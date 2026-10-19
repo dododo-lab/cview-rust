@@ -1555,3 +1555,22 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
   outline: 2px solid var(--primary); outline-offset: 2px;
 }
 .dense-row:focus-visible { outline-offset: -2px; }
+
+/* ── 스플래시 (SYS-10)·환영 안내 (SYS-11) ───────── */
+.splash { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: var(--background); transition: opacity .32s var(--ease-out); }
+.splash.leaving { opacity: 0; pointer-events: none; }
+.splash-mark { width: 64px; height: 64px; display: grid; place-items: center; border-radius: 18px; background: var(--brand-gradient); color: var(--on-primary); box-shadow: 0 12px 40px var(--primary-glow); animation: splash-pulse 1.4s ease-in-out infinite; }
+.splash-mark svg { width: 30px; height: 30px; }
+.splash-name { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+.splash-bar { width: 180px; height: 4px; border-radius: 2px; background: var(--hover); overflow: hidden; }
+.splash-bar span { display: block; height: 100%; width: 8%; background: var(--primary); transition: width .3s var(--ease-out); }
+.splash-step { font-size: var(--fs-footnote); color: var(--text-tertiary); }
+@keyframes splash-pulse { 50% { transform: scale(1.06); } }
+.welcome { max-width: 440px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.welcome-icon { font-size: 40px; line-height: 1; margin-top: 6px; }
+.welcome h2 { margin: 4px 0 0; }
+.welcome p { margin: 0; color: var(--text-secondary); line-height: 1.55; }
+.welcome-dots { display: flex; gap: 6px; margin: 6px 0; }
+.welcome-dots span { width: 7px; height: 7px; border-radius: 50%; background: var(--border); }
+.welcome-dots span.on { background: var(--primary); width: 18px; border-radius: 4px; }
+.welcome .sheet-actions { width: 100%; justify-content: center; }

@@ -17,6 +17,7 @@ import { LibraryPage, libraryIcon } from './library.js';
 import { StatsPage, statsIcon } from './stats.js';
 import { loadShortcuts } from './shortcuts.js';
 import { installA11y } from './a11y.js';
+import { splashStep, hideSplash, showWelcome } from './onboarding.js';
 import { HUBS, saveWorkspace, loadWorkspace, installSidebarExtras, hubFlash } from './workspace.js';
 import { CategoriesPage, categoryIcon } from './categories.js';
 import { CommandPalette } from './palette.js';
@@ -357,6 +358,8 @@ const MENU_ACTIONS = {
   'go-live': () => viewer.isOpen && viewer.controls.goLive(),
   screenshot: () => viewer.isPlaying && viewer.controls.screenshot(),
   bookmark: () => viewer.isPlaying && viewer.controls.bookmark(),
+  pip: () => (viewer.isPlaying ? viewer.controls.togglePip() : toast('재생 중인 방송이 없습니다')),
+  welcome: () => showWelcome({ force: true, onLogin: login }),
   fullscreen: () => viewer.isOpen && viewer.controls.fullscreen(false),
   'fullscreen-chat': () => viewer.isOpen && viewer.controls.fullscreen(true),
   'close-viewer': () => viewer.isOpen && viewer.close(),
@@ -400,6 +403,7 @@ function installMenuAndShortcuts() {
 }
 
 async function main() {
+  splashStep('화면 준비', 0.2);
   renderNav();
   const content = document.querySelector('.content');
   const page = (id) => content.querySelector(`[data-page="${id}"]`);
@@ -494,6 +498,7 @@ async function main() {
   listen(Events.loginFailed, (p) => p && p.message && toast(p.message));
 
   renderAccount();
+  splashStep('계정 확인', 0.55);
   if (!isTauri) {
     toast('CView 앱(cargo run -p cview-app) 안에서 실행해야 데이터가 표시됩니다', 6000);
   } else {
@@ -502,7 +507,9 @@ async function main() {
     } catch { /* 상태 이벤트를 기다린다 */ }
   }
   let settings = null;
+  splashStep('설정 불러오기', 0.8);
   try { settings = await api.settingsGet(); } catch { /* 기본값 */ }
+  setTimeout(() => { hideSplash(); showWelcome({ onLogin: login }); }, 120);
   syncTheme(settings && settings.appearance && settings.appearance.theme);
   // 작업 공간 복원 (NAV-16) — "실행 시 창 복원"이 켜져 있으면 마지막 화면으로. 방송은 자동 재생하지 않고 묻는다.
   const ws = settings?.general?.restoreWindowOnLaunch !== false ? loadWorkspace() : null;

@@ -175,8 +175,8 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 | SYS-07 | 🧪 단일 인스턴스(두 번째 실행 시 기존 창 활성화·링크 전달) | `SingleInstanceGuard` | `SingleInstanceGuard` 로직, `tauri-plugin-single-instance` 미도입 | S |
 | SYS-08 | 🧪 업데이트 확인 시트(GitHub 릴리스) | `UpdateSheetView`, `UpdateService` | `UpdateService`(GitHub 릴리스 파싱) | S |
 | SYS-09 | ✅ 정보(About) 창·오픈소스 고지 | `AboutPanelView` | 없음 | S |
-| SYS-10 | 스플래시·부트 진행 표시 | `SplashView`, `SplashContentView`, `BootProgress` | `BootProgress`, 없음 | S |
-| SYS-11 | 환영 안내(첫 실행 온보딩, 다시 보기) | `Components/WelcomeOverlay` | 없음 | S |
+| SYS-10 | 🧪 스플래시·부트 진행 표시 | `SplashView`, `SplashContentView`, `BootProgress` | `BootProgress`, 없음 | S |
+| SYS-11 | 🧪 환영 안내(첫 실행 온보딩, 다시 보기) | `Components/WelcomeOverlay` | 없음 | S |
 | SYS-12 | ✅ 오프라인 배너·네트워크 상태 감지 | `Components/OfflineBanner`, `NetworkPathMonitor` | `NetworkPathMonitor` | S |
 | SYS-13 | ✅ 토스트 센터(쌓임·액션 버튼) | `Components/ToastCenter` | 단일 토스트 | S |
 | SYS-14 | ✅ 스켈레톤 로딩·신선도 캡션(마지막 갱신 시각) | `SkeletonViews`, `Components/FreshnessCaption` | 스피너 | S |
@@ -185,14 +185,14 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 | SYS-17 | ✅ 항상 위(`alwaysOnTop`) | `GeneralSettings.alwaysOnTop` | 없음(`set_always_on_top`) | S |
 | SYS-18 | ✅ 로그인 시 자동 실행 | `launchAtLogin` | 없음(`tauri-plugin-autostart`) | S |
 | SYS-19 | 🟡 도움말 액션(문제 보고, 알림 설정 열기, 로그 폴더 열기) | `SupportActions`, `SystemSettingsActions` | 없음 | S |
-| SYS-20 | 메뉴 막대 앱(방송 중 팔로잉 목록, 열기/종료) | `MenuBarView`, `MenuBar/*` | 없음(Tauri 트레이 아이콘으로 근사) | M |
-| SYS-21 | 화면 속 화면(PiP, `⌥⌘P`) | `PiPController`, `AppState+PiP` | 없음(WebView `requestPictureInPicture`) | M |
+| SYS-20 | 🧪 메뉴 막대 앱(방송 중 팔로잉 목록, 열기/종료) | `MenuBarView`, `MenuBar/*` | 없음(Tauri 트레이 아이콘으로 근사) | M |
+| SYS-21 | 🧪 화면 속 화면(PiP, `⌥⌘P`) | `PiPController`, `AppState+PiP` | 없음(WebView `requestPictureInPicture`) | M |
 | SYS-22 | 창 투명도/Liquid Glass·트래픽 라이트 애니메이션 | `DesignSystem/LiquidGlass`, `TransparencyPolicy`, `TrafficLightsAnimator` | 없음 | M |
-| SYS-23 | 앱 아이콘 동적 렌더(라이브 수 배지 등) | `AppIconRenderer`, `Components/AppIconView` | 없음 | S |
-| SYS-24 | 위젯(WidgetKit) | `AppState+Widget`, `WidgetSnapshotWriter`, `CViewWidgets` | 없음 | L |
-| SYS-25 | App Intents(단축어/Siri) | `Intents/CViewIntents` | 없음 | M |
+| SYS-23 | 🧪 앱 아이콘 동적 렌더(라이브 수 배지 등) | `AppIconRenderer`, `Components/AppIconView` | 없음 | S |
+| SYS-24 | ⏸ 위젯(WidgetKit) | `AppState+Widget`, `WidgetSnapshotWriter`, `CViewWidgets` | 없음 | L |
+| SYS-25 | ⏸ App Intents(단축어/Siri) | `Intents/CViewIntents` | 없음 | M |
 | SYS-26 | 서명·공증·배포 스크립트 | 공증 스크립트 | Tauri 번들 설정 미작성 | S |
-| SYS-27 | 인증서 피닝 | `CertificatePinningDelegate` | 제외됨 | M |
+| SYS-27 | ⏸ 인증서 피닝 | `CertificatePinningDelegate` | 제외됨 | M |
 
 ## 9. 디자인 (DSN)
 

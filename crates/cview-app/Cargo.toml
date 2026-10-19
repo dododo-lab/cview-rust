@@ -27,7 +27,7 @@ cview-chat = { path = "../cview-chat" }
 cview-persistence = { path = "../cview-persistence" }
 cview-player = { path = "../cview-player" }
 cview-app-core = { path = "../cview-app-core" }
-tauri = { version = "2.12", features = [] }
+tauri = { version = "2.12", features = ["tray-icon", "image-png"] }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

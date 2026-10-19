@@ -52,6 +52,7 @@ const PLAYBACK: &[Item] = &[
         "영상+채팅 전체화면",
         Some("CmdOrCtrl+Ctrl+F"),
     ),
+    ("pip", "화면 속 화면(PiP)", Some("Alt+CmdOrCtrl+P")),
     ("close-viewer", "시청 화면 닫기", Some("CmdOrCtrl+W")),
 ];
 
@@ -67,6 +68,7 @@ const CHAT: &[Item] = &[
 
 const HELP: &[Item] = &[
     ("shortcuts", "키보드 단축키", Some("CmdOrCtrl+/")),
+    ("welcome", "처음 안내 다시 보기", None),
     ("report-issue", "문제 보고…", None),
     ("open-logs", "데이터 폴더 열기", None),
 ];

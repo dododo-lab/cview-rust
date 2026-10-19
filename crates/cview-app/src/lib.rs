@@ -15,6 +15,7 @@ pub mod multi_live;
 pub mod playback;
 pub mod state;
 pub mod system;
+pub mod tray;
 pub mod webview_store;
 pub mod window_prefs;
 
@@ -182,6 +183,9 @@ pub fn run() {
                 }
             }
             system::spawn_live_notifications(handle.clone());
+            if let Err(e) = tray::install(&handle) {
+                tracing::warn!("메뉴 막대 아이콘을 달지 못했습니다: {e}");
+            }
             spawn_auth_tasks(handle);
             Ok(())
         })
