@@ -14,4 +14,5 @@ pub mod chat;
 pub mod following;
 pub mod home;
 pub mod multi_live;
+pub mod search;
 pub mod support;
