@@ -97,17 +97,21 @@
       <!-- 시청 화면: 플레이어 영역 + 채팅 패널 -->
       <section class="viewer" id="viewer" hidden>
         <div class="viewer-main">
-          <header class="viewer-header" data-tauri-drag-region>
-            <div class="viewer-avatar"></div>
-            <div class="viewer-title">
-              <div class="title ellipsis"></div>
-              <div class="meta ellipsis"></div>
-            </div>
-            <button class="icon-btn" id="viewer-close" title="닫기">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
-            </button>
+          <header class="page-header viewer-header" data-tauri-drag-region>
+            <h1 class="page-title">라이브</h1>
           </header>
           <div class="player-stage">
+            <!-- 영상 위 위쪽 오버레이(치지직식): 채널·제목·바로 전환·창 동작 -->
+            <div class="stage-top">
+              <div class="viewer-avatar"></div>
+              <div class="viewer-title">
+                <div class="title ellipsis"></div>
+                <div class="meta ellipsis"></div>
+              </div>
+              <button class="icon-btn" id="viewer-close" title="닫기">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+              </button>
+            </div>
             <iframe id="player-frame" src="player/player.html" title="플레이어" allow="autoplay; fullscreen"></iframe>
             <div class="player-overlay" hidden><div class="spinner"></div><span></span></div>
           </div>

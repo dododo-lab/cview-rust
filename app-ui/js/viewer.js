@@ -28,7 +28,7 @@ export class Viewer {
     this.onClose = onClose;
     this.channelId = null;
     this.startToken = 0;
-    this.header = root.querySelector('.viewer-header');
+    this.header = root.querySelector('.stage-top');
     this.overlay = root.querySelector('.player-overlay');
     this.overlayText = this.overlay.querySelector('span');
     this.status = root.querySelector('.player-status');

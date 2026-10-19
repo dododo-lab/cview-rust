@@ -531,8 +531,8 @@ async function main() {
     },
   });
   window.addEventListener('cview:open-channel', (e) => openChannelPage(e.detail && e.detail.channelId));
-  // 시청 화면 헤더(아바타·채널명)를 누르면 채널 상세
-  document.querySelector('#viewer .viewer-header').addEventListener('click', (e) => {
+  // 영상 위 채널 정보(아바타·채널명)를 누르면 채널 상세
+  document.querySelector('#viewer .stage-top').addEventListener('click', (e) => {
     if (e.target.closest('.viewer-avatar, .viewer-title') && viewer.channelId) openChannelPage(viewer.channelId);
   });
 

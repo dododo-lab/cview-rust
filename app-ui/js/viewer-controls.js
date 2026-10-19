@@ -143,9 +143,11 @@ export class ViewerControls {
     this.center.addEventListener('click', () => this.togglePlay());
     stage.append(this.center);
 
+    // 위쪽 오버레이(채널·제목·바로 전환·창 동작)도 아래 막대와 함께 나타나고 숨는다.
+    const top = stage.querySelector('.stage-top');
     const menuOpen = () => !this.qualityMenu.hidden || Boolean(this.root.querySelector('.player-panel:not([hidden])'));
     const hide = () => {
-      if (stage.classList.contains('paused') || menuOpen() || bar.matches(':hover')) { this.wake(); return; }
+      if (stage.classList.contains('paused') || menuOpen() || bar.matches(':hover') || top?.matches(':hover')) { this.wake(); return; }
       stage.classList.remove('ctl-visible');
       stage.classList.add('idle');
     };
@@ -159,6 +161,7 @@ export class ViewerControls {
     stage.addEventListener('mousedown', this.wake);
     stage.addEventListener('mouseleave', () => { clearTimeout(this.idleTimer); this.idleTimer = setTimeout(hide, 400); });
     bar.addEventListener('focusin', this.wake);
+    top?.addEventListener('focusin', this.wake);
     // 영상은 iframe 안이라 그 문서의 마우스 움직임도 받는다(같은 출처).
     const iframe = stage.querySelector('iframe');
     const hook = () => {

@@ -36,7 +36,10 @@ export class ViewerExtras {
     this.rail.addEventListener('click', (e) => {
       const b = e.target.closest('[data-rail-channel]');
       if (b) window.dispatchEvent(new CustomEvent('cview:play', { detail: { channelId: b.dataset.railChannel } }));
+      else if (e.target.closest('.rail-more')) window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: 'following' } }));
     });
+    // 좁으면 들어가는 만큼만 보이고 나머지는 "+N" 으로 접는다.
+    new ResizeObserver(() => this.fitRail()).observe(this.rail.parentElement);
 
     document.addEventListener('keydown', (e) => this.onKey(e));
   }
@@ -78,7 +81,26 @@ export class ViewerExtras {
     this.rail.innerHTML = others.map((l) => {
       const avatar = safeUrl(l.channelImageUrl);
       return `<button class="rail-item" data-rail-channel="${esc(l.channelId)}" title="${esc(l.channelName)} · ${esc(l.liveTitle || '')}">${avatar ? `<img class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar">${esc((l.channelName || '?').slice(0, 1))}</span>`}</button>`;
-    }).join('');
+    }).join('') + '<button class="rail-more" hidden></button>';
+    this.fitRail();
+  }
+
+  fitRail() {
+    const items = [...this.rail.querySelectorAll('.rail-item')];
+    const more = this.rail.querySelector('.rail-more');
+    if (!more) return;
+    for (const b of items) b.hidden = false;
+    more.hidden = true;
+    const top = this.rail.parentElement;
+    const room = () => top.scrollWidth <= top.clientWidth;
+    let hiddenCount = 0;
+    for (let i = items.length - 1; i >= 0 && !room(); i--) {
+      items[i].hidden = true;
+      hiddenCount++;
+      more.hidden = false;
+      more.textContent = `+${hiddenCount}`;
+      more.title = `팔로잉 라이브 ${hiddenCount}개 더 — 팔로잉 화면에서 보기`;
+    }
   }
 
   // ── 라이브 되감기 키 (PLY-03, 부분) ────────
