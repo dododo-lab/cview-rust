@@ -10,6 +10,7 @@ pub mod hlsjs;
 pub mod low_latency;
 pub mod manifest;
 pub mod policy;
+pub mod proxy;
 pub mod reconnection;
 pub mod seek_arbiter;
 

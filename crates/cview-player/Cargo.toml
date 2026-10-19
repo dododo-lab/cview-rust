@@ -6,6 +6,7 @@ publish.workspace = true
 
 [dependencies]
 cview-core = { path = "../cview-core" }
+cview-networking = { path = "../cview-networking" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -17,7 +18,7 @@ async-trait.workspace = true
 reqwest = { workspace = true, features = ["stream"] }
 futures-util.workspace = true
 hyper = { version = "1.5", features = ["server", "http1"] }
-hyper-util = { version = "0.1.10", features = ["tokio"] }
+hyper-util = { version = "0.1.10", features = ["tokio", "server", "http1"] }
 http-body-util = "0.1.2"
 http = "1.1"
 bytes = "1.7"

@@ -282,6 +282,7 @@ dependencies = [
  "bytes",
  "chrono",
  "cview-core",
+ "cview-networking",
  "futures-util",
  "http",
  "http-body-util",
