@@ -1745,3 +1745,27 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 :root[data-window="chat"] .chatonly-head { gap: 8px; flex-wrap: nowrap; }
 :root[data-window="chat"] .chatonly-head .btn { white-space: nowrap; padding: 0 10px; height: 30px; font-size: var(--fs-footnote); }
 :root[data-window="chat"] .chatonly-title { min-width: 0; flex: 1; }
+
+/* ── 채팅 디자인 메뉴 (머리글 팔레트 버튼) ── */
+.design-menu { position: fixed; z-index: 70; width: 300px; max-height: 80vh; overflow-y: auto; padding: 8px; border-radius: var(--radius-lg); background: var(--surface-popover); border: 1px solid var(--border); box-shadow: var(--shadow-lg); }
+.design-menu-head { font-size: var(--fs-micro); font-weight: 700; color: var(--text-tertiary); padding: 6px 8px 4px; }
+.design-menu-sep { height: 1px; background: var(--border-subtle); margin: 6px 4px; }
+.design-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border-radius: var(--radius-sm); text-align: left; color: inherit; }
+.design-item:hover { background: var(--hover); }
+.design-item.on { background: var(--primary-dim); }
+.design-text { display: flex; flex-direction: column; min-width: 0; }
+.design-text b { font-size: var(--fs-footnote); font-weight: 600; }
+.design-text small { font-size: var(--fs-micro); color: var(--text-tertiary); }
+.design-width { margin: 2px 6px 6px; }
+.design-swatch { flex: none; width: 34px; height: 24px; border-radius: 7px; border: 1px solid var(--border); position: relative; overflow: hidden; }
+.design-swatch::before, .design-swatch::after { content: ""; position: absolute; height: 6px; border-radius: 3px; }
+.design-swatch::before { left: 4px; top: 5px; width: 18px; }
+.design-swatch::after { right: 4px; bottom: 5px; width: 14px; }
+.sw-unified { background: #191d25; } .sw-unified::before { background: #242a35; } .sw-unified::after { background: #2d3c57; }
+.sw-chzzk { background: #131415; } .sw-chzzk::before { background: #3a3d40; width: 24px; } .sw-chzzk::after { background: #00ffa3; height: 2px; }
+.sw-hybrid { background: #191d23; } .sw-hybrid::before { background: #242930; } .sw-hybrid::after { background: #1c3832; }
+.sw-kakao { background: #bacee0; } .sw-kakao::before { background: #fff; } .sw-kakao::after { background: #fee500; }
+.sw-imessage { background: #fff; } .sw-imessage::before { background: #e9e9eb; } .sw-imessage::after { background: #0a6cdb; }
+.sw-calm, .sw-compact, .sw-dashboard { background: var(--surface-base); }
+.sw-calm::before, .sw-compact::before, .sw-dashboard::before { background: var(--border); }
+.sw-calm::after, .sw-compact::after, .sw-dashboard::after { background: var(--border-subtle); }

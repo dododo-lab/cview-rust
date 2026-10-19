@@ -7,10 +7,56 @@ import { esc, toast } from './dom.js';
 import { chatPrefs, onChatPrefs, updateChatPrefs } from './chat-prefs.js';
 import { formatCheese, donationKindLabel, eventMeta, EVENT_ICONS } from './donations.js';
 
+/** 원본 ChatDesignStyle — 앞 다섯은 고를 수 있는 스타일, 뒤 셋은 이전 스타일(저장값 호환). */
 export const DESIGN_STYLES = [
-  ['unified', '기본'], ['chzzk', '치지직'], ['hybrid', '하이브리드'], ['kakao', '말풍선'],
-  ['imessage', '메신저'], ['calm', '차분하게'], ['compact', '촘촘하게'], ['dashboard', '대시보드'],
+  ['unified', 'Chat Lounge', '대화 카드와 아바타로 방송 옆 대화 공간을 구성합니다'],
+  ['chzzk', '치지직 스타일', '배지·닉네임·본문을 간결한 줄 형태로 표시합니다'],
+  ['hybrid', 'Lounge × CHZZK', '대화 카드와 간결한 채널 배지를 결합한 통합 디자인'],
+  ['kakao', '카카오톡형 말풍선', '프로필 옆 말풍선, 내 말은 노란 말풍선'],
+  ['imessage', 'iMessage형 말풍선', '회색·파란 꼬리 말풍선으로 메신저처럼'],
+  ['calm', '차분하게 (이전)', '여백과 얇은 구분선으로 편하게 읽기'],
+  ['compact', '촘촘하게 (이전)', '한 화면에 더 많은 메시지'],
+  ['dashboard', '대시보드 (이전)', '시간·닉네임·본문을 열로 정렬'],
 ];
+/** 읽기 폭 — 원본 ChatReadingWidthMenu. */
+export const READING_WIDTHS = [['full', '전체', null], ['wide', '넓게', 720], ['normal', '보통', 560], ['narrow', '좁게', 420]];
+
+/** 채팅 화면(패널·통합 목록)에 디자인 스타일·읽기 폭을 입힌다. */
+export function applyChatSkin(el, p = chatPrefs()) {
+  const style = DESIGN_STYLES.some(([v]) => v === p.designStyle) ? p.designStyle : 'unified';
+  el.classList.add('chat-skin');
+  for (const [v] of DESIGN_STYLES) el.classList.toggle(`style-${v}`, v === style);
+  const w = READING_WIDTHS.find(([v]) => v === p.readingWidth);
+  if (w && w[2]) { el.dataset.readWidth = w[0]; el.style.setProperty('--chat-read-width', `${w[2]}px`); }
+  else { delete el.dataset.readWidth; el.style.removeProperty('--chat-read-width'); }
+}
+
+/** 채팅 머리글 "디자인" 메뉴 — 스타일·읽기 폭 고르기. */
+export function showDesignMenu(anchor) {
+  document.querySelector('.design-menu')?.remove();
+  const p = chatPrefs();
+  const cur = DESIGN_STYLES.some(([v]) => v === p.designStyle) ? p.designStyle : 'unified';
+  const menu = document.createElement('div');
+  menu.className = 'design-menu';
+  menu.setAttribute('role', 'menu');
+  menu.innerHTML = `<div class="design-menu-head">채팅 디자인</div>
+    ${DESIGN_STYLES.map(([v, l, d], i) => `${i === 5 ? '<div class="design-menu-sep"></div>' : ''}<button class="design-item${v === cur ? ' on' : ''}" data-style="${v}" role="menuitemradio" aria-checked="${v === cur}"><span class="design-swatch sw-${v}"></span><span class="design-text"><b>${esc(l)}</b><small>${esc(d)}</small></span></button>`).join('')}
+    <div class="design-menu-sep"></div><div class="design-menu-head">읽기 폭</div>
+    <div class="segmented design-width">${READING_WIDTHS.map(([v, l]) => `<button class="seg${(p.readingWidth || 'full') === v ? ' active' : ''}" data-width="${v}">${l}</button>`).join('')}</div>`;
+  document.body.append(menu);
+  const r = anchor.getBoundingClientRect();
+  menu.style.top = `${Math.min(window.innerHeight - menu.offsetHeight - 8, r.bottom + 6)}px`;
+  menu.style.left = `${Math.max(8, Math.min(window.innerWidth - menu.offsetWidth - 8, r.right - menu.offsetWidth))}px`;
+  menu.addEventListener('click', (e) => {
+    const st = e.target.closest('[data-style]');
+    if (st) { updateChatPrefs({ designStyle: st.dataset.style }); menu.remove(); return; }
+    const wd = e.target.closest('[data-width]');
+    if (wd) { updateChatPrefs({ readingWidth: wd.dataset.width }); menu.remove(); }
+  });
+  setTimeout(() => document.addEventListener('pointerdown', function off(ev) {
+    if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('pointerdown', off); }
+  }), 0);
+}
 export const BACKGROUNDS = [['neutral', '기본'], ['tint', '브랜드 색'], ['dim', '어둡게'], ['clear', '투명']];
 
 const COMMANDS = [
@@ -72,6 +118,12 @@ export function installChatExtras(panel) {
   exportBtn.title = '채팅 내보내기';
   exportBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>';
   statsBtn.after(exportBtn);
+  const designBtn = document.createElement('button');
+  designBtn.className = 'icon-btn chat-hbtn';
+  designBtn.title = '채팅 디자인·읽기 폭';
+  designBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1 0 1.5-.8 1.5-1.6 0-1.1-.9-1.4-.9-2.4 0-.9.7-1.5 1.6-1.5H17a4 4 0 0 0 4-4c0-4.7-4-8.5-9-8.5Z"/><circle cx="7.5" cy="11" r="1" fill="currentColor"/><circle cx="10.5" cy="7" r="1" fill="currentColor"/><circle cx="15" cy="7.5" r="1" fill="currentColor"/></svg>';
+  statsBtn.before(designBtn);
+  designBtn.addEventListener('click', (e) => { e.stopPropagation(); showDesignMenu(designBtn); });
   statsBtn.addEventListener('click', () => showStats());
   exportBtn.addEventListener('click', () => exportChat());
 
@@ -211,8 +263,7 @@ export function installChatExtras(panel) {
   // ── 디자인 스타일 (CHT-13) · 배경 (CHT-15) ──
   const applyLook = () => {
     const p = chatPrefs();
-    const style = DESIGN_STYLES.some(([v]) => v === p.designStyle) ? p.designStyle : 'unified';
-    for (const [v] of DESIGN_STYLES) root.classList.toggle(`style-${v}`, v === style);
+    applyChatSkin(root, p);
     const bg = p.background && typeof p.background === 'object' ? p.background : {};
     const mode = BACKGROUNDS.some(([v]) => v === bg.mode) ? bg.mode : 'neutral';
     for (const [v] of BACKGROUNDS) root.classList.toggle(`bg-${v}`, v === mode);
