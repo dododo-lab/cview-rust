@@ -103,6 +103,11 @@ export class FollowingPage {
       const c = e.target.closest('[data-cat]');
       if (c) { this.category = c.dataset.cat; this.render(); return; }
       if (e.target.closest('[data-dense]')) { this.dense = !this.dense; this.render(); return; }
+      if (e.target.closest('[data-queue-multi]')) {
+        const ids = arrangeLives(this.lives, { sort: this.sort, category: this.category }).slice(0, 4).map((l) => l.channelId);
+        if (ids.length) window.dispatchEvent(new CustomEvent('cview:multi-queue', { detail: { channelIds: ids } }));
+        return;
+      }
       const ch = e.target.closest('[data-open-channel-id]');
       if (ch) window.dispatchEvent(new CustomEvent('cview:open-channel', { detail: { channelId: ch.dataset.openChannelId } }));
     });
@@ -135,6 +140,7 @@ export class FollowingPage {
         ? (this.dense ? `<div class="dense-list">${list.map(denseRow).join('')}</div>` : liveGrid(list))
         : emptyState('라이브 채널이 없습니다', '팔로우한 채널 중 방송 중인 채널이 없습니다');
       this.body.innerHTML = `
+        ${followingInsights(this.lives, list)}
         <div class="list-toolbar">${tabs}${sortSeg}<button class="btn ghost" data-dense>${this.dense ? '격자 보기' : '간결 보기'}</button>
           <div class="chips"><button class="chip${this.category === '' ? ' active' : ''}" data-cat="">전체 ${this.lives.length}</button>${cats.map((c) => `<button class="chip${this.category === c.name ? ' active' : ''}" data-cat="${esc(c.name)}">${esc(c.name)} <span class="chip-count">${c.count}</span></button>`).join('')}</div>
         </div>${body}`;
@@ -149,6 +155,23 @@ export class FollowingPage {
       <div class="list-toolbar">${tabs}${sortSeg}<span class="page-subtitle">팔로우 ${this.channels.length}개 · 방송 중 ${this.channels.filter((c) => c.isLive).length}개</span></div>
       ${sorted.length ? `<div class="dense-list">${sorted.map(followedRow).join('')}</div>` : emptyState('팔로우한 채널이 없습니다')}`;
   }
+}
+
+/** 팔로잉 인사이트 레일 (NAV-05) — 방송 중·총 시청자·많은 카테고리·막 시작, 이 목록 멀티뷰로 담기. */
+export function followingInsights(lives, shown, now = Date.now()) {
+  if (!lives.length) return '';
+  const viewers = lives.reduce((a, l) => a + (l.viewerCount || 0), 0);
+  const top = categoryGroups(lives)[0];
+  const fresh = lives.filter((l) => l.openDate && now - Date.parse(l.openDate) < 30 * 60 * 1000).length;
+  const item = (label, value) => `<div class="insight"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
+  return `<div class="insight-rail">
+    ${item('방송 중', `${lives.length}개`)}
+    ${item('총 시청자', compactCount(viewers))}
+    ${top ? item('가장 많은 카테고리', `${top.name} · ${top.count}`) : ''}
+    ${item('30분 안에 시작', `${fresh}개`)}
+    <div class="grow"></div>
+    ${shown.length > 1 ? `<button class="btn primary" data-queue-multi title="지금 목록의 위 4개 채널을 멀티라이브로 엽니다">이 목록 멀티라이브로 (${Math.min(4, shown.length)})</button>` : ''}
+  </div>`;
 }
 
 function denseRow(l) {
@@ -206,6 +229,8 @@ export class SearchPage {
         this.renderIdle();
         return;
       }
+      const dc = e.target.closest('[data-discover-cat]');
+      if (dc) { window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: 'categories', params: { category: dc.dataset.discoverCat } } })); return; }
       if (e.target.closest('[data-recent-clear]')) { try { localStorage.removeItem(RECENT_SEARCH_KEY); } catch { /* 무시 */ } this.renderIdle(); return; }
       const t = e.target.closest('[data-stab]');
       if (t) { this.tab = t.dataset.stab; this.renderResults(); return; }
@@ -222,9 +247,32 @@ export class SearchPage {
     this.input.focus();
   }
 
+  async loadDiscovery() {
+    if (this.discovery) return this.discovery;
+    try {
+      const lives = await api.popularLives(50, false);
+      this.discovery = { cats: categoryGroups(lives).slice(0, 14), top: lives.slice(0, 8) };
+    } catch { this.discovery = { cats: [], top: [] }; }
+    return this.discovery;
+  }
+
+  async renderDiscovery() {
+    const box = this.body.querySelector('.discovery');
+    if (!box) return;
+    const d = await this.loadDiscovery();
+    if (!this.body.contains(box)) return;
+    box.innerHTML = `
+      ${d.cats.length ? `<div class="section-head"><h2 class="section-title">지금 많이 보는 카테고리</h2></div>
+        <div class="chips">${d.cats.map((c) => `<button class="chip" data-discover-cat="${esc(c.name)}">${esc(c.name)} <span class="chip-count">${compactCount(c.viewers)}</span></button>`).join('')}</div>` : ''}
+      ${d.top.length ? `<div class="section-head"><h2 class="section-title">인기 채널</h2></div>
+        <div class="discover-rail">${d.top.map((l) => { const a = safeUrl(l.channelImageUrl); return `<button class="discover-item" data-recent="${esc(l.channelName)}" title="${esc(l.liveTitle || '')}">${a ? `<img class="avatar" src="${esc(a)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}<span class="ellipsis">${esc(l.channelName)}</span><small>${esc(l.viewerCountText)}</small></button>`; }).join('')}</div>` : ''}`;
+  }
+
   renderIdle() {
     const recent = recentSearches();
-    this.body.innerHTML = recent.length
+    setTimeout(() => this.renderDiscovery(), 0);
+    this.body.innerHTML = '<div class="discovery-top"></div><div class="discovery"></div>';
+    this.body.querySelector('.discovery-top').innerHTML = recent.length
       ? `<div class="section-head"><h2 class="section-title">최근 검색어</h2><div class="grow"></div><button class="link-btn" data-recent-clear>모두 지우기</button></div>
          <div class="chips">${recent.map((q) => `<span class="chip recent-chip"><button class="link-btn" data-recent="${esc(q)}">${esc(q)}</button><button class="chip-x" data-recent-remove="${esc(q)}" title="지우기">✕</button></span>`).join('')}</div>`
       : emptyState('검색어를 입력하세요', '채널 이름, 방송 제목, 다시보기로 찾을 수 있습니다');

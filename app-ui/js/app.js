@@ -15,6 +15,7 @@ import { ChannelPage } from './channel.js';
 import { MediaPage } from './media.js';
 import { LibraryPage, libraryIcon } from './library.js';
 import { StatsPage, statsIcon } from './stats.js';
+import { HUBS, saveWorkspace, loadWorkspace, installSidebarExtras, hubFlash } from './workspace.js';
 import { CategoriesPage, categoryIcon } from './categories.js';
 import { CommandPalette } from './palette.js';
 import { ChatOnlyPage } from './chat-only.js';
@@ -121,6 +122,7 @@ async function navigate(route, params = {}, { push = true } = {}) {
   current = route;
   currentParams = params;
   sidebar.setActive(route);
+  saveWorkspace(route, params, viewer && viewer.isPlaying ? viewer.channelId : null);
   // 라이브 메뉴는 재생 중이면 시청 화면, 아니면 이어 볼 채널 목록이다.
   const showViewer = route === 'live' && viewer.isPlaying;
   for (const [id, page] of Object.entries(pages)) {
@@ -374,6 +376,10 @@ function installMenuAndShortcuts() {
   // 메뉴가 없는 환경(브라우저 미리보기 등)과 ⌘/ 보조.
   document.addEventListener('keydown', (e) => {
     if (!(e.metaKey || e.ctrlKey)) return;
+    if (e.altKey && e.metaKey) {
+      const hub = HUBS.find(([k]) => e.code === `Digit${k}`);
+      if (hub) { e.preventDefault(); navigate(hub[1]); hubFlash(hub[2]); return; }
+    }
     if (e.key === '/') { e.preventDefault(); showShortcuts(); }
     else if (e.key === ',') { e.preventDefault(); navigate('settings'); }
   });
@@ -442,6 +448,25 @@ async function main() {
   window.addEventListener('cview:menu', (e) => { const run = MENU_ACTIONS[e.detail]; if (run) run(); });
   window.addEventListener('cview:play', (e) => e.detail && openChannel(e.detail.channelId));
   window.addEventListener('cview:navigate', (e) => e.detail && navigate(e.detail.route, e.detail.params || {}));
+  window.addEventListener('cview:multi-queue', (e) => e.detail && queueMulti(e.detail.channelIds || []));
+  installSidebarExtras({
+    onRandomLive: async () => {
+      try {
+        const lives = isLoggedIn() ? await api.followingLives(false) : await api.popularLives(30, false);
+        if (!lives.length) { toast('지금 방송 중인 채널이 없습니다'); return; }
+        const pick = lives[Math.floor(Math.random() * lives.length)];
+        toast(`${pick.channelName} 방송을 엽니다`, 1500);
+        openChannel(pick.channelId);
+      } catch (er) { toast(er.message); }
+    },
+    onQueueMulti: async () => {
+      try {
+        const lives = isLoggedIn() ? await api.followingLives(false) : await api.popularLives(10, false);
+        queueMulti([...lives].sort((a, b) => b.viewerCount - a.viewerCount).slice(0, 4).map((l) => l.channelId));
+      } catch (er) { toast(er.message); }
+    },
+    onRefresh: () => MENU_ACTIONS.refresh && MENU_ACTIONS.refresh(),
+  });
   installCardMenu();
   installPalette();
   installMenuAndShortcuts();
@@ -472,8 +497,25 @@ async function main() {
       onAuthChanged(await api.authStatus());
     } catch { /* 상태 이벤트를 기다린다 */ }
   }
-  api.settingsGet().then((s) => syncTheme(s && s.appearance && s.appearance.theme)).catch(() => {});
-  navigate('home');
+  let settings = null;
+  try { settings = await api.settingsGet(); } catch { /* 기본값 */ }
+  syncTheme(settings && settings.appearance && settings.appearance.theme);
+  // 작업 공간 복원 (NAV-16) — "실행 시 창 복원"이 켜져 있으면 마지막 화면으로. 방송은 자동 재생하지 않고 묻는다.
+  const ws = settings?.general?.restoreWindowOnLaunch !== false ? loadWorkspace() : null;
+  navigate('home', {}, { push: false });
+  if (ws && ws.route !== 'home') navigate(ws.route, ws.params || {});
+  if (ws && ws.channelId) {
+    toast('지난번에 보던 방송이 있어요', 8000, { label: '이어 보기', run: () => openChannel(ws.channelId) });
+  }
+}
+
+/** 여러 채널을 멀티라이브로 차례로 연다(NAV-05 스마트 큐·사이드바 빠른 동작). */
+async function queueMulti(channelIds) {
+  if (!channelIds.length) return;
+  if (current !== 'multilive') await navigate('multilive');
+  for (const id of channelIds) {
+    try { await pages.multilive.add(id); } catch { /* 한도 초과 등은 add 가 알린다 */ }
+  }
 }
 
 main();
