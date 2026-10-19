@@ -14,6 +14,7 @@ pub mod policy;
 pub mod proxy;
 pub mod reconnection;
 pub mod seek_arbiter;
+pub mod vod;
 
 pub use low_latency::{LowLatencyConfiguration, LowLatencyController, SyncState};
 pub use manifest::{HlsByteSpan, HlsManifestParser, MasterPlaylist, MediaPlaylist};
