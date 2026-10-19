@@ -209,6 +209,191 @@ impl SecretStore for KeyringSecretStore {
     }
 }
 
+// MARK: - Vault (한 항목)
+
+/// 보안 저장소의 **항목 하나**(읽기·쓰기·지우기). 실제는 `keyring::Entry`, 테스트는 메모리.
+pub trait SingleItem: Send + Sync {
+    fn get(&self) -> Result<Option<Vec<u8>>, StoreError>;
+    fn set(&self, data: &[u8]) -> Result<(), StoreError>;
+    fn remove(&self) -> Result<(), StoreError>;
+}
+
+/// `keyring` 항목 하나.
+pub struct KeyringItem {
+    entry: keyring::Entry,
+}
+
+impl KeyringItem {
+    pub fn new(service: &str, account: &str) -> Result<Self, StoreError> {
+        Ok(Self {
+            entry: keyring::Entry::new(service, account).map_err(map_keyring_error)?,
+        })
+    }
+}
+
+impl SingleItem for KeyringItem {
+    fn get(&self) -> Result<Option<Vec<u8>>, StoreError> {
+        match self.entry.get_secret() {
+            Ok(b) => Ok(Some(b)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(e) => Err(map_keyring_error(e)),
+        }
+    }
+    fn set(&self, data: &[u8]) -> Result<(), StoreError> {
+        self.entry.set_secret(data).map_err(map_keyring_error)
+    }
+    fn remove(&self) -> Result<(), StoreError> {
+        match self.entry.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(e) => Err(map_keyring_error(e)),
+        }
+    }
+}
+
+/// 메모리 항목(테스트) — 읽기 횟수를 센다.
+#[derive(Default)]
+pub struct MemoryItem {
+    data: Mutex<Option<Vec<u8>>>,
+    pub reads: std::sync::atomic::AtomicUsize,
+    pub writes: std::sync::atomic::AtomicUsize,
+}
+
+impl SingleItem for MemoryItem {
+    fn get(&self) -> Result<Option<Vec<u8>>, StoreError> {
+        self.reads.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(self.data.lock().unwrap_or_else(|e| e.into_inner()).clone())
+    }
+    fn set(&self, data: &[u8]) -> Result<(), StoreError> {
+        self.writes
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        *self.data.lock().unwrap_or_else(|e| e.into_inner()) = Some(data.to_vec());
+        Ok(())
+    }
+    fn remove(&self) -> Result<(), StoreError> {
+        *self.data.lock().unwrap_or_else(|e| e.into_inner()) = None;
+        Ok(())
+    }
+}
+
+type VaultCache = Result<HashMap<String, Vec<u8>>, StoreError>;
+
+/// 모든 비밀값을 **보안 저장소 항목 하나**에 모아 두는 backend.
+///
+/// macOS 키체인은 항목마다 접근 권한(ACL)을 따로 묻는다 — 쿠키·OAuth 토큰·클라이언트 자격 증명·키 색인을
+/// 항목 넷에 나눠 두면 실행할 때마다 여러 번 암호를 물었다. 한 항목(`account = vault`)에 JSON 으로 모으고,
+/// 실행당 한 번만 읽어 메모리에 두며, 값이 바뀔 때만 쓴다. 읽기가 거부되면 그 실행 동안 다시 묻지 않는다.
+pub struct VaultSecretStore {
+    item: Box<dyn SingleItem>,
+    /// `None` = 아직 안 읽음, `Some(Ok)` = 캐시, `Some(Err)` = 읽기 실패(다시 묻지 않음).
+    cache: Mutex<Option<VaultCache>>,
+}
+
+impl VaultSecretStore {
+    pub const ACCOUNT: &'static str = "vault";
+
+    pub fn new(item: Box<dyn SingleItem>) -> Self {
+        Self {
+            item,
+            cache: Mutex::new(None),
+        }
+    }
+
+    /// 실제 키체인 — 서비스 이름 아래 `vault` 항목.
+    pub fn keyring(service_name: &str) -> Result<Self, StoreError> {
+        Ok(Self::new(Box::new(KeyringItem::new(
+            service_name,
+            Self::ACCOUNT,
+        )?)))
+    }
+
+    fn decode(bytes: &[u8]) -> HashMap<String, Vec<u8>> {
+        use base64::Engine;
+        let raw: HashMap<String, String> = serde_json::from_slice(bytes).unwrap_or_default();
+        raw.into_iter()
+            .filter_map(|(k, v)| {
+                base64::engine::general_purpose::STANDARD
+                    .decode(v)
+                    .ok()
+                    .map(|d| (k, d))
+            })
+            .collect()
+    }
+
+    fn encode(map: &HashMap<String, Vec<u8>>) -> Result<Vec<u8>, StoreError> {
+        use base64::Engine;
+        let raw: std::collections::BTreeMap<&String, String> = map
+            .iter()
+            .map(|(k, v)| (k, base64::engine::general_purpose::STANDARD.encode(v)))
+            .collect();
+        serde_json::to_vec(&raw).map_err(|e| StoreError::Encoding(e.to_string()))
+    }
+
+    /// 캐시를 채우고 그 안에서 `f` 를 실행한다.
+    fn with_map<T>(
+        &self,
+        f: impl FnOnce(&mut HashMap<String, Vec<u8>>) -> Result<T, StoreError>,
+    ) -> Result<T, StoreError> {
+        let mut guard = self.cache.lock().unwrap_or_else(|e| e.into_inner());
+        if guard.is_none() {
+            *guard = Some(
+                self.item
+                    .get()
+                    .map(|d| d.map(|b| Self::decode(&b)).unwrap_or_default()),
+            );
+        }
+        match guard.as_mut().expect("채움") {
+            Ok(map) => f(map),
+            Err(e) => Err(e.clone()),
+        }
+    }
+
+    fn persist(&self, map: &HashMap<String, Vec<u8>>) -> Result<(), StoreError> {
+        if map.is_empty() {
+            self.item.remove()
+        } else {
+            self.item.set(&Self::encode(map)?)
+        }
+    }
+}
+
+impl SecretStore for VaultSecretStore {
+    fn save(&self, key: &str, data: &[u8]) -> Result<(), StoreError> {
+        self.with_map(|map| {
+            if map.get(key).map(Vec::as_slice) == Some(data) {
+                return Ok(());
+            }
+            let mut next = map.clone();
+            next.insert(key.to_string(), data.to_vec());
+            self.persist(&next)?;
+            *map = next;
+            Ok(())
+        })
+    }
+
+    fn load(&self, key: &str) -> Result<Option<Vec<u8>>, StoreError> {
+        self.with_map(|map| Ok(map.get(key).cloned()))
+    }
+
+    fn delete(&self, key: &str) -> Result<(), StoreError> {
+        self.with_map(|map| {
+            if !map.contains_key(key) {
+                return Ok(());
+            }
+            let mut next = map.clone();
+            next.remove(key);
+            self.persist(&next)?;
+            *map = next;
+            Ok(())
+        })
+    }
+
+    fn delete_all(&self) -> Result<(), StoreError> {
+        self.item.remove()?;
+        *self.cache.lock().unwrap_or_else(|e| e.into_inner()) = Some(Ok(HashMap::new()));
+        Ok(())
+    }
+}
+
 // MARK: - File
 
 /// 파일 backend — 명시적 파일 모드와 기존 데이터 이관에만 쓴다. 단독으로 쓰지 말 것(항상 파사드 경유).
@@ -392,7 +577,15 @@ impl KeychainService {
     pub fn with_mode(service_name: &str, use_system_keychain: bool) -> Self {
         Self {
             file_backend: Arc::new(FileSecretStore::for_service(service_name)),
-            keychain_backend: Arc::new(KeyringSecretStore::new(service_name)),
+            keychain_backend: match VaultSecretStore::keyring(service_name) {
+                Ok(vault) => Arc::new(vault) as Arc<dyn SecretStore>,
+                Err(e) => {
+                    tracing::warn!(
+                        "보안 저장소 항목을 만들지 못했습니다 — 개별 항목 방식으로: {e}"
+                    );
+                    Arc::new(KeyringSecretStore::new(service_name))
+                }
+            },
             use_system_keychain,
         }
     }
@@ -543,6 +736,63 @@ impl KeychainService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn vault_reads_once_and_writes_only_on_change() {
+        use std::sync::atomic::Ordering;
+        let item = Arc::new(MemoryItem::default());
+        struct Shared(Arc<MemoryItem>);
+        impl SingleItem for Shared {
+            fn get(&self) -> Result<Option<Vec<u8>>, StoreError> {
+                self.0.get()
+            }
+            fn set(&self, d: &[u8]) -> Result<(), StoreError> {
+                self.0.set(d)
+            }
+            fn remove(&self) -> Result<(), StoreError> {
+                self.0.remove()
+            }
+        }
+        let v = VaultSecretStore::new(Box::new(Shared(item.clone())));
+        assert_eq!(v.load("cookies").unwrap(), None);
+        v.save("cookies", b"abc").unwrap();
+        v.save("cookies", b"abc").unwrap(); // 같은 값 — 쓰지 않음
+        v.save("oauth_tokens", b"t").unwrap();
+        assert_eq!(v.load("cookies").unwrap().as_deref(), Some(&b"abc"[..]));
+        assert_eq!(
+            item.reads.load(Ordering::SeqCst),
+            1,
+            "실행당 한 번만 읽는다"
+        );
+        assert_eq!(item.writes.load(Ordering::SeqCst), 2);
+        // 새 실행 — 같은 항목에서 모두 복원
+        let v2 = VaultSecretStore::new(Box::new(Shared(item.clone())));
+        assert_eq!(v2.load("oauth_tokens").unwrap().as_deref(), Some(&b"t"[..]));
+        v2.delete("cookies").unwrap();
+        v2.delete("oauth_tokens").unwrap();
+        assert_eq!(item.get().unwrap(), None, "비면 항목을 지운다");
+    }
+
+    #[test]
+    fn vault_read_failure_is_not_retried() {
+        struct Denied(std::sync::atomic::AtomicUsize);
+        impl SingleItem for Denied {
+            fn get(&self) -> Result<Option<Vec<u8>>, StoreError> {
+                self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Err(StoreError::Backend("denied".into()))
+            }
+            fn set(&self, _: &[u8]) -> Result<(), StoreError> {
+                panic!("거부 뒤 쓰면 안 된다")
+            }
+            fn remove(&self) -> Result<(), StoreError> {
+                Ok(())
+            }
+        }
+        let v = VaultSecretStore::new(Box::new(Denied(Default::default())));
+        assert!(v.load("a").is_err());
+        assert!(v.save("a", b"x").is_err());
+        assert!(v.load("b").is_err());
+    }
 
     #[test]
     fn percent_encoding_matches_swift_alphanumerics() {
