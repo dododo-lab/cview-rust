@@ -22,6 +22,14 @@ export function formatDonation(amount) {
   return `${amount.toLocaleString('ko-KR')}원`;
 }
 
+// 닉네임 색을 바꾸는 역할만 클래스로 붙인다. 역할 문자열을 그대로 클래스로 쓰면 일반 시청자
+// `viewer` 가 시청 화면 섹션의 `.viewer`(position:absolute; inset:0) 와 겹쳐 닉네임이 창 전체를 덮는다.
+const ROLE_CLASSES = new Set(['streamer', 'manager', 'channelManager']);
+
+function roleClass(role) {
+  return ROLE_CLASSES.has(role) ? ` ${role}` : '';
+}
+
 function lineHtml(m) {
   const badges = (m.badges || [])
     .map((u) => safeUrl(u))
@@ -39,7 +47,7 @@ function lineHtml(m) {
     ? `<span class="amount">${esc(formatDonation(m.donationAmount))}</span>` : '';
   const sub = m.kind === 'subscription' && m.subscriptionMonths
     ? `<span class="amount">${esc(m.subscriptionMonths)}개월 구독</span>` : '';
-  return `<div class="${classes.join(' ')}" data-id="${esc(m.id)}">${badges}<span class="nick ${esc(m.role)}"${style}>${esc(m.nickname || '익명')}</span>${amount}${sub}<span class="text">${renderContent(m.content, m.emojis)}</span></div>`;
+  return `<div class="${classes.join(' ')}" data-id="${esc(m.id)}">${badges}<span class="nick${roleClass(m.role)}"${style}>${esc(m.nickname || '익명')}</span>${amount}${sub}<span class="text">${renderContent(m.content, m.emojis)}</span></div>`;
 }
 
 const STATE_LABEL = {
