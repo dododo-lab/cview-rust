@@ -30,8 +30,8 @@
 | NAV-05 | 팔로잉 인사이트 레일·스마트 큐(이 페이지 담기 → 멀티뷰) | `Following/FollowingLiveInsightRail`, `ResidentOverviewStage`, `FollowingView+MultiLive` | `following_overview_list_query`, 없음 | M |
 | NAV-06 | 통합 검색: VOD·클립 결과, 최근 검색어, 추천어, 결과 정렬·"전체 보기" | `SearchViews`, `Search/SearchContentView+*`, `SearchResultRows` | `search` 명령은 라이브+채널만, `SearchViewModel`(최근 검색) 미사용, `search_videos` API 미사용 | M |
 | NAV-07 | 검색 디스커버리(태그 칩, 인사이트 레일) | `Search/LiveDiscoveryWorkspace`, `DiscoveryInsight*`, `DiscoveryDesign` | 없음 | M |
-| NAV-08 | 라이브러리 허브(클립·다시보기·받은 영상 탭) | `LibraryHubView` | 없음 | S |
-| NAV-09 | 최근 시청·즐겨찾기 화면(즐겨찾기 토글, 최근 기록 삭제) | `RecentFavoritesView` | `FavoritesStore`·`RecentChannelsStore`·persistence `toggle_favorite`; UI 는 localStorage 최근 시청만 | M |
+| NAV-08 | ✅ 라이브러리 허브(클립·다시보기·받은 영상 탭) | `LibraryHubView` | 없음 | S |
+| NAV-09 | ✅ 최근 시청·즐겨찾기 화면(즐겨찾기 토글, 최근 기록 삭제) | `RecentFavoritesView` | `FavoritesStore`·`RecentChannelsStore`·persistence `toggle_favorite`; UI 는 localStorage 최근 시청만 | M |
 | NAV-10 | 카드 우클릭 메뉴(재생/멀티라이브 추가/채팅만 열기/채널 상세/즐겨찾기/링크 복사/치지직에서 열기) | `HomeV3/LiveCardActionMenu`, `ClipboardActions` | 카드에 "멀티라이브에 추가" 버튼만 | S |
 | NAV-11 | ✅ 뒤로 가기 내비게이션 스택(`⌘[`) | `AppRouter`, `Navigation/*` | `navigation/router.rs`, UI 는 단일 라우트 | S |
 | NAV-12 | 커맨드 팔레트(`⌘K`): 채널·화면·액션 검색 실행 | `CommandPaletteView`, `Actions/CViewActionRegistry` | `actions/registry.rs`·`cview_action.rs`; `⌘K` 는 검색 화면 이동만 | M |
@@ -60,7 +60,7 @@
 | PLY-14 | 헤더 채널 레일(다른 라이브 채널 전환, 채널 관리 패널) | `LiveChannelHeaderRail`, `LiveChannelHeaderControl`, `LiveChannelManagementPanel` | 아바타·제목·메타만 | M |
 | PLY-15 | ✅ 오버레이 볼륨 슬라이더(스크롤 조절, % 표시) | `OverlayVolumeSlider`, `Components/VolumeSymbol` | 하단 range 슬라이더 | S |
 | PLY-16 | 스트림 알림 위치·크기 조정(위치 조정 모드) | `StreamAlertOverlayView`, 설정 `streamAlertAnchorX/Y/Scale` | 알림은 있음, 위치 고정 | S |
-| PLY-17 | 🟡 스트림 북마크(`bookmarkStream` 단축키, 북마크 목록·삭제) | `ShortcutAction.bookmarkStream`, `DataStore+Bookmarks` | persistence `save_bookmark/fetch_bookmarks`, 명령 없음 | S |
+| PLY-17 | ✅ 스트림 북마크(`bookmarkStream` 단축키, 북마크 목록·삭제) | `ShortcutAction.bookmarkStream`, `DataStore+Bookmarks` | persistence `save_bookmark/fetch_bookmarks`, 명령 없음 | S |
 | PLY-18 | 별도 플레이어 창(`⌘N`, 창 분리) | `CViewApp` `player-window` | 단일 창 | M |
 | PLY-19 | 백그라운드 재생 끄기/가림 시 일시정지·화질 상한 | 설정 `continuePlaybackInBackground`, `OcclusionResolutionCap` | 미구현 | S |
 | PLY-20 | ✅ 시청 기록 기록(시작/종료) | `WatchHeartbeatCenter`, `DataStore+WatchHistorySync` | persistence `start/end_watch_record`, 셸 미호출 | S |
@@ -69,10 +69,10 @@
 
 | ID | 항목 | Swift 원본 | Rust 현황 | 크기 |
 |---|---|---|---|---|
-| VOD-01 | VOD 목록(팔로우 채널 다시보기, 이어보기, 검색, 나중에 보기) | `VODBrowseView`, `VOD/VODMediaCard`, `VODHeroComponents`, `VODPreviewInspector` | `VodBrowseViewModel`, `vod_feed`, `vod_sync_*`, persistence `vod_watch_later`; 명령·화면 없음 | L |
-| VOD-02 | VOD 플레이어(시크바, 속도, 화질, 이어보기 저장) | `VODPlayerView`, `TimelineSlider`, `VODStreamResolver` | `VodPlayerViewModel`·`VodProgressPersistenceWriter`, `VodPlayerEngine` 트레잇만 — WebView `<video>`/hls.js 엔진 필요 | L |
-| VOD-03 | 클립 플레이어(임베드/스트림, 필름스트립 독, 다음 클립) | `ClipPlayerView`, `ClipEmbedWebView`, `ClipFilmstripDock` | `ClipPlayerViewModel`, `clip_detail`/`clip_stream_url` API | M |
-| VOD-04 | 인기 클립 화면(기간 필터, 정렬, 히어로, 미리보기) | `PopularClipsView`, `PopularClipCards`, `Clips/ClipHeroComponents`, `ClipPreviewInspector` | `ClipBrowserViewModel`, `home_popular_clips` | M |
+| VOD-01 | 🟡 VOD 목록(팔로우 채널 다시보기, 이어보기, 검색, 나중에 보기) | `VODBrowseView`, `VOD/VODMediaCard`, `VODHeroComponents`, `VODPreviewInspector` | `VodBrowseViewModel`, `vod_feed`, `vod_sync_*`, persistence `vod_watch_later`; 명령·화면 없음 | L |
+| VOD-02 | ✅ VOD 플레이어(시크바, 속도, 화질, 이어보기 저장) | `VODPlayerView`, `TimelineSlider`, `VODStreamResolver` | `VodPlayerViewModel`·`VodProgressPersistenceWriter`, `VodPlayerEngine` 트레잇만 — WebView `<video>`/hls.js 엔진 필요 | L |
+| VOD-03 | ✅ 클립 플레이어(임베드/스트림, 필름스트립 독, 다음 클립) | `ClipPlayerView`, `ClipEmbedWebView`, `ClipFilmstripDock` | `ClipPlayerViewModel`, `clip_detail`/`clip_stream_url` API | M |
+| VOD-04 | ✅ 인기 클립 화면(기간 필터, 정렬, 히어로, 미리보기) | `PopularClipsView`, `PopularClipCards`, `Clips/ClipHeroComponents`, `ClipPreviewInspector` | `ClipBrowserViewModel`, `home_popular_clips` | M |
 | VOD-05 | ✅ 채널 상세의 VOD·클립 탭 | `ChannelVODClipTab` | `VodChannelBrowser`, `clip_list`/`vod_list` API | M |
 | VOD-06 | 다운로드(VOD/클립 HLS 세그먼트 결합 저장, 진행률, 취소·재시도) | `VideoDownloadService`, `VideoDownloadButton`, `VideoDownloadViews` | `media_download`(작업 모델·폴더 규칙)만, 다운로더 없음 | L |
 | VOD-07 | 다운로드 보관함(진행 중/완료, 끝난 항목 지우기, 폴더 열기) | `DownloadsLibraryView`, `DownloadHistoryStore` | `DownloadHistoryStore`, persistence `download_history` | M |

@@ -8,6 +8,7 @@ pub mod auth;
 pub mod chat;
 pub mod content;
 pub mod live;
+pub mod media;
 pub mod multi_live;
 pub mod player;
 pub mod settings;

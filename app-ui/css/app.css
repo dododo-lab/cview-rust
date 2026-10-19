@@ -1028,3 +1028,40 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .sheet textarea { min-height: 140px; }
 .sheet textarea:focus, .sheet input:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
 .sheet-actions { display: flex; justify-content: flex-end; gap: var(--sp-sm); }
+
+/* ══ 다시보기·클립 플레이어 (media.js) ═══════════════════════ */
+.media-layout { display: flex; gap: var(--sp-lg); align-items: flex-start; }
+.media-main { flex: 1; min-width: 0; }
+.media-stage { position: relative; aspect-ratio: 16 / 9; max-height: calc(100vh - 220px); border-radius: var(--radius-lg); overflow: hidden; background: #000; margin: 0 auto; }
+.media-stage.vertical { aspect-ratio: 9 / 16; max-height: calc(100vh - 200px); max-width: 100%; height: calc(100vh - 200px); }
+.media-stage video { width: 100%; height: 100%; display: block; background: #000; }
+.media-stage .empty { height: 100%; color: #ccc; }
+.media-bar { display: flex; align-items: center; gap: var(--sp-sm); flex-wrap: wrap; margin-top: var(--sp-md); }
+.media-title { font-size: var(--fs-headline); font-weight: 800; letter-spacing: -0.3px; line-height: 1.3; }
+.media-meta { color: var(--text-secondary); font-size: var(--fs-caption); margin-top: 4px; display: flex; align-items: center; flex-wrap: wrap; gap: 2px; }
+.media-meta .link-btn { padding: 0; font-weight: 700; color: var(--text-primary); }
+.media-title-box { min-width: 0; max-width: 720px; }
+.media-select { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-footnote); color: var(--text-secondary); }
+.media-side { width: 380px; flex: none; max-height: calc(100vh - 140px); overflow-y: auto; }
+.media-side .section-title { margin-top: 0; font-size: var(--fs-subhead); }
+.dock-grid { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: var(--sp-sm); }
+.dock-grid .card-title { font-size: var(--fs-footnote); }
+.progress-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255, 255, 255, 0.25); }
+.progress-bar i { display: block; height: 100%; background: var(--live); }
+@media (max-width: 1100px) { .media-layout { flex-direction: column; } .media-side { width: 100%; } }
+
+/* ══ 보관함 (library.js) ═══════════════════════════════════════ */
+.lib-tabs { margin-bottom: var(--sp-sm); }
+.lib-filters { display: flex; gap: var(--sp-sm); margin-bottom: var(--sp-lg); min-height: 0; }
+.lib-filters:empty { display: none; }
+.bookmark-list { display: flex; flex-direction: column; gap: var(--sp-sm); max-width: 980px; }
+.bookmark-row {
+  display: flex; align-items: center; gap: var(--sp-md); padding: 8px 10px; border-radius: var(--radius-lg);
+  background: var(--surface-base); border: 1px solid var(--border-subtle);
+}
+.bookmark-thumb { width: 120px; aspect-ratio: 16 / 9; border-radius: 8px; overflow: hidden; flex: none; background: var(--surface-elevated); }
+.bookmark-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.bookmark-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-caption); }
+.bookmark-text span { color: var(--text-tertiary); font-size: var(--fs-footnote); }
+
+.clip-embed { width: 100%; height: 100%; border: 0; display: block; background: #000; }

@@ -10,6 +10,8 @@ import { setTheme, syncTheme, resolvedTheme, onThemeChange } from './theme.js';
 import { MultiLivePage, multiLiveIcon, bindMultiLiveAddButtons } from './multilive.js';
 import { LivePage, liveIcon } from './live.js';
 import { ChannelPage } from './channel.js';
+import { MediaPage } from './media.js';
+import { LibraryPage, libraryIcon } from './library.js';
 
 // 사이드바 — Swift `AppRouter.SidebarItem` 라벨.
 const ROUTES = [
@@ -18,6 +20,7 @@ const ROUTES = [
   { id: 'popular', title: '인기', icon: icons.popular },
   { id: 'live', title: '라이브', icon: liveIcon },
   { id: 'multilive', title: '멀티라이브', icon: multiLiveIcon },
+  { id: 'library', title: '보관함', icon: libraryIcon },
   { id: 'search', title: '검색', icon: icons.search, section: '탐색' },
   { id: 'settings', title: '설정', icon: icons.settings, section: '앱' },
 ];
@@ -217,6 +220,8 @@ async function main() {
   });
   pages.multilive = new MultiLivePage(content, { isLoggedIn });
   pages.live = new LivePage(content, { isLoggedIn });
+  pages.library = new LibraryPage(content, { isLoggedIn, onOpenChannel: openChannelPage });
+  pages.media = new MediaPage(content, { onBack: goBack, onOpenChannel: openChannelPage });
   pages.channel = new ChannelPage(content, { onBack: goBack, onPlay: openChannel, onAddMulti: addToMultiLive });
   viewer = new Viewer(document.getElementById('viewer'), { isLoggedIn, onClose: onViewerClosed });
   bindMultiLiveAddButtons(addToMultiLive);
@@ -239,6 +244,8 @@ async function main() {
     }
   });
   window.addEventListener('mouseup', (e) => { if (e.button === 3) goBack(); });
+  window.addEventListener('cview:open-vod', (e) => e.detail && navigate('media', { kind: 'vod', id: e.detail.videoNo }));
+  window.addEventListener('cview:open-clip', (e) => e.detail && navigate('media', { kind: 'clip', id: e.detail.clipUid }));
   window.addEventListener('cview:open-channel', (e) => openChannelPage(e.detail && e.detail.channelId));
   // 시청 화면 헤더(아바타·채널명)를 누르면 채널 상세
   document.querySelector('#viewer .viewer-header').addEventListener('click', (e) => {

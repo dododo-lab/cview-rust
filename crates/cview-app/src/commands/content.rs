@@ -120,8 +120,8 @@ pub async fn channel_clips(
     Ok(PageDto::new(res.data, res.total_count, size))
 }
 
-/// 인기 클립 — `filter`: `WITHIN_ONE_DAY` / `WITHIN_SEVEN_DAYS` / `WITHIN_THIRTY_DAYS` / `ALL`,
-/// `order`: `POPULAR` / `RECENT`.
+/// 인기 클립 — `filter`: `WITHIN_1_DAY` / `WITHIN_7_DAYS` / `WITHIN_30_DAYS`,
+/// `order`: `POPULAR` / `RECOMMEND` (원본 ClipBrowserSupport.apiValue).
 #[tauri::command]
 pub async fn popular_clips(
     services: State<'_, AppServices>,
@@ -131,7 +131,7 @@ pub async fn popular_clips(
     Ok(services
         .api
         .home_popular_clips(
-            filter.as_deref().unwrap_or("WITHIN_SEVEN_DAYS"),
+            filter.as_deref().unwrap_or("WITHIN_7_DAYS"),
             order.as_deref().unwrap_or("POPULAR"),
         )
         .await?)
@@ -176,6 +176,14 @@ pub async fn clip_play(
             .map(|u| u.to_string()),
         _ => None,
     };
+    // 인키 경로가 막히면 상세의 재생 주소(videoPlayUrl → videoUrl)를 쓴다.
+    let stream_url = stream_url.or_else(|| {
+        detail
+            .video_play_url
+            .clone()
+            .or_else(|| detail.video_url.clone())
+            .filter(|u| u.starts_with("http"))
+    });
     Ok(ClipPlayDto { detail, stream_url })
 }
 
@@ -202,6 +210,87 @@ pub async fn channel_follow(
         services.api.unfollow(&channel_id).await?;
     }
     Ok(())
+}
+
+// MARK: - 팔로잉 전체·다시보기 피드
+
+/// 팔로우 채널 한 줄(오프라인 포함).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FollowedChannelDto {
+    pub channel_id: String,
+    pub channel_name: String,
+    pub channel_image_url: Option<String>,
+    pub is_live: bool,
+    pub live_title: Option<String>,
+    pub viewer_count: Option<i64>,
+    pub category_name: Option<String>,
+}
+
+/// 팔로우한 채널 전체 — 원본 FollowingChannelSidebar/DenseRow 의 바탕.
+#[tauri::command]
+pub async fn following_channels_all(
+    services: State<'_, AppServices>,
+    refresh: Option<bool>,
+) -> CmdResult<Vec<FollowedChannelDto>> {
+    if !services.auth.is_authenticated() {
+        return Err(CommandError("로그인이 필요합니다".into()));
+    }
+    let page = services
+        .api
+        .fetch_following_rows(refresh.unwrap_or(false))
+        .await?;
+    Ok(page
+        .rows
+        .iter()
+        .map(|r| {
+            let live = r.list_live_info.as_ref();
+            FollowedChannelDto {
+                channel_id: r.channel_id.clone(),
+                channel_name: r.channel_name.clone(),
+                channel_image_url: r.channel_image_url.clone().filter(|u| !u.is_empty()),
+                is_live: r.is_live,
+                live_title: live.and_then(|l| l.live_title.clone()),
+                viewer_count: live.and_then(|l| l.concurrent_user_count),
+                category_name: live.and_then(|l| l.live_category_value.clone()),
+            }
+        })
+        .collect())
+}
+
+/// 팔로우 채널 최신 다시보기를 모아 최신순으로 — 원본 VODFeedAggregator(간소화).
+#[tauri::command]
+pub async fn following_vods(
+    services: State<'_, AppServices>,
+    channels: Option<usize>,
+    per_channel: Option<i64>,
+) -> CmdResult<Vec<VodInfo>> {
+    if !services.auth.is_authenticated() {
+        return Err(CommandError("로그인이 필요합니다".into()));
+    }
+    let page = services.api.fetch_following_rows(false).await?;
+    let ids: Vec<String> = page
+        .rows
+        .iter()
+        .take(channels.unwrap_or(24).clamp(1, 60))
+        .map(|r| r.channel_id.clone())
+        .collect();
+    let per = per_channel.unwrap_or(3).clamp(1, 10);
+    let mut all = Vec::new();
+    for chunk in ids.chunks(6) {
+        let futs = chunk
+            .iter()
+            .map(|id| services.api.vod_list(id, 0, per, true));
+        for res in futures_util::future::join_all(futs)
+            .await
+            .into_iter()
+            .flatten()
+        {
+            all.extend(res.data);
+        }
+    }
+    all.sort_by_key(|v| std::cmp::Reverse(v.publish_date));
+    Ok(all)
 }
 
 // MARK: - 개인 데이터
