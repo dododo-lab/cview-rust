@@ -84,6 +84,16 @@ pub async fn player_start(
     drop(channel);
 
     services.begin_watch_record(&info);
+    *services
+        .playing_stream
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Some((
+        plan.stream_url.clone(),
+        info.channel
+            .as_ref()
+            .map(|c| c.channel_name.clone())
+            .unwrap_or_else(|| channel_id.clone()),
+    ));
 
     Ok(PlaybackStartedDto {
         live: LiveDetailDto::from_live_info(&info, &channel_id),

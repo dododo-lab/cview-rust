@@ -157,6 +157,7 @@ export class ViewerControls {
   goLive() {
     const v = this.video;
     if (v && v.paused) this.viewer.player.call('play');
+    if (v && v.playbackRate !== 1) { this.viewer.player.call('setRate', 1); if (this.viewer.panel) this.viewer.panel.rate = 1; }
     this.viewer.player.call('seekToLiveEdge');
     this.flash('라이브로 이동');
   }

@@ -47,13 +47,13 @@
 | PLY-01 | ✅ 화질 선택기(자동/1080p/720p…, 현재 화질 표시) | `LiveStreamView`, `PlayerSettingsTab`, `MultiLiveOverlays`("재생 품질") | player.html `getLevels/requestManualLevel/setForcedHeight`, 상태줄 텍스트만 | S |
 | PLY-02 | ✅ 재생/일시정지·라이브로 복귀 버튼, 지연 배지 | `LiveStreamView+Logic`, `LiveStreamHeader` | `seekToLiveEdge` 있음, 버튼 없음(지연은 상태 텍스트) | S |
 | PLY-03 | 라이브 되감기(타임시프트) 레일·`←/→` 10초, `⇧←/→` 1분 | `LiveRewindRail`, `TimelineSlider`, `StreamCoordinator+Timeshift` | 서버 타임머신·`seekTimeshift` 있음, 로컬 녹화기 미등록, UI 없음 | L |
-| PLY-04 | 재생 속도 조절 | `PlayerAdvancedSettings+MediaTabs`(재생 탭) | `setRate` 있음, UI 없음 | S |
-| PLY-05 | 플레이어 고급 설정 패널(이퀄라이저/비디오/화면/재생/지연/도구 탭) | `PlayerAdvancedSettingsView`, `PlayerAdvancedSettings+*`, `MLSettingsWindowView`, `ML*Tab` | 없음 | L |
-| PLY-06 | 이퀄라이저(프리셋·프리앰프·10밴드) | `PlayerAdvancedSettings+Equalizer`, `MLEqualizerTab`, `EqualizerPreset` | player.html `setEqualizer*`, `can_use_equalizer` VM, 설정 키 저장만 | M |
-| PLY-07 | 비디오 보정(밝기·대비·채도·색조·감마), 선명한 화면, 자동 보정, 업스케일 | `MLVideoTab`, `PlayerViewModel+AudioVideoAdjust` | player.html `applyVideoAdjust`·`setSharpPixelScaling`·`setPictureEnhancement` | M |
-| PLY-08 | 화면 비율 강제 | `PlayerAdvancedSettings+MediaTabs`(화면) | `setForcedAspectRatio` 있음 | S |
+| PLY-04 | ✅ 재생 속도 조절 | `PlayerAdvancedSettings+MediaTabs`(재생 탭) | `setRate` 있음, UI 없음 | S |
+| PLY-05 | ✅ 플레이어 고급 설정 패널(이퀄라이저/비디오/화면/재생/지연/도구 탭) | `PlayerAdvancedSettingsView`, `PlayerAdvancedSettings+*`, `MLSettingsWindowView`, `ML*Tab` | 없음 | L |
+| PLY-06 | 🟡 이퀄라이저(프리셋·프리앰프·10밴드) | `PlayerAdvancedSettings+Equalizer`, `MLEqualizerTab`, `EqualizerPreset` | player.html `setEqualizer*`, `can_use_equalizer` VM, 설정 키 저장만 | M |
+| PLY-07 | ✅ 비디오 보정(밝기·대비·채도·색조·감마), 선명한 화면, 자동 보정, 업스케일 | `MLVideoTab`, `PlayerViewModel+AudioVideoAdjust` | player.html `applyVideoAdjust`·`setSharpPixelScaling`·`setPictureEnhancement` | M |
+| PLY-08 | ✅ 화면 비율 강제 | `PlayerAdvancedSettings+MediaTabs`(화면) | `setForcedAspectRatio` 있음 | S |
 | PLY-09 | ✅ 스크린샷 저장(`⌘S`, PNG/JPEG, 저장 경로) | `PlayerViewModel+Screenshot`, `HLSJSPlayerEngine+Screenshot`, `ScreenshotEncoder` | `takeScreenshot` + `can_take_screenshot`, 파일 저장 명령 없음 | S |
-| PLY-10 | 녹화 시작/중지(`⌥⌘R`) | `PlayerViewModel+Recording`, `HLSJSRecordingWriter`, `StreamRecordingService` | `startRecording/stopRecording`(MediaRecorder), 저장 명령 없음 | M |
+| PLY-10 | 🟡 녹화 시작/중지(`⌥⌘R`) | `PlayerViewModel+Recording`, `HLSJSRecordingWriter`, `StreamRecordingService` | `startRecording/stopRecording`(MediaRecorder), 저장 명령 없음 | M |
 | PLY-11 | ✅ 전체 화면 모드 2종(영상만 / 영상+채팅), `⇧⌘F`·`⌃⌘F` | `LiveFullscreenPresentation` | 플레이어 영역 전체화면 버튼만 | S |
 | PLY-12 | 채팅 표시 모드(사이드/오버레이/숨김) + 오버레이 위치·크기·투명도 | `ChatOverlayView`, `ChatDisplayMode`, 설정 `overlay*` | 사이드 고정 | M |
 | PLY-13 | ✅ 로딩/오류/종료 오버레이 고도화(재시도, 다시 확인, 브랜드 로딩) | `StreamLoadingOverlay`, `BrandedLoadingView`, `ErrorStateView` | 스피너+문구 오버레이 | S |
@@ -138,7 +138,7 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 | SET-03 | ✅ 레이턴시 프리셋·고급(`latencyPreset/Target/Max/Min/MaxRate/MinRate/CatchUp/SlowDown`, PID `Kp/Ki/Kd`) | `LatencySettingsContent` | 모델·저지연 컨트롤러 있음, UI 없음 | M |
 | SET-04 | ✅ 라이브 되감기 키(`liveRewindEnabled/WindowMinutes/DiskBudgetMB`), 실험 키(`experimentalServerTimeMachine`, `experimentalMatchWebV2`) | `PlayerSettingsTab` "라이브 되감기"·"고급 / 실험" | 모델 있음 | S |
 | SET-05 | ✅ 스크린샷 키(`screenshotPath`, `screenshotFormat`) | `PlayerSettingsTab` "스크린샷" | 모델 있음 | S |
-| SET-06 | 🟡 비디오·오디오 키(`equalizer*`, `videoAdjust*`, `sharpPixelScaling`, `autoPictureEnhancement`, `videoUpscaling`, `aspectRatio`) | `PlayerSettingsTab` "화면 & 비디오 보정"·"이퀄라이저" | 모델 있음(PLY-05~08 과 묶음) | S |
+| SET-06 | ✅ 비디오·오디오 키(`equalizer*`, `videoAdjust*`, `sharpPixelScaling`, `autoPictureEnhancement`, `videoUpscaling`, `aspectRatio`) | `PlayerSettingsTab` "화면 & 비디오 보정"·"이퀄라이저" | 모델 있음(PLY-05~08 과 묶음) | S |
 | SET-07 | 🟡 채팅 설정 탭(디자인·표시 모드·필터·스크롤·오버레이·TTS·배경·사용자 관리) | `ChatSettingsTab`, `Components/ChatSettingsSharedSections` | `chat` 도메인 저장만 | M |
 | SET-08 | ✅ 일반 키: `launchAtLogin`, `showInMenuBar`, `alwaysOnTop`, `restoreWindowOnLaunch`, `autoRefreshInterval`, `notifyOnLiveStart/CategoryChange/TitleChange` | `GeneralSettingsTab` | 모델 있음, 2개만 노출 | S |
 | SET-09 | ✅ 외관 키: `transparencyMode`, `motionQuality`, `frameRateMode`, `compactMode`, `sidebarWidth/Scale`, 테마 미리보기 | `GeneralSettingsTab`, `GeneralSettingsTab+ThemePreview` | 테마만 | S |

@@ -100,6 +100,10 @@ export const api = {
   settingsImport: (json) => invoke('settings_import', { json }),
   settingsReset: (domain) => invoke('settings_reset', { domain }),
   networkPreset: (preset) => invoke('network_preset', { preset }),
+  playerRecordStart: () => invoke('player_record_start'),
+  playerRecordStop: () => invoke('player_record_stop'),
+  playerRecordStatus: () => invoke('player_record_status'),
+  equalizerPresets: () => invoke('equalizer_presets'),
   settingsGet: () => invoke('settings_get'),
   settingsUpdate: (domain, patch) => invoke('settings_update', { domain, patch }),
 };

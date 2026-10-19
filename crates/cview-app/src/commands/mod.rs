@@ -11,6 +11,7 @@ pub mod live;
 pub mod media;
 pub mod multi_live;
 pub mod player;
+pub mod recording;
 pub mod settings;
 
 use serde::Serialize;

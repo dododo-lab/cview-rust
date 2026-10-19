@@ -1288,3 +1288,28 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 :root.compact .nav-item { height: 32px; }
 :root.compact .card-title { font-size: var(--fs-caption); }
 :root.compact .home { gap: 24px; }
+
+/* ══ 플레이어 고급 패널 (player-panel.js) ═════════════════════ */
+.player-panel {
+  position: absolute; right: 12px; bottom: 12px; z-index: 6; width: min(380px, calc(100% - 24px)); max-height: calc(100% - 24px);
+  overflow-y: auto; padding: 10px; border-radius: 16px; background: var(--surface-popover); color: var(--text-primary);
+  border: 1px solid var(--border-subtle); box-shadow: var(--shadow-lg);
+}
+.player-panel[hidden] { display: none; }
+.pp-head { margin-bottom: 8px; }
+.pp-body { display: flex; flex-direction: column; gap: 4px; }
+.pp-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 4px; font-size: var(--fs-caption); }
+.pp-row.slider input { flex: 1; accent-color: var(--primary); }
+.pp-row.slider > span { width: 56px; flex: none; }
+.pp-row.slider output { width: 44px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.pp-note { color: var(--text-tertiary); font-size: var(--fs-footnote); padding: 0 4px 6px; }
+.pp-tools { display: flex; gap: 8px; flex-wrap: wrap; padding: 4px; }
+.eq-bands { display: grid; grid-template-columns: repeat(10, 1fr); gap: 2px; padding: 6px 0; }
+.eq-band { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 10px; color: var(--text-tertiary); }
+.eq-band input { writing-mode: vertical-lr; direction: rtl; width: 22px; height: 110px; accent-color: var(--primary); }
+.eq-band output { font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.rec-btn .rec-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid currentColor; display: block; }
+.rec-btn.recording { color: var(--live); }
+.rec-btn.recording .rec-dot { background: var(--live); border-color: var(--live); animation: live-pulse 1.2s ease-in-out infinite; }
+.pp-note.warn { color: var(--warning); }
+.pp-row.disabled { opacity: 0.5; }

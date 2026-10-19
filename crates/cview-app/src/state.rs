@@ -153,6 +153,10 @@ pub struct AppServices {
     pub engine: Arc<WebViewHlsEngine>,
     /// 재생 시작·정지 직렬화 — 지금 재생 중인 채널.
     pub player_channel: tokio::sync::Mutex<Option<String>>,
+    /// 지금 단독 재생 중인 원본 스트림 주소와 채널 이름(녹화용).
+    pub playing_stream: Mutex<Option<(url::Url, String)>>,
+    /// 방송 녹화(원본 StreamRecordingService).
+    pub recorder: cview_player::recording::StreamRecordingService,
     /// 진행 중인 시청 기록 — (채널, 시작 시각). 정지할 때 끝낸다(원본 WatchHeartbeatCenter).
     pub watch_record: Mutex<Option<(String, chrono::DateTime<chrono::Utc>)>>,
     pub sinks: ShellSinks,
@@ -272,6 +276,8 @@ impl AppServices {
             engine,
             player_channel: tokio::sync::Mutex::new(None),
             watch_record: Mutex::new(None),
+            playing_stream: Mutex::new(None),
+            recorder: cview_player::recording::StreamRecordingService::new(),
             sinks,
             login_task: Mutex::new(None),
         }
@@ -312,6 +318,11 @@ impl AppServices {
         if channel.take().is_some() {
             self.player.stop_stream().await;
         }
+        self.recorder.stop_recording();
+        *self
+            .playing_stream
+            .lock()
+            .unwrap_or_else(|e| e.into_inner()) = None;
         self.end_watch_record();
     }
 
