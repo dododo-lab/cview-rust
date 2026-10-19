@@ -8,12 +8,14 @@ import { HomePage } from './home.js';
 import { Sidebar } from './sidebar.js';
 import { setTheme, syncTheme, resolvedTheme, onThemeChange } from './theme.js';
 import { MultiLivePage, multiLiveIcon, bindMultiLiveAddButtons } from './multilive.js';
+import { LivePage, liveIcon } from './live.js';
 
 // 사이드바 — Swift `AppRouter.SidebarItem` 라벨.
 const ROUTES = [
   { id: 'home', title: '홈', icon: icons.home },
   { id: 'following', title: '팔로잉', icon: icons.following },
   { id: 'popular', title: '인기', icon: icons.popular },
+  { id: 'live', title: '라이브', icon: liveIcon },
   { id: 'multilive', title: '멀티라이브', icon: multiLiveIcon },
   { id: 'search', title: '검색', icon: icons.search, section: '탐색' },
   { id: 'settings', title: '설정', icon: icons.settings, section: '앱' },
@@ -72,14 +74,45 @@ async function refreshSidebarFollowing() {
   followingTimer = setTimeout(refreshSidebarFollowing, SIDEBAR_FOLLOWING_MS);
 }
 
+// 단독 라이브와 멀티라이브는 동시에 소리를 내지 않는다 — 마지막으로 연 쪽이 소리를 가진다.
+let audioOwner = null;
+function setAudioOwner(owner) {
+  if (owner === audioOwner) return;
+  audioOwner = owner;
+  if (owner === 'live') {
+    viewer.suspendAudio(false);
+    api.multiLiveSetAudioSuspended(true).catch(() => {});
+  } else if (owner === 'multilive') {
+    viewer.suspendAudio(true);
+    api.multiLiveSetAudioSuspended(false).catch(() => {});
+  }
+}
+
+let previousRoute = 'home';
 async function navigate(route) {
-  if (viewer && viewer.isOpen) await viewer.close();
+  if (current && current !== 'live') previousRoute = current;
   current = route;
   sidebar.setActive(route);
+  // 라이브 메뉴는 재생 중이면 시청 화면, 아니면 이어 볼 채널 목록이다.
+  const showViewer = route === 'live' && viewer.isPlaying;
   for (const [id, page] of Object.entries(pages)) {
-    page.root.hidden = id !== route;
+    page.root.hidden = showViewer || id !== route;
   }
+  if (showViewer) {
+    viewer.reveal();
+    setAudioOwner('live');
+    return;
+  }
+  viewer.hide();
+  if (route === 'multilive') setAudioOwner('multilive');
   pages[route].show();
+}
+
+function onViewerClosed() {
+  sidebar.setPlaying('live', false);
+  api.multiLiveSetAudioSuspended(false).catch(() => {});
+  audioOwner = null;
+  if (current === 'live') navigate(previousRoute || 'home');
 }
 
 function renderAccount() {
@@ -122,6 +155,9 @@ async function openChannel(channelId) {
     player = (await api.settingsGet()).player;
   } catch { /* 기본값 */ }
   viewer.open(channelId, player);
+  sidebar.setPlaying('live', true);
+  audioOwner = null;
+  await navigate('live');
 }
 
 /** 카드·시청 화면의 "멀티라이브에 추가" — 멀티라이브 화면으로 옮겨 패인을 띄운다. */
@@ -157,7 +193,8 @@ async function main() {
     onLogout: logout,
   });
   pages.multilive = new MultiLivePage(content, { isLoggedIn });
-  viewer = new Viewer(document.getElementById('viewer'), { isLoggedIn });
+  pages.live = new LivePage(content, { isLoggedIn });
+  viewer = new Viewer(document.getElementById('viewer'), { isLoggedIn, onClose: onViewerClosed });
   bindMultiLiveAddButtons(addToMultiLive);
   installViewerMultiLiveButton();
 

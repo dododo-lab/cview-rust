@@ -4,6 +4,7 @@ import { esc, safeUrl, toast, icons } from './dom.js';
 import { PlayerBridge } from './player.js';
 import { ChatPanel } from './chat.js';
 import { StreamAlerts } from './donations.js';
+import { installChatSplitter } from './splitter.js';
 
 const PHASE_TEXT = {
   idle: '',
@@ -55,6 +56,35 @@ export class Viewer {
       api.playerSetVolume(Number(this.volume.value) / 100).catch(() => {});
     });
     this.muteButton.innerHTML = icons.muted;
+    this.audioSuspended = false;
+    this.mutedBeforeSuspend = false;
+    installChatSplitter({ container: root, chat: root.querySelector('.chat'), key: 'viewer' });
+  }
+
+  /** 재생 중인 채널이 있는가(화면을 숨겨도 재생은 이어진다). */
+  get isPlaying() {
+    return Boolean(this.channelId);
+  }
+
+  /** 재생은 두고 화면만 숨긴다 — 다른 메뉴로 갈 때. */
+  hide() {
+    this.root.hidden = true;
+  }
+
+  reveal() {
+    if (this.channelId) this.root.hidden = false;
+  }
+
+  /** 멀티라이브가 소리를 가져갈 때 잠시 음소거한다(버튼 상태는 그대로). */
+  suspendAudio(on) {
+    if (on === this.audioSuspended) return;
+    this.audioSuspended = on;
+    if (on) {
+      this.mutedBeforeSuspend = this.player.isMuted();
+      this.player.call('setMuted', true);
+    } else {
+      this.player.call('setMuted', this.mutedBeforeSuspend);
+    }
   }
 
   get isOpen() {
@@ -142,7 +172,12 @@ export class Viewer {
       this.showOverlay('');
       // 페이지는 자동재생 정책 때문에 음소거로 시작한다 — 설정에 따라 바로 해제한다.
       this.player.call('setVolume', Number(this.volume.value) / 100);
-      this.setMuted(this.startMuted);
+      if (this.audioSuspended) {
+        this.mutedBeforeSuspend = this.startMuted;
+        this.player.call('setMuted', true);
+      } else {
+        this.setMuted(this.startMuted);
+      }
     } else if (type === 'fatalError') {
       this.showOverlay(`재생 오류: ${data.details || data.type || ''}`, true);
     } else if (type === 'playbackState') {

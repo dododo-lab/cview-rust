@@ -10,12 +10,21 @@ import { esc, safeUrl, toast } from './dom.js';
 import { PlayerBridge } from './player.js';
 import { ChatPanel } from './chat.js';
 import { StreamAlerts } from './donations.js';
+import { installChatSplitter } from './splitter.js';
+import { FOCUS_DIRECTIONS, FOCUS_RATIO, focusGrid, ratioFromPointer, clampFocusRatio } from './focus-layout.js';
 
 export const multiLiveIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5Zm9 9a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2v-5ZM14 3h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM5 12h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2Z" opacity=".9"/></svg>';
 
 const ICON_CLOSE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
 const ICON_SOUND = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4V9Z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 const ICON_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+
+const DIRECTION_ICONS = {
+  left: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4" width="11" height="16" rx="2"/><rect x="16" y="4" width="5" height="7" rx="1.5" opacity=".55"/><rect x="16" y="13" width="5" height="7" rx="1.5" opacity=".55"/></svg>',
+  right: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="10" y="4" width="11" height="16" rx="2"/><rect x="3" y="4" width="5" height="7" rx="1.5" opacity=".55"/><rect x="3" y="13" width="5" height="7" rx="1.5" opacity=".55"/></svg>',
+  top: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="11" rx="2"/><rect x="3" y="16" width="8" height="5" rx="1.5" opacity=".55"/><rect x="13" y="16" width="8" height="5" rx="1.5" opacity=".55"/></svg>',
+  bottom: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="10" width="18" height="11" rx="2"/><rect x="3" y="3" width="8" height="5" rx="1.5" opacity=".55"/><rect x="13" y="3" width="8" height="5" rx="1.5" opacity=".55"/></svg>',
+};
 
 const STATE_TEXT = {
   idle: '대기 중',
@@ -43,6 +52,16 @@ export class MultiLivePage {
         <h1 class="page-title">멀티라이브</h1>
         <span class="page-subtitle ml-count"></span>
         <div class="grow"></div>
+        <div class="ml-focus-controls" hidden>
+          <div class="segmented" role="group" aria-label="포커스 방향">
+            ${FOCUS_DIRECTIONS.map((d) => `<button class="seg icon" data-direction="${d.id}" title="${d.label}" aria-label="${d.label}">${DIRECTION_ICONS[d.id]}</button>`).join('')}
+          </div>
+          <label class="ml-ratio" title="메인 크기">
+            <span>메인</span>
+            <input type="range" min="${FOCUS_RATIO.min * 100}" max="${FOCUS_RATIO.max * 100}" step="1" aria-label="메인 패인 크기">
+            <output></output>
+          </label>
+        </div>
         <div class="segmented" role="group" aria-label="레이아웃">
           <button class="seg" data-layout="grid">그리드</button>
           <button class="seg" data-layout="focus">포커스</button>
@@ -89,6 +108,17 @@ export class MultiLivePage {
     this.picker = this.root.querySelector('.ml-picker');
     this.pickerList = this.root.querySelector('.ml-picker-list');
     this.pickerFilter = this.root.querySelector('.ml-picker-filter');
+    this.focusControls = this.root.querySelector('.ml-focus-controls');
+    this.ratioInput = this.root.querySelector('.ml-ratio input');
+    this.ratioOutput = this.root.querySelector('.ml-ratio output');
+    this.divider = document.createElement('div');
+    this.divider.className = 'ml-divider';
+    this.divider.title = '끌어서 메인 크기 조절';
+    this.divider.hidden = true;
+    this.stage.append(this.divider);
+    this.localRatio = null; // 드래그 중 미리보기 비율
+    this.bindFocusControls();
+    installChatSplitter({ container: this.root.querySelector('.ml-body'), chat: this.root.querySelector('.ml-chat'), key: 'multilive' });
     this.alerts = new StreamAlerts(this.stage);
     this.chat = new ChatPanel(this.root.querySelector('.ml-chat'), { isLoggedIn, onHighlight: (m) => this.alerts.push(m) });
 
@@ -184,8 +214,17 @@ export class MultiLivePage {
     for (const b of this.root.querySelectorAll('[data-ml="add"]')) b.disabled = !state.canAdd;
     this.root.querySelector('[data-ml="stop-all"]').hidden = n === 0;
 
-    this.stage.className = `ml-stage ml-n${Math.min(n, 4)} ${state.layout === 'focus' && n > 1 ? 'ml-focus' : ''}`;
+    const focus = state.layout === 'focus' && n > 1;
+    this.stage.className = `ml-stage ml-n${Math.min(n, 4)} ${focus ? `ml-focus dir-${state.focusDirection}` : ''}`;
     this.empty.hidden = n > 0;
+    this.focusControls.hidden = state.layout !== 'focus';
+    for (const b of this.root.querySelectorAll('[data-direction]')) {
+      b.classList.toggle('active', b.dataset.direction === state.focusDirection);
+    }
+    if (this.localRatio == null) {
+      this.ratioInput.value = String(Math.round((state.focusRatio || 0.7) * 100));
+      this.ratioOutput.textContent = `${this.ratioInput.value}%`;
+    }
 
     const order = paneOrder(sessions, state.focusMainId || state.selectedId, state.layout);
     const live = new Set();
@@ -196,6 +235,7 @@ export class MultiLivePage {
       pane.sessionId = s.id;
       this.renderPane(pane, s, order.indexOf(s.id), s.id === state.selectedId);
     }
+    this.applyFocusGrid(focus, order);
     for (const [slot, pane] of this.panes) {
       if (!live.has(slot)) {
         pane.el.hidden = true;
@@ -225,6 +265,87 @@ export class MultiLivePage {
     overlay.classList.toggle('error', kind === 'error');
     overlay.querySelector('.spinner').hidden = kind !== 'loading';
     overlay.querySelector('span').textContent = text;
+  }
+
+  /** 포커스 레이아웃 — 방향·비율에 맞춰 grid 템플릿과 패인 위치, 구분선 위치를 정한다. */
+  applyFocusGrid(focus, order) {
+    const panes = [...this.panes.values()].filter((p) => p.sessionId);
+    if (!focus) {
+      this.stage.style.gridTemplateColumns = '';
+      this.stage.style.gridTemplateRows = '';
+      for (const p of panes) { p.el.style.gridRow = ''; p.el.style.gridColumn = ''; }
+      this.divider.hidden = true;
+      return;
+    }
+    const st = this.state;
+    const ratio = this.localRatio ?? st.focusRatio;
+    const grid = focusGrid(order.length, st.focusDirection, ratio);
+    this.stage.style.gridTemplateColumns = grid.columns;
+    this.stage.style.gridTemplateRows = grid.rows;
+    for (const p of panes) {
+      const area = grid.areas[order.indexOf(p.sessionId)];
+      if (!area) continue;
+      p.el.style.gridRow = area.row;
+      p.el.style.gridColumn = area.column;
+    }
+    const r = clampFocusRatio(ratio);
+    const d = this.divider;
+    d.hidden = false;
+    d.className = `ml-divider ${st.focusDirection === 'top' || st.focusDirection === 'bottom' ? 'horizontal' : 'vertical'}`;
+    const pos = st.focusDirection === 'right' || st.focusDirection === 'bottom' ? 1 - r : r;
+    d.style.left = d.classList.contains('vertical') ? `calc(${(pos * 100).toFixed(2)}% - 4px)` : '';
+    d.style.top = d.classList.contains('horizontal') ? `calc(${(pos * 100).toFixed(2)}% - 4px)` : '';
+  }
+
+  bindFocusControls() {
+    this.root.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-direction]');
+      if (b) this.run(api.multiLiveSetFocusLayout(b.dataset.direction, null));
+    });
+    this.ratioInput.addEventListener('input', () => {
+      this.localRatio = Number(this.ratioInput.value) / 100;
+      this.ratioOutput.textContent = `${this.ratioInput.value}%`;
+      this.render(this.state);
+    });
+    this.ratioInput.addEventListener('change', () => this.commitRatio());
+    this.divider.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.divider.setPointerCapture(e.pointerId);
+      this.stage.classList.add('resizing');
+      const move = (ev) => {
+        const r = this.stage.getBoundingClientRect();
+        this.localRatio = ratioFromPointer(this.state.focusDirection, (ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height);
+        this.ratioInput.value = String(Math.round(this.localRatio * 100));
+        this.ratioOutput.textContent = `${this.ratioInput.value}%`;
+        this.render(this.state);
+      };
+      const up = () => {
+        this.divider.removeEventListener('pointermove', move);
+        this.stage.classList.remove('resizing');
+        this.commitRatio();
+      };
+      this.divider.addEventListener('pointermove', move);
+      this.divider.addEventListener('pointerup', up, { once: true });
+      this.divider.addEventListener('pointercancel', up, { once: true });
+    });
+    this.divider.addEventListener('dblclick', () => {
+      this.localRatio = 0.7;
+      this.commitRatio();
+    });
+  }
+
+  async commitRatio() {
+    const ratio = this.localRatio;
+    if (ratio == null) return;
+    try {
+      const state = await api.multiLiveSetFocusLayout(null, ratio);
+      this.localRatio = null;
+      this.render(state);
+    } catch (e) {
+      this.localRatio = null;
+      toast(e.message);
+    }
+    this.reportStageSize();
   }
 
   /** 채팅은 선택 패인의 채널을 따라간다. */

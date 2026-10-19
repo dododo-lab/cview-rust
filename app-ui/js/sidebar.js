@@ -33,6 +33,7 @@ export class Sidebar {
     this.routes = routes;
     this.onNavigate = onNavigate;
     this.liveCount = null;
+    this.playing = new Set();
     this.nav = root.querySelector('#nav');
     this.liveBox = root.querySelector('#sidebar-live');
     this.account = root.querySelector('#account');
@@ -110,10 +111,17 @@ export class Sidebar {
         ? `<span class="nav-badge">${this.liveCount > 99 ? '99+' : this.liveCount}</span>` : '';
       return `
         ${r.section ? `<div class="nav-section">${esc(r.section)}</div>` : ''}
-        <button class="nav-item" data-route="${r.id}" data-tip="${esc(r.title)}">
+        <button class="nav-item${this.playing.has(r.id) ? ' playing' : ''}" data-route="${r.id}" data-tip="${esc(r.title)}">
           <span class="nav-icon">${r.icon}</span><span class="nav-label">${esc(r.title)}</span>${badge}
         </button>`;
     }).join('');
+  }
+
+  /** 메뉴 옆 "재생 중" 표시(라이브 메뉴). */
+  setPlaying(route, on) {
+    if (on) this.playing.add(route); else this.playing.delete(route);
+    const item = this.nav.querySelector(`[data-route="${route}"]`);
+    if (item) item.classList.toggle('playing', on);
   }
 
   setActive(route) {

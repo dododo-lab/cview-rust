@@ -5,7 +5,8 @@
 .ml-header { flex: none; gap: var(--sp-sm); }
 .ml-header .btn svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
 
-.ml-body { flex: 1; min-height: 0; display: flex; gap: var(--sp-md); margin-top: var(--sp-md); }
+.ml-body { flex: 1; min-height: 0; display: flex; gap: 0; margin-top: var(--sp-md); position: relative; }
+.ml-body .ml-stage { margin-right: 4px; }
 .ml-chat { border-radius: var(--radius-lg); border: 1px solid var(--border-subtle); overflow: hidden; }
 
 /* 무대 — 세션 수별 격자. 패인 위치는 order 로만 바꾼다(iframe 을 옮기지 않는다). */
@@ -17,11 +18,32 @@
 .ml-stage.ml-n3 { grid-template: 1fr 1fr / 2fr 1fr; }
 .ml-stage.ml-n3 .ml-pane.ml-first { grid-row: span 2; }
 .ml-stage.ml-n4 { grid-template: 1fr 1fr / 1fr 1fr; }
-/* 포커스 — 선택 패인을 왼쪽 크게, 나머지는 오른쪽 세로 줄. */
-.ml-stage.ml-focus { grid-template-columns: 3fr 1fr; grid-template-rows: none; grid-auto-rows: 1fr; }
-.ml-stage.ml-focus.ml-n2 .ml-pane.ml-first { grid-row: span 1; }
-.ml-stage.ml-focus.ml-n3 .ml-pane.ml-first { grid-row: span 2; }
-.ml-stage.ml-focus.ml-n4 .ml-pane.ml-first { grid-row: span 3; }
+/* 포커스 — 메인 위치·비율은 focus-layout.js 가 grid 템플릿과 패인 위치로 정한다. */
+.ml-stage.ml-focus { grid-auto-rows: auto; }
+
+/* 메인 크기 구분선 */
+.ml-divider { position: absolute; z-index: 4; border-radius: 4px; touch-action: none; }
+.ml-divider[hidden] { display: none; }
+.ml-divider.vertical { top: 0; bottom: 0; width: 8px; cursor: col-resize; }
+.ml-divider.horizontal { left: 0; right: 0; height: 8px; cursor: row-resize; }
+.ml-divider::after {
+  content: ""; position: absolute; border-radius: 3px; background: var(--primary); opacity: 0;
+  transition: opacity 0.15s var(--ease-out);
+}
+.ml-divider.vertical::after { left: 3px; top: 30%; bottom: 30%; width: 2px; }
+.ml-divider.horizontal::after { top: 3px; left: 30%; right: 30%; height: 2px; }
+.ml-divider:hover::after, .ml-stage.resizing .ml-divider::after { opacity: 1; }
+.ml-stage.resizing, .ml-stage.resizing * { user-select: none; }
+.ml-stage.resizing iframe { pointer-events: none; }
+
+/* 포커스 설정 */
+.ml-focus-controls { display: inline-flex; align-items: center; gap: var(--sp-sm); }
+.ml-focus-controls[hidden] { display: none; }
+.segmented .seg.icon { padding: 5px 8px; }
+.segmented .seg.icon svg { width: 16px; height: 16px; }
+.ml-ratio { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-footnote); color: var(--text-secondary); }
+.ml-ratio input { width: 110px; accent-color: var(--primary); }
+.ml-ratio output { min-width: 34px; font-variant-numeric: tabular-nums; color: var(--text-primary); font-weight: 600; }
 
 .ml-empty {
   grid-column: 1 / -1; grid-row: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center;

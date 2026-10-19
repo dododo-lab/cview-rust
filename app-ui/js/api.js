@@ -57,6 +57,8 @@ export const api = {
   multiLiveSetLayout: (layout) => invoke('multilive_set_layout', { layout }),
   multiLiveStageSize: (width, height) => invoke('multilive_stage_size', { width, height }),
   multiLiveStopAll: () => invoke('multilive_stop_all'),
+  multiLiveSetFocusLayout: (direction, ratio) => invoke('multilive_set_focus_layout', { direction, ratio }),
+  multiLiveSetAudioSuspended: (suspended) => invoke('multilive_set_audio_suspended', { suspended }),
   multiLivePlayerMessage: (slot, message) => invoke('multilive_player_message', { slot, message }),
 
   chatConnect: (chatChannelId, channelId) => invoke('chat_connect', { chatChannelId, channelId }),
