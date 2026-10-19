@@ -17,7 +17,9 @@ use tokio_tungstenite::tungstenite::Message;
 
 use crate::engine::{ChatEngine, ChatEngineConfiguration, ChatEngineEvent, ChatEventStream};
 use crate::reconnection::ReconnectionConfiguration;
-use crate::websocket::{WebSocketConfiguration, WebSocketMessage, WebSocketService, WebSocketState};
+use crate::websocket::{
+    WebSocketConfiguration, WebSocketMessage, WebSocketService, WebSocketState,
+};
 
 const WAIT: Duration = Duration::from_secs(5);
 
@@ -35,8 +37,12 @@ async fn spawn_server() -> LocalServer {
     let (recv_tx, received) = mpsc::unbounded_channel::<String>();
     let (outgoing, mut out_rx) = mpsc::unbounded_channel::<String>();
     tokio::spawn(async move {
-        let Ok((stream, _)) = listener.accept().await else { return };
-        let Ok(ws) = tokio_tungstenite::accept_async(stream).await else { return };
+        let Ok((stream, _)) = listener.accept().await else {
+            return;
+        };
+        let Ok(ws) = tokio_tungstenite::accept_async(stream).await else {
+            return;
+        };
         let (mut sink, mut source) = ws.split();
         loop {
             tokio::select! {
@@ -52,15 +58,25 @@ async fn spawn_server() -> LocalServer {
             }
         }
     });
-    LocalServer { url, received, outgoing }
+    LocalServer {
+        url,
+        received,
+        outgoing,
+    }
 }
 
 async fn next_frame(server: &mut LocalServer) -> Value {
-    let text = timeout(WAIT, server.received.recv()).await.expect("server receive timed out").expect("closed");
+    let text = timeout(WAIT, server.received.recv())
+        .await
+        .expect("server receive timed out")
+        .expect("closed");
     serde_json::from_str(&text).expect("client sent invalid JSON")
 }
 
-async fn wait_for_event(stream: &ChatEventStream, pred: impl Fn(&ChatEngineEvent) -> bool) -> ChatEngineEvent {
+async fn wait_for_event(
+    stream: &ChatEventStream,
+    pred: impl Fn(&ChatEngineEvent) -> bool,
+) -> ChatEngineEvent {
     timeout(WAIT, async {
         loop {
             let e = stream.recv().await.expect("stream closed");
@@ -106,7 +122,10 @@ async fn refused_connection_throws_and_never_passes_through_connected() {
     while let Ok(s) = states.try_recv() {
         seen.push(s);
     }
-    assert!(!seen.contains(&WebSocketState::Connected), "실패한 연결이 Connected 를 거쳤다: {seen:?}");
+    assert!(
+        !seen.contains(&WebSocketState::Connected),
+        "실패한 연결이 Connected 를 거쳤다: {seen:?}"
+    );
 }
 
 #[tokio::test]
@@ -184,8 +203,14 @@ async fn engine_handshake_recent_chat_and_send() {
     assert_eq!(connect["bdy"]["auth"], "SEND");
     assert!(!engine.is_connected(), "10100 전에는 연결 성공이 아니다");
 
-    server.outgoing.send(r#"{"cmd":10100,"retCode":0,"bdy":{"sid":"s1"}}"#.into()).unwrap();
-    timeout(WAIT, server_task).await.expect("connect() did not return").unwrap();
+    server
+        .outgoing
+        .send(r#"{"cmd":10100,"retCode":0,"bdy":{"sid":"s1"}}"#.into())
+        .unwrap();
+    timeout(WAIT, server_task)
+        .await
+        .expect("connect() did not return")
+        .unwrap();
     assert!(engine.is_connected());
     assert_eq!(engine.session_id().as_deref(), Some("s1"));
     wait_for_event(&events, |e| *e == ChatEngineEvent::Connected).await;
@@ -204,7 +229,9 @@ async fn engine_handshake_recent_chat_and_send() {
         )
         .unwrap();
     let new = wait_for_event(&events, |e| matches!(e, ChatEngineEvent::NewMessages(_))).await;
-    let ChatEngineEvent::NewMessages(msgs) = new else { unreachable!() };
+    let ChatEngineEvent::NewMessages(msgs) = new else {
+        unreachable!()
+    };
     assert_eq!(msgs[0].content, "Hello");
     assert_eq!(engine.messages().len(), 1);
 
@@ -237,10 +264,16 @@ async fn engine_rejected_handshake_is_failure() {
         tokio::spawn(async move { engine.connect().await })
     };
     assert_eq!(next_frame(&mut server).await["cmd"], 100);
-    server.outgoing.send(r#"{"cmd":10100,"retCode":-1,"retMsg":"denied"}"#.into()).unwrap();
+    server
+        .outgoing
+        .send(r#"{"cmd":10100,"retCode":-1,"retMsg":"denied"}"#.into())
+        .unwrap();
 
     // 거절은 ack 타임아웃(2초)을 기다리지 않고 곧장 실패로 끝난다.
-    timeout(Duration::from_millis(1500), connect_task).await.expect("rejection waited for timeout").unwrap();
+    timeout(Duration::from_millis(1500), connect_task)
+        .await
+        .expect("rejection waited for timeout")
+        .unwrap();
     assert!(!engine.is_connected());
     assert_eq!(engine.session_id(), None);
     engine.disconnect().await;
@@ -259,7 +292,10 @@ async fn engine_ack_timeout_is_failure() {
     };
     assert_eq!(next_frame(&mut server).await["cmd"], 100);
     // 응답하지 않는다.
-    timeout(WAIT, connect_task).await.expect("ack timeout did not fire").unwrap();
+    timeout(WAIT, connect_task)
+        .await
+        .expect("ack timeout did not fire")
+        .unwrap();
     assert!(!engine.is_connected());
     engine.disconnect().await;
 }

@@ -1,0 +1,8 @@
+[package]
+name = "cview-player"
+edition.workspace = true
+version.workspace = true
+publish.workspace = true
+
+[dependencies]
+cview-core = { path = "../cview-core" }

@@ -18,7 +18,9 @@ pub mod notice_kind;
 
 mod ident;
 
-pub use emoticon::{ChatContentSegment, EmoticonDeploy, EmoticonItem, EmoticonPack, EmoticonParser};
+pub use emoticon::{
+    ChatContentSegment, EmoticonDeploy, EmoticonItem, EmoticonPack, EmoticonParser,
+};
 pub use ident::{is_plausible_url, new_uuid_string};
 pub use item::ChatMessageItem;
 pub use messages::{

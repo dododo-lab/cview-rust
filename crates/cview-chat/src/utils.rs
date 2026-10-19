@@ -36,7 +36,11 @@ impl ChatMessageBuffer {
     /// 용량 지정 (최소 10).
     pub fn new(capacity: usize) -> Self {
         let capacity = capacity.max(Self::MIN_CAPACITY);
-        Self { items: VecDeque::with_capacity(capacity), capacity, restructure_count: 0 }
+        Self {
+            items: VecDeque::with_capacity(capacity),
+            capacity,
+            restructure_count: 0,
+        }
     }
 
     pub fn capacity(&self) -> usize {
@@ -107,7 +111,12 @@ impl ChatMessageBuffer {
     /// 조건에 맞는 것을 지운다. 지울 것이 없으면 아무것도 바꾸지 않는다.
     pub fn remove_where<F: FnMut(&ChatMessageItem) -> bool>(&mut self, mut predicate: F) {
         let before = self.items.len();
-        let surviving: VecDeque<_> = self.items.iter().filter(|i| !predicate(i)).cloned().collect();
+        let surviving: VecDeque<_> = self
+            .items
+            .iter()
+            .filter(|i| !predicate(i))
+            .cloned()
+            .collect();
         if surviving.len() == before {
             return;
         }
@@ -122,7 +131,10 @@ impl ChatMessageBuffer {
     }
 
     /// 모든 원소를 변환한다. 바뀐 것만 새 행으로 교체.
-    pub fn map_in_place<F: FnMut(&ChatMessageItem) -> ChatMessageItem>(&mut self, mut transform: F) {
+    pub fn map_in_place<F: FnMut(&ChatMessageItem) -> ChatMessageItem>(
+        &mut self,
+        mut transform: F,
+    ) {
         for slot in self.items.iter_mut() {
             let updated = transform(slot);
             if updated != **slot {
@@ -169,7 +181,11 @@ impl ChatCommitBackpressure {
         if !milliseconds.is_finite() || milliseconds < 0.0 || !now.is_finite() {
             return;
         }
-        let previous = if self.is_fresh(now) { self.recent_cost_milliseconds } else { 0.0 };
+        let previous = if self.is_fresh(now) {
+            self.recent_cost_milliseconds
+        } else {
+            0.0
+        };
         // 느려질 때 즉시 반응하고, 단일 스파이크는 여러 틱에 걸쳐 복원한다.
         self.recent_cost_milliseconds = milliseconds.min(100.0).max(previous * 0.75);
         self.sampled_at = Some(now);
@@ -180,7 +196,8 @@ impl ChatCommitBackpressure {
         if !self.is_fresh(now) || self.recent_cost_milliseconds <= 5.0 {
             return 0;
         }
-        let ms = (Self::MAXIMUM_INTERVAL_NS as f64 / 1_000_000.0).min(self.recent_cost_milliseconds * 4.0);
+        let ms = (Self::MAXIMUM_INTERVAL_NS as f64 / 1_000_000.0)
+            .min(self.recent_cost_milliseconds * 4.0);
         (ms * 1_000_000.0) as u64
     }
 

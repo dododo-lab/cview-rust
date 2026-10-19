@@ -14,7 +14,11 @@ use super::messages::EmojiMap;
 pub struct EmoticonPack {
     pub emoticon_pack_id: String,
     pub emoticon_pack_name: String,
-    #[serde(rename = "emoticonPackImageUrl", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "emoticonPackImageUrl",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub emoticon_pack_image_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub emoticon_pack_type: Option<String>,
@@ -48,7 +52,11 @@ pub struct EmoticonItem {
     pub emoticon_name: Option<String>,
     #[serde(rename = "imageUrl", default, skip_serializing_if = "Option::is_none")]
     pub image_url: Option<String>,
-    #[serde(rename = "darkModeImageUrl", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "darkModeImageUrl",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub dark_mode_image_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub width: Option<i64>,
@@ -198,7 +206,10 @@ mod tests {
     use super::*;
 
     fn map(pairs: &[(&str, &str)]) -> EmojiMap {
-        pairs.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+        pairs
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
     }
 
     #[test]
@@ -217,8 +228,14 @@ mod tests {
         .unwrap();
         assert_eq!(item.emoticon_id, "emo_1");
         assert_eq!(item.emoticon_name.as_deref(), Some("하하"));
-        assert_eq!(item.image_url.as_deref(), Some("https://example.com/emo.png"));
-        assert_eq!(item.dark_mode_image_url.as_deref(), Some("https://example.com/emo_dark.png"));
+        assert_eq!(
+            item.image_url.as_deref(),
+            Some("https://example.com/emo.png")
+        );
+        assert_eq!(
+            item.dark_mode_image_url.as_deref(),
+            Some("https://example.com/emo_dark.png")
+        );
         assert_eq!(item.width, Some(48));
         assert_eq!(item.pack_id.as_deref(), Some("pack_1"));
 
@@ -230,7 +247,10 @@ mod tests {
             r#"{"emoticonPackId":"p1","emoticonPackName":"테스트팩","emoticonPackImageUrl":"https://example.com/pack.png","emoticonPackType":"SUBSCRIPTION","emoticons":[{"emoticonId":"e1"}]}"#,
         )
         .unwrap();
-        assert_eq!(pack.emoticon_pack_image_url.as_deref(), Some("https://example.com/pack.png"));
+        assert_eq!(
+            pack.emoticon_pack_image_url.as_deref(),
+            Some("https://example.com/pack.png")
+        );
         assert_eq!(pack.emoticons.unwrap().len(), 1);
     }
 
@@ -248,21 +268,32 @@ mod tests {
         assert_eq!(deploy.all_packs()[0].emoticon_pack_id, "p1");
         assert_eq!(deploy.all_emoticons().len(), 3);
         assert!(EmoticonDeploy::default().all_packs().is_empty());
-        let empty = EmoticonDeploy { emoticon_packs: Some(vec![EmoticonPack::new("p", "A")]), ..Default::default() };
+        let empty = EmoticonDeploy {
+            emoticon_packs: Some(vec![EmoticonPack::new("p", "A")]),
+            ..Default::default()
+        };
         assert!(empty.all_emoticons().is_empty());
     }
 
     #[test]
     fn segment_ids() {
-        assert!(ChatContentSegment::Text("hello".into()).id().starts_with("text-"));
-        let seg = ChatContentSegment::Emoticon { id: "d_54".into(), url: "https://x.com/a.png".into() };
+        assert!(ChatContentSegment::Text("hello".into())
+            .id()
+            .starts_with("text-"));
+        let seg = ChatContentSegment::Emoticon {
+            id: "d_54".into(),
+            url: "https://x.com/a.png".into(),
+        };
         assert_eq!(seg.id(), "emo-d_54");
     }
 
     #[test]
     fn parser_cases() {
         let p = EmoticonParser::new();
-        assert_eq!(p.parse("안녕하세요", None), vec![ChatContentSegment::Text("안녕하세요".into())]);
+        assert_eq!(
+            p.parse("안녕하세요", None),
+            vec![ChatContentSegment::Text("안녕하세요".into())]
+        );
         assert_eq!(p.parse("hello", Some(&EmojiMap::new())).len(), 1);
 
         let emojis = map(&[("d_54", "https://example.com/d_54.png")]);
@@ -282,12 +313,18 @@ mod tests {
             vec![ChatContentSegment::Text("{:unknown:}".into())]
         );
 
-        let ab = map(&[("a", "https://example.com/a.png"), ("b", "https://example.com/b.png")]);
+        let ab = map(&[
+            ("a", "https://example.com/a.png"),
+            ("b", "https://example.com/b.png"),
+        ]);
         let both = p.parse("{:a:}{:b:}", Some(&ab));
         assert_eq!(both.len(), 2);
         assert!(matches!(&both[1], ChatContentSegment::Emoticon { id, .. } if id == "b"));
 
         // 닫는 중괄호가 없으면 나머지는 텍스트.
-        assert_eq!(p.parse("x {:a:", Some(&ab)), vec![ChatContentSegment::Text("x {:a:".into())]);
+        assert_eq!(
+            p.parse("x {:a:", Some(&ab)),
+            vec![ChatContentSegment::Text("x {:a:".into())]
+        );
     }
 }

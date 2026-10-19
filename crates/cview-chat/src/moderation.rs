@@ -98,7 +98,12 @@ impl ChatCommand {
         let cmd = Self::from_raw(parts.next()?)?;
         let args = parts
             .next()
-            .map(|rest| rest.split(' ').filter(|s| !s.is_empty()).map(str::to_owned).collect())
+            .map(|rest| {
+                rest.split(' ')
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_owned)
+                    .collect()
+            })
             .unwrap_or_default();
         Some((cmd, args))
     }
@@ -126,24 +131,36 @@ pub struct ChatFilter {
 impl ChatFilter {
     pub fn new(r#type: FilterType, is_enabled: bool) -> Self {
         let compiled_regex = match &r#type {
-            FilterType::Regex(pattern) => match RegexBuilder::new(pattern).case_insensitive(true).build() {
-                Ok(r) => Some(r),
-                Err(error) => {
-                    tracing::warn!(pattern, %error, "Chat filter regex compile failed");
-                    None
+            FilterType::Regex(pattern) => {
+                match RegexBuilder::new(pattern).case_insensitive(true).build() {
+                    Ok(r) => Some(r),
+                    Err(error) => {
+                        tracing::warn!(pattern, %error, "Chat filter regex compile failed");
+                        None
+                    }
                 }
-            },
+            }
             _ => None,
         };
         let lowered_keywords = match &r#type {
-            FilterType::Keyword(words) => words.iter().map(|w| w.to_lowercase()).filter(|w| !w.is_empty()).collect(),
+            FilterType::Keyword(words) => words
+                .iter()
+                .map(|w| w.to_lowercase())
+                .filter(|w| !w.is_empty())
+                .collect(),
             _ => Vec::new(),
         };
         let user_id_set = match &r#type {
             FilterType::User(ids) => ids.iter().cloned().collect(),
             _ => HashSet::new(),
         };
-        Self { r#type, is_enabled, compiled_regex, lowered_keywords, user_id_set }
+        Self {
+            r#type,
+            is_enabled,
+            compiled_regex,
+            lowered_keywords,
+            user_id_set,
+        }
     }
 
     /// 메시지를 숨겨야 하는가.
@@ -157,10 +174,18 @@ impl ChatFilter {
                     return false;
                 }
                 let lc = message.content.to_lowercase();
-                self.lowered_keywords.iter().any(|k| lc.contains(k.as_str()))
+                self.lowered_keywords
+                    .iter()
+                    .any(|k| lc.contains(k.as_str()))
             }
-            FilterType::Regex(_) => self.compiled_regex.as_ref().is_some_and(|r| r.is_match(&message.content)),
-            FilterType::User(_) => message.user_id.as_ref().is_some_and(|id| self.user_id_set.contains(id)),
+            FilterType::Regex(_) => self
+                .compiled_regex
+                .as_ref()
+                .is_some_and(|r| r.is_match(&message.content)),
+            FilterType::User(_) => message
+                .user_id
+                .as_ref()
+                .is_some_and(|id| self.user_id_set.contains(id)),
             FilterType::DonationOnly => message.r#type != MessageType::Donation,
         }
     }
@@ -170,7 +195,10 @@ impl ChatFilter {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChatCommandResult {
     LocalAction(String),
-    ServerCommand { command: ChatCommand, args: Vec<String> },
+    ServerCommand {
+        command: ChatCommand,
+        args: Vec<String>,
+    },
     ClearChat,
     ExportChat,
     Error(String),
@@ -260,7 +288,11 @@ impl ChatModerationService {
     /// 키워드 필터 활성 토글 — 슬롯 값은 유지.
     pub fn set_keyword_filter_enabled(&self, enabled: bool) {
         let mut st = self.lock();
-        if let Some(ChatFilter { r#type: FilterType::Keyword(words), .. }) = &st.keyword_filter {
+        if let Some(ChatFilter {
+            r#type: FilterType::Keyword(words),
+            ..
+        }) = &st.keyword_filter
+        {
             let words = words.clone();
             st.keyword_filter = Some(ChatFilter::new(FilterType::Keyword(words), enabled));
         }
@@ -278,7 +310,12 @@ impl ChatModerationService {
                 return true;
             }
         }
-        if let Some(ChatFilter { r#type: FilterType::Keyword(words), is_enabled: true, .. }) = &st.keyword_filter {
+        if let Some(ChatFilter {
+            r#type: FilterType::Keyword(words),
+            is_enabled: true,
+            ..
+        }) = &st.keyword_filter
+        {
             if !words.is_empty() {
                 return true;
             }
@@ -300,7 +337,9 @@ impl ChatModerationService {
 
     /// `duration` 초 동안 뮤트. 음수는 이미 만료된 항목을 남긴다(Swift 와 같다).
     pub fn mute_user(&self, user_id: &str, duration: f64) {
-        self.lock().muted_users.insert(user_id.to_owned(), MuteExpiry::from_duration(duration));
+        self.lock()
+            .muted_users
+            .insert(user_id.to_owned(), MuteExpiry::from_duration(duration));
         tracing::info!(user_id, duration, "Muted user");
     }
 
@@ -317,7 +356,10 @@ impl ChatModerationService {
     }
 
     pub fn is_muted(&self, user_id: &str) -> bool {
-        self.lock().muted_users.get(user_id).is_some_and(|e| e.active(Instant::now()))
+        self.lock()
+            .muted_users
+            .get(user_id)
+            .is_some_and(|e| e.active(Instant::now()))
     }
 
     /// 만료된 뮤트 항목 정리.
@@ -345,7 +387,11 @@ impl ChatModerationService {
     /// 후원·구독·공지·시스템 메시지는 콘텐츠 필터를 우회한다(차단·뮤트는 그대로 적용).
     pub fn filter_messages(&self, messages: &[ChatMessage]) -> Vec<ChatMessage> {
         let st = self.lock();
-        messages.iter().filter(|m| Self::passes(&st, m)).cloned().collect()
+        messages
+            .iter()
+            .filter(|m| Self::passes(&st, m))
+            .cloned()
+            .collect()
     }
 
     pub fn should_show(&self, message: &ChatMessage) -> bool {
@@ -358,16 +404,27 @@ impl ChatModerationService {
         if st.blocked_users.contains(user_id) {
             return false;
         }
-        if st.muted_users.get(user_id).is_some_and(|e| e.active(Instant::now())) {
+        if st
+            .muted_users
+            .get(user_id)
+            .is_some_and(|e| e.active(Instant::now()))
+        {
             return false;
         }
         if matches!(
             message.r#type,
-            MessageType::Donation | MessageType::Subscription | MessageType::Notice | MessageType::SystemMessage
+            MessageType::Donation
+                | MessageType::Subscription
+                | MessageType::Notice
+                | MessageType::SystemMessage
         ) {
             return true;
         }
-        if st.keyword_filter.as_ref().is_some_and(|f| f.should_filter(message)) {
+        if st
+            .keyword_filter
+            .as_ref()
+            .is_some_and(|f| f.should_filter(message))
+        {
             return false;
         }
         !st.filters.iter().any(|f| f.should_filter(message))
@@ -383,7 +440,9 @@ impl ChatModerationService {
 
         match command {
             ChatCommand::Mute => {
-                let Some(user_id) = first else { return usage("사용법: /mute <사용자ID> [시간(초)]") };
+                let Some(user_id) = first else {
+                    return usage("사용법: /mute <사용자ID> [시간(초)]");
+                };
                 // 사용자 입력이라 "inf"/"nan"/"1e30" 이 모두 실수로 파싱된다 — 유한값만 받아 1초~상한으로.
                 let duration = match args.get(1).and_then(|s| s.parse::<f64>().ok()) {
                     Some(d) if d.is_finite() => d.clamp(1.0, chat_defaults::MAX_MUTE_DURATION_SECS),
@@ -396,19 +455,31 @@ impl ChatModerationService {
                 )))
             }
             ChatCommand::Unmute => {
-                let Some(user_id) = first else { return usage("사용법: /unmute <사용자ID>") };
+                let Some(user_id) = first else {
+                    return usage("사용법: /unmute <사용자ID>");
+                };
                 self.unmute_user(&user_id);
-                Some(ChatCommandResult::LocalAction(format!("'{user_id}' 님의 채팅 금지가 해제되었습니다.")))
+                Some(ChatCommandResult::LocalAction(format!(
+                    "'{user_id}' 님의 채팅 금지가 해제되었습니다."
+                )))
             }
             ChatCommand::Ban => {
-                let Some(user_id) = first else { return usage("사용법: /ban <사용자ID>") };
+                let Some(user_id) = first else {
+                    return usage("사용법: /ban <사용자ID>");
+                };
                 self.block_user(&user_id);
-                Some(ChatCommandResult::LocalAction(format!("'{user_id}' 님이 차단되었습니다.")))
+                Some(ChatCommandResult::LocalAction(format!(
+                    "'{user_id}' 님이 차단되었습니다."
+                )))
             }
             ChatCommand::Unban => {
-                let Some(user_id) = first else { return usage("사용법: /unban <사용자ID>") };
+                let Some(user_id) = first else {
+                    return usage("사용법: /unban <사용자ID>");
+                };
                 self.unblock_user(&user_id);
-                Some(ChatCommandResult::LocalAction(format!("'{user_id}' 님의 차단이 해제되었습니다.")))
+                Some(ChatCommandResult::LocalAction(format!(
+                    "'{user_id}' 님의 차단이 해제되었습니다."
+                )))
             }
             ChatCommand::Clear => Some(ChatCommandResult::ClearChat),
             ChatCommand::Notice => {
@@ -417,7 +488,9 @@ impl ChatModerationService {
                 }
                 Some(ChatCommandResult::ServerCommand { command, args })
             }
-            ChatCommand::Slow | ChatCommand::Host => Some(ChatCommandResult::ServerCommand { command, args }),
+            ChatCommand::Slow | ChatCommand::Host => {
+                Some(ChatCommandResult::ServerCommand { command, args })
+            }
             ChatCommand::Filter => {
                 if args.is_empty() {
                     return usage("사용법: /filter <키워드> [키워드2 …]");
@@ -428,14 +501,22 @@ impl ChatModerationService {
             }
             ChatCommand::Export => Some(ChatCommandResult::ExportChat),
             ChatCommand::Block => {
-                let Some(user_id) = first else { return usage("사용법: /block <사용자ID>") };
+                let Some(user_id) = first else {
+                    return usage("사용법: /block <사용자ID>");
+                };
                 self.block_user(&user_id);
-                Some(ChatCommandResult::LocalAction(format!("'{user_id}' 님이 로컬 차단되었습니다.")))
+                Some(ChatCommandResult::LocalAction(format!(
+                    "'{user_id}' 님이 로컬 차단되었습니다."
+                )))
             }
             ChatCommand::Unblock => {
-                let Some(user_id) = first else { return usage("사용법: /unblock <사용자ID>") };
+                let Some(user_id) = first else {
+                    return usage("사용법: /unblock <사용자ID>");
+                };
                 self.unblock_user(&user_id);
-                Some(ChatCommandResult::LocalAction(format!("'{user_id}' 님의 로컬 차단이 해제되었습니다.")))
+                Some(ChatCommandResult::LocalAction(format!(
+                    "'{user_id}' 님의 로컬 차단이 해제되었습니다."
+                )))
             }
             ChatCommand::Help => {
                 let help = ChatCommand::ALL
@@ -443,7 +524,9 @@ impl ChatModerationService {
                     .map(|c| format!("{} — {}", c.raw_value(), c.description()))
                     .collect::<Vec<_>>()
                     .join("\n");
-                Some(ChatCommandResult::LocalAction(format!("사용 가능한 명령어:\n{help}")))
+                Some(ChatCommandResult::LocalAction(format!(
+                    "사용 가능한 명령어:\n{help}"
+                )))
             }
         }
     }

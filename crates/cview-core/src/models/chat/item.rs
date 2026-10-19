@@ -79,18 +79,26 @@ impl ChatMessageItem {
             content: message.content.clone(),
             timestamp: message.timestamp,
             r#type: message.r#type,
-            badge_image_url: profile.and_then(|p| p.badge.as_ref()).and_then(|b| b.image_url.clone()),
+            badge_image_url: profile
+                .and_then(|p| p.badge.as_ref())
+                .and_then(|b| b.image_url.clone()),
             emojis,
             donation_amount: extras.and_then(|e| e.donation.as_ref()).map(|d| d.amount),
-            donation_type: extras.and_then(|e| e.donation.as_ref()).map(|d| d.r#type.clone()),
+            donation_type: extras
+                .and_then(|e| e.donation.as_ref())
+                .map(|d| d.r#type.clone()),
             subscription_months,
             profile_image_url: profile.and_then(|p| p.profile_image_url.clone()),
             is_notice,
             is_system: false,
             user_role: profile.map(|p| p.user_role).unwrap_or_default(),
             badges,
-            title_name: profile.and_then(|p| p.title.as_ref()).map(|t| t.name.clone()),
-            title_color: profile.and_then(|p| p.title.as_ref()).and_then(|t| t.color.clone()),
+            title_name: profile
+                .and_then(|p| p.title.as_ref())
+                .map(|t| t.name.clone()),
+            title_color: profile
+                .and_then(|p| p.title.as_ref())
+                .and_then(|t| t.color.clone()),
             is_blinded: message.is_blinded,
             system_notice_kind: ChatSystemNoticeKind::Info,
         }
@@ -161,7 +169,10 @@ impl ChatMessageItem {
 
     /// `HH:mm` (로컬 시간대).
     pub fn formatted_time(&self) -> String {
-        self.timestamp.with_timezone(&Local).format("%H:%M").to_string()
+        self.timestamp
+            .with_timezone(&Local)
+            .format("%H:%M")
+            .to_string()
     }
 
     /// 이미지를 그릴 수 없는 곳(OS 알림·멘션 트레이)용 본문 미리보기.
@@ -232,7 +243,11 @@ impl ChatMessageItem {
     fn extract_subscription_months_from_badges(badges: &[ChatBadge]) -> Option<i64> {
         badges
             .iter()
-            .filter(|b| b.badge_id.as_deref().is_some_and(|id| id.starts_with("subscription")))
+            .filter(|b| {
+                b.badge_id
+                    .as_deref()
+                    .is_some_and(|id| id.starts_with("subscription"))
+            })
             .find_map(|b| b.alt_text.as_deref().and_then(first_ascii_int_run))
     }
 }
@@ -294,7 +309,10 @@ mod tests {
             content,
             Utc::now(),
             MessageType::Normal,
-            emojis.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect(),
+            emojis
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
             false,
             false,
         )
@@ -331,28 +349,54 @@ mod tests {
 
     #[test]
     fn badges_dedupe_and_subscription_fallback() {
-        let sub = ChatBadge::new(Some("https://b/sub".into()), Some("subscription_1".into()), Some("12개월 구독".into()));
+        let sub = ChatBadge::new(
+            Some("https://b/sub".into()),
+            Some("subscription_1".into()),
+            Some("12개월 구독".into()),
+        );
         let dup = ChatBadge::new(Some("https://b/sub".into()), Some("act".into()), None);
-        let profile = ChatProfile::new("n", None, None, Some(sub.clone()), vec![sub.clone()], None, vec![dup]);
+        let profile = ChatProfile::new(
+            "n",
+            None,
+            None,
+            Some(sub.clone()),
+            vec![sub.clone()],
+            None,
+            vec![dup],
+        );
         let msg = ChatMessage::new("n", "c").profile(profile.clone());
         let item = ChatMessageItem::from_message(&msg, false);
         assert_eq!(item.badges.len(), 1);
         assert_eq!(item.subscription_months, Some(12));
         assert_eq!(item.badge_image_url.as_deref(), Some("https://b/sub"));
 
-        let with_extras = ChatMessage::new("n", "c").profile(profile).extras(ChatExtras {
-            subscription: Some(SubscriptionInfo { months: 3, tier_name: None }),
-            ..Default::default()
-        });
-        assert_eq!(ChatMessageItem::from_message(&with_extras, false).subscription_months, Some(3));
+        let with_extras = ChatMessage::new("n", "c")
+            .profile(profile)
+            .extras(ChatExtras {
+                subscription: Some(SubscriptionInfo {
+                    months: 3,
+                    tier_name: None,
+                }),
+                ..Default::default()
+            });
+        assert_eq!(
+            ChatMessageItem::from_message(&with_extras, false).subscription_months,
+            Some(3)
+        );
     }
 
     #[test]
     fn blinded_message_drops_emojis() {
-        let msg = ChatMessage::new("n", "가려짐").blinded(true).extras(ChatExtras {
-            emojis: Some([("a".to_string(), "https://x".to_string())].into_iter().collect()),
-            ..Default::default()
-        });
+        let msg = ChatMessage::new("n", "가려짐")
+            .blinded(true)
+            .extras(ChatExtras {
+                emojis: Some(
+                    [("a".to_string(), "https://x".to_string())]
+                        .into_iter()
+                        .collect(),
+                ),
+                ..Default::default()
+            });
         let item = ChatMessageItem::from_message(&msg, false);
         assert!(item.emojis.is_empty());
         assert!(item.is_blinded);
@@ -373,21 +417,41 @@ mod tests {
     #[test]
     fn plain_text_preview_rules() {
         assert_eq!(
-            item("안녕 {:d_54:} 반가워", &[("d_54", "https://example.com/d_54.png")]).plain_text_preview(),
+            item(
+                "안녕 {:d_54:} 반가워",
+                &[("d_54", "https://example.com/d_54.png")]
+            )
+            .plain_text_preview(),
             "안녕 [이모티콘] 반가워"
         );
-        assert_eq!(item("여기 {:pending_123:} 봐", &[]).plain_text_preview(), "여기 [이모티콘] 봐");
-        assert_eq!(item("값은 {count}개", &[]).plain_text_preview(), "값은 {count}개");
+        assert_eq!(
+            item("여기 {:pending_123:} 봐", &[]).plain_text_preview(),
+            "여기 [이모티콘] 봐"
+        );
+        assert_eq!(
+            item("값은 {count}개", &[]).plain_text_preview(),
+            "값은 {count}개"
+        );
     }
 
     #[test]
     fn placeholder_content_shares_rule_without_fallback() {
         assert_eq!(
-            item("안녕 {:d_54:} 반가워", &[("d_54", "https://example.com/d_54.png")]).emoticon_placeholder_content(),
+            item(
+                "안녕 {:d_54:} 반가워",
+                &[("d_54", "https://example.com/d_54.png")]
+            )
+            .emoticon_placeholder_content(),
             "안녕 [이모티콘] 반가워"
         );
-        assert_eq!(item("여기 {:pending_123:} 봐", &[]).emoticon_placeholder_content(), "여기 [이모티콘] 봐");
-        assert_eq!(item("값은 {count}개", &[]).emoticon_placeholder_content(), "값은 {count}개");
+        assert_eq!(
+            item("여기 {:pending_123:} 봐", &[]).emoticon_placeholder_content(),
+            "여기 [이모티콘] 봐"
+        );
+        assert_eq!(
+            item("값은 {count}개", &[]).emoticon_placeholder_content(),
+            "값은 {count}개"
+        );
         let blank = item("  ", &[]);
         assert_eq!(blank.emoticon_placeholder_content(), "  ");
         assert_eq!(blank.plain_text_preview(), "새 메시지가 도착했습니다.");
@@ -405,7 +469,19 @@ mod tests {
     #[test]
     fn equality() {
         let date = Utc::now();
-        let mk = || ChatMessageItem::new("same", "u", "n", "c", date, MessageType::Normal, EmojiMap::new(), false, false);
+        let mk = || {
+            ChatMessageItem::new(
+                "same",
+                "u",
+                "n",
+                "c",
+                date,
+                MessageType::Normal,
+                EmojiMap::new(),
+                false,
+                false,
+            )
+        };
         assert_eq!(mk(), mk());
         assert_ne!(
             ChatMessageItem::system("msg", ChatSystemNoticeKind::Info),

@@ -209,6 +209,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cview-auth"
+version = "0.1.0"
+dependencies = [
+ "cview-core",
+ "cview-networking",
+]
+
+[[package]]
 name = "cview-chat"
 version = "0.1.0"
 dependencies = [
@@ -236,7 +244,10 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "tokio",
+ "tracing",
+ "unicode-normalization",
  "url",
+ "uuid",
 ]
 
 [[package]]
@@ -246,6 +257,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "cview-core",
+ "rand 0.8.8",
  "reqwest",
  "serde",
  "serde_json",
@@ -253,6 +265,20 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "cview-persistence"
+version = "0.1.0"
+dependencies = [
+ "cview-core",
+]
+
+[[package]]
+name = "cview-player"
+version = "0.1.0"
+dependencies = [
+ "cview-core",
 ]
 
 [[package]]
@@ -1562,6 +1588,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2c754d6c33795a1c324727428e5a7dedb5b06195f9890bdbcba760d3e246563"
 
 [[package]]
+name = "unicode-normalization"
+version = "0.1.26"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75cd3fb03d5288b3ba9a1ee103ac7e9cbb59f0b03d64f8ddfcc04dd42758a85d"
+dependencies = [
+ "tinyvec",
+]
+
+[[package]]
 name = "untrusted"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1577,6 +1612,7 @@ dependencies = [
  "idna",
  "percent-encoding",
  "serde",
+ "serde_derive",
 ]
 
 [[package]]
@@ -1590,6 +1626,18 @@ name = "utf8_iter"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
+
+[[package]]
+name = "uuid"
+version = "1.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cc1186384beb7dd8eedea376413fd654937285ea6c9cfbb928dc3043ea4b606"
+dependencies = [
+ "getrandom 0.4.3",
+ "js-sys",
+ "serde_core",
+ "wasm-bindgen",
+]
 
 [[package]]
 name = "version_check"

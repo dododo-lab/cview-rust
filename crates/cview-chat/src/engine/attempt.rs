@@ -35,7 +35,10 @@ impl ConnectAckAttemptState {
         self.nonce = self.nonce.wrapping_add(1);
         self.received = false;
         self.failed = false;
-        ConnectAckAttemptToken { generation, nonce: self.nonce }
+        ConnectAckAttemptToken {
+            generation,
+            nonce: self.nonce,
+        }
     }
 
     /// 첫 terminal 결과일 때만 `true`.
@@ -57,7 +60,10 @@ impl ConnectAckAttemptState {
     }
 
     pub fn accepts_timeout(&self, token: ConnectAckAttemptToken, current_generation: u64) -> bool {
-        token.generation == current_generation && token.nonce == self.nonce && !self.received && !self.failed
+        token.generation == current_generation
+            && token.nonce == self.nonce
+            && !self.received
+            && !self.failed
     }
 }
 
@@ -85,7 +91,10 @@ impl ReconnectionOwnerState {
 
     pub fn begin(&mut self, generation: u64) -> ReconnectionOwnerToken {
         self.nonce = self.nonce.wrapping_add(1);
-        let token = ReconnectionOwnerToken { generation, nonce: self.nonce };
+        let token = ReconnectionOwnerToken {
+            generation,
+            nonce: self.nonce,
+        };
         self.active = Some(token);
         self.pending_owner = None;
         self.pending_handshake_nonce = None;
@@ -104,14 +113,20 @@ impl ReconnectionOwnerState {
 
     /// 재연결 진행 중 들어온 close 를 기록한다.
     pub fn request_reconnect(&mut self, handshake_nonce: u64) -> bool {
-        let Some(active) = self.active else { return false };
+        let Some(active) = self.active else {
+            return false;
+        };
         self.pending_owner = Some(active);
         self.pending_handshake_nonce = Some(handshake_nonce);
         true
     }
 
     /// 현재 성공한 handshake 와 같은 nonce 의 close 만 소비한다.
-    pub fn consume_pending_reconnect(&mut self, owner: ReconnectionOwnerToken, current_handshake_nonce: u64) -> bool {
+    pub fn consume_pending_reconnect(
+        &mut self,
+        owner: ReconnectionOwnerToken,
+        current_handshake_nonce: u64,
+    ) -> bool {
         if self.pending_owner != Some(owner) {
             return false;
         }

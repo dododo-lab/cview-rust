@@ -20,7 +20,9 @@ use std::time::Instant;
 use futures_util::future::BoxFuture;
 use tokio::task::JoinHandle;
 
-pub use attempt::{ConnectAckAttemptState, ConnectAckAttemptToken, ReconnectionOwnerState, ReconnectionOwnerToken};
+pub use attempt::{
+    ConnectAckAttemptState, ConnectAckAttemptToken, ReconnectionOwnerState, ReconnectionOwnerToken,
+};
 pub use events::{ChatEngineEvent, ChatEventStream, EVENT_BUFFER_LIMIT};
 
 use crate::constants::{chat_defaults, secs, ws_defaults};
@@ -28,12 +30,15 @@ use crate::error::{ChatError, ChatResult};
 use crate::parser::ChatMessageParser;
 use crate::protocol::ChatEvent;
 use crate::reconnection::{ReconnectionConfiguration, ReconnectionPolicy};
-use crate::websocket::{BackgroundModePolicy, WebSocketConfiguration, WebSocketService, WebSocketState};
+use crate::websocket::{
+    BackgroundModePolicy, WebSocketConfiguration, WebSocketService, WebSocketState,
+};
 use cview_core::models::chat::{ChatConnectionState, ChatMessage, EmojiMap};
 use events::EventQueue;
 
 /// 재연결 시점에 최신 채팅 토큰 `(accessToken, extraToken)` 을 조달하는 공급자.
-pub type TokenProvider = Arc<dyn Fn() -> BoxFuture<'static, ChatResult<(String, Option<String>)>> + Send + Sync>;
+pub type TokenProvider =
+    Arc<dyn Fn() -> BoxFuture<'static, ChatResult<(String, Option<String>)>> + Send + Sync>;
 
 /// 쿠키 저장소에서 현재 쿠키를 읽어 오는 공급자 (Swift `HTTPCookieStorage.shared`).
 pub type CookieProvider = Arc<dyn Fn() -> Vec<ChatCookie> + Send + Sync>;
@@ -171,7 +176,9 @@ pub fn naver_cookie_domain_matches(domain: &str) -> bool {
                 && label.len() <= 63
                 && !label.starts_with('-')
                 && !label.ends_with('-')
-                && label.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+                && label
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
         })
 }
 
@@ -265,7 +272,9 @@ pub struct ChatEngine {
 
 impl std::fmt::Debug for ChatEngine {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ChatEngine").field("config", &self.inner.config).finish()
+        f.debug_struct("ChatEngine")
+            .field("config", &self.inner.config)
+            .finish()
     }
 }
 
@@ -289,7 +298,10 @@ impl ChatEngine {
             session_id: None,
             is_manual_disconnect: false,
             next_tid: 3,
-            background_mode_policy: BackgroundModePolicy { enabled: false, revision: 0 },
+            background_mode_policy: BackgroundModePolicy {
+                enabled: false,
+                revision: 0,
+            },
             connection_generation: 0,
             connect_ack_waiter: None,
             connect_ack_state: ConnectAckAttemptState::default(),
@@ -334,7 +346,10 @@ impl ChatEngine {
         is_reconnecting: bool,
         is_connected: bool,
     ) -> bool {
-        expected_generation == current_generation && !is_manual_disconnect && !is_reconnecting && !is_connected
+        expected_generation == current_generation
+            && !is_manual_disconnect
+            && !is_reconnecting
+            && !is_connected
     }
 
     // MARK: - 접근자
@@ -370,7 +385,9 @@ impl ChatEngine {
 
     /// 이벤트 스트림. 엔진 생성 시점부터 버퍼링된다.
     pub fn events(&self) -> ChatEventStream {
-        ChatEventStream { queue: self.inner.events.clone() }
+        ChatEventStream {
+            queue: self.inner.events.clone(),
+        }
     }
 
     // MARK: - 공개 API
@@ -392,12 +409,15 @@ impl ChatEngine {
             if generation != st.connection_generation {
                 return;
             }
-            self.inner.update_connection_state(&mut st, ChatConnectionState::Connecting);
+            self.inner
+                .update_connection_state(&mut st, ChatConnectionState::Connecting);
         }
 
         match self.inner.establish_connection(generation).await {
             Ok(()) | Err(ChatError::Cancelled) => {}
-            Err(error) => self.inner.handle_initial_connection_failure(error, generation),
+            Err(error) => self
+                .inner
+                .handle_initial_connection_failure(error, generation),
         }
     }
 
@@ -433,7 +453,8 @@ impl ChatEngine {
             return;
         }
         st.session_id = None;
-        self.inner.update_connection_state(&mut st, ChatConnectionState::Disconnected);
+        self.inner
+            .update_connection_state(&mut st, ChatConnectionState::Disconnected);
         tracing::debug!("Chat disconnected (manual)");
     }
 
@@ -445,7 +466,11 @@ impl ChatEngine {
                 return Err(ChatError::NotConnected);
             }
             let tid = st.next_tid;
-            st.next_tid = if st.next_tid == i64::MAX { 3 } else { st.next_tid + 1 };
+            st.next_tid = if st.next_tid == i64::MAX {
+                3
+            } else {
+                st.next_tid + 1
+            };
             let message = self.inner.parser.build_send_message(
                 &self.inner.config.chat_channel_id,
                 self.inner.config.channel_id.as_deref(),
@@ -496,7 +521,9 @@ impl ChatEngine {
 
     #[cfg(test)]
     pub(crate) async fn refresh_tokens_if_needed(&self, expected_generation: Option<u64>) {
-        self.inner.refresh_tokens_if_needed(expected_generation).await
+        self.inner
+            .refresh_tokens_if_needed(expected_generation)
+            .await
     }
 
     #[cfg(test)]
@@ -533,7 +560,8 @@ impl EngineInner {
     }
 
     fn is_current_connection(st: &EngineState, ws: &WebSocketService, generation: u64) -> bool {
-        generation == st.connection_generation && st.web_socket.as_ref().is_some_and(|cur| cur.ptr_eq(ws))
+        generation == st.connection_generation
+            && st.web_socket.as_ref().is_some_and(|cur| cur.ptr_eq(ws))
     }
 
     fn handle_initial_connection_failure(&self, error: ChatError, generation: u64) {
@@ -570,7 +598,10 @@ impl EngineInner {
                 &session_id,
                 chat_defaults::RECENT_CHAT_DEFAULT_COUNT,
             );
-            (request, st.web_socket.clone().ok_or(ChatError::NotConnected)?)
+            (
+                request,
+                st.web_socket.clone().ok_or(ChatError::NotConnected)?,
+            )
         };
         socket.send(&request).await
     }
@@ -622,7 +653,9 @@ impl EngineInner {
     }
 
     fn cookie_headers(&self) -> Vec<(String, String)> {
-        let Some(provider) = &self.config.cookie_provider else { return Vec::new() };
+        let Some(provider) = &self.config.cookie_provider else {
+            return Vec::new();
+        };
         let cookies: Vec<String> = provider()
             .into_iter()
             .filter(|c| {
@@ -643,7 +676,8 @@ impl EngineInner {
     async fn establish_connection(&self, expected_generation: u64) -> ChatResult<()> {
         tracing::info!(chat_channel_id = %self.config.chat_channel_id, "Chat connecting");
 
-        self.refresh_tokens_if_needed(Some(expected_generation)).await;
+        self.refresh_tokens_if_needed(Some(expected_generation))
+            .await;
         if expected_generation != self.lock().connection_generation {
             return Err(ChatError::Cancelled);
         }
@@ -694,7 +728,14 @@ impl EngineInner {
                 self.config.uid.as_deref(),
             )
         };
-        tracing::info!(auth = if self.config.uid.is_some() { "SEND" } else { "READ" }, "Connect msg");
+        tracing::info!(
+            auth = if self.config.uid.is_some() {
+                "SEND"
+            } else {
+                "READ"
+            },
+            "Connect msg"
+        );
         ws.send(&connect_msg).await?;
         self.ensure_current(&ws, expected_generation).await?;
 
@@ -792,14 +833,19 @@ impl EngineInner {
             Err(_) => {
                 let mut st = self.lock();
                 let generation = st.connection_generation;
-                if st.connect_ack_state.accepts_timeout(attempt, generation) && st.connect_ack_waiter.is_some() {
+                if st.connect_ack_state.accepts_timeout(attempt, generation)
+                    && st.connect_ack_waiter.is_some()
+                {
                     let error = ChatError::ConnectionFailed("연결 응답(10100) 시간 초과".into());
                     self.fail_connect_ack(&mut st, error.clone());
                     Err(error)
                 } else if st.connect_ack_state.received() {
                     Ok(())
                 } else {
-                    Err(st.connect_ack_failure.clone().unwrap_or(ChatError::Cancelled))
+                    Err(st
+                        .connect_ack_failure
+                        .clone()
+                        .unwrap_or(ChatError::Cancelled))
                 }
             }
         };
@@ -812,9 +858,16 @@ impl EngineInner {
 
     // MARK: - Listeners
 
-    fn start_message_listening(&self, st: &mut EngineState, ws: &WebSocketService, generation: u64) {
+    fn start_message_listening(
+        &self,
+        st: &mut EngineState,
+        ws: &WebSocketService,
+        generation: u64,
+    ) {
         abort(&mut st.message_listen_task);
-        let Some(mut rx) = ws.take_messages() else { return };
+        let Some(mut rx) = ws.take_messages() else {
+            return;
+        };
         let weak = self.weak_self.clone();
         let ws = ws.clone();
         st.message_listen_task = Some(tokio::spawn(async move {
@@ -837,7 +890,9 @@ impl EngineInner {
 
     fn start_state_listening(&self, st: &mut EngineState, ws: &WebSocketService, generation: u64) {
         abort(&mut st.state_listen_task);
-        let Some(mut rx) = ws.take_state_changes() else { return };
+        let Some(mut rx) = ws.take_state_changes() else {
+            return;
+        };
         let weak = self.weak_self.clone();
         let ws = ws.clone();
         st.state_listen_task = Some(tokio::spawn(async move {
@@ -872,7 +927,10 @@ impl EngineInner {
     /// 마지막 JSON 프레임 또는 성공한 transport pong 이후 동적 silence limit 을 넘으면 재연결.
     fn check_inbound_activity(&self, ws: &WebSocketService, generation: u64) {
         let mut st = self.lock();
-        if !Self::is_current_connection(&st, ws, generation) || st.is_manual_disconnect || st.is_reconnecting() {
+        if !Self::is_current_connection(&st, ws, generation)
+            || st.is_manual_disconnect
+            || st.is_reconnecting()
+        {
             return;
         }
         let transport = ws.transport_liveness();
@@ -882,14 +940,24 @@ impl EngineInner {
         if silence <= limit {
             return;
         }
-        tracing::warn!(silence = silence as i64, limit = limit as i64, "Chat inactivity watchdog — forcing reconnect");
+        tracing::warn!(
+            silence = silence as i64,
+            limit = limit as i64,
+            "Chat inactivity watchdog — forcing reconnect"
+        );
         st.last_inbound_activity = Instant::now();
         self.handle_web_socket_closed(&mut st);
     }
 
     // MARK: - Message Handling
 
-    fn handle_parsed_result(&self, result: ChatResult<Vec<ChatEvent>>, raw: &str, ws: &WebSocketService, generation: u64) {
+    fn handle_parsed_result(
+        &self,
+        result: ChatResult<Vec<ChatEvent>>,
+        raw: &str,
+        ws: &WebSocketService,
+        generation: u64,
+    ) {
         let mut st = self.lock();
         if !Self::is_current_connection(&st, ws, generation) {
             return;
@@ -913,7 +981,10 @@ impl EngineInner {
                     return;
                 }
                 st.session_id = Some(session_id);
-                self.update_connection_state(st, ChatConnectionState::Connected { server_index: 0 });
+                self.update_connection_state(
+                    st,
+                    ChatConnectionState::Connected { server_index: 0 },
+                );
                 // 핸들을 보관해 취소 가능하게 — 채널 전환 시 이전 요청이 새 소켓으로 나가지 않게.
                 let generation = st.connection_generation;
                 abort(&mut st.recent_messages_task);
@@ -926,7 +997,9 @@ impl EngineInner {
                 self.emit(ChatEngineEvent::Connected);
             }
             ChatEvent::ConnectionRejected { ret_code, ret_msg } => {
-                let code = ret_code.map(|c| c.to_string()).unwrap_or_else(|| "missing".into());
+                let code = ret_code
+                    .map(|c| c.to_string())
+                    .unwrap_or_else(|| "missing".into());
                 let suffix = ret_msg
                     .as_deref()
                     .map(str::trim)
@@ -934,7 +1007,10 @@ impl EngineInner {
                     .map(|s| format!(": {s}"))
                     .unwrap_or_default();
                 tracing::warn!(%code, "Chat CONNECT rejected");
-                self.fail_connect_ack(st, ChatError::ConnectionFailed(format!("연결 응답 거절 (retCode={code}){suffix}")));
+                self.fail_connect_ack(
+                    st,
+                    ChatError::ConnectionFailed(format!("연결 응답 거절 (retCode={code}){suffix}")),
+                );
             }
             ChatEvent::Messages(msgs) => {
                 self.apply_repeated_blind_states(st, &msgs);
@@ -961,7 +1037,10 @@ impl EngineInner {
             ChatEvent::NoticeCleared => self.emit(ChatEngineEvent::NoticeCleared),
             ChatEvent::Blind { message_id, .. } => {
                 Self::remove_message(st, &message_id);
-                self.emit(ChatEngineEvent::MessageBlinded { message_id, blind_text: None });
+                self.emit(ChatEngineEvent::MessageBlinded {
+                    message_id,
+                    blind_text: None,
+                });
             }
             ChatEvent::Kick { user_id } => {
                 if ChatEngine::is_self_kick(&user_id, self.config.uid.as_deref()) {
@@ -987,12 +1066,20 @@ impl EngineInner {
                 }));
             }
             ChatEvent::Pong => {}
-            ChatEvent::SendConfirmed { tid, ret_code, ret_msg } => {
+            ChatEvent::SendConfirmed {
+                tid,
+                ret_code,
+                ret_msg,
+            } => {
                 if ret_code == 0 {
                     tracing::debug!("Chat send confirmed");
                 } else {
                     tracing::warn!(ret_code, "Chat send failed");
-                    self.emit(ChatEngineEvent::SendRejected { tid, ret_code, message: ret_msg });
+                    self.emit(ChatEngineEvent::SendRejected {
+                        tid,
+                        ret_code,
+                        message: ret_msg,
+                    });
                 }
             }
             ChatEvent::System(msg) => self.emit(ChatEngineEvent::SystemMessage(msg)),
@@ -1007,7 +1094,9 @@ impl EngineInner {
             if !st.message_ids.contains(&message.id) {
                 continue;
             }
-            let Some(index) = st.messages.iter().position(|m| m.id == message.id) else { continue };
+            let Some(index) = st.messages.iter().position(|m| m.id == message.id) else {
+                continue;
+            };
             if st.messages[index].is_blinded {
                 continue;
             }
@@ -1021,11 +1110,18 @@ impl EngineInner {
     }
 
     /// id 디듑 후 버퍼에 붙이고 새로 들어간 것만 돌려준다. 빈 id 는 디듑하지 않는다.
-    fn append_messages(&self, st: &mut EngineState, new_messages: Vec<ChatMessage>) -> Vec<ChatMessage> {
+    fn append_messages(
+        &self,
+        st: &mut EngineState,
+        new_messages: Vec<ChatMessage>,
+    ) -> Vec<ChatMessage> {
         let mut seen_in_batch: HashSet<String> = HashSet::new();
         let deduped: Vec<ChatMessage> = new_messages
             .into_iter()
-            .filter(|m| m.id.is_empty() || (!st.message_ids.contains(&m.id) && seen_in_batch.insert(m.id.clone())))
+            .filter(|m| {
+                m.id.is_empty()
+                    || (!st.message_ids.contains(&m.id) && seen_in_batch.insert(m.id.clone()))
+            })
             .collect();
         if deduped.is_empty() {
             return deduped;
@@ -1039,7 +1135,11 @@ impl EngineInner {
         if st.messages.len() > max + BUFFER_TRIM_SLACK {
             let excess = st.messages.len() - max;
             // 축출될 id 를 제거 **전에** 걷어낸다.
-            let EngineState { messages, message_ids, .. } = st;
+            let EngineState {
+                messages,
+                message_ids,
+                ..
+            } = st;
             for m in messages[..excess].iter().filter(|m| !m.id.is_empty()) {
                 message_ids.remove(&m.id);
             }
@@ -1060,7 +1160,10 @@ impl EngineInner {
     /// 소켓 종료 공통 진입점 (호출측이 세대/identity gate 를 먼저 통과시킨다).
     fn handle_web_socket_closed(&self, st: &mut EngineState) {
         // guard 보다 먼저 핸드셰이크 대기자를 깨운다.
-        self.fail_connect_ack(st, ChatError::ConnectionFailed("핸드셰이크 중 연결 종료".into()));
+        self.fail_connect_ack(
+            st,
+            ChatError::ConnectionFailed("핸드셰이크 중 연결 종료".into()),
+        );
         abort(&mut st.recent_messages_task);
         if st.is_manual_disconnect {
             return;
@@ -1074,7 +1177,11 @@ impl EngineInner {
         let generation = st.connection_generation;
         let owner = st.reconnection_owner.begin(generation);
         self.update_connection_state(st, ChatConnectionState::Reconnecting { attempt: 0 });
-        st.reconnection_task = Some(tokio::spawn(start_reconnection(self.weak_self.clone(), generation, owner)));
+        st.reconnection_task = Some(tokio::spawn(start_reconnection(
+            self.weak_self.clone(),
+            generation,
+            owner,
+        )));
     }
 }
 
@@ -1093,16 +1200,27 @@ impl Drop for OwnerFinishGuard {
 }
 
 /// 재연결 루프 — 소진 후에도 영구 포기하지 않고 장기 지연 뒤 정책을 리셋해 다시 시도한다.
-async fn start_reconnection(weak: Weak<EngineInner>, generation: u64, owner: ReconnectionOwnerToken) {
-    let _guard = OwnerFinishGuard { weak: weak.clone(), owner };
+async fn start_reconnection(
+    weak: Weak<EngineInner>,
+    generation: u64,
+    owner: ReconnectionOwnerToken,
+) {
+    let _guard = OwnerFinishGuard {
+        weak: weak.clone(),
+        owner,
+    };
     loop {
         let Some(inner) = weak.upgrade() else { return };
         {
             let mut st = inner.lock();
-            if generation != st.connection_generation || !st.reconnection_owner.owns(owner) || st.is_manual_disconnect {
+            if generation != st.connection_generation
+                || !st.reconnection_owner.owns(owner)
+                || st.is_manual_disconnect
+            {
                 return;
             }
-            inner.update_connection_state(&mut st, ChatConnectionState::Reconnecting { attempt: 1 });
+            inner
+                .update_connection_state(&mut st, ChatConnectionState::Reconnecting { attempt: 1 });
             inner.emit(ChatEngineEvent::Reconnecting);
         }
 
@@ -1123,8 +1241,13 @@ async fn start_reconnection(weak: Weak<EngineInner>, generation: u64, owner: Rec
             Ok(()) => {
                 let mut st = inner.lock();
                 let nonce = st.connect_ack_state.nonce();
-                if st.reconnection_owner.consume_pending_reconnect(owner, nonce) {
-                    tracing::info!("Connection closed during reconnect completion; continuing retry loop");
+                if st
+                    .reconnection_owner
+                    .consume_pending_reconnect(owner, nonce)
+                {
+                    tracing::info!(
+                        "Connection closed during reconnect completion; continuing retry loop"
+                    );
                     continue;
                 }
                 return;
@@ -1137,7 +1260,9 @@ async fn start_reconnection(weak: Weak<EngineInner>, generation: u64, owner: Rec
                     let mut st = inner.lock();
                     inner.update_connection_state(
                         &mut st,
-                        ChatConnectionState::Failed { reason: "재연결 실패 — 잠시 후 자동으로 다시 시도합니다".into() },
+                        ChatConnectionState::Failed {
+                            reason: "재연결 실패 — 잠시 후 자동으로 다시 시도합니다".into(),
+                        },
                     );
                 }
                 let delay = secs(inner.config.exhausted_retry_delay);

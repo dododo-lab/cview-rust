@@ -44,7 +44,12 @@ fn macos_product_version() -> Option<String> {
 
 impl ChatMessageParser {
     /// cmd 100 (connect) 프레임.
-    pub fn build_connect_message(&self, chat_channel_id: &str, access_token: &str, uid: Option<&str>) -> String {
+    pub fn build_connect_message(
+        &self,
+        chat_channel_id: &str,
+        access_token: &str,
+        uid: Option<&str>,
+    ) -> String {
         let body = json!({
             "ver": "3",
             "cmd": ChzzkChatCommand::Connect.raw_value(),
@@ -79,7 +84,16 @@ impl ChatMessageParser {
         emojis: Option<&EmojiMap>,
     ) -> String {
         let msg_time = chrono::Utc::now().timestamp_millis();
-        self.build_send_message_at(chat_channel_id, channel_id, session_id, extra_token, message, tid, emojis, msg_time)
+        self.build_send_message_at(
+            chat_channel_id,
+            channel_id,
+            session_id,
+            extra_token,
+            message,
+            tid,
+            emojis,
+            msg_time,
+        )
     }
 
     /// 시각을 지정하는 [`build_send_message`](Self::build_send_message) (결정적 테스트용).
@@ -96,12 +110,19 @@ impl ChatMessageParser {
         msg_time: i64,
     ) -> String {
         let emoji_obj: Map<String, Value> = emojis
-            .map(|m| m.iter().map(|(k, v)| (k.clone(), Value::String(v.clone()))).collect())
+            .map(|m| {
+                m.iter()
+                    .map(|(k, v)| (k.clone(), Value::String(v.clone())))
+                    .collect()
+            })
             .unwrap_or_default();
         let mut msg_extras = Map::new();
         msg_extras.insert("chatType".into(), "STREAMING".into());
         msg_extras.insert("osType".into(), "PC".into());
-        msg_extras.insert("streamingChannelId".into(), channel_id.unwrap_or(chat_channel_id).into());
+        msg_extras.insert(
+            "streamingChannelId".into(),
+            channel_id.unwrap_or(chat_channel_id).into(),
+        );
         msg_extras.insert("emojis".into(), Value::Object(emoji_obj));
         if let Some(token) = extra_token.filter(|t| !t.is_empty()) {
             msg_extras.insert("extraToken".into(), token.into());
@@ -127,7 +148,12 @@ impl ChatMessageParser {
     }
 
     /// cmd 5101 (최근 채팅 요청). cmd 10100 에서 받은 비어 있지 않은 sid 가 필요하다.
-    pub fn build_recent_chat_request(&self, chat_channel_id: &str, session_id: &str, count: i64) -> String {
+    pub fn build_recent_chat_request(
+        &self,
+        chat_channel_id: &str,
+        session_id: &str,
+        count: i64,
+    ) -> String {
         let body = json!({
             "ver": "3",
             "cmd": ChzzkChatCommand::RequestRecentChat.raw_value(),
@@ -142,6 +168,9 @@ impl ChatMessageParser {
 
     /// pong 응답 (cmd 10000). 키 순서까지 Swift 리터럴 그대로.
     pub fn build_pong(&self) -> String {
-        format!("{{\"ver\":\"3\",\"cmd\":{}}}", ChzzkChatCommand::Pong.raw_value())
+        format!(
+            "{{\"ver\":\"3\",\"cmd\":{}}}",
+            ChzzkChatCommand::Pong.raw_value()
+        )
     }
 }

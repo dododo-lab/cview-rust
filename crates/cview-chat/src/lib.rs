@@ -25,7 +25,9 @@ pub mod websocket;
 
 pub use engine::{ChatEngine, ChatEngineConfiguration, ChatEngineEvent, ChatEventStream};
 pub use error::{ChatError, ChatResult};
-pub use moderation::{ChatCommand, ChatCommandResult, ChatFilter, ChatModerationService, FilterType};
+pub use moderation::{
+    ChatCommand, ChatCommandResult, ChatFilter, ChatModerationService, FilterType,
+};
 pub use parser::ChatMessageParser;
 pub use protocol::{AnyCodable, ChatEvent, ChatProtocolMessage, ChzzkChatCommand};
 pub use reconnection::{ReconnectionConfiguration, ReconnectionPolicy, ReconnectionState};

@@ -4,10 +4,13 @@ use std::time::Duration;
 
 use cview_core::models::chat::{new_uuid_string, ChatMessage, MessageType};
 
-use crate::moderation::{ChatCommand, ChatCommandResult, ChatFilter, ChatModerationService, FilterType};
+use crate::moderation::{
+    ChatCommand, ChatCommandResult, ChatFilter, ChatModerationService, FilterType,
+};
 
 fn make_message(user_id: Option<&str>, content: &str, ty: MessageType) -> ChatMessage {
-    let mut m = ChatMessage::with_id(new_uuid_string(), user_id.unwrap_or("anon"), content).message_type(ty);
+    let mut m = ChatMessage::with_id(new_uuid_string(), user_id.unwrap_or("anon"), content)
+        .message_type(ty);
     if let Some(u) = user_id {
         m = m.user_id(u);
     }
@@ -28,16 +31,25 @@ fn kw(words: &[&str]) -> FilterType {
 fn blocked_user_is_filtered() {
     let svc = ChatModerationService::new();
     svc.block_user("baduser");
-    let msgs = [msg(Some("good"), "hello"), msg(Some("baduser"), "spam"), msg(Some("good2"), "world")];
+    let msgs = [
+        msg(Some("good"), "hello"),
+        msg(Some("baduser"), "spam"),
+        msg(Some("good2"), "world"),
+    ];
     let result = svc.filter_messages(&msgs);
     assert_eq!(result.len(), 2);
-    assert!(result.iter().all(|m| m.user_id.as_deref() != Some("baduser")));
+    assert!(result
+        .iter()
+        .all(|m| m.user_id.as_deref() != Some("baduser")));
 }
 
 #[test]
 fn initial_blocked_users_applied() {
     let svc = ChatModerationService::with_blocked_users(["pre-blocked".to_string()]);
-    let result = svc.filter_messages(&[msg(Some("pre-blocked"), "should be blocked"), msg(Some("ok"), "ok msg")]);
+    let result = svc.filter_messages(&[
+        msg(Some("pre-blocked"), "should be blocked"),
+        msg(Some("ok"), "ok msg"),
+    ]);
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].user_id.as_deref(), Some("ok"));
 }
@@ -57,7 +69,9 @@ fn unblock_restores_messages() {
 fn muted_user_blocked() {
     let svc = ChatModerationService::new();
     svc.mute_user("u1", 60.0);
-    assert!(svc.filter_messages(&[msg(Some("u1"), "muted msg")]).is_empty());
+    assert!(svc
+        .filter_messages(&[msg(Some("u1"), "muted msg")])
+        .is_empty());
     assert!(svc.is_muted("u1"));
 }
 
@@ -65,7 +79,11 @@ fn muted_user_blocked() {
 fn mute_immediately_expired() {
     let svc = ChatModerationService::new();
     svc.mute_user("u1", -1.0);
-    assert_eq!(svc.filter_messages(&[msg(Some("u1"), "passed")]).len(), 1, "음수 duration → 만료 처리되어 메시지 통과");
+    assert_eq!(
+        svc.filter_messages(&[msg(Some("u1"), "passed")]).len(),
+        1,
+        "음수 duration → 만료 처리되어 메시지 통과"
+    );
     assert!(!svc.is_muted("u1"));
 }
 
@@ -92,11 +110,17 @@ fn mute_command_clamps_hostile_duration() {
     let svc = ChatModerationService::new();
     for argument in ["inf", "-inf", "nan"] {
         let text = local_action(&svc, &format!("/mute u {argument}"));
-        assert!(text.contains("300초"), "{argument} → 기본값으로 폴백해야 한다: {text}");
+        assert!(
+            text.contains("300초"),
+            "{argument} → 기본값으로 폴백해야 한다: {text}"
+        );
     }
     for argument in ["1e30", "99999999999999999999"] {
         let text = local_action(&svc, &format!("/mute u {argument}"));
-        assert!(text.contains("86400초"), "{argument} → 상한으로 제한해야 한다: {text}");
+        assert!(
+            text.contains("86400초"),
+            "{argument} → 상한으로 제한해야 한다: {text}"
+        );
     }
     assert!(local_action(&svc, "/mute u abc").contains("300초"));
     let _ = svc.process_command("/mute neg -100");
@@ -117,8 +141,11 @@ fn unmute_restores() {
 fn keyword_filter_matches() {
     let svc = ChatModerationService::new();
     svc.add_filter(ChatFilter::new(kw(&["spam", "bad"]), true));
-    let result =
-        svc.filter_messages(&[msg(None, "this is spam alert"), msg(None, "BAD WORD HERE"), msg(None, "clean message")]);
+    let result = svc.filter_messages(&[
+        msg(None, "this is spam alert"),
+        msg(None, "BAD WORD HERE"),
+        msg(None, "clean message"),
+    ]);
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].content, "clean message");
 }
@@ -127,7 +154,11 @@ fn keyword_filter_matches() {
 fn empty_keyword_list_passes_all() {
     let svc = ChatModerationService::new();
     svc.add_filter(ChatFilter::new(kw(&[]), true));
-    let result = svc.filter_messages(&[msg(None, "anything"), msg(None, "spam"), msg(None, "filter test")]);
+    let result = svc.filter_messages(&[
+        msg(None, "anything"),
+        msg(None, "spam"),
+        msg(None, "filter test"),
+    ]);
     assert_eq!(result.len(), 3);
 }
 
@@ -159,7 +190,10 @@ fn set_keyword_filter_replaces() {
     let svc = ChatModerationService::new();
     svc.set_keyword_filter(vec!["spam".into()], true);
     svc.set_keyword_filter(vec!["banana".into()], true);
-    let result = svc.filter_messages(&[msg(None, "spam should now pass"), msg(None, "banana should be blocked")]);
+    let result = svc.filter_messages(&[
+        msg(None, "spam should now pass"),
+        msg(None, "banana should be blocked"),
+    ]);
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].content, "spam should now pass");
 }
@@ -177,8 +211,15 @@ fn set_keyword_filter_enabled_false() {
     let svc = ChatModerationService::new();
     svc.set_keyword_filter(vec!["spam".into()], true);
     svc.set_keyword_filter_enabled(false);
-    assert_eq!(svc.filter_messages(&[msg(None, "spam should pass when disabled")]).len(), 1);
-    assert!(!svc.has_active_rules(), "disabled keyword filter 는 활성 규칙으로 카운트되지 않는다");
+    assert_eq!(
+        svc.filter_messages(&[msg(None, "spam should pass when disabled")])
+            .len(),
+        1
+    );
+    assert!(
+        !svc.has_active_rules(),
+        "disabled keyword filter 는 활성 규칙으로 카운트되지 않는다"
+    );
 }
 
 #[test]
@@ -198,7 +239,10 @@ fn has_active_rules_union() {
 #[test]
 fn valid_regex_filters_matching_messages() {
     let svc = ChatModerationService::new();
-    svc.add_filter(ChatFilter::new(FilterType::Regex(r"\d{3}-\d{4}".into()), true));
+    svc.add_filter(ChatFilter::new(
+        FilterType::Regex(r"\d{3}-\d{4}".into()),
+        true,
+    ));
     let result = svc.filter_messages(&[
         msg(None, "call me at 010-1234"),
         msg(None, "no numbers here"),
@@ -212,7 +256,11 @@ fn valid_regex_filters_matching_messages() {
 fn invalid_regex_is_silent_no_op() {
     let svc = ChatModerationService::new();
     svc.add_filter(ChatFilter::new(FilterType::Regex("[unclosed".into()), true));
-    let result = svc.filter_messages(&[msg(None, "abc"), msg(None, "any text"), msg(None, "[bracket]")]);
+    let result = svc.filter_messages(&[
+        msg(None, "abc"),
+        msg(None, "any text"),
+        msg(None, "[bracket]"),
+    ]);
     assert_eq!(result.len(), 3);
 }
 
@@ -250,7 +298,10 @@ fn remove_all_filters_clears_content_only() {
     svc.block_user("baduser");
     svc.remove_all_filters();
     assert!(svc.current_filters().is_empty());
-    let result = svc.filter_messages(&[msg(Some("baduser"), "still blocked"), msg(Some("ok"), "spam allowed now")]);
+    let result = svc.filter_messages(&[
+        msg(Some("baduser"), "still blocked"),
+        msg(Some("ok"), "spam allowed now"),
+    ]);
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].user_id.as_deref(), Some("ok"));
 }
@@ -270,12 +321,26 @@ fn should_show_agrees_with_filter() {
         make_message(Some("ok"), "bad word", MessageType::SystemMessage),
         make_message(Some("blocked"), "bad word", MessageType::Donation),
     ];
-    let bulk: Vec<String> = svc.filter_messages(&candidates).into_iter().map(|m| m.id).collect();
-    let single: Vec<String> = candidates.iter().filter(|c| svc.should_show(c)).map(|m| m.id.clone()).collect();
+    let bulk: Vec<String> = svc
+        .filter_messages(&candidates)
+        .into_iter()
+        .map(|m| m.id)
+        .collect();
+    let single: Vec<String> = candidates
+        .iter()
+        .filter(|c| svc.should_show(c))
+        .map(|m| m.id.clone())
+        .collect();
     assert_eq!(bulk, single);
     assert_eq!(bulk.len(), 5);
-    assert!(svc.should_show(&candidates[3]), "후원은 키워드 필터를 우회해야 한다");
-    assert!(!svc.should_show(&candidates[7]), "차단 사용자는 후원이라도 막힌다");
+    assert!(
+        svc.should_show(&candidates[3]),
+        "후원은 키워드 필터를 우회해야 한다"
+    );
+    assert!(
+        !svc.should_show(&candidates[7]),
+        "차단 사용자는 후원이라도 막힌다"
+    );
 }
 
 #[test]
@@ -294,16 +359,34 @@ fn expired_mute_is_not_an_active_rule() {
 fn command_parse_and_results() {
     assert_eq!(ChatCommand::parse("hello"), None);
     assert_eq!(ChatCommand::parse("/unknown x"), None);
-    assert_eq!(ChatCommand::parse("  /ban   a  b "), Some((ChatCommand::Ban, vec!["a".into(), "b".into()])));
+    assert_eq!(
+        ChatCommand::parse("  /ban   a  b "),
+        Some((ChatCommand::Ban, vec!["a".into(), "b".into()]))
+    );
 
     let svc = ChatModerationService::new();
-    assert_eq!(svc.process_command("/clear"), Some(ChatCommandResult::ClearChat));
-    assert_eq!(svc.process_command("/export"), Some(ChatCommandResult::ExportChat));
-    assert!(matches!(svc.process_command("/ban"), Some(ChatCommandResult::Error(_))));
-    assert!(matches!(svc.process_command("/notice"), Some(ChatCommandResult::Error(_))));
+    assert_eq!(
+        svc.process_command("/clear"),
+        Some(ChatCommandResult::ClearChat)
+    );
+    assert_eq!(
+        svc.process_command("/export"),
+        Some(ChatCommandResult::ExportChat)
+    );
+    assert!(matches!(
+        svc.process_command("/ban"),
+        Some(ChatCommandResult::Error(_))
+    ));
+    assert!(matches!(
+        svc.process_command("/notice"),
+        Some(ChatCommandResult::Error(_))
+    ));
     assert_eq!(
         svc.process_command("/slow 5"),
-        Some(ChatCommandResult::ServerCommand { command: ChatCommand::Slow, args: vec!["5".into()] })
+        Some(ChatCommandResult::ServerCommand {
+            command: ChatCommand::Slow,
+            args: vec!["5".into()]
+        })
     );
     local_action(&svc, "/ban x");
     assert!(svc.is_blocked("x"));

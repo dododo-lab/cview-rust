@@ -11,7 +11,10 @@ thiserror.workspace = true
 chrono.workspace = true
 async-trait.workspace = true
 tokio.workspace = true
-url.workspace = true
+tracing.workspace = true
+url = { workspace = true, features = ["serde"] }
+uuid.workspace = true
+unicode-normalization.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }

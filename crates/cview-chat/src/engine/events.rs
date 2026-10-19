@@ -18,7 +18,9 @@ use cview_core::models::chat::{ChatConnectionState, ChatMessage};
 #[allow(clippy::large_enum_variant)]
 pub enum ChatEngineEvent {
     Connected,
-    Disconnected { reason: String },
+    Disconnected {
+        reason: String,
+    },
     Reconnecting,
     StateChanged(ChatConnectionState),
     NewMessages(Vec<ChatMessage>),
@@ -27,11 +29,21 @@ pub enum ChatEngineEvent {
     Notice(ChatMessage),
     NoticeCleared,
     /// 삭제된 메시지 id 와 서버가 알려준 삭제 사유 본문(있을 때).
-    MessageBlinded { message_id: String, blind_text: Option<String> },
+    MessageBlinded {
+        message_id: String,
+        blind_text: Option<String>,
+    },
     Kicked,
-    UserPenalized { user_id: String, duration: i64 },
+    UserPenalized {
+        user_id: String,
+        duration: i64,
+    },
     /// cmd 13101 `retCode != 0` — 서버가 내 메시지를 버렸다. `tid` 가 `None` 이면 아무것도 지우지 말 것.
-    SendRejected { tid: Option<i64>, ret_code: i64, message: Option<String> },
+    SendRejected {
+        tid: Option<i64>,
+        ret_code: i64,
+        message: Option<String>,
+    },
     SystemMessage(String),
     MessagesCleared,
 }

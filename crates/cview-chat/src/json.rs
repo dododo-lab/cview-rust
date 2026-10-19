@@ -116,8 +116,16 @@ fn numeric_case_insensitive_cmp(a: &str, b: &str) -> Ordering {
             while j < b.len() && b[j].is_ascii_digit() {
                 j += 1;
             }
-            let na: String = a[si..i].iter().collect::<String>().trim_start_matches('0').to_string();
-            let nb: String = b[sj..j].iter().collect::<String>().trim_start_matches('0').to_string();
+            let na: String = a[si..i]
+                .iter()
+                .collect::<String>()
+                .trim_start_matches('0')
+                .to_string();
+            let nb: String = b[sj..j]
+                .iter()
+                .collect::<String>()
+                .trim_start_matches('0')
+                .to_string();
             let ord = na.len().cmp(&nb.len()).then_with(|| na.cmp(&nb));
             if ord != Ordering::Equal {
                 return ord;
@@ -233,7 +241,10 @@ mod tests {
     fn key_order_is_numeric_and_case_insensitive() {
         let mut keys = vec!["d_10", "d_9", "B", "a", "msgTypeCode", "msgTime", "msg"];
         keys.sort_by(|a, b| foundation_key_cmp(a, b));
-        assert_eq!(keys, vec!["a", "B", "d_9", "d_10", "msg", "msgTime", "msgTypeCode"]);
+        assert_eq!(
+            keys,
+            vec!["a", "B", "d_9", "d_10", "msg", "msgTime", "msgTypeCode"]
+        );
     }
 
     #[test]

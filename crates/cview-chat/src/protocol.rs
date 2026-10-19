@@ -121,7 +121,10 @@ pub struct ChatProtocolMessage {
 impl ChatProtocolMessage {
     /// `cmd` 만 채운 envelope.
     pub fn new(cmd: i64) -> Self {
-        Self { cmd, ..Default::default() }
+        Self {
+            cmd,
+            ..Default::default()
+        }
     }
 
     pub fn with_bdy(mut self, bdy: AnyCodable) -> Self {
@@ -140,22 +143,41 @@ impl ChatProtocolMessage {
 // 공지 한 건은 드물고 나머지는 Vec/String 이라 Box 로 API 를 비틀 이유가 없다.
 #[allow(clippy::large_enum_variant)]
 pub enum ChatEvent {
-    Connected { session_id: String },
+    Connected {
+        session_id: String,
+    },
     /// cmd 10100 이 오류 retCode 를 반환했거나 유효한 sid 를 주지 않은 핸드셰이크 실패.
-    ConnectionRejected { ret_code: Option<i64>, ret_msg: Option<String> },
+    ConnectionRejected {
+        ret_code: Option<i64>,
+        ret_msg: Option<String>,
+    },
     Messages(Vec<ChatMessage>),
     RecentMessages(Vec<ChatMessage>),
     Donations(Vec<ChatMessage>),
     Notice(ChatMessage),
     NoticeCleared,
-    Blind { message_id: String, user_id: String },
+    Blind {
+        message_id: String,
+        user_id: String,
+    },
     /// cmd 94005 — 추방. 채팅방 전원에게 브로드캐스트되므로 대상 userId 를 동반한다.
-    Kick { user_id: String },
-    Penalty { user_id: String, duration: i64 },
+    Kick {
+        user_id: String,
+    },
+    Penalty {
+        user_id: String,
+        duration: i64,
+    },
     Ping,
     Pong,
     /// cmd 13101 — 전송 응답. `tid` 는 대응 요청 번호(서버가 안 주면 `None`).
-    SendConfirmed { tid: Option<i64>, ret_code: i64, ret_msg: Option<String> },
+    SendConfirmed {
+        tid: Option<i64>,
+        ret_code: i64,
+        ret_msg: Option<String>,
+    },
     System(String),
-    Unknown { cmd: i64 },
+    Unknown {
+        cmd: i64,
+    },
 }

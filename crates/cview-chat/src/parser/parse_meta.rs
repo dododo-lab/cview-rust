@@ -17,7 +17,11 @@ impl ChatMessageParser {
         let bdy = raw.bdy.as_ref().ok_or(ChatError::InvalidMessage)?;
         let dict: &Map<String, Value> = if let Some(d) = bdy.as_object() {
             d
-        } else if let Some(first) = bdy.as_array().and_then(|a| a.first()).and_then(Value::as_object) {
+        } else if let Some(first) = bdy
+            .as_array()
+            .and_then(|a| a.first())
+            .and_then(Value::as_object)
+        {
             first
         } else {
             return Err(ChatError::InvalidMessage);
@@ -29,7 +33,9 @@ impl ChatMessageParser {
         }
         let extras = embedded_dictionary(dict.get("extras"));
         let profile = embedded_dictionary(dict.get("profile"));
-        let register_profile = extras.as_ref().and_then(|e| ns_object(e.get("registerProfile")));
+        let register_profile = extras
+            .as_ref()
+            .and_then(|e| ns_object(e.get("registerProfile")));
         let nickname = [
             register_profile.and_then(|r| ns_str(r.get("nickname"))),
             extras.as_ref().and_then(|e| ns_str(e.get("nickname"))),
@@ -62,7 +68,9 @@ impl ChatMessageParser {
     }
 
     pub(crate) fn parse_blind(&self, raw: &ChatProtocolMessage) -> (String, String) {
-        let Some(dict) = body_object(raw) else { return (String::new(), String::new()) };
+        let Some(dict) = body_object(raw) else {
+            return (String::new(), String::new());
+        };
         (
             body_str(dict, "messageId").unwrap_or("").to_owned(),
             body_str(dict, "userId").unwrap_or("").to_owned(),
@@ -70,7 +78,9 @@ impl ChatMessageParser {
     }
 
     pub(crate) fn parse_penalty(&self, raw: &ChatProtocolMessage) -> (String, i64) {
-        let Some(dict) = body_object(raw) else { return (String::new(), 0) };
+        let Some(dict) = body_object(raw) else {
+            return (String::new(), 0);
+        };
         (
             body_str(dict, "targetUserId").unwrap_or("").to_owned(),
             any_int(dict.get("duration")).unwrap_or(0),
@@ -79,7 +89,9 @@ impl ChatMessageParser {
 
     /// cmd 94005 의 대상 userId. 못 찾으면 빈 문자열 — 호출측은 "내 것이 아님"으로 폴백한다.
     pub(crate) fn parse_kick_target(&self, raw: &ChatProtocolMessage) -> String {
-        let Some(dict) = body_object(raw) else { return String::new() };
+        let Some(dict) = body_object(raw) else {
+            return String::new();
+        };
         ["targetUserId", "userId", "uid", "kickUserId"]
             .into_iter()
             .find_map(|key| body_str(dict, key).filter(|s| !s.is_empty()))
@@ -88,11 +100,17 @@ impl ChatMessageParser {
     }
 
     pub(crate) fn extract_session_id(&self, raw: &ChatProtocolMessage) -> String {
-        body_object(raw).and_then(|d| body_str(d, "sid")).unwrap_or("").to_owned()
+        body_object(raw)
+            .and_then(|d| body_str(d, "sid"))
+            .unwrap_or("")
+            .to_owned()
     }
 
     pub(crate) fn extract_system_message(&self, raw: &ChatProtocolMessage) -> String {
-        body_object(raw).and_then(|d| body_str(d, "msg")).unwrap_or("").to_owned()
+        body_object(raw)
+            .and_then(|d| body_str(d, "msg"))
+            .unwrap_or("")
+            .to_owned()
     }
 }
 

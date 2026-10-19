@@ -63,34 +63,66 @@ fn parse_raw_all_fields() {
 
 #[test]
 fn parse_raw_body_shapes() {
-    let raw = parser().parse_raw(r#"{"cmd":10100,"retCode":0,"bdy":{"sid":"abc"}}"#).unwrap();
+    let raw = parser()
+        .parse_raw(r#"{"cmd":10100,"retCode":0,"bdy":{"sid":"abc"}}"#)
+        .unwrap();
     assert_eq!(raw.bdy.unwrap()["sid"], "abc");
-    let raw = parser().parse_raw(r#"{"cmd":93101,"bdy":[{"msg":"hello","uid":"u1","msgTime":1000}]}"#).unwrap();
+    let raw = parser()
+        .parse_raw(r#"{"cmd":93101,"bdy":[{"msg":"hello","uid":"u1","msgTime":1000}]}"#)
+        .unwrap();
     assert_eq!(raw.bdy.unwrap().as_array().unwrap().len(), 1);
     assert!(parser().parse_raw(r#"{"cmd":0}"#).unwrap().bdy.is_none());
     // 명시적 null 은 None 과 구분된다 (공지 해제 판정).
-    assert_eq!(parser().parse_raw(r#"{"cmd":94010,"bdy":null}"#).unwrap().bdy, Some(Value::Null));
+    assert_eq!(
+        parser()
+            .parse_raw(r#"{"cmd":94010,"bdy":null}"#)
+            .unwrap()
+            .bdy,
+        Some(Value::Null)
+    );
 }
 
 #[test]
 fn parse_raw_rejects_invalid_input() {
-    for bad in ["", "this is not json", r#"{"bdy":{}}"#, "[1,2,3]", "not valid json", r#"{"cmd":true}"#] {
-        assert_eq!(parser().parse_raw(bad).unwrap_err(), ChatError::InvalidMessage, "{bad}");
+    for bad in [
+        "",
+        "this is not json",
+        r#"{"bdy":{}}"#,
+        "[1,2,3]",
+        "not valid json",
+        r#"{"cmd":true}"#,
+    ] {
+        assert_eq!(
+            parser().parse_raw(bad).unwrap_err(),
+            ChatError::InvalidMessage,
+            "{bad}"
+        );
     }
 }
 
 #[test]
 fn parse_raw_unicode() {
-    let raw = parser().parse_raw(r#"{"cmd":93101,"bdy":[{"msg":"안녕하세요 🎉","uid":"u1","msgTime":1000}]}"#).unwrap();
+    let raw = parser()
+        .parse_raw(r#"{"cmd":93101,"bdy":[{"msg":"안녕하세요 🎉","uid":"u1","msgTime":1000}]}"#)
+        .unwrap();
     assert_eq!(raw.bdy.unwrap()[0]["msg"], "안녕하세요 🎉");
 }
 
 #[test]
 fn parses_tid_in_both_formats() {
     let p = parser();
-    assert_eq!(p.parse_raw(r#"{"cmd":13101,"tid":7}"#).unwrap().tid, Some(7));
-    assert_eq!(p.parse_raw(r#"{"cmd":13101,"tid":"7"}"#).unwrap().tid, Some(7));
-    assert_eq!(p.parse_raw(r#"{"cmd":13101,"tid":"abc"}"#).unwrap().tid, None);
+    assert_eq!(
+        p.parse_raw(r#"{"cmd":13101,"tid":7}"#).unwrap().tid,
+        Some(7)
+    );
+    assert_eq!(
+        p.parse_raw(r#"{"cmd":13101,"tid":"7"}"#).unwrap().tid,
+        Some(7)
+    );
+    assert_eq!(
+        p.parse_raw(r#"{"cmd":13101,"tid":"abc"}"#).unwrap().tid,
+        None
+    );
     assert_eq!(p.parse_raw(r#"{"cmd":13101}"#).unwrap().tid, None);
 }
 
@@ -105,7 +137,10 @@ fn parse_single_chat_with_profile() {
     assert_eq!(m[0].content, "Hello!");
     assert_eq!(m[0].nickname, "TestUser");
     assert_eq!(m[0].user_id.as_deref(), Some("user1"));
-    assert_eq!(m[0].profile.as_ref().unwrap().profile_image_url.as_deref(), Some("https://img.example.com/pic.jpg"));
+    assert_eq!(
+        m[0].profile.as_ref().unwrap().profile_image_url.as_deref(),
+        Some("https://img.example.com/pic.jpg")
+    );
 }
 
 #[test]
@@ -127,7 +162,9 @@ fn server_message_id_preferred() {
 
 #[test]
 fn anonymous_id_prefix_when_uid_missing() {
-    let m = messages(parse(r#"{"cmd":93101,"bdy":[{"msg":"hi","msgTime":1000}]}"#));
+    let m = messages(parse(
+        r#"{"cmd":93101,"bdy":[{"msg":"hi","msgTime":1000}]}"#,
+    ));
     assert_eq!(m[0].content, "hi");
     assert!(m[0].id.starts_with("anon_1000_"));
 }
@@ -146,7 +183,9 @@ fn clean_bot_blinded_message() {
 
 #[test]
 fn normal_status_not_blinded() {
-    let m = messages(parse(r#"{"cmd":93101,"bdy":[{"msg":"hello","uid":"u1","msgTime":1000,"msgStatusType":"NORMAL","extras":"{}"}]}"#));
+    let m = messages(parse(
+        r#"{"cmd":93101,"bdy":[{"msg":"hello","uid":"u1","msgTime":1000,"msgStatusType":"NORMAL","extras":"{}"}]}"#,
+    ));
     assert!(!m[0].is_blinded);
     assert_eq!(m[0].content, "hello");
 }
@@ -156,16 +195,33 @@ fn multiple_and_empty_messages() {
     let m = messages(parse(
         r#"{"cmd":93101,"bdy":[{"msg":"msg1","uid":"u1","msgTime":1000},{"msg":"msg2","uid":"u2","msgTime":2000},{"msg":"msg3","uid":"u3","msgTime":3000}]}"#,
     ));
-    assert_eq!(m.iter().map(|x| x.content.as_str()).collect::<Vec<_>>(), ["msg1", "msg2", "msg3"]);
-    assert_eq!(messages(parse(r#"{"cmd":93101,"bdy":[{"msg":"","uid":"u1","msgTime":1000}]}"#))[0].content, "");
-    assert_eq!(messages(parse(r#"{"cmd":93101,"bdy":[{"uid":"u1","msgTime":1000}]}"#))[0].content, "");
+    assert_eq!(
+        m.iter().map(|x| x.content.as_str()).collect::<Vec<_>>(),
+        ["msg1", "msg2", "msg3"]
+    );
+    assert_eq!(
+        messages(parse(
+            r#"{"cmd":93101,"bdy":[{"msg":"","uid":"u1","msgTime":1000}]}"#
+        ))[0]
+            .content,
+        ""
+    );
+    assert_eq!(
+        messages(parse(
+            r#"{"cmd":93101,"bdy":[{"uid":"u1","msgTime":1000}]}"#
+        ))[0]
+            .content,
+        ""
+    );
     assert!(messages(parse(r#"{"cmd":93101,"bdy":[]}"#)).is_empty());
     assert!(messages(parse(r#"{"cmd":93101}"#)).is_empty());
 }
 
 #[test]
 fn timestamp_conversion() {
-    let m = messages(parse(r#"{"cmd":93101,"bdy":[{"msg":"test","uid":"u1","msgTime":1700000000000}]}"#));
+    let m = messages(parse(
+        r#"{"cmd":93101,"bdy":[{"msg":"test","uid":"u1","msgTime":1700000000000}]}"#,
+    ));
     assert_eq!(m[0].timestamp.timestamp(), 1_700_000_000);
 }
 
@@ -206,7 +262,16 @@ fn parse_donation_nested_extras_and_double_amounts() {
         r#"{"cmd":93102,"bdy":[{"msg":"hello donation","uid":"d1","msgTime":2000,"extras":{"payAmount":5000,"donationType":"CHAT","chatType":"STREAMING"}}]}"#,
     ));
     assert_eq!(m[0].r#type, MessageType::Donation);
-    assert_eq!(m[0].extras.as_ref().unwrap().donation.as_ref().unwrap().amount, 5000);
+    assert_eq!(
+        m[0].extras
+            .as_ref()
+            .unwrap()
+            .donation
+            .as_ref()
+            .unwrap()
+            .amount,
+        5000
+    );
 
     let m = donations(parse(
         r#"{"cmd":93102,"bdy":[{"msg":"double amount","uid":"d2","msgTime":3000,"extras":{"payAmount":2500.0,"donationType":"VIDEO"}}]}"#,
@@ -238,7 +303,16 @@ fn anonymous_flag_overrides_nickname() {
         r#"{"cmd":93102,"bdy":[{"msg":"x","uid":"d","msgTime":1,"profile":{"nickname":"Real"},"extras":{"payAmount":"₩1,000원","isAnonymous":true}}]}"#,
     ));
     assert_eq!(m[0].nickname, "익명");
-    assert_eq!(m[0].extras.as_ref().unwrap().donation.as_ref().unwrap().amount, 1000);
+    assert_eq!(
+        m[0].extras
+            .as_ref()
+            .unwrap()
+            .donation
+            .as_ref()
+            .unwrap()
+            .amount,
+        1000
+    );
 }
 
 // MARK: - Profiles & Badges
@@ -252,7 +326,10 @@ fn parse_profile_json_string() {
     );
     let m = messages(parse(&json));
     assert_eq!(m[0].nickname, "StreamerNick");
-    assert_eq!(m[0].profile.as_ref().unwrap().user_role_code.as_deref(), Some("streamer"));
+    assert_eq!(
+        m[0].profile.as_ref().unwrap().user_role_code.as_deref(),
+        Some("streamer")
+    );
 }
 
 #[test]
@@ -263,12 +340,17 @@ fn parse_manager_profile_keeps_raw_role() {
         json_escape(profile)
     );
     let m = messages(parse(&json));
-    assert_eq!(m[0].profile.as_ref().unwrap().user_role_code.as_deref(), Some("streaming_chat_manager"));
+    assert_eq!(
+        m[0].profile.as_ref().unwrap().user_role_code.as_deref(),
+        Some("streaming_chat_manager")
+    );
 }
 
 #[test]
 fn no_profile_defaults_to_unknown() {
-    let m = messages(parse(r#"{"cmd":93101,"bdy":[{"msg":"anonymous","uid":"u1","msgTime":1000}]}"#));
+    let m = messages(parse(
+        r#"{"cmd":93101,"bdy":[{"msg":"anonymous","uid":"u1","msgTime":1000}]}"#,
+    ));
     assert_eq!(m[0].nickname, "Unknown");
 }
 
@@ -281,7 +363,10 @@ fn subscription_badge_from_streaming_property() {
     );
     let m = messages(parse(&json));
     let badge = m[0].profile.as_ref().unwrap().badge.as_ref().unwrap();
-    assert_eq!(badge.image_url.as_deref(), Some("https://badge.example.com/sub.png"));
+    assert_eq!(
+        badge.image_url.as_deref(),
+        Some("https://badge.example.com/sub.png")
+    );
     assert_eq!(badge.badge_id.as_deref(), Some("subscription_1"));
     assert_eq!(badge.alt_text.as_deref(), Some("3개월 구독"));
 }
@@ -296,7 +381,10 @@ fn viewer_badges() {
     let m = messages(parse(&json));
     let badges = &m[0].profile.as_ref().unwrap().badges;
     assert!(!badges.is_empty());
-    assert_eq!(badges[0].image_url.as_deref(), Some("https://badge.example.com/fan.png"));
+    assert_eq!(
+        badges[0].image_url.as_deref(),
+        Some("https://badge.example.com/fan.png")
+    );
     assert_eq!(badges[0].badge_id.as_deref(), Some("donation_newbie"));
 }
 
@@ -320,8 +408,18 @@ fn emoji_map_parsing() {
     assert_eq!(emojis.len(), 2);
     assert_eq!(emojis["happy_emote"], "https://emoji.example.com/happy.png");
 
-    assert!(extras_message(r#"{"emojis":{},"chatType":"STREAMING"}"#, "no emojis").extras.unwrap().emojis.is_none());
-    assert!(extras_message(r#"{"chatType":"STREAMING"}"#, "text").extras.unwrap().emojis.is_none());
+    assert!(
+        extras_message(r#"{"emojis":{},"chatType":"STREAMING"}"#, "no emojis")
+            .extras
+            .unwrap()
+            .emojis
+            .is_none()
+    );
+    assert!(extras_message(r#"{"chatType":"STREAMING"}"#, "text")
+        .extras
+        .unwrap()
+        .emojis
+        .is_none());
 }
 
 #[test]
@@ -337,8 +435,14 @@ fn non_string_emoji_values_are_dropped() {
 
 #[test]
 fn subscription_and_system_types_from_extras() {
-    assert_eq!(extras_message(r#"{"chatType":"SUBSCRIPTION"}"#, "subscribed!").r#type, MessageType::Subscription);
-    assert_eq!(extras_message(r#"{"chatType":"SYSTEM"}"#, "system notice").r#type, MessageType::SystemMessage);
+    assert_eq!(
+        extras_message(r#"{"chatType":"SUBSCRIPTION"}"#, "subscribed!").r#type,
+        MessageType::Subscription
+    );
+    assert_eq!(
+        extras_message(r#"{"chatType":"SYSTEM"}"#, "system notice").r#type,
+        MessageType::SystemMessage
+    );
 }
 
 // MARK: - Event Types
@@ -347,15 +451,25 @@ fn subscription_and_system_types_from_extras() {
 fn connected_event_and_rejections() {
     assert_eq!(
         parse(r#"{"cmd":10100,"retCode":0,"bdy":{"sid":"sess-xyz-789"}}"#),
-        ChatEvent::Connected { session_id: "sess-xyz-789".into() }
+        ChatEvent::Connected {
+            session_id: "sess-xyz-789".into()
+        }
     );
     assert!(matches!(
         parse(r#"{"cmd":10100,"retCode":0,"bdy":{}}"#),
-        ChatEvent::ConnectionRejected { ret_code: Some(0), .. }
+        ChatEvent::ConnectionRejected {
+            ret_code: Some(0),
+            ..
+        }
     ));
     assert_eq!(
-        parse(r#"{"cmd":10100,"retCode":401,"retMsg":"invalid token","bdy":{"sid":"must-not-pass"}}"#),
-        ChatEvent::ConnectionRejected { ret_code: Some(401), ret_msg: Some("invalid token".into()) }
+        parse(
+            r#"{"cmd":10100,"retCode":401,"retMsg":"invalid token","bdy":{"sid":"must-not-pass"}}"#
+        ),
+        ChatEvent::ConnectionRejected {
+            ret_code: Some(401),
+            ret_msg: Some("invalid token".into())
+        }
     );
     assert!(matches!(
         parse(r#"{"cmd":10100,"bdy":{"sid":"must-not-pass"}}"#),
@@ -363,7 +477,10 @@ fn connected_event_and_rejections() {
     ));
     assert!(matches!(
         parse(r#"{"cmd":10100,"retCode":0,"bdy":{"sid":"  \n "}}"#),
-        ChatEvent::ConnectionRejected { ret_code: Some(0), .. }
+        ChatEvent::ConnectionRejected {
+            ret_code: Some(0),
+            ..
+        }
     ));
 }
 
@@ -392,7 +509,9 @@ fn recent_chat_variants() {
 
 #[test]
 fn notice_events() {
-    let ChatEvent::Notice(n) = parse(r#"{"cmd":94010,"bdy":{"msg":"This is a notice"}}"#) else { panic!() };
+    let ChatEvent::Notice(n) = parse(r#"{"cmd":94010,"bdy":{"msg":"This is a notice"}}"#) else {
+        panic!()
+    };
     assert_eq!(n.content, "This is a notice");
     assert_eq!(n.r#type, MessageType::Notice);
     assert_eq!(n.nickname, "공지");
@@ -405,7 +524,9 @@ fn notice_events() {
     assert_eq!(n.content, "Array body notice");
     assert_eq!(n.nickname, "스트리머닉");
 
-    let ChatEvent::Notice(n) = parse(r#"{"cmd":94010,"bdy":{"notice":{"message":"  nested  "},"noticeId":"77"}}"#) else {
+    let ChatEvent::Notice(n) =
+        parse(r#"{"cmd":94010,"bdy":{"notice":{"message":"  nested  "},"noticeId":"77"}}"#)
+    else {
         panic!()
     };
     assert_eq!(n.content, "nested");
@@ -415,10 +536,14 @@ fn notice_events() {
 #[test]
 fn notice_id_is_stable_by_content() {
     let json = r#"{"cmd":94010,"bdy":{"msg":"고정 공지입니다"}}"#;
-    let (ChatEvent::Notice(a), ChatEvent::Notice(b)) = (parse(json), parse(json)) else { panic!() };
+    let (ChatEvent::Notice(a), ChatEvent::Notice(b)) = (parse(json), parse(json)) else {
+        panic!()
+    };
     assert_eq!(a.id, b.id);
     assert!(a.id.starts_with("notice_"));
-    let ChatEvent::Notice(c) = parse(r#"{"cmd":94010,"bdy":{"msg":"다른 공지"}}"#) else { panic!() };
+    let ChatEvent::Notice(c) = parse(r#"{"cmd":94010,"bdy":{"msg":"다른 공지"}}"#) else {
+        panic!()
+    };
     assert_ne!(c.id, a.id);
 }
 
@@ -426,15 +551,23 @@ fn notice_id_is_stable_by_content() {
 fn blind_kick_penalty_pong_system_emote_unknown() {
     assert_eq!(
         parse(r#"{"cmd":94008,"bdy":{"messageId":"msg-123","userId":"user-456"}}"#),
-        ChatEvent::Blind { message_id: "msg-123".into(), user_id: "user-456".into() }
+        ChatEvent::Blind {
+            message_id: "msg-123".into(),
+            user_id: "user-456".into()
+        }
     );
     assert_eq!(
         parse(r#"{"cmd":94005,"bdy":{"targetUserId":"kicked-user"}}"#),
-        ChatEvent::Kick { user_id: "kicked-user".into() }
+        ChatEvent::Kick {
+            user_id: "kicked-user".into()
+        }
     );
     assert_eq!(
         parse(r#"{"cmd":94015,"bdy":{"targetUserId":"bad-user","duration":300}}"#),
-        ChatEvent::Penalty { user_id: "bad-user".into(), duration: 300 }
+        ChatEvent::Penalty {
+            user_id: "bad-user".into(),
+            duration: 300
+        }
     );
     assert_eq!(parse(r#"{"cmd":10000}"#), ChatEvent::Pong);
     assert_eq!(parse(r#"{"cmd":0}"#), ChatEvent::Ping);
@@ -442,7 +575,13 @@ fn blind_kick_penalty_pong_system_emote_unknown() {
         parse(r#"{"cmd":93006,"bdy":{"msg":"System: maintenance in 5 min"}}"#),
         ChatEvent::System("System: maintenance in 5 min".into())
     );
-    assert_eq!(messages(parse(r#"{"cmd":93103,"bdy":[{"msg":"emote","uid":"u1","msgTime":1000}]}"#)).len(), 1);
+    assert_eq!(
+        messages(parse(
+            r#"{"cmd":93103,"bdy":[{"msg":"emote","uid":"u1","msgTime":1000}]}"#
+        ))
+        .len(),
+        1
+    );
     assert_eq!(parse(r#"{"cmd":12345}"#), ChatEvent::Unknown { cmd: 12345 });
     assert_eq!(parse(r#"{"cmd":99999}"#), ChatEvent::Unknown { cmd: 99999 });
 }
@@ -451,19 +590,40 @@ fn blind_kick_penalty_pong_system_emote_unknown() {
 fn send_confirmed_variants() {
     assert_eq!(
         parse(r#"{"cmd":13101,"retCode":0,"retMsg":"OK"}"#),
-        ChatEvent::SendConfirmed { tid: None, ret_code: 0, ret_msg: Some("OK".into()) }
+        ChatEvent::SendConfirmed {
+            tid: None,
+            ret_code: 0,
+            ret_msg: Some("OK".into())
+        }
     );
     assert_eq!(
         parse(r#"{"cmd":13101,"retCode":-1,"retMsg":"error"}"#),
-        ChatEvent::SendConfirmed { tid: None, ret_code: -1, ret_msg: Some("error".into()) }
+        ChatEvent::SendConfirmed {
+            tid: None,
+            ret_code: -1,
+            ret_msg: Some("error".into())
+        }
     );
     assert_eq!(
         parse(r#"{"cmd":13101,"retCode":5}"#),
-        ChatEvent::SendConfirmed { tid: None, ret_code: 5, ret_msg: None }
+        ChatEvent::SendConfirmed {
+            tid: None,
+            ret_code: 5,
+            ret_msg: None
+        }
     );
-    assert!(matches!(parse(r#"{"cmd":13101,"tid":9,"retCode":0}"#), ChatEvent::SendConfirmed { tid: Some(9), .. }));
-    assert!(matches!(parse(r#"{"cmd":13101,"tid":"9","retCode":-1}"#), ChatEvent::SendConfirmed { tid: Some(9), .. }));
-    assert!(matches!(parse(r#"{"cmd":13101,"retCode":-1}"#), ChatEvent::SendConfirmed { tid: None, .. }));
+    assert!(matches!(
+        parse(r#"{"cmd":13101,"tid":9,"retCode":0}"#),
+        ChatEvent::SendConfirmed { tid: Some(9), .. }
+    ));
+    assert!(matches!(
+        parse(r#"{"cmd":13101,"tid":"9","retCode":-1}"#),
+        ChatEvent::SendConfirmed { tid: Some(9), .. }
+    ));
+    assert!(matches!(
+        parse(r#"{"cmd":13101,"retCode":-1}"#),
+        ChatEvent::SendConfirmed { tid: None, .. }
+    ));
 }
 
 // MARK: - Build (와이어 바이트)
@@ -485,11 +645,23 @@ fn build_connect_message_is_byte_exact() {
 fn build_send_message_is_byte_exact() {
     let mut emojis = EmojiMap::new();
     emojis.insert("smile".into(), "https://emoji.com/smile.png".into());
-    let msg = parser().build_send_message_at("ch-1", Some("chan"), Some("sid-1"), Some("xt"), "Hello \"World\"!", 42, Some(&emojis), 1_700_000_000_000);
+    let msg = parser().build_send_message_at(
+        "ch-1",
+        Some("chan"),
+        Some("sid-1"),
+        Some("xt"),
+        "Hello \"World\"!",
+        42,
+        Some(&emojis),
+        1_700_000_000_000,
+    );
     let extras = r#"{"chatType":"STREAMING","emojis":{"smile":"https:\/\/emoji.com\/smile.png"},"extraToken":"xt","osType":"PC","streamingChannelId":"chan"}"#;
     let expected = format!(
         r#"{{"bdy":{{"ctime":1700000000000,"extras":"{}","msg":"Hello \"World\"!","msgTime":1700000000000,"msgTypeCode":1}},"cid":"ch-1","cmd":3101,"retry":false,"sid":"sid-1","svcid":"game","tid":"42","ver":"3"}}"#,
-        extras.replace('\\', "\\\\").replace('"', "\\\"").replace('/', "\\/")
+        extras
+            .replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('/', "\\/")
     );
     assert_eq!(msg, expected);
 
@@ -497,7 +669,10 @@ fn build_send_message_is_byte_exact() {
     let msg = parser().build_send_message_at("ch-1", None, None, None, "hi", 3, None, 1);
     let v: Value = serde_json::from_str(&msg).unwrap();
     let extras: Value = serde_json::from_str(v["bdy"]["extras"].as_str().unwrap()).unwrap();
-    assert_eq!(extras, json!({"chatType":"STREAMING","osType":"PC","streamingChannelId":"ch-1","emojis":{}}));
+    assert_eq!(
+        extras,
+        json!({"chatType":"STREAMING","osType":"PC","streamingChannelId":"ch-1","emojis":{}})
+    );
     assert_eq!(v["sid"], "");
     assert!(msg.contains("3101"));
 }
@@ -512,7 +687,11 @@ fn send_frame_tid_is_string_and_round_trips() {
 
 #[test]
 fn build_recent_chat_and_pong() {
-    let msg = parser().build_recent_chat_request("ch-1", "session-verified", chat_defaults::RECENT_CHAT_DEFAULT_COUNT);
+    let msg = parser().build_recent_chat_request(
+        "ch-1",
+        "session-verified",
+        chat_defaults::RECENT_CHAT_DEFAULT_COUNT,
+    );
     assert_eq!(
         msg,
         r#"{"bdy":{"recentMessageCount":50},"cid":"ch-1","cmd":5101,"sid":"session-verified","svcid":"game","tid":2,"ver":"3"}"#
@@ -535,9 +714,14 @@ fn command_codes() {
     assert_eq!(SystemMessage.raw_value(), 93006);
     assert_eq!(ChzzkChatCommand::from_raw(99999), None);
     assert_eq!(ChzzkChatCommand::ALL.len(), 17);
-    let unique: std::collections::HashSet<i64> = ChzzkChatCommand::ALL.iter().map(|c| c.raw_value()).collect();
+    let unique: std::collections::HashSet<i64> = ChzzkChatCommand::ALL
+        .iter()
+        .map(|c| c.raw_value())
+        .collect();
     assert_eq!(unique.len(), 17);
-    assert!(ChzzkChatCommand::ALL.iter().all(|c| !c.description().is_empty()));
+    assert!(ChzzkChatCommand::ALL
+        .iter()
+        .all(|c| !c.description().is_empty()));
 }
 
 #[test]
@@ -557,22 +741,43 @@ fn inbound_commands_map_to_known_events() {
                 assert!(outbound.contains(&cmd), "{cmd:?} 가 .unknown 으로 떨어졌다");
                 assert_eq!(c, cmd.raw_value());
             }
-            Ok(_) => assert!(!outbound.contains(&cmd), "outbound {cmd:?} 가 inbound 로 분류됐다"),
+            Ok(_) => assert!(
+                !outbound.contains(&cmd),
+                "outbound {cmd:?} 가 inbound 로 분류됐다"
+            ),
         }
     }
     for raw in [99999, -1, 1234567] {
-        assert_eq!(parse(&format!(r#"{{"cmd":{raw}}}"#)), ChatEvent::Unknown { cmd: raw });
+        assert_eq!(
+            parse(&format!(r#"{{"cmd":{raw}}}"#)),
+            ChatEvent::Unknown { cmd: raw }
+        );
     }
 }
 
 #[test]
 fn core_command_mapping() {
-    assert!(matches!(parse(r#"{"cmd":93102,"bdy":[]}"#), ChatEvent::Donations(_)));
-    assert!(matches!(parse(r#"{"cmd":15101,"bdy":{"messageList":[]}}"#), ChatEvent::RecentMessages(_)));
+    assert!(matches!(
+        parse(r#"{"cmd":93102,"bdy":[]}"#),
+        ChatEvent::Donations(_)
+    ));
+    assert!(matches!(
+        parse(r#"{"cmd":15101,"bdy":{"messageList":[]}}"#),
+        ChatEvent::RecentMessages(_)
+    ));
     assert!(matches!(parse(r#"{"cmd":94005}"#), ChatEvent::Kick { .. }));
-    assert!(matches!(parse(r#"{"cmd":94015,"bdy":{"targetUserId":"u","duration":60}}"#), ChatEvent::Penalty { .. }));
-    assert!(matches!(parse(r#"{"cmd":94010,"bdy":{"msg":"hi"}}"#), ChatEvent::Notice(_)));
-    assert!(matches!(parse(r#"{"cmd":93103,"bdy":[]}"#), ChatEvent::Messages(_)));
+    assert!(matches!(
+        parse(r#"{"cmd":94015,"bdy":{"targetUserId":"u","duration":60}}"#),
+        ChatEvent::Penalty { .. }
+    ));
+    assert!(matches!(
+        parse(r#"{"cmd":94010,"bdy":{"msg":"hi"}}"#),
+        ChatEvent::Notice(_)
+    ));
+    assert!(matches!(
+        parse(r#"{"cmd":93103,"bdy":[]}"#),
+        ChatEvent::Messages(_)
+    ));
 }
 
 // MARK: - Kick targeting
@@ -586,9 +791,15 @@ fn kick_target(json: &str) -> String {
 
 #[test]
 fn kick_target_fields_and_fallbacks() {
-    assert_eq!(kick_target(r#"{"cmd":94005,"bdy":{"targetUserId":"victim-1"}}"#), "victim-1");
+    assert_eq!(
+        kick_target(r#"{"cmd":94005,"bdy":{"targetUserId":"victim-1"}}"#),
+        "victim-1"
+    );
     for key in ["userId", "uid", "kickUserId"] {
-        assert_eq!(kick_target(&format!(r#"{{"cmd":94005,"bdy":{{"{key}":"victim-2"}}}}"#)), "victim-2");
+        assert_eq!(
+            kick_target(&format!(r#"{{"cmd":94005,"bdy":{{"{key}":"victim-2"}}}}"#)),
+            "victim-2"
+        );
     }
     for json in [
         r#"{"cmd":94005}"#,
@@ -599,7 +810,10 @@ fn kick_target_fields_and_fallbacks() {
     ] {
         assert_eq!(kick_target(json), "", "{json}");
     }
-    assert_eq!(kick_target(r#"{"cmd":94005,"bdy":{"uid":"someone-else","targetUserId":"victim-3"}}"#), "victim-3");
+    assert_eq!(
+        kick_target(r#"{"cmd":94005,"bdy":{"uid":"someone-else","targetUserId":"victim-3"}}"#),
+        "victim-3"
+    );
 }
 
 #[test]
@@ -611,7 +825,10 @@ fn self_kick_gate() {
     assert!(!ChatEngine::is_self_kick("victim", Some("")));
     assert!(!ChatEngine::is_self_kick("", Some("")));
     assert!(!ChatEngine::is_self_kick("", None));
-    assert!(!ChatEngine::is_self_kick(&kick_target(r#"{"cmd":94005}"#), Some("me")));
+    assert!(!ChatEngine::is_self_kick(
+        &kick_target(r#"{"cmd":94005}"#),
+        Some("me")
+    ));
 }
 
 // MARK: - Precision
@@ -629,8 +846,14 @@ fn equivalent_extras_have_same_identity() {
     let a = precision_message(object, json!({}));
     let b = precision_message(Value::String(text.into()), json!({}));
     assert_eq!(a.id, b.id);
-    assert_eq!(a.extras.as_ref().unwrap().emojis, b.extras.as_ref().unwrap().emojis);
-    let changed = precision_message(json!({"emojis":{"a":"https://example.com/changed"}}), json!({}));
+    assert_eq!(
+        a.extras.as_ref().unwrap().emojis,
+        b.extras.as_ref().unwrap().emojis
+    );
+    let changed = precision_message(
+        json!({"emojis":{"a":"https://example.com/changed"}}),
+        json!({}),
+    );
     assert_ne!(changed.id, a.id);
 }
 
@@ -643,7 +866,10 @@ fn profile_representations_use_same_rules() {
     assert_eq!(a.nickname, b.nickname);
     assert_eq!(a.profile, b.profile);
     assert_eq!(a.profile.as_ref().unwrap().badges.len(), 1);
-    assert_eq!(a.profile.as_ref().unwrap().title.as_ref().unwrap().name, "title");
+    assert_eq!(
+        a.profile.as_ref().unwrap().title.as_ref().unwrap().name,
+        "title"
+    );
 }
 
 #[test]
@@ -651,30 +877,63 @@ fn numeric_fields_cannot_trap_or_misidentify() {
     for v in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
         assert_eq!(ChatMessageParser::parse_amount_f64(v), None);
     }
-    assert_eq!(ChatMessageParser::parse_amount_f64(f64::MAX), Some(i64::MAX));
-    assert_eq!(ChatMessageParser::parse_amount_f64(-f64::MAX), Some(i64::MIN));
-    assert_eq!(ChatMessageParser::parse_amount(Some(&json!(f64::MAX))), Some(i64::MAX));
-    assert_eq!(ChatMessageParser::parse_amount(Some(&json!(-f64::MAX))), Some(i64::MIN));
-    assert_eq!(ChatMessageParser::parse_amount(Some(&json!(1234.6))), Some(1235));
-    assert_eq!(ChatMessageParser::parse_amount(Some(&json!("₩1,000원"))), Some(1000));
-    assert_eq!(ChatMessageParser::parse_amount(Some(&json!("99999999999999999999999"))), Some(i64::MAX));
+    assert_eq!(
+        ChatMessageParser::parse_amount_f64(f64::MAX),
+        Some(i64::MAX)
+    );
+    assert_eq!(
+        ChatMessageParser::parse_amount_f64(-f64::MAX),
+        Some(i64::MIN)
+    );
+    assert_eq!(
+        ChatMessageParser::parse_amount(Some(&json!(f64::MAX))),
+        Some(i64::MAX)
+    );
+    assert_eq!(
+        ChatMessageParser::parse_amount(Some(&json!(-f64::MAX))),
+        Some(i64::MIN)
+    );
+    assert_eq!(
+        ChatMessageParser::parse_amount(Some(&json!(1234.6))),
+        Some(1235)
+    );
+    assert_eq!(
+        ChatMessageParser::parse_amount(Some(&json!("₩1,000원"))),
+        Some(1000)
+    );
+    assert_eq!(
+        ChatMessageParser::parse_amount(Some(&json!("99999999999999999999999"))),
+        Some(i64::MAX)
+    );
     assert_eq!(ChatMessageParser::parse_amount(Some(&json!(true))), None);
     assert_eq!(ChatMessageParser::parse_tid(Some(&json!(true))), None);
     assert_eq!(ChatMessageParser::parse_tid(Some(&json!(3.5))), None);
     assert_eq!(ChatMessageParser::parse_tid(Some(&json!("3"))), Some(3));
-    assert_eq!(ChatMessageParser::parse_tid(Some(&json!(i64::MAX))), Some(i64::MAX));
+    assert_eq!(
+        ChatMessageParser::parse_tid(Some(&json!(i64::MAX))),
+        Some(i64::MAX)
+    );
 }
 
 #[test]
 fn notice_removal_and_recent_snapshot_are_preserved() {
     assert_eq!(parse(r#"{"cmd":94010,"bdy":{}}"#), ChatEvent::NoticeCleared);
-    assert_eq!(parse(r#"{"cmd":94010,"bdy":null}"#), ChatEvent::NoticeCleared);
-    let events = parser().parse_events(r#"{"cmd":15101,"bdy":{"messageList":[],"notice":{"msg":"pinned"}}}"#).unwrap();
+    assert_eq!(
+        parse(r#"{"cmd":94010,"bdy":null}"#),
+        ChatEvent::NoticeCleared
+    );
+    let events = parser()
+        .parse_events(r#"{"cmd":15101,"bdy":{"messageList":[],"notice":{"msg":"pinned"}}}"#)
+        .unwrap();
     assert_eq!(events.len(), 2);
     assert!(matches!(events[0], ChatEvent::RecentMessages(_)));
-    let ChatEvent::Notice(n) = &events[1] else { panic!("Recent snapshot lost its notice or ordering") };
+    let ChatEvent::Notice(n) = &events[1] else {
+        panic!("Recent snapshot lost its notice or ordering")
+    };
     assert_eq!(n.content, "pinned");
-    let malformed = parser().parse_events(r#"{"cmd":15101,"bdy":{"messageList":[],"notice":42}}"#).unwrap();
+    let malformed = parser()
+        .parse_events(r#"{"cmd":15101,"bdy":{"messageList":[],"notice":42}}"#)
+        .unwrap();
     assert_eq!(malformed.len(), 1);
     assert!(parser().parse(r#"{"cmd":94010}"#).is_err());
 }
@@ -683,7 +942,11 @@ fn notice_removal_and_recent_snapshot_are_preserved() {
 fn hidden_messages_never_expose_payload() {
     for command in [93101, 15101, 93102] {
         let row = json!({"msg":"hidden payload","uid":"user","msgTime":1,"msgTypeCode":10,"msgStatusType":"HIDDEN","extras":{"payAmount":1000,"emojis":{"x":"https://example.com/x"}}});
-        let body = if command == 15101 { json!({"messageList":[row]}) } else { json!([row]) };
+        let body = if command == 15101 {
+            json!({"messageList":[row]})
+        } else {
+            json!([row])
+        };
         let event = parse(&serde_json::to_string(&json!({"cmd":command,"bdy":body})).unwrap());
         let items = match event {
             ChatEvent::Messages(m) | ChatEvent::RecentMessages(m) | ChatEvent::Donations(m) => m,
@@ -699,7 +962,10 @@ fn hidden_messages_never_expose_payload() {
 
 #[test]
 fn large_recent_batch_within_receive_budget() {
-    let long_image_url = format!("https://ssl.pstatic.net/static/badge/{}.png", "a".repeat(480));
+    let long_image_url = format!(
+        "https://ssl.pstatic.net/static/badge/{}.png",
+        "a".repeat(480)
+    );
     let profile = json!({
         "nickname": "긴닉네임".repeat(20),
         "profileImageUrl": long_image_url,
@@ -723,10 +989,16 @@ fn large_recent_batch_within_receive_budget() {
         })
         .collect();
     let text = serde_json::to_string(&json!({"cmd":15101,"bdy":{"messageList":list}})).unwrap();
-    assert!(text.len() > 65_536, "fixture 가 과거 64KiB 제한을 넘어야 한다");
+    assert!(
+        text.len() > 65_536,
+        "fixture 가 과거 64KiB 제한을 넘어야 한다"
+    );
     assert!(text.len() < ws_defaults::MAX_MESSAGE_SIZE);
     let parsed = recent(parse(&text));
-    assert_eq!(parsed.len() as i64, chat_defaults::RECENT_CHAT_DEFAULT_COUNT);
+    assert_eq!(
+        parsed.len() as i64,
+        chat_defaults::RECENT_CHAT_DEFAULT_COUNT
+    );
     assert_eq!(parsed[0].content, "가".repeat(180));
     assert_eq!(parsed.last().unwrap().user_id.as_deref(), Some("user-49"));
 }

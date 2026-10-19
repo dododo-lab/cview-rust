@@ -119,7 +119,9 @@ impl ReconnectionPolicy {
         if let Some(connected_at) = inner.last_successful_connection.take() {
             if connected_at.elapsed().as_secs_f64() >= self.config.reset_threshold {
                 inner.current_attempt = 0;
-                tracing::info!("Stable connection reached reset threshold; reconnection attempts reset");
+                tracing::info!(
+                    "Stable connection reached reset threshold; reconnection attempts reset"
+                );
             }
         }
 
@@ -127,7 +129,10 @@ impl ReconnectionPolicy {
 
         if inner.current_attempt > self.config.max_attempts {
             inner.state = ReconnectionState::Exhausted;
-            tracing::error!(max_attempts = self.config.max_attempts, "Reconnection exhausted");
+            tracing::error!(
+                max_attempts = self.config.max_attempts,
+                "Reconnection exhausted"
+            );
             return None;
         }
 
@@ -137,10 +142,17 @@ impl ReconnectionPolicy {
 
         // 지터: delay ± (jitterFactor * delay)
         let jitter = clamped * self.config.jitter_factor;
-        let offset = if jitter > 0.0 { rand::thread_rng().gen_range(-jitter..=jitter) } else { 0.0 };
+        let offset = if jitter > 0.0 {
+            rand::thread_rng().gen_range(-jitter..=jitter)
+        } else {
+            0.0
+        };
         let safe = (clamped + offset).max(0.1);
 
-        inner.state = ReconnectionState::Waiting { attempt: inner.current_attempt, delay: safe };
+        inner.state = ReconnectionState::Waiting {
+            attempt: inner.current_attempt,
+            delay: safe,
+        };
         tracing::info!(
             attempt = inner.current_attempt,
             max_attempts = self.config.max_attempts,
@@ -170,7 +182,8 @@ impl ReconnectionPolicy {
     /// `next_delay()` 가 예산을 되돌릴 기회를 가져야 한다.
     pub fn should_reconnect(&self) -> bool {
         let inner = self.lock();
-        inner.last_successful_connection.is_some() || inner.current_attempt < self.config.max_attempts
+        inner.last_successful_connection.is_some()
+            || inner.current_attempt < self.config.max_attempts
     }
 
     /// 지연 → `action` 실행을 성공하거나 소진할 때까지 반복한다.
@@ -187,7 +200,10 @@ impl ReconnectionPolicy {
             };
             let attempt = {
                 let mut inner = self.lock();
-                inner.state = ReconnectionState::Waiting { attempt: inner.current_attempt, delay };
+                inner.state = ReconnectionState::Waiting {
+                    attempt: inner.current_attempt,
+                    delay,
+                };
                 inner.current_attempt
             };
 
@@ -209,7 +225,9 @@ impl ReconnectionPolicy {
         }
 
         self.lock().state = ReconnectionState::Exhausted;
-        Err(ChatError::ConnectionFailed("최대 재연결 시도 횟수 초과".into()))
+        Err(ChatError::ConnectionFailed(
+            "최대 재연결 시도 횟수 초과".into(),
+        ))
     }
 
     /// 정책 상태를 `Idle` 로 되돌린다. 진행 중인 재연결 작업을 취소하지는 않는다
@@ -227,7 +245,10 @@ impl ReconnectionPolicy {
         match self.state() {
             ReconnectionState::Idle => "대기 중".into(),
             ReconnectionState::Waiting { attempt, delay } => {
-                format!("재연결 대기 ({attempt}/{}) - {delay:.0}초", self.config.max_attempts)
+                format!(
+                    "재연결 대기 ({attempt}/{}) - {delay:.0}초",
+                    self.config.max_attempts
+                )
             }
             ReconnectionState::Connecting { attempt } => {
                 format!("재연결 중 ({attempt}/{})", self.config.max_attempts)

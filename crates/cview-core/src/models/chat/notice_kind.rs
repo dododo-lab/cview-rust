@@ -22,7 +22,8 @@ pub enum ChatSystemNoticeKind {
 
 impl ChatSystemNoticeKind {
     /// Swift `CaseIterable.allCases`.
-    pub const ALL: [ChatSystemNoticeKind; 4] = [Self::Info, Self::Warning, Self::Error, Self::Positive];
+    pub const ALL: [ChatSystemNoticeKind; 4] =
+        [Self::Info, Self::Warning, Self::Error, Self::Positive];
 
     /// Swift raw value.
     pub fn raw_value(self) -> &'static str {

@@ -10,7 +10,13 @@ use crate::reconnection::{ReconnectionConfiguration, ReconnectionPolicy, Reconne
 
 /// Swift `Configuration(initialDelay:maxDelay:maxAttempts:backoffMultiplier:jitterFactor:)` —
 /// 나머지는 기본값.
-fn cfg(initial: f64, max_delay: f64, max_attempts: i64, multiplier: f64, jitter: f64) -> ReconnectionConfiguration {
+fn cfg(
+    initial: f64,
+    max_delay: f64,
+    max_attempts: i64,
+    multiplier: f64,
+    jitter: f64,
+) -> ReconnectionConfiguration {
     ReconnectionConfiguration {
         initial_delay: initial,
         max_delay,
@@ -29,7 +35,10 @@ fn cfg_reset(
     jitter: f64,
     reset: f64,
 ) -> ReconnectionConfiguration {
-    ReconnectionConfiguration { reset_threshold: reset, ..cfg(initial, max_delay, max_attempts, multiplier, jitter) }
+    ReconnectionConfiguration {
+        reset_threshold: reset,
+        ..cfg(initial, max_delay, max_attempts, multiplier, jitter)
+    }
 }
 
 fn approx(a: f64, b: f64, eps: f64) -> bool {
@@ -92,7 +101,10 @@ fn backoff_curve_formula() {
     let p = ReconnectionPolicy::new(cfg(2.0, 1000.0, 8, 1.5, 0.0));
     for n in 1..=8 {
         let expected = 2.0 * 1.5f64.powi(n - 1);
-        assert!(approx(p.next_delay().unwrap(), expected, 0.001), "attempt {n}");
+        assert!(
+            approx(p.next_delay().unwrap(), expected, 0.001),
+            "attempt {n}"
+        );
     }
 }
 
@@ -310,7 +322,10 @@ fn below_threshold_no_reset() {
     p.next_delay();
     p.next_delay();
     p.mark_connected();
-    assert!(approx(p.next_delay().unwrap(), 4.0, 0.01), "짧은 성공 뒤에는 기존 backoff를 이어야 한다");
+    assert!(
+        approx(p.next_delay().unwrap(), 4.0, 0.01),
+        "짧은 성공 뒤에는 기존 backoff를 이어야 한다"
+    );
 }
 
 #[test]

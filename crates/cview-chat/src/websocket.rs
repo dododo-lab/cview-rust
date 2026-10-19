@@ -130,10 +130,15 @@ impl WebSocketAttemptState {
         self.ping_nonce = self.ping_nonce.wrapping_add(1);
         self.open_state = WebSocketOpenAttemptState::Pending;
         self.failed_connection_attempt = None;
-        WebSocketConnectionAttemptToken { nonce: self.connection_nonce }
+        WebSocketConnectionAttemptToken {
+            nonce: self.connection_nonce,
+        }
     }
 
-    pub fn invalidate_connection(&mut self, failed_attempt: Option<WebSocketConnectionAttemptToken>) {
+    pub fn invalidate_connection(
+        &mut self,
+        failed_attempt: Option<WebSocketConnectionAttemptToken>,
+    ) {
         self.connection_nonce = self.connection_nonce.wrapping_add(1);
         self.ping_nonce = self.ping_nonce.wrapping_add(1);
         self.open_state = WebSocketOpenAttemptState::Failed;
@@ -141,7 +146,9 @@ impl WebSocketAttemptState {
     }
 
     pub fn current_connection(&self) -> WebSocketConnectionAttemptToken {
-        WebSocketConnectionAttemptToken { nonce: self.connection_nonce }
+        WebSocketConnectionAttemptToken {
+            nonce: self.connection_nonce,
+        }
     }
 
     pub fn is_current(&self, token: WebSocketConnectionAttemptToken) -> bool {
@@ -178,7 +185,10 @@ impl WebSocketAttemptState {
 
     pub fn begin_ping(&mut self) -> WebSocketPingAttemptToken {
         self.ping_nonce = self.ping_nonce.wrapping_add(1);
-        WebSocketPingAttemptToken { connection: self.current_connection(), nonce: self.ping_nonce }
+        WebSocketPingAttemptToken {
+            connection: self.current_connection(),
+            nonce: self.ping_nonce,
+        }
     }
 
     pub fn is_current_ping(&self, token: WebSocketPingAttemptToken) -> bool {
@@ -308,7 +318,9 @@ pub struct WebSocketService {
 
 impl std::fmt::Debug for WebSocketService {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("WebSocketService").field("url", &self.inner.config.url).finish()
+        f.debug_struct("WebSocketService")
+            .field("url", &self.inner.config.url)
+            .finish()
     }
 }
 
@@ -355,12 +367,20 @@ impl WebSocketService {
 
     /// 수신 메시지 스트림. 생성 시점부터 버퍼링되며 한 번만 꺼낼 수 있다.
     pub fn take_messages(&self) -> Option<mpsc::UnboundedReceiver<WebSocketMessage>> {
-        self.inner.msg_rx.lock().unwrap_or_else(|e| e.into_inner()).take()
+        self.inner
+            .msg_rx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
     }
 
     /// 상태 변화 스트림. 한 번만 꺼낼 수 있다.
     pub fn take_state_changes(&self) -> Option<mpsc::UnboundedReceiver<WebSocketState>> {
-        self.inner.state_rx.lock().unwrap_or_else(|e| e.into_inner()).take()
+        self.inner
+            .state_rx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
     }
 
     /// 전원 배율까지 적용된 base 를 foreground/background 스케줄로 정규화한다.
@@ -401,7 +421,10 @@ impl WebSocketService {
 
     pub(crate) fn transport_liveness(&self) -> TransportLiveness {
         let s = self.inner.lock();
-        TransportLiveness { last_activity: s.last_transport_activity, ping_interval: s.scheduled_ping_interval }
+        TransportLiveness {
+            last_activity: s.last_transport_activity,
+            ping_interval: s.scheduled_ping_interval,
+        }
     }
 
     /// 서버에 연결한다. 업그레이드가 끝나야 `Ok` — 실패하면 아무것도 남기지 않는다.
@@ -490,7 +513,9 @@ impl WebSocketService {
         }
     }
 
-    fn build_request(&self) -> ChatResult<tokio_tungstenite::tungstenite::handshake::client::Request> {
+    fn build_request(
+        &self,
+    ) -> ChatResult<tokio_tungstenite::tungstenite::handshake::client::Request> {
         let mut request = self
             .inner
             .config
@@ -499,13 +524,23 @@ impl WebSocketService {
             .into_client_request()
             .map_err(|e| ChatError::ConnectionFailed(e.to_string()))?;
         let headers = request.headers_mut();
-        headers.insert("Origin", HeaderValue::from_static(common_headers::CHZZK_ORIGIN));
-        headers.insert("User-Agent", HeaderValue::from_static(common_headers::CHROME_USER_AGENT));
-        headers.insert("Keep-Alive", HeaderValue::from_static(ws_defaults::KEEP_ALIVE_HEADER));
+        headers.insert(
+            "Origin",
+            HeaderValue::from_static(common_headers::CHZZK_ORIGIN),
+        );
+        headers.insert(
+            "User-Agent",
+            HeaderValue::from_static(common_headers::CHROME_USER_AGENT),
+        );
+        headers.insert(
+            "Keep-Alive",
+            HeaderValue::from_static(ws_defaults::KEEP_ALIVE_HEADER),
+        );
         for (key, value) in &self.inner.config.http_headers {
             let name = tokio_tungstenite::tungstenite::http::HeaderName::from_bytes(key.as_bytes())
                 .map_err(|e| ChatError::ConnectionFailed(e.to_string()))?;
-            let value = HeaderValue::from_str(value).map_err(|e| ChatError::ConnectionFailed(e.to_string()))?;
+            let value = HeaderValue::from_str(value)
+                .map_err(|e| ChatError::ConnectionFailed(e.to_string()))?;
             headers.insert(name, value);
         }
         Ok(request)
@@ -521,19 +556,24 @@ impl WebSocketService {
                 return;
             }
             s.attempt.invalidate_connection(None);
-            self.inner.update_state(&mut s, WebSocketState::Disconnecting);
+            self.inner
+                .update_state(&mut s, WebSocketState::Disconnecting);
             abort(&mut s.ping_task);
             abort(&mut s.receive_task);
             s.pending_pong = None;
             let sink = s.sink.take();
-            self.inner.update_state(&mut s, WebSocketState::Disconnected);
+            self.inner
+                .update_state(&mut s, WebSocketState::Disconnected);
             sink
         };
         if let Some(sink) = sink {
             // goingAway close frame — 최선 노력, 짧은 상한.
             let _ = tokio::time::timeout(Duration::from_secs(1), async move {
                 let mut sink = sink.lock().await;
-                let frame = CloseFrame { code: CloseCode::Away, reason: "".into() };
+                let frame = CloseFrame {
+                    code: CloseCode::Away,
+                    reason: "".into(),
+                };
                 let _ = sink.send(Message::Close(Some(frame))).await;
                 let _ = sink.close().await;
             })
@@ -560,7 +600,9 @@ impl WebSocketService {
         };
         match (result, disposition) {
             (_, WebSocketSendResumeDisposition::NotConnected) => Err(ChatError::NotConnected),
-            (Err(e), WebSocketSendResumeDisposition::Sent) => Err(ChatError::SendFailed(e.to_string())),
+            (Err(e), WebSocketSendResumeDisposition::Sent) => {
+                Err(ChatError::SendFailed(e.to_string()))
+            }
             (Ok(()), WebSocketSendResumeDisposition::Sent) => {
                 tracing::debug!(chars = text.chars().count(), "Sent");
                 Ok(())
@@ -572,9 +614,15 @@ impl WebSocketService {
     pub fn set_background_mode(&self, enabled: bool) {
         let next_revision = {
             let s = self.inner.lock();
-            s.background.policy().map(|p| p.revision.wrapping_add(1)).unwrap_or(0)
+            s.background
+                .policy()
+                .map(|p| p.revision.wrapping_add(1))
+                .unwrap_or(0)
         };
-        self.set_background_mode_policy(BackgroundModePolicy { enabled, revision: next_revision });
+        self.set_background_mode_policy(BackgroundModePolicy {
+            enabled,
+            revision: next_revision,
+        });
     }
 
     /// revision 이 더 새로운 정책만 적용한다.
@@ -591,7 +639,11 @@ impl WebSocketService {
     }
 
     pub fn is_background_mode(&self) -> bool {
-        self.inner.lock().background.policy().is_some_and(|p| p.enabled)
+        self.inner
+            .lock()
+            .background
+            .policy()
+            .is_some_and(|p| p.enabled)
     }
 }
 
@@ -628,9 +680,14 @@ impl Inner {
         abort(&mut s.ping_task);
         let ping_attempt = s.attempt.begin_ping();
         let background = s.background.policy().is_some_and(|p| p.enabled);
-        let interval = WebSocketService::effective_ping_interval(self.config.ping_interval, background);
+        let interval =
+            WebSocketService::effective_ping_interval(self.config.ping_interval, background);
         s.scheduled_ping_interval = interval;
-        s.ping_task = Some(tokio::spawn(ping_loop(self.weak_self.clone(), interval, ping_attempt)));
+        s.ping_task = Some(tokio::spawn(ping_loop(
+            self.weak_self.clone(),
+            interval,
+            ping_attempt,
+        )));
     }
 
     fn is_current_ping(&self, attempt: WebSocketPingAttemptToken) -> bool {
@@ -661,7 +718,10 @@ impl Inner {
             }
         }
         tracing::info!(?code, "WS server close frame received");
-        self.handle_disconnection(ChatError::ConnectionFailed("네트워크 연결이 끊어졌습니다".into()), attempt);
+        self.handle_disconnection(
+            ChatError::ConnectionFailed("네트워크 연결이 끊어졌습니다".into()),
+            attempt,
+        );
     }
 
     /// control ping 을 보내고 pong 을 기다린다 (10초 상한).
@@ -671,7 +731,9 @@ impl Inner {
             if !s.attempt.is_current_ping(attempt) || s.state != WebSocketState::Connected {
                 return Err(ChatError::Cancelled);
             }
-            let Some(sink) = s.sink.clone() else { return Err(ChatError::Cancelled) };
+            let Some(sink) = s.sink.clone() else {
+                return Err(ChatError::Cancelled);
+            };
             let (tx, rx) = oneshot::channel();
             s.pending_pong = Some(tx);
             (sink, rx)
@@ -686,13 +748,20 @@ impl Inner {
         match tokio::time::timeout(Duration::from_secs(10), rx).await {
             Ok(Ok(())) => {}
             Ok(Err(_)) => return Err(ChatError::Cancelled),
-            Err(_) => return Err(ChatError::ConnectionFailed("요청 시간이 초과되었습니다".into())),
+            Err(_) => {
+                return Err(ChatError::ConnectionFailed(
+                    "요청 시간이 초과되었습니다".into(),
+                ))
+            }
         }
 
         // pong 은 서버 생존 증명이다. 그 사이 소켓이 바뀌었다면 새 연결의 watchdog 을 연장하지 않는다.
         let mut s = self.lock();
         let same_socket = s.sink.as_ref().is_some_and(|cur| Arc::ptr_eq(cur, &sink));
-        if !s.attempt.is_current_ping(attempt) || s.state != WebSocketState::Connected || !same_socket {
+        if !s.attempt.is_current_ping(attempt)
+            || s.state != WebSocketState::Connected
+            || !same_socket
+        {
             return Err(ChatError::Cancelled);
         }
         s.last_transport_activity = Instant::now();
@@ -700,7 +769,11 @@ impl Inner {
     }
 }
 
-async fn receive_loop(weak: Weak<Inner>, attempt: WebSocketConnectionAttemptToken, mut stream: SplitStream<WsStream>) {
+async fn receive_loop(
+    weak: Weak<Inner>,
+    attempt: WebSocketConnectionAttemptToken,
+    mut stream: SplitStream<WsStream>,
+) {
     loop {
         let next = stream.next().await;
         let Some(inner) = weak.upgrade() else { break };
@@ -742,7 +815,10 @@ async fn receive_loop(weak: Weak<Inner>, attempt: WebSocketConnectionAttemptToke
                 break;
             }
             None => {
-                inner.handle_disconnection(ChatError::ConnectionFailed("네트워크 연결이 끊어졌습니다".into()), attempt);
+                inner.handle_disconnection(
+                    ChatError::ConnectionFailed("네트워크 연결이 끊어졌습니다".into()),
+                    attempt,
+                );
                 break;
             }
         }

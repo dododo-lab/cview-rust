@@ -9,14 +9,18 @@ use futures_util::FutureExt;
 use cview_core::models::chat::{ChatConnectionState, ChatMessage, MessageType};
 
 use crate::constants::chat_defaults;
-use crate::engine::{ChatEngine, ChatEngineConfiguration, ChatEngineEvent, ChatEventStream, TokenProvider};
+use crate::engine::{
+    ChatEngine, ChatEngineConfiguration, ChatEngineEvent, ChatEventStream, TokenProvider,
+};
 use crate::error::ChatError;
 use crate::parser::ChatMessageParser;
 use crate::protocol::ChatEvent;
 use crate::reconnection::ReconnectionConfiguration;
 
 fn make_engine(max_buffer: usize) -> ChatEngine {
-    ChatEngine::new(ChatEngineConfiguration::new("test-channel", "token").max_message_buffer(max_buffer))
+    ChatEngine::new(
+        ChatEngineConfiguration::new("test-channel", "token").max_message_buffer(max_buffer),
+    )
 }
 
 fn test_config() -> ChatEngineConfiguration {
@@ -61,14 +65,22 @@ async fn drain_until_cleared(stream: &ChatEventStream) -> Vec<ChatEngineEvent> {
 fn duplicate_ids_are_rejected() {
     let engine = make_engine(chat_defaults::MAX_MESSAGE_BUFFER);
     engine.append_messages(vec![msg("a", "hello"), msg("b", "hello")]);
-    engine.append_messages(vec![msg("a", "hello"), msg("b", "hello"), msg("c", "hello")]);
+    engine.append_messages(vec![
+        msg("a", "hello"),
+        msg("b", "hello"),
+        msg("c", "hello"),
+    ]);
     assert_eq!(ids(&engine), ["a", "b", "c"]);
 }
 
 #[test]
 fn duplicates_within_one_batch_are_rejected() {
     let engine = make_engine(chat_defaults::MAX_MESSAGE_BUFFER);
-    engine.append_messages(vec![msg("x", "hello"), msg("x", "hello"), msg("y", "hello")]);
+    engine.append_messages(vec![
+        msg("x", "hello"),
+        msg("x", "hello"),
+        msg("y", "hello"),
+    ]);
     assert_eq!(ids(&engine), ["x", "y"]);
 }
 
@@ -88,11 +100,23 @@ fn trimmed_ids_can_be_re_added() {
     engine.append_messages((0..total).map(|i| msg(&format!("m{i}"), "hello")).collect());
     let after = engine.messages();
     assert_eq!(after.len(), max_buffer);
-    assert!(!after.iter().any(|m| m.id == "m0"), "트림이 일어나지 않았다");
+    assert!(
+        !after.iter().any(|m| m.id == "m0"),
+        "트림이 일어나지 않았다"
+    );
 
     engine.append_messages(vec![msg("m0", "재수신")]);
-    let contents: Vec<String> = engine.messages().into_iter().filter(|m| m.id == "m0").map(|m| m.content).collect();
-    assert_eq!(contents, ["재수신"], "트림으로 축출된 id 가 디듑 집합에 유령으로 남았다");
+    let contents: Vec<String> = engine
+        .messages()
+        .into_iter()
+        .filter(|m| m.id == "m0")
+        .map(|m| m.content)
+        .collect();
+    assert_eq!(
+        contents,
+        ["재수신"],
+        "트림으로 축출된 id 가 디듑 집합에 유령으로 남았다"
+    );
 }
 
 #[test]
@@ -163,7 +187,10 @@ async fn first_attempt_does_not_refresh() {
     engine.refresh_tokens_if_needed(None).await;
     assert_eq!(stub.calls.load(Ordering::SeqCst), 0);
     assert_eq!(engine.current_access_token(), "initial-token");
-    assert_eq!(engine.current_extra_token().as_deref(), Some("initial-extra"));
+    assert_eq!(
+        engine.current_extra_token().as_deref(),
+        Some("initial-extra")
+    );
 }
 
 #[tokio::test]
@@ -174,7 +201,10 @@ async fn retries_refresh() {
     engine.refresh_tokens_if_needed(None).await;
     assert_eq!(stub.calls.load(Ordering::SeqCst), 1);
     assert_eq!(engine.current_access_token(), "refreshed");
-    assert_eq!(engine.current_extra_token().as_deref(), Some("refreshed-extra"));
+    assert_eq!(
+        engine.current_extra_token().as_deref(),
+        Some("refreshed-extra")
+    );
 }
 
 #[tokio::test]
@@ -195,7 +225,10 @@ async fn failure_keeps_previous_token() {
     engine.refresh_tokens_if_needed(None).await;
     assert_eq!(stub.calls.load(Ordering::SeqCst), 1);
     assert_eq!(engine.current_access_token(), "initial-token");
-    assert_eq!(engine.current_extra_token().as_deref(), Some("initial-extra"));
+    assert_eq!(
+        engine.current_extra_token().as_deref(),
+        Some("initial-extra")
+    );
 }
 
 #[tokio::test]
@@ -206,7 +239,10 @@ async fn empty_token_is_rejected() {
     engine.refresh_tokens_if_needed(None).await;
     assert_eq!(stub.calls.load(Ordering::SeqCst), 1);
     assert_eq!(engine.current_access_token(), "initial-token");
-    assert_eq!(engine.current_extra_token().as_deref(), Some("initial-extra"));
+    assert_eq!(
+        engine.current_extra_token().as_deref(),
+        Some("initial-extra")
+    );
 }
 
 #[tokio::test]
@@ -216,7 +252,10 @@ async fn no_provider_keeps_initial_token() {
         engine.refresh_tokens_if_needed(None).await;
     }
     assert_eq!(engine.current_access_token(), "initial-token");
-    assert_eq!(engine.current_extra_token().as_deref(), Some("initial-extra"));
+    assert_eq!(
+        engine.current_extra_token().as_deref(),
+        Some("initial-extra")
+    );
 }
 
 #[tokio::test]
@@ -236,7 +275,8 @@ async fn repeated_hidden_snapshot_updates_existing_message_once() {
     let engine = ChatEngine::new(ChatEngineConfiguration::new("test", "test"));
     let stream = engine.events();
     let original = ChatMessage::with_id("m1", "test", "original");
-    let hidden = ChatMessage::with_id("m1", "test", ChatMessageParser::ADMIN_BLIND_TEXT).blinded(true);
+    let hidden =
+        ChatMessage::with_id("m1", "test", ChatMessageParser::ADMIN_BLIND_TEXT).blinded(true);
     engine.handle_parsed_event(ChatEvent::Messages(vec![original.clone()]));
     engine.handle_parsed_event(ChatEvent::RecentMessages(vec![hidden.clone()]));
     engine.handle_parsed_event(ChatEvent::Messages(vec![hidden.clone(), original]));
@@ -263,10 +303,14 @@ async fn repeated_clean_bot_snapshot_carries_its_own_blind_text() {
     let engine = ChatEngine::new(ChatEngineConfiguration::new("test", "test"));
     let stream = engine.events();
     let original = ChatMessage::with_id("m1", "test", "원문");
-    let clean_bot = ChatMessage::with_id("m1", "test", ChatMessageParser::CLEAN_BOT_BLIND_TEXT).blinded(true);
+    let clean_bot =
+        ChatMessage::with_id("m1", "test", ChatMessageParser::CLEAN_BOT_BLIND_TEXT).blinded(true);
     engine.handle_parsed_event(ChatEvent::Messages(vec![original]));
     engine.handle_parsed_event(ChatEvent::RecentMessages(vec![clean_bot]));
-    assert_eq!(engine.messages()[0].content, ChatMessageParser::CLEAN_BOT_BLIND_TEXT);
+    assert_eq!(
+        engine.messages()[0].content,
+        ChatMessageParser::CLEAN_BOT_BLIND_TEXT
+    );
     engine.clear_messages();
     let blind_texts: Vec<Option<String>> = drain_until_cleared(&stream)
         .await
@@ -276,16 +320,22 @@ async fn repeated_clean_bot_snapshot_carries_its_own_blind_text() {
             _ => None,
         })
         .collect();
-    assert_eq!(blind_texts, [Some(ChatMessageParser::CLEAN_BOT_BLIND_TEXT.to_string())]);
+    assert_eq!(
+        blind_texts,
+        [Some(ChatMessageParser::CLEAN_BOT_BLIND_TEXT.to_string())]
+    );
 }
 
 #[test]
 fn notice_never_enters_message_buffer() {
     let engine = ChatEngine::new(ChatEngineConfiguration::new("test", "test"));
-    let notice = ChatMessage::with_id("notice_1", "공지", "공지 본문").message_type(MessageType::Notice);
+    let notice =
+        ChatMessage::with_id("notice_1", "공지", "공지 본문").message_type(MessageType::Notice);
     engine.handle_parsed_event(ChatEvent::Notice(notice));
     assert!(engine.messages().is_empty());
-    engine.handle_parsed_event(ChatEvent::Messages(vec![ChatMessage::with_id("m1", "test", "hello")]));
+    engine.handle_parsed_event(ChatEvent::Messages(vec![ChatMessage::with_id(
+        "m1", "test", "hello",
+    )]));
     assert_eq!(engine.messages().len(), 1);
     assert_ne!(engine.messages()[0].r#type, MessageType::Notice);
 }
@@ -306,7 +356,11 @@ async fn duplicate_bursts_do_not_reach_consumers_and_empty_recent_still_complete
     let collected = drain_until_cleared(&stream).await;
     assert_eq!(collected.len(), 3, "{collected:?}");
     match (&collected[0], &collected[1], &collected[2]) {
-        (ChatEngineEvent::NewMessages(fresh), ChatEngineEvent::RecentMessages(recent), ChatEngineEvent::NoticeCleared) => {
+        (
+            ChatEngineEvent::NewMessages(fresh),
+            ChatEngineEvent::RecentMessages(recent),
+            ChatEngineEvent::NoticeCleared,
+        ) => {
             assert_eq!(fresh.len(), 1);
             assert!(recent.is_empty());
         }
@@ -349,7 +403,10 @@ async fn clear_messages_emits_event() {
 #[tokio::test]
 async fn send_message_fails_when_disconnected() {
     let engine = ChatEngine::new(test_config());
-    assert_eq!(engine.send_message("test message", None).await, Err(ChatError::NotConnected));
+    assert_eq!(
+        engine.send_message("test message", None).await,
+        Err(ChatError::NotConnected)
+    );
 }
 
 #[tokio::test]
@@ -386,24 +443,51 @@ fn configuration_server_url() {
         assert!(url.ends_with(".chat.naver.com/chat"));
     }
     // "AAA" = 65*3 = 195 → 195 % 9 + 1 = 7
-    assert_eq!(ChatEngineConfiguration::compute_server_url("AAA"), "wss://kr-ss7.chat.naver.com/chat");
-    let custom = ChatEngineConfiguration::new("ch1", "tok").server_url("wss://custom.server.com/chat");
+    assert_eq!(
+        ChatEngineConfiguration::compute_server_url("AAA"),
+        "wss://kr-ss7.chat.naver.com/chat"
+    );
+    let custom =
+        ChatEngineConfiguration::new("ch1", "tok").server_url("wss://custom.server.com/chat");
     assert_eq!(custom.server_url, "wss://custom.server.com/chat");
 }
 
 #[test]
 fn configuration_max_buffer() {
-    assert_eq!(ChatEngineConfiguration::new("ch1", "tok").max_message_buffer, chat_defaults::MAX_MESSAGE_BUFFER);
-    assert_eq!(ChatEngineConfiguration::new("ch1", "tok").max_message_buffer(100).max_message_buffer, 100);
+    assert_eq!(
+        ChatEngineConfiguration::new("ch1", "tok").max_message_buffer,
+        chat_defaults::MAX_MESSAGE_BUFFER
+    );
+    assert_eq!(
+        ChatEngineConfiguration::new("ch1", "tok")
+            .max_message_buffer(100)
+            .max_message_buffer,
+        100
+    );
 }
 
 #[test]
 fn connection_state_display_text() {
-    assert_eq!(ChatConnectionState::Disconnected.display_text(), "연결 안됨");
+    assert_eq!(
+        ChatConnectionState::Disconnected.display_text(),
+        "연결 안됨"
+    );
     assert_eq!(ChatConnectionState::Connecting.display_text(), "연결 중…");
-    assert_eq!(ChatConnectionState::Connected { server_index: 3 }.display_text(), "연결됨 (서버 3)");
-    assert_eq!(ChatConnectionState::Reconnecting { attempt: 2 }.display_text(), "재연결 중 (2회)");
-    assert_eq!(ChatConnectionState::Failed { reason: "timeout".into() }.display_text(), "연결 실패: timeout");
+    assert_eq!(
+        ChatConnectionState::Connected { server_index: 3 }.display_text(),
+        "연결됨 (서버 3)"
+    );
+    assert_eq!(
+        ChatConnectionState::Reconnecting { attempt: 2 }.display_text(),
+        "재연결 중 (2회)"
+    );
+    assert_eq!(
+        ChatConnectionState::Failed {
+            reason: "timeout".into()
+        }
+        .display_text(),
+        "연결 실패: timeout"
+    );
     assert!(!ChatConnectionState::Disconnected.is_connected());
     assert!(ChatConnectionState::Connected { server_index: 0 }.is_connected());
     assert!(!ChatConnectionState::Reconnecting { attempt: 1 }.is_connected());

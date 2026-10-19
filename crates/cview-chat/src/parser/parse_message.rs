@@ -6,11 +6,13 @@ use chrono::{DateTime, Utc};
 use serde_json::{Map, Value};
 
 use super::{body_str, ChatMessageParser};
-use crate::json::{any_int, fnv1a, ns_bool, ns_int, ns_object, ns_object_array, ns_str, to_foundation_json};
+use crate::json::{
+    any_int, fnv1a, ns_bool, ns_int, ns_object, ns_object_array, ns_str, to_foundation_json,
+};
 use crate::protocol::ChatProtocolMessage;
 use cview_core::models::chat::{
-    is_plausible_url, ChatBadge, ChatExtras, ChatMessage, ChatProfile, ChatTitle, DonationInfo, EmojiMap,
-    MessageType, SubscriptionInfo,
+    is_plausible_url, ChatBadge, ChatExtras, ChatMessage, ChatProfile, ChatTitle, DonationInfo,
+    EmojiMap, MessageType, SubscriptionInfo,
 };
 
 type Dict = Map<String, Value>;
@@ -56,16 +58,24 @@ fn url(s: &str) -> Option<String> {
 
 /// `dict[a] as? String ?? dict[b] as? String`.
 fn str_either(dict: &Dict, a: &str, b: &str) -> Option<String> {
-    ns_str(dict.get(a)).or_else(|| ns_str(dict.get(b))).map(str::to_owned)
+    ns_str(dict.get(a))
+        .or_else(|| ns_str(dict.get(b)))
+        .map(str::to_owned)
 }
 
 impl ChatMessageParser {
     /// cmd 93101 / 93103 / 15101 / 93102 공통. `bdy` 가 배열이거나 `{messageList: [...]}`.
     pub(crate) fn parse_chat_messages(&self, raw: &ChatProtocolMessage) -> Vec<ChatMessage> {
-        let Some(body) = raw.bdy.as_ref() else { return Vec::new() };
+        let Some(body) = raw.bdy.as_ref() else {
+            return Vec::new();
+        };
         let items: &Vec<Value> = if let Some(array) = body.as_array() {
             array
-        } else if let Some(list) = body.as_object().and_then(|d| d.get("messageList")).and_then(Value::as_array) {
+        } else if let Some(list) = body
+            .as_object()
+            .and_then(|d| d.get("messageList"))
+            .and_then(Value::as_array)
+        {
             list
         } else {
             return Vec::new();
@@ -84,21 +94,42 @@ impl ChatMessageParser {
 
     fn parse_single_message(&self, dict: &Dict) -> ChatMessage {
         // 실시간 93101 은 축약 키, recent 15101 messageList 는 장문 키를 쓴다. 여기서 정규화.
-        let msg = body_str(dict, "msg").or_else(|| body_str(dict, "content")).unwrap_or("").to_string();
-        let uid = body_str(dict, "uid").or_else(|| body_str(dict, "userId")).unwrap_or("").to_string();
-        let msg_time = any_int(dict.get("msgTime")).or_else(|| any_int(dict.get("messageTime"))).unwrap_or(0);
-        let msg_type_code = any_int(dict.get("msgTypeCode")).or_else(|| any_int(dict.get("messageTypeCode")));
+        let msg = body_str(dict, "msg")
+            .or_else(|| body_str(dict, "content"))
+            .unwrap_or("")
+            .to_string();
+        let uid = body_str(dict, "uid")
+            .or_else(|| body_str(dict, "userId"))
+            .unwrap_or("")
+            .to_string();
+        let msg_time = any_int(dict.get("msgTime"))
+            .or_else(|| any_int(dict.get("messageTime")))
+            .unwrap_or(0);
+        let msg_type_code =
+            any_int(dict.get("msgTypeCode")).or_else(|| any_int(dict.get("messageTypeCode")));
 
         let extras_object = embedded_dictionary(dict.get("extras"));
-        let msg_id = stable_message_id(dict, &msg, &uid, msg_time, msg_type_code, extras_object.as_ref());
+        let msg_id = stable_message_id(
+            dict,
+            &msg,
+            &uid,
+            msg_time,
+            msg_type_code,
+            extras_object.as_ref(),
+        );
 
         let parsed_profile = parse_profile(dict.get("profile"));
         let parsed_extras = parse_extras(extras_object.as_ref());
 
-        let status = body_str(dict, "msgStatusType").or_else(|| body_str(dict, "messageStatusType"));
+        let status =
+            body_str(dict, "msgStatusType").or_else(|| body_str(dict, "messageStatusType"));
         let is_clean_bot_blinded = status == Some("CBOTBLIND");
         let is_blinded = is_clean_bot_blinded || status == Some("HIDDEN");
-        let blind_text = if is_clean_bot_blinded { Self::CLEAN_BOT_BLIND_TEXT } else { Self::ADMIN_BLIND_TEXT };
+        let blind_text = if is_clean_bot_blinded {
+            Self::CLEAN_BOT_BLIND_TEXT
+        } else {
+            Self::ADMIN_BLIND_TEXT
+        };
 
         // msgTypeCode 우선: 10 = donation, 11 = subscription.
         let message_type = match msg_type_code {
@@ -141,9 +172,17 @@ impl ChatMessageParser {
             id: msg_id,
             user_id: Some(uid),
             nickname,
-            content: if is_blinded { blind_text.to_string() } else { msg },
+            content: if is_blinded {
+                blind_text.to_string()
+            } else {
+                msg
+            },
             timestamp: DateTime::<Utc>::from_timestamp_millis(msg_time).unwrap_or_default(),
-            r#type: if is_blinded { MessageType::Normal } else { message_type },
+            r#type: if is_blinded {
+                MessageType::Normal
+            } else {
+                message_type
+            },
             profile: Some(profile),
             extras,
             is_blinded,
@@ -154,9 +193,13 @@ impl ChatMessageParser {
 fn parse_profile(value: Option<&Value>) -> ParsedProfile {
     let mut result = ParsedProfile::default();
     // 문자열 JSON 과 객체 payload 가 같은 규칙을 쓴다.
-    let Some(parsed) = embedded_dictionary(value) else { return result };
+    let Some(parsed) = embedded_dictionary(value) else {
+        return result;
+    };
 
-    result.nickname = ns_str(parsed.get("nickname")).unwrap_or("Unknown").to_string();
+    result.nickname = ns_str(parsed.get("nickname"))
+        .unwrap_or("Unknown")
+        .to_string();
     result.profile_image_url = ns_str(parsed.get("profileImageUrl")).map(str::to_owned);
     if let Some(role) = ns_str(parsed.get("userRoleCode")) {
         result.user_role_code = Some(role.to_owned());
@@ -165,12 +208,20 @@ fn parse_profile(value: Option<&Value>) -> ParsedProfile {
     // 1) badge (구형 호환)
     if let Some(badge) = ns_object(parsed.get("badge")) {
         if let Some(img) = str_either(badge, "imageUrl", "imageURL") {
-            result.badges.push(ChatBadge::new(url(&img), ns_str(badge.get("badgeId")).map(str::to_owned), None));
+            result.badges.push(ChatBadge::new(
+                url(&img),
+                ns_str(badge.get("badgeId")).map(str::to_owned),
+                None,
+            ));
         }
     }
     // 2) streamingProperty.subscription.badge (구독 뱃지)
-    if let Some(subscription) = ns_object(parsed.get("streamingProperty")).and_then(|p| ns_object(p.get("subscription"))) {
-        if let Some(sub_url) = ns_object(subscription.get("badge")).and_then(|b| str_either(b, "imageUrl", "imageURL")) {
+    if let Some(subscription) =
+        ns_object(parsed.get("streamingProperty")).and_then(|p| ns_object(p.get("subscription")))
+    {
+        if let Some(sub_url) =
+            ns_object(subscription.get("badge")).and_then(|b| str_either(b, "imageUrl", "imageURL"))
+        {
             let tier = ns_int(subscription.get("tier"));
             let months = ns_int(subscription.get("accumulativeMonth"));
             result.badges.push(ChatBadge::new(
@@ -186,7 +237,9 @@ fn parse_profile(value: Option<&Value>) -> ParsedProfile {
             if let Some(info) = ns_object(vb.get("badge")) {
                 if let Some(img) = str_either(info, "imageUrl", "imageURL") {
                     let id = ns_str(info.get("badgeId")).map(str::to_owned);
-                    result.badges.push(ChatBadge::new(url(&img), id.clone(), id));
+                    result
+                        .badges
+                        .push(ChatBadge::new(url(&img), id.clone(), id));
                 }
             }
         }
@@ -227,7 +280,10 @@ fn parse_extras(object: Option<&Dict>) -> ParsedExtras {
             .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_owned())))
             .collect();
         if !result.emojis.is_empty() {
-            tracing::debug!(count = result.emojis.len(), "parseExtras: 메시지당 이모티콘 수신");
+            tracing::debug!(
+                count = result.emojis.len(),
+                "parseExtras: 메시지당 이모티콘 수신"
+            );
         }
     }
 
@@ -237,11 +293,15 @@ fn parse_extras(object: Option<&Dict>) -> ParsedExtras {
         result.donation = Some(DonationInfo {
             amount: pay,
             currency: "KRW".into(),
-            r#type: ns_str(dict.get("donationType")).unwrap_or("CHAT").to_owned(),
+            r#type: ns_str(dict.get("donationType"))
+                .unwrap_or("CHAT")
+                .to_owned(),
         });
     }
 
-    if ns_bool(dict.get("isAnonymous")) == Some(true) || ns_bool(dict.get("anonymous")) == Some(true) {
+    if ns_bool(dict.get("isAnonymous")) == Some(true)
+        || ns_bool(dict.get("anonymous")) == Some(true)
+    {
         result.is_anonymous = true;
     }
 
@@ -255,7 +315,10 @@ fn parse_extras(object: Option<&Dict>) -> ParsedExtras {
             .or_else(|| ChatMessageParser::parse_amount(dict.get("accumulativeMonth")))
             .or_else(|| ChatMessageParser::parse_amount(dict.get("months")))
             .unwrap_or(1);
-        result.subscription = Some(SubscriptionInfo { months: month, tier_name: str_either(dict, "tierName", "tierInfo") });
+        result.subscription = Some(SubscriptionInfo {
+            months: month,
+            tier_name: str_either(dict, "tierName", "tierInfo"),
+        });
     }
     result
 }
@@ -287,7 +350,9 @@ pub(crate) fn stable_message_id(
         }
     }
 
-    let type_part = msg_type_code.map(|c| c.to_string()).unwrap_or_else(|| "0".into());
+    let type_part = msg_type_code
+        .map(|c| c.to_string())
+        .unwrap_or_else(|| "0".into());
     let fingerprint = extras_fingerprint(dict.get("extras"), normalized_extras);
     let payload = format!("{uid}|{msg_time}|{type_part}|{msg}|{fingerprint}");
     let hex = format!("{:x}", fnv1a(&payload));
@@ -300,7 +365,9 @@ pub(crate) fn stable_message_id(
 
 /// 중첩 사전 순서 / JSON 공백 / 문자열 대 객체 표현 차이를 지운 extras 정체성.
 fn extras_fingerprint(value: Option<&Value>, normalized: Option<&Dict>) -> String {
-    let Some(value) = value else { return String::new() };
+    let Some(value) = value else {
+        return String::new();
+    };
     if let Some(obj) = normalized {
         return to_foundation_json(&Value::Object(obj.clone()));
     }

@@ -35,12 +35,16 @@ impl ChatMessageParser {
     pub const ADMIN_BLIND_TEXT: &'static str = "관리자에 의해 삭제된 메시지입니다.";
 
     pub fn new() -> Self {
-        Self { os_version: default_os_version() }
+        Self {
+            os_version: default_os_version(),
+        }
     }
 
     /// `osVer` 를 직접 지정한다(테스트·플랫폼별 조정용).
     pub fn with_os_version(os_version: impl Into<String>) -> Self {
-        Self { os_version: os_version.into() }
+        Self {
+            os_version: os_version.into(),
+        }
     }
 
     pub fn os_version(&self) -> &str {
@@ -150,9 +154,14 @@ impl ChatMessageParser {
         let raw = self.parse_raw(text)?;
         let mut events = vec![self.parse_to_domain_event(&raw)?];
         if raw.cmd == ChzzkChatCommand::RecentChat.raw_value() {
-            if let Some(notice) = raw.bdy.as_ref().and_then(Value::as_object).and_then(|b| b.get("notice")) {
-                let notice_raw =
-                    ChatProtocolMessage::new(ChzzkChatCommand::Notice.raw_value()).with_bdy(notice.clone());
+            if let Some(notice) = raw
+                .bdy
+                .as_ref()
+                .and_then(Value::as_object)
+                .and_then(|b| b.get("notice"))
+            {
+                let notice_raw = ChatProtocolMessage::new(ChzzkChatCommand::Notice.raw_value())
+                    .with_bdy(notice.clone());
                 // 손상된 부가 공지 하나가 정상 최근 메시지 전체를 버리게 하지 않는다.
                 if let Ok(event) = self.parse_to_domain_event(&notice_raw) {
                     events.push(event);
@@ -190,7 +199,9 @@ impl ChatMessageParser {
                 ChatEvent::Messages(self.parse_chat_messages(raw))
             }
             ChzzkChatCommand::Donation => ChatEvent::Donations(self.parse_donations(raw)),
-            ChzzkChatCommand::RecentChat => ChatEvent::RecentMessages(self.parse_chat_messages(raw)),
+            ChzzkChatCommand::RecentChat => {
+                ChatEvent::RecentMessages(self.parse_chat_messages(raw))
+            }
             ChzzkChatCommand::Notice => match &raw.bdy {
                 Some(Value::Null) => ChatEvent::NoticeCleared,
                 Some(Value::Object(body)) if body.is_empty() => ChatEvent::NoticeCleared,
@@ -198,9 +209,14 @@ impl ChatMessageParser {
             },
             ChzzkChatCommand::Blind => {
                 let (message_id, user_id) = self.parse_blind(raw);
-                ChatEvent::Blind { message_id, user_id }
+                ChatEvent::Blind {
+                    message_id,
+                    user_id,
+                }
             }
-            ChzzkChatCommand::Kick => ChatEvent::Kick { user_id: self.parse_kick_target(raw) },
+            ChzzkChatCommand::Kick => ChatEvent::Kick {
+                user_id: self.parse_kick_target(raw),
+            },
             ChzzkChatCommand::Penalty => {
                 let (user_id, duration) = self.parse_penalty(raw);
                 ChatEvent::Penalty { user_id, duration }
@@ -216,7 +232,11 @@ impl ChatMessageParser {
                         "SendChat response error"
                     );
                 }
-                ChatEvent::SendConfirmed { tid: raw.tid, ret_code, ret_msg: raw.ret_msg.clone() }
+                ChatEvent::SendConfirmed {
+                    tid: raw.tid,
+                    ret_code,
+                    ret_msg: raw.ret_msg.clone(),
+                }
             }
             ChzzkChatCommand::SystemMessage => ChatEvent::System(self.extract_system_message(raw)),
             ChzzkChatCommand::Connect

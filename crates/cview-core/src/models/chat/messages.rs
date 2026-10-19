@@ -46,8 +46,15 @@ impl ChatMessage {
     }
 
     /// id 를 지정해 만든다(테스트·파서용 단축).
-    pub fn with_id(id: impl Into<String>, nickname: impl Into<String>, content: impl Into<String>) -> Self {
-        Self { id: id.into(), ..Self::new(nickname, content) }
+    pub fn with_id(
+        id: impl Into<String>,
+        nickname: impl Into<String>,
+        content: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            ..Self::new(nickname, content)
+        }
     }
 
     pub fn user_id(mut self, user_id: impl Into<String>) -> Self {
@@ -155,9 +162,17 @@ impl UserRole {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ChatProfile {
     pub nickname: String,
-    #[serde(rename = "profileImageURL", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "profileImageURL",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub profile_image_url: Option<String>,
-    #[serde(rename = "userRoleCode", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "userRoleCode",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub user_role_code: Option<String>,
     #[serde(rename = "userRole")]
     pub user_role: UserRole,
@@ -212,8 +227,16 @@ pub struct ChatBadge {
 }
 
 impl ChatBadge {
-    pub fn new(image_url: Option<String>, badge_id: Option<String>, alt_text: Option<String>) -> Self {
-        Self { image_url, badge_id, alt_text }
+    pub fn new(
+        image_url: Option<String>,
+        badge_id: Option<String>,
+        alt_text: Option<String>,
+    ) -> Self {
+        Self {
+            image_url,
+            badge_id,
+            alt_text,
+        }
     }
 }
 
@@ -236,7 +259,11 @@ pub struct DonationInfo {
 impl DonationInfo {
     /// Swift 기본값: `currency = "KRW"`, `type = "CHAT"`.
     pub fn new(amount: i64) -> Self {
-        Self { amount, currency: "KRW".into(), r#type: "CHAT".into() }
+        Self {
+            amount,
+            currency: "KRW".into(),
+            r#type: "CHAT".into(),
+        }
     }
 }
 
@@ -324,7 +351,11 @@ pub struct TemporaryRestrict {
 impl Default for TemporaryRestrict {
     /// Swift 기본 인자: `false`, `0`, `0`.
     fn default() -> Self {
-        Self { temporary_restrict: Some(false), times: Some(0), duration: Some(0) }
+        Self {
+            temporary_restrict: Some(false),
+            times: Some(0),
+            duration: Some(0),
+        }
     }
 }
 
@@ -334,9 +365,15 @@ pub enum ChatConnectionState {
     #[default]
     Disconnected,
     Connecting,
-    Connected { server_index: i64 },
-    Reconnecting { attempt: i64 },
-    Failed { reason: String },
+    Connected {
+        server_index: i64,
+    },
+    Reconnecting {
+        attempt: i64,
+    },
+    Failed {
+        reason: String,
+    },
 }
 
 impl ChatConnectionState {
@@ -362,8 +399,14 @@ mod tests {
     #[test]
     fn user_role_from_code() {
         assert_eq!(UserRole::from_code(Some("streamer")), UserRole::Streamer);
-        assert_eq!(UserRole::from_code(Some("streaming_chat_manager")), UserRole::Manager);
-        assert_eq!(UserRole::from_code(Some("streaming_channel_manager")), UserRole::Manager);
+        assert_eq!(
+            UserRole::from_code(Some("streaming_chat_manager")),
+            UserRole::Manager
+        );
+        assert_eq!(
+            UserRole::from_code(Some("streaming_channel_manager")),
+            UserRole::Manager
+        );
         assert_eq!(UserRole::from_code(Some("common_user")), UserRole::Viewer);
         assert_eq!(UserRole::from_code(None), UserRole::Viewer);
         assert!(UserRole::Streamer.is_special());
@@ -389,18 +432,33 @@ mod tests {
     fn message_with_donation_extras() {
         let m = ChatMessage::with_id("msg-2", "Donor", "donation message")
             .message_type(MessageType::Donation)
-            .extras(ChatExtras { donation: Some(DonationInfo::new(1000)), ..Default::default() });
+            .extras(ChatExtras {
+                donation: Some(DonationInfo::new(1000)),
+                ..Default::default()
+            });
         assert_eq!(m.extras.unwrap().donation.unwrap().amount, 1000);
     }
 
     #[test]
     fn connection_state_display_text() {
-        assert_eq!(ChatConnectionState::Disconnected.display_text(), "연결 안됨");
-        assert_eq!(ChatConnectionState::Connecting.display_text(), "연결 중…");
-        assert_eq!(ChatConnectionState::Connected { server_index: 3 }.display_text(), "연결됨 (서버 3)");
-        assert_eq!(ChatConnectionState::Reconnecting { attempt: 2 }.display_text(), "재연결 중 (2회)");
         assert_eq!(
-            ChatConnectionState::Failed { reason: "timeout".into() }.display_text(),
+            ChatConnectionState::Disconnected.display_text(),
+            "연결 안됨"
+        );
+        assert_eq!(ChatConnectionState::Connecting.display_text(), "연결 중…");
+        assert_eq!(
+            ChatConnectionState::Connected { server_index: 3 }.display_text(),
+            "연결됨 (서버 3)"
+        );
+        assert_eq!(
+            ChatConnectionState::Reconnecting { attempt: 2 }.display_text(),
+            "재연결 중 (2회)"
+        );
+        assert_eq!(
+            ChatConnectionState::Failed {
+                reason: "timeout".into()
+            }
+            .display_text(),
             "연결 실패: timeout"
         );
     }
@@ -421,8 +479,15 @@ mod tests {
             Some("https://img/p.png".into()),
             Some("streamer".into()),
             None,
-            vec![ChatBadge::new(Some("https://b".into()), Some("sub".into()), None)],
-            Some(ChatTitle { name: "t".into(), color: None }),
+            vec![ChatBadge::new(
+                Some("https://b".into()),
+                Some("sub".into()),
+                None,
+            )],
+            Some(ChatTitle {
+                name: "t".into(),
+                color: None,
+            }),
             vec![],
         );
         let v = serde_json::to_value(&profile).unwrap();
@@ -450,7 +515,10 @@ mod tests {
         assert_eq!(rank.rank_list[0].id(), "h");
         assert_eq!(rank.rank_list[0].verified_mark, None);
 
-        assert_eq!(serde_json::to_string(&MessageType::SystemMessage).unwrap(), "\"systemMessage\"");
+        assert_eq!(
+            serde_json::to_string(&MessageType::SystemMessage).unwrap(),
+            "\"systemMessage\""
+        );
         assert_eq!(serde_json::to_string(&UserRole::Viewer).unwrap(), "\"\"");
     }
 }
