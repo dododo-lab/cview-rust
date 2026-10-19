@@ -40,7 +40,7 @@
       "minimumSystemVersion": "13.0",
       "hardenedRuntime": true,
       "entitlements": "Entitlements.plist",
-      "signingIdentity": null
+      "signingIdentity": "Developer ID Application: Kim Sun Dong (MZ8NB937SB)"
     }
   },
   "plugins": {
