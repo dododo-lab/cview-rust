@@ -1,4 +1,4 @@
-// 사이드바 화면들 — 홈 / 팔로잉 / 인기 / 검색 / 설정.
+// 사이드바 화면들 — 팔로잉 / 인기 / 검색 / 설정. 홈은 home.js.
 import { api } from './api.js';
 import { esc, toast } from './dom.js';
 import { liveGrid, channelRow, emptyState, loadingState } from './cards.js';
@@ -48,32 +48,6 @@ export class FollowingPage extends ListPage {
     return lives.length
       ? liveGrid(lives)
       : emptyState('라이브 채널이 없습니다', '팔로우한 채널 중 방송 중인 채널이 없습니다');
-  }
-}
-
-export class HomePage extends ListPage {
-  constructor(root, { isLoggedIn }) {
-    super(root);
-    this.isLoggedIn = isLoggedIn;
-  }
-
-  async render(refresh) {
-    const [following, popular] = await Promise.allSettled([
-      this.isLoggedIn() ? api.followingLives(refresh) : Promise.resolve(null),
-      api.popularLives(24, refresh),
-    ]);
-    let html = '';
-    if (following.status === 'fulfilled' && following.value && following.value.length) {
-      html += `<h2 class="section-title">팔로잉 라이브</h2>${liveGrid(following.value.slice(0, 8))}`;
-    } else if (!this.isLoggedIn()) {
-      html += emptyState('로그인이 필요합니다', '로그인하면 팔로잉 라이브가 여기에 표시됩니다', loginAction);
-    }
-    if (popular.status === 'fulfilled') {
-      html += `<h2 class="section-title">인기 라이브</h2>${popular.value.length ? liveGrid(popular.value) : emptyState('추천할 라이브 채널이 없습니다')}`;
-    } else {
-      html += emptyState('인기 라이브를 불러오지 못했습니다', popular.reason && popular.reason.message);
-    }
-    return html;
   }
 }
 

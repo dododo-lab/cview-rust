@@ -17,11 +17,20 @@
     </aside>
 
     <main class="content">
-      <section class="page" data-page="home" hidden>
-        <header class="page-header">
-          <h1 class="page-title">홈</h1>
+      <section class="page page-home" data-page="home" hidden>
+        <header class="home-header">
+          <div class="home-hello">
+            <h1 class="home-greeting">안녕하세요</h1>
+            <p class="home-summary">지금 볼 만한 라이브를 모았어요</p>
+          </div>
           <div class="grow"></div>
-          <button class="btn" data-action="refresh">새로고침</button>
+          <form class="search-field home-search" role="search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+            <input type="search" placeholder="채널, 라이브 검색…" autocomplete="off" spellcheck="false">
+          </form>
+          <button class="icon-btn round" data-action="refresh" title="새로고침">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>
+          </button>
         </header>
         <div class="page-body"></div>
       </section>
