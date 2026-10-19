@@ -7,6 +7,7 @@ pub mod boot_progress;
 pub mod channel_header_hub;
 pub mod channel_preset_store;
 pub mod download_history_store;
+pub mod media_download;
 pub mod mention_inbox;
 pub mod menu_transition_gate;
 pub mod multi_chat_preferences;
