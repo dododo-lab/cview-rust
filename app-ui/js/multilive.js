@@ -216,18 +216,18 @@ export class MultiLivePage {
       <div class="ml-pane-top">
         <span class="ml-pane-sound" title="소리 나는 패인">${ICON_SOUND}</span>
         <span class="ml-pane-cap"></span>
-        <button class="ml-pane-btn ml-drag" draggable="true" title="끌어서 자리 바꾸기">⠿</button>
+        <button class="ml-pane-btn ml-drag" draggable="true" title="끌어서 자리 바꾸기" aria-label="끌어서 자리 바꾸기"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>
         <div class="grow"></div>
-        <button class="ml-pane-btn" data-ml="single" title="이 채널만 크게 (더블클릭)">⤢</button>
+        <button class="ml-pane-btn" data-ml="single" title="이 채널만 크게 (더블클릭)" aria-label="이 채널만 크게"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
         <button class="ml-pane-btn" data-ml="audio" title="이 패인 소리 켜기 (선택)">${ICON_SOUND}</button>
-        <button class="ml-pane-btn" data-ml="retry" title="다시 연결">↻</button>
-        <button class="ml-pane-btn" data-ml="info" title="채널 정보">ⓘ</button>
+        <button class="ml-pane-btn" data-ml="retry" title="다시 연결" aria-label="다시 연결"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5a8 8 0 1 0-2.4 5.9"/><path d="M20 4.5v7h-7"/></svg></button>
+        <button class="ml-pane-btn" data-ml="info" title="채널 정보" aria-label="채널 정보"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 7.6v.2"/></svg></button>
         <button class="ml-pane-close" data-ml="remove" title="닫기">${ICON_CLOSE}</button>
       </div>
       <div class="ml-pane-info">
         <div class="ml-pane-avatar"></div>
         <div class="ml-pane-text">
-          <div class="ml-pane-name ellipsis"></div>
+          <div class="ml-pane-line"><span class="ml-live-pill">LIVE</span><span class="ml-pane-name ellipsis"></span><span class="ml-pane-viewers"></span></div>
           <div class="ml-pane-title ellipsis"></div>
         </div>
       </div>`;
@@ -321,6 +321,8 @@ export class MultiLivePage {
     el.classList.toggle('audible', s.isAudible);
     el.querySelector('.ml-pane-name').textContent = s.channelName || s.channelId;
     el.querySelector('.ml-pane-title').textContent = s.liveTitle || '';
+    const viewers = el.querySelector('.ml-pane-viewers');
+    if (viewers) viewers.textContent = s.viewerCountText ? `${s.viewerCountText}명` : '';
     const avatar = safeUrl(s.profileImageUrl);
     el.querySelector('.ml-pane-avatar').innerHTML = avatar
       ? `<img src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '';
