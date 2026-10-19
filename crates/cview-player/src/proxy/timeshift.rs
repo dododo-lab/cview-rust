@@ -36,6 +36,19 @@ pub trait TimeshiftBackend: Send + Sync {
     fn commit(&self, destination: &TeeDestination, data: Vec<u8>);
     fn abandon(&self, destination: &TeeDestination);
     fn stop(&self);
+
+    // 코디네이터(`StreamCoordinator+Timeshift`)가 쓰는 면 — 기본값은 기록 없는 레코더.
+
+    /// 되감을 수 있는 기록 길이(초) — Swift `window.recordedDuration`.
+    fn recorded_duration(&self) -> f64 {
+        0.0
+    }
+    /// 기록 한도 변경.
+    fn update_limits(&self, _max_duration: f64, _budget_limit_bytes: i64) {}
+    /// 레코더의 상류 직접 요청 허용 여부(재생·버퍼링 중이고 로딩이 멈추지 않았을 때만).
+    fn set_upstream_fetch_enabled(&self, _enabled: bool) {}
+    /// 라이브 복귀 — 로컬 재생 위치 표식을 지운다.
+    fn clear_served_position(&self) {}
 }
 
 /// `/_ts/` 요청 종류.
