@@ -10,6 +10,7 @@ pub mod commands;
 pub mod dto;
 pub mod engine;
 pub mod login;
+pub mod multi_live;
 pub mod playback;
 pub mod state;
 pub mod webview_store;
@@ -20,6 +21,7 @@ use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime};
 
 use crate::commands::auth::broadcast_status;
 use crate::commands::{events, PlayerCommandPayload};
+use crate::multi_live::{MultiLiveShell, SlotCommandPayload};
 use crate::state::{AppServices, ShellSinks};
 use crate::webview_store::TauriWebViewStore;
 
@@ -45,6 +47,31 @@ fn spawn_auth_tasks<R: Runtime>(app: AppHandle<R>) {
             while states.try_recv().is_ok() {}
             services.sync_authentication().await;
             broadcast_status(&app, &services).await;
+        }
+    });
+}
+
+/// 멀티라이브 상태 감시 → `multilive://state`. 매니저 변화나 1초 주기로 보고, 바뀐 것만 보낸다
+/// (세션 재생 상태는 매니저 감시 채널을 거치지 않으므로 주기 확인이 필요하다).
+fn spawn_multi_live_state_task<R: Runtime>(app: AppHandle<R>) {
+    tauri::async_runtime::spawn(async move {
+        let shell = app.state::<MultiLiveShell>();
+        let mut changes = shell.manager.subscribe();
+        let mut last = None;
+        loop {
+            tokio::select! {
+                changed = changes.changed() => {
+                    if changed.is_err() {
+                        break;
+                    }
+                }
+                _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {}
+            }
+            let state = shell.state_dto();
+            if last.as_ref() != Some(&state) {
+                let _ = app.emit(events::MULTILIVE_STATE, &state);
+                last = Some(state);
+            }
         }
     });
 }
@@ -88,7 +115,24 @@ pub fn run() {
                 webview,
                 shell_sinks(&handle),
             ));
+            let command_app = handle.clone();
+            let shell = MultiLiveShell::new(
+                services.api.clone(),
+                services.cookies.clone(),
+                services.settings.clone(),
+                Arc::new(move |slot, script| {
+                    if let Err(e) = command_app.emit_to(
+                        MAIN_WINDOW,
+                        events::MULTILIVE_COMMAND,
+                        SlotCommandPayload { slot, script },
+                    ) {
+                        tracing::warn!("멀티라이브 명령 전달 실패: {e}");
+                    }
+                }),
+            );
             app.manage(services);
+            app.manage(shell);
+            spawn_multi_live_state_task(handle.clone());
             spawn_auth_tasks(handle);
             Ok(())
         })
@@ -105,6 +149,14 @@ pub fn run() {
             commands::player::player_stop,
             commands::player::player_set_volume,
             commands::player::player_message,
+            commands::multi_live::multilive_state,
+            commands::multi_live::multilive_add,
+            commands::multi_live::multilive_remove,
+            commands::multi_live::multilive_select,
+            commands::multi_live::multilive_set_layout,
+            commands::multi_live::multilive_stage_size,
+            commands::multi_live::multilive_stop_all,
+            commands::multi_live::multilive_player_message,
             commands::chat::chat_connect,
             commands::chat::chat_disconnect,
             commands::chat::chat_send,
@@ -118,6 +170,9 @@ pub fn run() {
         if let RunEvent::Exit = event {
             if let Some(services) = handle.try_state::<AppServices>() {
                 tauri::async_runtime::block_on(services.shutdown());
+            }
+            if let Some(shell) = handle.try_state::<MultiLiveShell>() {
+                tauri::async_runtime::block_on(shell.manager.stop_all());
             }
         }
     });

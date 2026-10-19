@@ -7,6 +7,7 @@
 pub mod auth;
 pub mod chat;
 pub mod live;
+pub mod multi_live;
 pub mod player;
 pub mod settings;
 
@@ -24,6 +25,10 @@ pub mod events {
     pub const PLAYER_COMMAND: &str = "player://command";
     /// 재생 코디네이터 이벤트 — `PlayerEventDto`.
     pub const PLAYER_EVENT: &str = "player://event";
+    /// 멀티라이브 패인 플레이어 스크립트 — `{ slot, script }`.
+    pub const MULTILIVE_COMMAND: &str = "multilive://command";
+    /// 멀티라이브 상태 — `MultiLiveStateDto`.
+    pub const MULTILIVE_STATE: &str = "multilive://state";
 }
 
 /// 명령 오류 — 프런트엔드에는 사용자용 문구 문자열로 간다.

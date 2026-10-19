@@ -9,7 +9,7 @@
 
 use std::sync::Arc;
 
-use cview_app_core::viewmodels::player::StartStreamRequest;
+use cview_app_core::viewmodels::player::{PlayerViewModel, StartStreamRequest};
 use cview_core::models::live::LiveStatus;
 use cview_core::models::player::{PlayerError, PlayerPhase};
 use cview_player::coordinator::StreamPhase;
@@ -121,31 +121,34 @@ pub async fn player_message(services: State<'_, AppServices>, message: Value) ->
     if matches!(parsed, JsMessage::SurfaceFirstFrame { .. }) {
         services.player.engine_surface_presented();
     }
+    if let Some(EngineSignal::Fatal(message)) = &signal {
+        (services.sinks.player_event)(PlayerEventDto::Error {
+            message: message.clone(),
+        });
+    }
+    apply_engine_signal(&services.player, signal).await;
+    Ok(())
+}
+
+/// 엔진 신호를 뷰모델에 넘긴다(단일 시청 화면·멀티라이브 패인 공용).
+pub async fn apply_engine_signal(player: &PlayerViewModel, signal: Option<EngineSignal>) {
     match signal {
         Some(EngineSignal::Playing) => {
-            services.player.engine_rebuffer_changed(false);
-            services
-                .player
-                .engine_state_changed(&PlayerPhase::Playing)
-                .await;
+            player.engine_rebuffer_changed(false);
+            player.engine_state_changed(&PlayerPhase::Playing).await;
         }
-        Some(EngineSignal::Buffering) => services.player.engine_rebuffer_changed(true),
+        Some(EngineSignal::Buffering) => player.engine_rebuffer_changed(true),
         Some(EngineSignal::Fatal(message)) => {
             tracing::warn!("hls.js 치명 오류: {message}");
-            (services.sinks.player_event)(PlayerEventDto::Error {
-                message: message.clone(),
-            });
-            services
-                .player
+            player
                 .engine_state_changed(&PlayerPhase::Error(PlayerError::DecodingFailed(message)))
                 .await;
         }
         None => {}
     }
-    Ok(())
 }
 
-fn now_seconds() -> f64 {
+pub fn now_seconds() -> f64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs_f64())
