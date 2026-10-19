@@ -4,6 +4,8 @@
 import { api } from './api.js';
 import { esc, safeUrl, icons } from './dom.js';
 import { liveCard, emptyState, liveGrid, recentChannels, uptimeText, compactCount } from './cards.js';
+import { clipCard } from './channel.js';
+import { continueCard } from './media.js';
 
 const HERO_SIZE = 5;
 // 자동 넘김 — 대기열 진행 막대(CSS `queue-progress`, 7초)가 끝나면 다음 장으로. 호버 중엔 CSS 가 멈춘다.
@@ -206,12 +208,16 @@ export class HomePage {
     this.renderGreeting();
     if (!this.body.querySelector('.home') || refresh) this.body.innerHTML = homeSkeleton();
     const loggedIn = this.isLoggedIn();
-    const [following, popular] = await Promise.allSettled([
+    const [following, popular, recent] = await Promise.allSettled([
       loggedIn ? api.followingLives(refresh) : Promise.resolve([]),
       api.popularLives(POPULAR_SIZE, refresh),
+      api.recentChannels(8),
     ]);
     if (seq !== this.seq) return;
+    // 최근 시청은 DB(재생할 때 기록)가 원본 — 비어 있으면 예전 localStorage 기록을 쓴다.
+    this.dbRecent = recent.status === 'fulfilled' ? recent.value : [];
     this.render(loggedIn, following, popular);
+    this.loadRails(seq);
   }
 
   renderGreeting(following = null, popular = null) {
@@ -239,7 +245,7 @@ export class HomePage {
     if (this.heroIndex >= this.hero.length) this.heroIndex = 0;
 
     const liveById = new Map([...popular, ...following].map((l) => [l.channelId, l]));
-    const recent = recentChannels().slice(0, 8);
+    const recent = (this.dbRecent && this.dbRecent.length ? this.dbRecent : recentChannels()).slice(0, 8);
 
     let html = '<div class="home">';
     if (!loggedIn) html += loginBanner();
@@ -261,6 +267,7 @@ export class HomePage {
     }
 
     if (recent.length) html += recentShelf(recent, liveById);
+    html += '<section class="home-section" data-rail="continue" hidden></section>';
     if (following.length > HERO_SIZE) html += followingShelf(following);
 
     if (popularRes.status === 'fulfilled') {
@@ -280,8 +287,23 @@ export class HomePage {
     } else {
       html += emptyState('인기 라이브를 불러오지 못했습니다', popularRes.reason && popularRes.reason.message);
     }
+    html += '<section class="home-section" data-rail="clips" hidden></section>';
     html += '</div>';
     this.body.innerHTML = html;
+  }
+
+  /** 이어 보기·인기 클립 레일 — 첫 화면을 막지 않게 나중에 채운다 (NAV-14). */
+  async loadRails(seq) {
+    const [cont, clips] = await Promise.allSettled([api.vodContinueList(12), api.popularClips('WITHIN_1_DAY', 'POPULAR')]);
+    if (seq !== this.seq) return;
+    const fill = (name, title, html, goto) => {
+      const box = this.body.querySelector(`[data-rail="${name}"]`);
+      if (!box || !html) return;
+      box.innerHTML = `<div class="section-head"><h2 class="section-title">${title}</h2><div class="grow"></div><button class="link-btn" data-goto-lib="${goto}">전체 보기</button></div>${html}`;
+      box.hidden = false;
+    };
+    if (cont.status === 'fulfilled' && cont.value.length) fill('continue', '이어 보기', `<div class="shelf">${cont.value.map(continueCard).join('')}</div>`, 'continue');
+    if (clips.status === 'fulfilled' && clips.value.length) fill('clips', '오늘의 인기 클립', `<div class="shelf clip-shelf">${clips.value.slice(0, 16).map(clipCard).join('')}</div>`, 'clips');
   }
 
   setHero(index) {
@@ -314,16 +336,18 @@ export class HomePage {
       shelf.scrollBy({ left: Number(shelfBtn.dataset.shelf) * shelf.clientWidth * 0.9, behavior: 'smooth' });
       return;
     }
+    const vod = e.target.closest('[data-vod-no]');
+    if (vod) { window.dispatchEvent(new CustomEvent('cview:open-vod', { detail: { videoNo: Number(vod.dataset.vodNo) } })); return; }
+    const clip = e.target.closest('[data-clip-uid]');
+    if (clip) { window.dispatchEvent(new CustomEvent('cview:open-clip', { detail: { clipUid: clip.dataset.clipUid } })); return; }
+    const lib = e.target.closest('[data-goto-lib]');
+    if (lib) { window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: 'library', params: { tab: lib.dataset.gotoLib } } })); return; }
     const goto = e.target.closest('[data-goto]');
-    if (goto) document.querySelector(`.nav-item[data-route="${goto.dataset.goto}"]`)?.click();
+    if (goto) window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: goto.dataset.goto } }));
   }
 }
 
 /** 홈 검색창 → 검색 화면으로 넘겨 바로 검색한다. */
 function goSearch(q) {
-  document.querySelector('.nav-item[data-route="search"]')?.click();
-  const form = document.querySelector('[data-page="search"] form');
-  if (!form) return;
-  form.querySelector('input').value = q;
-  setTimeout(() => form.requestSubmit(), 0);
+  window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: 'search', params: { query: q } } }));
 }

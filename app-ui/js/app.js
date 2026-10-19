@@ -13,12 +13,16 @@ import { LivePage, liveIcon } from './live.js';
 import { ChannelPage } from './channel.js';
 import { MediaPage } from './media.js';
 import { LibraryPage, libraryIcon } from './library.js';
+import { CategoriesPage, categoryIcon } from './categories.js';
+import { CommandPalette } from './palette.js';
+import { showMenu } from './chat.js';
 
 // 사이드바 — Swift `AppRouter.SidebarItem` 라벨.
 const ROUTES = [
   { id: 'home', title: '홈', icon: icons.home },
   { id: 'following', title: '팔로잉', icon: icons.following },
   { id: 'popular', title: '인기', icon: icons.popular },
+  { id: 'categories', title: '카테고리', icon: categoryIcon },
   { id: 'live', title: '라이브', icon: liveIcon },
   { id: 'multilive', title: '멀티라이브', icon: multiLiveIcon },
   { id: 'library', title: '보관함', icon: libraryIcon },
@@ -72,7 +76,10 @@ async function refreshSidebarFollowing() {
     return;
   }
   try {
-    sidebar.setFollowing(await api.followingLives(false));
+    // 즐겨찾기 채널을 위로 (DAT-02)
+    const [lives, favs] = await Promise.all([api.followingLives(false), api.favoritesList().catch(() => [])]);
+    const fav = new Set(favs.map((f) => f.channelId));
+    sidebar.setFollowing([...lives].sort((a, b) => (fav.has(b.channelId) - fav.has(a.channelId)) || ((b.viewerCount || 0) - (a.viewerCount || 0))));
   } catch {
     sidebar.setFollowing(null);
   }
@@ -207,6 +214,69 @@ function installViewerMultiLiveButton() {
   close.before(button);
 }
 
+/** 카드 우클릭 메뉴 — 원본 LiveCardActionMenu (NAV-10). */
+function installCardMenu() {
+  document.addEventListener('contextmenu', async (e) => {
+    const card = e.target.closest('[data-channel-id]');
+    if (!card || e.target.closest('.chat') || card.closest('.ml-stage')) return;
+    e.preventDefault();
+    const id = card.dataset.channelId;
+    const name = card.dataset.channelName || '';
+    const image = card.dataset.channelImage || null;
+    let isFav = false;
+    try { isFav = (await api.favoritesList()).some((f) => f.channelId === id); } catch { /* 무시 */ }
+    const url = `https://chzzk.naver.com/live/${id}`;
+    showMenu(e.clientX, e.clientY, [
+      ['play', '재생'],
+      ['multi', '멀티라이브에 추가'],
+      ['channel', '채널 정보'],
+      ['-'],
+      ['fav', isFav ? '즐겨찾기 해제' : '즐겨찾기 추가'],
+      ['copy', '링크 복사'],
+      ['open', '치지직에서 열기'],
+    ], async (a) => {
+      if (a === 'play') openChannel(id);
+      else if (a === 'multi') addToMultiLive(id);
+      else if (a === 'channel') openChannelPage(id);
+      else if (a === 'fav') {
+        try { await api.favoriteSet(id, !isFav, name, image); toast(isFav ? '즐겨찾기에서 뺐습니다' : '즐겨찾기에 추가했습니다', 1500); refreshSidebarFollowing(); } catch (er) { toast(er.message); }
+      } else if (a === 'copy') navigator.clipboard.writeText(url).then(() => toast('링크를 복사했습니다', 1200));
+      else if (a === 'open') api.openExternal(url).catch((er) => toast(er.message));
+    });
+  });
+}
+
+/** ⌘K 커맨드 팔레트 (NAV-12) — 사이드바의 ⌘K(검색 이동)보다 먼저 받는다. */
+let palette = null;
+function installPalette() {
+  palette = new CommandPalette({
+    isLoggedIn,
+    onOpenChannel: openChannelPage,
+    onPlay: openChannel,
+    onSearch: (q) => navigate('search', { query: q }),
+    actions: () => [
+      ...ROUTES.map((r) => ({ group: '화면', label: r.title, hint: '이동', run: () => navigate(r.id) })),
+      { group: '화면', label: '검색', hint: '라이브·채널·다시보기', run: () => navigate('search') },
+      { group: '보관함', label: '인기 클립', hint: '보관함', run: () => navigate('library', { tab: 'clips' }) },
+      { group: '보관함', label: '이어 보기', hint: '다시보기', run: () => navigate('library', { tab: 'continue' }) },
+      { group: '보관함', label: '즐겨찾기', hint: '채널', run: () => navigate('library', { tab: 'favorites' }) },
+      { group: '보관함', label: '북마크', hint: '방송 장면', run: () => navigate('library', { tab: 'bookmarks' }) },
+      { group: '동작', label: resolvedTheme() === 'dark' ? '라이트 테마로 전환' : '다크 테마로 전환', hint: '테마', run: () => setTheme(resolvedTheme() === 'dark' ? 'light' : 'dark') },
+      { group: '동작', label: '뒤로 가기', hint: '⌘[', run: goBack },
+      { group: '동작', label: '사이드바 접기/펼치기', hint: '⌘\\', run: () => sidebar.toggle() },
+      { group: '동작', label: '현재 화면 새로고침', hint: '⌘R', run: () => pages[current] && (pages[current].acceptsParams ? pages[current].show(currentParams) : pages[current].show(true)) },
+      ...(isLoggedIn() ? [{ group: '동작', label: '로그아웃', hint: '계정', run: logout }] : [{ group: '동작', label: '네이버 로그인', hint: '계정', run: login }]),
+    ],
+  });
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (palette.isOpen) palette.close(); else palette.open();
+    }
+  }, true);
+}
+
 async function main() {
   renderNav();
   const content = document.querySelector('.content');
@@ -222,6 +292,7 @@ async function main() {
   });
   pages.multilive = new MultiLivePage(content, { isLoggedIn });
   pages.live = new LivePage(content, { isLoggedIn });
+  pages.categories = new CategoriesPage(content);
   pages.library = new LibraryPage(content, { isLoggedIn, onOpenChannel: openChannelPage });
   pages.media = new MediaPage(content, { onBack: goBack, onOpenChannel: openChannelPage });
   pages.channel = new ChannelPage(content, { onBack: goBack, onPlay: openChannel, onAddMulti: addToMultiLive });
@@ -248,6 +319,9 @@ async function main() {
   window.addEventListener('mouseup', (e) => { if (e.button === 3) goBack(); });
   window.addEventListener('cview:open-vod', (e) => e.detail && navigate('media', { kind: 'vod', id: e.detail.videoNo }));
   window.addEventListener('cview:open-clip', (e) => e.detail && navigate('media', { kind: 'clip', id: e.detail.clipUid }));
+  window.addEventListener('cview:navigate', (e) => e.detail && navigate(e.detail.route, e.detail.params || {}));
+  installCardMenu();
+  installPalette();
   window.addEventListener('cview:open-channel', (e) => openChannelPage(e.detail && e.detail.channelId));
   // 시청 화면 헤더(아바타·채널명)를 누르면 채널 상세
   document.querySelector('#viewer .viewer-header').addEventListener('click', (e) => {

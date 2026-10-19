@@ -24,19 +24,19 @@
 | ID | 항목 | Swift 원본 | Rust 현황 | 크기 |
 |---|---|---|---|---|
 | NAV-01 | ✅ 채널 상세 화면(헤더·팔로워·방송 중 배지·정보/VOD/클립 탭) | `ChannelInfoView`, `ChannelInfoHeaderView`, `ChannelInfoTabContent`, `ChannelVODClipTab`, `ChannelMediaCards` | `channel_info` 명령 + `ChannelDetailModel` VM, 화면 없음 | M |
-| NAV-02 | 카테고리 둘러보기(카테고리 카드 → 카테고리별 라이브, 정렬·고정) | `CategoryBrowseView`, `Category/CategoryBrowseCards`, `CategoryBrowseModels` | `CategoryBrowseViewModel`, `category_groups`, `pinned_category_decoder`, 명령·화면 없음 | M |
-| NAV-03 | 인기(전체방송) 화면 고도화: 30개 페이지네이션, 정렬, 카테고리 필터, 미리보기 인스펙터 | `AllBroadcasts/AllBroadcastsView`, `BroadcastPreviewInspector`, `Components/PaginationBar` | `AllBroadcastsViewModel` 사용, 단순 격자만 | M |
-| NAV-04 | 팔로잉 허브: 오프라인 채널 포함 목록, 정렬(시청자/이름/최근), 카테고리 필터, 간결 보기, 채널 독 | `FollowingView*`, `Following/FollowingChannelSidebar`, `FollowingChannelDenseRow`, `FollowingChannelDock`, `FollowingSortOrder` | `FollowingStore`·`following_browser_query`·`following_channel_sidebar` 로직, UI 는 방송 중 격자만 | M |
+| NAV-02 | ✅ 카테고리 둘러보기(카테고리 카드 → 카테고리별 라이브, 정렬·고정) | `CategoryBrowseView`, `Category/CategoryBrowseCards`, `CategoryBrowseModels` | `CategoryBrowseViewModel`, `category_groups`, `pinned_category_decoder`, 명령·화면 없음 | M |
+| NAV-03 | ✅ 인기(전체방송) 화면 고도화: 30개 페이지네이션, 정렬, 카테고리 필터, 미리보기 인스펙터 | `AllBroadcasts/AllBroadcastsView`, `BroadcastPreviewInspector`, `Components/PaginationBar` | `AllBroadcastsViewModel` 사용, 단순 격자만 | M |
+| NAV-04 | 🟡 팔로잉 허브: 오프라인 채널 포함 목록, 정렬(시청자/이름/최근), 카테고리 필터, 간결 보기, 채널 독 | `FollowingView*`, `Following/FollowingChannelSidebar`, `FollowingChannelDenseRow`, `FollowingChannelDock`, `FollowingSortOrder` | `FollowingStore`·`following_browser_query`·`following_channel_sidebar` 로직, UI 는 방송 중 격자만 | M |
 | NAV-05 | 팔로잉 인사이트 레일·스마트 큐(이 페이지 담기 → 멀티뷰) | `Following/FollowingLiveInsightRail`, `ResidentOverviewStage`, `FollowingView+MultiLive` | `following_overview_list_query`, 없음 | M |
-| NAV-06 | 통합 검색: VOD·클립 결과, 최근 검색어, 추천어, 결과 정렬·"전체 보기" | `SearchViews`, `Search/SearchContentView+*`, `SearchResultRows` | `search` 명령은 라이브+채널만, `SearchViewModel`(최근 검색) 미사용, `search_videos` API 미사용 | M |
+| NAV-06 | 🟡 통합 검색: VOD·클립 결과, 최근 검색어, 추천어, 결과 정렬·"전체 보기" | `SearchViews`, `Search/SearchContentView+*`, `SearchResultRows` | `search` 명령은 라이브+채널만, `SearchViewModel`(최근 검색) 미사용, `search_videos` API 미사용 | M |
 | NAV-07 | 검색 디스커버리(태그 칩, 인사이트 레일) | `Search/LiveDiscoveryWorkspace`, `DiscoveryInsight*`, `DiscoveryDesign` | 없음 | M |
 | NAV-08 | ✅ 라이브러리 허브(클립·다시보기·받은 영상 탭) | `LibraryHubView` | 없음 | S |
 | NAV-09 | ✅ 최근 시청·즐겨찾기 화면(즐겨찾기 토글, 최근 기록 삭제) | `RecentFavoritesView` | `FavoritesStore`·`RecentChannelsStore`·persistence `toggle_favorite`; UI 는 localStorage 최근 시청만 | M |
-| NAV-10 | 카드 우클릭 메뉴(재생/멀티라이브 추가/채팅만 열기/채널 상세/즐겨찾기/링크 복사/치지직에서 열기) | `HomeV3/LiveCardActionMenu`, `ClipboardActions` | 카드에 "멀티라이브에 추가" 버튼만 | S |
+| NAV-10 | 🟡 카드 우클릭 메뉴(재생/멀티라이브 추가/채팅만 열기/채널 상세/즐겨찾기/링크 복사/치지직에서 열기) | `HomeV3/LiveCardActionMenu`, `ClipboardActions` | 카드에 "멀티라이브에 추가" 버튼만 | S |
 | NAV-11 | ✅ 뒤로 가기 내비게이션 스택(`⌘[`) | `AppRouter`, `Navigation/*` | `navigation/router.rs`, UI 는 단일 라우트 | S |
-| NAV-12 | 커맨드 팔레트(`⌘K`): 채널·화면·액션 검색 실행 | `CommandPaletteView`, `Actions/CViewActionRegistry` | `actions/registry.rs`·`cview_action.rs`; `⌘K` 는 검색 화면 이동만 | M |
+| NAV-12 | ✅ 커맨드 팔레트(`⌘K`): 채널·화면·액션 검색 실행 | `CommandPaletteView`, `Actions/CViewActionRegistry` | `actions/registry.rs`·`cview_action.rs`; `⌘K` 는 검색 화면 이동만 | M |
 | NAV-13 | 사이드바 빠른 액션·위젯·재생 인사이트 | `Components/SidebarQuickActions`, `SidebarWidgets`, `SidebarPlaybackInsights` | `sidebar_quick_action.rs`, 없음 | S |
-| NAV-14 | 홈 보강: 인기 클립 레일, 이어보기(VOD 진행률), 빠른 멀티 묶음, 타임라인 | `HomeV3/HomeV3Rail`, `HomeV3QuickMulti`, `HomeV3Timeline`, `HomeV3Discovery` | 홈 VM(`recommendation`, `promotion`) 일부만 화면 반영 | M |
+| NAV-14 | 🟡 홈 보강: 인기 클립 레일, 이어보기(VOD 진행률), 빠른 멀티 묶음, 타임라인 | `HomeV3/HomeV3Rail`, `HomeV3QuickMulti`, `HomeV3Timeline`, `HomeV3Discovery` | 홈 VM(`recommendation`, `promotion`) 일부만 화면 반영 | M |
 | NAV-15 | 라이브 허브 모드 전환(탐색/시청/멀티/검색/인기/카테고리, `⌘⌥1~6`) | `MainShell/MenuHubSegment`, `MenuHubTransition`, `navigation/hub_mode` | `hub_mode.rs`, 없음 | S |
 | NAV-16 | 워크스페이스 복원(마지막 화면·채널·멀티 구성) | `Persistence/WorkspaceSnapshot`, `AppState+StoreRecovery` | `workspace_snapshot.rs`, 미연결 | M |
 
@@ -156,8 +156,8 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 | ID | 항목 | Swift 원본 | Rust 현황 | 크기 |
 |---|---|---|---|---|
 | DAT-01 | ✅ 채널 메모(작성·편집 시트) | `ChannelMemoSheet` | persistence `fetch_memo/save_memo`, 명령 없음 | S |
-| DAT-02 | 🟡 즐겨찾기(카드·채널 상세에서 토글, 사이드바 우선 표시) | `FavoritesStore`, `LiveCardActionMenu` | `FavoritesStore`, persistence | S |
-| DAT-03 | 🟡 최근 시청을 DB 로 이관(지금은 localStorage) | `RecentChannelsStore` | `RecentChannelsStore` | S |
+| DAT-02 | ✅ 즐겨찾기(카드·채널 상세에서 토글, 사이드바 우선 표시) | `FavoritesStore`, `LiveCardActionMenu` | `FavoritesStore`, persistence | S |
+| DAT-03 | ✅ 최근 시청을 DB 로 이관(지금은 localStorage) | `RecentChannelsStore` | `RecentChannelsStore` | S |
 | DAT-04 | 통계/인사이트 화면(세션·스트리밍·채팅·기록 탭, KPI 카드) | `Statistics/StatisticsView`, `Tabs/*`, `Components/KPICard` | persistence `aggregate_insights`, `watch_time_by_channel/category`, `current_watch_streak` | L |
 | DAT-05 | 통계 독립 창(`⇧⌘T`) | `CViewApp` `statistics-window` | 없음 | S |
 | DAT-06 | 저장소 복구·로컬 데이터 정리 UI | `AppState+StoreRecovery`, `AppState+LocalDataHygiene` | `store_open_health`, `maintenance` | M |

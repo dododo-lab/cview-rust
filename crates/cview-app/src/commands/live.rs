@@ -69,7 +69,7 @@ pub async fn popular_lives(
     size: Option<i64>,
     refresh: Option<bool>,
 ) -> CmdResult<Vec<LiveCardDto>> {
-    let size = size.unwrap_or(POPULAR_DEFAULT_SIZE).clamp(1, 50) as usize;
+    let size = size.unwrap_or(POPULAR_DEFAULT_SIZE).clamp(1, 300) as usize;
     let vm = &services.popular;
     let failed = matches!(vm.read().state, LoadState::Error(_));
     if refresh.unwrap_or(false) || failed {
