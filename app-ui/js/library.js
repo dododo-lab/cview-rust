@@ -60,7 +60,7 @@ export class LibraryPage {
     this.root.dataset.page = 'library';
     this.root.hidden = true;
     this.root.innerHTML = `
-      <header class="page-header" data-tauri-drag-region="deep">
+      <header class="page-header" data-tauri-drag-region>
         <h1 class="page-title">보관함</h1>
         <span class="page-subtitle">클립 · 다시보기 · 즐겨찾기 · 북마크</span>
       </header>
