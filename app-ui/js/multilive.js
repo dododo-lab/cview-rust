@@ -9,6 +9,7 @@ import { api, listen, Events } from './api.js';
 import { esc, safeUrl, toast } from './dom.js';
 import { PlayerBridge } from './player.js';
 import { ChatPanel } from './chat.js';
+import { StreamAlerts } from './donations.js';
 
 export const multiLiveIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5Zm9 9a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2v-5ZM14 3h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM5 12h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2Z" opacity=".9"/></svg>';
 
@@ -88,7 +89,8 @@ export class MultiLivePage {
     this.picker = this.root.querySelector('.ml-picker');
     this.pickerList = this.root.querySelector('.ml-picker-list');
     this.pickerFilter = this.root.querySelector('.ml-picker-filter');
-    this.chat = new ChatPanel(this.root.querySelector('.ml-chat'), { isLoggedIn });
+    this.alerts = new StreamAlerts(this.stage);
+    this.chat = new ChatPanel(this.root.querySelector('.ml-chat'), { isLoggedIn, onHighlight: (m) => this.alerts.push(m) });
 
     this.state = { sessions: [], selectedId: null, canAdd: true, maxSessions: 4, layout: 'grid' };
     this.panes = new Map(); // slot → { el, bridge, sessionId }

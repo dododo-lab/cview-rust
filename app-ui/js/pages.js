@@ -2,6 +2,8 @@
 import { api } from './api.js';
 import { esc, toast } from './dom.js';
 import { liveGrid, channelRow, emptyState, loadingState } from './cards.js';
+import { THEMES, THEME_LABELS, currentTheme, setTheme } from './theme.js';
+import { streamAlertsEnabled, setStreamAlertsEnabled } from './donations.js';
 
 const loginAction = '<button class="btn primary" data-action="login">로그인</button>';
 
@@ -126,6 +128,12 @@ export class SettingsPage {
       if (action.dataset.action === 'login') this.onLogin();
       if (action.dataset.action === 'logout') this.onLogout();
     });
+    this.body.addEventListener('click', async (e) => {
+      const choice = e.target.closest('[data-theme-choice]');
+      if (!choice) return;
+      await setTheme(choice.dataset.themeChoice);
+      this.render();
+    });
   }
 
   async show() {
@@ -148,6 +156,18 @@ export class SettingsPage {
       : '<div class="setting"><span class="setting-label">로그인되지 않음<small>팔로잉 목록과 채팅 참여에 네이버 로그인이 필요합니다</small></span><button class="btn primary" data-action="login">로그인</button></div>';
     this.body.innerHTML = `
       <section class="settings-group"><h3>계정</h3>${account}</section>
+      <section class="settings-group"><h3>화면</h3>
+        <div class="setting">
+          <span class="setting-label">테마<small>시스템은 macOS 화면 모드를 따릅니다</small></span>
+          <div class="segmented" role="radiogroup" aria-label="테마">
+            ${THEMES.map((t) => `<button class="seg ${t === currentTheme() ? 'active' : ''}" data-theme-choice="${t}" role="radio" aria-checked="${t === currentTheme()}">${THEME_LABELS[t]}</button>`).join('')}
+          </div>
+        </div>
+        <label class="setting">
+          <span class="setting-label">후원·구독 알림<small>시청 화면 위에 새 후원과 구독을 잠깐 띄웁니다</small></span>
+          <span class="toggle"><input type="checkbox" data-local="streamAlerts" ${streamAlertsEnabled() ? 'checked' : ''}><span></span></span>
+        </label>
+      </section>
       <section class="settings-group"><h3>플레이어</h3>
         ${PLAYER_TOGGLES.map((t) => toggleRow('player', t, player)).join('')}
         <label class="setting">
@@ -164,6 +184,10 @@ export class SettingsPage {
   }
 
   async onChange(target) {
+    if (target.dataset.local === 'streamAlerts') {
+      setStreamAlertsEnabled(target.checked);
+      return;
+    }
     const { domain, key } = target.dataset;
     if (!domain || !key) return;
     const value = target.type === 'checkbox' ? target.checked : target.value;

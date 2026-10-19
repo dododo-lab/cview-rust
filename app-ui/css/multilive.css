@@ -5,14 +5,6 @@
 .ml-header { flex: none; gap: var(--sp-sm); }
 .ml-header .btn svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
 
-.segmented { display: inline-flex; padding: 2px; border-radius: 9px; background: var(--surface-base); border: 1px solid var(--border-subtle); }
-.segmented .seg {
-  border: 0; background: transparent; color: var(--text-secondary); font: inherit; font-size: var(--fs-caption);
-  padding: 5px 12px; border-radius: 7px; cursor: pointer;
-}
-.segmented .seg:hover { color: var(--text-primary); }
-.segmented .seg.active { background: var(--surface-overlay); color: var(--text-primary); font-weight: 600; }
-
 .ml-body { flex: 1; min-height: 0; display: flex; gap: var(--sp-md); margin-top: var(--sp-md); }
 .ml-chat { border-radius: var(--radius-lg); border: 1px solid var(--border-subtle); overflow: hidden; }
 
@@ -85,12 +77,12 @@
 .ml-pane-state.error { color: var(--error); }
 
 /* 채널 추가 */
-.ml-picker { position: absolute; inset: 0; z-index: 40; background: rgba(0, 0, 0, 0.5); display: grid; place-items: center; }
+.ml-picker { position: absolute; inset: 0; z-index: 40; background: var(--scrim); display: grid; place-items: center; backdrop-filter: blur(4px); }
 .ml-picker[hidden] { display: none; }
 .ml-picker-panel {
   width: min(560px, 92%); max-height: 78%; display: flex; flex-direction: column; overflow: hidden;
   background: var(--surface-popover); border: 1px solid var(--border); border-radius: var(--radius-lg);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-lg);
 }
 .ml-picker-head { display: flex; align-items: center; gap: var(--sp-sm); padding: var(--sp-md); border-bottom: 1px solid var(--border-subtle); }
 .ml-picker-head strong { flex: none; }
@@ -121,4 +113,4 @@
 }
 .card-ml-add svg { width: 14px; height: 14px; }
 .card:hover .card-ml-add, .card:focus-within .card-ml-add { opacity: 1; }
-.card-ml-add:hover { background: var(--primary); color: #000; }
+.card-ml-add:hover { background: var(--primary); color: var(--on-primary); }

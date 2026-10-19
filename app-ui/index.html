@@ -4,6 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CView</title>
+  <script>
+    // 첫 페인트 전에 테마를 정한다(설정 값은 js/theme.js 가 다시 맞춘다).
+    try { document.documentElement.dataset.theme = localStorage.getItem('cview.theme') || 'dark'; }
+    catch (e) { document.documentElement.dataset.theme = 'dark'; }
+  </script>
   <link rel="stylesheet" href="css/app.css">
   <link rel="stylesheet" href="css/multilive.css">
   <script type="module" src="js/app.js"></script>

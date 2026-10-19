@@ -1,6 +1,7 @@
 // 채팅 패널 — `chat://event` (Rust ChatEventDto) 를 그린다.
 import { api, listen, Events } from './api.js';
 import { esc, safeUrl, toast } from './dom.js';
+import { DonationRanking, eventHead } from './donations.js';
 
 const MAX_LINES = 300;
 
@@ -15,11 +16,6 @@ export function renderContent(content, emojis) {
       return url ? `<img class="emoji" src="${esc(url)}" alt="${esc(m[1])}" referrerpolicy="no-referrer">` : esc(part);
     })
     .join('');
-}
-
-export function formatDonation(amount) {
-  if (typeof amount !== 'number' || !Number.isFinite(amount) || amount <= 0) return '';
-  return `${amount.toLocaleString('ko-KR')}원`;
 }
 
 // 닉네임 색을 바꾸는 역할만 클래스로 붙인다. 역할 문자열을 그대로 클래스로 쓰면 일반 시청자
@@ -41,13 +37,16 @@ function lineHtml(m) {
     return `<div class="chat-line system" data-id="${esc(m.id)}">${esc(m.content)}</div>`;
   }
   const classes = ['chat-line'];
-  if (m.kind === 'donation') classes.push('donation');
   if (m.isBlinded) classes.push('blinded');
-  const amount = m.kind === 'donation' && formatDonation(m.donationAmount)
-    ? `<span class="amount">${esc(formatDonation(m.donationAmount))}</span>` : '';
-  const sub = m.kind === 'subscription' && m.subscriptionMonths
-    ? `<span class="amount">${esc(m.subscriptionMonths)}개월 구독</span>` : '';
-  return `<div class="${classes.join(' ')}" data-id="${esc(m.id)}">${badges}<span class="nick${roleClass(m.role)}"${style}>${esc(m.nickname || '익명')}</span>${amount}${sub}<span class="text">${renderContent(m.content, m.emojis)}</span></div>`;
+  if (m.kind === 'notice') classes.push('notice-line');
+  const nick = `<span class="nick${roleClass(m.role)}"${style}>${esc(m.nickname || '익명')}</span>`;
+  const text = `<span class="text">${renderContent(m.content, m.emojis)}</span>`;
+  const event = eventHead(m);
+  if (event) {
+    classes.push(...event.classes);
+    return `<div class="${classes.join(' ')}" data-id="${esc(m.id)}"><div class="event-head">${badges}${nick}${event.head}</div>${text}</div>`;
+  }
+  return `<div class="${classes.join(' ')}" data-id="${esc(m.id)}">${badges}${nick}${text}</div>`;
 }
 
 const STATE_LABEL = {
@@ -59,8 +58,15 @@ const STATE_LABEL = {
 };
 
 export class ChatPanel {
-  constructor(root, { isLoggedIn }) {
+  /**
+   * @param {HTMLElement} root `.chat` 패널
+   * @param {{ isLoggedIn: () => boolean, onHighlight?: (message) => void }} options
+   *   onHighlight — 실시간(최근 기록 제외)으로 들어온 후원·구독 메시지(스트림 알림용)
+   */
+  constructor(root, { isLoggedIn, onHighlight = null }) {
     this.root = root;
+    this.onHighlight = onHighlight;
+    this.ranking = new DonationRanking(root);
     this.list = root.querySelector('.chat-list');
     this.state = root.querySelector('.chat-state');
     this.notice = root.querySelector('.chat-notice');
@@ -82,6 +88,7 @@ export class ChatPanel {
   async connect(chatChannelId, channelId) {
     this.clear();
     this.active = true;
+    this.ranking.load(channelId);
     this.setState('connecting');
     if (!chatChannelId) {
       this.setState('failed');
@@ -100,6 +107,7 @@ export class ChatPanel {
 
   async disconnect() {
     this.active = false;
+    this.ranking.clear();
     this.connected = false;
     this.canSend = false;
     try { await api.chatDisconnect(); } catch { /* 무시 */ }
@@ -159,6 +167,11 @@ export class ChatPanel {
         break;
       case 'messages':
         this.append(ev.messages);
+        if (!ev.recent && this.onHighlight) {
+          for (const m of ev.messages || []) {
+            if (m.kind === 'donation' || m.kind === 'subscription') this.onHighlight(m);
+          }
+        }
         break;
       case 'notice':
         this.notice.innerHTML = `📌 <strong>${esc(ev.message.nickname)}</strong> ${renderContent(ev.message.content, ev.message.emojis)}`;

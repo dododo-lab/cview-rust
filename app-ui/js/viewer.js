@@ -3,6 +3,7 @@ import { api, listen, Events } from './api.js';
 import { esc, safeUrl, toast, icons } from './dom.js';
 import { PlayerBridge } from './player.js';
 import { ChatPanel } from './chat.js';
+import { StreamAlerts } from './donations.js';
 
 const PHASE_TEXT = {
   idle: '',
@@ -31,7 +32,8 @@ export class Viewer {
     this.muteButton = root.querySelector('#mute');
 
     this.player = new PlayerBridge(root.querySelector('#player-frame'));
-    this.chat = new ChatPanel(root.querySelector('.chat'), { isLoggedIn });
+    this.alerts = new StreamAlerts(root.querySelector('.player-stage'));
+    this.chat = new ChatPanel(root.querySelector('.chat'), { isLoggedIn, onHighlight: (m) => this.alerts.push(m) });
 
     this.player.onMessage((type, data) => this.onPlayerMessage(type, data));
     listen(Events.playerEvent, (ev) => this.onPlayerEvent(ev));
@@ -119,6 +121,7 @@ export class Viewer {
     this.startToken += 1;
     this.root.hidden = true;
     this.channelId = null;
+    this.alerts.clear();
     this.showOverlay('');
     await Promise.allSettled([api.playerStop(), this.chat.disconnect()]);
     if (this.onClose) this.onClose();
