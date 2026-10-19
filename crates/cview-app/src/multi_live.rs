@@ -842,6 +842,9 @@ impl MultiLiveShell {
             layout: layout_name(st.grid_layout_mode()).to_string(),
             focus_direction: st.focus_direction().raw_value().to_string(),
             focus_ratio: st.layout_ratios().focus_ratio,
+            horizontal_ratio: st.layout_ratios().horizontal_ratio,
+            vertical_ratio: st.layout_ratios().vertical_ratio,
+            multi_audio: st.is_multi_audio_mode(),
         }
     }
 }
@@ -850,7 +853,8 @@ impl MultiLiveShell {
 pub fn layout_name(mode: MultiLiveGridLayoutMode) -> &'static str {
     match mode {
         MultiLiveGridLayoutMode::Focus => "focus",
-        _ => "grid",
+        MultiLiveGridLayoutMode::Custom => "custom",
+        MultiLiveGridLayoutMode::Preset => "grid",
     }
 }
 
@@ -858,6 +862,7 @@ pub fn layout_from_name(name: &str) -> Option<MultiLiveGridLayoutMode> {
     match name {
         "focus" => Some(MultiLiveGridLayoutMode::Focus),
         "grid" => Some(MultiLiveGridLayoutMode::Preset),
+        "custom" => Some(MultiLiveGridLayoutMode::Custom),
         _ => None,
     }
 }
@@ -936,6 +941,11 @@ pub struct MultiLiveStateDto {
     pub focus_direction: String,
     /// 포커스 메인 패인 비율(0.45~0.85).
     pub focus_ratio: f64,
+    /// 사용자 배치 그리드의 열·행 비율(0.2~0.8).
+    pub horizontal_ratio: f64,
+    pub vertical_ratio: f64,
+    /// 여러 패인 소리 모드.
+    pub multi_audio: bool,
 }
 
 /// `multilive://command` 페이로드.

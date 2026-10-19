@@ -115,16 +115,16 @@
 | MUL-03 | ✅ 멀티채팅 메시지 검색(`⌥⌘F`)·다음/이전 채널(`⌃⇥`) | `MultiChatSearchView`, `MultiChatSearchStore` | `MultiChatSearchStore` | M |
 | MUL-04 | ✅ 멀티채팅 개요·컨트롤 레일·알림 배너·오프라인 세션 정책 | `MultiChatOverviewView`, `MultiChatControlRail`, `MultiChatNoticeBanner` | `OfflineSessionPolicy` | M |
 | MUL-05 | 멀티채팅 독립 창(`⇧⌘M`) | `MultiChatWindowHost` | 없음 | M |
-| MUL-06 | 멀티라이브 레이아웃: 프리셋/사용자 배치(드래그 크기 조절), `⌃⌘1~3` | `MultiLiveGridLayouts`, `PaneResizeGrip`, `MCGridResizeDivider`, `MultiLiveLayoutModePolicy` | 그리드·포커스만(포커스 비율 드래그 있음) | M |
-| MUL-07 | 패인 순서 드래그 재배치·탭 바 | `MLTabReorderDropDelegate`, `MCTabBar` | `order` 계산만, 드래그 없음 | S |
+| MUL-06 | ✅ 멀티라이브 레이아웃: 프리셋/사용자 배치(드래그 크기 조절), `⌃⌘1~3` | `MultiLiveGridLayouts`, `PaneResizeGrip`, `MCGridResizeDivider`, `MultiLiveLayoutModePolicy` | 그리드·포커스만(포커스 비율 드래그 있음) | M |
+| MUL-07 | ✅ 패인 순서 드래그 재배치·탭 바 | `MLTabReorderDropDelegate`, `MCTabBar` | `order` 계산만, 드래그 없음 | S |
 | MUL-08 | 🟡 패인 개별 컨트롤(볼륨·음소거·화질·재연결·채널 상세) | `MultiLivePaneOverlays`, `MLPlaybackVolumePanel` | 선택·닫기만 | M |
-| MUL-09 | 다중 오디오(보조 패인 볼륨)·오디오 글로우 | `MultiLiveAudioGlow`, 설정 `multiAudioEnabled`/`secondaryVolume` | 선택 패인만 소리 | S |
-| MUL-10 | 그리드 채팅 오버레이(투명도·글자 크기) | 설정 `chatOverlayInGrid` 등 | 사이드 채팅만 | M |
-| MUL-11 | 싱글 채널 스테이지(멀티에서 한 채널 크게) | `MLSingleChannelStage` | 포커스 레이아웃으로 대체 | S |
+| MUL-09 | 🟡 다중 오디오(보조 패인 볼륨)·오디오 글로우 | `MultiLiveAudioGlow`, 설정 `multiAudioEnabled`/`secondaryVolume` | 선택 패인만 소리 | S |
+| MUL-10 | 🟡 그리드 채팅 오버레이(투명도·글자 크기) | 설정 `chatOverlayInGrid` 등 | 사이드 채팅만 | M |
+| MUL-11 | ✅ 싱글 채널 스테이지(멀티에서 한 채널 크게) | `MLSingleChannelStage` | 포커스 레이아웃으로 대체 | S |
 | MUL-12 | ✅ 모든 스트림 재연결·일괄 해제 | `MultiLiveOverlays` | "모두 닫기"만 | S |
-| MUL-13 | 멀티라이브 제안 토스트(자주 같이 보는 채널) | `MultiLiveProposerToast`, `MultiLiveProposer` | `MultiLiveProposer` | S |
-| MUL-14 | 채널 프리셋 저장/불러오기(멀티 구성 묶음) | `ChannelPresetPicker`, `Components/SidebarPresetSaveSheet` | `ChannelPresetStore` | S |
-| MUL-15 | 마지막 멀티 레이아웃·세션 기억 | `MultiLiveManager+Persistence`, 설정 `rememberLastLayout` | 미연결 | S |
+| MUL-13 | 🟡 멀티라이브 제안 토스트(자주 같이 보는 채널) | `MultiLiveProposerToast`, `MultiLiveProposer` | `MultiLiveProposer` | S |
+| MUL-14 | ✅ 채널 프리셋 저장/불러오기(멀티 구성 묶음) | `ChannelPresetPicker`, `Components/SidebarPresetSaveSheet` | `ChannelPresetStore` | S |
+| MUL-15 | ✅ 마지막 멀티 레이아웃·세션 기억 | `MultiLiveManager+Persistence`, 설정 `rememberLastLayout` | 미연결 | S |
 | MUL-16 | ✅ 멀티라이브 설정 탭(최대 세션 수, 기본 레이아웃·방향, 대역폭 분배, 화면 크기 화질 캡) | `MultiLiveSettingsTab`, `MultiLiveSettingsPanel` | Rust `MultiLiveSettings` 모델, 설정 명령에 도메인 없음 | S |
 
 ## 6. 설정 (SET)

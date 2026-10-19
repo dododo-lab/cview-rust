@@ -180,3 +180,114 @@ pub async fn multilive_retry(
     }
     Ok(shell.state_dto())
 }
+
+/// 패인 끌어 놓기 — 대상 자리로 옮기거나 서로 바꾼다(MUL-07, 원본 MLTabReorderDropDelegate).
+#[tauri::command]
+pub async fn multilive_reorder(
+    shell: State<'_, MultiLiveShell>,
+    dragged_id: String,
+    target_id: String,
+) -> CmdResult<MultiLiveStateDto> {
+    let dragged = parse_id(&dragged_id)?;
+    let target = parse_id(&target_id)?;
+    {
+        let mut st = shell.manager.lock();
+        let mut zoom = st.double_tap_zoom_session_id();
+        st.drop_tile(dragged, target, &mut zoom);
+    }
+    Ok(shell.state_dto())
+}
+
+/// 다중 오디오 — `toggle_mode` 면 여러 패인 소리 모드를 켜고 끄고, 아니면 그 패인 소리를 토글(MUL-09).
+#[tauri::command]
+pub async fn multilive_audio(
+    shell: State<'_, MultiLiveShell>,
+    session_id: Option<String>,
+    toggle_mode: bool,
+) -> CmdResult<MultiLiveStateDto> {
+    {
+        let mut st = shell.manager.lock();
+        if toggle_mode {
+            st.toggle_multi_audio_mode();
+        } else if let Some(id) = session_id.as_deref() {
+            st.toggle_session_audio(parse_id(id)?);
+        }
+    }
+    Ok(shell.state_dto())
+}
+
+/// 그리드 비율(사용자 배치) — 열·행 비율(0.2~0.8). 레이아웃을 사용자 지정으로 바꾸고 저장한다(MUL-06).
+#[tauri::command]
+pub async fn multilive_set_ratios(
+    shell: State<'_, MultiLiveShell>,
+    horizontal: Option<f64>,
+    vertical: Option<f64>,
+) -> CmdResult<MultiLiveStateDto> {
+    {
+        let mut st = shell.manager.lock();
+        let mut r: MultiLiveLayoutRatios = st.layout_ratios();
+        if let Some(h) = horizontal.filter(|v| v.is_finite()) {
+            r.horizontal_ratio = MultiLiveLayoutRatios::clamped(h);
+        }
+        if let Some(v) = vertical.filter(|v| v.is_finite()) {
+            r.vertical_ratio = MultiLiveLayoutRatios::clamped(v);
+        }
+        st.set_layout_ratios(r);
+        st.apply_grid_layout_mode(
+            cview_app_core::viewmodels::multi_live::MultiLiveGridLayoutMode::Custom,
+        );
+        st.save_state();
+    }
+    Ok(shell.state_dto())
+}
+
+// MARK: - 채널 프리셋 (MUL-14, 원본 ChannelPresetPicker)
+
+fn preset_store(
+    app: &tauri::AppHandle,
+) -> CmdResult<cview_app_core::services::channel_preset_store::ChannelPresetStore> {
+    use tauri::Manager;
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| CommandError(e.to_string()))?;
+    Ok(
+        cview_app_core::services::channel_preset_store::ChannelPresetStore::new(
+            cview_app_core::services::channel_preset_store::ChannelPresetStore::default_path(&dir),
+        ),
+    )
+}
+
+#[tauri::command]
+pub async fn preset_list(
+    app: tauri::AppHandle,
+) -> CmdResult<Vec<cview_app_core::services::channel_preset_store::Preset>> {
+    preset_store(&app)?
+        .load_all()
+        .map_err(|e| CommandError(e.to_string()))
+}
+
+#[tauri::command]
+pub async fn preset_save(
+    app: tauri::AppHandle,
+    name: String,
+    channels: Vec<String>,
+) -> CmdResult<cview_app_core::services::channel_preset_store::Preset> {
+    use cview_app_core::services::channel_preset_store::{Preset, PresetKind};
+    let name = name.trim();
+    if name.is_empty() || channels.is_empty() {
+        return Err(CommandError("이름과 채널이 필요합니다".into()));
+    }
+    let preset = Preset::new(name, channels, PresetKind::Live);
+    preset_store(&app)?
+        .save(&preset)
+        .map_err(|e| CommandError(e.to_string()))?;
+    Ok(preset)
+}
+
+#[tauri::command]
+pub async fn preset_delete(app: tauri::AppHandle, id: String) -> CmdResult<()> {
+    preset_store(&app)?
+        .delete(parse_id(&id)?)
+        .map_err(|e| CommandError(e.to_string()))
+}

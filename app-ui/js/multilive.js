@@ -63,10 +63,13 @@ export class MultiLivePage {
           </label>
         </div>
         <div class="segmented" role="group" aria-label="레이아웃">
-          <button class="seg" data-layout="grid">그리드</button>
-          <button class="seg" data-layout="focus">포커스</button>
+          <button class="seg" data-layout="grid" title="균등 분할 (⌃⌘1)">그리드</button>
+          <button class="seg" data-layout="focus" title="포커스 (⌃⌘2)">포커스</button>
+          <button class="seg" data-layout="custom" title="사용자 배치 — 경계를 끌어 크기 조절 (⌃⌘3)">사용자</button>
         </div>
         <button class="btn primary" data-ml="add">${ICON_PLUS}<span>채널 추가</span></button>
+        <button class="btn ghost ml-multiaudio" data-ml="multi-audio" title="여러 패인 소리 동시에 (보조 볼륨)">여러 소리</button>
+        <button class="btn ghost" data-ml="presets" title="채널 묶음 저장·불러오기">프리셋</button>
         <button class="btn ghost" data-ml="retry-all" title="모든 패인 다시 연결">모두 다시 연결</button>
         <button class="btn ghost" data-ml="stop-all">모두 닫기</button>
       </header>
@@ -76,6 +79,7 @@ export class MultiLivePage {
             <strong>여러 방송을 한 화면에서 보세요</strong>
             <span>채널을 추가하면 최대 4개까지 나란히 재생합니다. 패인을 누르면 소리와 채팅이 그 방송으로 바뀝니다.</span>
             <button class="btn primary lg" data-ml="add">${ICON_PLUS}<span>채널 추가</span></button>
+            <button class="btn lg ml-restore" data-ml="restore" hidden>지난 구성 다시 열기</button>
           </div>
         </div>
         <aside class="chat ml-chat">
@@ -121,6 +125,20 @@ export class MultiLivePage {
     this.bindFocusControls();
     installChatSplitter({ container: this.root.querySelector('.ml-body'), chat: this.root.querySelector('.ml-chat'), key: 'multilive' });
     this.alerts = new StreamAlerts(this.stage);
+    this.single = null; // 한 채널 크게(MUL-11) — 슬롯
+    this.gridDividers = this.buildGridDividers();
+    this.bindDrag();
+    this.stage.addEventListener('dblclick', (e) => {
+      const pane = e.target.closest('.ml-pane');
+      if (pane) this.toggleSingle(Number(pane.dataset.slot));
+    });
+    document.addEventListener('keydown', (e) => {
+      if (this.root.hidden || !(e.metaKey && e.ctrlKey)) return;
+      const map = { '1': 'grid', '2': 'focus', '3': 'custom' };
+      if (map[e.key]) { e.preventDefault(); this.run(api.multiLiveSetLayout(map[e.key])); }
+    });
+    this.proposed = new Set();
+    setInterval(() => this.proposeTick(), 120000);
     this.chat = new ChatPanel(this.root.querySelector('.ml-chat'), { isLoggedIn, onHighlight: (m) => this.alerts.push(m) });
 
     this.state = { sessions: [], selectedId: null, canAdd: true, maxSessions: 4, layout: 'grid' };
@@ -143,6 +161,12 @@ export class MultiLivePage {
     } catch (e) {
       toast(e.message);
     }
+    try {
+      const ml = (await api.settingsGet()).multiLive || {};
+      this.root.querySelector('.ml-body').classList.toggle('chat-overlay', Boolean(ml.chatOverlayInGrid));
+      this.root.style.setProperty('--ml-chat-opacity', String(ml.chatOverlayOpacity ?? 0.5));
+      this.root.style.setProperty('--ml-chat-font', `${ml.chatOverlayFontSize ?? 12}px`);
+    } catch { /* 앱 밖 */ }
     this.reportStageSize();
   }
 
@@ -171,7 +195,9 @@ export class MultiLivePage {
       <div class="ml-pane-top">
         <span class="ml-pane-sound" title="소리 나는 패인">${ICON_SOUND}</span>
         <span class="ml-pane-cap"></span>
+        <button class="ml-pane-btn ml-drag" draggable="true" title="끌어서 자리 바꾸기">⠿</button>
         <div class="grow"></div>
+        <button class="ml-pane-btn" data-ml="single" title="이 채널만 크게 (더블클릭)">⤢</button>
         <button class="ml-pane-btn" data-ml="audio" title="이 패인 소리 켜기 (선택)">${ICON_SOUND}</button>
         <button class="ml-pane-btn" data-ml="retry" title="다시 연결">↻</button>
         <button class="ml-pane-btn" data-ml="info" title="채널 정보">ⓘ</button>
@@ -218,9 +244,17 @@ export class MultiLivePage {
     for (const b of this.root.querySelectorAll('[data-ml="add"]')) b.disabled = !state.canAdd;
     this.root.querySelector('[data-ml="stop-all"]').hidden = n === 0;
     this.root.querySelector('[data-ml="retry-all"]').hidden = n === 0;
+    this.root.querySelector('[data-ml="multi-audio"]').classList.toggle('primary', Boolean(state.multiAudio));
+    // 지난 구성 기억(MUL-15) — 세션이 있으면 저장, 비면 다시 열기 버튼
+    const savedIds = this.savedSessionIds();
+    if (n > 0) this.saveSessionIds(sessions.map((x) => x.channelId));
+    const restore = this.root.querySelector('[data-ml="restore"]');
+    restore.hidden = n > 0 || !savedIds.length;
+    restore.textContent = `지난 구성 다시 열기 (${savedIds.length}개)`;
+    if (this.single != null && !sessions.some((x) => x.slot === this.single)) this.single = null;
 
     const focus = state.layout === 'focus' && n > 1;
-    this.stage.className = `ml-stage ml-n${n <= 4 ? n : (n <= 9 ? 'many' : 'lots')} ${focus ? `ml-focus dir-${state.focusDirection}` : ''}`;
+    this.stage.className = `ml-stage ml-n${n <= 4 ? n : (n <= 9 ? 'many' : 'lots')} ${focus ? `ml-focus dir-${state.focusDirection}` : ''} ${state.layout === 'custom' && n > 1 && n <= 4 ? 'ml-custom' : ''} ${this.single != null ? 'ml-single' : ''}`;
     this.empty.hidden = n > 0;
     this.focusControls.hidden = state.layout !== 'focus';
     for (const b of this.root.querySelectorAll('[data-direction]')) {
@@ -241,6 +275,8 @@ export class MultiLivePage {
       this.renderPane(pane, s, order.indexOf(s.id), s.id === state.selectedId);
     }
     this.applyFocusGrid(focus, order);
+    this.applyCustomGrid(state.layout === 'custom' && n > 1 && n <= 4 && this.single == null, n);
+    for (const [slot, pane] of this.panes) pane.el.classList.toggle('ml-single-target', this.single === slot);
     for (const [slot, pane] of this.panes) {
       if (!live.has(slot)) {
         pane.el.hidden = true;
@@ -353,6 +389,150 @@ export class MultiLivePage {
     this.reportStageSize();
   }
 
+  // ── 사용자 배치 그리드 (MUL-06) ──────────────
+  buildGridDividers() {
+    const mk = (cls) => { const d = document.createElement('div'); d.className = `ml-divider ${cls} ml-grid-div`; d.hidden = true; this.stage.append(d); return d; };
+    const v = mk('vertical');
+    const h = mk('horizontal');
+    for (const [d, axis] of [[v, 'h'], [h, 'v']]) {
+      d.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        d.setPointerCapture(e.pointerId);
+        this.stage.classList.add('resizing');
+        const move = (ev) => {
+          const r = this.stage.getBoundingClientRect();
+          const frac = axis === 'h' ? (ev.clientX - r.left) / r.width : (ev.clientY - r.top) / r.height;
+          this.localGrid = { ...(this.localGrid || { h: this.state.horizontalRatio, v: this.state.verticalRatio }), [axis]: Math.min(0.8, Math.max(0.2, frac)) };
+          this.applyCustomGrid(true, (this.state.sessions || []).length);
+        };
+        const up = () => {
+          d.removeEventListener('pointermove', move);
+          this.stage.classList.remove('resizing');
+          const g = this.localGrid;
+          this.localGrid = null;
+          if (g) this.run(api.multiLiveSetRatios(g.h, g.v));
+        };
+        d.addEventListener('pointermove', move);
+        d.addEventListener('pointerup', up, { once: true });
+      });
+      d.addEventListener('dblclick', () => this.run(api.multiLiveSetRatios(0.5, 0.5)));
+    }
+    return { v, h };
+  }
+
+  applyCustomGrid(on, n) {
+    const { v, h } = this.gridDividers;
+    if (!on) {
+      if (!this.stage.classList.contains('ml-focus')) { this.stage.style.gridTemplateColumns = ''; this.stage.style.gridTemplateRows = ''; }
+      v.hidden = true; h.hidden = true;
+      return;
+    }
+    const st = this.state;
+    const hr = (this.localGrid && this.localGrid.h) ?? st.horizontalRatio ?? 0.5;
+    const vr = (this.localGrid && this.localGrid.v) ?? st.verticalRatio ?? 0.5;
+    this.stage.style.gridTemplateColumns = `${hr.toFixed(3)}fr ${(1 - hr).toFixed(3)}fr`;
+    this.stage.style.gridTemplateRows = n >= 3 ? `${vr.toFixed(3)}fr ${(1 - vr).toFixed(3)}fr` : '1fr';
+    v.hidden = false;
+    v.style.left = `calc(${(hr * 100).toFixed(2)}% - 4px)`;
+    h.hidden = n < 3;
+    h.style.top = `calc(${(vr * 100).toFixed(2)}% - 4px)`;
+  }
+
+  // ── 끌어서 자리 바꾸기 (MUL-07) ───────────────
+  bindDrag() {
+    this.stage.addEventListener('dragstart', (e) => {
+      const pane = e.target.closest('.ml-pane');
+      if (!pane) return;
+      this.dragId = this.panes.get(Number(pane.dataset.slot))?.sessionId;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', this.dragId || '');
+      pane.classList.add('dragging');
+    });
+    this.stage.addEventListener('dragend', () => { for (const p of this.stage.querySelectorAll('.dragging, .drop-target')) p.classList.remove('dragging', 'drop-target'); });
+    this.stage.addEventListener('dragover', (e) => {
+      const pane = e.target.closest('.ml-pane');
+      if (!pane || !this.dragId) return;
+      e.preventDefault();
+      for (const p of this.stage.querySelectorAll('.drop-target')) if (p !== pane) p.classList.remove('drop-target');
+      pane.classList.add('drop-target');
+    });
+    this.stage.addEventListener('drop', (e) => {
+      const pane = e.target.closest('.ml-pane');
+      e.preventDefault();
+      const target = pane && this.panes.get(Number(pane.dataset.slot))?.sessionId;
+      const dragged = this.dragId;
+      this.dragId = null;
+      if (target && dragged && target !== dragged) this.run(api.multiLiveReorder(dragged, target));
+    });
+  }
+
+  // ── 한 채널 크게 (MUL-11) ─────────────────────
+  toggleSingle(slot) {
+    this.single = this.single === slot ? null : slot;
+    const s = (this.state.sessions || []).find((x) => x.slot === slot);
+    if (this.single != null && s && s.id !== this.state.selectedId) this.run(api.multiLiveSelect(s.id));
+    else this.render(this.state);
+    this.reportStageSize();
+  }
+
+  // ── 지난 구성 (MUL-15) ───────────────────────
+  savedSessionIds() {
+    try { return JSON.parse(localStorage.getItem('cview.ml.lastSessions') || '[]'); } catch { return []; }
+  }
+
+  saveSessionIds(ids) {
+    try { localStorage.setItem('cview.ml.lastSessions', JSON.stringify(ids)); } catch { /* 무시 */ }
+  }
+
+  async restoreSessions(ids) {
+    for (const id of ids) {
+      try { this.render(await api.multiLiveAdd(id)); } catch (e) { toast(e.message); }
+    }
+  }
+
+  // ── 채널 프리셋 (MUL-14) ─────────────────────
+  async showPresets() {
+    let presets = [];
+    try { presets = (await api.presetList()).filter((p) => p.kind === 'live'); } catch (e) { toast(e.message); }
+    const ids = (this.state.sessions || []).map((s) => s.channelId);
+    const scrim = document.createElement('div');
+    scrim.className = 'sheet-scrim';
+    scrim.innerHTML = `<form class="sheet" role="dialog" aria-label="멀티라이브 프리셋">
+      <h2>멀티라이브 프리셋</h2>
+      <div class="preset-list">${presets.map((p) => `<div class="preset-row" data-preset-id="${esc(p.id)}"><strong>${esc(p.name)}</strong><span class="muted">채널 ${p.channels.length}개</span><div class="grow"></div><button type="button" class="btn" data-preset-load>불러오기</button><button type="button" class="icon-btn" data-preset-del title="삭제">✕</button></div>`).join('') || '<p class="muted">저장한 프리셋이 없습니다</p>'}</div>
+      ${ids.length ? `<div class="word-form"><input type="text" maxlength="30" placeholder="지금 구성(${ids.length}개 채널) 이름"><button class="btn primary">저장</button></div>` : ''}
+      <div class="sheet-actions"><button type="button" class="btn" data-preset-close>닫기</button></div></form>`;
+    document.body.append(scrim);
+    const close = () => scrim.remove();
+    scrim.addEventListener('click', async (e) => {
+      if (e.target === scrim || e.target.closest('[data-preset-close]')) { close(); return; }
+      const row = e.target.closest('[data-preset-id]');
+      if (!row) return;
+      const p = presets.find((x) => x.id === row.dataset.presetId);
+      if (e.target.closest('[data-preset-del]')) { try { await api.presetDelete(p.id); row.remove(); } catch (er) { toast(er.message); } }
+      if (e.target.closest('[data-preset-load]')) { close(); toast(`${p.name} 불러오는 중…`, 1500); await this.restoreSessions(p.channels); }
+    });
+    scrim.querySelector('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = scrim.querySelector('.word-form input')?.value.trim();
+      if (!name) return;
+      try { await api.presetSave(name, ids); toast(`프리셋 "${name}" 저장`, 1500); close(); } catch (er) { toast(er.message); }
+    });
+  }
+
+  // ── 제안 토스트 (MUL-13) — 방송 중 팔로잉 중 아직 없는 인기 채널을 하나씩 권한다 ──
+  async proposeTick() {
+    const sessions = (this.state && this.state.sessions) || [];
+    if (this.root.hidden || !sessions.length || !this.state.canAdd) return;
+    let lives = [];
+    try { lives = await api.followingLives(false); } catch { return; }
+    const have = new Set(sessions.map((s) => s.channelId));
+    const pick = lives.filter((l) => !have.has(l.channelId) && !this.proposed.has(l.channelId)).sort((a, b) => b.viewerCount - a.viewerCount)[0];
+    if (!pick) return;
+    this.proposed.add(pick.channelId);
+    toast(`${pick.channelName} 님이 방송 중이에요 — 멀티라이브에 추가할까요?`, 8000, { label: '추가', run: () => this.add(pick.channelId) });
+  }
+
   /** 채팅은 선택 패인의 채널을 따라간다. */
   syncChat(session) {
     const key = session && session.chatChannelId ? `${session.id}:${session.chatChannelId}` : null;
@@ -395,7 +575,15 @@ export class MultiLivePage {
       case 'stop-all': this.run(api.multiLiveStopAll()); break;
       case 'select': if (sessionId && sessionId !== this.state.selectedId) this.run(api.multiLiveSelect(sessionId)); break;
       case 'remove': if (sessionId) this.run(api.multiLiveRemove(sessionId)); break;
-      case 'audio': if (sessionId) this.run(api.multiLiveSelect(sessionId)); break;
+      case 'audio':
+        if (!sessionId) break;
+        if (this.state.multiAudio) this.run(api.multiLiveAudio(sessionId, false));
+        else this.run(api.multiLiveSelect(sessionId));
+        break;
+      case 'single': if (pane) this.toggleSingle(Number(pane.dataset.slot)); break;
+      case 'multi-audio': this.run(api.multiLiveAudio(null, true)); break;
+      case 'presets': this.showPresets(); break;
+      case 'restore': this.restoreSessions(this.savedSessionIds()); break;
       case 'retry': if (sessionId) { toast('다시 연결합니다', 1200); this.run(api.multiLiveRetry(sessionId)); } break;
       case 'retry-all': toast('모든 패인을 다시 연결합니다', 1500); this.run(api.multiLiveRetry(null)); break;
       case 'info': {

@@ -59,6 +59,12 @@ export const api = {
   multiLiveStopAll: () => invoke('multilive_stop_all'),
   multiLiveSetFocusLayout: (direction, ratio) => invoke('multilive_set_focus_layout', { direction, ratio }),
   multiLiveSetAudioSuspended: (suspended) => invoke('multilive_set_audio_suspended', { suspended }),
+  multiLiveReorder: (draggedId, targetId) => invoke('multilive_reorder', { draggedId, targetId }),
+  multiLiveAudio: (sessionId, toggleMode) => invoke('multilive_audio', { sessionId, toggleMode }),
+  multiLiveSetRatios: (horizontal, vertical) => invoke('multilive_set_ratios', { horizontal, vertical }),
+  presetList: () => invoke('preset_list'),
+  presetSave: (name, channels) => invoke('preset_save', { name, channels }),
+  presetDelete: (id) => invoke('preset_delete', { id }),
   multiLivePlayerMessage: (slot, message) => invoke('multilive_player_message', { slot, message }),
 
   vodPlay: (videoNo) => invoke('vod_play', { videoNo }),
