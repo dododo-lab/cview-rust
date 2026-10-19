@@ -45,3 +45,49 @@ UI 를 Tauri 로 잡은 이유: 라이브 재생 엔진이 이미 WebView 안의
 - SwiftUI 디자인 시스템(`DesignSystem/`, Liquid Glass), 성능 계측(signpost, RenderBudget) — UI 단계에서 웹 기술로 재설계.
 - `AVPlayerEngine`(VOD) — 단계 7 에서 WebView `<video>` 로 대체.
 - 위젯, App Intents, PiP, 공증(notarization) 스크립트.
+
+## 진행 현황 (2026-10, `rust-final` 브랜치)
+
+### 단계별 상태
+
+| 단계 | 상태 | 비고 |
+|---|---|---|
+| 0 골격 | 완료 | `cargo fmt --check` · `clippy -D warnings` · `cargo test --workspace` 통과 |
+| 1 `cview-core` | 완료 | |
+| 2 `cview-networking` | 완료 | |
+| 3 `cview-chat` | 완료 | |
+| 4 `cview-auth` | 완료 | 인증서 피닝 제외 |
+| 5 `cview-persistence` | 완료 | |
+| 6 `cview-player` | 완료 | 코디네이터·로컬 프록시·저지연 PID·재연결 |
+| 6.5 `cview-app-core` | 완료 | AppState, 서비스, 뷰모델(홈·팔로잉·인기·검색·채널 상세·클립·채팅·멀티라이브·플레이어·VOD 탐색/재생/보관함) |
+| 7 `cview-app` | 1차 완료 | Tauri 셸이 app-core 뷰모델을 사용: 재생 `PlayerViewModel`(저지연 제어 다시 켬), 채팅 `ChatViewModel`, 팔로잉 `FollowingStore`, 인기 `AllBroadcastsViewModel`, 검색 `SearchViewModel`. 화면은 홈/라이브/채팅/설정까지 |
+
+### 크레이트별 테스트 수
+
+| 크레이트 | 테스트 |
+|---|---|
+| `cview-core` | 369 |
+| `cview-networking` | 71 |
+| `cview-chat` | 156 |
+| `cview-auth` | 110 |
+| `cview-persistence` | 253 |
+| `cview-player` | 283 |
+| `cview-app-core` | 501 (lib 252 + 통합 249) |
+| `cview-app` | 27 |
+| **합계** | **1770** |
+
+### 일부러 이식하지 않은 것 / 남은 일
+
+- 플랫폼 확장: PiP, 위젯, App Intents, 공증 스크립트.
+- 인증서 피닝, 미디어 다운로더(VOD 저장), 저장/열기 패널, 토스트.
+- 로컬 타임시프트 녹화기 팩토리 — 설정값은 계산하지만 코디네이터에 녹화기를 등록하지 않는다(서버 타임머신만 동작).
+- VOD 재생 엔진 — `VodPlayerEngine` 트레잇만 있고 AVPlayer 대체(WebView `<video>`) 구현과 셸 화면은 없다.
+- 셸 화면: VOD·클립·채널 상세·멀티라이브·이모티콘 선택기·화질 선택기 UI 는 아직 없다(뷰모델은 이식됨).
+- WebView 엔진의 이퀄라이저·비디오 보정·녹화·스크린샷 명령 연결, 매치웹 v2 시크 토큰 응답(기본 꺼짐).
+- `HomeViewModel` 레거시 캐시 마이그레이션, `LiveCatalogStore` 영속화(+Persistence/+Checkpoint/promote 는 no-op), `WatchHeartbeatCenter`, 가림(occlusion) 상한 타이머.
+- `PlayerViewModel` 의 `MultiLivePlayer` 구현(선택 사항), VOD 탐색 동기화 패스는 합류(join) 대신 직렬화로 단순화.
+- 셸은 app-core `AppState` 의 인증 경계만 쓴다 — 워크스페이스 복원·저장소 복구 UI 는 미연결.
+
+### 검증 범위
+
+앱은 CHZZK 에 접근할 수 없는 샌드박스에서 `xvfb-run` 으로 헤드리스 기동만 확인했다(패닉 없음, 네트워크 오류는 예상대로 표시). 실제 로그인·라이브 재생(저지연 제어 포함)·채팅 송수신은 macOS 실기기에서 반드시 확인해야 한다.
