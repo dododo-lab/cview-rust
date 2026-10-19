@@ -50,6 +50,9 @@ async fn purge_removes_history_and_keeps_data() {
         s.save_setting(&format!("k{i}"), &i).unwrap();
     }
     assert!(s.history_transaction_count() >= 12);
+    // 이력은 cutoff "이전" 만 지운다. 마지막 커밋과 같은 시각(macOS 시계 해상도)이면 남으므로
+    // cutoff 를 마지막 커밋보다 확실히 뒤로 둔다.
+    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     let windows = s.purge_change_history(now(), 1.0).await;
     assert!(windows.is_some());
     assert_eq!(s.history_transaction_count(), 0);
