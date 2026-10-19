@@ -23,9 +23,10 @@ use cview_app_core::viewmodels::multi_live::deps::{
     MultiLiveSessionBackend, MultiLiveSessionFactory, MultiLiveSettingsSource,
     MultiLiveStreamRequest, SharedHlsEngine, StreamEndedProbe,
 };
+use cview_app_core::viewmodels::multi_live::layout::LayoutPrefsStore;
 use cview_app_core::viewmodels::multi_live::{
-    MultiLiveAddSessionResult, MultiLiveDeps, MultiLiveGridLayoutMode, MultiLiveLoadState,
-    MultiLiveManager,
+    MultiLiveAddSessionResult, MultiLiveDeps, MultiLiveFocusDirection, MultiLiveGridLayoutMode,
+    MultiLiveLayoutRatios, MultiLiveLoadState, MultiLiveManager,
 };
 use cview_app_core::viewmodels::player::{PlayerCallbacks, PlayerViewModel, StartStreamRequest};
 use cview_auth::CookieManager;
@@ -692,6 +693,52 @@ impl MultiLiveSettingsSource for ShellSettings {
     }
 }
 
+// MARK: - 레이아웃 저장
+
+/// 마지막 레이아웃(모드·비율·포커스 방향)을 데이터 폴더의 JSON 파일로 둔다
+/// (Swift UserDefaults `multiLiveLayoutPrefs`).
+pub struct FileLayoutPrefsStore {
+    dir: std::path::PathBuf,
+}
+
+impl FileLayoutPrefsStore {
+    pub fn new(dir: impl Into<std::path::PathBuf>) -> Self {
+        Self { dir: dir.into() }
+    }
+
+    fn path(&self, key: &str) -> std::path::PathBuf {
+        let safe: String = key
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+            .collect();
+        self.dir.join(format!("{safe}.json"))
+    }
+}
+
+impl LayoutPrefsStore for FileLayoutPrefsStore {
+    fn get(&self, key: &str) -> Option<Vec<u8>> {
+        std::fs::read(self.path(key)).ok()
+    }
+    fn set(&self, key: &str, data: Vec<u8>) {
+        if let Err(e) = std::fs::write(self.path(key), data) {
+            tracing::warn!("멀티라이브 레이아웃 저장 실패: {e}");
+        }
+    }
+}
+
+/// 포커스 레이아웃 변경 요청을 정리한다 — 방향은 알려진 값만, 비율은 허용 범위로 자른다.
+pub fn focus_layout_update(
+    direction: Option<&str>,
+    ratio: Option<f64>,
+) -> (Option<MultiLiveFocusDirection>, Option<f64>) {
+    (
+        direction.and_then(MultiLiveFocusDirection::from_raw),
+        ratio
+            .filter(|r| r.is_finite())
+            .map(MultiLiveLayoutRatios::clamped_focus),
+    )
+}
+
 // MARK: - 셸
 
 /// 멀티라이브 셸 상태 — Tauri 관리 상태.
@@ -707,6 +754,7 @@ impl MultiLiveShell {
         cookies: Arc<CookieManager>,
         settings: SettingsStore,
         sink: SlotCommandSink,
+        data_dir: &std::path::Path,
     ) -> Self {
         let pool = Arc::new(PanePool::new(sink));
         let registry = Arc::new(PaneRegistry::default());
@@ -718,7 +766,9 @@ impl MultiLiveShell {
             settings: settings.clone(),
             auth_key_channels: auth_key_channels.clone(),
         });
-        let manager = MultiLiveManager::new(MultiLiveDeps::new(pool.clone(), factory));
+        let mut deps = MultiLiveDeps::new(pool.clone(), factory);
+        deps.layout_prefs = Arc::new(FileLayoutPrefsStore::new(data_dir));
+        let manager = MultiLiveManager::new(deps);
         let backend = Arc::new(ShellBackend {
             api,
             settings: settings.clone(),
@@ -790,6 +840,8 @@ impl MultiLiveShell {
             can_add: st.can_add_session(),
             max_sessions: st.effective_max_sessions(),
             layout: layout_name(st.grid_layout_mode()).to_string(),
+            focus_direction: st.focus_direction().raw_value().to_string(),
+            focus_ratio: st.layout_ratios().focus_ratio,
         }
     }
 }
@@ -880,6 +932,10 @@ pub struct MultiLiveStateDto {
     pub can_add: bool,
     pub max_sessions: usize,
     pub layout: String,
+    /// 포커스 메인 위치 — `left` / `right` / `top` / `bottom`.
+    pub focus_direction: String,
+    /// 포커스 메인 패인 비율(0.45~0.85).
+    pub focus_ratio: f64,
 }
 
 /// `multilive://command` 페이로드.
@@ -945,6 +1001,36 @@ mod tests {
         assert!(!engine.is_loading_suspended());
         pool.release(engine.clone()).await;
         assert_eq!(engine.max_adaptive_height(), 0, "풀로 돌아가면 상한을 푼다");
+    }
+
+    #[test]
+    fn focus_layout_update_validates_and_clamps() {
+        assert_eq!(
+            focus_layout_update(Some("top"), Some(0.99)),
+            (
+                Some(MultiLiveFocusDirection::Top),
+                Some(MultiLiveLayoutRatios::FOCUS_MAX)
+            )
+        );
+        assert_eq!(
+            focus_layout_update(Some("sideways"), Some(0.1)),
+            (None, Some(MultiLiveLayoutRatios::FOCUS_MIN))
+        );
+        assert_eq!(focus_layout_update(None, Some(f64::NAN)), (None, None));
+    }
+
+    #[test]
+    fn file_layout_store_round_trips() {
+        let dir = std::env::temp_dir().join(format!("cview-ml-prefs-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let store = FileLayoutPrefsStore::new(&dir);
+        assert!(store.get("multiLiveLayoutPrefs").is_none());
+        store.set("multiLiveLayoutPrefs", b"{}".to_vec());
+        assert_eq!(
+            store.get("multiLiveLayoutPrefs").as_deref(),
+            Some(&b"{}"[..])
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

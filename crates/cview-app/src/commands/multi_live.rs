@@ -11,8 +11,10 @@ use uuid::Uuid;
 
 use super::player::now_seconds;
 use super::{CmdResult, CommandError};
-use crate::multi_live::{add_result_message, layout_from_name, MultiLiveShell, MultiLiveStateDto};
-use crate::state::AppServices;
+use crate::multi_live::{
+    add_result_message, focus_layout_update, layout_from_name, MultiLiveShell, MultiLiveStateDto,
+};
+use cview_app_core::viewmodels::multi_live::MultiLiveLayoutRatios;
 
 fn parse_id(id: &str) -> CmdResult<Uuid> {
     Uuid::parse_str(id).map_err(|_| CommandError("세션 ID 가 올바르지 않습니다".into()))
@@ -23,15 +25,13 @@ pub async fn multilive_state(shell: State<'_, MultiLiveShell>) -> CmdResult<Mult
     Ok(shell.state_dto())
 }
 
-/// 채널을 패인으로 추가한다. 이미 있으면 그 패인을 선택한다.
+/// 채널을 패인으로 추가한다. 이미 있으면 그 패인을 선택한다. 단독 시청 화면은 멈추지 않는다 —
+/// 소리는 화면이 `multilive_set_audio_suspended` 로 한쪽만 내게 한다.
 #[tauri::command]
 pub async fn multilive_add(
     shell: State<'_, MultiLiveShell>,
-    services: State<'_, AppServices>,
     channel_id: String,
 ) -> CmdResult<MultiLiveStateDto> {
-    // 단일 시청 화면과 함께 소리가 겹치지 않게 멈춘다.
-    services.stop_player().await;
     let result = shell
         .manager
         .add_session(&channel_id, AddSessionOptions::default(), None)
@@ -72,7 +72,11 @@ pub async fn multilive_set_layout(
 ) -> CmdResult<MultiLiveStateDto> {
     let mode = layout_from_name(&layout)
         .ok_or_else(|| CommandError(format!("알 수 없는 레이아웃: {layout}")))?;
-    shell.manager.lock().apply_grid_layout_mode(mode);
+    {
+        let mut st = shell.manager.lock();
+        st.apply_grid_layout_mode(mode);
+        st.save_state();
+    }
     Ok(shell.state_dto())
 }
 
@@ -111,6 +115,46 @@ pub async fn multilive_player_message(
     };
     if let Some(player) = shell.registry.player_for_slot(slot) {
         player.handle_page_message(&parsed).await;
+    }
+    Ok(())
+}
+
+/// 포커스 레이아웃 — 메인 위치(`left`/`right`/`top`/`bottom`)와 메인 비율. 바꾼 뒤 저장한다.
+#[tauri::command]
+pub async fn multilive_set_focus_layout(
+    shell: State<'_, MultiLiveShell>,
+    direction: Option<String>,
+    ratio: Option<f64>,
+) -> CmdResult<MultiLiveStateDto> {
+    let (direction, ratio) = focus_layout_update(direction.as_deref(), ratio);
+    {
+        let mut st = shell.manager.lock();
+        if let Some(d) = direction {
+            st.set_focus_direction(d);
+        }
+        if let Some(r) = ratio {
+            let mut ratios: MultiLiveLayoutRatios = st.layout_ratios();
+            ratios.focus_ratio = r;
+            st.set_layout_ratios(ratios);
+        }
+        st.save_state();
+    }
+    Ok(shell.state_dto())
+}
+
+/// 단독 시청 화면이 재생하는 동안 멀티라이브 소리를 끈다(`true`). `false` 면 오디오 패인을 되살린다.
+#[tauri::command]
+pub async fn multilive_set_audio_suspended(
+    shell: State<'_, MultiLiveShell>,
+    suspended: bool,
+) -> CmdResult<()> {
+    let mut st = shell.manager.lock();
+    if suspended {
+        for s in st.sessions().to_vec() {
+            s.set_muted(true);
+        }
+    } else if let Some(id) = st.audio_session_id().or(st.selected_session_id()) {
+        st.route_audio(id);
     }
     Ok(())
 }

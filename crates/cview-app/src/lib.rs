@@ -129,6 +129,7 @@ pub fn run() {
                         tracing::warn!("멀티라이브 명령 전달 실패: {e}");
                     }
                 }),
+                &data_dir,
             );
             commands::settings::apply_window_theme(&handle, services.settings.appearance().theme);
             app.manage(services);
@@ -158,6 +159,8 @@ pub fn run() {
             commands::multi_live::multilive_stage_size,
             commands::multi_live::multilive_stop_all,
             commands::multi_live::multilive_player_message,
+            commands::multi_live::multilive_set_focus_layout,
+            commands::multi_live::multilive_set_audio_suspended,
             commands::chat::chat_connect,
             commands::chat::chat_donation_ranking,
             commands::settings::appearance_set_theme,
