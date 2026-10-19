@@ -8,3 +8,5 @@ pub mod menu_transition_gate;
 pub mod multi_chat_preferences;
 pub mod notification_service;
 pub mod support;
+pub mod vod_playback_progress;
+pub mod vod_sync_state;
