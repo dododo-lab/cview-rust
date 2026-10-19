@@ -59,6 +59,26 @@ impl Clock for ManualClock {
     }
 }
 
+/// tokio 단조 시계(초) — Swift `ProcessInfo.systemUptime` 대체. `tokio::time::pause` 를 따른다.
+#[derive(Debug, Clone, Copy)]
+pub struct TokioMonotonicClock {
+    origin: tokio::time::Instant,
+}
+
+impl TokioMonotonicClock {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            origin: tokio::time::Instant::now(),
+        })
+    }
+}
+
+impl Clock for TokioMonotonicClock {
+    fn now(&self) -> f64 {
+        self.origin.elapsed().as_secs_f64()
+    }
+}
+
 /// 공유 시계 핸들.
 pub type SharedClock = Arc<dyn Clock>;
 
