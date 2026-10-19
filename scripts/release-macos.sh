@@ -9,7 +9,8 @@
 #     APPLE_API_ISSUER · APPLE_API_KEY · APPLE_API_KEY_PATH   (App Store Connect API 키, 권장)
 #     APPLE_ID · APPLE_PASSWORD(앱 암호) · APPLE_TEAM_ID
 #
-# 사용: scripts/release-macos.sh [--dmg]
+# 사용: scripts/release-macos.sh [--dmg]   (DMG 는 서명해 dist/CView_<버전>_arm64.dmg 로 복사)
+#   공증: CVIEW_NOTARIZE_PROFILE=cview-notarize scripts/release-macos.sh --dmg  (notarytool 프로파일이 있을 때)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -39,5 +40,19 @@ if true; then
   echo "── Gatekeeper 평가"
   spctl -a -vvv -t exec "$app" || echo "(공증 전이면 거부될 수 있습니다)"
   xcrun stapler validate "$app" || true
+fi
+dmg=$(ls -t target/release/bundle/dmg/*.dmg 2>/dev/null | head -1 || true)
+if [[ -n "$dmg" ]]; then
+  echo "── DMG 서명·복사"
+  codesign --force --timestamp --sign "$identity" "$dmg"
+  version=$(python3 -c 'import json;print(json.load(open("crates/cview-app/tauri.conf.json"))["version"])')
+  mkdir -p dist && cp "$dmg" "dist/CView_${version}_arm64.dmg"
+  if [[ -n "${CVIEW_NOTARIZE_PROFILE:-}" ]]; then
+    echo "── 공증(프로파일 $CVIEW_NOTARIZE_PROFILE)"
+    xcrun notarytool submit "dist/CView_${version}_arm64.dmg" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --wait
+    xcrun stapler staple "dist/CView_${version}_arm64.dmg"
+  fi
+  spctl -a -vv -t install "dist/CView_${version}_arm64.dmg" || echo "(공증 전이면 거부됩니다)"
+  shasum -a 256 "dist/CView_${version}_arm64.dmg"
 fi
 echo "완료: $app"
