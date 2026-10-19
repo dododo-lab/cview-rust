@@ -151,7 +151,6 @@
 .ml-pane.dragging { opacity: 0.5; }
 .ml-pane.drop-target { outline-color: var(--accent-blue) !important; }
 .ml-drag { cursor: grab; }
-.ml-multiaudio.primary { color: var(--on-primary); }
 .ml-restore[hidden] { display: none; }
 .ml-body.chat-overlay .chat-splitter, .ml-body.chat-overlay .chat-reopen { display: none !important; }
 .ml-body.chat-overlay .ml-chat {
@@ -169,3 +168,43 @@
   animation: ml-audio-glow 2.4s ease-in-out infinite; }
 @keyframes ml-audio-glow { 50% { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary) 35%, transparent), 0 0 6px transparent; } }
 :root[data-motion="reduced"] .ml-pane.audible::after { animation: none; }
+
+/* ══ 상단 바(툴바) — 한 줄 그룹, 높이 30px 통일, 옅은 구분선 ══ */
+.ml-header { flex-wrap: nowrap; min-width: 0; }
+.ml-header .page-title { white-space: nowrap; }
+.ml-count { flex: none; font-size: var(--fs-micro); font-weight: 600; color: var(--text-secondary); padding: 2px 8px; border-radius: 999px; background: var(--hover); font-variant-numeric: tabular-nums; }
+.ml-toolbar { display: flex; align-items: center; gap: 6px; min-width: 0; flex: none; }
+.ml-toolbar .ml-focus-controls { gap: 6px; }
+.ml-tb-sep { width: 1px; height: 18px; background: var(--border-subtle); margin: 0 4px; flex: none; }
+.ml-toolbar .segmented { height: 30px; padding: 2px; border-radius: 9px; align-items: stretch; }
+.ml-toolbar .segmented .seg { height: auto; padding: 0 11px; border-radius: 7px; font-size: var(--fs-footnote); display: inline-flex; align-items: center; justify-content: center; }
+.ml-toolbar .segmented .seg.icon { width: 28px; padding: 0; }
+.ml-toolbar .segmented .seg.icon svg { width: 14px; height: 14px; }
+.ml-toolbar .ml-ratio { height: 30px; padding: 0 10px; border-radius: 9px; background: var(--surface-elevated); border: 1px solid var(--border-subtle); gap: 8px; }
+.ml-toolbar .ml-ratio input { width: 84px; }
+.ml-toolbar .ml-ratio output { min-width: 30px; font-size: var(--fs-footnote); text-align: right; }
+.ml-tb-icon { width: 30px; height: 30px; flex: none; display: grid; place-items: center; border-radius: 9px; color: var(--text-secondary); border: 1px solid transparent; transition: background .15s var(--ease-out), color .15s var(--ease-out), border-color .15s var(--ease-out); }
+.ml-tb-icon svg { width: 16px; height: 16px; }
+.ml-tb-icon:hover { background: var(--hover); color: var(--text-primary); }
+.ml-tb-icon:active { background: var(--active); }
+.ml-tb-icon.active { color: var(--primary-text); background: var(--primary-dim); border-color: color-mix(in srgb, var(--primary) 45%, transparent); }
+.ml-tb-icon[aria-expanded="true"] { background: var(--active); color: var(--text-primary); }
+.ml-toolbar .ml-add { height: 30px; padding: 0 12px; border-radius: 9px; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-size: var(--fs-footnote); font-weight: 600; margin-left: 2px; }
+.ml-toolbar .ml-add svg { margin: 0; }
+.ml-toolbar .ml-add:disabled { opacity: 1; background: var(--surface-elevated); color: var(--text-tertiary); border-color: var(--border-subtle); box-shadow: none; cursor: not-allowed; }
+/* 더 보기 메뉴 */
+.ml-more { position: relative; flex: none; }
+.ml-more-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 60; min-width: 200px; padding: 5px; border-radius: var(--radius-md); background: var(--surface-popover); border: 1px solid var(--border); box-shadow: var(--shadow-lg); }
+.ml-more-menu[hidden] { display: none; }
+.ml-menu-item { width: 100%; display: flex; align-items: center; gap: 9px; padding: 7px 10px; border-radius: var(--radius-sm); font-size: var(--fs-footnote); color: var(--text-primary); text-align: left; }
+.ml-menu-item[hidden] { display: none; }
+.ml-menu-item svg { width: 15px; height: 15px; color: var(--text-secondary); flex: none; }
+.ml-menu-item:hover { background: var(--hover); }
+.ml-menu-item.danger { color: var(--error); }
+.ml-menu-item.danger svg { color: var(--error); }
+.ml-menu-item.danger:hover { background: color-mix(in srgb, var(--error) 12%, transparent); }
+.ml-menu-sep { height: 1px; margin: 4px 6px; background: var(--border-subtle); }
+/* 좁은 창 — 글자를 줄이고 덜 중요한 것부터 접는다 */
+@media (max-width: 1180px) { .ml-toolbar .ml-add span { display: none; } .ml-toolbar .ml-add { width: 30px; padding: 0; justify-content: center; } }
+@media (max-width: 1040px) { .ml-toolbar .ml-ratio output { display: none; } .ml-toolbar .ml-ratio input { width: 64px; } }
+@media (max-width: 940px) { .ml-toolbar .segmented .seg:not(.icon) { padding: 0 8px; } .ml-count { display: none; } }
