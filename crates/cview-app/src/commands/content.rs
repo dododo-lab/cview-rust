@@ -612,6 +612,25 @@ pub async fn open_path(path: String) -> CmdResult<()> {
         .map_err(|e| CommandError(format!("열 수 없습니다: {e}")))
 }
 
+/// 시스템 알림 설정 열기(SYS-19 도움말 액션).
+#[tauri::command]
+pub async fn open_notification_settings() -> CmdResult<()> {
+    #[cfg(target_os = "macos")]
+    let result = std::process::Command::new("open")
+        .arg("x-apple.systempreferences:com.apple.Notifications-Settings.extension")
+        .spawn();
+    #[cfg(target_os = "windows")]
+    let result = std::process::Command::new("explorer")
+        .arg("ms-settings:notifications")
+        .spawn();
+    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+    let result: std::io::Result<std::process::Child> =
+        Err(std::io::Error::other("지원하지 않는 환경"));
+    result
+        .map(|_| ())
+        .map_err(|e| CommandError(format!("알림 설정을 열 수 없습니다: {e}")))
+}
+
 /// 외부 브라우저로 링크를 연다(치지직에서 열기 등). http(s) 만 허용한다.
 #[tauri::command]
 pub async fn open_external(url: String) -> CmdResult<()> {

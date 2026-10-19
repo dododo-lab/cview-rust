@@ -100,6 +100,7 @@ export const api = {
   saveFile: (kind, fileName, dataBase64, text) => invoke('save_file', { kind, fileName, dataBase64, text }),
   revealPath: (path) => invoke('reveal_path', { path }),
   openPath: (path) => invoke('open_path', { path }),
+  openNotificationSettings: () => invoke('open_notification_settings'),
   downloadList: () => invoke('download_list'),
   downloadStart: (kind, target, title, channelName) => invoke('download_start', { kind, target, title, channelName }),
   downloadCancel: (id) => invoke('download_cancel', { id }),

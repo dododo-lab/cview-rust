@@ -262,7 +262,7 @@ export class SettingsPage {
       </section>
       <section class="settings-group" data-g="overview"><h3>앱</h3>
         <div class="setting" data-search="업데이트 확인 버전"><span class="setting-label">업데이트 확인<small class="update-status">GitHub 최신 릴리스와 비교합니다</small></span><button class="btn" data-sys="update">확인</button></div>
-        <div class="setting" data-search="알림 권한 시스템 알림"><span class="setting-label">시스템 알림 권한<small class="notify-status">방송 시작·멘션 알림에 필요합니다</small></span><button class="btn" data-sys="notify">권한 확인</button></div>
+        <div class="setting" data-search="알림 권한 시스템 알림"><span class="setting-label">시스템 알림 권한<small class="notify-status">방송 시작·멘션 알림에 필요합니다</small></span><span class="shortcut-edit"><button class="btn" data-sys="notify">권한 확인</button><button class="link-btn" data-sys="notify-settings">시스템 설정 열기</button></span></div>
         <div class="setting" data-search="딥 링크 cview url"><span class="setting-label">링크로 열기<small>cview://live?channelId=… · cview://search?q=… · cview://multilive</small></span></div>
       </section>`;
   }
@@ -459,6 +459,8 @@ export class SettingsPage {
           el.textContent = `새 버전 ${u.latest} 이 있습니다 (현재 ${u.current})`;
           if (u.url) toast(`새 버전 ${u.latest}`, 8000, { label: '릴리스 페이지', run: () => api.openExternal(u.url) });
         } else el.textContent = `최신 버전입니다 (${u.current})`;
+      } else if (b.dataset.sys === 'notify-settings') {
+        await api.openNotificationSettings();
       } else if (b.dataset.sys === 'notify') {
         let st = await api.notifyPermission(false);
         if (st.state !== 'granted') st = await api.notifyPermission(true);

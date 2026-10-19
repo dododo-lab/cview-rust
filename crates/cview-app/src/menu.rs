@@ -78,6 +78,7 @@ const HELP: &[Item] = &[
     ("welcome", "처음 안내 다시 보기", None),
     ("report-issue", "문제 보고…", None),
     ("open-logs", "데이터 폴더 열기", None),
+    ("notification-settings", "알림 설정 열기…", None),
 ];
 
 fn items<R: Runtime>(app: &AppHandle<R>, list: &[Item]) -> tauri::Result<Vec<MenuItem<R>>> {

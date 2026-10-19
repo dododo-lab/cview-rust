@@ -232,6 +232,7 @@ pub fn run() {
             system::notify_permission,
             system::update_check,
             commands::content::open_path,
+            commands::content::open_notification_settings,
             commands::download::download_start,
             commands::download::download_cancel,
             commands::download::download_clear,
