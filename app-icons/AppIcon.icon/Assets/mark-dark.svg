@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- 전경 레이어 (Icon Composer) —  CView 앱 아이콘 (어두운 버전) — 라이브 화면 겸 채팅 말풍선 안의 재생 표시 + LIVE 점. macOS 아이콘 격자(824 본체, 100 여백) -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#20242B"/><stop offset="1" stop-color="#0B0C10"/></linearGradient>
+    <linearGradient id="mark" x1="0.1" y1="0" x2="0.9" y2="1"><stop offset="0" stop-color="#00FFA3"/><stop offset="1" stop-color="#00C2FF"/></linearGradient>
+    <linearGradient id="hl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.18"/><stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
+  </defs>
+  <g transform="translate(512 512) scale(1.243) translate(-512 -512)">
+  <path fill="#000000" opacity="0.45" transform="translate(0 16)" d="M330 262 H694 A98 98 0 0 1 792 360 V598 A98 98 0 0 1 694 696 H452 L342 786 A14 14 0 0 1 320 774 L330 696 A98 98 0 0 1 232 598 V360 A98 98 0 0 1 330 262 Z"/>
+  <g>
+    <path fill="url(#mark)" d="M330 262 H694 A98 98 0 0 1 792 360 V598 A98 98 0 0 1 694 696 H452 L342 786 A14 14 0 0 1 320 774 L330 696 A98 98 0 0 1 232 598 V360 A98 98 0 0 1 330 262 Z"/>
+    <path fill="url(#hl)" d="M330 262 H694 A98 98 0 0 1 792 360 V598 A98 98 0 0 1 694 696 H452 L342 786 A14 14 0 0 1 320 774 L330 696 A98 98 0 0 1 232 598 V360 A98 98 0 0 1 330 262 Z"/>
+    <path fill="#0B0D10" stroke="#0B0D10" stroke-width="34" stroke-linejoin="round" d="M462 392 L462 566 L612 479 Z"/>
+  </g>
+  <circle cx="776" cy="258" r="64" fill="#0B0C10"/>
+  <circle cx="776" cy="258" r="44" fill="#FF3B30"/>
+  </g>
+</svg>
