@@ -39,17 +39,26 @@ export function loadWorkspace() {
   } catch { return null; }
 }
 
+/** 빠른 동작 선 아이콘 — 사이드바 메뉴 아이콘과 같은 굵기(1.9)·둥근 끝. */
+const line = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const QUICK_ICONS = {
+  random: line('<path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="M4 4l5 5"/>'),
+  multi: line('<rect x="3.5" y="4.5" width="7.5" height="6.5" rx="1.6"/><rect x="13" y="4.5" width="7.5" height="6.5" rx="1.6"/><rect x="3.5" y="13" width="7.5" height="6.5" rx="1.6"/><rect x="13" y="13" width="7.5" height="6.5" rx="1.6"/>'),
+  refresh: line('<path d="M20 11.5a8 8 0 1 0-2.4 5.9"/><path d="M20 4.5v7h-7"/>'),
+  clock: line('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
+};
+
 /** 사이드바 빠른 동작·오늘 시청 위젯. */
 export function installSidebarExtras({ onRandomLive, onQueueMulti, onRefresh }) {
   const nav = document.getElementById('nav');
   const box = document.createElement('div');
   box.className = 'side-extras';
   box.innerHTML = `
-    <div class="side-widget" title="이 기기에서 오늘 본 시간 · 연속 시청 일수 (통계에서 자세히)"><span class="side-widget-label nav-label">오늘 시청</span><strong class="side-widget-value">—</strong></div>
+    <button class="side-widget" title="이 기기에서 오늘 본 시간 · 연속 시청 일수 (통계에서 자세히)"><span class="side-widget-icon">${QUICK_ICONS.clock}</span><span class="side-widget-label nav-label">오늘 시청</span><strong class="side-widget-value">—</strong></button>
     <div class="side-quick">
-      <button class="side-quick-btn" data-q="random" title="팔로잉 중 아무 방송이나 보기">🎲<span class="nav-label">아무거나</span></button>
-      <button class="side-quick-btn" data-q="multi" title="팔로잉 상위 4개를 멀티라이브로">▦<span class="nav-label">멀티로</span></button>
-      <button class="side-quick-btn" data-q="refresh" title="새로 고침 (⌘R)">↻<span class="nav-label">새로 고침</span></button>
+      <button class="side-quick-btn" data-q="random" title="팔로잉 중 아무 방송이나 보기" aria-label="아무 방송이나 보기">${QUICK_ICONS.random}<span class="nav-label">아무거나</span></button>
+      <button class="side-quick-btn" data-q="multi" title="팔로잉 상위 4개를 멀티라이브로" aria-label="멀티라이브로 열기">${QUICK_ICONS.multi}<span class="nav-label">멀티로</span></button>
+      <button class="side-quick-btn" data-q="refresh" title="새로 고침 (⌘R)" aria-label="새로 고침">${QUICK_ICONS.refresh}<span class="nav-label">새로 고침</span></button>
     </div>`;
   nav.after(box);
   box.addEventListener('click', (e) => {

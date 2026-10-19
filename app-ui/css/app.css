@@ -186,8 +186,11 @@ html, body {
   overflow: hidden;
   user-select: none;
 }
-button, input, select { font: inherit; color: inherit; }
-button { cursor: pointer; }
+button, input, select, textarea { font: inherit; color: inherit; }
+/* 기본 버튼 초기화 — 어떤 버튼도 시스템 기본 모양(회색 면·볼록 테두리)으로 떨어지지 않게 */
+button { cursor: pointer; -webkit-appearance: none; appearance: none; border: 0; background: none; margin: 0; padding: 0; line-height: inherit; text-align: inherit; }
+button:disabled { cursor: default; opacity: 0.5; }
+button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 img { display: block; }
 a { color: var(--primary); }
 
@@ -1614,18 +1617,25 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .discover-item small { font-size: var(--fs-micro); color: var(--live); }
 .discovery { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
 .side-extras { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 4px; }
-.side-widget { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 8px 12px; border-radius: var(--radius-md); background: var(--surface-elevated); border: 1px solid var(--border-subtle); cursor: pointer; font-size: var(--fs-footnote); }
-.side-widget-label { color: var(--text-tertiary); }
-.side-widget-value { font-variant-numeric: tabular-nums; }
-.side-widget[data-streak]:not([data-streak=""])::after { content: attr(data-streak); font-size: var(--fs-micro); }
-.side-quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
-.side-quick-btn { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 2px; border-radius: var(--radius-sm); color: var(--text-secondary); font-size: 15px; }
-.side-quick-btn:hover { background: var(--hover); color: var(--text-primary); }
-.side-quick-btn .nav-label { font-size: 10px; }
+.side-widget { width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--radius-md); background: var(--surface-base); border: 1px solid var(--border-subtle); font-size: var(--fs-footnote); color: var(--text-secondary); transition: background .15s var(--ease-out), border-color .15s var(--ease-out); }
+.side-widget:hover { background: var(--hover); border-color: var(--border); color: var(--text-primary); }
+.side-widget-icon { display: grid; place-items: center; color: var(--primary-text); }
+.side-widget-icon svg { width: 15px; height: 15px; }
+.side-widget-label { flex: 1; text-align: left; color: var(--text-tertiary); }
+.side-widget-value { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text-primary); }
+.side-widget[data-streak]:not([data-streak=""])::after { content: attr(data-streak); font-size: var(--fs-micro); font-weight: 600; color: var(--accent-orange); }
+.side-quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.side-quick-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; height: 50px; border-radius: var(--radius-md); background: var(--surface-base); border: 1px solid var(--border-subtle); color: var(--text-secondary); transition: background .15s var(--ease-out), color .15s var(--ease-out), border-color .15s var(--ease-out), transform .12s var(--ease-out); }
+.side-quick-btn svg { width: 17px; height: 17px; }
+.side-quick-btn:hover { background: var(--hover); border-color: var(--border); color: var(--text-primary); }
+.side-quick-btn:active { transform: scale(0.96); background: var(--active); }
+.side-quick-btn .nav-label { font-size: 10px; font-weight: 500; letter-spacing: -0.01em; }
 .sidebar.collapsed .side-widget { justify-content: center; padding: 6px 0; }
+.sidebar.collapsed .side-widget-icon, .sidebar.collapsed .side-widget-label { display: none; }
 .sidebar.collapsed .side-widget-value { font-size: 10px; }
 .sidebar.collapsed .side-widget::after { display: none; }
 .sidebar.collapsed .side-quick { grid-template-columns: 1fr; }
+.sidebar.collapsed .side-quick-btn { height: 36px; }
 .notify-pop { position: fixed; z-index: 60; width: 280px; display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: var(--radius-lg); background: var(--surface-popover); border: 1px solid var(--border); box-shadow: var(--shadow-lg); }
 .notify-pop .setting { padding: 6px 0; }
 .shortcut-edit { display: inline-flex; align-items: center; gap: 8px; }
