@@ -16,3 +16,4 @@ tokio-tungstenite.workspace = true
 futures-util.workspace = true
 url.workspace = true
 rand.workspace = true
+regex.workspace = true
