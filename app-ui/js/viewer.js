@@ -7,6 +7,7 @@ import { StreamAlerts } from './donations.js';
 import { installChatSplitter } from './splitter.js';
 import { ViewerControls } from './viewer-controls.js';
 import { PlayerPanel } from './player-panel.js';
+import { ViewerExtras } from './viewer-extras.js';
 
 const PHASE_TEXT = {
   idle: '',
@@ -63,6 +64,7 @@ export class Viewer {
     installChatSplitter({ container: root, chat: root.querySelector('.chat'), key: 'viewer' });
     this.controls = new ViewerControls(this);
     this.panel = new PlayerPanel(this);
+    this.extras = new ViewerExtras(this, { isLoggedIn });
   }
 
   /** 재생 중인 채널이 있는가(화면을 숨겨도 재생은 이어진다). */
@@ -134,6 +136,7 @@ export class Viewer {
       const started = await api.playerStart(channelId);
       if (token !== this.startToken) return;
       this.renderHeader(started.live);
+      this.extras.loadRail(channelId);
       if (started.audioOnly) this.status.textContent = '오디오 전용 방송';
       this.chat.connect(started.live.chatChannelId, started.live.channelId);
     } catch (e) {

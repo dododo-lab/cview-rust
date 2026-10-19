@@ -1313,3 +1313,24 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .rec-btn.recording .rec-dot { background: var(--live); border-color: var(--live); animation: live-pulse 1.2s ease-in-out infinite; }
 .pp-note.warn { color: var(--warning); }
 .pp-row.disabled { opacity: 0.5; }
+
+/* ══ 시청 화면 부가 (viewer-extras.js) ═════════════════════════ */
+.viewer-rail { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; max-width: 40%; padding: 2px; }
+.viewer-rail::-webkit-scrollbar { display: none; }
+.rail-item { flex: none; border: 0; padding: 2px; border-radius: 50%; background: conic-gradient(from 210deg, var(--primary), var(--accent-cyan), var(--primary)); cursor: pointer; transition: transform 0.15s var(--ease-out); }
+.rail-item:hover { transform: scale(1.08); }
+.rail-item .avatar { width: 28px; height: 28px; border: 2px solid var(--surface-base); display: grid; place-items: center; font-size: 11px; }
+#ctl-chatmode.active { color: var(--primary-text); }
+/* 오버레이: 채팅이 영상 위에 반투명으로 뜬다 */
+.viewer.chat-mode-overlay .chat-splitter, .viewer.chat-mode-hidden .chat-splitter, .viewer.chat-mode-hidden .chat-reopen { display: none !important; }
+.viewer.chat-mode-hidden .chat { display: none; }
+.viewer.chat-mode-overlay .chat {
+  position: absolute; right: 16px; top: 74px; bottom: 60px; z-index: 6; width: var(--overlay-w, 340px) !important;
+  border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.12); overflow: hidden;
+  background: rgba(12, 13, 16, var(--overlay-bg, 0.5)); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  --text-primary: #f4f5f7; --text-secondary: #d0d3d9; --text-tertiary: #a4a8b0; color: var(--text-primary);
+}
+.viewer.chat-mode-overlay .chat .chat-header, .viewer.chat-mode-overlay .chat .chat-input { background: transparent; border-color: rgba(255, 255, 255, 0.1); }
+.viewer.chat-mode-overlay .chat .chat-input input { background: rgba(0, 0, 0, 0.35); color: #fff; }
+.alert-position-layer { position: absolute; inset: 0; z-index: 8; cursor: crosshair; background: rgba(0, 0, 0, 0.25); }
+.alert-ghost { position: absolute; transform: translate(-50%, 0) scale(var(--alert-scale, 1)); transform-origin: top center; pointer-events: none; animation: none; border-style: dashed; }

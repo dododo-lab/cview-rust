@@ -125,6 +125,7 @@ export class PlayerPanel {
           <button class="btn" data-tool="record">${this.recording ? '■ 녹화 중지' : '● 녹화 시작'}</button>
           <button class="btn" data-tool="shot">스크린샷</button>
           <button class="btn" data-tool="bookmark">북마크</button>
+          <button class="btn" data-tool="alert-pos">후원 알림 위치 조정</button>
         </div>
         <p class="pp-note">녹화는 ~/Movies/CView, 스크린샷은 설정한 폴더에 저장됩니다.</p>`;
     }
@@ -155,6 +156,7 @@ export class PlayerPanel {
       if (tool.dataset.tool === 'record') this.toggleRecording();
       if (tool.dataset.tool === 'shot') this.viewer.controls.screenshot();
       if (tool.dataset.tool === 'bookmark') this.viewer.controls.bookmark();
+      if (tool.dataset.tool === 'alert-pos') { this.el.hidden = true; this.viewer.extras.startAlertPositioning(); }
     }
   }
 

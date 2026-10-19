@@ -46,7 +46,7 @@
 |---|---|---|---|---|
 | PLY-01 | ✅ 화질 선택기(자동/1080p/720p…, 현재 화질 표시) | `LiveStreamView`, `PlayerSettingsTab`, `MultiLiveOverlays`("재생 품질") | player.html `getLevels/requestManualLevel/setForcedHeight`, 상태줄 텍스트만 | S |
 | PLY-02 | ✅ 재생/일시정지·라이브로 복귀 버튼, 지연 배지 | `LiveStreamView+Logic`, `LiveStreamHeader` | `seekToLiveEdge` 있음, 버튼 없음(지연은 상태 텍스트) | S |
-| PLY-03 | 라이브 되감기(타임시프트) 레일·`←/→` 10초, `⇧←/→` 1분 | `LiveRewindRail`, `TimelineSlider`, `StreamCoordinator+Timeshift` | 서버 타임머신·`seekTimeshift` 있음, 로컬 녹화기 미등록, UI 없음 | L |
+| PLY-03 | 🟡 라이브 되감기(타임시프트) 레일·`←/→` 10초, `⇧←/→` 1분 | `LiveRewindRail`, `TimelineSlider`, `StreamCoordinator+Timeshift` | 서버 타임머신·`seekTimeshift` 있음, 로컬 녹화기 미등록, UI 없음 | L |
 | PLY-04 | ✅ 재생 속도 조절 | `PlayerAdvancedSettings+MediaTabs`(재생 탭) | `setRate` 있음, UI 없음 | S |
 | PLY-05 | ✅ 플레이어 고급 설정 패널(이퀄라이저/비디오/화면/재생/지연/도구 탭) | `PlayerAdvancedSettingsView`, `PlayerAdvancedSettings+*`, `MLSettingsWindowView`, `ML*Tab` | 없음 | L |
 | PLY-06 | 🟡 이퀄라이저(프리셋·프리앰프·10밴드) | `PlayerAdvancedSettings+Equalizer`, `MLEqualizerTab`, `EqualizerPreset` | player.html `setEqualizer*`, `can_use_equalizer` VM, 설정 키 저장만 | M |
@@ -55,11 +55,11 @@
 | PLY-09 | ✅ 스크린샷 저장(`⌘S`, PNG/JPEG, 저장 경로) | `PlayerViewModel+Screenshot`, `HLSJSPlayerEngine+Screenshot`, `ScreenshotEncoder` | `takeScreenshot` + `can_take_screenshot`, 파일 저장 명령 없음 | S |
 | PLY-10 | 🟡 녹화 시작/중지(`⌥⌘R`) | `PlayerViewModel+Recording`, `HLSJSRecordingWriter`, `StreamRecordingService` | `startRecording/stopRecording`(MediaRecorder), 저장 명령 없음 | M |
 | PLY-11 | ✅ 전체 화면 모드 2종(영상만 / 영상+채팅), `⇧⌘F`·`⌃⌘F` | `LiveFullscreenPresentation` | 플레이어 영역 전체화면 버튼만 | S |
-| PLY-12 | 채팅 표시 모드(사이드/오버레이/숨김) + 오버레이 위치·크기·투명도 | `ChatOverlayView`, `ChatDisplayMode`, 설정 `overlay*` | 사이드 고정 | M |
+| PLY-12 | ✅ 채팅 표시 모드(사이드/오버레이/숨김) + 오버레이 위치·크기·투명도 | `ChatOverlayView`, `ChatDisplayMode`, 설정 `overlay*` | 사이드 고정 | M |
 | PLY-13 | ✅ 로딩/오류/종료 오버레이 고도화(재시도, 다시 확인, 브랜드 로딩) | `StreamLoadingOverlay`, `BrandedLoadingView`, `ErrorStateView` | 스피너+문구 오버레이 | S |
-| PLY-14 | 헤더 채널 레일(다른 라이브 채널 전환, 채널 관리 패널) | `LiveChannelHeaderRail`, `LiveChannelHeaderControl`, `LiveChannelManagementPanel` | 아바타·제목·메타만 | M |
+| PLY-14 | ✅ 헤더 채널 레일(다른 라이브 채널 전환, 채널 관리 패널) | `LiveChannelHeaderRail`, `LiveChannelHeaderControl`, `LiveChannelManagementPanel` | 아바타·제목·메타만 | M |
 | PLY-15 | ✅ 오버레이 볼륨 슬라이더(스크롤 조절, % 표시) | `OverlayVolumeSlider`, `Components/VolumeSymbol` | 하단 range 슬라이더 | S |
-| PLY-16 | 🟡 스트림 알림 위치·크기 조정(위치 조정 모드) | `StreamAlertOverlayView`, 설정 `streamAlertAnchorX/Y/Scale` | 알림은 있음, 위치 고정 | S |
+| PLY-16 | ✅ 스트림 알림 위치·크기 조정(위치 조정 모드) | `StreamAlertOverlayView`, 설정 `streamAlertAnchorX/Y/Scale` | 알림은 있음, 위치 고정 | S |
 | PLY-17 | ✅ 스트림 북마크(`bookmarkStream` 단축키, 북마크 목록·삭제) | `ShortcutAction.bookmarkStream`, `DataStore+Bookmarks` | persistence `save_bookmark/fetch_bookmarks`, 명령 없음 | S |
 | PLY-18 | 별도 플레이어 창(`⌘N`, 창 분리) | `CViewApp` `player-window` | 단일 창 | M |
 | PLY-19 | ✅ 백그라운드 재생 끄기/가림 시 일시정지·화질 상한 | 설정 `continuePlaybackInBackground`, `OcclusionResolutionCap` | 미구현 | S |
