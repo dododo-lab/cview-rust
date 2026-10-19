@@ -1,8 +1,8 @@
 //! 얇은 명령 계층 — 프런트엔드 `invoke` 대상.
 //!
-//! 각 명령은 하위 크레이트(`cview-networking`·`cview-auth`·`cview-chat`·`cview-player`·
-//! `cview-persistence`)를 직접 부르고 결과를 [`crate::dto`] 로 바꾼다. 뷰모델 로직은 두지 않는다 —
-//! `cview-app-core` 가 준비되면 이 함수들의 몸통만 그 쪽 서비스 호출로 바꾼다.
+//! 각 명령은 `cview-app-core` 의 뷰모델·서비스(팔로잉 스토어·인기·검색·채팅·플레이어)를 부르고,
+//! 대응이 없는 것(채널/라이브 상세·인증·설정)은 하위 크레이트를 직접 부른다. 결과는 [`crate::dto`]
+//! 로 바꾼다 — 명령 계층에는 화면 로직을 두지 않는다.
 
 pub mod auth;
 pub mod chat;

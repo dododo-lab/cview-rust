@@ -1,16 +1,14 @@
-//! 채팅 명령 — 연결/해제/전송. 엔진 이벤트는 `chat://event` 로 흘려보낸다.
+//! 채팅 명령 — 연결/해제/전송. 상태기계는 app-core `ChatViewModel` 이 맡고, 엔진 이벤트는
+//! 뷰모델이 꺼내는 순간 `chat://event` 로도 흘려보낸다(`state.rs` 의 엔진 어댑터).
 
-use std::sync::Arc;
-
-use cview_chat::engine::{ChatCookie, CookieProvider, TokenProvider};
-use cview_chat::{ChatEngine, ChatEngineConfiguration, ChatError};
-use futures_util::FutureExt;
+use cview_app_core::viewmodels::chat::connection::ConnectRequest;
+use cview_app_core::viewmodels::chat::interaction::MessageSendOutcome;
+use cview_app_core::viewmodels::chat::ChatViewModel;
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, State};
+use tauri::State;
 
-use super::{events, CmdResult, CommandError};
-use crate::dto::ChatEventDto;
-use crate::state::{AppServices, ChatSession};
+use super::{CmdResult, CommandError};
+use crate::state::AppServices;
 
 /// 채팅 한 줄 최대 길이 (치지직 웹 입력 제한).
 pub const MAX_CHAT_LENGTH: usize = 100;
@@ -30,88 +28,55 @@ pub struct ChatConnectedDto {
     pub can_send: bool,
 }
 
-async fn disconnect_session(services: &AppServices) {
-    if let Some(session) = services.chat.lock().await.take() {
-        session.engine.disconnect().await;
-        session.pump.abort();
-    }
-}
-
-/// 채팅 연결. 기존 연결은 끊는다.
+/// 채팅 연결. 기존 연결은 뷰모델이 끊는다.
 #[tauri::command]
 pub async fn chat_connect(
-    app: AppHandle,
     services: State<'_, AppServices>,
     chat_channel_id: String,
     channel_id: Option<String>,
 ) -> CmdResult<ChatConnectedDto> {
-    disconnect_session(&services).await;
     if chat_channel_id.trim().is_empty() {
+        services.chat.disconnect().await;
         return Err(CommandError("채팅 채널 정보가 없습니다".into()));
     }
 
-    let token = services.api.chat_access_token(&chat_channel_id).await?;
+    let token = match services.api.chat_access_token(&chat_channel_id).await {
+        Ok(t) => t,
+        Err(e) => {
+            services.chat.disconnect().await;
+            return Err(e.into());
+        }
+    };
     let logged_in = services.auth.is_authenticated();
-    let uid = if logged_in {
-        services
-            .api
-            .user_status()
-            .await
-            .ok()
-            .and_then(|s| s.user_id_hash)
+    let (uid, nickname) = if logged_in {
+        match services.api.user_status().await {
+            Ok(s) => (s.user_id_hash, s.nickname),
+            Err(_) => (None, None),
+        }
     } else {
-        None
+        (None, None)
     };
 
-    let cookies = services.cookies.clone();
-    let cookie_provider: CookieProvider = Arc::new(move || {
-        cookies
-            .auth_cookies()
-            .into_iter()
-            .map(|c| ChatCookie {
-                name: c.name,
-                value: c.value,
-                domain: c.domain,
-            })
-            .collect()
-    });
-    let api = services.api.clone();
-    let token_channel = chat_channel_id.clone();
-    let token_provider: TokenProvider = Arc::new(move || {
-        let api = api.clone();
-        let id = token_channel.clone();
-        async move {
-            api.chat_access_token(&id)
-                .await
-                .map(|t| (t.access_token, t.extra_token))
-                .map_err(|e| ChatError::ConnectionFailed(e.to_string()))
-        }
-        .boxed()
-    });
-
-    let config = ChatEngineConfiguration::new(chat_channel_id.clone(), token.access_token)
-        .extra_token(token.extra_token)
-        .uid(uid.clone())
-        .channel_id(channel_id)
-        .cookie_provider(Some(cookie_provider))
-        .token_provider(Some(token_provider));
-    let engine = ChatEngine::new(config);
-
-    let stream = engine.events();
-    let event_app = app.clone();
-    let pump = tauri::async_runtime::spawn(async move {
-        while let Some(event) = stream.recv().await {
-            let _ = event_app.emit(events::CHAT_EVENT, ChatEventDto::from_engine(&event));
-        }
-    });
-
-    *services.chat.lock().await = Some(ChatSession {
-        engine: engine.clone(),
+    {
+        let mut s = services.chat.lock();
+        s.current_user_uid = uid.clone();
+        s.current_user_nickname = nickname;
+    }
+    let request = ConnectRequest {
         chat_channel_id: chat_channel_id.clone(),
-        pump,
-    });
+        access_token: token.access_token,
+        extra_token: token.extra_token,
+        uid: uid.clone(),
+        channel_id,
+        channel_name: None,
+        token_provider: Some(ChatViewModel::make_token_provider(
+            services.api.clone(),
+            chat_channel_id.clone(),
+        )),
+    };
     // 연결 실패는 엔진의 재연결 루프가 맡는다 — 상태는 이벤트로 온다.
-    tauri::async_runtime::spawn(async move { engine.connect().await });
+    let vm = services.chat.clone();
+    tauri::async_runtime::spawn(async move { vm.connect(request).await });
 
     Ok(ChatConnectedDto {
         chat_channel_id,
@@ -121,27 +86,33 @@ pub async fn chat_connect(
 
 #[tauri::command]
 pub async fn chat_disconnect(services: State<'_, AppServices>) -> CmdResult<()> {
-    disconnect_session(&services).await;
+    services.chat.disconnect().await;
     Ok(())
 }
 
-/// 채팅 전송. 반환값은 전송 `tid`.
+/// 채팅 전송. `/` 명령은 뷰모델이 로컬에서 처리한다.
 #[tauri::command]
-pub async fn chat_send(services: State<'_, AppServices>, text: String) -> CmdResult<i64> {
+pub async fn chat_send(services: State<'_, AppServices>, text: String) -> CmdResult<()> {
     let Some(text) = sanitize_outgoing(&text) else {
         return Err(CommandError("메시지를 입력하세요".into()));
     };
     if !services.auth.is_authenticated() {
         return Err(CommandError("로그인 후 채팅 참여 가능".into()));
     }
-    let engine = services
-        .chat
-        .lock()
-        .await
-        .as_ref()
-        .map(|s| s.engine.clone())
-        .ok_or(ChatError::NotConnected)?;
-    Ok(engine.send_message(&text, None).await?)
+    match services.chat.send_message(&text).await {
+        MessageSendOutcome::Sent | MessageSendOutcome::HandledLocally => Ok(()),
+        MessageSendOutcome::SessionChanged => Err(CommandError(
+            "채팅 연결이 바뀌었습니다. 다시 보내 주세요".into(),
+        )),
+        MessageSendOutcome::Failed => Err(CommandError(
+            services
+                .chat
+                .lock()
+                .error_message
+                .take()
+                .unwrap_or_else(|| "메시지를 보내지 못했습니다".into()),
+        )),
+    }
 }
 
 #[cfg(test)]

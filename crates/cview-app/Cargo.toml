@@ -24,6 +24,7 @@ cview-auth = { path = "../cview-auth" }
 cview-chat = { path = "../cview-chat" }
 cview-persistence = { path = "../cview-persistence" }
 cview-player = { path = "../cview-player" }
+cview-app-core = { path = "../cview-app-core" }
 tauri = { version = "2.12", features = [] }
 serde.workspace = true
 serde_json.workspace = true

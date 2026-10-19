@@ -102,6 +102,9 @@ impl RewindSettings {
     }
 }
 
+/// 코디네이터 이벤트 탭.
+pub type StreamEventTap = Arc<dyn Fn(&StreamEvent) + Send + Sync>;
+
 /// 사용자 이벤트 콜백.
 #[derive(Default, Clone)]
 pub struct PlayerCallbacks {
@@ -109,6 +112,9 @@ pub struct PlayerCallbacks {
     pub on_check_stream_ended: Option<Arc<dyn Fn() -> BoxFuture<'static, bool> + Send + Sync>>,
     pub on_volume_changed: Option<Arc<dyn Fn(f32) + Send + Sync>>,
     pub on_mute_changed: Option<Arc<dyn Fn(bool) + Send + Sync>>,
+    /// 코디네이터 이벤트 탭 — 뷰모델이 처리하기 직전에 현재 세션 이벤트를 그대로 넘긴다
+    /// (코디네이터 이벤트 채널은 구독자가 하나뿐이라 셸이 따로 받을 수 없다).
+    pub on_stream_event: Option<StreamEventTap>,
 }
 
 /// `startStream` 요청.
@@ -1249,25 +1255,27 @@ impl PlayerViewModel {
             coordinator.set_prefetched_manifest(manifest);
         }
 
+        // 가드를 `await` 너머로 들고 가지 않도록 엔진 확보와 실패 처리를 나눈다(Send 퓨처).
         let engine = {
             let mut s = self.state.lock();
             let engine = match (&s.engine, s.is_preallocated) {
-                (Some(e), true) => e.clone(),
-                _ => {
-                    let Some(factory) = &self.engine_factory else {
-                        drop(s);
-                        self.fail_start(&coordinator, "재생 엔진이 없습니다".into())
-                            .await;
-                        return;
-                    };
+                (Some(e), true) => Some(e.clone()),
+                _ => self.engine_factory.as_ref().map(|factory| {
                     let e = factory();
                     s.engine = Some(e.clone());
                     e
-                }
+                }),
             };
-            s.current_engine_type = PlayerEngineType::Hlsjs;
-            engine.set_volume(if s.is_muted { 0.0 } else { s.volume });
+            if let Some(engine) = &engine {
+                s.current_engine_type = PlayerEngineType::Hlsjs;
+                engine.set_volume(if s.is_muted { 0.0 } else { s.volume });
+            }
             engine
+        };
+        let Some(engine) = engine else {
+            self.fail_start(&coordinator, "재생 엔진이 없습니다".into())
+                .await;
+            return;
         };
 
         if engine.is_hlsjs() {
@@ -1620,6 +1628,9 @@ impl PlayerViewModel {
                     if !slot_is(&s.event_task, id) || s.session_id != session {
                         return;
                     }
+                }
+                if let Some(tap) = me.callbacks().on_stream_event {
+                    tap(&event);
                 }
                 me.handle_stream_event(event);
             }

@@ -44,12 +44,10 @@ pub async fn auth_logout(
     services: State<'_, AppServices>,
 ) -> CmdResult<AuthStatusDto> {
     // 채팅은 로그인 쿠키로 연결돼 있을 수 있다 — 끊는다.
-    if let Some(session) = services.chat.lock().await.take() {
-        session.engine.disconnect().await;
-        session.pump.abort();
-    }
+    services.chat.disconnect().await;
     services.auth.logout().await;
     services.api.invalidate_authentication_cache().await;
+    services.sync_authentication().await;
     let status = current_status(&services).await;
     let _ = app.emit(events::AUTH_CHANGED, status.clone());
     Ok(status)

@@ -16,10 +16,11 @@ pub mod webview_store;
 
 use std::sync::Arc;
 
-use tauri::{AppHandle, Manager, RunEvent, Runtime};
+use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime};
 
 use crate::commands::auth::broadcast_status;
-use crate::state::AppServices;
+use crate::commands::{events, PlayerCommandPayload};
+use crate::state::{AppServices, ShellSinks};
 use crate::webview_store::TauriWebViewStore;
 
 /// 메인 창 라벨 (`tauri.conf.json`).
@@ -37,13 +38,39 @@ fn spawn_auth_tasks<R: Runtime>(app: AppHandle<R>) {
         let services = app.state::<AppServices>();
         let mut states = services.auth.auth_state_stream();
         services.auth.initialize().await;
+        services.sync_authentication().await;
         broadcast_status(&app, &services).await;
         while states.recv().await.is_some() {
             // 상태 전이마다(로그인·로그아웃·만료) 최신 상태를 다시 계산해 보낸다.
             while states.try_recv().is_ok() {}
+            services.sync_authentication().await;
             broadcast_status(&app, &services).await;
         }
     });
+}
+
+/// 프런트엔드로 가는 통로 — 플레이어 스크립트는 메인 창에만, 이벤트는 전체로.
+fn shell_sinks<R: Runtime>(app: &AppHandle<R>) -> ShellSinks {
+    let command_app = app.clone();
+    let player_app = app.clone();
+    let chat_app = app.clone();
+    ShellSinks {
+        player_command: Arc::new(move |script: String| {
+            if let Err(e) = command_app.emit_to(
+                MAIN_WINDOW,
+                events::PLAYER_COMMAND,
+                PlayerCommandPayload { script },
+            ) {
+                tracing::warn!("플레이어 명령 전달 실패: {e}");
+            }
+        }),
+        player_event: Arc::new(move |dto| {
+            let _ = player_app.emit(events::PLAYER_EVENT, dto);
+        }),
+        chat_event: Arc::new(move |dto| {
+            let _ = chat_app.emit(events::CHAT_EVENT, dto);
+        }),
+    }
 }
 
 /// 앱 실행.
@@ -56,8 +83,11 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
             tracing::info!("데이터 디렉터리: {}", data_dir.display());
             let webview = Arc::new(TauriWebViewStore::new(handle.clone()));
-            let services =
-                tauri::async_runtime::block_on(AppServices::initialize(&data_dir, webview));
+            let services = tauri::async_runtime::block_on(AppServices::initialize(
+                &data_dir,
+                webview,
+                shell_sinks(&handle),
+            ));
             app.manage(services);
             spawn_auth_tasks(handle);
             Ok(())

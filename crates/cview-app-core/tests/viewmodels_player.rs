@@ -890,3 +890,39 @@ async fn start_success_follows_coordinator_events_and_stops() {
     assert!(vm.read().engine().is_none());
     assert!(!engine.st().playing);
 }
+
+#[tokio::test]
+async fn stream_event_tap_sees_current_session_events() {
+    let engine = FakeEngine::new(true);
+    let factory_engine = engine.clone();
+    let vm = PlayerViewModel::new(Some(Arc::new(move || {
+        factory_engine.clone() as SharedLiveEngine
+    })));
+    let seen: Arc<Mutex<Vec<StreamPhase>>> = Arc::new(Mutex::new(Vec::new()));
+    let sink = seen.clone();
+    vm.set_callbacks(cview_app_core::viewmodels::player::PlayerCallbacks {
+        on_stream_event: Some(Arc::new(move |event| {
+            if let cview_player::coordinator::StreamEvent::PhaseChanged(p) = event {
+                sink.lock().unwrap().push(p.clone());
+            }
+        })),
+        ..Default::default()
+    });
+    let mut req =
+        StartStreamRequest::new("ch1", Url::parse("http://127.0.0.1:9/live.m3u8").unwrap());
+    req.player_settings = Some(PlayerSettings {
+        stream_proxy_mode: StreamProxyMode::None,
+        ..Default::default()
+    });
+    vm.start_stream(req).await;
+    vm.engine_state_changed(&cview_core::models::player::PlayerPhase::Playing)
+        .await;
+    for _ in 0..50 {
+        if seen.lock().unwrap().contains(&StreamPhase::Playing) {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    assert!(seen.lock().unwrap().contains(&StreamPhase::Playing));
+    vm.stop_stream().await;
+}
