@@ -14,7 +14,7 @@ export class LivePage {
     this.root.dataset.page = 'live';
     this.root.hidden = true;
     this.root.innerHTML = `
-      <header class="page-header" data-tauri-drag-region>
+      <header class="page-header" data-tauri-drag-region="deep">
         <h1 class="page-title">라이브</h1>
         <span class="page-subtitle">재생 중인 방송이 없습니다 — 이어 볼 채널을 고르세요</span>
         <div class="grow"></div>

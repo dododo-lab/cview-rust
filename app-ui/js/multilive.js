@@ -48,7 +48,7 @@ export class MultiLivePage {
     this.root.dataset.page = 'multilive';
     this.root.hidden = true;
     this.root.innerHTML = `
-      <header class="page-header ml-header" data-tauri-drag-region>
+      <header class="page-header ml-header" data-tauri-drag-region="deep">
         <h1 class="page-title">멀티라이브</h1>
         <span class="page-subtitle ml-count"></span>
         <div class="grow"></div>

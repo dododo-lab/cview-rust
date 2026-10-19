@@ -20,7 +20,7 @@ export class CategoriesPage {
     this.root.dataset.page = 'categories';
     this.root.hidden = true;
     this.root.innerHTML = `
-      <header class="page-header" data-tauri-drag-region>
+      <header class="page-header" data-tauri-drag-region="deep">
         <h1 class="page-title">카테고리</h1>
         <span class="page-subtitle cat-sub">지금 방송 중인 카테고리</span>
         <div class="grow"></div>

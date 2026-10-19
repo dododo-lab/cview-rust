@@ -35,7 +35,7 @@ export class MultiChatPage {
     this.root.dataset.page = 'multichat';
     this.root.hidden = true;
     this.root.innerHTML = `
-      <header class="page-header mc-header" data-tauri-drag-region>
+      <header class="page-header mc-header" data-tauri-drag-region="deep">
         <h1 class="page-title">멀티채팅</h1>
         <span class="page-subtitle mc-count"></span>
         <div class="grow"></div>
