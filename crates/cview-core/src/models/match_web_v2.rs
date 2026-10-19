@@ -36,7 +36,10 @@ impl MatchWebV2Flag {
 
     /// `livePlaybackJSON` 이 비어 있으면 라디오 JSON 으로 재생한다.
     pub fn source_eligible_live(live: &LiveInfo) -> bool {
-        Self::source_eligible(live.is_watch_party(), live.live_playback_json.as_deref().unwrap_or("").is_empty())
+        Self::source_eligible(
+            live.is_watch_party(),
+            live.live_playback_json.as_deref().unwrap_or("").is_empty(),
+        )
     }
 }
 

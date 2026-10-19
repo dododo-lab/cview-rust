@@ -120,7 +120,10 @@ pub struct PlayerSettings {
     #[serde(deserialize_with = "de_rewind_window")]
     pub live_rewind_window_minutes: i64,
     /// 되감기 기록에 쓸 디스크 한도(MiB).
-    #[serde(rename = "liveRewindDiskBudgetMB", deserialize_with = "de_rewind_budget")]
+    #[serde(
+        rename = "liveRewindDiskBudgetMB",
+        deserialize_with = "de_rewind_budget"
+    )]
     pub live_rewind_disk_budget_mb: i64,
     /// [실험] 치지직 공식 타임머신(치트키 전용) 재생.
     pub experimental_server_time_machine: bool,
@@ -191,16 +194,24 @@ fn de_alert_scale<'de, D: Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
 }
 
 fn de_rewind_window<'de, D: Deserializer<'de>>(d: D) -> Result<i64, D::Error> {
-    Ok(PlayerSettings::sanitized_rewind_window(i64::deserialize(d)?))
+    Ok(PlayerSettings::sanitized_rewind_window(i64::deserialize(
+        d,
+    )?))
 }
 
 fn de_rewind_budget<'de, D: Deserializer<'de>>(d: D) -> Result<i64, D::Error> {
-    Ok(PlayerSettings::sanitized_rewind_budget(i64::deserialize(d)?))
+    Ok(PlayerSettings::sanitized_rewind_budget(i64::deserialize(
+        d,
+    )?))
 }
 
 fn nearest(choices: &[i64], value: i64, fallback: i64) -> i64 {
     // Swift `min(by:)` 은 동률이면 앞의 것을 고른다 — `min_by_key` 와 같다.
-    choices.iter().copied().min_by_key(|c| (c - value).abs()).unwrap_or(fallback)
+    choices
+        .iter()
+        .copied()
+        .min_by_key(|c| (c - value).abs())
+        .unwrap_or(fallback)
 }
 
 impl PlayerSettings {
@@ -269,8 +280,13 @@ pub enum LatencyPreset {
 }
 
 impl LatencyPreset {
-    pub const ALL: [LatencyPreset; 5] =
-        [Self::MatchWeb, Self::WebSync, Self::Standard, Self::UltraLow, Self::Custom];
+    pub const ALL: [LatencyPreset; 5] = [
+        Self::MatchWeb,
+        Self::WebSync,
+        Self::Standard,
+        Self::UltraLow,
+        Self::Custom,
+    ];
 
     pub fn raw_value(self) -> &'static str {
         match self {
@@ -320,12 +336,25 @@ impl LatencyPreset {
     /// ⚠ `LowLatencyController.Configuration` 과 **쌍으로** 검증된다. 한쪽만 바꾸지 말 것.
     pub fn values(self) -> LatencyPresetValues {
         let (target, max, min, max_rate, min_rate, catch_up, slow_down, kp, ki, kd) = match self {
-            Self::MatchWeb | Self::Custom => (3.0, 8.0, 1.5, 1.03, 0.97, 0.55, 0.55, 0.35, 0.03, 0.02),
+            Self::MatchWeb | Self::Custom => {
+                (3.0, 8.0, 1.5, 1.03, 0.97, 0.55, 0.55, 0.35, 0.03, 0.02)
+            }
             Self::WebSync => (6.0, 12.0, 3.0, 1.08, 0.93, 1.0, 0.8, 0.5, 0.05, 0.03),
             Self::Standard => (3.0, 8.0, 1.0, 1.15, 0.90, 1.2, 0.5, 0.8, 0.12, 0.06),
             Self::UltraLow => (1.5, 8.0, 0.5, 1.20, 0.85, 1.0, 0.3, 1.0, 0.15, 0.08),
         };
-        LatencyPresetValues { target, max, min, max_rate, min_rate, catch_up, slow_down, kp, ki, kd }
+        LatencyPresetValues {
+            target,
+            max,
+            min,
+            max_rate,
+            min_rate,
+            catch_up,
+            slow_down,
+            kp,
+            ki,
+            kd,
+        }
     }
 }
 
@@ -359,7 +388,10 @@ impl ExperimentalPlaybackFlags {
 
     /// [실험] 웹 동기화 v2 — 읽을 때마다 덮어쓰기(`override_value`)를 적용한다.
     pub fn match_web_v2(override_value: Option<bool>) -> bool {
-        super::match_web_v2::MatchWebV2Flag::resolve_enabled(Self::match_web_v2_setting_value(), override_value)
+        super::match_web_v2::MatchWebV2Flag::resolve_enabled(
+            Self::match_web_v2_setting_value(),
+            override_value,
+        )
     }
 }
 
@@ -593,8 +625,13 @@ pub enum NetworkPreset {
 }
 
 impl NetworkPreset {
-    pub const ALL: [NetworkPreset; 5] =
-        [Self::Balanced, Self::Stability, Self::LowLatency, Self::Performance, Self::Custom];
+    pub const ALL: [NetworkPreset; 5] = [
+        Self::Balanced,
+        Self::Stability,
+        Self::LowLatency,
+        Self::Performance,
+        Self::Custom,
+    ];
 
     pub fn display_name(self) -> &'static str {
         match self {
@@ -755,7 +792,13 @@ pub enum ChatDesignStyle {
 }
 
 impl ChatDesignStyle {
-    pub const SELECTABLE: [ChatDesignStyle; 5] = [Self::Unified, Self::Chzzk, Self::Hybrid, Self::Kakao, Self::Imessage];
+    pub const SELECTABLE: [ChatDesignStyle; 5] = [
+        Self::Unified,
+        Self::Chzzk,
+        Self::Hybrid,
+        Self::Kakao,
+        Self::Imessage,
+    ];
 
     pub fn uses_conversation_cards(self) -> bool {
         matches!(self, Self::Unified | Self::Hybrid)
@@ -835,10 +878,22 @@ mod tests {
 
     #[test]
     fn empty_json_decodes_to_defaults() {
-        assert_eq!(serde_json::from_str::<PlayerSettings>("{}").unwrap(), PlayerSettings::default());
-        assert_eq!(serde_json::from_str::<GeneralSettings>("{}").unwrap(), GeneralSettings::default());
-        assert_eq!(serde_json::from_str::<AppearanceSettings>("{}").unwrap(), AppearanceSettings::default());
-        assert_eq!(serde_json::from_str::<NetworkSettings>("{}").unwrap(), NetworkSettings::default());
+        assert_eq!(
+            serde_json::from_str::<PlayerSettings>("{}").unwrap(),
+            PlayerSettings::default()
+        );
+        assert_eq!(
+            serde_json::from_str::<GeneralSettings>("{}").unwrap(),
+            GeneralSettings::default()
+        );
+        assert_eq!(
+            serde_json::from_str::<AppearanceSettings>("{}").unwrap(),
+            AppearanceSettings::default()
+        );
+        assert_eq!(
+            serde_json::from_str::<NetworkSettings>("{}").unwrap(),
+            NetworkSettings::default()
+        );
     }
 
     #[test]
@@ -850,7 +905,8 @@ mod tests {
     #[test]
     fn unknown_keys_are_ignored() {
         let s: PlayerSettings =
-            serde_json::from_str(r#"{"preferredEngine":"VLC","audioDelay":1.0,"volumeLevel":0.5}"#).unwrap();
+            serde_json::from_str(r#"{"preferredEngine":"VLC","audioDelay":1.0,"volumeLevel":0.5}"#)
+                .unwrap();
         assert_eq!(s.volume_level, 0.5);
     }
 
@@ -859,7 +915,8 @@ mod tests {
         let mut s = PlayerSettings::default();
         s.apply_latency_preset(LatencyPreset::UltraLow);
         s.equalizer_preset = Some("록".into());
-        let back: PlayerSettings = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        let back: PlayerSettings =
+            serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
         assert_eq!(back, s);
     }
 
@@ -877,7 +934,8 @@ mod tests {
 
     #[test]
     fn removed_proxy_mode_is_absorbed() {
-        let s: PlayerSettings = serde_json::from_str(r#"{"streamProxyMode":"directVLCAdaptive"}"#).unwrap();
+        let s: PlayerSettings =
+            serde_json::from_str(r#"{"streamProxyMode":"directVLCAdaptive"}"#).unwrap();
         assert_eq!(s.stream_proxy_mode, StreamProxyMode::LocalProxy);
     }
 
@@ -914,25 +972,47 @@ mod tests {
 
     #[test]
     fn network_presets_detect() {
-        assert_eq!(NetworkSettings::default().matching_preset(), NetworkPreset::Balanced);
-        assert_eq!(NetworkPreset::Stability.settings().matching_preset(), NetworkPreset::Stability);
-        assert_eq!(NetworkPreset::Performance.settings().matching_preset(), NetworkPreset::Performance);
-        let custom = NetworkSettings { retry_count: 7, ..NetworkSettings::default() };
+        assert_eq!(
+            NetworkSettings::default().matching_preset(),
+            NetworkPreset::Balanced
+        );
+        assert_eq!(
+            NetworkPreset::Stability.settings().matching_preset(),
+            NetworkPreset::Stability
+        );
+        assert_eq!(
+            NetworkPreset::Performance.settings().matching_preset(),
+            NetworkPreset::Performance
+        );
+        let custom = NetworkSettings {
+            retry_count: 7,
+            ..NetworkSettings::default()
+        };
         assert_eq!(custom.matching_preset(), NetworkPreset::Custom);
     }
 
     #[test]
     fn appearance_clamps_sidebar() {
-        let a: AppearanceSettings = serde_json::from_str(r#"{"sidebarWidth":999,"sidebarScale":0.1}"#).unwrap();
+        let a: AppearanceSettings =
+            serde_json::from_str(r#"{"sidebarWidth":999,"sidebarScale":0.1}"#).unwrap();
         assert_eq!(a.sidebar_width, sidebar::MAX_WIDTH);
         assert_eq!(a.sidebar_scale, sidebar::SCALE_MIN);
-        assert_eq!(serde_json::to_value(FrameRateMode::Fixed60).unwrap(), "fixed60");
+        assert_eq!(
+            serde_json::to_value(FrameRateMode::Fixed60).unwrap(),
+            "fixed60"
+        );
     }
 
     #[test]
     fn chat_design_style_saved_values() {
-        assert_eq!(ChatDesignStyle::from_saved(Some("kakao")), ChatDesignStyle::Kakao);
-        assert_eq!(ChatDesignStyle::from_saved(Some("calm")), ChatDesignStyle::Unified);
+        assert_eq!(
+            ChatDesignStyle::from_saved(Some("kakao")),
+            ChatDesignStyle::Kakao
+        );
+        assert_eq!(
+            ChatDesignStyle::from_saved(Some("calm")),
+            ChatDesignStyle::Unified
+        );
         assert_eq!(ChatDesignStyle::from_saved(None), ChatDesignStyle::Unified);
         assert!(ChatDesignStyle::Kakao.uses_line_chrome());
         assert!(ChatDesignStyle::Dashboard.uses_event_rail());
@@ -949,6 +1029,9 @@ mod tests {
     #[test]
     fn screenshot_format() {
         assert_eq!(ScreenshotFormat::Jpeg.file_extension(), "jpeg");
-        assert_eq!(serde_json::to_string(&ScreenshotFormat::Png).unwrap(), "\"png\"");
+        assert_eq!(
+            serde_json::to_string(&ScreenshotFormat::Png).unwrap(),
+            "\"png\""
+        );
     }
 }

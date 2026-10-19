@@ -21,17 +21,29 @@ pub struct VodDetail {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub video_id: Option<String>,
     pub video_title: String,
-    #[serde(rename = "videoImageUrl", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "videoImageUrl",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub video_image_url: Option<Url>,
     pub duration: i64,
-    #[serde(default, with = "chzzk_date_opt", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "chzzk_date_opt",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub publish_date: Option<DateTime<Utc>>,
     pub read_count: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channel: Option<ChannelInfo>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub vod_status: Option<String>,
-    #[serde(rename = "thumbnailImageUrl", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "thumbnailImageUrl",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub thumbnail_image_url: Option<Url>,
     /// 재생 정보 JSON 문자열 (livePlaybackJSON 과 유사한 구조)
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -182,8 +194,14 @@ mod tests {
         let order: Vec<i64> = merged.iter().map(|v| v.video_no).collect();
         // 2(3일, 첫 등장 우선) · 4(3일) 동률 → videoNo 내림차순, None 은 뒤 (5, 3)
         assert_eq!(order, vec![4, 2, 1, 5, 3]);
-        assert_eq!(merged[1].publish_date, Some(Utc.with_ymd_and_hms(2026, 1, 3, 0, 0, 0).unwrap()));
-        assert_eq!(merge_latest_vods(&[vec![vod(1, Some(1)), vod(2, Some(2))]], 1).len(), 1);
+        assert_eq!(
+            merged[1].publish_date,
+            Some(Utc.with_ymd_and_hms(2026, 1, 3, 0, 0, 0).unwrap())
+        );
+        assert_eq!(
+            merge_latest_vods(&[vec![vod(1, Some(1)), vod(2, Some(2))]], 1).len(),
+            1
+        );
         assert!(merge_latest_vods(&[], 5).is_empty());
     }
 
@@ -205,6 +223,9 @@ mod tests {
         .unwrap();
         assert_eq!(d.video_no, 5);
         assert_eq!(d.in_key.as_deref(), Some("k"));
-        assert!(serde_json::from_str::<VodDetail>(r#"{"videoNo":5,"videoTitle":"t","duration":10}"#).is_err());
+        assert!(serde_json::from_str::<VodDetail>(
+            r#"{"videoNo":5,"videoTitle":"t","duration":10}"#
+        )
+        .is_err());
     }
 }

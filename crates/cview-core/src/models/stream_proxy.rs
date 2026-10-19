@@ -106,8 +106,17 @@ pub struct StreamProxyRouteStatus {
 }
 
 impl StreamProxyRouteStatus {
-    pub fn new(requested: StreamProxyMode, effective: Option<StreamProxyMode>, reason: StreamProxyRouteReason) -> Self {
-        Self { requested, effective, reason, pending: false }
+    pub fn new(
+        requested: StreamProxyMode,
+        effective: Option<StreamProxyMode>,
+        reason: StreamProxyRouteReason,
+    ) -> Self {
+        Self {
+            requested,
+            effective,
+            reason,
+            pending: false,
+        }
     }
 
     pub fn resolve(
@@ -122,7 +131,11 @@ impl StreamProxyRouteStatus {
             return Self::new(
                 requested,
                 ok.then_some(StreamProxyMode::LocalProxy),
-                if ok { R::AuthenticationRequired } else { R::AuthenticationUnavailable },
+                if ok {
+                    R::AuthenticationRequired
+                } else {
+                    R::AuthenticationUnavailable
+                },
             );
         }
         if !supported_host {
@@ -147,7 +160,11 @@ impl StreamProxyRouteStatus {
             StreamProxyRouteReason::ProxyStartFailed => "프록시 시작 실패",
             StreamProxyRouteReason::AuthenticationUnavailable => "인증용 프록시 연결 실패",
         };
-        let pending = if self.pending { " · 라이브 재생 시 변경 적용" } else { "" };
+        let pending = if self.pending {
+            " · 라이브 재생 시 변경 적용"
+        } else {
+            ""
+        };
         format!("실제 적용: {route} · {detail}{pending}")
     }
 }
@@ -163,22 +180,38 @@ mod tests {
         let n: StreamProxyMode = serde_json::from_str("\"none\"").unwrap();
         assert_eq!(n, StreamProxyMode::None);
         assert!(serde_json::from_str::<StreamProxyMode>("3").is_err());
-        assert_eq!(serde_json::to_string(&StreamProxyMode::LocalProxy).unwrap(), "\"localProxy\"");
+        assert_eq!(
+            serde_json::to_string(&StreamProxyMode::LocalProxy).unwrap(),
+            "\"localProxy\""
+        );
     }
 
     #[test]
     fn resolved_and_route() {
-        assert_eq!(StreamProxyMode::LocalProxy.resolved(false), StreamProxyMode::None);
+        assert_eq!(
+            StreamProxyMode::LocalProxy.resolved(false),
+            StreamProxyMode::None
+        );
         let auth = StreamProxyRouteStatus::resolve(StreamProxyMode::None, true, true, true);
         assert_eq!(auth.effective, Some(StreamProxyMode::LocalProxy));
-        assert_eq!(auth.summary(), "실제 적용: 로컬 프록시 · 암호화 방송 인증에 필요");
+        assert_eq!(
+            auth.summary(),
+            "실제 적용: 로컬 프록시 · 암호화 방송 인증에 필요"
+        );
         let fail = StreamProxyRouteStatus::resolve(StreamProxyMode::None, true, false, true);
         assert_eq!(fail.effective, None);
-        assert_eq!(fail.reason, StreamProxyRouteReason::AuthenticationUnavailable);
-        let start = StreamProxyRouteStatus::resolve(StreamProxyMode::LocalProxy, false, true, false);
+        assert_eq!(
+            fail.reason,
+            StreamProxyRouteReason::AuthenticationUnavailable
+        );
+        let start =
+            StreamProxyRouteStatus::resolve(StreamProxyMode::LocalProxy, false, true, false);
         assert_eq!(start.reason, StreamProxyRouteReason::ProxyStartFailed);
         let mut user = StreamProxyRouteStatus::resolve(StreamProxyMode::None, false, true, false);
         user.pending = true;
-        assert_eq!(user.summary(), "실제 적용: 직접 재생 · 선택한 설정 적용 · 라이브 재생 시 변경 적용");
+        assert_eq!(
+            user.summary(),
+            "실제 적용: 직접 재생 · 선택한 설정 적용 · 라이브 재생 시 변경 적용"
+        );
     }
 }

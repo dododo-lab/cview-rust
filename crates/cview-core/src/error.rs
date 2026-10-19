@@ -92,6 +92,10 @@ pub enum ApiError {
     RateLimited { retry_after: f64 },
     #[error("서버 응답 형식이 예상과 다릅니다")]
     MalformedResponse(String),
+    /// Rust 포팅 전용 — Swift `CancellationError` 대응. 호출자 취소나 로그인 세대 변경으로
+    /// 요청 결과를 버릴 때 쓴다. 사용자 오류가 아니므로 복구 액션이 없다.
+    #[error("요청이 취소되었습니다")]
+    Cancelled,
 }
 
 fn http_error_description(code: i64) -> String {
@@ -138,10 +142,12 @@ impl ApiError {
     pub fn recovery_kind(&self) -> RecoveryKind {
         match self {
             ApiError::Unauthorized => RecoveryKind::Login,
-            ApiError::HttpError { status_code: 401 | 403 } => RecoveryKind::Login,
+            ApiError::HttpError {
+                status_code: 401 | 403,
+            } => RecoveryKind::Login,
             ApiError::RateLimited { .. } => RecoveryKind::Wait,
             ApiError::HttpError { status_code: 429 } => RecoveryKind::Wait,
-            ApiError::EmptyContent => RecoveryKind::None,
+            ApiError::EmptyContent | ApiError::Cancelled => RecoveryKind::None,
             _ => RecoveryKind::Retry,
         }
     }
@@ -226,70 +232,145 @@ mod tests {
 
     #[test]
     fn app_error_descriptions() {
-        assert_eq!(AppError::Network(NetworkError::NoConnection).to_string(), "인터넷에 연결되어 있지 않습니다");
-        assert_eq!(AppError::Auth(AuthError::NotLoggedIn).to_string(), "로그인이 필요합니다");
-        assert_eq!(AppError::Api(ApiError::Unauthorized).to_string(), "로그인이 필요합니다");
-        assert_eq!(AppError::Player(PlayerError::StreamNotFound).to_string(), "스트림을 찾을 수 없습니다");
-        assert_eq!(AppError::Chat(ChatError::NotConnected).to_string(), "채팅에 연결되어 있지 않습니다");
+        assert_eq!(
+            AppError::Network(NetworkError::NoConnection).to_string(),
+            "인터넷에 연결되어 있지 않습니다"
+        );
+        assert_eq!(
+            AppError::Auth(AuthError::NotLoggedIn).to_string(),
+            "로그인이 필요합니다"
+        );
+        assert_eq!(
+            AppError::Api(ApiError::Unauthorized).to_string(),
+            "로그인이 필요합니다"
+        );
+        assert_eq!(
+            AppError::Player(PlayerError::StreamNotFound).to_string(),
+            "스트림을 찾을 수 없습니다"
+        );
+        assert_eq!(
+            AppError::Chat(ChatError::NotConnected).to_string(),
+            "채팅에 연결되어 있지 않습니다"
+        );
         assert_eq!(
             AppError::Persistence(PersistenceError::ContainerNotLoaded).to_string(),
             "데이터 저장소가 로드되지 않았습니다"
         );
-        assert_eq!(AppError::Unknown("테스트".into()).error_description(), "알 수 없는 오류: 테스트");
+        assert_eq!(
+            AppError::Unknown("테스트".into()).error_description(),
+            "알 수 없는 오류: 테스트"
+        );
     }
 
     #[test]
     fn app_error_recovery_suggestions() {
         assert_eq!(
-            AppError::Network(NetworkError::Timeout).recovery_suggestion().as_deref(),
+            AppError::Network(NetworkError::Timeout)
+                .recovery_suggestion()
+                .as_deref(),
             Some("네트워크 연결을 확인하고 다시 시도해주세요.")
         );
-        assert_eq!(AppError::Auth(AuthError::NotLoggedIn).recovery_suggestion().as_deref(), Some("다시 로그인해주세요."));
         assert_eq!(
-            AppError::Api(ApiError::Unauthorized).recovery_suggestion().as_deref(),
+            AppError::Auth(AuthError::NotLoggedIn)
+                .recovery_suggestion()
+                .as_deref(),
+            Some("다시 로그인해주세요.")
+        );
+        assert_eq!(
+            AppError::Api(ApiError::Unauthorized)
+                .recovery_suggestion()
+                .as_deref(),
             Some("다시 로그인하면 이어서 이용할 수 있습니다.")
         );
         assert_eq!(
-            AppError::Api(ApiError::NetworkError("x".into())).recovery_suggestion().as_deref(),
+            AppError::Api(ApiError::NetworkError("x".into()))
+                .recovery_suggestion()
+                .as_deref(),
             Some("네트워크 상태를 확인하고 다시 시도해 주세요.")
         );
         assert_eq!(
-            AppError::Api(ApiError::EmptyContent).recovery_suggestion().as_deref(),
+            AppError::Api(ApiError::EmptyContent)
+                .recovery_suggestion()
+                .as_deref(),
             Some("잠시 후 다시 시도해주세요.")
         );
         assert_eq!(
-            AppError::Player(PlayerError::StreamNotFound).recovery_suggestion().as_deref(),
+            AppError::Player(PlayerError::StreamNotFound)
+                .recovery_suggestion()
+                .as_deref(),
             Some("다른 품질로 재생하거나 플레이어를 재시작해보세요.")
         );
-        assert_eq!(AppError::Chat(ChatError::NotConnected).recovery_suggestion().as_deref(), Some("채팅 연결을 다시 시도합니다."));
         assert_eq!(
-            AppError::Persistence(PersistenceError::ContainerNotLoaded).recovery_suggestion().as_deref(),
+            AppError::Chat(ChatError::NotConnected)
+                .recovery_suggestion()
+                .as_deref(),
+            Some("채팅 연결을 다시 시도합니다.")
+        );
+        assert_eq!(
+            AppError::Persistence(PersistenceError::ContainerNotLoaded)
+                .recovery_suggestion()
+                .as_deref(),
             Some("앱을 재시작해주세요.")
         );
-        assert_eq!(AppError::Unknown("x".into()).recovery_suggestion().as_deref(), Some("앱을 재시작해주세요."));
+        assert_eq!(
+            AppError::Unknown("x".into())
+                .recovery_suggestion()
+                .as_deref(),
+            Some("앱을 재시작해주세요.")
+        );
     }
 
     #[test]
     fn network_error_descriptions() {
-        assert_eq!(NetworkError::NoConnection.to_string(), "인터넷에 연결되어 있지 않습니다");
-        assert_eq!(NetworkError::Timeout.to_string(), "요청 시간이 초과되었습니다");
-        assert_eq!(NetworkError::DnsResolutionFailed.to_string(), "DNS 조회 실패");
+        assert_eq!(
+            NetworkError::NoConnection.to_string(),
+            "인터넷에 연결되어 있지 않습니다"
+        );
+        assert_eq!(
+            NetworkError::Timeout.to_string(),
+            "요청 시간이 초과되었습니다"
+        );
+        assert_eq!(
+            NetworkError::DnsResolutionFailed.to_string(),
+            "DNS 조회 실패"
+        );
         assert_eq!(NetworkError::SslError.to_string(), "보안 연결 오류");
-        assert_eq!(NetworkError::InvalidUrl("http://bad".into()).to_string(), "잘못된 URL: http://bad");
+        assert_eq!(
+            NetworkError::InvalidUrl("http://bad".into()).to_string(),
+            "잘못된 URL: http://bad"
+        );
     }
 
     #[test]
     fn api_error_user_copy() {
         assert_eq!(ApiError::Unauthorized.to_string(), "로그인이 필요합니다");
-        assert_eq!(ApiError::InvalidResponse.to_string(), "서버 응답을 읽지 못했습니다");
+        assert_eq!(
+            ApiError::InvalidResponse.to_string(),
+            "서버 응답을 읽지 못했습니다"
+        );
         assert_eq!(ApiError::http(403).to_string(), "접근 권한이 없습니다");
-        assert_eq!(ApiError::http(404).to_string(), "요청한 정보를 찾을 수 없습니다");
-        assert_eq!(ApiError::http(429).to_string(), "요청이 많아 잠시 제한되었습니다");
+        assert_eq!(
+            ApiError::http(404).to_string(),
+            "요청한 정보를 찾을 수 없습니다"
+        );
+        assert_eq!(
+            ApiError::http(429).to_string(),
+            "요청이 많아 잠시 제한되었습니다"
+        );
         assert_eq!(ApiError::http(503).to_string(), "서버에 문제가 생겼습니다");
-        assert_eq!(ApiError::http(999).to_string(), "요청을 처리하지 못했습니다 (999)");
+        assert_eq!(
+            ApiError::http(999).to_string(),
+            "요청을 처리하지 못했습니다 (999)"
+        );
         assert_eq!(ApiError::EmptyContent.to_string(), "표시할 내용이 없습니다");
-        assert_eq!(ApiError::NetworkError("timeout".into()).to_string(), "네트워크에 연결하지 못했습니다");
-        assert_eq!(ApiError::RateLimited { retry_after: 30.0 }.to_string(), "요청이 많아 30초 후 다시 시도합니다");
+        assert_eq!(
+            ApiError::NetworkError("timeout".into()).to_string(),
+            "네트워크에 연결하지 못했습니다"
+        );
+        assert_eq!(
+            ApiError::RateLimited { retry_after: 30.0 }.to_string(),
+            "요청이 많아 30초 후 다시 시도합니다"
+        );
     }
 
     #[test]
@@ -307,12 +388,21 @@ mod tests {
         assert_eq!(ApiError::Unauthorized.recovery_kind(), RecoveryKind::Login);
         assert_eq!(ApiError::http(401).recovery_kind(), RecoveryKind::Login);
         assert_eq!(ApiError::http(403).recovery_kind(), RecoveryKind::Login);
-        assert_eq!(ApiError::RateLimited { retry_after: 5.0 }.recovery_kind(), RecoveryKind::Wait);
+        assert_eq!(
+            ApiError::RateLimited { retry_after: 5.0 }.recovery_kind(),
+            RecoveryKind::Wait
+        );
         assert_eq!(ApiError::http(429).recovery_kind(), RecoveryKind::Wait);
         assert_eq!(ApiError::EmptyContent.recovery_kind(), RecoveryKind::None);
-        assert_eq!(ApiError::NetworkError("x".into()).recovery_kind(), RecoveryKind::Retry);
+        assert_eq!(
+            ApiError::NetworkError("x".into()).recovery_kind(),
+            RecoveryKind::Retry
+        );
         assert_eq!(ApiError::http(500).recovery_kind(), RecoveryKind::Retry);
-        assert!(ApiError::Unauthorized.recovery_suggestion().unwrap().contains("로그인"));
+        assert!(ApiError::Unauthorized
+            .recovery_suggestion()
+            .unwrap()
+            .contains("로그인"));
         assert_eq!(ApiError::EmptyContent.recovery_suggestion(), None);
     }
 
@@ -321,44 +411,116 @@ mod tests {
         assert_eq!(ApiError::Unauthorized, ApiError::Unauthorized);
         assert_eq!(ApiError::http(200), ApiError::http(200));
         assert_ne!(ApiError::http(200), ApiError::http(404));
-        assert_eq!(ApiError::RateLimited { retry_after: 10.0 }, ApiError::RateLimited { retry_after: 10.0 });
-        assert_ne!(ApiError::RateLimited { retry_after: 10.0 }, ApiError::RateLimited { retry_after: 30.0 });
+        assert_eq!(
+            ApiError::RateLimited { retry_after: 10.0 },
+            ApiError::RateLimited { retry_after: 10.0 }
+        );
+        assert_ne!(
+            ApiError::RateLimited { retry_after: 10.0 },
+            ApiError::RateLimited { retry_after: 30.0 }
+        );
     }
 
     #[test]
     fn auth_chat_persistence_descriptions() {
         assert_eq!(AuthError::NotLoggedIn.to_string(), "로그인이 필요합니다");
-        assert_eq!(AuthError::CookieExpired.to_string(), "인증 쿠키가 만료되었습니다");
-        assert_eq!(AuthError::OauthFailed("reason".into()).to_string(), "OAuth 인증 실패: reason");
-        assert_eq!(AuthError::KeychainAccessDenied.to_string(), "키체인 접근이 거부되었습니다");
+        assert_eq!(
+            AuthError::CookieExpired.to_string(),
+            "인증 쿠키가 만료되었습니다"
+        );
+        assert_eq!(
+            AuthError::OauthFailed("reason".into()).to_string(),
+            "OAuth 인증 실패: reason"
+        );
+        assert_eq!(
+            AuthError::KeychainAccessDenied.to_string(),
+            "키체인 접근이 거부되었습니다"
+        );
         assert_eq!(AuthError::TokenRefreshFailed.to_string(), "토큰 갱신 실패");
 
-        assert_eq!(ChatError::ConnectionFailed("timeout".into()).to_string(), "채팅 연결 실패: timeout");
-        assert_eq!(ChatError::AuthenticationFailed.to_string(), "채팅 인증 실패");
-        assert_eq!(ChatError::SendFailed("오류".into()).to_string(), "메시지 전송 실패: 오류");
-        assert_eq!(ChatError::MaxRetriesExceeded.to_string(), "최대 재연결 시도 횟수 초과");
+        assert_eq!(
+            ChatError::ConnectionFailed("timeout".into()).to_string(),
+            "채팅 연결 실패: timeout"
+        );
+        assert_eq!(
+            ChatError::AuthenticationFailed.to_string(),
+            "채팅 인증 실패"
+        );
+        assert_eq!(
+            ChatError::SendFailed("오류".into()).to_string(),
+            "메시지 전송 실패: 오류"
+        );
+        assert_eq!(
+            ChatError::MaxRetriesExceeded.to_string(),
+            "최대 재연결 시도 횟수 초과"
+        );
         assert_eq!(ChatError::InvalidChannelId.to_string(), "잘못된 채널 ID");
-        assert_eq!(ChatError::ServerError("500".into()).to_string(), "서버 오류: 500");
-        assert_eq!(ChatError::NotConnected.to_string(), "채팅에 연결되어 있지 않습니다");
+        assert_eq!(
+            ChatError::ServerError("500".into()).to_string(),
+            "서버 오류: 500"
+        );
+        assert_eq!(
+            ChatError::NotConnected.to_string(),
+            "채팅에 연결되어 있지 않습니다"
+        );
         assert_eq!(ChatError::InvalidMessage.to_string(), "잘못된 메시지 형식");
 
-        assert_eq!(PersistenceError::SaveFailed("disk full".into()).to_string(), "저장 실패: disk full");
-        assert_eq!(PersistenceError::FetchFailed("not found".into()).to_string(), "조회 실패: not found");
-        assert_eq!(PersistenceError::MigrationFailed("v2".into()).to_string(), "마이그레이션 실패: v2");
-        assert_eq!(PersistenceError::ContainerNotLoaded.to_string(), "데이터 저장소가 로드되지 않았습니다");
+        assert_eq!(
+            PersistenceError::SaveFailed("disk full".into()).to_string(),
+            "저장 실패: disk full"
+        );
+        assert_eq!(
+            PersistenceError::FetchFailed("not found".into()).to_string(),
+            "조회 실패: not found"
+        );
+        assert_eq!(
+            PersistenceError::MigrationFailed("v2".into()).to_string(),
+            "마이그레이션 실패: v2"
+        );
+        assert_eq!(
+            PersistenceError::ContainerNotLoaded.to_string(),
+            "데이터 저장소가 로드되지 않았습니다"
+        );
     }
 
     #[test]
     fn player_error_descriptions() {
-        assert_eq!(PlayerError::StreamNotFound.to_string(), "스트림을 찾을 수 없습니다");
-        assert_eq!(PlayerError::NetworkTimeout.to_string(), "네트워크 연결 시간 초과");
-        assert_eq!(PlayerError::DecodingFailed("corrupt".into()).to_string(), "디코딩 실패: corrupt");
-        assert_eq!(PlayerError::EngineInitFailed.to_string(), "플레이어 엔진 초기화 실패");
-        assert_eq!(PlayerError::UnsupportedFormat("mkv".into()).to_string(), "지원하지 않는 포맷: mkv");
-        assert_eq!(PlayerError::HlsParsingFailed("x".into()).to_string(), "HLS 파싱 실패: x");
-        assert_eq!(PlayerError::InvalidManifest.to_string(), "잘못된 매니페스트");
-        assert_eq!(PlayerError::ConnectionLost.to_string(), "연결이 끊어졌습니다");
+        assert_eq!(
+            PlayerError::StreamNotFound.to_string(),
+            "스트림을 찾을 수 없습니다"
+        );
+        assert_eq!(
+            PlayerError::NetworkTimeout.to_string(),
+            "네트워크 연결 시간 초과"
+        );
+        assert_eq!(
+            PlayerError::DecodingFailed("corrupt".into()).to_string(),
+            "디코딩 실패: corrupt"
+        );
+        assert_eq!(
+            PlayerError::EngineInitFailed.to_string(),
+            "플레이어 엔진 초기화 실패"
+        );
+        assert_eq!(
+            PlayerError::UnsupportedFormat("mkv".into()).to_string(),
+            "지원하지 않는 포맷: mkv"
+        );
+        assert_eq!(
+            PlayerError::HlsParsingFailed("x".into()).to_string(),
+            "HLS 파싱 실패: x"
+        );
+        assert_eq!(
+            PlayerError::InvalidManifest.to_string(),
+            "잘못된 매니페스트"
+        );
+        assert_eq!(
+            PlayerError::ConnectionLost.to_string(),
+            "연결이 끊어졌습니다"
+        );
         assert_eq!(PlayerError::AuthRequired.to_string(), "인증이 필요합니다");
-        assert_eq!(PlayerError::RecordingFailed("perm".into()).to_string(), "녹화 실패: perm");
+        assert_eq!(
+            PlayerError::RecordingFailed("perm".into()).to_string(),
+            "녹화 실패: perm"
+        );
     }
 }

@@ -47,15 +47,25 @@ impl NaverVodPlayResponse {
         if self.error_code.is_some() {
             return None;
         }
-        let list = self.videos.as_ref().and_then(|v| v.list.as_deref()).unwrap_or(&[]);
+        let list = self
+            .videos
+            .as_ref()
+            .and_then(|v| v.list.as_deref())
+            .unwrap_or(&[]);
         if let Some(adhls) = list
             .iter()
             .find(|v| matches!(v.encoded_type.as_deref(), Some("ADHLS") | Some("ABR_HLS")))
         {
-            return adhls.master_playlist_url.clone().or_else(|| adhls.source.clone());
+            return adhls
+                .master_playlist_url
+                .clone()
+                .or_else(|| adhls.source.clone());
         }
         let first = list.first()?;
-        first.master_playlist_url.clone().or_else(|| first.source.clone())
+        first
+            .master_playlist_url
+            .clone()
+            .or_else(|| first.source.clone())
     }
 }
 
@@ -88,13 +98,21 @@ pub struct ClipDetail {
     pub clip_title: String,
     #[serde(rename = "clipUrl", default, skip_serializing_if = "Option::is_none")]
     pub clip_url: Option<Url>,
-    #[serde(rename = "thumbnailImageUrl", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "thumbnailImageUrl",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub thumbnail_image_url: Option<Url>,
     pub duration: i64,
     /// 조회수 (clipDetail API 에서는 반환되지 않으므로 optional)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub read_count: Option<i64>,
-    #[serde(default, with = "chzzk_date_opt", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "chzzk_date_opt",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub created_date: Option<DateTime<Utc>>,
     /// 선택적 필드 (채널 정보는 여기서 가져와야 함)
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -174,7 +192,10 @@ mod tests {
         )
         .unwrap();
         assert_eq!(d.channel().unwrap().channel_id, "m");
-        assert_eq!(d.best_playback_url().unwrap().as_str(), "https://v.example/x.m3u8");
+        assert_eq!(
+            d.best_playback_url().unwrap().as_str(),
+            "https://v.example/x.m3u8"
+        );
         assert!(d.created_date.is_some());
         assert!(serde_json::from_str::<ClipDetail>(r#"{"clipUID":"u","clipTitle":"t"}"#).is_err());
     }

@@ -54,7 +54,10 @@ pub struct QueryItem {
 
 impl QueryItem {
     pub fn new(name: impl Into<String>, value: impl Into<String>) -> Self {
-        Self { name: name.into(), value: Some(value.into()) }
+        Self {
+            name: name.into(),
+            value: Some(value.into()),
+        }
     }
 }
 
@@ -130,7 +133,12 @@ pub struct HttpCookie {
 
 impl HttpCookie {
     pub fn new(name: impl Into<String>, value: impl Into<String>) -> Self {
-        Self { name: name.into(), value: value.into(), domain: None, path: None }
+        Self {
+            name: name.into(),
+            value: value.into(),
+            domain: None,
+            path: None,
+        }
     }
 
     /// `HTTPCookie.requestHeaderFields(with:)` 의 `Cookie` 값 — `"a=1; b=2"`. 비어 있으면 `None`.
@@ -138,7 +146,13 @@ impl HttpCookie {
         if cookies.is_empty() {
             return None;
         }
-        Some(cookies.iter().map(|c| format!("{}={}", c.name, c.value)).collect::<Vec<_>>().join("; "))
+        Some(
+            cookies
+                .iter()
+                .map(|c| format!("{}={}", c.name, c.value))
+                .collect::<Vec<_>>()
+                .join("; "),
+        )
     }
 }
 
@@ -255,7 +269,9 @@ pub trait PlayerEngineProtocol: Send + Sync {
 
     // MARK: Recording — 미지원 엔진은 명시적으로 실패한다.
     async fn start_recording(&self, _path: &Path) -> Result<(), PlayerError> {
-        Err(PlayerError::RecordingFailed(RECORDING_UNSUPPORTED_REASON.into()))
+        Err(PlayerError::RecordingFailed(
+            RECORDING_UNSUPPORTED_REASON.into(),
+        ))
     }
     async fn stop_recording(&self) {}
     fn is_recording(&self) -> bool {
@@ -274,8 +290,13 @@ pub trait PlayerEngineProtocol: Send + Sync {
 
     /// 현재 표시 중인 프레임 1장을 캡처한다. 기본 구현은 조용한 no-op 대신 명시적 실패.
     /// ⚠ 이 기본 구현을 "성공한 척" 하도록 바꾸지 말 것.
-    async fn capture_screenshot(&self, _format: ScreenshotFormat) -> Result<CapturedFrame, PlayerError> {
-        Err(PlayerError::ScreenshotFailed(SCREENSHOT_UNIMPLEMENTED_REASON.into()))
+    async fn capture_screenshot(
+        &self,
+        _format: ScreenshotFormat,
+    ) -> Result<CapturedFrame, PlayerError> {
+        Err(PlayerError::ScreenshotFailed(
+            SCREENSHOT_UNIMPLEMENTED_REASON.into(),
+        ))
     }
 
     /// 본 엔진이 지원하는 기능 집합. UI/설정 패널이 타입 캐스팅 대신 이 flag 로 분기한다.
@@ -288,7 +309,10 @@ mod tests {
 
     #[test]
     fn cache_policy_constants() {
-        assert_eq!(CachePolicy::STANDARD, CachePolicy::ReturnCacheElseLoad { ttl: 60.0 });
+        assert_eq!(
+            CachePolicy::STANDARD,
+            CachePolicy::ReturnCacheElseLoad { ttl: 60.0 }
+        );
         assert_eq!(CachePolicy::NONE, CachePolicy::ReloadIgnoringCache);
     }
 
@@ -302,14 +326,20 @@ mod tests {
 
     #[test]
     fn auth_state() {
-        assert!(AuthState::LoggedIn { user_id: "u".into() }.is_logged_in());
+        assert!(AuthState::LoggedIn {
+            user_id: "u".into()
+        }
+        .is_logged_in());
         assert!(!AuthState::Expired.is_logged_in());
     }
 
     #[test]
     fn cookie_header() {
         assert_eq!(HttpCookie::header_value(&[]), None);
-        let v = HttpCookie::header_value(&[HttpCookie::new("NID_AUT", "a"), HttpCookie::new("NID_SES", "b")]);
+        let v = HttpCookie::header_value(&[
+            HttpCookie::new("NID_AUT", "a"),
+            HttpCookie::new("NID_SES", "b"),
+        ]);
         assert_eq!(v.as_deref(), Some("NID_AUT=a; NID_SES=b"));
     }
 
@@ -364,11 +394,15 @@ mod tests {
         let engine = DummyEngine;
         assert_eq!(
             futures_lite_block_on(engine.capture_screenshot(ScreenshotFormat::Png)),
-            Err(PlayerError::ScreenshotFailed(SCREENSHOT_UNIMPLEMENTED_REASON.into()))
+            Err(PlayerError::ScreenshotFailed(
+                SCREENSHOT_UNIMPLEMENTED_REASON.into()
+            ))
         );
         assert_eq!(
             futures_lite_block_on(engine.start_recording(Path::new("/tmp/x"))),
-            Err(PlayerError::RecordingFailed(RECORDING_UNSUPPORTED_REASON.into()))
+            Err(PlayerError::RecordingFailed(
+                RECORDING_UNSUPPORTED_REASON.into()
+            ))
         );
         assert!(!engine.is_recording());
         assert!(!engine.is_suspend_intent_active());

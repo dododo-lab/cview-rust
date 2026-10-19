@@ -35,7 +35,10 @@ pub struct LiveInfo {
     /// `{type}` 플레이스홀더가 `720` 으로 치환된 썸네일 URL.
     #[serde(rename = "liveImageUrl", skip_serializing_if = "Option::is_none")]
     pub live_image_url: Option<Url>,
-    #[serde(rename = "defaultThumbnailImageUrl", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "defaultThumbnailImageUrl",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub default_thumbnail_image_url: Option<Url>,
     #[serde(with = "chzzk_date_opt", skip_serializing_if = "Option::is_none")]
     pub open_date: Option<DateTime<Utc>>,
@@ -48,7 +51,10 @@ pub struct LiveInfo {
     #[serde(rename = "livePlaybackJson", skip_serializing_if = "Option::is_none")]
     pub live_playback_json: Option<String>,
     /// [2026-06-13] 같이보기+ 오디오 전용 라디오 스트림 JSON (영상 livePlayback 부재 시 폴백).
-    #[serde(rename = "radioModePlaybackJson", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "radioModePlaybackJson",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub radio_mode_playback_json: Option<String>,
     /// 워치파티(같이보기+) 식별 — `Some` 이면 같이보기 스트림.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -115,7 +121,11 @@ impl LiveInfo {
 
     /// 같이보기+(워치파티) 스트림 여부.
     pub fn is_watch_party(&self) -> bool {
-        self.watch_party_no.is_some() || self.watch_party_type.as_deref().is_some_and(|t| !t.is_empty())
+        self.watch_party_no.is_some()
+            || self
+                .watch_party_type
+                .as_deref()
+                .is_some_and(|t| !t.is_empty())
     }
 
     /// TV 정책이 DENIED 인지. 이 값만으로 모든 영상 재생을 차단하지 않는다.
@@ -130,7 +140,11 @@ impl LiveInfo {
     /// 영상 livePlayback 은 비었지만 라디오(오디오) 스트림은 있는 경우 — 같이보기+ 오디오 전용.
     pub fn has_only_radio_playback(&self) -> bool {
         self.live_playback_json.as_deref().unwrap_or("").is_empty()
-            && !self.radio_mode_playback_json.as_deref().unwrap_or("").is_empty()
+            && !self
+                .radio_mode_playback_json
+                .as_deref()
+                .unwrap_or("")
+                .is_empty()
     }
 
     /// API 가 playback JSON 을 문자열 또는 중첩 JSON 객체로 반환하는 경우 모두 처리.
@@ -201,7 +215,12 @@ pub struct ChannelViewerInfo {
 
 impl Default for ChannelViewerInfo {
     fn default() -> Self {
-        Self { channel_id: String::new(), user_role: "GUEST".into(), cheat_key: false, naver_membership: false }
+        Self {
+            channel_id: String::new(),
+            user_role: "GUEST".into(),
+            cheat_key: false,
+            naver_membership: false,
+        }
     }
 }
 
@@ -271,8 +290,13 @@ pub enum StreamQuality {
 }
 
 impl StreamQuality {
-    pub const ALL: [StreamQuality; 5] =
-        [StreamQuality::Auto, StreamQuality::Source, StreamQuality::High, StreamQuality::Medium, StreamQuality::Low];
+    pub const ALL: [StreamQuality; 5] = [
+        StreamQuality::Auto,
+        StreamQuality::Source,
+        StreamQuality::High,
+        StreamQuality::Medium,
+        StreamQuality::Low,
+    ];
 
     pub fn raw_value(self) -> &'static str {
         match self {
@@ -351,7 +375,10 @@ mod tests {
             r#"{"liveId":1,"liveTitle":"T","status":"OPEN","concurrentUserCount":0,"liveImageUrl":"https://cdn.example.com/thumb/{type}/image.jpg"}"#,
         )
         .unwrap();
-        assert_eq!(info.live_image_url.as_ref().unwrap().as_str(), "https://cdn.example.com/thumb/720/image.jpg");
+        assert_eq!(
+            info.live_image_url.as_ref().unwrap().as_str(),
+            "https://cdn.example.com/thumb/720/image.jpg"
+        );
         assert_eq!(info.resolved_live_image_url(), info.live_image_url.as_ref());
     }
 
@@ -441,7 +468,10 @@ mod tests {
         let mut fast = info.clone();
         fast.watch_polling_interval_ms = Some(100);
         assert_eq!(fast.watch_heartbeat_interval(), Duration::from_secs(5));
-        assert_eq!(LiveInfo::new(1, "t").watch_heartbeat_interval(), Duration::from_secs(10));
+        assert_eq!(
+            LiveInfo::new(1, "t").watch_heartbeat_interval(),
+            Duration::from_secs(10)
+        );
     }
 
     #[test]
@@ -459,7 +489,10 @@ mod tests {
     fn live_status_raw_values() {
         assert_eq!(LiveStatus::Open.raw_value(), "OPEN");
         assert_eq!(LiveStatus::Close.raw_value(), "CLOSE");
-        assert_eq!(serde_json::from_str::<LiveStatus>("\"OPEN\"").unwrap(), LiveStatus::Open);
+        assert_eq!(
+            serde_json::from_str::<LiveStatus>("\"OPEN\"").unwrap(),
+            LiveStatus::Open
+        );
     }
 
     #[test]
@@ -472,7 +505,10 @@ mod tests {
         assert_eq!(StreamQuality::ALL.len(), 5);
         assert_eq!(StreamQuality::Auto.raw_value(), "auto");
         assert_eq!(StreamQuality::Source.raw_value(), "1080p");
-        assert_eq!(serde_json::to_string(&StreamQuality::Source).unwrap(), "\"1080p\"");
+        assert_eq!(
+            serde_json::to_string(&StreamQuality::Source).unwrap(),
+            "\"1080p\""
+        );
         assert_eq!(StreamQuality::High.max_height_cap(), 720);
         assert_eq!(StreamQuality::Source.max_height_cap(), 0);
     }
@@ -480,8 +516,16 @@ mod tests {
     #[test]
     fn live_playback_round_trip() {
         let original = LivePlayback {
-            media: vec![MediaInfo::new("m1", Some("HLS".into()), "/live/stream.m3u8")],
-            live: Some(LivePlaybackDetail { start: Some("2024-01-01".into()), status: Some("STARTED".into()), ..Default::default() }),
+            media: vec![MediaInfo::new(
+                "m1",
+                Some("HLS".into()),
+                "/live/stream.m3u8",
+            )],
+            live: Some(LivePlaybackDetail {
+                start: Some("2024-01-01".into()),
+                status: Some("STARTED".into()),
+                ..Default::default()
+            }),
         };
         let data = serde_json::to_string(&original).unwrap();
         let decoded: LivePlayback = serde_json::from_str(&data).unwrap();
@@ -494,7 +538,8 @@ mod tests {
     #[test]
     fn live_info_round_trip_keeps_fields() {
         let mut info = LiveInfo::new(3, "x");
-        info.open_date = Some(chrono::TimeZone::with_ymd_and_hms(&Utc, 2026, 1, 2, 3, 4, 5).unwrap());
+        info.open_date =
+            Some(chrono::TimeZone::with_ymd_and_hms(&Utc, 2026, 1, 2, 3, 4, 5).unwrap());
         info.channel = Some(ChannelInfo::new("c", "n"));
         let json = serde_json::to_string(&info).unwrap();
         let back: LiveInfo = serde_json::from_str(&json).unwrap();

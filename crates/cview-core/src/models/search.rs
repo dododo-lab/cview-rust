@@ -21,7 +21,12 @@ pub enum SearchType {
 }
 
 impl SearchType {
-    pub const ALL: [SearchType; 4] = [SearchType::Channel, SearchType::Live, SearchType::Video, SearchType::Clip];
+    pub const ALL: [SearchType; 4] = [
+        SearchType::Channel,
+        SearchType::Live,
+        SearchType::Video,
+        SearchType::Clip,
+    ];
 }
 
 /// 검색 결과 컨테이너.
@@ -41,14 +46,24 @@ pub struct SearchResult<T> {
 
 impl<T> Default for SearchResult<T> {
     fn default() -> Self {
-        Self { size: 0, page: None, total_count: None, data: Vec::new() }
+        Self {
+            size: 0,
+            page: None,
+            total_count: None,
+            data: Vec::new(),
+        }
     }
 }
 
 impl<T> SearchResult<T> {
     /// `data` 만 다른 타입으로 바꾼다 (클라이언트의 래퍼 → 도메인 변환에 쓴다).
     pub fn map<U>(self, f: impl FnMut(T) -> U) -> SearchResult<U> {
-        SearchResult { size: self.size, page: self.page, total_count: self.total_count, data: self.data.into_iter().map(f).collect() }
+        SearchResult {
+            size: self.size,
+            page: self.page,
+            total_count: self.total_count,
+            data: self.data.into_iter().map(f).collect(),
+        }
     }
 }
 
@@ -185,7 +200,9 @@ impl<'de> Deserialize<'de> for VodInfo {
             video_no: o.required::<_, D::Error>("videoNo")?,
             video_id: o.optional::<_, D::Error>("videoId")?,
             video_title: o.optional::<_, D::Error>("videoTitle")?.unwrap_or_default(),
-            video_image_url: o.url("thumbnailImageUrl").or_else(|| o.url("videoImageUrl")),
+            video_image_url: o
+                .url("thumbnailImageUrl")
+                .or_else(|| o.url("videoImageUrl")),
             duration: o.optional::<_, D::Error>("duration")?.unwrap_or(0),
             publish_date: o.optional_date::<D::Error>("publishDate")?,
             read_count: o.optional::<_, D::Error>("readCount")?.unwrap_or(0),
@@ -344,7 +361,10 @@ pub struct AutocompleteSuggestion {
 
 impl AutocompleteSuggestion {
     pub fn new(text: impl Into<String>, kind: AutocompleteSuggestionKind) -> Self {
-        Self { text: text.into(), kind }
+        Self {
+            text: text.into(),
+            kind,
+        }
     }
 
     /// [2026-09-19] 값에서 파생된 안정 식별자 (`"{kind}|{text}"`).
@@ -424,7 +444,10 @@ mod tests {
         let v: VodInfo =
             serde_json::from_str(r#"{"videoNo":1,"videoImageUrl":"https://i.example/detail.jpg","publishDate":"2024-01-15T12:00:00Z"}"#)
                 .unwrap();
-        assert_eq!(v.video_image_url.as_ref().unwrap().as_str(), "https://i.example/detail.jpg");
+        assert_eq!(
+            v.video_image_url.as_ref().unwrap().as_str(),
+            "https://i.example/detail.jpg"
+        );
         assert_eq!(v.video_title, "");
         let json = serde_json::to_value(&v).unwrap();
         assert!(json.get("thumbnailImageUrl").is_some());
@@ -455,13 +478,16 @@ mod tests {
         .unwrap();
         assert_eq!(list.clip_uid, "U1");
         assert_eq!(list.channel.as_ref().unwrap().channel_id, "o");
-        let detail: ClipInfo =
-            serde_json::from_str(r#"{"clipUid":"u2","channel":{"channelId":"d","channelName":"D"}}"#).unwrap();
+        let detail: ClipInfo = serde_json::from_str(
+            r#"{"clipUid":"u2","channel":{"channelId":"d","channelName":"D"}}"#,
+        )
+        .unwrap();
         assert_eq!(detail.clip_uid, "u2");
         assert_eq!(detail.channel.as_ref().unwrap().channel_id, "d");
         let empty: ClipInfo = serde_json::from_str("{}").unwrap();
         assert_eq!(empty.clip_uid, "");
-        let back: ClipInfo = serde_json::from_value(serde_json::to_value(&detail).unwrap()).unwrap();
+        let back: ClipInfo =
+            serde_json::from_value(serde_json::to_value(&detail).unwrap()).unwrap();
         assert_eq!(back, detail);
     }
 
@@ -469,14 +495,23 @@ mod tests {
     fn autocomplete_stable_id() {
         let a = AutocompleteSuggestion::new("롤", AutocompleteSuggestionKind::Following);
         assert_eq!(a.id(), "following|롤");
-        assert_eq!(a.id(), AutocompleteSuggestion::new("롤", AutocompleteSuggestionKind::Following).id());
+        assert_eq!(
+            a.id(),
+            AutocompleteSuggestion::new("롤", AutocompleteSuggestionKind::Following).id()
+        );
         assert_eq!(AutocompleteSuggestionKind::Recent.source_label(), None);
-        assert_eq!(AutocompleteSuggestionKind::Watched.source_label(), Some("최근 시청"));
+        assert_eq!(
+            AutocompleteSuggestionKind::Watched.source_label(),
+            Some("최근 시청")
+        );
     }
 
     #[test]
     fn search_type_raw() {
-        assert_eq!(serde_json::to_string(&SearchType::Channel).unwrap(), "\"channel\"");
+        assert_eq!(
+            serde_json::to_string(&SearchType::Channel).unwrap(),
+            "\"channel\""
+        );
         assert_eq!(LiveSortOption::ViewerCount.raw_value(), "시청자 많은순");
     }
 }

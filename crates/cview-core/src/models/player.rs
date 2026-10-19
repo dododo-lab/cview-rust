@@ -38,7 +38,10 @@ impl Default for PlayerState {
 
 impl PlayerState {
     pub fn is_active(&self) -> bool {
-        matches!(self.phase, PlayerPhase::Playing | PlayerPhase::Buffering { .. } | PlayerPhase::Paused)
+        matches!(
+            self.phase,
+            PlayerPhase::Playing | PlayerPhase::Buffering { .. } | PlayerPhase::Paused
+        )
     }
 }
 
@@ -123,7 +126,11 @@ impl PlayerTool {
 
 impl PlayerToolStatus {
     pub fn new(kind: PlayerToolStatusKind, message: impl Into<String>, tool: PlayerTool) -> Self {
-        Self { kind, message: message.into(), tool }
+        Self {
+            kind,
+            message: message.into(),
+            tool,
+        }
     }
 
     pub fn is_failure(&self) -> bool {
@@ -132,7 +139,15 @@ impl PlayerToolStatus {
 
     /// 접근성 머리말 — `"녹화 실패"` / `"캡처 완료"`.
     pub fn accessibility_headline(&self) -> String {
-        format!("{} {}", self.tool.display_name(), if self.is_failure() { "실패" } else { "완료" })
+        format!(
+            "{} {}",
+            self.tool.display_name(),
+            if self.is_failure() {
+                "실패"
+            } else {
+                "완료"
+            }
+        )
     }
 }
 
@@ -165,7 +180,11 @@ pub struct LatencyDataPoint {
 
 impl LatencyDataPoint {
     pub fn new(timestamp: DateTime<Utc>, latency: f64) -> Self {
-        Self { id: Uuid::new_v4(), timestamp, latency }
+        Self {
+            id: Uuid::new_v4(),
+            timestamp,
+            latency,
+        }
     }
 
     pub fn latency_duration(&self) -> Duration {
@@ -198,14 +217,21 @@ mod tests {
             (PlayerPhase::Ended, false),
             (PlayerPhase::Error(PlayerError::ConnectionLost), false),
         ] {
-            let s = PlayerState { phase, ..PlayerState::default() };
+            let s = PlayerState {
+                phase,
+                ..PlayerState::default()
+            };
             assert_eq!(s.is_active(), active);
         }
     }
 
     #[test]
     fn tool_status_headline() {
-        let s = PlayerToolStatus::new(PlayerToolStatusKind::Failure, "녹화 저장 실패", PlayerTool::Recording);
+        let s = PlayerToolStatus::new(
+            PlayerToolStatusKind::Failure,
+            "녹화 저장 실패",
+            PlayerTool::Recording,
+        );
         assert!(s.is_failure());
         assert_eq!(s.accessibility_headline(), "녹화 실패");
         let ok = PlayerToolStatus::new(PlayerToolStatusKind::Success, "ok", PlayerTool::default());
@@ -214,14 +240,23 @@ mod tests {
 
     #[test]
     fn engine_type() {
-        assert_eq!(serde_json::to_string(&PlayerEngineType::Hlsjs).unwrap(), "\"HLS.js\"");
+        assert_eq!(
+            serde_json::to_string(&PlayerEngineType::Hlsjs).unwrap(),
+            "\"HLS.js\""
+        );
         assert_eq!(PlayerEngineType::Hlsjs.display_name(), "HLS.js (저지연)");
-        assert_eq!(PlayerError::ScreenshotFailed("x".into()).to_string(), "화면 캡처 실패: x");
+        assert_eq!(
+            PlayerError::ScreenshotFailed("x".into()).to_string(),
+            "화면 캡처 실패: x"
+        );
     }
 
     #[test]
     fn latency_points_have_unique_ids() {
         let now = Utc::now();
-        assert_ne!(LatencyDataPoint::new(now, 1.0).id, LatencyDataPoint::new(now, 1.0).id);
+        assert_ne!(
+            LatencyDataPoint::new(now, 1.0).id,
+            LatencyDataPoint::new(now, 1.0).id
+        );
     }
 }

@@ -28,7 +28,11 @@ pub struct LiveChannelItem {
     pub thumbnail_url: Option<String>,
     pub channel_id: String,
     pub is_live: bool,
-    #[serde(default, with = "chzzk_date_opt", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        with = "chzzk_date_opt",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub open_date: Option<DateTime<Utc>>,
 }
 
@@ -246,7 +250,10 @@ mod tests {
     #[test]
     fn display_category_name() {
         assert_eq!(LiveChannelItem::display_category_name(None), "분류 없음");
-        assert_eq!(LiveChannelItem::display_category_name(Some("")), "분류 없음");
+        assert_eq!(
+            LiveChannelItem::display_category_name(Some("")),
+            "분류 없음"
+        );
         assert_eq!(LiveChannelItem::display_category_name(Some("롤")), "롤");
     }
 
@@ -270,17 +277,28 @@ mod tests {
         assert_eq!(CategoryTypeStat::display_name_for("SPORTS"), "스포츠");
         assert_eq!(CategoryTypeStat::display_name_for("MUSIC"), "기타");
         assert_eq!(CategoryTypeStat::display_name_for(""), "기타");
-        let stat = CategoryStat { id: "cat1".into(), name: "게임".into(), channel_count: 10, total_viewers: 50_000 };
+        let stat = CategoryStat {
+            id: "cat1".into(),
+            name: "게임".into(),
+            channel_count: 10,
+            total_viewers: 50_000,
+        };
         assert_eq!(stat.channel_count, 10);
-        let bucket =
-            ViewerBucket { id: "b1".into(), label: "100-500".into(), count: 25, min_viewers: 100, max_viewers: 500 };
+        let bucket = ViewerBucket {
+            id: "b1".into(),
+            label: "100-500".into(),
+            count: 25,
+            min_viewers: 100,
+            max_viewers: 500,
+        };
         assert_eq!(bucket.max_viewers, 500);
     }
 
     #[test]
     fn item_round_trip() {
         let item = make("a", "b", Some("c"));
-        let back: LiveChannelItem = serde_json::from_str(&serde_json::to_string(&item).unwrap()).unwrap();
+        let back: LiveChannelItem =
+            serde_json::from_str(&serde_json::to_string(&item).unwrap()).unwrap();
         assert_eq!(back, item);
     }
 }

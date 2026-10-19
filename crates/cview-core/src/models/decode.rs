@@ -94,7 +94,8 @@ pub fn parse_chzzk_date(s: &str) -> Option<DateTime<Utc>> {
             let rest = &b[idx..];
             let offset_secs: i32 = match rest {
                 [b'Z'] | [b'z'] => 0,
-                [sign @ (b'+' | b'-'), h1, h2, b':', m1, m2] | [sign @ (b'+' | b'-'), h1, h2, m1, m2] => {
+                [sign @ (b'+' | b'-'), h1, h2, b':', m1, m2]
+                | [sign @ (b'+' | b'-'), h1, h2, m1, m2] => {
                     let all = [*h1, *h2, *m1, *m2];
                     if !all.iter().all(u8::is_ascii_digit) {
                         return None;
@@ -114,7 +115,8 @@ pub fn parse_chzzk_date(s: &str) -> Option<DateTime<Utc>> {
                 _ => return None,
             };
             let offset = FixedOffset::east_opt(offset_secs)?;
-            let naive = naive.checked_add_signed(chrono::Duration::nanoseconds(i64::from(nanos)))?;
+            let naive =
+                naive.checked_add_signed(chrono::Duration::nanoseconds(i64::from(nanos)))?;
             offset
                 .from_local_datetime(&naive)
                 .single()
@@ -232,7 +234,10 @@ impl LenientObject {
 
     /// `try container.decodeIfPresent(T.self, forKey:)` — 없거나 `null` 이면 `None`,
     /// 있는데 형식이 어긋나면 오류.
-    pub fn optional<T: DeserializeOwned, E: serde::de::Error>(&self, key: &str) -> Result<Option<T>, E> {
+    pub fn optional<T: DeserializeOwned, E: serde::de::Error>(
+        &self,
+        key: &str,
+    ) -> Result<Option<T>, E> {
         match self.0.get(key) {
             None | Some(Value::Null) => Ok(None),
             Some(v) => T::deserialize(v)
@@ -247,7 +252,10 @@ impl LenientObject {
     }
 
     /// 엄격한 선택 날짜 (`decodeIfPresent(Date.self)`).
-    pub fn optional_date<E: serde::de::Error>(&self, key: &str) -> Result<Option<DateTime<Utc>>, E> {
+    pub fn optional_date<E: serde::de::Error>(
+        &self,
+        key: &str,
+    ) -> Result<Option<DateTime<Utc>>, E> {
         match self.0.get(key) {
             None | Some(Value::Null) => Ok(None),
             Some(v) => date_from_value(v)
@@ -266,7 +274,10 @@ impl LenientObject {
     pub fn array_report<T: DeserializeOwned>(&self, key: &str) -> ArrayDecodingResult<T> {
         let Some(Value::Array(items)) = self.0.get(key) else {
             tracing::warn!("SafeDecoding: '{key}' 배열 컨테이너 없음, 빈 배열 반환");
-            return ArrayDecodingResult { values: Vec::new(), failure_count: 1 };
+            return ArrayDecodingResult {
+                values: Vec::new(),
+                failure_count: 1,
+            };
         };
         let mut values = Vec::with_capacity(items.len());
         let mut failure_count = 0;
@@ -282,7 +293,10 @@ impl LenientObject {
                 values.len()
             );
         }
-        ArrayDecodingResult { values, failure_count }
+        ArrayDecodingResult {
+            values,
+            failure_count,
+        }
     }
 
     /// `SafeDecoding.decodeArray` — 실패 수 없이 유효 원소만.
@@ -307,9 +321,18 @@ mod tests {
 
     #[test]
     fn legacy_format_is_local_time() {
-        assert_eq!(parse_chzzk_date("2024-06-15 18:30:00"), Some(local(2024, 6, 15, 18, 30, 0)));
-        assert_eq!(parse_chzzk_date("2024-02-29 12:00:00"), Some(local(2024, 2, 29, 12, 0, 0)));
-        assert_eq!(parse_chzzk_date("2026-12-31 23:59:59"), Some(local(2026, 12, 31, 23, 59, 59)));
+        assert_eq!(
+            parse_chzzk_date("2024-06-15 18:30:00"),
+            Some(local(2024, 6, 15, 18, 30, 0))
+        );
+        assert_eq!(
+            parse_chzzk_date("2024-02-29 12:00:00"),
+            Some(local(2024, 2, 29, 12, 0, 0))
+        );
+        assert_eq!(
+            parse_chzzk_date("2026-12-31 23:59:59"),
+            Some(local(2026, 12, 31, 23, 59, 59))
+        );
     }
 
     #[test]
@@ -324,14 +347,8 @@ mod tests {
             parse_chzzk_date("2026-08-19T11:58:13.999Z"),
             Some(base + chrono::Duration::milliseconds(999))
         );
-        assert_eq!(
-            parse_chzzk_date("2026-08-19T20:58:13+09:00"),
-            Some(base)
-        );
-        assert_eq!(
-            parse_chzzk_date("2026-08-19T06:58:13-05:00"),
-            Some(base)
-        );
+        assert_eq!(parse_chzzk_date("2026-08-19T20:58:13+09:00"), Some(base));
+        assert_eq!(parse_chzzk_date("2026-08-19T06:58:13-05:00"), Some(base));
         assert_eq!(
             parse_chzzk_date("2026-08-19T20:58:13.250+09:00"),
             Some(base + chrono::Duration::milliseconds(250))
@@ -385,7 +402,8 @@ mod tests {
 
     #[test]
     fn format_round_trips() {
-        let d = Utc.with_ymd_and_hms(2026, 8, 19, 11, 58, 13).unwrap() + chrono::Duration::milliseconds(123);
+        let d = Utc.with_ymd_and_hms(2026, 8, 19, 11, 58, 13).unwrap()
+            + chrono::Duration::milliseconds(123);
         assert_eq!(parse_chzzk_date(&format_date(&d)), Some(d));
     }
 
@@ -399,7 +417,9 @@ mod tests {
     #[test]
     fn array_report_isolates_bad_elements() {
         let obj: LenientObject =
-            serde_json::from_str::<Map<String, Value>>(r#"{"a":[1,"x",3],"b":null}"#).map(LenientObject).unwrap();
+            serde_json::from_str::<Map<String, Value>>(r#"{"a":[1,"x",3],"b":null}"#)
+                .map(LenientObject)
+                .unwrap();
         let r = obj.array_report::<i64>("a");
         assert_eq!(r.values, vec![1, 3]);
         assert_eq!(r.failure_count, 1);

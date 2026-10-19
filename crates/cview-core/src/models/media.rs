@@ -22,7 +22,11 @@ pub struct MediaInfo {
 }
 
 impl MediaInfo {
-    pub fn new(media_id: impl Into<String>, media_protocol: Option<String>, path: impl Into<String>) -> Self {
+    pub fn new(
+        media_id: impl Into<String>,
+        media_protocol: Option<String>,
+        path: impl Into<String>,
+    ) -> Self {
         Self {
             media_id: media_id.into(),
             media_protocol,
@@ -63,7 +67,10 @@ pub struct EncodingTrack {
 
 impl EncodingTrack {
     pub fn new(encoding_track_id: impl Into<String>) -> Self {
-        Self { encoding_track_id: encoding_track_id.into(), ..Self::default() }
+        Self {
+            encoding_track_id: encoding_track_id.into(),
+            ..Self::default()
+        }
     }
 }
 
@@ -130,7 +137,9 @@ mod tests {
 
     #[test]
     fn frame_rate_as_string() {
-        let t: EncodingTrack = serde_json::from_str(r#"{"encodingTrackId":"track2","videoFrameRate":"30.0"}"#).unwrap();
+        let t: EncodingTrack =
+            serde_json::from_str(r#"{"encodingTrackId":"track2","videoFrameRate":"30.0"}"#)
+                .unwrap();
         assert_eq!(t.video_frame_rate, Some(30.0));
     }
 
@@ -166,7 +175,9 @@ mod tests {
 
     #[test]
     fn media_protocol_key_mapping() {
-        let m: MediaInfo = serde_json::from_str(r#"{"mediaId":"m1","protocol":"HLS","path":"/stream.m3u8"}"#).unwrap();
+        let m: MediaInfo =
+            serde_json::from_str(r#"{"mediaId":"m1","protocol":"HLS","path":"/stream.m3u8"}"#)
+                .unwrap();
         assert_eq!(m.media_protocol.as_deref(), Some("HLS"));
         assert_eq!(m.path, "/stream.m3u8");
     }
@@ -174,6 +185,8 @@ mod tests {
     #[test]
     fn playback_detail_default() {
         let d = LivePlaybackDetail::default();
-        assert!(d.start.is_none() && d.open.is_none() && d.time_machine.is_none() && d.status.is_none());
+        assert!(
+            d.start.is_none() && d.open.is_none() && d.time_machine.is_none() && d.status.is_none()
+        );
     }
 }

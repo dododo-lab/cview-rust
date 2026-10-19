@@ -72,8 +72,16 @@ pub struct FollowingChannel {
 }
 
 impl FollowingChannel {
-    pub fn new(channel: ChannelInfo, streamer: Option<StreamerInfo>, live_info: Option<LiveInfo>) -> Self {
-        Self { channel, streamer, live_info }
+    pub fn new(
+        channel: ChannelInfo,
+        streamer: Option<StreamerInfo>,
+        live_info: Option<LiveInfo>,
+    ) -> Self {
+        Self {
+            channel,
+            streamer,
+            live_info,
+        }
     }
 
     pub fn id(&self) -> &str {
@@ -83,7 +91,9 @@ impl FollowingChannel {
     /// 실제 라이브 여부: `LiveInfo` 가 존재하고 status 가 `Open` 이어야 한다.
     /// (치지직 API 는 방송 종료 직후에도 status=CLOSE 인 LiveInfo 를 잠시 반환하므로 단순 nil 체크로는 불충분)
     pub fn is_live(&self) -> bool {
-        self.live_info.as_ref().is_some_and(|l| l.status == LiveStatus::Open)
+        self.live_info
+            .as_ref()
+            .is_some_and(|l| l.status == LiveStatus::Open)
     }
 }
 
@@ -124,7 +134,10 @@ mod tests {
         let ch: ChannelInfo = serde_json::from_str(json).unwrap();
         assert_eq!(ch.channel_id, "abc");
         assert_eq!(ch.channel_name, "방송채널");
-        assert_eq!(ch.channel_image_url.unwrap().as_str(), "https://example.com/img.png");
+        assert_eq!(
+            ch.channel_image_url.unwrap().as_str(),
+            "https://example.com/img.png"
+        );
         assert!(ch.verified_mark);
         assert_eq!(ch.follower_count, 12345);
         assert_eq!(ch.channel_description.as_deref(), Some("소개글"));
@@ -132,7 +145,8 @@ mod tests {
 
     #[test]
     fn json_decoding_defaults() {
-        let ch: ChannelInfo = serde_json::from_str(r#"{"channelId":"ch2","channelName":"최소"}"#).unwrap();
+        let ch: ChannelInfo =
+            serde_json::from_str(r#"{"channelId":"ch2","channelName":"최소"}"#).unwrap();
         assert!(!ch.verified_mark);
         assert_eq!(ch.follower_count, 0);
         assert!(ch.channel_image_url.is_none());
