@@ -52,26 +52,35 @@ export class MultiLivePage {
         <h1 class="page-title">멀티라이브</h1>
         <span class="page-subtitle ml-count"></span>
         <div class="grow"></div>
-        <div class="ml-focus-controls" hidden>
-          <div class="segmented" role="group" aria-label="포커스 방향">
-            ${FOCUS_DIRECTIONS.map((d) => `<button class="seg icon" data-direction="${d.id}" title="${d.label}" aria-label="${d.label}">${DIRECTION_ICONS[d.id]}</button>`).join('')}
+        <div class="ml-toolbar">
+          <div class="ml-focus-controls" hidden>
+            <div class="segmented ml-tb-seg" role="group" aria-label="포커스 방향">
+              ${FOCUS_DIRECTIONS.map((d) => `<button class="seg icon" data-direction="${d.id}" title="메인 위치: ${d.label}" aria-label="메인 위치 ${d.label}">${DIRECTION_ICONS[d.id]}</button>`).join('')}
+            </div>
+            <label class="ml-ratio" title="메인 패인 크기">
+              <input type="range" min="${FOCUS_RATIO.min * 100}" max="${FOCUS_RATIO.max * 100}" step="1" aria-label="메인 패인 크기">
+              <output></output>
+            </label>
+            <span class="ml-tb-sep" aria-hidden="true"></span>
           </div>
-          <label class="ml-ratio" title="메인 크기">
-            <span>메인</span>
-            <input type="range" min="${FOCUS_RATIO.min * 100}" max="${FOCUS_RATIO.max * 100}" step="1" aria-label="메인 패인 크기">
-            <output></output>
-          </label>
+          <div class="segmented ml-tb-seg" role="group" aria-label="레이아웃">
+            <button class="seg" data-layout="grid" title="균등 분할 (⌃⌘1)">그리드</button>
+            <button class="seg" data-layout="focus" title="포커스 — 한 방송을 크게 (⌃⌘2)">포커스</button>
+            <button class="seg" data-layout="custom" title="사용자 배치 — 경계를 끌어 크기 조절 (⌃⌘3)">사용자</button>
+          </div>
+          <span class="ml-tb-sep" aria-hidden="true"></span>
+          <button class="ml-tb-icon ml-multiaudio" data-ml="multi-audio" title="여러 소리 — 선택하지 않은 패인 소리도 함께 듣기" aria-label="여러 소리" aria-pressed="false">${ICON_SOUND}</button>
+          <div class="ml-more">
+            <button class="ml-tb-icon" data-ml-more title="더 보기" aria-label="더 보기" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg></button>
+            <div class="ml-more-menu" role="menu" hidden>
+              <button class="ml-menu-item" role="menuitem" data-ml="presets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h12v16l-6-4-6 4z"/></svg>프리셋 저장·불러오기</button>
+              <button class="ml-menu-item" role="menuitem" data-ml="retry-all"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5a8 8 0 1 0-2.4 5.9"/><path d="M20 4.5v7h-7"/></svg>모두 다시 연결</button>
+              <div class="ml-menu-sep"></div>
+              <button class="ml-menu-item danger" role="menuitem" data-ml="stop-all"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>모두 닫기</button>
+            </div>
+          </div>
+          <button class="btn primary ml-add" data-ml="add" title="채널 추가">${ICON_PLUS}<span>채널 추가</span></button>
         </div>
-        <div class="segmented" role="group" aria-label="레이아웃">
-          <button class="seg" data-layout="grid" title="균등 분할 (⌃⌘1)">그리드</button>
-          <button class="seg" data-layout="focus" title="포커스 (⌃⌘2)">포커스</button>
-          <button class="seg" data-layout="custom" title="사용자 배치 — 경계를 끌어 크기 조절 (⌃⌘3)">사용자</button>
-        </div>
-        <button class="btn primary" data-ml="add">${ICON_PLUS}<span>채널 추가</span></button>
-        <button class="btn ghost ml-multiaudio" data-ml="multi-audio" title="여러 패인 소리 동시에 (보조 볼륨)">여러 소리</button>
-        <button class="btn ghost" data-ml="presets" title="채널 묶음 저장·불러오기">프리셋</button>
-        <button class="btn ghost" data-ml="retry-all" title="모든 패인 다시 연결">모두 다시 연결</button>
-        <button class="btn ghost" data-ml="stop-all">모두 닫기</button>
       </header>
       <div class="page-body ml-body">
         <div class="ml-stage">
@@ -151,6 +160,18 @@ export class MultiLivePage {
     listen(Events.multiLiveState, (s) => this.render(s));
 
     this.root.addEventListener('click', (e) => this.onClick(e));
+    // "⋯" 더 보기 메뉴 — 프리셋·모두 다시 연결·모두 닫기
+    const moreBtn = this.root.querySelector('[data-ml-more]');
+    const moreMenu = this.root.querySelector('.ml-more-menu');
+    const closeMore = () => { moreMenu.hidden = true; moreBtn.setAttribute('aria-expanded', 'false'); };
+    moreBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      moreMenu.hidden = !moreMenu.hidden;
+      moreBtn.setAttribute('aria-expanded', String(!moreMenu.hidden));
+    });
+    moreMenu.addEventListener('click', () => closeMore());
+    document.addEventListener('pointerdown', (e) => { if (!moreMenu.hidden && !e.target.closest('.ml-more')) closeMore(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !moreMenu.hidden) closeMore(); });
     this.pickerFilter.addEventListener('input', () => this.renderPicker());
     new ResizeObserver(() => this.reportStageSize()).observe(this.stage);
   }
@@ -241,10 +262,15 @@ export class MultiLivePage {
     for (const b of this.root.querySelectorAll('[data-layout]')) {
       b.classList.toggle('active', b.dataset.layout === state.layout);
     }
-    for (const b of this.root.querySelectorAll('[data-ml="add"]')) b.disabled = !state.canAdd;
+    for (const b of this.root.querySelectorAll('[data-ml="add"]')) {
+      b.disabled = !state.canAdd;
+      if (b.classList.contains('ml-add')) b.title = state.canAdd ? '채널 추가' : `최대 ${state.maxSessions}개까지 볼 수 있어요 — 패인을 닫으면 추가할 수 있습니다`;
+    }
     this.root.querySelector('[data-ml="stop-all"]').hidden = n === 0;
     this.root.querySelector('[data-ml="retry-all"]').hidden = n === 0;
-    this.root.querySelector('[data-ml="multi-audio"]').classList.toggle('primary', Boolean(state.multiAudio));
+    const ma = this.root.querySelector('[data-ml="multi-audio"]');
+    ma.classList.toggle('active', Boolean(state.multiAudio));
+    ma.setAttribute('aria-pressed', String(Boolean(state.multiAudio)));
     // 지난 구성 기억(MUL-15) — 세션이 있으면 저장, 비면 다시 열기 버튼
     const savedIds = this.savedSessionIds();
     if (n > 0) this.saveSessionIds(sessions.map((x) => x.channelId));
