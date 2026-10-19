@@ -283,12 +283,23 @@ dependencies = [
 name = "cview-app-core"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "chrono",
  "cview-auth",
  "cview-chat",
  "cview-core",
  "cview-networking",
  "cview-persistence",
  "cview-player",
+ "futures-util",
+ "rand 0.8.8",
+ "regex",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "url",
+ "uuid",
 ]
 
 [[package]]
