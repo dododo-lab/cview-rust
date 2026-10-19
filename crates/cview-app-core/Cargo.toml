@@ -21,3 +21,8 @@ uuid = { workspace = true }
 url = { workspace = true }
 async-trait = { workspace = true }
 futures-util = { workspace = true }
+regex = { workspace = true }
+rand = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }

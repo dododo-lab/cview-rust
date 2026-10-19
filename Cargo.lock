@@ -626,6 +626,8 @@ dependencies = [
  "cview-persistence",
  "cview-player",
  "futures-util",
+ "rand 0.8.8",
+ "regex",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
