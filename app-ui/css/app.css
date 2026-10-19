@@ -839,11 +839,7 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 
 /* ══ 후원·구독·선물·공지 카드 (원본 ChatEventCard / ChatMessageRow+Donation·Subscription) ══ */
 .chat-line.ev { --ev: var(--donation); display: block; padding: 4px 0; }
-.ev-donation { --ev: var(--donation); }
-.ev-video { --ev: var(--accent-pink); }
-.ev-mission { --ev: var(--accent-orange); }
-.ev-subscription { --ev: var(--subscription); }
-.ev-gift { --ev: var(--accent-cyan); }
+
 .ev-card {
   position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 4px;
   padding: 10px 12px 10px; border-radius: 14px;
@@ -874,9 +870,9 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .ev-tier-3 .ev-value { font-size: var(--fs-subhead); }
 /* 공지 */
 .chat-line.notice-line { display: flex; gap: 10px; align-items: flex-start; margin: 6px 0; padding: 9px 12px; border-radius: 14px; background: var(--surface-elevated); border: 1px solid var(--border-subtle); }
-.notice-icon { flex: none; width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; color: var(--primary-text); background: var(--primary-dim); }
-.notice-icon svg { width: 14px; height: 14px; }
-.notice-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.notice-line .notice-icon { flex: none; width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; color: var(--primary-text); background: var(--primary-dim); }
+.notice-line .notice-icon svg { width: 14px; height: 14px; }
+.notice-line .notice-body { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .notice-from { display: flex; align-items: center; gap: 6px; font-size: var(--fs-footnote); }
 .notice-from .nick { margin: 0; }
 .notice-from .chat-time { margin-left: auto; font-size: var(--fs-micro); color: var(--text-tertiary); }
@@ -888,6 +884,7 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 :root.compact .ev-icon { width: 18px; height: 18px; border-radius: 6px; }
 :root.compact .ev-icon svg { width: 11px; height: 11px; }
 :root.compact .chat-line.notice-line { padding: 6px 10px; border-radius: 10px; }
+:root.compact .chat-line.msg { padding-top: 1px; padding-bottom: 1px; }
 /* 영상 위 채팅(오버레이)·멀티라이브 그리드 오버레이 — 어두운 반투명 면 */
 .chat-mode-overlay .ev-card, .ml-body.chat-overlay .ev-card { background: color-mix(in srgb, var(--ev) 22%, rgba(10, 11, 14, 0.55)); border-color: color-mix(in srgb, var(--ev) 45%, transparent); }
 .chat-mode-overlay .ev-title, .chat-mode-overlay .ev-body, .chat-mode-overlay .ev-from .nick,
@@ -1428,7 +1425,7 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .chat-skin.style-unified .chat-line.msg > .msg-main > .text { display: block; padding: 9px 12px; border-radius: 13px; background: var(--cs-surface); border: .5px solid var(--cs-edge); }
 .chat-skin.style-unified .chat-line.own .text { background: var(--cs-own); }
 .chat-skin.style-unified .chat-line.mention .text, .chat-skin.style-unified .chat-line.highlighted .text { border: 1px solid color-mix(in srgb, var(--cs-accent) 55%, transparent); }
-.chat-skin:is(.style-unified,.style-hybrid) .msg-mention { display: inline; font-size: var(--fs-micro); color: var(--cs-accent); font-weight: 500; }
+.chat-skin:is(.style-unified,.style-hybrid) .msg-mention { display: inline; font-size: var(--fs-micro); color: var(--cs-accent); font-weight: 500; margin-right: 6px; }
 
 /* ── 치지직 — 간결한 줄, 내 말은 초록 띠 ── */
 .chat-skin.style-chzzk .chat-line.msg { padding: 3px 8px; border-radius: 6px; }
@@ -1778,3 +1775,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .style-card b { font-size: var(--fs-footnote); }
 .style-card small { font-size: var(--fs-micro); color: var(--text-tertiary); line-height: 1.35; }
 .mc-merged.chat-skin { border-radius: var(--radius-lg); overflow: hidden; }
+
+/* 이벤트 톤 — 줄·알림·칩 공통(기본 --ev 선언보다 뒤, 같은 구체성) */
+:is(.chat-line, .stream-alert, .event-chip).ev-donation { --ev: var(--donation); }
+:is(.chat-line, .stream-alert, .event-chip).ev-video { --ev: var(--accent-pink); }
+:is(.chat-line, .stream-alert, .event-chip).ev-mission { --ev: var(--accent-orange); }
+:is(.chat-line, .stream-alert, .event-chip).ev-subscription { --ev: var(--subscription); }
+:is(.chat-line, .stream-alert, .event-chip).ev-gift { --ev: var(--accent-cyan); }
+/* 카드·말풍선 스타일은 줄 배경 대신 말풍선 테두리로 멘션·강조를 보인다 */
+.chat-skin:is(.style-unified,.style-hybrid,.style-kakao,.style-imessage) .chat-line.msg:is(.mention, .highlighted) { background: none; box-shadow: none; padding-left: 0; border-radius: 0; }
