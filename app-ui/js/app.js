@@ -16,6 +16,7 @@ import { MediaPage } from './media.js';
 import { LibraryPage, libraryIcon } from './library.js';
 import { StatsPage, statsIcon } from './stats.js';
 import { loadShortcuts } from './shortcuts.js';
+import { InsightPanel } from './insight-panel.js';
 import { installA11y } from './a11y.js';
 import { splashStep, hideSplash, showWelcome } from './onboarding.js';
 import { HUBS, saveWorkspace, loadWorkspace, installSidebarExtras, hubFlash } from './workspace.js';
@@ -51,6 +52,7 @@ const pages = {};
 let current = null;
 let viewer = null;
 let sidebar = null;
+let insights = null;
 
 const ICON_SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
 const ICON_MOON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 14.4A8.5 8.5 0 0 1 9.6 3.5a8.5 8.5 0 1 0 10.9 10.9Z"/></svg>';
@@ -128,6 +130,7 @@ async function navigate(route, params = {}, { push = true } = {}) {
   current = route;
   currentParams = params;
   sidebar.setActive(route);
+  if (insights) insights.show(route === 'live' && viewer && viewer.isPlaying ? 'live' : route);
   if (!AUX) saveWorkspace(route, params, viewer && viewer.isPlaying ? viewer.channelId : null);
   // 라이브 메뉴는 재생 중이면 시청 화면, 아니면 이어 볼 채널 목록이다.
   const showViewer = route === 'live' && viewer.isPlaying;
@@ -467,6 +470,7 @@ async function main() {
   pages.media = new MediaPage(content, { onBack: goBack, onOpenChannel: openChannelPage });
   pages.channel = new ChannelPage(content, { onBack: goBack, onPlay: openChannel, onAddMulti: addToMultiLive });
   viewer = new Viewer(document.getElementById('viewer'), { isLoggedIn, onClose: onViewerClosed });
+  if (!AUX) insights = new InsightPanel(content, { isLoggedIn });
   bindMultiLiveAddButtons(addToMultiLive);
   installViewerMultiLiveButton();
 
