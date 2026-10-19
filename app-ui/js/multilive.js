@@ -288,7 +288,7 @@ export class MultiLivePage {
     }
     if (this.localRatio == null) {
       this.ratioInput.value = String(Math.round((state.focusRatio || 0.7) * 100));
-      this.ratioOutput.textContent = `${this.ratioInput.value}%`;
+      this.ratioOutput.textContent = `${this.ratioInput.value}%`; this.syncRatioFill();
     }
 
     const order = paneOrder(sessions, state.focusMainId || state.selectedId, state.layout);
@@ -371,7 +371,7 @@ export class MultiLivePage {
     });
     this.ratioInput.addEventListener('input', () => {
       this.localRatio = Number(this.ratioInput.value) / 100;
-      this.ratioOutput.textContent = `${this.ratioInput.value}%`;
+      this.ratioOutput.textContent = `${this.ratioInput.value}%`; this.syncRatioFill();
       this.render(this.state);
     });
     this.ratioInput.addEventListener('change', () => this.commitRatio());
@@ -383,7 +383,7 @@ export class MultiLivePage {
         const r = this.stage.getBoundingClientRect();
         this.localRatio = ratioFromPointer(this.state.focusDirection, (ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height);
         this.ratioInput.value = String(Math.round(this.localRatio * 100));
-        this.ratioOutput.textContent = `${this.ratioInput.value}%`;
+        this.ratioOutput.textContent = `${this.ratioInput.value}%`; this.syncRatioFill();
         this.render(this.state);
       };
       const up = () => {
@@ -557,6 +557,13 @@ export class MultiLivePage {
     if (!pick) return;
     this.proposed.add(pick.channelId);
     toast(`${pick.channelName} 님이 방송 중이에요 — 멀티라이브에 추가할까요?`, 8000, { label: '추가', run: () => this.add(pick.channelId) });
+  }
+
+  /** 메인 크기 슬라이더의 채움 위치(트랙 색)를 값에 맞춘다. */
+  syncRatioFill() {
+    const i = this.ratioInput;
+    const pct = ((Number(i.value) - Number(i.min)) / (Number(i.max) - Number(i.min))) * 100;
+    i.style.setProperty('--fill', `${Math.max(0, Math.min(100, pct))}%`);
   }
 
   /** 채팅은 선택 패인의 채널을 따라간다. */

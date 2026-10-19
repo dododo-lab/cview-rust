@@ -208,3 +208,8 @@
 @media (max-width: 1180px) { .ml-toolbar .ml-add span { display: none; } .ml-toolbar .ml-add { width: 30px; padding: 0; justify-content: center; } }
 @media (max-width: 1040px) { .ml-toolbar .ml-ratio output { display: none; } .ml-toolbar .ml-ratio input { width: 64px; } }
 @media (max-width: 940px) { .ml-toolbar .segmented .seg:not(.icon) { padding: 0 8px; } .ml-count { display: none; } }
+/* 메인 크기 슬라이더 — 시스템 기본 큰 손잡이 대신 얇은 트랙·작은 손잡이 */
+.ml-toolbar .ml-ratio input[type="range"] { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--primary) var(--fill, 50%), var(--border) var(--fill, 50%)); outline: none; }
+.ml-toolbar .ml-ratio input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--surface-base); border: 1.5px solid var(--primary); box-shadow: var(--shadow-sm); cursor: pointer; }
+.ml-toolbar .ml-ratio input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: var(--focus-ring); }
+@media (max-width: 900px) { .ml-toolbar .ml-ratio { display: none; } }
