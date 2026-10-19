@@ -1,7 +1,7 @@
 // 사이드바 화면들 — 팔로잉 / 인기 / 검색 / 설정. 홈은 home.js.
 import { api } from './api.js';
 import { esc, safeUrl, toast } from './dom.js';
-import { liveGrid, channelRow, emptyState, loadingState, compactCount } from './cards.js';
+import { liveGrid, channelRow, emptyState, loadingState, compactCount, skeletonGrid, freshnessText } from './cards.js';
 import { vodCard } from './channel.js';
 import { THEMES, THEME_LABELS, currentTheme, setTheme } from './theme.js';
 import { streamAlertsEnabled, setStreamAlertsEnabled } from './donations.js';
@@ -55,11 +55,12 @@ export class PopularPage {
 
   async show(refresh = false) {
     const seq = ++this.seq;
-    if (!this.lives.length || refresh) this.body.innerHTML = loadingState();
+    if (!this.lives.length || refresh) this.body.innerHTML = skeletonGrid(12);
     try {
       const lives = await api.popularLives(this.limit, refresh);
       if (seq !== this.seq) return;
       this.lives = lives;
+      this.loadedAt = Date.now();
       this.render();
     } catch (e) {
       if (seq === this.seq) this.body.innerHTML = emptyState('불러오지 못했습니다', e.message);
@@ -72,6 +73,7 @@ export class PopularPage {
     this.body.innerHTML = `
       <div class="list-toolbar">
         <div class="segmented"><button class="seg${this.sort === 'viewers' ? ' active' : ''}" data-sort="viewers">시청자순</button><button class="seg${this.sort === 'recent' ? ' active' : ''}" data-sort="recent">최근 시작</button></div>
+        <span class="freshness">${esc(freshnessText(this.loadedAt))}</span>
         <div class="chips">
           <button class="chip${this.category === '' ? ' active' : ''}" data-cat="">전체</button>
           ${cats.map((c) => `<button class="chip${this.category === c.name ? ' active' : ''}" data-cat="${esc(c.name)}">${esc(c.name)} <span class="chip-count">${c.count}</span></button>`).join('')}
@@ -115,7 +117,7 @@ export class FollowingPage {
       return;
     }
     const seq = ++this.seq;
-    this.body.innerHTML = loadingState();
+    this.body.innerHTML = this.tab === 'live' ? skeletonGrid(8) : loadingState();
     try {
       if (this.tab === 'live') this.lives = await api.followingLives(refresh);
       else this.channels = await api.followingChannelsAll(refresh);

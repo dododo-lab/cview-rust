@@ -10,6 +10,7 @@ pub mod commands;
 pub mod dto;
 pub mod engine;
 pub mod login;
+pub mod menu;
 pub mod multi_live;
 pub mod playback;
 pub mod state;
@@ -104,6 +105,8 @@ fn shell_sinks<R: Runtime>(app: &AppHandle<R>) -> ShellSinks {
 pub fn run() {
     init_tracing();
     let app = tauri::Builder::default()
+        .menu(menu::build)
+        .on_menu_event(|handle, event| menu::forward(handle, event.id().as_ref()))
         .setup(|app| {
             let handle = app.handle().clone();
             let data_dir = app.path().app_data_dir()?;
@@ -160,6 +163,8 @@ pub fn run() {
             commands::multi_live::multilive_stop_all,
             commands::multi_live::multilive_player_message,
             commands::multi_live::multilive_set_focus_layout,
+            commands::multi_live::multilive_retry,
+            commands::settings::app_info,
             commands::multi_live::multilive_set_audio_suspended,
             commands::media::vod_play,
             commands::media::vod_progress_save,

@@ -67,6 +67,7 @@ export class MultiLivePage {
           <button class="seg" data-layout="focus">포커스</button>
         </div>
         <button class="btn primary" data-ml="add">${ICON_PLUS}<span>채널 추가</span></button>
+        <button class="btn ghost" data-ml="retry-all" title="모든 패인 다시 연결">모두 다시 연결</button>
         <button class="btn ghost" data-ml="stop-all">모두 닫기</button>
       </header>
       <div class="page-body ml-body">
@@ -171,6 +172,9 @@ export class MultiLivePage {
         <span class="ml-pane-sound" title="소리 나는 패인">${ICON_SOUND}</span>
         <span class="ml-pane-cap"></span>
         <div class="grow"></div>
+        <button class="ml-pane-btn" data-ml="audio" title="이 패인 소리 켜기 (선택)">${ICON_SOUND}</button>
+        <button class="ml-pane-btn" data-ml="retry" title="다시 연결">↻</button>
+        <button class="ml-pane-btn" data-ml="info" title="채널 정보">ⓘ</button>
         <button class="ml-pane-close" data-ml="remove" title="닫기">${ICON_CLOSE}</button>
       </div>
       <div class="ml-pane-info">
@@ -213,6 +217,7 @@ export class MultiLivePage {
     }
     for (const b of this.root.querySelectorAll('[data-ml="add"]')) b.disabled = !state.canAdd;
     this.root.querySelector('[data-ml="stop-all"]').hidden = n === 0;
+    this.root.querySelector('[data-ml="retry-all"]').hidden = n === 0;
 
     const focus = state.layout === 'focus' && n > 1;
     this.stage.className = `ml-stage ml-n${Math.min(n, 4)} ${focus ? `ml-focus dir-${state.focusDirection}` : ''}`;
@@ -390,6 +395,14 @@ export class MultiLivePage {
       case 'stop-all': this.run(api.multiLiveStopAll()); break;
       case 'select': if (sessionId && sessionId !== this.state.selectedId) this.run(api.multiLiveSelect(sessionId)); break;
       case 'remove': if (sessionId) this.run(api.multiLiveRemove(sessionId)); break;
+      case 'audio': if (sessionId) this.run(api.multiLiveSelect(sessionId)); break;
+      case 'retry': if (sessionId) { toast('다시 연결합니다', 1200); this.run(api.multiLiveRetry(sessionId)); } break;
+      case 'retry-all': toast('모든 패인을 다시 연결합니다', 1500); this.run(api.multiLiveRetry(null)); break;
+      case 'info': {
+        const s = (this.state.sessions || []).find((x) => x.id === sessionId);
+        if (s) window.dispatchEvent(new CustomEvent('cview:open-channel', { detail: { channelId: s.channelId } }));
+        break;
+      }
       case 'pick': this.closePicker(); await this.add(action.dataset.channelId); break;
       default: break;
     }

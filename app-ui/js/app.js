@@ -277,6 +277,109 @@ function installPalette() {
   }, true);
 }
 
+// ── 메뉴·단축키·정보·오프라인 (SYS-01·02·03·09·12) ─────────────────
+
+const SHORTCUTS = [
+  ['탐색', [['⌘1 ~ ⌘7', '홈 · 팔로잉 · 인기 · 멀티라이브 · 라이브 · 보관함 · 카테고리'], ['⌘K', '명령 팔레트'], ['⌘F', '검색'], ['⌘[  /  ⌥←', '뒤로'], ['⌘R', '새로고침'], ['⌘\\', '사이드바 접기'], ['⇧⌘L', '다크/라이트 전환'], ['⌘,', '설정']]],
+  ['시청', [['Space', '재생/일시정지'], ['M', '음소거'], ['↑ ↓', '볼륨'], ['L', '라이브로 이동'], ['B / ⇧⌘B', '북마크'], ['⌘S', '스크린샷'], ['⇧⌘F', '영상 전체화면'], ['⌃⌘F', '영상+채팅 전체화면'], ['⌘W / Esc', '시청 화면 닫기']]],
+  ['채팅', [['⇧⌘K', '채팅 지우기'], ['⌘J', '자동 스크롤'], [':이름', '이모티콘 자동완성'], ['@닉네임', '멘션 자동완성'], ['우클릭', '메시지 메뉴'], ['더블클릭', '프로필']]],
+];
+
+function showSheet(html, cls = '') {
+  document.querySelector('.sheet-scrim.app-sheet')?.remove();
+  const scrim = document.createElement('div');
+  scrim.className = 'sheet-scrim app-sheet';
+  scrim.innerHTML = `<div class="sheet ${cls}" role="dialog" tabindex="-1">${html}<div class="sheet-actions"><button class="btn primary" data-close>닫기</button></div></div>`;
+  document.body.append(scrim);
+  scrim.querySelector('.sheet').focus();
+  const close = () => scrim.remove();
+  scrim.addEventListener('click', (e) => { if (e.target === scrim || e.target.closest('[data-close]')) close(); });
+  scrim.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  return scrim;
+}
+
+function showShortcuts() {
+  showSheet(`<h2>키보드 단축키</h2><div class="shortcut-cols">${SHORTCUTS.map(([g, list]) => `
+    <section><h3>${g}</h3>${list.map(([k, d]) => `<div class="shortcut-row"><kbd>${k}</kbd><span>${d}</span></div>`).join('')}</section>`).join('')}</div>`, 'wide');
+}
+
+async function showAbout() {
+  let info = null;
+  try { info = await api.appInfo(); } catch { /* 앱 밖 */ }
+  showSheet(`<div class="about"><span class="brand-mark big">▶</span><h2>CView</h2>
+    <p>치지직 라이브·채팅 데스크톱 앱 (Rust/Tauri 포팅판)</p>
+    <p class="muted">버전 ${info ? info.version : '-'} · ${info ? `${info.os} ${info.arch}` : ''}</p>
+    <p class="muted small">재생: hls.js (Apache-2.0) · 셸: Tauri (MIT/Apache-2.0)</p></div>`);
+}
+
+function activeChat() {
+  if (viewer.isOpen) return viewer.chat;
+  if (current === 'multilive') return pages.multilive.chat;
+  return null;
+}
+
+const MENU_ACTIONS = {
+  'nav-home': () => navigate('home'),
+  'nav-following': () => navigate('following'),
+  'nav-popular': () => navigate('popular'),
+  'nav-multilive': () => navigate('multilive'),
+  'nav-live': () => navigate('live'),
+  'nav-library': () => navigate('library'),
+  'nav-categories': () => navigate('categories'),
+  search: () => navigate('search'),
+  palette: () => (palette.isOpen ? palette.close() : palette.open()),
+  back: () => goBack(),
+  refresh: () => pages[current] && (pages[current].acceptsParams ? pages[current].show({ ...currentParams, refresh: true }) : pages[current].show(true)),
+  'toggle-sidebar': () => sidebar.toggle(),
+  'theme-toggle': () => setTheme(resolvedTheme() === 'dark' ? 'light' : 'dark'),
+  settings: () => navigate('settings'),
+  about: () => showAbout(),
+  shortcuts: () => showShortcuts(),
+  'report-issue': () => api.openExternal('https://github.com/dododo-lab/cview-v2/issues').catch((e) => toast(e.message)),
+  'open-logs': async () => { try { const i = await api.appInfo(); await api.revealPath(i.dataDir); } catch (e) { toast(e.message); } },
+  'play-pause': () => viewer.isOpen && viewer.controls.togglePlay(),
+  mute: () => viewer.isOpen && viewer.toggleMute(),
+  'go-live': () => viewer.isOpen && viewer.controls.goLive(),
+  screenshot: () => viewer.isPlaying && viewer.controls.screenshot(),
+  bookmark: () => viewer.isPlaying && viewer.controls.bookmark(),
+  fullscreen: () => viewer.isOpen && viewer.controls.fullscreen(false),
+  'fullscreen-chat': () => viewer.isOpen && viewer.controls.fullscreen(true),
+  'close-viewer': () => viewer.isOpen && viewer.close(),
+  'chat-clear': () => activeChat()?.clear(true),
+  'chat-reconnect': () => activeChat()?.reconnect(),
+  'chat-autoscroll': async () => {
+    const { chatPrefs, updateChatPrefs } = await import('./chat-prefs.js');
+    const on = !chatPrefs().autoScroll;
+    updateChatPrefs({ autoScroll: on });
+    toast(on ? '자동 스크롤 켬' : '자동 스크롤 끔', 1200);
+  },
+};
+
+function installMenuAndShortcuts() {
+  listen('menu://action', (p) => {
+    const run = p && MENU_ACTIONS[p.id];
+    if (run) run();
+  });
+  // 메뉴가 없는 환경(브라우저 미리보기 등)과 ⌘/ 보조.
+  document.addEventListener('keydown', (e) => {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    if (e.key === '/') { e.preventDefault(); showShortcuts(); }
+    else if (e.key === ',') { e.preventDefault(); navigate('settings'); }
+  });
+  // 오프라인 배너 (SYS-12)
+  const banner = document.createElement('div');
+  banner.className = 'offline-banner';
+  banner.innerHTML = '<span>오프라인입니다 — 네트워크가 돌아오면 자동으로 다시 불러옵니다</span>';
+  banner.hidden = navigator.onLine !== false;
+  document.querySelector('.content').prepend(banner);
+  window.addEventListener('offline', () => { banner.hidden = false; });
+  window.addEventListener('online', () => {
+    banner.hidden = true;
+    toast('다시 연결되었습니다', 1500);
+    if (pages[current] && !viewer.isOpen) MENU_ACTIONS.refresh();
+  });
+}
+
 async function main() {
   renderNav();
   const content = document.querySelector('.content');
@@ -322,6 +425,7 @@ async function main() {
   window.addEventListener('cview:navigate', (e) => e.detail && navigate(e.detail.route, e.detail.params || {}));
   installCardMenu();
   installPalette();
+  installMenuAndShortcuts();
   window.addEventListener('cview:open-channel', (e) => openChannelPage(e.detail && e.detail.channelId));
   // 시청 화면 헤더(아바타·채널명)를 누르면 채널 상세
   document.querySelector('#viewer .viewer-header').addEventListener('click', (e) => {

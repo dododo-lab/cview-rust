@@ -117,11 +117,11 @@
 | MUL-05 | 멀티채팅 독립 창(`⇧⌘M`) | `MultiChatWindowHost` | 없음 | M |
 | MUL-06 | 멀티라이브 레이아웃: 프리셋/사용자 배치(드래그 크기 조절), `⌃⌘1~3` | `MultiLiveGridLayouts`, `PaneResizeGrip`, `MCGridResizeDivider`, `MultiLiveLayoutModePolicy` | 그리드·포커스만(포커스 비율 드래그 있음) | M |
 | MUL-07 | 패인 순서 드래그 재배치·탭 바 | `MLTabReorderDropDelegate`, `MCTabBar` | `order` 계산만, 드래그 없음 | S |
-| MUL-08 | 패인 개별 컨트롤(볼륨·음소거·화질·재연결·채널 상세) | `MultiLivePaneOverlays`, `MLPlaybackVolumePanel` | 선택·닫기만 | M |
+| MUL-08 | 🟡 패인 개별 컨트롤(볼륨·음소거·화질·재연결·채널 상세) | `MultiLivePaneOverlays`, `MLPlaybackVolumePanel` | 선택·닫기만 | M |
 | MUL-09 | 다중 오디오(보조 패인 볼륨)·오디오 글로우 | `MultiLiveAudioGlow`, 설정 `multiAudioEnabled`/`secondaryVolume` | 선택 패인만 소리 | S |
 | MUL-10 | 그리드 채팅 오버레이(투명도·글자 크기) | 설정 `chatOverlayInGrid` 등 | 사이드 채팅만 | M |
 | MUL-11 | 싱글 채널 스테이지(멀티에서 한 채널 크게) | `MLSingleChannelStage` | 포커스 레이아웃으로 대체 | S |
-| MUL-12 | 모든 스트림 재연결·일괄 해제 | `MultiLiveOverlays` | "모두 닫기"만 | S |
+| MUL-12 | ✅ 모든 스트림 재연결·일괄 해제 | `MultiLiveOverlays` | "모두 닫기"만 | S |
 | MUL-13 | 멀티라이브 제안 토스트(자주 같이 보는 채널) | `MultiLiveProposerToast`, `MultiLiveProposer` | `MultiLiveProposer` | S |
 | MUL-14 | 채널 프리셋 저장/불러오기(멀티 구성 묶음) | `ChannelPresetPicker`, `Components/SidebarPresetSaveSheet` | `ChannelPresetStore` | S |
 | MUL-15 | 마지막 멀티 레이아웃·세션 기억 | `MultiLiveManager+Persistence`, 설정 `rememberLastLayout` | 미연결 | S |
@@ -166,25 +166,25 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 
 | ID | 항목 | Swift 원본 | Rust 현황 | 크기 |
 |---|---|---|---|---|
-| SYS-01 | 전역 단축키 체계(재생 Space/M/↑↓, `⌘1~4`, `⌘R` 새로고침, `⌘,` 설정, `⌘F` 검색) | `CViewApp` Commands, `KeyboardShortcutSettings` | `⌘K`·`⌘\`·Esc 만 | M |
-| SYS-02 | 키보드 단축키 도움말(`⌘/`) | `KeyboardShortcutsHelpView` | 없음 | S |
-| SYS-03 | 앱 메뉴 바(재생/채팅/윈도우/도움말 메뉴) | `CViewApp` `CommandMenu` | Tauri 기본 메뉴 | M |
+| SYS-01 | ✅ 전역 단축키 체계(재생 Space/M/↑↓, `⌘1~4`, `⌘R` 새로고침, `⌘,` 설정, `⌘F` 검색) | `CViewApp` Commands, `KeyboardShortcutSettings` | `⌘K`·`⌘\`·Esc 만 | M |
+| SYS-02 | ✅ 키보드 단축키 도움말(`⌘/`) | `KeyboardShortcutsHelpView` | 없음 | S |
+| SYS-03 | ✅ 앱 메뉴 바(재생/채팅/윈도우/도움말 메뉴) | `CViewApp` `CommandMenu` | Tauri 기본 메뉴 | M |
 | SYS-04 | 팔로우 채널 방송 시작·카테고리·제목 변경 알림 | `NotificationService*`, `BackgroundUpdateService` | `BackgroundUpdateService` diff + `NotificationService`(Noop), `tauri-plugin-notification` 미도입 | M |
 | SYS-05 | 멘션 알림 | `MentionNotificationService` | `MentionNotificationService` | S |
 | SYS-06 | 딥 링크 `cview://live/…`·`channel`·`following`·`multilive`·`search`·`clip`·`login` | `DeepLinkRouter`, `DeepLinkInbox` | `deep_link.rs`·`deep_link_inbox.rs`, `tauri-plugin-deep-link` 미도입 | S |
 | SYS-07 | 단일 인스턴스(두 번째 실행 시 기존 창 활성화·링크 전달) | `SingleInstanceGuard` | `SingleInstanceGuard` 로직, `tauri-plugin-single-instance` 미도입 | S |
 | SYS-08 | 업데이트 확인 시트(GitHub 릴리스) | `UpdateSheetView`, `UpdateService` | `UpdateService`(GitHub 릴리스 파싱) | S |
-| SYS-09 | 정보(About) 창·오픈소스 고지 | `AboutPanelView` | 없음 | S |
+| SYS-09 | ✅ 정보(About) 창·오픈소스 고지 | `AboutPanelView` | 없음 | S |
 | SYS-10 | 스플래시·부트 진행 표시 | `SplashView`, `SplashContentView`, `BootProgress` | `BootProgress`, 없음 | S |
 | SYS-11 | 환영 안내(첫 실행 온보딩, 다시 보기) | `Components/WelcomeOverlay` | 없음 | S |
-| SYS-12 | 오프라인 배너·네트워크 상태 감지 | `Components/OfflineBanner`, `NetworkPathMonitor` | `NetworkPathMonitor` | S |
-| SYS-13 | 토스트 센터(쌓임·액션 버튼) | `Components/ToastCenter` | 단일 토스트 | S |
-| SYS-14 | 스켈레톤 로딩·신선도 캡션(마지막 갱신 시각) | `SkeletonViews`, `Components/FreshnessCaption` | 스피너 | S |
+| SYS-12 | ✅ 오프라인 배너·네트워크 상태 감지 | `Components/OfflineBanner`, `NetworkPathMonitor` | `NetworkPathMonitor` | S |
+| SYS-13 | ✅ 토스트 센터(쌓임·액션 버튼) | `Components/ToastCenter` | 단일 토스트 | S |
+| SYS-14 | ✅ 스켈레톤 로딩·신선도 캡션(마지막 갱신 시각) | `SkeletonViews`, `Components/FreshnessCaption` | 스피너 | S |
 | SYS-15 | 자동 새로고침 주기 적용(`autoRefreshInterval`) | `RefreshCoordinator` | `RefreshCoordinator`, 사이드바만 120초 고정 | S |
 | SYS-16 | 창 위치·크기 저장/복원 | `WindowFrameAutosave`, `restoreWindowOnLaunch` | 없음(`tauri-plugin-window-state` 로 대체 가능) | S |
 | SYS-17 | 항상 위(`alwaysOnTop`) | `GeneralSettings.alwaysOnTop` | 없음(`set_always_on_top`) | S |
 | SYS-18 | 로그인 시 자동 실행 | `launchAtLogin` | 없음(`tauri-plugin-autostart`) | S |
-| SYS-19 | 도움말 액션(문제 보고, 알림 설정 열기, 로그 폴더 열기) | `SupportActions`, `SystemSettingsActions` | 없음 | S |
+| SYS-19 | 🟡 도움말 액션(문제 보고, 알림 설정 열기, 로그 폴더 열기) | `SupportActions`, `SystemSettingsActions` | 없음 | S |
 | SYS-20 | 메뉴 막대 앱(방송 중 팔로잉 목록, 열기/종료) | `MenuBarView`, `MenuBar/*` | 없음(Tauri 트레이 아이콘으로 근사) | M |
 | SYS-21 | 화면 속 화면(PiP, `⌥⌘P`) | `PiPController`, `AppState+PiP` | 없음(WebView `requestPictureInPicture`) | M |
 | SYS-22 | 창 투명도/Liquid Glass·트래픽 라이트 애니메이션 | `DesignSystem/LiquidGlass`, `TransparencyPolicy`, `TrafficLightsAnimator` | 없음 | M |

@@ -26,15 +26,41 @@ export function h(html) {
   return t.content.firstElementChild;
 }
 
-let toastTimer = 0;
-/** 화면 아래 짧은 알림. */
-export function toast(message, ms = 2600) {
-  const el = document.getElementById('toast');
-  if (!el) return;
-  el.textContent = message;
-  el.hidden = false;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { el.hidden = true; }, ms);
+/**
+ * 토스트 센터 — 원본 ToastCenter: 여러 개가 아래에서 쌓이고(최대 4), 동작 버튼을 붙일 수 있다 (SYS-13).
+ * @param {string} message
+ * @param {number} [ms]
+ * @param {{ label: string, run: () => void }} [action]
+ */
+export function toast(message, ms = 2600, action = null) {
+  let stack = document.getElementById('toast-stack');
+  if (!stack) {
+    stack = document.createElement('div');
+    stack.id = 'toast-stack';
+    stack.className = 'toast-stack';
+    stack.setAttribute('role', 'status');
+    stack.setAttribute('aria-live', 'polite');
+    document.body.append(stack);
+  }
+  // 같은 문구가 이미 떠 있으면 시간만 늘린다.
+  const same = [...stack.children].find((t) => t.dataset.msg === message);
+  if (same) { same.remove(); }
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.dataset.msg = message;
+  el.innerHTML = `<span class="toast-text"></span>${action ? '<button class="toast-action"></button>' : ''}`;
+  el.querySelector('.toast-text').textContent = message;
+  if (action) {
+    const b = el.querySelector('.toast-action');
+    b.textContent = action.label;
+    b.addEventListener('click', () => { el.remove(); action.run(); });
+  }
+  stack.append(el);
+  while (stack.children.length > 4) stack.firstElementChild.remove();
+  setTimeout(() => {
+    el.classList.add('leaving');
+    setTimeout(() => el.remove(), 250);
+  }, action ? Math.max(ms, 5000) : ms);
 }
 
 export const icons = {

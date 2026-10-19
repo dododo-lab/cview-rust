@@ -52,6 +52,20 @@ export function loadingState() {
   return '<div class="empty"><div class="spinner"></div></div>';
 }
 
+/** 카드 격자 스켈레톤 — 원본 SkeletonViews (SYS-14). */
+export function skeletonGrid(n = 8) {
+  return `<div class="grid">${Array.from({ length: n }, () => '<div class="sk-card"><div class="sk thumb-sk"></div><div class="sk line"></div><div class="sk line short"></div></div>').join('')}</div>`;
+}
+
+/** 갱신 시각 캡션 — 원본 FreshnessCaption. */
+export function freshnessText(at, now = Date.now()) {
+  if (!at) return '';
+  const s = Math.max(0, Math.round((now - at) / 1000));
+  if (s < 30) return '방금 갱신';
+  if (s < 3600) return `${Math.max(1, Math.round(s / 60))}분 전 갱신`;
+  return `${Math.round(s / 3600)}시간 전 갱신`;
+}
+
 /** 방송 경과 시간 — `openDate`(RFC3339) 기준 "2시간 5분" / "35분". 알 수 없으면 ''. */
 export function uptimeText(openDate, now = Date.now()) {
   const t = Date.parse(openDate || '');

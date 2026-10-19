@@ -162,3 +162,31 @@ pub async fn appearance_set_theme(
     apply_window_theme(&app, theme);
     Ok(())
 }
+
+/// 앱 정보 — 버전·데이터 폴더(정보 창, 데이터 폴더 열기).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppInfoDto {
+    pub name: String,
+    pub version: String,
+    pub data_dir: String,
+    pub os: String,
+    pub arch: String,
+}
+
+#[tauri::command]
+pub async fn app_info(app: tauri::AppHandle) -> CmdResult<AppInfoDto> {
+    use tauri::Manager;
+    let info = app.package_info();
+    Ok(AppInfoDto {
+        name: info.name.clone(),
+        version: info.version.to_string(),
+        data_dir: app
+            .path()
+            .app_data_dir()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        os: std::env::consts::OS.into(),
+        arch: std::env::consts::ARCH.into(),
+    })
+}

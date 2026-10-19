@@ -158,3 +158,25 @@ pub async fn multilive_set_audio_suspended(
     }
     Ok(())
 }
+
+/// 패인 다시 연결 — `session_id` 가 없으면 모든 패인(MUL-08, MUL-12).
+#[tauri::command]
+pub async fn multilive_retry(
+    shell: State<'_, MultiLiveShell>,
+    session_id: Option<String>,
+) -> CmdResult<MultiLiveStateDto> {
+    let targets: Vec<_> = {
+        let st = shell.manager.read();
+        match session_id.as_deref() {
+            Some(id) => {
+                let id = parse_id(id)?;
+                st.session(id).cloned().into_iter().collect()
+            }
+            None => st.sessions().to_vec(),
+        }
+    };
+    for s in targets {
+        s.retry().await;
+    }
+    Ok(shell.state_dto())
+}

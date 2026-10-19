@@ -94,6 +94,8 @@ export const api = {
   chatDisconnect: () => invoke('chat_disconnect'),
   chatSend: (text) => invoke('chat_send', { text }),
 
+  appInfo: () => invoke('app_info'),
+  multiLiveRetry: (sessionId = null) => invoke('multilive_retry', { sessionId }),
   settingsGet: () => invoke('settings_get'),
   settingsUpdate: (domain, patch) => invoke('settings_update', { domain, patch }),
 };
