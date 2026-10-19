@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- macOS 26+: Assets.car 의 AppIcon(밝은·어두운·틴트)을 시스템 외형에 따라 쓴다. 그 이하는 icon.icns. -->
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
+</dict>
+</plist>

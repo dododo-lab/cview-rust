@@ -37,8 +37,9 @@
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
-      "icons/icon.png",
-      "icons/icon.ico"
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
     ],
     "category": "public.app-category.entertainment",
     "shortDescription": "치지직 라이브 데스크톱 뷰어",
@@ -46,7 +47,10 @@
       "minimumSystemVersion": "13.0",
       "hardenedRuntime": true,
       "entitlements": "Entitlements.plist",
-      "signingIdentity": "Developer ID Application: Kim Sun Dong (MZ8NB937SB)"
+      "signingIdentity": "Developer ID Application: Kim Sun Dong (MZ8NB937SB)",
+      "files": {
+        "Resources/Assets.car": "icons/Assets.car"
+      }
     }
   },
   "plugins": {
