@@ -40,7 +40,7 @@ export function showDesignMenu(anchor) {
   menu.className = 'design-menu';
   menu.setAttribute('role', 'menu');
   menu.innerHTML = `<div class="design-menu-head">채팅 디자인</div>
-    ${DESIGN_STYLES.map(([v, l, d], i) => `${i === 5 ? '<div class="design-menu-sep"></div>' : ''}<button class="design-item${v === cur ? ' on' : ''}" data-style="${v}" role="menuitemradio" aria-checked="${v === cur}"><span class="design-swatch sw-${v}"></span><span class="design-text"><b>${esc(l)}</b><small>${esc(d)}</small></span></button>`).join('')}
+    ${DESIGN_STYLES.map(([v, l, d], i) => `${i === 5 ? '<div class="design-menu-sep"></div><div class="design-menu-head">이전 스타일</div>' : ''}<button class="design-item${v === cur ? ' on' : ''}" data-style="${v}" role="menuitemradio" aria-checked="${v === cur}"><span class="design-swatch sw-${v}"></span><span class="design-text"><b>${esc(l)}</b><small>${esc(d)}</small></span><span class="design-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span></button>`).join('')}
     <div class="design-menu-sep"></div><div class="design-menu-head">읽기 폭</div>
     <div class="segmented design-width">${READING_WIDTHS.map(([v, l]) => `<button class="seg${(p.readingWidth || 'full') === v ? ' active' : ''}" data-width="${v}">${l}</button>`).join('')}</div>`;
   document.body.append(menu);
