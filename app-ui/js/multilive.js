@@ -10,6 +10,7 @@ import { esc, safeUrl, toast } from './dom.js';
 import { PlayerBridge } from './player.js';
 import { ChatPanel } from './chat.js';
 import { StreamAlerts } from './donations.js';
+import { PaneControls, paneControlsHtml, PANE_ICON } from './ml-pane-controls.js';
 import { installChatSplitter } from './splitter.js';
 import { FOCUS_DIRECTIONS, FOCUS_RATIO, focusGrid, ratioFromPointer, clampFocusRatio } from './focus-layout.js';
 
@@ -139,7 +140,7 @@ export class MultiLivePage {
     this.bindDrag();
     this.stage.addEventListener('dblclick', (e) => {
       const pane = e.target.closest('.ml-pane');
-      if (pane) this.toggleSingle(Number(pane.dataset.slot));
+      if (pane && !e.target.closest('.ml-pane-bar, .ml-pane-top, .ml-pane-menu')) this.toggleSingle(Number(pane.dataset.slot));
     });
     document.addEventListener('keydown', (e) => {
       if (this.root.hidden || !(e.metaKey && e.ctrlKey)) return;
@@ -148,6 +149,15 @@ export class MultiLivePage {
     });
     this.proposed = new Set();
     setInterval(() => this.proposeTick(), 120000);
+    // 패인 재생 상태(일시정지·버퍼링·지연) — 화면이 보일 때만 맞춘다.
+    setInterval(() => {
+      if (this.root.hidden) return;
+      for (const p of this.panes.values()) {
+        if (!p.sessionId) continue;
+        const s = (this.state.sessions || []).find((x) => x.id === p.sessionId);
+        p.controls.sync(Boolean(s && s.isAudible));
+      }
+    }, 700);
     this.chat = new ChatPanel(this.root.querySelector('.ml-chat'), { isLoggedIn, onHighlight: (m) => this.alerts.push(m) });
 
     this.state = { sessions: [], selectedId: null, canAdd: true, maxSessions: 4, layout: 'grid' };
@@ -214,23 +224,20 @@ export class MultiLivePage {
       <div class="ml-pane-hit" data-ml="select"></div>
       <div class="ml-pane-state"><div class="spinner"></div><span></span></div>
       <div class="ml-pane-top">
-        <span class="ml-pane-sound" title="소리 나는 패인">${ICON_SOUND}</span>
-        <span class="ml-pane-cap"></span>
         <button class="ml-pane-btn ml-drag" draggable="true" title="끌어서 자리 바꾸기" aria-label="끌어서 자리 바꾸기"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>
-        <div class="grow"></div>
-        <button class="ml-pane-btn" data-ml="single" title="이 채널만 크게 (더블클릭)" aria-label="이 채널만 크게"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg></button>
-        <button class="ml-pane-btn" data-ml="audio" title="이 패인 소리 켜기 (선택)">${ICON_SOUND}</button>
-        <button class="ml-pane-btn" data-ml="retry" title="다시 연결" aria-label="다시 연결"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5a8 8 0 1 0-2.4 5.9"/><path d="M20 4.5v7h-7"/></svg></button>
-        <button class="ml-pane-btn" data-ml="info" title="채널 정보" aria-label="채널 정보"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 7.6v.2"/></svg></button>
-        <button class="ml-pane-close" data-ml="remove" title="닫기">${ICON_CLOSE}</button>
-      </div>
-      <div class="ml-pane-info">
-        <div class="ml-pane-avatar"></div>
+        <div class="ml-pane-avatar" data-ml="info" title="채널 정보"></div>
         <div class="ml-pane-text">
-          <div class="ml-pane-line"><span class="ml-live-pill">LIVE</span><span class="ml-pane-name ellipsis"></span><span class="ml-pane-viewers"></span></div>
+          <div class="ml-pane-line"><span class="ml-pane-name ellipsis"></span><span class="ml-pane-viewers"></span></div>
           <div class="ml-pane-title ellipsis"></div>
         </div>
-      </div>`;
+        <div class="grow"></div>
+        <button class="ml-pane-btn ml-sec" data-ml="select" title="이 패인 채팅 보기" aria-label="이 패인 채팅 보기">${PANE_ICON.chat}</button>
+        <button class="ml-pane-btn ml-sec" data-ml="info" title="채널 정보" aria-label="채널 정보">${PANE_ICON.info}</button>
+        <button class="ml-pane-btn ml-sec" data-ml="retry" title="다시 연결" aria-label="다시 연결">${PANE_ICON.retry}</button>
+        <button class="ml-pane-btn" data-mp="more" title="더 보기" aria-label="더 보기" aria-haspopup="menu">${PANE_ICON.more}</button>
+        <button class="ml-pane-close" data-ml="remove" title="닫기">${ICON_CLOSE}</button>
+      </div>
+      <span class="ml-pane-sound" title="소리 나는 패인">${ICON_SOUND}</span>${paneControlsHtml()}`;
     this.stage.append(el);
     const iframe = el.querySelector('iframe');
     const bridge = new PlayerBridge(iframe, {
@@ -242,6 +249,7 @@ export class MultiLivePage {
       if (type === 'playStarted') bridge.call('setMuted', false);
     });
     pane = { el, bridge, sessionId: null };
+    pane.controls = new PaneControls(pane, { makeAudible: () => this.makeAudible(pane) });
     this.panes.set(slot, pane);
     const queued = this.pending.get(slot);
     if (queued) {
@@ -319,6 +327,7 @@ export class MultiLivePage {
     el.classList.toggle('ml-first', index === 0);
     el.classList.toggle('selected', selected);
     el.classList.toggle('audible', s.isAudible);
+    pane.controls.sync(s.isAudible);
     el.querySelector('.ml-pane-name').textContent = s.channelName || s.channelId;
     el.querySelector('.ml-pane-title').textContent = s.liveTitle || '';
     const viewers = el.querySelector('.ml-pane-viewers');
@@ -492,6 +501,14 @@ export class MultiLivePage {
       this.dragId = null;
       if (target && dragged && target !== dragged) this.run(api.multiLiveReorder(dragged, target));
     });
+  }
+
+  /** 패인 볼륨을 올리면 그 패인 소리를 켠다(여러 소리 모드면 더하고, 아니면 선택). */
+  makeAudible(pane) {
+    const id = pane.sessionId;
+    if (!id) return;
+    if (this.state.multiAudio) this.run(api.multiLiveAudio(id, false));
+    else if (id !== this.state.selectedId) this.run(api.multiLiveSelect(id));
   }
 
   // ── 한 채널 크게 (MUL-11) ─────────────────────
