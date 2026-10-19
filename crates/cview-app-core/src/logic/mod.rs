@@ -1,4 +1,4 @@
-//! `Sources/CViewApp/Logic` 포팅 (+ `Models/`, `Playback/` 의 순수 규칙).
+//! `Sources/CViewApp/Logic` 포팅 (+ `Models/EffectivePlaybackPolicy`, `Playback/PlaybackGuardrail`).
 //!
 //! | Swift 원본 | Rust |
 //! |---|---|
@@ -8,8 +8,8 @@
 //! | `Logic/FollowingOverviewListQuery.swift` | [`following_overview_list_query`] |
 //! | `Logic/MergedChatMergeState.swift` | [`merged_chat_merge_state`] |
 //! | `Logic/PinnedCategoryDecoder.swift` | [`pinned_category_decoder`] |
-//! | `Playback/EffectivePlaybackPolicy.swift` | [`effective_playback_policy`] |
-//! | `Playback/PlaybackGuardrail*.swift` | [`playback_guardrail`] |
+//! | `Models/EffectivePlaybackPolicy.swift` | [`effective_playback_policy`] |
+//! | `Playback/PlaybackGuardrail.swift` | [`playback_guardrail`] |
 
 pub mod category_groups;
 pub mod effective_playback_policy;
