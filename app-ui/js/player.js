@@ -15,14 +15,29 @@ export class PlayerBridge {
   constructor(iframe) {
     this.iframe = iframe;
     this.ready = false;
+    // `ready` 를 받은 문서 — 같은 문서의 중복 ready 는 무시하고, 새 문서는 다시 기다린다.
+    this.readyDocument = null;
     this.queue = [];
     this.listeners = new Set();
     window.__cviewPlayerBridge = (message) => this.onPageMessage(message);
-    iframe.addEventListener('load', () => {
-      // 새 문서 — ready 를 다시 기다린다.
-      this.ready = false;
-    });
+    // 페이지는 스크립트 끝에서 `ready` 를 보내지만 두 경우에 잃는다: 부모 모듈보다 iframe 이 먼저
+    // 떠서 브리지가 아직 없을 때, 그리고 `ready` 직후 오는 iframe `load`. 그래서 문서가 다 뜬 시점에
+    // 페이지 API 가 있으면 그 문서의 ready 로 본다.
+    iframe.addEventListener('load', () => this.adoptLoadedDocument());
+    this.adoptLoadedDocument();
     listen(Events.playerCommand, (payload) => this.exec(payload && payload.script));
+  }
+
+  adoptLoadedDocument() {
+    const win = this.iframe.contentWindow;
+    const doc = this.iframe.contentDocument;
+    if (!win || !doc || doc.readyState !== 'complete' || typeof win.loadSource !== 'function') {
+      if (doc !== this.readyDocument) this.ready = false;
+      return;
+    }
+    const pageGen = typeof win.__cviewPageGen === 'number' ? win.__cviewPageGen : 0;
+    const hlsSupported = Boolean(win.Hls && win.Hls.isSupported());
+    this.onPageMessage({ type: 'ready', data: { hlsSupported, pageGen } });
   }
 
   /** 페이지 메시지 구독 (type, data). */
@@ -34,6 +49,9 @@ export class PlayerBridge {
   onPageMessage(message) {
     if (!message || typeof message.type !== 'string') return;
     if (message.type === 'ready') {
+      const doc = this.iframe.contentDocument;
+      if (this.ready && doc === this.readyDocument) return;
+      this.readyDocument = doc;
       this.ready = true;
       this.flush();
     }
