@@ -76,7 +76,14 @@ function lineHtml(m, prefs) {
   if (m.kind === 'notice') {
     return `<div class="${classes.join(' ')}" ${data}><span class="notice-icon">${EVENT_ICONS.megaphone}</span><div class="notice-body"><div class="notice-from">${nick}<span class="notice-tag">공지</span>${time}</div>${text}</div></div>`;
   }
-  return `<div class="${classes.join(' ')}" ${data}>${time}<span class="badges">${badges}</span>${nick}${text}</div>`;
+  // 공통 구조 — 아바타·머리(시간·배지·닉네임)·본문. 줄 형태 스타일은 CSS 가 한 줄로 이어 붙이고,
+  // 카드·말풍선 스타일(라운지·하이브리드·카카오·iMessage)은 같은 구조를 블록으로 배치한다.
+  const me = getMyNickname();
+  if (me && m.nickname === me) classes.push('own');
+  classes.push('msg');
+  const initial = esc(Array.from(m.nickname || '•')[0] || '•');
+  const mentionTag = classes.includes('mention') ? '<span class="msg-mention">나를 언급</span>' : '';
+  return `<div class="${classes.join(' ')}" ${data}><span class="chat-avatar" aria-hidden="true">${initial}</span><span class="msg-main"><span class="msg-head">${time}<span class="badges">${badges}</span>${nick}${mentionTag}</span>${text}</span></div>`;
 }
 
 const STATE_LABEL = {
