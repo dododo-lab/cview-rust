@@ -4,6 +4,7 @@
 pub mod app_lifecycle;
 pub mod background_update;
 pub mod boot_progress;
+pub mod channel_header_hub;
 pub mod channel_preset_store;
 pub mod download_history_store;
 pub mod mention_inbox;
