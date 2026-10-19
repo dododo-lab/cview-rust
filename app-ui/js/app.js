@@ -14,6 +14,7 @@ import { LivePage, liveIcon } from './live.js';
 import { ChannelPage } from './channel.js';
 import { MediaPage } from './media.js';
 import { LibraryPage, libraryIcon } from './library.js';
+import { StatsPage, statsIcon } from './stats.js';
 import { CategoriesPage, categoryIcon } from './categories.js';
 import { CommandPalette } from './palette.js';
 import { ChatOnlyPage } from './chat-only.js';
@@ -31,6 +32,7 @@ const ROUTES = [
   { id: 'multilive', title: '멀티라이브', icon: multiLiveIcon },
   { id: 'multichat', title: '멀티채팅', icon: multiChatIcon },
   { id: 'library', title: '보관함', icon: libraryIcon },
+  { id: 'stats', title: '통계', icon: statsIcon },
   { id: 'search', title: '검색', icon: icons.search, section: '탐색' },
   { id: 'settings', title: '설정', icon: icons.settings, section: '앱' },
 ];
@@ -268,6 +270,8 @@ function installPalette() {
       { group: '보관함', label: '이어 보기', hint: '다시보기', run: () => navigate('library', { tab: 'continue' }) },
       { group: '보관함', label: '즐겨찾기', hint: '채널', run: () => navigate('library', { tab: 'favorites' }) },
       { group: '보관함', label: '북마크', hint: '방송 장면', run: () => navigate('library', { tab: 'bookmarks' }) },
+      { group: '통계', label: '시청 통계', hint: '통계', run: () => navigate('stats') },
+      { group: '통계', label: '데이터 관리 · 백업', hint: '저장소', run: () => navigate('stats', { tab: 'data' }) },
       { group: '동작', label: resolvedTheme() === 'dark' ? '라이트 테마로 전환' : '다크 테마로 전환', hint: '테마', run: () => setTheme(resolvedTheme() === 'dark' ? 'light' : 'dark') },
       { group: '동작', label: '뒤로 가기', hint: '⌘[', run: goBack },
       { group: '동작', label: '사이드바 접기/펼치기', hint: '⌘\\', run: () => sidebar.toggle() },
@@ -406,6 +410,7 @@ async function main() {
   pages.multichat = new MultiChatPage(content, { isLoggedIn });
   pages.chat = new ChatOnlyPage(content, { isLoggedIn, onBack: goBack, onPlay: openChannel });
   pages.library = new LibraryPage(content, { isLoggedIn, onOpenChannel: openChannelPage });
+  pages.stats = new StatsPage(content, { onOpenChannel: openChannelPage });
   pages.media = new MediaPage(content, { onBack: goBack, onOpenChannel: openChannelPage });
   pages.channel = new ChannelPage(content, { onBack: goBack, onPlay: openChannel, onAddMulti: addToMultiLive });
   viewer = new Viewer(document.getElementById('viewer'), { isLoggedIn, onClose: onViewerClosed });

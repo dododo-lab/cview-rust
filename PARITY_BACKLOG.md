@@ -158,9 +158,9 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 | DAT-01 | ✅ 채널 메모(작성·편집 시트) | `ChannelMemoSheet` | persistence `fetch_memo/save_memo`, 명령 없음 | S |
 | DAT-02 | ✅ 즐겨찾기(카드·채널 상세에서 토글, 사이드바 우선 표시) | `FavoritesStore`, `LiveCardActionMenu` | `FavoritesStore`, persistence | S |
 | DAT-03 | ✅ 최근 시청을 DB 로 이관(지금은 localStorage) | `RecentChannelsStore` | `RecentChannelsStore` | S |
-| DAT-04 | 통계/인사이트 화면(세션·스트리밍·채팅·기록 탭, KPI 카드) | `Statistics/StatisticsView`, `Tabs/*`, `Components/KPICard` | persistence `aggregate_insights`, `watch_time_by_channel/category`, `current_watch_streak` | L |
+| DAT-04 | ✅ 통계/인사이트 화면(세션·스트리밍·채팅·기록 탭, KPI 카드) | `Statistics/StatisticsView`, `Tabs/*`, `Components/KPICard` | persistence `aggregate_insights`, `watch_time_by_channel/category`, `current_watch_streak` | L |
 | DAT-05 | 통계 독립 창(`⇧⌘T`) | `CViewApp` `statistics-window` | 없음 | S |
-| DAT-06 | 저장소 복구·로컬 데이터 정리 UI | `AppState+StoreRecovery`, `AppState+LocalDataHygiene` | `store_open_health`, `maintenance` | M |
+| DAT-06 | 🟡 저장소 복구·로컬 데이터 정리 UI | `AppState+StoreRecovery`, `AppState+LocalDataHygiene` | `store_open_health`, `maintenance` | M |
 
 ## 8. 앱 셸·시스템 연동 (SYS)
 
@@ -202,7 +202,7 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 | DSN-02 | ✅ 모션 등급(reduced/balanced/rich)·화면 전환 애니메이션 | `CVAnimation`, `RouteTransitionTiming`, `MotionTransactionPolicy` | `prefers-reduced-motion` 만 | S |
 | DSN-03 | ✅ 콤팩트 밀도 모드 | `CompactDensity`, `compactMode` | 없음 | S |
 | DSN-04 | 채널 프로필 톤(채널 색 강조) | `ChannelProfileTone`, `ChannelIdentity` | 없음 | S |
-| DSN-05 | 차트·랭킹 바 스타일(통계용) | `CVChartStyle`, `CVRankingBar` | 없음(DAT-04 와 묶음) | S |
+| DSN-05 | ✅ 차트·랭킹 바 스타일(통계용) | `CVChartStyle`, `CVRankingBar` | 없음(DAT-04 와 묶음) | S |
 | DSN-06 | 접근성 레이블·키보드 포커스 이동 정합 | `Components/CardAccessibility`, `CViewCore/Focus` | 일부 aria | S |
 
 ---
