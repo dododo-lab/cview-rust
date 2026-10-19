@@ -7,5 +7,11 @@
 //!
 //! 버린 것: 애니메이션·트랜잭션, 색·SF Symbol, 뷰 기하, signpost 계측.
 
+pub mod all_broadcasts;
+pub mod category_browse;
+pub mod channel_detail;
 pub mod chat;
+pub mod following;
+pub mod home;
+pub mod multi_live;
 pub mod support;
