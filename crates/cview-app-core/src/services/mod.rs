@@ -14,6 +14,8 @@ pub mod pinned_notice_cache;
 pub mod refresh_coordinator;
 pub mod single_instance_guard;
 pub mod support;
+pub mod vod_feed;
 pub mod vod_playback_progress;
 pub mod vod_sync_state;
+pub mod vod_sync_store;
 pub mod watch_heartbeat;
