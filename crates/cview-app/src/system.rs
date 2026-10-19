@@ -229,6 +229,16 @@ pub async fn update_check(app: AppHandle) -> CmdResult<UpdateCheckDto> {
         .await
         .map_err(|e| CommandError(format!("업데이트 서버에 연결하지 못했습니다: {e}")))?;
     let status = resp.status().as_u16();
+    let rate_limited = resp
+        .headers()
+        .get("x-ratelimit-remaining")
+        .and_then(|v| v.to_str().ok())
+        == Some("0");
+    if status == 403 && rate_limited {
+        return Err(CommandError(
+            "GitHub 요청 한도를 넘었습니다 — 한 시간쯤 뒤에 다시 확인해 주세요".into(),
+        ));
+    }
     if status == 404 {
         return Ok(UpdateCheckDto {
             current,

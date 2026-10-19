@@ -32,7 +32,7 @@ export class ChatOnlyPage {
       </aside>`;
     content.append(this.root);
     this.chat = new ChatPanel(this.root.querySelector('.chatonly-chat'), { isLoggedIn, session });
-    if (standalone) this.root.querySelector('[data-co=back]').hidden = true;
+    if (standalone) this.root.querySelector('[data-co=back]').remove();
     this.root.addEventListener('click', (e) => {
       const a = e.target.closest('[data-co]');
       if (!a) return;

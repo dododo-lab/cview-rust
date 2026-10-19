@@ -9,7 +9,7 @@
 // - 멀티라이브는 패인마다 iframe 이 하나다. 페이지가 자기 `window` 를 함께 넘기므로 그 창의 브리지로
 //   보낸다. 패인 브리지는 명령 이벤트를 직접 듣지 않고(`commandEvent: null`) 화면이 슬롯별로 넣어 주며,
 //   메시지는 `forward` 로 `multilive_player_message` 에 넘긴다.
-import { api, listen, Events } from './api.js';
+import { api, Events, listenHere } from './api.js';
 
 // 창(WindowProxy) → 브리지. iframe 의 contentWindow 는 문서가 바뀌어도 같은 객체다.
 const bridges = new Map();
@@ -43,7 +43,7 @@ export class PlayerBridge {
     // 페이지 API 가 있으면 그 문서의 ready 로 본다.
     iframe.addEventListener('load', () => this.adoptLoadedDocument());
     this.adoptLoadedDocument();
-    if (commandEvent) listen(commandEvent, (payload) => this.exec(payload && payload.script));
+    if (commandEvent) listenHere(commandEvent, (payload) => this.exec(payload && payload.script));
   }
 
   adoptLoadedDocument() {

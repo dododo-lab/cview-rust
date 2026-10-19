@@ -5,7 +5,7 @@
 //   옮기지 않는다(옮기면 다시 로드된다) — 위치는 CSS grid 의 `order` 로만 바꾼다.
 // - 슬롯 명령(`multilive://command`)은 패인 iframe 이 생기기 전에 올 수 있어 슬롯별로 줄 세운다.
 // - 패인을 누르면 선택 — 오디오·채팅·고화질이 그 패인을 따라간다.
-import { api, listen, Events } from './api.js';
+import { api, listen, listenHere, Events } from './api.js';
 import { esc, safeUrl, toast } from './dom.js';
 import { PlayerBridge } from './player.js';
 import { ChatPanel } from './chat.js';
@@ -147,7 +147,7 @@ export class MultiLivePage {
     this.chatKey = null;
     this.pickerItems = [];
 
-    listen(Events.multiLiveCommand, (p) => p && this.dispatch(p.slot, p.script));
+    listenHere(Events.multiLiveCommand, (p) => p && this.dispatch(p.slot, p.script));
     listen(Events.multiLiveState, (s) => this.render(s));
 
     this.root.addEventListener('click', (e) => this.onClick(e));

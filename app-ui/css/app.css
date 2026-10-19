@@ -1602,3 +1602,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
   :root[data-transparency="system"] *, :root[data-transparency="system"] *::before, :root[data-transparency="system"] *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
   :root[data-transparency="system"] { --glass: var(--surface-base); }
 }
+:root[data-window="chat"] .chatonly-head { gap: 8px; flex-wrap: nowrap; }
+:root[data-window="chat"] .chatonly-head .btn { white-space: nowrap; padding: 0 10px; height: 30px; font-size: var(--fs-footnote); }
+:root[data-window="chat"] .chatonly-title { min-width: 0; flex: 1; }

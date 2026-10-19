@@ -221,7 +221,7 @@ export class ChannelPage {
         break;
       }
       case 'memo': this.editMemo(); break;
-      case 'notify': this.editNotify(a); break;
+      case 'notify': this.editNotify(action); break;
       case 'more':
         this.pages[this.tab] += 1;
         this.renderTab(true);

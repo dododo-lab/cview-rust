@@ -365,10 +365,16 @@ pub fn parse_neon_streams(json: &str) -> Result<NeonStreams, VodResolveError> {
 }
 
 /// [`parse_neon_streams`] 결과를 VOD 상세와 합친다.
+/// 재생은 단일 MP4 를 먼저 쓴다 — 이 CDN 의 HLS 는 하위 재생목록·세그먼트에 마스터의 서명 쿼리(`_lsu_sa_`)를
+/// 이어 붙여야 해서 WebView 기본 HLS 가 열지 못한다(MEDIA_ERR_SRC_NOT_SUPPORTED). MP4 는 범위 요청으로 탐색된다.
 pub fn parse_neon_playback(json: &str, detail: &VodDetail) -> Result<VodSources, VodResolveError> {
     let n = parse_neon_streams(json)?;
+    let info = match n.progressive.first() {
+        Some(best) => base_info(detail, best.url.clone(), n.progressive.clone()),
+        None => base_info(detail, n.master, n.hls),
+    };
     Ok(VodSources {
-        info: base_info(detail, n.master, n.hls),
+        info,
         progressive: n.progressive,
     })
 }
@@ -531,10 +537,17 @@ mod tests {
     #[test]
     fn parses_neon_playback_hls_and_progressive() {
         let d = detail(None, None, Some("k"));
+        let n = parse_neon_streams(NEON).unwrap();
+        assert_eq!(n.master.as_str(), "https://cdn.example.com/master.m3u8?s=1");
+        assert_eq!(
+            n.hls.iter().map(|q| q.name.as_str()).collect::<Vec<_>>(),
+            ["1080p", "720p"]
+        );
         let s = parse_neon_playback(NEON, &d).unwrap();
+        // 재생은 단일 MP4 우선.
         assert_eq!(
             s.info.stream_url.as_str(),
-            "https://cdn.example.com/master.m3u8?s=1"
+            "https://cdn.example.com/1080.mp4"
         );
         assert_eq!(
             s.info
@@ -542,7 +555,7 @@ mod tests {
                 .iter()
                 .map(|q| q.name.as_str())
                 .collect::<Vec<_>>(),
-            ["1080p", "720p"]
+            ["1080p", "144p"]
         );
         assert_eq!(s.progressive.len(), 2);
         assert_eq!(

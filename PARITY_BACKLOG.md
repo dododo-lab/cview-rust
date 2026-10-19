@@ -27,18 +27,18 @@
 | NAV-02 | ✅ 카테고리 둘러보기(카테고리 카드 → 카테고리별 라이브, 정렬·고정) | `CategoryBrowseView`, `Category/CategoryBrowseCards`, `CategoryBrowseModels` | `CategoryBrowseViewModel`, `category_groups`, `pinned_category_decoder`, 명령·화면 없음 | M |
 | NAV-03 | ✅ 인기(전체방송) 화면 고도화: 30개 페이지네이션, 정렬, 카테고리 필터, 미리보기 인스펙터 | `AllBroadcasts/AllBroadcastsView`, `BroadcastPreviewInspector`, `Components/PaginationBar` | `AllBroadcastsViewModel` 사용, 단순 격자만 | M |
 | NAV-04 | 🟡 팔로잉 허브: 오프라인 채널 포함 목록, 정렬(시청자/이름/최근), 카테고리 필터, 간결 보기, 채널 독 | `FollowingView*`, `Following/FollowingChannelSidebar`, `FollowingChannelDenseRow`, `FollowingChannelDock`, `FollowingSortOrder` | `FollowingStore`·`following_browser_query`·`following_channel_sidebar` 로직, UI 는 방송 중 격자만 | M |
-| NAV-05 | 🧪 팔로잉 인사이트 레일·스마트 큐(이 페이지 담기 → 멀티뷰) | `Following/FollowingLiveInsightRail`, `ResidentOverviewStage`, `FollowingView+MultiLive` | `following_overview_list_query`, 없음 | M |
+| NAV-05 | ✅ 팔로잉 인사이트 레일·스마트 큐(이 페이지 담기 → 멀티뷰) | `Following/FollowingLiveInsightRail`, `ResidentOverviewStage`, `FollowingView+MultiLive` | `following_overview_list_query`, 없음 | M |
 | NAV-06 | 🟡 통합 검색: VOD·클립 결과, 최근 검색어, 추천어, 결과 정렬·"전체 보기" | `SearchViews`, `Search/SearchContentView+*`, `SearchResultRows` | `search` 명령은 라이브+채널만, `SearchViewModel`(최근 검색) 미사용, `search_videos` API 미사용 | M |
-| NAV-07 | 🧪 검색 디스커버리(태그 칩, 인사이트 레일) | `Search/LiveDiscoveryWorkspace`, `DiscoveryInsight*`, `DiscoveryDesign` | 없음 | M |
+| NAV-07 | ✅ 검색 디스커버리(태그 칩, 인사이트 레일) | `Search/LiveDiscoveryWorkspace`, `DiscoveryInsight*`, `DiscoveryDesign` | 없음 | M |
 | NAV-08 | ✅ 라이브러리 허브(클립·다시보기·받은 영상 탭) | `LibraryHubView` | 없음 | S |
 | NAV-09 | ✅ 최근 시청·즐겨찾기 화면(즐겨찾기 토글, 최근 기록 삭제) | `RecentFavoritesView` | `FavoritesStore`·`RecentChannelsStore`·persistence `toggle_favorite`; UI 는 localStorage 최근 시청만 | M |
 | NAV-10 | 🟡 카드 우클릭 메뉴(재생/멀티라이브 추가/채팅만 열기/채널 상세/즐겨찾기/링크 복사/치지직에서 열기) | `HomeV3/LiveCardActionMenu`, `ClipboardActions` | 카드에 "멀티라이브에 추가" 버튼만 | S |
 | NAV-11 | ✅ 뒤로 가기 내비게이션 스택(`⌘[`) | `AppRouter`, `Navigation/*` | `navigation/router.rs`, UI 는 단일 라우트 | S |
 | NAV-12 | ✅ 커맨드 팔레트(`⌘K`): 채널·화면·액션 검색 실행 | `CommandPaletteView`, `Actions/CViewActionRegistry` | `actions/registry.rs`·`cview_action.rs`; `⌘K` 는 검색 화면 이동만 | M |
-| NAV-13 | 🧪 사이드바 빠른 액션·위젯·재생 인사이트 | `Components/SidebarQuickActions`, `SidebarWidgets`, `SidebarPlaybackInsights` | `sidebar_quick_action.rs`, 없음 | S |
+| NAV-13 | ✅ 사이드바 빠른 액션·위젯·재생 인사이트 | `Components/SidebarQuickActions`, `SidebarWidgets`, `SidebarPlaybackInsights` | `sidebar_quick_action.rs`, 없음 | S |
 | NAV-14 | 🟡 홈 보강: 인기 클립 레일, 이어보기(VOD 진행률), 빠른 멀티 묶음, 타임라인 | `HomeV3/HomeV3Rail`, `HomeV3QuickMulti`, `HomeV3Timeline`, `HomeV3Discovery` | 홈 VM(`recommendation`, `promotion`) 일부만 화면 반영 | M |
-| NAV-15 | 🧪 라이브 허브 모드 전환(탐색/시청/멀티/검색/인기/카테고리, `⌘⌥1~6`) | `MainShell/MenuHubSegment`, `MenuHubTransition`, `navigation/hub_mode` | `hub_mode.rs`, 없음 | S |
-| NAV-16 | 🧪 워크스페이스 복원(마지막 화면·채널·멀티 구성) | `Persistence/WorkspaceSnapshot`, `AppState+StoreRecovery` | `workspace_snapshot.rs`, 미연결 | M |
+| NAV-15 | ✅ 라이브 허브 모드 전환(탐색/시청/멀티/검색/인기/카테고리, `⌘⌥1~6`) | `MainShell/MenuHubSegment`, `MenuHubTransition`, `navigation/hub_mode` | `hub_mode.rs`, 없음 | S |
+| NAV-16 | ✅ 워크스페이스 복원(마지막 화면·채널·멀티 구성) | `Persistence/WorkspaceSnapshot`, `AppState+StoreRecovery` | `workspace_snapshot.rs`, 미연결 | M |
 
 ## 2. 라이브 시청 화면·플레이어 (PLY)
 
@@ -61,7 +61,7 @@
 | PLY-15 | ✅ 오버레이 볼륨 슬라이더(스크롤 조절, % 표시) | `OverlayVolumeSlider`, `Components/VolumeSymbol` | 하단 range 슬라이더 | S |
 | PLY-16 | ✅ 스트림 알림 위치·크기 조정(위치 조정 모드) | `StreamAlertOverlayView`, 설정 `streamAlertAnchorX/Y/Scale` | 알림은 있음, 위치 고정 | S |
 | PLY-17 | ✅ 스트림 북마크(`bookmarkStream` 단축키, 북마크 목록·삭제) | `ShortcutAction.bookmarkStream`, `DataStore+Bookmarks` | persistence `save_bookmark/fetch_bookmarks`, 명령 없음 | S |
-| PLY-18 | 🧪 별도 플레이어 창(`⌘N`, 창 분리) | `CViewApp` `player-window` | 단일 창 | M |
+| PLY-18 | ✅ 별도 플레이어 창(`⌘N`, 창 분리) | `CViewApp` `player-window` | 단일 창 | M |
 | PLY-19 | ✅ 백그라운드 재생 끄기/가림 시 일시정지·화질 상한 | 설정 `continuePlaybackInBackground`, `OcclusionResolutionCap` | 미구현 | S |
 | PLY-20 | ✅ 시청 기록 기록(시작/종료) | `WatchHeartbeatCenter`, `DataStore+WatchHistorySync` | persistence `start/end_watch_record`, 셸 미호출 | S |
 
@@ -74,8 +74,8 @@
 | VOD-03 | ✅ 클립 플레이어(임베드/스트림, 필름스트립 독, 다음 클립) | `ClipPlayerView`, `ClipEmbedWebView`, `ClipFilmstripDock` | `ClipPlayerViewModel`, `clip_detail`/`clip_stream_url` API | M |
 | VOD-04 | ✅ 인기 클립 화면(기간 필터, 정렬, 히어로, 미리보기) | `PopularClipsView`, `PopularClipCards`, `Clips/ClipHeroComponents`, `ClipPreviewInspector` | `ClipBrowserViewModel`, `home_popular_clips` | M |
 | VOD-05 | ✅ 채널 상세의 VOD·클립 탭 | `ChannelVODClipTab` | `VodChannelBrowser`, `clip_list`/`vod_list` API | M |
-| VOD-06 | 🧪 다운로드(VOD/클립 HLS 세그먼트 결합 저장, 진행률, 취소·재시도) | `VideoDownloadService`, `VideoDownloadButton`, `VideoDownloadViews` | `media_download`(작업 모델·폴더 규칙)만, 다운로더 없음 | L |
-| VOD-07 | 🧪 다운로드 보관함(진행 중/완료, 끝난 항목 지우기, 폴더 열기) | `DownloadsLibraryView`, `DownloadHistoryStore` | `DownloadHistoryStore`, persistence `download_history` | M |
+| VOD-06 | ✅ 다운로드(VOD/클립 HLS 세그먼트 결합 저장, 진행률, 취소·재시도) | `VideoDownloadService`, `VideoDownloadButton`, `VideoDownloadViews` | `media_download`(작업 모델·폴더 규칙)만, 다운로더 없음 | L |
+| VOD-07 | ✅ 다운로드 보관함(진행 중/완료, 끝난 항목 지우기, 폴더 열기) | `DownloadsLibraryView`, `DownloadHistoryStore` | `DownloadHistoryStore`, persistence `download_history` | M |
 
 ## 4. 채팅 (CHT)
 
@@ -103,7 +103,7 @@
 | CHT-20 | ✅ 입력 상태 배너(로그인 필요·슬로우 모드·제한 사유) | `ChatInputStatusBanner`, `ChatRestrictionReason` | placeholder 문구만 | S |
 | CHT-21 | 🟡 채팅 화면 갱신 상한·최대 표시 줄 수 | `ChatSettingsQualityView`, `maxUpdateRate`/`maxVisibleMessages` | `pacing.rs`, UI 는 300줄 고정 | S |
 | CHT-22 | ✅ 채팅만 보기 화면(영상 없이) | `ChatOnlyView`, 라우트 `chatOnly` | 없음 | S |
-| CHT-23 | 🧪 독립 채팅 창(`⇧⌘C`, 채널 피커) | `IndependentChatWindow`, `ChatChannelPickerView` | 없음 | M |
+| CHT-23 | ✅ 독립 채팅 창(`⇧⌘C`, 채널 피커) | `IndependentChatWindow`, `ChatChannelPickerView` | 없음 | M |
 | CHT-24 | ✅ 채팅 통계(분당 메시지·참여자) | `ChatViewModel+Stats`, `Statistics/Tabs/ChatStatsView` | `stats.rs` | S |
 
 ## 5. 멀티채팅·멀티라이브 (MUL)
@@ -114,11 +114,11 @@
 | MUL-02 | ✅ 통합(머지) 채팅(여러 채널 메시지 한 타임라인, 보낼 채널 선택) | `MergedChatView*` | `merged_chat_merge_state.rs`, `merged_budget.rs` | L |
 | MUL-03 | ✅ 멀티채팅 메시지 검색(`⌥⌘F`)·다음/이전 채널(`⌃⇥`) | `MultiChatSearchView`, `MultiChatSearchStore` | `MultiChatSearchStore` | M |
 | MUL-04 | ✅ 멀티채팅 개요·컨트롤 레일·알림 배너·오프라인 세션 정책 | `MultiChatOverviewView`, `MultiChatControlRail`, `MultiChatNoticeBanner` | `OfflineSessionPolicy` | M |
-| MUL-05 | 🧪 멀티채팅 독립 창(`⇧⌘M`) | `MultiChatWindowHost` | 없음 | M |
+| MUL-05 | ✅ 멀티채팅 독립 창(`⇧⌘M`) | `MultiChatWindowHost` | 없음 | M |
 | MUL-06 | ✅ 멀티라이브 레이아웃: 프리셋/사용자 배치(드래그 크기 조절), `⌃⌘1~3` | `MultiLiveGridLayouts`, `PaneResizeGrip`, `MCGridResizeDivider`, `MultiLiveLayoutModePolicy` | 그리드·포커스만(포커스 비율 드래그 있음) | M |
 | MUL-07 | ✅ 패인 순서 드래그 재배치·탭 바 | `MLTabReorderDropDelegate`, `MCTabBar` | `order` 계산만, 드래그 없음 | S |
 | MUL-08 | 🟡 패인 개별 컨트롤(볼륨·음소거·화질·재연결·채널 상세) | `MultiLivePaneOverlays`, `MLPlaybackVolumePanel` | 선택·닫기만 | M |
-| MUL-09 | 🧪 다중 오디오(보조 패인 볼륨)·오디오 글로우 | `MultiLiveAudioGlow`, 설정 `multiAudioEnabled`/`secondaryVolume` | 선택 패인만 소리 | S |
+| MUL-09 | ✅ 다중 오디오(보조 패인 볼륨)·오디오 글로우 | `MultiLiveAudioGlow`, 설정 `multiAudioEnabled`/`secondaryVolume` | 선택 패인만 소리 | S |
 | MUL-10 | 🟡 그리드 채팅 오버레이(투명도·글자 크기) | 설정 `chatOverlayInGrid` 등 | 사이드 채팅만 | M |
 | MUL-11 | ✅ 싱글 채널 스테이지(멀티에서 한 채널 크게) | `MLSingleChannelStage` | 포커스 레이아웃으로 대체 | S |
 | MUL-12 | ✅ 모든 스트림 재연결·일괄 해제 | `MultiLiveOverlays` | "모두 닫기"만 | S |
@@ -144,9 +144,9 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 | SET-09 | ✅ 외관 키: `transparencyMode`, `motionQuality`, `frameRateMode`, `compactMode`, `sidebarWidth/Scale`, 테마 미리보기 | `GeneralSettingsTab`, `GeneralSettingsTab+ThemePreview` | 테마만 | S |
 | SET-10 | 🟡 성능 탭(`maxMemoryMB`, `debugMode`, 하드웨어·메모리, 캐시 & 초기화, 로컬 진단 로그) | `PerformanceSettingsTab` | 없음 | M |
 | SET-11 | ✅ 네트워크 탭(프리셋 balanced/stability/lowLatency/performance/custom, 요청 한도·동시성·타임아웃·재시도·재연결·`forceStreamProxy`·오프라인 대기) | `NetworkSettingsTab`, `NetworkPreset` | `NetworkSettings` 모델, 도메인 없음 | M |
-| SET-12 | 🧪 키보드 단축키 편집(`KeyboardShortcutSettings` 바인딩) | `GeneralSettingsTab` "키보드 단축키" | 모델 있음 | M |
-| SET-13 | 🧪 채널별 알림 설정(방송 시작/카테고리/제목 변경) | `ChannelNotificationSettings`, 채널 상세 | 모델 있음 | S |
-| SET-14 | 🧪 치지직 OAuth 연동(클라이언트 ID/Secret 입력, 연결 상태) | `OAuthCredentialsSection`, `CViewAuth/ChzzkOAuthService` | `cview-auth` OAuth 이식, UI 없음(쿠키 로그인만) | M |
+| SET-12 | ✅ 키보드 단축키 편집(`KeyboardShortcutSettings` 바인딩) | `GeneralSettingsTab` "키보드 단축키" | 모델 있음 | M |
+| SET-13 | ✅ 채널별 알림 설정(방송 시작/카테고리/제목 변경) | `ChannelNotificationSettings`, 채널 상세 | 모델 있음 | S |
+| SET-14 | 🟡 치지직 OAuth 연동(클라이언트 ID/Secret 입력, 연결 상태) | `OAuthCredentialsSection`, `CViewAuth/ChzzkOAuthService` | `cview-auth` OAuth 이식, UI 없음(쿠키 로그인만) | M |
 | SET-15 | 🟡 시청 기록 동기화(`SyncSettings` opt-in, 엔드포인트) | `AppState+Sync`, `WatchHistorySyncService` | `sync/watch_history_sync.rs` | S |
 | SET-16 | ✅ `settings_update` 도메인 확장(network/multiLive/multiChat/keyboard/channelNotifications/sync) | — | 4도메인만 | S |
 | SET-17 | ✅ 설정 백업·복원/초기화 | `SettingsStore+SnapshotRestore`, `SettingsSnapshotFile` | persistence `settings_snapshot_file`, `store_backup` | S |
@@ -159,7 +159,7 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 | DAT-02 | ✅ 즐겨찾기(카드·채널 상세에서 토글, 사이드바 우선 표시) | `FavoritesStore`, `LiveCardActionMenu` | `FavoritesStore`, persistence | S |
 | DAT-03 | ✅ 최근 시청을 DB 로 이관(지금은 localStorage) | `RecentChannelsStore` | `RecentChannelsStore` | S |
 | DAT-04 | ✅ 통계/인사이트 화면(세션·스트리밍·채팅·기록 탭, KPI 카드) | `Statistics/StatisticsView`, `Tabs/*`, `Components/KPICard` | persistence `aggregate_insights`, `watch_time_by_channel/category`, `current_watch_streak` | L |
-| DAT-05 | 🧪 통계 독립 창(`⇧⌘T`) | `CViewApp` `statistics-window` | 없음 | S |
+| DAT-05 | ✅ 통계 독립 창(`⇧⌘T`) | `CViewApp` `statistics-window` | 없음 | S |
 | DAT-06 | 🟡 저장소 복구·로컬 데이터 정리 UI | `AppState+StoreRecovery`, `AppState+LocalDataHygiene` | `store_open_health`, `maintenance` | M |
 
 ## 8. 앱 셸·시스템 연동 (SYS)
@@ -169,14 +169,14 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 | SYS-01 | ✅ 전역 단축키 체계(재생 Space/M/↑↓, `⌘1~4`, `⌘R` 새로고침, `⌘,` 설정, `⌘F` 검색) | `CViewApp` Commands, `KeyboardShortcutSettings` | `⌘K`·`⌘\`·Esc 만 | M |
 | SYS-02 | ✅ 키보드 단축키 도움말(`⌘/`) | `KeyboardShortcutsHelpView` | 없음 | S |
 | SYS-03 | ✅ 앱 메뉴 바(재생/채팅/윈도우/도움말 메뉴) | `CViewApp` `CommandMenu` | Tauri 기본 메뉴 | M |
-| SYS-04 | 🧪 팔로우 채널 방송 시작·카테고리·제목 변경 알림 | `NotificationService*`, `BackgroundUpdateService` | `BackgroundUpdateService` diff + `NotificationService`(Noop), `tauri-plugin-notification` 미도입 | M |
-| SYS-05 | 🧪 멘션 알림 | `MentionNotificationService` | `MentionNotificationService` | S |
-| SYS-06 | 🧪 딥 링크 `cview://live/…`·`channel`·`following`·`multilive`·`search`·`clip`·`login` | `DeepLinkRouter`, `DeepLinkInbox` | `deep_link.rs`·`deep_link_inbox.rs`, `tauri-plugin-deep-link` 미도입 | S |
-| SYS-07 | 🧪 단일 인스턴스(두 번째 실행 시 기존 창 활성화·링크 전달) | `SingleInstanceGuard` | `SingleInstanceGuard` 로직, `tauri-plugin-single-instance` 미도입 | S |
-| SYS-08 | 🧪 업데이트 확인 시트(GitHub 릴리스) | `UpdateSheetView`, `UpdateService` | `UpdateService`(GitHub 릴리스 파싱) | S |
+| SYS-04 | 🟡 팔로우 채널 방송 시작·카테고리·제목 변경 알림 | `NotificationService*`, `BackgroundUpdateService` | `BackgroundUpdateService` diff + `NotificationService`(Noop), `tauri-plugin-notification` 미도입 | M |
+| SYS-05 | 🟡 멘션 알림 | `MentionNotificationService` | `MentionNotificationService` | S |
+| SYS-06 | ✅ 딥 링크 `cview://live/…`·`channel`·`following`·`multilive`·`search`·`clip`·`login` | `DeepLinkRouter`, `DeepLinkInbox` | `deep_link.rs`·`deep_link_inbox.rs`, `tauri-plugin-deep-link` 미도입 | S |
+| SYS-07 | ✅ 단일 인스턴스(두 번째 실행 시 기존 창 활성화·링크 전달) | `SingleInstanceGuard` | `SingleInstanceGuard` 로직, `tauri-plugin-single-instance` 미도입 | S |
+| SYS-08 | 🟡 업데이트 확인 시트(GitHub 릴리스) | `UpdateSheetView`, `UpdateService` | `UpdateService`(GitHub 릴리스 파싱) | S |
 | SYS-09 | ✅ 정보(About) 창·오픈소스 고지 | `AboutPanelView` | 없음 | S |
-| SYS-10 | 🧪 스플래시·부트 진행 표시 | `SplashView`, `SplashContentView`, `BootProgress` | `BootProgress`, 없음 | S |
-| SYS-11 | 🧪 환영 안내(첫 실행 온보딩, 다시 보기) | `Components/WelcomeOverlay` | 없음 | S |
+| SYS-10 | ✅ 스플래시·부트 진행 표시 | `SplashView`, `SplashContentView`, `BootProgress` | `BootProgress`, 없음 | S |
+| SYS-11 | ✅ 환영 안내(첫 실행 온보딩, 다시 보기) | `Components/WelcomeOverlay` | 없음 | S |
 | SYS-12 | ✅ 오프라인 배너·네트워크 상태 감지 | `Components/OfflineBanner`, `NetworkPathMonitor` | `NetworkPathMonitor` | S |
 | SYS-13 | ✅ 토스트 센터(쌓임·액션 버튼) | `Components/ToastCenter` | 단일 토스트 | S |
 | SYS-14 | ✅ 스켈레톤 로딩·신선도 캡션(마지막 갱신 시각) | `SkeletonViews`, `Components/FreshnessCaption` | 스피너 | S |
@@ -184,26 +184,26 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 | SYS-16 | ✅ 창 위치·크기 저장/복원 | `WindowFrameAutosave`, `restoreWindowOnLaunch` | 없음(`tauri-plugin-window-state` 로 대체 가능) | S |
 | SYS-17 | ✅ 항상 위(`alwaysOnTop`) | `GeneralSettings.alwaysOnTop` | 없음(`set_always_on_top`) | S |
 | SYS-18 | ✅ 로그인 시 자동 실행 | `launchAtLogin` | 없음(`tauri-plugin-autostart`) | S |
-| SYS-19 | 🧪 도움말 액션(문제 보고, 알림 설정 열기, 로그 폴더 열기) | `SupportActions`, `SystemSettingsActions` | 없음 | S |
-| SYS-20 | 🧪 메뉴 막대 앱(방송 중 팔로잉 목록, 열기/종료) | `MenuBarView`, `MenuBar/*` | 없음(Tauri 트레이 아이콘으로 근사) | M |
-| SYS-21 | 🧪 화면 속 화면(PiP, `⌥⌘P`) | `PiPController`, `AppState+PiP` | 없음(WebView `requestPictureInPicture`) | M |
-| SYS-22 | 🧪 창 투명도/Liquid Glass·트래픽 라이트 애니메이션 | `DesignSystem/LiquidGlass`, `TransparencyPolicy`, `TrafficLightsAnimator` | 없음 | M |
-| SYS-23 | 🧪 앱 아이콘 동적 렌더(라이브 수 배지 등) | `AppIconRenderer`, `Components/AppIconView` | 없음 | S |
+| SYS-19 | 🟡 도움말 액션(문제 보고, 알림 설정 열기, 로그 폴더 열기) | `SupportActions`, `SystemSettingsActions` | 없음 | S |
+| SYS-20 | 🟡 메뉴 막대 앱(방송 중 팔로잉 목록, 열기/종료) | `MenuBarView`, `MenuBar/*` | 없음(Tauri 트레이 아이콘으로 근사) | M |
+| SYS-21 | ✅ 화면 속 화면(PiP, `⌥⌘P`) | `PiPController`, `AppState+PiP` | 없음(WebView `requestPictureInPicture`) | M |
+| SYS-22 | ✅ 창 투명도/Liquid Glass·트래픽 라이트 애니메이션 | `DesignSystem/LiquidGlass`, `TransparencyPolicy`, `TrafficLightsAnimator` | 없음 | M |
+| SYS-23 | 🟡 앱 아이콘 동적 렌더(라이브 수 배지 등) | `AppIconRenderer`, `Components/AppIconView` | 없음 | S |
 | SYS-24 | ⏸ 위젯(WidgetKit) | `AppState+Widget`, `WidgetSnapshotWriter`, `CViewWidgets` | 없음 | L |
 | SYS-25 | ⏸ App Intents(단축어/Siri) | `Intents/CViewIntents` | 없음 | M |
-| SYS-26 | 🧪 서명·공증·배포 스크립트 | 공증 스크립트 | Tauri 번들 설정 미작성 | S |
+| SYS-26 | 🟡 서명·공증·배포 스크립트 | 공증 스크립트 | Tauri 번들 설정 미작성 | S |
 | SYS-27 | ⏸ 인증서 피닝 | `CertificatePinningDelegate` | 제외됨 | M |
 
 ## 9. 디자인 (DSN)
 
 | ID | 항목 | Swift 원본 | Rust 현황 | 크기 |
 |---|---|---|---|---|
-| DSN-01 | 🧪 디자인 토큰 정합(간격·반경·의미 색·카테고리 색) | `DesignSystem/DesignTokens*` | `css/app.css` 자체 토큰 | M |
+| DSN-01 | ✅ 디자인 토큰 정합(간격·반경·의미 색·카테고리 색) | `DesignSystem/DesignTokens*` | `css/app.css` 자체 토큰 | M |
 | DSN-02 | ✅ 모션 등급(reduced/balanced/rich)·화면 전환 애니메이션 | `CVAnimation`, `RouteTransitionTiming`, `MotionTransactionPolicy` | `prefers-reduced-motion` 만 | S |
 | DSN-03 | ✅ 콤팩트 밀도 모드 | `CompactDensity`, `compactMode` | 없음 | S |
-| DSN-04 | 🧪 채널 프로필 톤(채널 색 강조) | `ChannelProfileTone`, `ChannelIdentity` | 없음 | S |
+| DSN-04 | ✅ 채널 프로필 톤(채널 색 강조) | `ChannelProfileTone`, `ChannelIdentity` | 없음 | S |
 | DSN-05 | ✅ 차트·랭킹 바 스타일(통계용) | `CVChartStyle`, `CVRankingBar` | 없음(DAT-04 와 묶음) | S |
-| DSN-06 | 🧪 접근성 레이블·키보드 포커스 이동 정합 | `Components/CardAccessibility`, `CViewCore/Focus` | 일부 aria | S |
+| DSN-06 | ✅ 접근성 레이블·키보드 포커스 이동 정합 | `Components/CardAccessibility`, `CViewCore/Focus` | 일부 aria | S |
 
 ---
 

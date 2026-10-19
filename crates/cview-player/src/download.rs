@@ -58,6 +58,17 @@ pub fn range_header(range: &ByteRange, previous_end: Option<i64>) -> (String, i6
     (format!("bytes={start}-{end}"), end + 1)
 }
 
+/// 하위 주소에 쿼리가 없고 같은 호스트면 부모 재생목록의 쿼리(서명)를 물려준다. 순수 함수.
+pub fn inherit_query(child: &Url, parent: &Url) -> Url {
+    if child.query().is_some() || parent.query().is_none() || child.host_str() != parent.host_str()
+    {
+        return child.clone();
+    }
+    let mut out = child.clone();
+    out.set_query(parent.query());
+    out
+}
+
 pub struct VideoDownloader {
     client: reqwest::Client,
     cancel: Arc<AtomicBool>,
@@ -280,18 +291,27 @@ impl VideoDownloader {
                 let master = parser
                     .parse_master_playlist(&text, &final_url)
                     .map_err(|_| DownloadError::NoSegments)?;
-                url = master
-                    .variants
-                    .first()
-                    .ok_or(DownloadError::NoSegments)?
-                    .uri
-                    .clone();
+                url = inherit_query(
+                    &master
+                        .variants
+                        .first()
+                        .ok_or(DownloadError::NoSegments)?
+                        .uri,
+                    &final_url,
+                );
                 continue;
             }
-            return parser
+            let mut segments = parser
                 .parse_media_playlist(&text, &final_url)
                 .map(|m| m.segments)
-                .map_err(|_| DownloadError::NoSegments);
+                .map_err(|_| DownloadError::NoSegments)?;
+            for seg in &mut segments {
+                seg.uri = inherit_query(&seg.uri, &final_url);
+                if let Some(init) = seg.init_segment.as_mut() {
+                    init.uri = inherit_query(&init.uri, &final_url);
+                }
+            }
+            return Ok(segments);
         }
         Err(DownloadError::NoSegments)
     }
@@ -310,6 +330,20 @@ mod tests {
         let iv = sequence_iv(0x0102);
         assert_eq!(&iv[..14], &[0u8; 14]);
         assert_eq!(&iv[14..], &[1, 2]);
+    }
+
+    #[test]
+    fn child_urls_inherit_signed_query() {
+        let parent = Url::parse("https://cdn.example.com/hls/master.m3u8?_lsu_sa_=sig").unwrap();
+        let child = Url::parse("https://cdn.example.com/hls/720.m3u8").unwrap();
+        assert_eq!(
+            inherit_query(&child, &parent).as_str(),
+            "https://cdn.example.com/hls/720.m3u8?_lsu_sa_=sig"
+        );
+        let own = Url::parse("https://cdn.example.com/hls/a.ts?x=1").unwrap();
+        assert_eq!(inherit_query(&own, &parent), own);
+        let other = Url::parse("https://other.example.com/a.ts").unwrap();
+        assert_eq!(inherit_query(&other, &parent), other);
     }
 
     #[test]
