@@ -87,6 +87,11 @@ pub trait KeyValueStore: Send + Sync {
     fn set_value(&self, key: &str, value: Value);
     fn remove(&self, key: &str);
 
+    /// `dictionaryRepresentation().keys` 중 접두사가 맞는 키. 열거를 못 하는 저장소는 빈 목록.
+    fn keys_with_prefix(&self, _prefix: &str) -> Vec<String> {
+        Vec::new()
+    }
+
     fn string(&self, key: &str) -> Option<String> {
         match self.value(key)? {
             Value::String(s) => Some(s),
@@ -174,6 +179,13 @@ impl KeyValueStore for MemoryKeyValueStore {
     fn remove(&self, key: &str) {
         lock(&self.values).remove(key);
     }
+    fn keys_with_prefix(&self, prefix: &str) -> Vec<String> {
+        lock(&self.values)
+            .keys()
+            .filter(|k| k.starts_with(prefix))
+            .cloned()
+            .collect()
+    }
 }
 
 /// JSON 파일 하나에 통째로 저장하는 저장소 — 쓰기마다 원자적으로 다시 쓴다.
@@ -217,6 +229,13 @@ impl KeyValueStore for JsonFileKeyValueStore {
         if g.remove(key).is_some() {
             self.flush(&g);
         }
+    }
+    fn keys_with_prefix(&self, prefix: &str) -> Vec<String> {
+        lock(&self.values)
+            .keys()
+            .filter(|k| k.starts_with(prefix))
+            .cloned()
+            .collect()
     }
 }
 
