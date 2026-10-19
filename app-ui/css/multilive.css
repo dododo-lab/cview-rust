@@ -142,3 +142,5 @@
 }
 .ml-pane-btn svg { width: 14px; height: 14px; }
 .ml-pane-btn:hover { background: var(--primary); color: var(--on-primary); }
+.ml-stage.ml-nmany { grid-template-columns: repeat(3, 1fr); grid-auto-rows: 1fr; }
+.ml-stage.ml-nlots { grid-template-columns: repeat(4, 1fr); grid-auto-rows: 1fr; }

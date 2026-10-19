@@ -220,7 +220,7 @@ export class MultiLivePage {
     this.root.querySelector('[data-ml="retry-all"]').hidden = n === 0;
 
     const focus = state.layout === 'focus' && n > 1;
-    this.stage.className = `ml-stage ml-n${Math.min(n, 4)} ${focus ? `ml-focus dir-${state.focusDirection}` : ''}`;
+    this.stage.className = `ml-stage ml-n${n <= 4 ? n : (n <= 9 ? 'many' : 'lots')} ${focus ? `ml-focus dir-${state.focusDirection}` : ''}`;
     this.empty.hidden = n > 0;
     this.focusControls.hidden = state.layout !== 'focus';
     for (const b of this.root.querySelectorAll('[data-direction]')) {

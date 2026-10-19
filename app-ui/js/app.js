@@ -2,7 +2,8 @@
 import { api, listen, Events, isTauri } from './api.js';
 import { toast, icons } from './dom.js';
 import { bindCardOpen } from './cards.js';
-import { FollowingPage, PopularPage, SearchPage, SettingsPage } from './pages.js';
+import { FollowingPage, PopularPage, SearchPage } from './pages.js';
+import { SettingsPage } from './settings.js';
 import { Viewer } from './viewer.js';
 import { HomePage } from './home.js';
 import { Sidebar } from './sidebar.js';
@@ -15,6 +16,7 @@ import { MediaPage } from './media.js';
 import { LibraryPage, libraryIcon } from './library.js';
 import { CategoriesPage, categoryIcon } from './categories.js';
 import { CommandPalette } from './palette.js';
+import { installPrefsEffects } from './prefs-effects.js';
 import { showMenu } from './chat.js';
 
 // 사이드바 — Swift `AppRouter.SidebarItem` 라벨.
@@ -422,10 +424,19 @@ async function main() {
   window.addEventListener('mouseup', (e) => { if (e.button === 3) goBack(); });
   window.addEventListener('cview:open-vod', (e) => e.detail && navigate('media', { kind: 'vod', id: e.detail.videoNo }));
   window.addEventListener('cview:open-clip', (e) => e.detail && navigate('media', { kind: 'clip', id: e.detail.clipUid }));
+  window.addEventListener('cview:menu', (e) => { const run = MENU_ACTIONS[e.detail]; if (run) run(); });
   window.addEventListener('cview:navigate', (e) => e.detail && navigate(e.detail.route, e.detail.params || {}));
   installCardMenu();
   installPalette();
   installMenuAndShortcuts();
+  installPrefsEffects({
+    viewer,
+    refreshCurrent: () => {
+      if (viewer.isOpen || palette.isOpen) return;
+      if (['home', 'following', 'popular', 'categories', 'live'].includes(current)) pages[current].show(current === 'categories' ? {} : false);
+      refreshSidebarFollowing();
+    },
+  });
   window.addEventListener('cview:open-channel', (e) => openChannelPage(e.detail && e.detail.channelId));
   // 시청 화면 헤더(아바타·채널명)를 누르면 채널 상세
   document.querySelector('#viewer .viewer-header').addEventListener('click', (e) => {

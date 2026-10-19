@@ -15,6 +15,7 @@ pub mod multi_live;
 pub mod playback;
 pub mod state;
 pub mod webview_store;
+pub mod window_prefs;
 
 use std::sync::Arc;
 
@@ -135,6 +136,22 @@ pub fn run() {
                 &data_dir,
             );
             commands::settings::apply_window_theme(&handle, services.settings.appearance().theme);
+            window_prefs::apply_on_launch(&handle, &data_dir, &services.settings.general());
+            // 창 위치·크기 저장 — 움직이거나 크기를 바꾸면 기록한다(SYS-16).
+            if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
+                let dir = data_dir.clone();
+                let w = window.clone();
+                window.on_window_event(move |event| {
+                    if matches!(
+                        event,
+                        tauri::WindowEvent::Moved(_)
+                            | tauri::WindowEvent::Resized(_)
+                            | tauri::WindowEvent::CloseRequested { .. }
+                    ) {
+                        window_prefs::save_frame(&dir, &w);
+                    }
+                });
+            }
             app.manage(services);
             app.manage(shell);
             spawn_multi_live_state_task(handle.clone());
@@ -165,6 +182,10 @@ pub fn run() {
             commands::multi_live::multilive_set_focus_layout,
             commands::multi_live::multilive_retry,
             commands::settings::app_info,
+            commands::settings::settings_export,
+            commands::settings::settings_import,
+            commands::settings::settings_reset,
+            commands::settings::network_preset,
             commands::multi_live::multilive_set_audio_suspended,
             commands::media::vod_play,
             commands::media::vod_progress_save,

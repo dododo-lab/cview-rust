@@ -59,10 +59,10 @@
 | PLY-13 | ✅ 로딩/오류/종료 오버레이 고도화(재시도, 다시 확인, 브랜드 로딩) | `StreamLoadingOverlay`, `BrandedLoadingView`, `ErrorStateView` | 스피너+문구 오버레이 | S |
 | PLY-14 | 헤더 채널 레일(다른 라이브 채널 전환, 채널 관리 패널) | `LiveChannelHeaderRail`, `LiveChannelHeaderControl`, `LiveChannelManagementPanel` | 아바타·제목·메타만 | M |
 | PLY-15 | ✅ 오버레이 볼륨 슬라이더(스크롤 조절, % 표시) | `OverlayVolumeSlider`, `Components/VolumeSymbol` | 하단 range 슬라이더 | S |
-| PLY-16 | 스트림 알림 위치·크기 조정(위치 조정 모드) | `StreamAlertOverlayView`, 설정 `streamAlertAnchorX/Y/Scale` | 알림은 있음, 위치 고정 | S |
+| PLY-16 | 🟡 스트림 알림 위치·크기 조정(위치 조정 모드) | `StreamAlertOverlayView`, 설정 `streamAlertAnchorX/Y/Scale` | 알림은 있음, 위치 고정 | S |
 | PLY-17 | ✅ 스트림 북마크(`bookmarkStream` 단축키, 북마크 목록·삭제) | `ShortcutAction.bookmarkStream`, `DataStore+Bookmarks` | persistence `save_bookmark/fetch_bookmarks`, 명령 없음 | S |
 | PLY-18 | 별도 플레이어 창(`⌘N`, 창 분리) | `CViewApp` `player-window` | 단일 창 | M |
-| PLY-19 | 백그라운드 재생 끄기/가림 시 일시정지·화질 상한 | 설정 `continuePlaybackInBackground`, `OcclusionResolutionCap` | 미구현 | S |
+| PLY-19 | ✅ 백그라운드 재생 끄기/가림 시 일시정지·화질 상한 | 설정 `continuePlaybackInBackground`, `OcclusionResolutionCap` | 미구현 | S |
 | PLY-20 | ✅ 시청 기록 기록(시작/종료) | `WatchHeartbeatCenter`, `DataStore+WatchHistorySync` | persistence `start/end_watch_record`, 셸 미호출 | S |
 
 ## 3. VOD·클립·다운로드 (VOD)
@@ -125,7 +125,7 @@
 | MUL-13 | 멀티라이브 제안 토스트(자주 같이 보는 채널) | `MultiLiveProposerToast`, `MultiLiveProposer` | `MultiLiveProposer` | S |
 | MUL-14 | 채널 프리셋 저장/불러오기(멀티 구성 묶음) | `ChannelPresetPicker`, `Components/SidebarPresetSaveSheet` | `ChannelPresetStore` | S |
 | MUL-15 | 마지막 멀티 레이아웃·세션 기억 | `MultiLiveManager+Persistence`, 설정 `rememberLastLayout` | 미연결 | S |
-| MUL-16 | 멀티라이브 설정 탭(최대 세션 수, 기본 레이아웃·방향, 대역폭 분배, 화면 크기 화질 캡) | `MultiLiveSettingsTab`, `MultiLiveSettingsPanel` | Rust `MultiLiveSettings` 모델, 설정 명령에 도메인 없음 | S |
+| MUL-16 | ✅ 멀티라이브 설정 탭(최대 세션 수, 기본 레이아웃·방향, 대역폭 분배, 화면 크기 화질 캡) | `MultiLiveSettingsTab`, `MultiLiveSettingsPanel` | Rust `MultiLiveSettings` 모델, 설정 명령에 도메인 없음 | S |
 
 ## 6. 설정 (SET)
 
@@ -133,23 +133,23 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 
 | ID | 항목 | Swift 원본 | Rust 현황 | 크기 |
 |---|---|---|---|---|
-| SET-01 | 설정 화면 구조: 그룹 탭 + 개요 + 설정 검색 | `SettingsView`, `SettingsWorkspace`, `SettingsOverviewContent`, `SettingsSearchIndex` | 한 페이지 목록 | M |
-| SET-02 | 플레이어 키: `quality`, `autoPlay`, `catchupRate`, `bufferDuration`, `volumeLevel`, `continuePlaybackInBackground` | `PlayerSettingsTab` | 모델 있음, UI 없음 | S |
-| SET-03 | 레이턴시 프리셋·고급(`latencyPreset/Target/Max/Min/MaxRate/MinRate/CatchUp/SlowDown`, PID `Kp/Ki/Kd`) | `LatencySettingsContent` | 모델·저지연 컨트롤러 있음, UI 없음 | M |
-| SET-04 | 라이브 되감기 키(`liveRewindEnabled/WindowMinutes/DiskBudgetMB`), 실험 키(`experimentalServerTimeMachine`, `experimentalMatchWebV2`) | `PlayerSettingsTab` "라이브 되감기"·"고급 / 실험" | 모델 있음 | S |
-| SET-05 | 스크린샷 키(`screenshotPath`, `screenshotFormat`) | `PlayerSettingsTab` "스크린샷" | 모델 있음 | S |
-| SET-06 | 비디오·오디오 키(`equalizer*`, `videoAdjust*`, `sharpPixelScaling`, `autoPictureEnhancement`, `videoUpscaling`, `aspectRatio`) | `PlayerSettingsTab` "화면 & 비디오 보정"·"이퀄라이저" | 모델 있음(PLY-05~08 과 묶음) | S |
-| SET-07 | 채팅 설정 탭(디자인·표시 모드·필터·스크롤·오버레이·TTS·배경·사용자 관리) | `ChatSettingsTab`, `Components/ChatSettingsSharedSections` | `chat` 도메인 저장만 | M |
-| SET-08 | 일반 키: `launchAtLogin`, `showInMenuBar`, `alwaysOnTop`, `restoreWindowOnLaunch`, `autoRefreshInterval`, `notifyOnLiveStart/CategoryChange/TitleChange` | `GeneralSettingsTab` | 모델 있음, 2개만 노출 | S |
-| SET-09 | 외관 키: `transparencyMode`, `motionQuality`, `frameRateMode`, `compactMode`, `sidebarWidth/Scale`, 테마 미리보기 | `GeneralSettingsTab`, `GeneralSettingsTab+ThemePreview` | 테마만 | S |
-| SET-10 | 성능 탭(`maxMemoryMB`, `debugMode`, 하드웨어·메모리, 캐시 & 초기화, 로컬 진단 로그) | `PerformanceSettingsTab` | 없음 | M |
-| SET-11 | 네트워크 탭(프리셋 balanced/stability/lowLatency/performance/custom, 요청 한도·동시성·타임아웃·재시도·재연결·`forceStreamProxy`·오프라인 대기) | `NetworkSettingsTab`, `NetworkPreset` | `NetworkSettings` 모델, 도메인 없음 | M |
+| SET-01 | ✅ 설정 화면 구조: 그룹 탭 + 개요 + 설정 검색 | `SettingsView`, `SettingsWorkspace`, `SettingsOverviewContent`, `SettingsSearchIndex` | 한 페이지 목록 | M |
+| SET-02 | ✅ 플레이어 키: `quality`, `autoPlay`, `catchupRate`, `bufferDuration`, `volumeLevel`, `continuePlaybackInBackground` | `PlayerSettingsTab` | 모델 있음, UI 없음 | S |
+| SET-03 | ✅ 레이턴시 프리셋·고급(`latencyPreset/Target/Max/Min/MaxRate/MinRate/CatchUp/SlowDown`, PID `Kp/Ki/Kd`) | `LatencySettingsContent` | 모델·저지연 컨트롤러 있음, UI 없음 | M |
+| SET-04 | ✅ 라이브 되감기 키(`liveRewindEnabled/WindowMinutes/DiskBudgetMB`), 실험 키(`experimentalServerTimeMachine`, `experimentalMatchWebV2`) | `PlayerSettingsTab` "라이브 되감기"·"고급 / 실험" | 모델 있음 | S |
+| SET-05 | ✅ 스크린샷 키(`screenshotPath`, `screenshotFormat`) | `PlayerSettingsTab` "스크린샷" | 모델 있음 | S |
+| SET-06 | 🟡 비디오·오디오 키(`equalizer*`, `videoAdjust*`, `sharpPixelScaling`, `autoPictureEnhancement`, `videoUpscaling`, `aspectRatio`) | `PlayerSettingsTab` "화면 & 비디오 보정"·"이퀄라이저" | 모델 있음(PLY-05~08 과 묶음) | S |
+| SET-07 | 🟡 채팅 설정 탭(디자인·표시 모드·필터·스크롤·오버레이·TTS·배경·사용자 관리) | `ChatSettingsTab`, `Components/ChatSettingsSharedSections` | `chat` 도메인 저장만 | M |
+| SET-08 | ✅ 일반 키: `launchAtLogin`, `showInMenuBar`, `alwaysOnTop`, `restoreWindowOnLaunch`, `autoRefreshInterval`, `notifyOnLiveStart/CategoryChange/TitleChange` | `GeneralSettingsTab` | 모델 있음, 2개만 노출 | S |
+| SET-09 | ✅ 외관 키: `transparencyMode`, `motionQuality`, `frameRateMode`, `compactMode`, `sidebarWidth/Scale`, 테마 미리보기 | `GeneralSettingsTab`, `GeneralSettingsTab+ThemePreview` | 테마만 | S |
+| SET-10 | 🟡 성능 탭(`maxMemoryMB`, `debugMode`, 하드웨어·메모리, 캐시 & 초기화, 로컬 진단 로그) | `PerformanceSettingsTab` | 없음 | M |
+| SET-11 | ✅ 네트워크 탭(프리셋 balanced/stability/lowLatency/performance/custom, 요청 한도·동시성·타임아웃·재시도·재연결·`forceStreamProxy`·오프라인 대기) | `NetworkSettingsTab`, `NetworkPreset` | `NetworkSettings` 모델, 도메인 없음 | M |
 | SET-12 | 키보드 단축키 편집(`KeyboardShortcutSettings` 바인딩) | `GeneralSettingsTab` "키보드 단축키" | 모델 있음 | M |
 | SET-13 | 채널별 알림 설정(방송 시작/카테고리/제목 변경) | `ChannelNotificationSettings`, 채널 상세 | 모델 있음 | S |
 | SET-14 | 치지직 OAuth 연동(클라이언트 ID/Secret 입력, 연결 상태) | `OAuthCredentialsSection`, `CViewAuth/ChzzkOAuthService` | `cview-auth` OAuth 이식, UI 없음(쿠키 로그인만) | M |
-| SET-15 | 시청 기록 동기화(`SyncSettings` opt-in, 엔드포인트) | `AppState+Sync`, `WatchHistorySyncService` | `sync/watch_history_sync.rs` | S |
-| SET-16 | `settings_update` 도메인 확장(network/multiLive/multiChat/keyboard/channelNotifications/sync) | — | 4도메인만 | S |
-| SET-17 | 설정 백업·복원/초기화 | `SettingsStore+SnapshotRestore`, `SettingsSnapshotFile` | persistence `settings_snapshot_file`, `store_backup` | S |
+| SET-15 | 🟡 시청 기록 동기화(`SyncSettings` opt-in, 엔드포인트) | `AppState+Sync`, `WatchHistorySyncService` | `sync/watch_history_sync.rs` | S |
+| SET-16 | ✅ `settings_update` 도메인 확장(network/multiLive/multiChat/keyboard/channelNotifications/sync) | — | 4도메인만 | S |
+| SET-17 | ✅ 설정 백업·복원/초기화 | `SettingsStore+SnapshotRestore`, `SettingsSnapshotFile` | persistence `settings_snapshot_file`, `store_backup` | S |
 
 ## 7. 개인 데이터·통계 (DAT)
 
@@ -180,10 +180,10 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 | SYS-12 | ✅ 오프라인 배너·네트워크 상태 감지 | `Components/OfflineBanner`, `NetworkPathMonitor` | `NetworkPathMonitor` | S |
 | SYS-13 | ✅ 토스트 센터(쌓임·액션 버튼) | `Components/ToastCenter` | 단일 토스트 | S |
 | SYS-14 | ✅ 스켈레톤 로딩·신선도 캡션(마지막 갱신 시각) | `SkeletonViews`, `Components/FreshnessCaption` | 스피너 | S |
-| SYS-15 | 자동 새로고침 주기 적용(`autoRefreshInterval`) | `RefreshCoordinator` | `RefreshCoordinator`, 사이드바만 120초 고정 | S |
-| SYS-16 | 창 위치·크기 저장/복원 | `WindowFrameAutosave`, `restoreWindowOnLaunch` | 없음(`tauri-plugin-window-state` 로 대체 가능) | S |
-| SYS-17 | 항상 위(`alwaysOnTop`) | `GeneralSettings.alwaysOnTop` | 없음(`set_always_on_top`) | S |
-| SYS-18 | 로그인 시 자동 실행 | `launchAtLogin` | 없음(`tauri-plugin-autostart`) | S |
+| SYS-15 | ✅ 자동 새로고침 주기 적용(`autoRefreshInterval`) | `RefreshCoordinator` | `RefreshCoordinator`, 사이드바만 120초 고정 | S |
+| SYS-16 | ✅ 창 위치·크기 저장/복원 | `WindowFrameAutosave`, `restoreWindowOnLaunch` | 없음(`tauri-plugin-window-state` 로 대체 가능) | S |
+| SYS-17 | ✅ 항상 위(`alwaysOnTop`) | `GeneralSettings.alwaysOnTop` | 없음(`set_always_on_top`) | S |
+| SYS-18 | ✅ 로그인 시 자동 실행 | `launchAtLogin` | 없음(`tauri-plugin-autostart`) | S |
 | SYS-19 | 🟡 도움말 액션(문제 보고, 알림 설정 열기, 로그 폴더 열기) | `SupportActions`, `SystemSettingsActions` | 없음 | S |
 | SYS-20 | 메뉴 막대 앱(방송 중 팔로잉 목록, 열기/종료) | `MenuBarView`, `MenuBar/*` | 없음(Tauri 트레이 아이콘으로 근사) | M |
 | SYS-21 | 화면 속 화면(PiP, `⌥⌘P`) | `PiPController`, `AppState+PiP` | 없음(WebView `requestPictureInPicture`) | M |
@@ -199,8 +199,8 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 | ID | 항목 | Swift 원본 | Rust 현황 | 크기 |
 |---|---|---|---|---|
 | DSN-01 | 디자인 토큰 정합(간격·반경·의미 색·카테고리 색) | `DesignSystem/DesignTokens*` | `css/app.css` 자체 토큰 | M |
-| DSN-02 | 모션 등급(reduced/balanced/rich)·화면 전환 애니메이션 | `CVAnimation`, `RouteTransitionTiming`, `MotionTransactionPolicy` | `prefers-reduced-motion` 만 | S |
-| DSN-03 | 콤팩트 밀도 모드 | `CompactDensity`, `compactMode` | 없음 | S |
+| DSN-02 | ✅ 모션 등급(reduced/balanced/rich)·화면 전환 애니메이션 | `CVAnimation`, `RouteTransitionTiming`, `MotionTransactionPolicy` | `prefers-reduced-motion` 만 | S |
+| DSN-03 | ✅ 콤팩트 밀도 모드 | `CompactDensity`, `compactMode` | 없음 | S |
 | DSN-04 | 채널 프로필 톤(채널 색 강조) | `ChannelProfileTone`, `ChannelIdentity` | 없음 | S |
 | DSN-05 | 차트·랭킹 바 스타일(통계용) | `CVChartStyle`, `CVRankingBar` | 없음(DAT-04 와 묶음) | S |
 | DSN-06 | 접근성 레이블·키보드 포커스 이동 정합 | `Components/CardAccessibility`, `CViewCore/Focus` | 일부 aria | S |

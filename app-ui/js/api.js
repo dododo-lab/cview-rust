@@ -96,6 +96,10 @@ export const api = {
 
   appInfo: () => invoke('app_info'),
   multiLiveRetry: (sessionId = null) => invoke('multilive_retry', { sessionId }),
+  settingsExport: () => invoke('settings_export'),
+  settingsImport: (json) => invoke('settings_import', { json }),
+  settingsReset: (domain) => invoke('settings_reset', { domain }),
+  networkPreset: (preset) => invoke('network_preset', { preset }),
   settingsGet: () => invoke('settings_get'),
   settingsUpdate: (domain, patch) => invoke('settings_update', { domain, patch }),
 };
