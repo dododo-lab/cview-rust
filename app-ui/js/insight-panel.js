@@ -139,11 +139,11 @@ const PROVIDERS = {
     const o = await safe(overview(), null);
     const s = liveSummary(lives);
     const followedIds = new Set(all.map((c) => c.channelId));
-    const mostWatched = (o ? o.channels : []).filter((c) => c.seconds > 0).slice(0, 5).map((c) => ({ name: c.name, value: c.seconds }));
+    const mostWatched = (o ? o.channels : []).filter((c) => c.seconds >= 60).slice(0, 5).map((c) => ({ name: c.name, value: c.seconds }));
     return header('팔로잉 인사이트', `팔로잉 ${all.length || '?'}명 중 ${s.liveCount}명 방송 중`)
       + tiles([[String(s.liveCount), '방송 중'], [String(all.length || followedIds.size || '—'), '전체 팔로잉'], [compactCount(s.viewerTotal), '팔로잉 시청자'], [String(s.categoryCount), '방송 분야']])
       + section('heart', '많이 보는 팔로잉', bars(mostWatched, durationText))
-      + section('grid', '방송 분야', bars(categoryGroups(lives).slice(0, 5).map((c) => ({ name: c.name, value: c.count, category: c.name })), (v) => `${v}명`))
+      + section('grid', '방송 분야', bars([...categoryGroups(lives)].sort((a, b) => b.count - a.count).slice(0, 5).map((c) => ({ name: c.name, value: c.count, category: c.name })), (v) => `${v}명`))
       + section('people', '시청 규모', bars(viewerBuckets(lives).map(([name, value]) => ({ name, value })), (v) => `${v}명`))
       + section('spark', '최근 시작한 팔로잉', liveRows(freshLives(lives), (l) => agoText(l.openDate)));
   },
@@ -155,7 +155,7 @@ const PROVIDERS = {
     const groups = categoryGroups(lives);
     const o = await safe(overview(), null);
     const live = new Map(groups.map((g) => [g.name, g.count]));
-    const mine = (o ? o.categories : []).filter((c) => c.seconds > 0).slice(0, 4);
+    const mine = (o ? o.categories : []).filter((c) => c.seconds >= 60).slice(0, 4);
     return header('카테고리 인사이트', groups.length ? `카테고리 ${groups.length}개 · 라이브 ${lives.length}개 기준` : '카테고리 정보를 불러오지 못했어요')
       + section('flame', '시청자 많은 카테고리', bars(groups.slice(0, 6).map((g) => ({ name: g.name, value: g.viewers, category: g.name }))))
       + section('grid', '라이브가 많은 카테고리', bars([...groups].sort((a, b) => b.count - a.count).slice(0, 5).map((g) => ({ name: g.name, value: g.count, category: g.name })), (v) => `${v}개`))
@@ -199,7 +199,7 @@ const PROVIDERS = {
     return header('기록 요약', `${o.countedSessionCount}회 · 채널 ${o.uniqueChannelCount}개`)
       + tiles([[durationText(o.last7), '최근 7일'], [`${o.streak}일`, '연속 시청'], [durationText(o.average), '회당 평균'], [o.hourly[peak] > 0 ? `${peak}시` : '—', '주로 보는 시간']])
       + section('clock', '최근 7일', columns(o.daily.slice(-7).map((d) => d.seconds), o.daily.slice(-7).map((d) => ['일', '월', '화', '수', '목', '금', '토'][new Date(d.date).getDay()])))
-      + section('heart', '가장 많이 본 채널', bars(o.channels.slice(0, 4).map((c) => ({ name: c.name, value: c.seconds })), durationText));
+      + section('heart', '가장 많이 본 채널', bars(o.channels.filter((c) => c.seconds >= 60).slice(0, 4).map((c) => ({ name: c.name, value: c.seconds })), durationText));
   },
   async settings({ isLoggedIn }) {
     const [info, health, auth] = await Promise.all([safe(api.appInfo(), null), safe(api.dataHealth(), null), safe(api.authStatus(), null)]);
