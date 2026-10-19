@@ -6,6 +6,7 @@ import { esc, safeUrl, toast } from './dom.js';
 import { emptyState, loadingState } from './cards.js';
 import { vodCard, clipCard, relativeDate, formatDuration } from './channel.js';
 import { continueCard } from './media.js';
+import { mountDownloads } from './downloads.js';
 
 export const libraryIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h4v16H4zM10 4h4v16h-4zM16.2 4.4l3.8-1 4 15.5-3.8 1z" transform="scale(.92) translate(1 1)"/></svg>';
 
@@ -17,6 +18,7 @@ const TABS = [
   ['favorites', '즐겨찾기'],
   ['recent', '최근 시청'],
   ['bookmarks', '북마크'],
+  ['downloads', '다운로드'],
 ];
 const CLIP_FILTERS = [['WITHIN_1_DAY', '오늘'], ['WITHIN_7_DAYS', '7일'], ['WITHIN_30_DAYS', '30일']];
 const CLIP_ORDERS = [['POPULAR', '인기순'], ['RECOMMEND', '추천순']];
@@ -91,6 +93,7 @@ export class LibraryPage {
 
   async load() {
     const seq = ++this.seq;
+    if (this.unmountDownloads) { this.unmountDownloads(); this.unmountDownloads = null; }
     this.renderFilters();
     this.body.innerHTML = loadingState();
     const needsLogin = this.tab === 'vods';
@@ -130,6 +133,14 @@ export class LibraryPage {
           const list = await api.recentChannels(60);
           html = list.length ? `<div class="recent-row">${list.map(channelRowSaved).join('')}</div>` : emptyState('최근 시청 기록이 없습니다');
           break;
+        }
+        case 'downloads': {
+          const box = document.createElement('div');
+          box.className = 'dl-box';
+          this.body.innerHTML = '';
+          this.body.append(box);
+          this.unmountDownloads = await mountDownloads(box);
+          return;
         }
         case 'bookmarks': {
           const list = await api.bookmarksList();

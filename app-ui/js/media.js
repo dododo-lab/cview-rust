@@ -6,6 +6,7 @@ import { api } from './api.js';
 import { esc, safeUrl, toast } from './dom.js';
 import { emptyState, loadingState, compactCount } from './cards.js';
 import { formatDuration, relativeDate, clipCard } from './channel.js';
+import { startDownload } from './downloads.js';
 
 const ICON_BACK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>';
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -76,6 +77,7 @@ export class MediaPage {
               ${SPEEDS.map((s) => `<option value="${s}" ${s === 1 ? 'selected' : ''}>${s}x</option>`).join('')}
             </select></label>
             <button class="btn${info.watchLater ? ' primary' : ''}" data-media="later">${info.watchLater ? '나중에 보기 ✓' : '나중에 보기'}</button>
+            <button class="btn" data-media="download" title="다시보기를 파일로 받기">받기</button>
             <button class="btn ghost" data-media="external">치지직에서 열기</button>
           </div>
         </div>
@@ -113,6 +115,7 @@ export class MediaPage {
               </div>
             </div>
             <div class="grow"></div>
+            <button class="btn" data-media="download" title="클립을 파일로 받기">받기</button>
             <button class="btn ghost" data-media="external">치지직에서 열기</button>
           </div>
         </div>
@@ -170,6 +173,12 @@ export class MediaPage {
           ? `https://chzzk.naver.com/video/${this.info.videoNo}`
           : `https://chzzk.naver.com/clips/${this.info.clipUid}`;
         api.openExternal(url).catch((er) => toast(er.message));
+        break;
+      }
+      case 'download': {
+        const i = this.info;
+        if (this.kind === 'vod') startDownload('vod', i.videoNo, i.title, i.channelName);
+        else startDownload('clip', i.clipUid, i.clipTitle, i.optionalProperty?.ownerChannel?.channelName || i.ownerChannel?.channelName || i.channel?.channelName || '');
         break;
       }
       case 'later': {

@@ -7,6 +7,7 @@
 pub mod auth;
 pub mod chat;
 pub mod content;
+pub mod download;
 pub mod insights;
 pub mod live;
 pub mod media;

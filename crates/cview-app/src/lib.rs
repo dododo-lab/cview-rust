@@ -159,6 +159,7 @@ pub fn run() {
                     }
                 });
             }
+            app.manage(commands::download::Downloads::new(&data_dir));
             app.manage(services);
             app.manage(shell);
             spawn_multi_live_state_task(handle.clone());
@@ -195,6 +196,11 @@ pub fn run() {
             commands::multi_live::preset_save,
             commands::multi_live::preset_delete,
             commands::insights::insights_overview,
+            commands::download::download_list,
+            commands::content::open_path,
+            commands::download::download_start,
+            commands::download::download_cancel,
+            commands::download::download_clear,
             commands::insights::data_health,
             commands::insights::data_backup_now,
             commands::insights::data_cleanup,

@@ -32,6 +32,7 @@ export const Events = Object.freeze({
   playerEvent: 'player://event',
   multiLiveCommand: 'multilive://command',
   multiLiveState: 'multilive://state',
+  downloadUpdate: 'download://update',
 });
 
 export const api = {
@@ -97,6 +98,11 @@ export const api = {
   bookmarkDelete: (id) => invoke('bookmark_delete', { id }),
   saveFile: (kind, fileName, dataBase64, text) => invoke('save_file', { kind, fileName, dataBase64, text }),
   revealPath: (path) => invoke('reveal_path', { path }),
+  openPath: (path) => invoke('open_path', { path }),
+  downloadList: () => invoke('download_list'),
+  downloadStart: (kind, target, title, channelName) => invoke('download_start', { kind, target, title, channelName }),
+  downloadCancel: (id) => invoke('download_cancel', { id }),
+  downloadClear: (ids) => invoke('download_clear', { ids }),
   openExternal: (url) => invoke('open_external', { url }),
 
   chatEmoticons: (channelId) => invoke('chat_emoticons', { channelId }),

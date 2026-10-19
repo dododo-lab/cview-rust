@@ -2,6 +2,10 @@
 //!
 //! `liveRewindPlaybackJson`(HLS 매니페스트·화질 트랙)을 먼저 보고, 실패하면 `vodUrl` 로 폴백한다.
 //! 두 경로 모두 `inKey` 가 있으면 쿼리에 붙인다.
+//!
+//! 둘 다 없는 일반 업로드 VOD(`vodStatus = ABR_HLS`)는 `videoId`·`inKey` 로 네이버 플레이어 재생 정보
+//! (`neonplayer/vodplay/v2/playback`, DASH MPD 를 JSON 으로 편 것)를 받아 HLS 마스터와 화질별 HLS,
+//! 다운로드용 단일 MP4(PD) 주소를 꺼낸다. Swift 원본에는 없는 경로다(원본은 이런 VOD 를 못 연다).
 
 use std::time::Duration;
 
@@ -27,6 +31,19 @@ pub enum VodResolveError {
 #[async_trait]
 pub trait VodDetailSource: Send + Sync {
     async fn vod_detail(&self, video_no: i64) -> Result<VodDetail, ApiError>;
+
+    /// 네이버 플레이어 재생 정보 JSON 원문. 기본은 "없음".
+    async fn neon_playback(&self, _video_id: &str, _in_key: &str) -> Result<String, ApiError> {
+        Err(ApiError::EmptyContent)
+    }
+}
+
+/// 네이버 플레이어 재생 정보 주소.
+pub fn neon_playback_url(video_id: &str, in_key: &str) -> Option<Url> {
+    let mut url = Url::parse("https://apis.naver.com/neonplayer/vodplay/v2/playback/").ok()?;
+    url.path_segments_mut().ok()?.pop_if_empty().push(video_id);
+    url.query_pairs_mut().append_pair("key", in_key);
+    Some(url)
 }
 
 #[async_trait]
@@ -34,6 +51,37 @@ impl VodDetailSource for ChzzkApiClient {
     async fn vod_detail(&self, video_no: i64) -> Result<VodDetail, ApiError> {
         ChzzkApiClient::vod_detail(self, video_no).await
     }
+
+    async fn neon_playback(&self, video_id: &str, in_key: &str) -> Result<String, ApiError> {
+        let url = neon_playback_url(video_id, in_key).ok_or(ApiError::InvalidResponse)?;
+        let resp = reqwest::Client::new()
+            .get(url)
+            .header("Accept", "application/json")
+            .header(
+                "User-Agent",
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+            )
+            .timeout(Duration::from_secs(15))
+            .send()
+            .await
+            .map_err(|e| ApiError::NetworkError(e.to_string()))?;
+        let status = resp.status().as_u16() as i64;
+        if !(200..300).contains(&status) {
+            return Err(ApiError::HttpError {
+                status_code: status,
+            });
+        }
+        resp.text()
+            .await
+            .map_err(|e| ApiError::NetworkError(e.to_string()))
+    }
+}
+
+/// 재생 정보 + 다운로드용 단일 MP4 화질(높은 순). PD 가 없는 VOD 는 비어 있다.
+#[derive(Debug, Clone)]
+pub struct VodSources {
+    pub info: VodStreamInfo,
+    pub progressive: Vec<VodQuality>,
 }
 
 /// VOD/Clip 스트림 URL 해석기.
@@ -48,12 +96,47 @@ impl<S: VodDetailSource> VodStreamResolver<S> {
 
     /// VOD 상세 정보에서 스트림 정보 해석.
     pub async fn resolve_vod(&self, video_no: i64) -> Result<VodStreamInfo, VodResolveError> {
+        Ok(self.resolve_sources(video_no).await?.info)
+    }
+
+    /// 재생 정보와 다운로드용 MP4 를 함께 해석한다.
+    pub async fn resolve_sources(&self, video_no: i64) -> Result<VodSources, VodResolveError> {
         let detail = self
             .source
             .vod_detail(video_no)
             .await
             .map_err(|e| VodResolveError::NetworkError(e.to_string()))?;
-        resolve_from_detail(&detail)
+        let direct = resolve_from_detail(&detail);
+        let (Some(video_id), Some(in_key)) = (detail.video_id.as_deref(), detail.in_key.as_deref())
+        else {
+            return direct.map(|info| VodSources {
+                info,
+                progressive: Vec::new(),
+            });
+        };
+        if direct.is_ok() && detail.live_rewind_playback_json.is_some() {
+            return direct.map(|info| VodSources {
+                info,
+                progressive: Vec::new(),
+            });
+        }
+        match self.source.neon_playback(video_id, in_key).await {
+            Ok(json) => match parse_neon_playback(&json, &detail) {
+                Ok(sources) => Ok(sources),
+                Err(e) => direct
+                    .map(|info| VodSources {
+                        info,
+                        progressive: Vec::new(),
+                    })
+                    .map_err(|_| e),
+            },
+            Err(e) => direct
+                .map(|info| VodSources {
+                    info,
+                    progressive: Vec::new(),
+                })
+                .map_err(|_| VodResolveError::NetworkError(e.to_string())),
+        }
     }
 }
 
@@ -193,6 +276,155 @@ pub fn parse_playback_json(
     ))
 }
 
+fn rep_quality(rep: &Map<String, Value>, url: Url) -> VodQuality {
+    let width = int(rep, "width").unwrap_or(0);
+    let height = int(rep, "height").unwrap_or(0);
+    VodQuality {
+        id: rep
+            .get("id")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        name: if height > 0 {
+            format!("{height}p")
+        } else {
+            "트랙".into()
+        },
+        resolution: format!("{width}x{height}"),
+        bandwidth: int(rep, "bandwidth").unwrap_or(0),
+        url,
+    }
+}
+
+/// 네이버 플레이어 재생 정보(JSON 으로 편 DASH MPD) 파싱.
+/// `video/mp2t` 적응 집합의 `otherAttributes.m3u` 가 HLS 마스터, 각 표현의 `m3u` 가 화질별 HLS 이고,
+/// `video/mp4` 집합의 `baseURL` 은 단일 MP4(다운로드용)다.
+pub fn parse_neon_streams(json: &str) -> Result<NeonStreams, VodResolveError> {
+    let root: Value =
+        serde_json::from_str(json).map_err(|_| VodResolveError::InvalidPlaybackJson)?;
+    let sets: Vec<&Map<String, Value>> = root
+        .pointer("/period/0/adaptationSet")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_object).collect())
+        .unwrap_or_default();
+    let reps = |set: &Map<String, Value>| -> Vec<Map<String, Value>> {
+        set.get("representation")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(Value::as_object).cloned().collect())
+            .unwrap_or_default()
+    };
+    let mime = |set: &Map<String, Value>| {
+        set.get("mimeType")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string()
+    };
+    let m3u = |m: &Map<String, Value>| {
+        m.get("otherAttributes")
+            .and_then(|o| o.get("m3u"))
+            .and_then(Value::as_str)
+            .and_then(|s| Url::parse(s).ok())
+    };
+    let base_url = |m: &Map<String, Value>| {
+        m.get("baseURL")
+            .and_then(Value::as_array)
+            .and_then(|a| a.first())
+            .and_then(|b| b.get("value"))
+            .and_then(Value::as_str)
+            .and_then(|s| Url::parse(s).ok())
+    };
+
+    let hls_set = sets.iter().find(|s| mime(s) == "video/mp2t");
+    let mut qualities: Vec<VodQuality> = hls_set
+        .map(|set| {
+            reps(set)
+                .iter()
+                .filter_map(|r| m3u(r).map(|u| rep_quality(r, u)))
+                .collect()
+        })
+        .unwrap_or_default();
+    qualities.sort_by_key(|q| std::cmp::Reverse(q.bandwidth));
+    let master = hls_set
+        .and_then(|s| m3u(s))
+        .or_else(|| qualities.first().map(|q| q.url.clone()))
+        .ok_or(VodResolveError::NoPlayableUrl)?;
+
+    let mut progressive: Vec<VodQuality> = sets
+        .iter()
+        .filter(|s| mime(s) == "video/mp4")
+        .flat_map(|s| reps(s))
+        .filter_map(|r| base_url(&r).map(|u| rep_quality(&r, u)))
+        .collect();
+    progressive.sort_by_key(|q| std::cmp::Reverse(q.bandwidth));
+
+    Ok(NeonStreams {
+        master,
+        hls: qualities,
+        progressive,
+    })
+}
+
+/// [`parse_neon_streams`] 결과를 VOD 상세와 합친다.
+pub fn parse_neon_playback(json: &str, detail: &VodDetail) -> Result<VodSources, VodResolveError> {
+    let n = parse_neon_streams(json)?;
+    Ok(VodSources {
+        info: base_info(detail, n.master, n.hls),
+        progressive: n.progressive,
+    })
+}
+
+/// 네이버 플레이어 재생 정보에서 꺼낸 주소들.
+#[derive(Debug, Clone)]
+pub struct NeonStreams {
+    /// HLS 마스터(없으면 가장 높은 화질 HLS).
+    pub master: Url,
+    /// 화질별 HLS(높은 순).
+    pub hls: Vec<VodQuality>,
+    /// 단일 MP4(높은 순).
+    pub progressive: Vec<VodQuality>,
+}
+
+/// 클립 재생 정보 — `play-info/clip/{uid}` 로 `videoId`·`inKey` 를 받아 네이버 플레이어 재생 정보를 푼다.
+pub async fn resolve_clip_streams(clip_uid: &str) -> Result<NeonStreams, VodResolveError> {
+    let net = |e: reqwest::Error| VodResolveError::NetworkError(e.to_string());
+    let mut url = Url::parse("https://api.chzzk.naver.com/service/v1/play-info/clip/")
+        .map_err(|_| VodResolveError::NoPlayableUrl)?;
+    url.path_segments_mut()
+        .map_err(|_| VodResolveError::NoPlayableUrl)?
+        .pop_if_empty()
+        .push(clip_uid);
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)")
+        .timeout(Duration::from_secs(15))
+        .build()
+        .map_err(net)?;
+    let info: Value = client
+        .get(url)
+        .send()
+        .await
+        .map_err(net)?
+        .json()
+        .await
+        .map_err(net)?;
+    let content = info.get("content").ok_or(VodResolveError::NoPlayableUrl)?;
+    let video_id = content.get("videoId").and_then(Value::as_str);
+    let in_key = content.get("inKey").and_then(Value::as_str);
+    let (Some(video_id), Some(in_key)) = (video_id, in_key) else {
+        return Err(VodResolveError::NoPlayableUrl);
+    };
+    let neon = neon_playback_url(video_id, in_key).ok_or(VodResolveError::NoPlayableUrl)?;
+    let text = client
+        .get(neon)
+        .header("Accept", "application/json")
+        .send()
+        .await
+        .map_err(net)?
+        .text()
+        .await
+        .map_err(net)?;
+    parse_neon_streams(&text)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -285,5 +517,70 @@ mod tests {
             err.resolve_vod(42).await,
             Err(VodResolveError::NetworkError(_))
         ));
+    }
+
+    const NEON: &str = r#"{"period":[{"adaptationSet":[
+      {"mimeType":"video/mp4","representation":[
+        {"id":"PD_144","width":256,"height":144,"bandwidth":162000,"baseURL":[{"value":"https://cdn.example.com/144.mp4"}]},
+        {"id":"PD_1080","width":1920,"height":1080,"bandwidth":8105000,"baseURL":[{"value":"https://cdn.example.com/1080.mp4"}]}]},
+      {"mimeType":"video/mp2t","otherAttributes":{"m3u":"https://cdn.example.com/master.m3u8?s=1"},"representation":[
+        {"id":"a","width":1280,"height":720,"bandwidth":3170000,"otherAttributes":{"m3u":"https://cdn.example.com/720.m3u8"}},
+        {"id":"b","width":1920,"height":1080,"bandwidth":8105000,"otherAttributes":{"m3u":"https://cdn.example.com/1080.m3u8"}}]},
+      {"mimeType":"audio/mp4","representation":[{"id":"aud","bandwidth":128000}]}]}]}"#;
+
+    #[test]
+    fn parses_neon_playback_hls_and_progressive() {
+        let d = detail(None, None, Some("k"));
+        let s = parse_neon_playback(NEON, &d).unwrap();
+        assert_eq!(
+            s.info.stream_url.as_str(),
+            "https://cdn.example.com/master.m3u8?s=1"
+        );
+        assert_eq!(
+            s.info
+                .qualities
+                .iter()
+                .map(|q| q.name.as_str())
+                .collect::<Vec<_>>(),
+            ["1080p", "720p"]
+        );
+        assert_eq!(s.progressive.len(), 2);
+        assert_eq!(
+            s.progressive[0].url.as_str(),
+            "https://cdn.example.com/1080.mp4"
+        );
+        assert!(parse_neon_playback("{}", &d).is_err());
+    }
+
+    #[test]
+    fn neon_url_escapes_id_and_key() {
+        let u = neon_playback_url("AB/C", "k y").unwrap();
+        assert_eq!(
+            u.as_str(),
+            "https://apis.naver.com/neonplayer/vodplay/v2/playback/AB%2FC?key=k+y"
+        );
+    }
+
+    struct NeonSource;
+
+    #[async_trait]
+    impl VodDetailSource for NeonSource {
+        async fn vod_detail(&self, _: i64) -> Result<VodDetail, ApiError> {
+            let mut d = detail(None, None, Some("key"));
+            d.video_id = Some("VID".into());
+            Ok(d)
+        }
+        async fn neon_playback(&self, id: &str, key: &str) -> Result<String, ApiError> {
+            assert_eq!((id, key), ("VID", "key"));
+            Ok(NEON.into())
+        }
+    }
+
+    #[tokio::test]
+    async fn resolver_falls_back_to_neon_playback() {
+        let r = VodStreamResolver::new(NeonSource);
+        let s = r.resolve_sources(1).await.unwrap();
+        assert_eq!(s.info.qualities.len(), 2);
+        assert_eq!(s.progressive.len(), 2);
     }
 }

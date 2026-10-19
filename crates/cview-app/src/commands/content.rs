@@ -516,7 +516,7 @@ pub fn sanitize_file_name(name: &str) -> String {
 }
 
 /// 같은 이름이 있으면 ` (2)` 를 붙인다.
-fn unique_path(dir: &Path, file_name: &str) -> PathBuf {
+pub(crate) fn unique_path(dir: &Path, file_name: &str) -> PathBuf {
     let candidate = dir.join(file_name);
     if !candidate.exists() {
         return candidate;
@@ -589,6 +589,24 @@ pub async fn reveal_path(path: String) -> CmdResult<()> {
     let result = std::process::Command::new("xdg-open")
         .arg(p.parent().unwrap_or(&p))
         .spawn();
+    result
+        .map(|_| ())
+        .map_err(|e| CommandError(format!("열 수 없습니다: {e}")))
+}
+
+/// 파일·폴더를 기본 앱으로 연다(받은 영상 재생 등).
+#[tauri::command]
+pub async fn open_path(path: String) -> CmdResult<()> {
+    let p = PathBuf::from(&path);
+    if !p.exists() {
+        return Err(CommandError("파일이 없습니다".into()));
+    }
+    #[cfg(target_os = "macos")]
+    let result = std::process::Command::new("open").arg(&p).spawn();
+    #[cfg(target_os = "windows")]
+    let result = std::process::Command::new("explorer").arg(&p).spawn();
+    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+    let result = std::process::Command::new("xdg-open").arg(&p).spawn();
     result
         .map(|_| ())
         .map_err(|e| CommandError(format!("열 수 없습니다: {e}")))

@@ -7,6 +7,7 @@
 pub mod bandwidth_coordinator;
 pub mod clock;
 pub mod coordinator;
+pub mod download;
 pub mod hlsjs;
 pub mod low_latency;
 pub mod manifest;

@@ -5,7 +5,7 @@
 
 ## 진행 표시
 
-✅ 완료 · 🟡 부분 · ⏸ 보류 — 항목 이름 앞에 붙인다. 커밋은 `git log --grep <ID>` 로 찾는다.
+✅ 완료 · 🟡 부분 · 🧪 구현됨·기능 테스트 대기(마지막에 한 번에 확인) · ⏸ 보류 — 항목 이름 앞에 붙인다. 커밋은 `git log --grep <ID>` 로 찾는다.
 
 ## 지금 Rust 가 가진 것 (요약)
 
@@ -74,8 +74,8 @@
 | VOD-03 | ✅ 클립 플레이어(임베드/스트림, 필름스트립 독, 다음 클립) | `ClipPlayerView`, `ClipEmbedWebView`, `ClipFilmstripDock` | `ClipPlayerViewModel`, `clip_detail`/`clip_stream_url` API | M |
 | VOD-04 | ✅ 인기 클립 화면(기간 필터, 정렬, 히어로, 미리보기) | `PopularClipsView`, `PopularClipCards`, `Clips/ClipHeroComponents`, `ClipPreviewInspector` | `ClipBrowserViewModel`, `home_popular_clips` | M |
 | VOD-05 | ✅ 채널 상세의 VOD·클립 탭 | `ChannelVODClipTab` | `VodChannelBrowser`, `clip_list`/`vod_list` API | M |
-| VOD-06 | 다운로드(VOD/클립 HLS 세그먼트 결합 저장, 진행률, 취소·재시도) | `VideoDownloadService`, `VideoDownloadButton`, `VideoDownloadViews` | `media_download`(작업 모델·폴더 규칙)만, 다운로더 없음 | L |
-| VOD-07 | 다운로드 보관함(진행 중/완료, 끝난 항목 지우기, 폴더 열기) | `DownloadsLibraryView`, `DownloadHistoryStore` | `DownloadHistoryStore`, persistence `download_history` | M |
+| VOD-06 | 🧪 다운로드(VOD/클립 HLS 세그먼트 결합 저장, 진행률, 취소·재시도) | `VideoDownloadService`, `VideoDownloadButton`, `VideoDownloadViews` | `media_download`(작업 모델·폴더 규칙)만, 다운로더 없음 | L |
+| VOD-07 | 🧪 다운로드 보관함(진행 중/완료, 끝난 항목 지우기, 폴더 열기) | `DownloadsLibraryView`, `DownloadHistoryStore` | `DownloadHistoryStore`, persistence `download_history` | M |
 
 ## 4. 채팅 (CHT)
 
