@@ -16,6 +16,7 @@ import { MediaPage } from './media.js';
 import { LibraryPage, libraryIcon } from './library.js';
 import { CategoriesPage, categoryIcon } from './categories.js';
 import { CommandPalette } from './palette.js';
+import { ChatOnlyPage } from './chat-only.js';
 import { installPrefsEffects } from './prefs-effects.js';
 import { showMenu } from './chat.js';
 
@@ -127,7 +128,7 @@ async function navigate(route, params = {}, { push = true } = {}) {
     return;
   }
   viewer.hide();
-  if (route === 'multilive') setAudioOwner('multilive');
+  if (route === 'multilive') { setAudioOwner('multilive'); pages.multilive.chatKey = null; }
   // 파라미터는 받겠다고 표시한 화면(채널 상세 등)에만 넘긴다 — 목록 화면의 show(refresh) 와 겹치지 않게.
   if (pages[route].acceptsParams) pages[route].show(params);
   else pages[route].show();
@@ -232,6 +233,7 @@ function installCardMenu() {
       ['play', '재생'],
       ['multi', '멀티라이브에 추가'],
       ['channel', '채널 정보'],
+      ['chat', '채팅만 열기'],
       ['-'],
       ['fav', isFav ? '즐겨찾기 해제' : '즐겨찾기 추가'],
       ['copy', '링크 복사'],
@@ -240,6 +242,7 @@ function installCardMenu() {
       if (a === 'play') openChannel(id);
       else if (a === 'multi') addToMultiLive(id);
       else if (a === 'channel') openChannelPage(id);
+      else if (a === 'chat') { if (viewer.isPlaying) viewer.close(); navigate('chat', { channelId: id }); }
       else if (a === 'fav') {
         try { await api.favoriteSet(id, !isFav, name, image); toast(isFav ? '즐겨찾기에서 뺐습니다' : '즐겨찾기에 추가했습니다', 1500); refreshSidebarFollowing(); } catch (er) { toast(er.message); }
       } else if (a === 'copy') navigator.clipboard.writeText(url).then(() => toast('링크를 복사했습니다', 1200));
@@ -398,6 +401,7 @@ async function main() {
   pages.multilive = new MultiLivePage(content, { isLoggedIn });
   pages.live = new LivePage(content, { isLoggedIn });
   pages.categories = new CategoriesPage(content);
+  pages.chat = new ChatOnlyPage(content, { isLoggedIn, onBack: goBack, onPlay: openChannel });
   pages.library = new LibraryPage(content, { isLoggedIn, onOpenChannel: openChannelPage });
   pages.media = new MediaPage(content, { onBack: goBack, onOpenChannel: openChannelPage });
   pages.channel = new ChannelPage(content, { onBack: goBack, onPlay: openChannel, onAddMulti: addToMultiLive });
@@ -405,7 +409,10 @@ async function main() {
   bindMultiLiveAddButtons(addToMultiLive);
   installViewerMultiLiveButton();
 
-  for (const p of Object.values(pages)) bindCardOpen(p.root.querySelector('.page-body'), openChannel);
+  for (const p of Object.values(pages)) {
+    const body = p.root.querySelector('.page-body');
+    if (body) bindCardOpen(body, openChannel);
+  }
   bindCardOpen(document.getElementById('sidebar-live'), openChannel);
   document.addEventListener('click', (e) => {
     const action = e.target.closest('[data-action]');

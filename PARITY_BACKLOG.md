@@ -87,24 +87,24 @@
 | CHT-04 | ✅ 사용자 프로필 시트(배지, 최근 메시지, 차단·멘션) | `ChatUserProfileSheet` | 없음 | M |
 | CHT-05 | ✅ 사용자 차단/해제 + 차단 목록 관리 화면 | `BlockedUsersView`, `ChatViewModel+Moderation` | chat VM `moderation`, `ChatModerationService`(cview-chat), 설정 `blockedUsers` 미노출 | S |
 | CHT-06 | ✅ 키워드 필터 관리(금지어 목록, 켜기/끄기) | `KeywordFilterView` | 설정 `blockedWords`/`chatFilterEnabled` 로직, UI 없음 | S |
-| CHT-07 | 채팅 명령어(`/mute`·`/ban`·`/slow`·`/clear`·`/notice`·`/filter`·`/export`) | `CViewChat/ChatModerationService` `ChatCommand` | 파서 이식 여부 확인 필요, 입력창 미연결 | S |
+| CHT-07 | ✅ 채팅 명령어(`/mute`·`/ban`·`/slow`·`/clear`·`/notice`·`/filter`·`/export`) | `CViewChat/ChatModerationService` `ChatCommand` | 파서 이식 여부 확인 필요, 입력창 미연결 | S |
 | CHT-08 | ✅ 멘션 강조 + 멘션 트레이(모아 보기, 모두 지우기) | `MentionTrayView`, `MentionInbox`, `MentionNotificationService` | `MentionInbox`, chat VM `mention` | M |
 | CHT-09 | ✅ 사용자 하이라이트·역할 강조 토글 | `ChatViewModel+Moderation.toggleHighlight` | VM 로직, UI 없음 | S |
 | CHT-10 | ✅ 메시지 핀 고정·스트리머 공지 숨기기 | `StreamerNoticeBannerView`, `pinMessage` | 공지 배너 표시만, `PinnedNoticeCache` | S |
 | CHT-11 | ✅ 읽음 구분선·"맨 아래로" 버튼·자동 스크롤 토글(`⌘J`) | `ChatLiveScrollPolicy`, `ChatViewModel+ReadDivider` | `read_divider.rs`; 하단 근처면 자동 스크롤만 | S |
 | CHT-12 | ✅ 채팅 지우기(`⇧⌘K`)·다시 연결 버튼 | `CViewApp` 채팅 메뉴, `ChatConnectionStatusBadge` | 상태 텍스트만 | S |
-| CHT-13 | 채팅 디자인 스타일 8종(unified/chzzk/hybrid/kakao/imessage/calm/compact/dashboard) | `ChatCHZZKDesign`, `ChatHybridDesign`, `ChatMessengerDesign`, `ChatPanelView+Lounge`, `ChatMessageRow+*` | 단일 스타일 | L |
+| CHT-13 | ✅ 채팅 디자인 스타일 8종(unified/chzzk/hybrid/kakao/imessage/calm/compact/dashboard) | `ChatCHZZKDesign`, `ChatHybridDesign`, `ChatMessengerDesign`, `ChatPanelView+Lounge`, `ChatMessageRow+*` | 단일 스타일 | L |
 | CHT-14 | ✅ 표시 옵션: 글자 크기·줄 간격·타임스탬프·배지·이모티콘·정렬·읽기 폭 | `ChatSettingsTab`, `ChatReadingWidthMenu`, `ChatRowMetrics` | 설정 `chat` 도메인은 저장 가능, UI·렌더 미반영 | M |
-| CHT-15 | 채팅 배경(채널 색/사용자 색/중립, 강도) | `ChatBackgroundScope`, `CViewUI/ChatBackgroundPalette`, `Components/ChatBackgroundSettingsRows` | 없음 | S |
+| CHT-15 | 🟡 채팅 배경(채널 색/사용자 색/중립, 강도) | `ChatBackgroundScope`, `CViewUI/ChatBackgroundPalette`, `Components/ChatBackgroundSettingsRows` | 없음 | S |
 | CHT-16 | ✅ 후원만 보기·후원 표시 끄기 | 설정 `showDonation`/`showDonationsOnly` | 없음 | S |
-| CHT-17 | 후원·구독 TTS(음량·속도·음성) | `ChatTTSService` | `TtsQueue`(NoopTts) — Web Speech API 로 구현 가능 | M |
-| CHT-18 | 채팅 이벤트 레일·하이브리드 이벤트 선반 | `ChatPanelEventRail`, `ChatHybridEventShelf` | 후원 랭킹 칩 줄만 | M |
-| CHT-19 | 채팅 내보내기(텍스트 저장) | `ChatPanelView`("채팅 내보내기"), `/export` | 없음 | S |
+| CHT-17 | 🟡 후원·구독 TTS(음량·속도·음성) | `ChatTTSService` | `TtsQueue`(NoopTts) — Web Speech API 로 구현 가능 | M |
+| CHT-18 | ✅ 채팅 이벤트 레일·하이브리드 이벤트 선반 | `ChatPanelEventRail`, `ChatHybridEventShelf` | 후원 랭킹 칩 줄만 | M |
+| CHT-19 | ✅ 채팅 내보내기(텍스트 저장) | `ChatPanelView`("채팅 내보내기"), `/export` | 없음 | S |
 | CHT-20 | ✅ 입력 상태 배너(로그인 필요·슬로우 모드·제한 사유) | `ChatInputStatusBanner`, `ChatRestrictionReason` | placeholder 문구만 | S |
 | CHT-21 | 🟡 채팅 화면 갱신 상한·최대 표시 줄 수 | `ChatSettingsQualityView`, `maxUpdateRate`/`maxVisibleMessages` | `pacing.rs`, UI 는 300줄 고정 | S |
-| CHT-22 | 채팅만 보기 화면(영상 없이) | `ChatOnlyView`, 라우트 `chatOnly` | 없음 | S |
+| CHT-22 | ✅ 채팅만 보기 화면(영상 없이) | `ChatOnlyView`, 라우트 `chatOnly` | 없음 | S |
 | CHT-23 | 독립 채팅 창(`⇧⌘C`, 채널 피커) | `IndependentChatWindow`, `ChatChannelPickerView` | 없음 | M |
-| CHT-24 | 채팅 통계(분당 메시지·참여자) | `ChatViewModel+Stats`, `Statistics/Tabs/ChatStatsView` | `stats.rs` | S |
+| CHT-24 | ✅ 채팅 통계(분당 메시지·참여자) | `ChatViewModel+Stats`, `Statistics/Tabs/ChatStatsView` | `stats.rs` | S |
 
 ## 5. 멀티채팅·멀티라이브 (MUL)
 

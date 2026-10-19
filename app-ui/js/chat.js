@@ -6,6 +6,7 @@
 import { api, listen, Events } from './api.js';
 import { esc, safeUrl, toast } from './dom.js';
 import { DonationRanking, eventHead } from './donations.js';
+import { installChatExtras } from './chat-extras.js';
 import {
   chatPrefs, onChatPrefs, updateChatPrefs, passesFilters, mentionsMe, getMyNickname,
 } from './chat-prefs.js';
@@ -84,6 +85,8 @@ const STATE_LABEL = {
 
 /** 이모티콘 팩 캐시(채널별). */
 const emoticonCache = new Map();
+/** 모든 채팅 패널 — Rust 채팅 세션은 하나라 마지막으로 연결한 패널만 이벤트를 그린다. */
+const PANELS = new Set();
 
 export class ChatPanel {
   /**
@@ -113,6 +116,9 @@ export class ChatPanel {
     this.emoticons = [];
     this.seenEmoji = new Map(); // 채팅에서 본 이모티콘 id → url (이모티콘 API 가 막힌 채널의 대체 팩)
 
+    this.appendHooks = [];
+    this.sendHooks = [];
+    PANELS.add(this);
     this.buildChrome();
     root.querySelector('.chat-input').addEventListener('submit', (e) => {
       e.preventDefault();
@@ -122,6 +128,7 @@ export class ChatPanel {
     onChatPrefs(() => this.applyPrefs());
     this.applyPrefs();
     this.updateInput();
+    installChatExtras(this);
   }
 
   // ── 머리·입력 부속 ───────────────────────────
@@ -208,6 +215,7 @@ export class ChatPanel {
     });
 
     this.list.addEventListener('contextmenu', (e) => this.onContextMenu(e));
+    this.header = header;
     this.list.addEventListener('dblclick', (e) => {
       const line = e.target.closest('.chat-line[data-uid]');
       if (line && line.dataset.uid) this.showProfile(line.dataset.uid, line.dataset.nick);
@@ -237,6 +245,7 @@ export class ChatPanel {
   // ── 연결 ───────────────────────────────────
 
   async connect(chatChannelId, channelId) {
+    for (const p of PANELS) if (p !== this) p.active = false;
     this.clear();
     this.active = true;
     if (this.channelId !== channelId) this.seenEmoji.clear();
@@ -341,6 +350,9 @@ export class ChatPanel {
       this.recentNicks = new Map(keep);
     }
     this.renderMentionCount();
+    for (const fn of this.appendHooks) {
+      try { fn(shown); } catch (e) { console.error(e); }
+    }
     while (this.list.children.length > this.maxLines) this.list.firstElementChild.remove();
     if (follow) this.list.scrollTop = this.list.scrollHeight;
     else { this.unread += shown.length; this.renderJump(); }
@@ -439,6 +451,10 @@ export class ChatPanel {
   async send() {
     const text = this.input.value.trim();
     if (!text) return;
+    // 슬래시 명령 등 — 훅이 처리하면 서버로 보내지 않는다(CHT-07).
+    for (const fn of this.sendHooks) {
+      if (fn(text)) { this.input.value = ''; return; }
+    }
     this.input.disabled = true;
     try {
       await api.chatSend(text);

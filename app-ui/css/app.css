@@ -1334,3 +1334,44 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .viewer.chat-mode-overlay .chat .chat-input input { background: rgba(0, 0, 0, 0.35); color: #fff; }
 .alert-position-layer { position: absolute; inset: 0; z-index: 8; cursor: crosshair; background: rgba(0, 0, 0, 0.25); }
 .alert-ghost { position: absolute; transform: translate(-50%, 0) scale(var(--alert-scale, 1)); transform-origin: top center; pointer-events: none; animation: none; border-style: dashed; }
+
+/* ══ 채팅 부가 (chat-extras.js · chat-only.js) ═════════════════ */
+.chat-events { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 6px var(--sp-md); border-bottom: 1px solid var(--border-subtle); }
+.chat-events[hidden] { display: none; }
+.chat-events::-webkit-scrollbar { display: none; }
+.event-chip { flex: none; font-size: var(--fs-micro); padding: 3px 8px; border-radius: 999px; background: var(--donation-bg); color: var(--text-secondary); border: 1px solid var(--donation-border); white-space: nowrap; }
+.event-chip b { color: var(--text-primary); }
+.event-chip.subscription { background: var(--subscription-bg); border-color: transparent; }
+.stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; padding: 4px; margin-bottom: 6px; }
+.stat-grid div { display: flex; flex-direction: column; padding: 8px 10px; border-radius: 10px; background: var(--surface-elevated); }
+.stat-grid b { font-size: var(--fs-headline); font-variant-numeric: tabular-nums; }
+.stat-grid span { font-size: var(--fs-micro); color: var(--text-tertiary); }
+/* 디자인 스타일 (CHT-13) */
+.chat.style-chzzk .chat-line .nick { color: var(--primary-text); }
+.chat.style-chzzk .chat-line { padding-top: 1px; padding-bottom: 1px; }
+.chat.style-hybrid .chat-line:not(.donation):not(.subscription):not(.system) { border-bottom: 1px solid var(--border-subtle); padding: 5px 0; }
+.chat.style-kakao .chat-line:not(.donation):not(.subscription):not(.system), .chat.style-imessage .chat-line:not(.donation):not(.subscription):not(.system) {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 6px; margin: 4px 0;
+}
+.chat.style-kakao .chat-line .text, .chat.style-imessage .chat-line .text { display: inline-block; padding: 5px 10px; border-radius: 14px; background: var(--surface-elevated); max-width: 100%; }
+.chat.style-kakao .chat-line .nick, .chat.style-imessage .chat-line .nick { flex-basis: 100%; font-size: 0.85em; }
+.chat.style-kakao .chat-line .text { border-top-left-radius: 4px; background: #fee500; color: #1a1a1a; }
+.chat.style-imessage .chat-line .text { background: var(--accent-blue); color: #fff; }
+.chat.style-calm .chat-line { color: var(--text-secondary); padding: 5px 0; }
+.chat.style-calm .chat-line .nick { color: var(--text-primary); font-weight: 500; }
+.chat.style-compact .chat-line { padding: 0; line-height: 1.3; font-size: calc(var(--chat-font, 13px) - 1px); }
+.chat.style-compact .chat-line .badge { width: 13px; height: 13px; }
+.chat.style-dashboard .chat-line:not(.donation):not(.subscription):not(.system) { display: grid; grid-template-columns: 42px 110px 1fr; gap: 6px; padding: 3px 0; border-bottom: 1px dashed var(--border-subtle); }
+.chat.style-dashboard .chat-line .badges { display: none; }
+.chat.style-dashboard .chat-line .nick { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 배경 (CHT-15) */
+.chat.bg-tint .chat-list { background: linear-gradient(180deg, color-mix(in srgb, var(--primary) calc(var(--chat-bg-strength, 0.5) * 14%), transparent), transparent 70%); }
+.chat.bg-dim .chat-list { background: rgba(0, 0, 0, calc(var(--chat-bg-strength, 0.5) * 0.4)); }
+.chat.bg-clear { background: transparent; }
+/* 채팅만 보기 (CHT-22) */
+.page-chatonly { display: flex; flex-direction: column; overflow: hidden; }
+.chatonly-head { flex: none; }
+.chatonly-head .back-btn { margin: 0; }
+.chatonly-avatar .avatar { width: 40px; height: 40px; }
+.chatonly-title { min-width: 0; display: flex; flex-direction: column; }
+.chatonly-chat { flex: 1; width: 100% !important; max-width: 900px; margin: 0 auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); min-height: 0; }

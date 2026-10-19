@@ -9,6 +9,7 @@ import { emptyState } from './cards.js';
 import { THEMES, THEME_LABELS, currentTheme, setTheme } from './theme.js';
 import { streamAlertsEnabled, setStreamAlertsEnabled } from './donations.js';
 import { chatPrefs, updateChatPrefs, blockedLabel, loadChatPrefs } from './chat-prefs.js';
+import { DESIGN_STYLES, BACKGROUNDS } from './chat-extras.js';
 
 const opt = (pairs) => pairs.map(([value, label]) => ({ value, label }));
 
@@ -266,6 +267,21 @@ export class SettingsPage {
         <label class="setting" data-search="최대 표시 줄 수"><span class="setting-label">최대 표시 줄 수<small>오래된 메시지부터 지웁니다</small></span>
           <select class="select" data-chat="maxVisibleMessages">${[150, 300, 500, 1000].map((n) => `<option value="${n}" ${Number(p.maxVisibleMessages) === n ? 'selected' : ''}>${n}줄</option>`).join('')}</select></label>
       </section>
+      <section class="settings-group" data-g="chat"><h3>디자인 · 배경</h3>
+        <label class="setting" data-search="채팅 디자인 스타일"><span class="setting-label">디자인 스타일<small>메시지 모양 — 말풍선·촘촘하게·대시보드 등</small></span>
+          <select class="select" data-chat-str="designStyle">${DESIGN_STYLES.map(([v, l]) => `<option value="${v}" ${p.designStyle === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="setting" data-search="채팅 배경"><span class="setting-label">배경</span>
+          <select class="select" data-chat-bg="mode">${BACKGROUNDS.map(([v, l]) => `<option value="${v}" ${(p.background || {}).mode === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="setting" data-search="배경 강도"><span class="setting-label">배경 강도</span>
+          <span class="range-field"><input type="range" min="0" max="1" step="0.05" value="${esc((p.background || {}).strength ?? 0.5)}" data-chat-bg="strength"><output>${esc((p.background || {}).strength ?? 0.5)}</output></span></label>
+      </section>
+      <section class="settings-group" data-g="chat"><h3>후원 읽어 주기(TTS)</h3>
+        ${toggle(['ttsEnabled', '후원·구독 읽어 주기', '새 후원과 구독을 소리 내어 읽습니다 (/tts 로도 켜고 끔)'])}
+        ${range('ttsVolume', '음량', 0, 1, 0.05)}
+        ${range('ttsRate', '속도', 100, 400, 10)}
+        <label class="setting" data-search="tts 음성 목소리"><span class="setting-label">목소리</span>
+          <select class="select" data-chat-str="ttsVoiceIdentifier"><option value="">기본</option>${(window.speechSynthesis ? speechSynthesis.getVoices() : []).filter((v) => v.lang.startsWith('ko')).map((v) => `<option value="${esc(v.voiceURI)}" ${p.ttsVoiceIdentifier === v.voiceURI ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
+      </section>
       <section class="settings-group" data-g="chat"><h3>필터 · 사용자 관리</h3>
         ${toggle(['chatFilterEnabled', '금지어 필터', '아래 단어가 들어간 메시지를 숨깁니다'])}
         <div class="setting column" data-search="금지어"><div class="word-list">${words || '<span class="muted">금지어가 없습니다</span>'}</div>
@@ -303,6 +319,13 @@ export class SettingsPage {
 
   async onChange(target) {
     if (target.matches('.settings-search')) return;
+    if (target.dataset.chatStr) { await updateChatPrefs({ [target.dataset.chatStr]: target.value || null }); return; }
+    if (target.dataset.chatBg) {
+      const bg = { mode: 'neutral', strength: 0.5, ...(chatPrefs().background || {}) };
+      bg[target.dataset.chatBg] = target.dataset.chatBg === 'strength' ? Number(target.value) : target.value;
+      await updateChatPrefs({ background: bg });
+      return;
+    }
     if (target.dataset.chat) {
       const value = target.type === 'checkbox' ? target.checked : Number(target.value);
       await updateChatPrefs({ [target.dataset.chat]: value });
