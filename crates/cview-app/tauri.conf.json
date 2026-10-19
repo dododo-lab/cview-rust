@@ -33,7 +33,15 @@
       "icons/128x128@2x.png",
       "icons/icon.png",
       "icons/icon.ico"
-    ]
+    ],
+    "category": "public.app-category.entertainment",
+    "shortDescription": "치지직 라이브 데스크톱 뷰어",
+    "macOS": {
+      "minimumSystemVersion": "13.0",
+      "hardenedRuntime": true,
+      "entitlements": "Entitlements.plist",
+      "signingIdentity": null
+    }
   },
   "plugins": {
     "deep-link": {

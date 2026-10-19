@@ -22,6 +22,8 @@ function apply(s, ctx) {
   const a = s.appearance || {};
   root.classList.toggle('compact', Boolean(a.compactMode));
   root.dataset.motion = a.motionQuality || 'balanced';
+  // 투명도 (SYS-22) — 시스템이면 macOS "투명도 줄이기"를 따른다.
+  root.dataset.transparency = a.transparencyMode || 'system';
   for (const [k, v] of Object.entries(alertVars(s.player || {}))) root.style.setProperty(k, v);
   scheduleRefresh(ctx);
 }

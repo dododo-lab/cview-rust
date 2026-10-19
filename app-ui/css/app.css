@@ -1587,3 +1587,18 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .picker-row .avatar { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; background: var(--hover); flex: none; }
 .picker-row span { flex: 1; min-width: 0; font-size: var(--fs-footnote); }
 .picker-row small { color: var(--live); font-size: var(--fs-micro); }
+
+/* ── 투명도 (SYS-22) — 원본 TransparencyPolicy·LiquidGlass: 선명하게=유리 질감, 불투명=단색 ───────── */
+:root[data-transparency="full"] .sidebar { background: color-mix(in srgb, var(--sidebar) 72%, transparent); backdrop-filter: blur(28px) saturate(1.6); -webkit-backdrop-filter: blur(28px) saturate(1.6); }
+:root[data-transparency="full"] .sheet, :root[data-transparency="full"] .notify-pop, :root[data-transparency="full"] .toast {
+  background: color-mix(in srgb, var(--surface-popover) 78%, transparent); backdrop-filter: blur(24px) saturate(1.5); -webkit-backdrop-filter: blur(24px) saturate(1.5);
+}
+:root[data-transparency="full"] .kpi-card, :root[data-transparency="full"] .stats-card, :root[data-transparency="full"] .insight-rail {
+  background: color-mix(in srgb, var(--surface-elevated) 82%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+}
+:root[data-transparency="reduced"] *, :root[data-transparency="reduced"] *::before, :root[data-transparency="reduced"] *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+:root[data-transparency="reduced"] { --glass: var(--surface-base); --scrim: rgba(0, 0, 0, 0.72); }
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-transparency="system"] *, :root[data-transparency="system"] *::before, :root[data-transparency="system"] *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+  :root[data-transparency="system"] { --glass: var(--surface-base); }
+}
