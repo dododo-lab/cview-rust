@@ -5,13 +5,13 @@
 //!
 //! Swift 는 메서드마다 `MultiLiveManager` 를 받았다. 여기서는 그 면을 [`FollowingWorkspaceHost`]
 //! trait 으로 받는다(멀티라이브 매니저가 구현). `MultiChatSessionManager` 는 [`FollowingChatSessions`],
-//! `UserDefaults` 는 [`FollowingDefaults`], `MenuTransitionGate.menuChangeEpoch` 는 `menu_epoch` 클로저다.
+//! `UserDefaults` 는 [`KeyValueStore`](서비스 계층과 같은 저장소), `MenuTransitionGate.menuChangeEpoch` 는 `menu_epoch` 클로저다.
 //! 버린 것: `NavigationTransitionMetrics`·`MenuPerfTrace`(계측), `overviewBrowserCache`(뷰 캐시),
 //! 아이콘 이름 밖의 색.
 
 use std::collections::HashSet;
 use std::future::Future;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use serde::Serialize;
@@ -19,115 +19,16 @@ use uuid::Uuid;
 
 use cview_core::models::LiveChannelItem;
 
+pub use crate::navigation::hub_mode::{
+    FollowingBrowserFilter, FollowingBrowserSortOrder, FollowingHubMode, LiveDiscoverySection,
+};
+
 use super::chat::deps::ToastPresenter;
 use super::chat::ChatViewModel;
 use super::multi_live::MultiLiveAddSessionResult;
 use super::support::{cancel_slot, Observed, ObservedGuard, TaskSlot};
 
 // MARK: - 열거형
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum FollowingHubMode {
-    Explore,
-    Watch,
-    Multi,
-    Search,
-    Popular,
-    Category,
-}
-
-/// 탐색 화면 구역(`LiveDiscoverySection`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum LiveDiscoverySection {
-    Search,
-    Popular,
-    Category,
-}
-
-impl FollowingHubMode {
-    pub const ALL: [Self; 6] = [
-        Self::Explore,
-        Self::Watch,
-        Self::Multi,
-        Self::Search,
-        Self::Popular,
-        Self::Category,
-    ];
-    pub const TOP_LEVEL_MODES: [Self; 3] = [Self::Explore, Self::Watch, Self::Multi];
-
-    /// UserDefaults 원시값.
-    pub fn raw_value(self) -> &'static str {
-        match self {
-            Self::Explore => "탐색",
-            Self::Watch => "시청",
-            Self::Multi => "멀티",
-            Self::Search => "검색",
-            Self::Popular => "인기",
-            Self::Category => "카테고리",
-        }
-    }
-
-    pub fn from_raw(raw: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|m| m.raw_value() == raw)
-    }
-
-    pub fn discovery_section(self) -> Option<LiveDiscoverySection> {
-        match self {
-            Self::Search => Some(LiveDiscoverySection::Search),
-            Self::Popular => Some(LiveDiscoverySection::Popular),
-            Self::Category => Some(LiveDiscoverySection::Category),
-            _ => None,
-        }
-    }
-
-    pub fn deep_link_token(self) -> &'static str {
-        match self {
-            Self::Explore => "explore",
-            Self::Watch => "watch",
-            Self::Multi => "multi",
-            Self::Search => "search",
-            Self::Popular => "popular",
-            Self::Category => "category",
-        }
-    }
-
-    /// 딥링크 토큰(대소문자 무시) 또는 원시값.
-    pub fn from_deep_link_token(token: &str) -> Option<Self> {
-        let lowered = token.to_lowercase();
-        Self::ALL
-            .into_iter()
-            .find(|m| m.deep_link_token() == lowered)
-            .or_else(|| Self::from_raw(token))
-    }
-
-    pub fn occupies_full_stage(self) -> bool {
-        matches!(self, Self::Search | Self::Popular | Self::Category)
-    }
-
-    pub fn display_name(self) -> &'static str {
-        match self {
-            Self::Explore => "개요",
-            Self::Watch => "시청",
-            Self::Multi => "멀티",
-            Self::Search => "검색",
-            Self::Popular => "인기",
-            Self::Category => "카테고리",
-        }
-    }
-
-    pub fn icon(self) -> &'static str {
-        match self {
-            Self::Explore => "safari",
-            Self::Watch => "play.rectangle",
-            Self::Multi => "square.grid.2x2",
-            Self::Search => "magnifyingglass",
-            Self::Popular => "dot.radiowaves.left.and.right",
-            Self::Category => "rectangle.3.group.fill",
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -159,84 +60,6 @@ impl ChatDockFocus {
         [Self::Balanced, Self::Single, Self::Multi]
             .into_iter()
             .find(|v| v.raw_value() == raw)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum FollowingBrowserSortOrder {
-    Recommended,
-    Viewers,
-    Name,
-}
-
-impl FollowingBrowserSortOrder {
-    pub fn raw_value(self) -> &'static str {
-        match self {
-            Self::Recommended => "recommended",
-            Self::Viewers => "viewers",
-            Self::Name => "name",
-        }
-    }
-    pub fn from_raw(raw: &str) -> Option<Self> {
-        [Self::Recommended, Self::Viewers, Self::Name]
-            .into_iter()
-            .find(|v| v.raw_value() == raw)
-    }
-    pub fn title(self) -> &'static str {
-        match self {
-            Self::Recommended => "추천순",
-            Self::Viewers => "시청자순",
-            Self::Name => "이름순",
-        }
-    }
-    pub fn icon(self) -> &'static str {
-        match self {
-            Self::Recommended => "sparkles",
-            Self::Viewers => "person.2.fill",
-            Self::Name => "textformat.abc",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum FollowingBrowserFilter {
-    All,
-    Live,
-    Favorites,
-    Recent,
-}
-
-impl FollowingBrowserFilter {
-    pub fn raw_value(self) -> &'static str {
-        match self {
-            Self::All => "all",
-            Self::Live => "live",
-            Self::Favorites => "favorites",
-            Self::Recent => "recent",
-        }
-    }
-    pub fn from_raw(raw: &str) -> Option<Self> {
-        [Self::All, Self::Live, Self::Favorites, Self::Recent]
-            .into_iter()
-            .find(|v| v.raw_value() == raw)
-    }
-    pub fn title(self) -> &'static str {
-        match self {
-            Self::All => "전체",
-            Self::Live => "라이브",
-            Self::Favorites => "즐겨찾기",
-            Self::Recent => "최근",
-        }
-    }
-    pub fn icon(self) -> &'static str {
-        match self {
-            Self::All => "square.grid.2x2",
-            Self::Live => "antenna.radiowaves.left.and.right",
-            Self::Favorites => "star.fill",
-            Self::Recent => "clock",
-        }
     }
 }
 
@@ -325,56 +148,7 @@ impl FollowingChatSessions for NoopChatSessions {
     fn select_channel(&self, _channel_id: &str) {}
 }
 
-/// 문자열/불리언 설정 저장소(`UserDefaults`).
-pub trait FollowingDefaults: Send + Sync {
-    fn string(&self, key: &str) -> Option<String>;
-    fn bool(&self, key: &str) -> Option<bool>;
-    fn set_string(&self, key: &str, value: &str);
-    fn set_bool(&self, key: &str, value: bool);
-    fn remove(&self, key: &str);
-}
-
-#[derive(Debug, Clone, PartialEq)]
-enum DefaultsValue {
-    Str(String),
-    Bool(bool),
-}
-
-/// 메모리 설정 저장소.
-#[derive(Debug, Default)]
-pub struct MemoryDefaults {
-    values: Mutex<std::collections::HashMap<String, DefaultsValue>>,
-}
-
-impl FollowingDefaults for MemoryDefaults {
-    fn string(&self, key: &str) -> Option<String> {
-        match self.values.lock().unwrap().get(key) {
-            Some(DefaultsValue::Str(s)) => Some(s.clone()),
-            _ => None,
-        }
-    }
-    fn bool(&self, key: &str) -> Option<bool> {
-        match self.values.lock().unwrap().get(key) {
-            Some(DefaultsValue::Bool(b)) => Some(*b),
-            _ => None,
-        }
-    }
-    fn set_string(&self, key: &str, value: &str) {
-        self.values
-            .lock()
-            .unwrap()
-            .insert(key.into(), DefaultsValue::Str(value.into()));
-    }
-    fn set_bool(&self, key: &str, value: bool) {
-        self.values
-            .lock()
-            .unwrap()
-            .insert(key.into(), DefaultsValue::Bool(value));
-    }
-    fn remove(&self, key: &str) {
-        self.values.lock().unwrap().remove(key);
-    }
-}
+pub use crate::services::support::{KeyValueStore, MemoryKeyValueStore};
 
 pub mod defaults_key {
     pub const AUTO_SYNC_CHAT_ON_MULTI_LIVE_ADD: &str =
@@ -490,7 +264,7 @@ impl Default for FollowingBrowserInteractionState {
 pub type MenuEpoch = Arc<dyn Fn() -> u64 + Send + Sync>;
 
 pub struct FollowingState {
-    defaults: Arc<dyn FollowingDefaults>,
+    defaults: Arc<dyn KeyValueStore>,
     menu_epoch: MenuEpoch,
     pub chat_sessions: Arc<dyn FollowingChatSessions>,
     pub toast: Option<Arc<dyn ToastPresenter>>,
@@ -550,7 +324,7 @@ const CHAT_CAPACITY_AFTER_ADD_MESSAGE: &str =
 impl FollowingState {
     fn new(
         this: std::sync::Weak<FollowingShared>,
-        defaults: Arc<dyn FollowingDefaults>,
+        defaults: Arc<dyn KeyValueStore>,
         menu_epoch: MenuEpoch,
         chat_sessions: Arc<dyn FollowingChatSessions>,
     ) -> Self {
@@ -613,10 +387,16 @@ impl FollowingState {
             defaults.remove(k::BROWSER_SORT_ORDER);
             defaults.set_string(k::REDESIGN_MIGRATION, k::REDESIGN_MIGRATION_CURRENT);
         }
-        if let Some(v) = defaults.bool(k::AUTO_SYNC_CHAT_ON_MULTI_LIVE_ADD) {
+        if let Some(v) = defaults
+            .value(k::AUTO_SYNC_CHAT_ON_MULTI_LIVE_ADD)
+            .and_then(|v| v.as_bool())
+        {
             s.set_auto_sync_chat_on_multi_live_add(v);
         }
-        if let Some(v) = defaults.bool(k::CHANNEL_DOCK_COMPACT) {
+        if let Some(v) = defaults
+            .value(k::CHANNEL_DOCK_COMPACT)
+            .and_then(|v| v.as_bool())
+        {
             s.set_channel_dock_compact(v);
         }
         if let Some(v) = defaults
@@ -637,7 +417,10 @@ impl FollowingState {
         {
             s.set_browser_sort_order(v);
         }
-        if let Some(v) = defaults.bool(k::CHAT_DOCK_COLLAPSED) {
+        if let Some(v) = defaults
+            .value(k::CHAT_DOCK_COLLAPSED)
+            .and_then(|v| v.as_bool())
+        {
             s.set_chat_dock_collapsed(v);
         }
         s
@@ -1576,7 +1359,7 @@ impl FollowingViewState {
     pub const ADDING_POLL_INTERVAL: Duration = Duration::from_millis(40);
 
     pub fn new(
-        defaults: Arc<dyn FollowingDefaults>,
+        defaults: Arc<dyn KeyValueStore>,
         menu_epoch: MenuEpoch,
         chat_sessions: Arc<dyn FollowingChatSessions>,
     ) -> Self {

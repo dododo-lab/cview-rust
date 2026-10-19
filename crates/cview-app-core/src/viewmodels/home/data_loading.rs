@@ -5,7 +5,7 @@
 
 use chrono::Utc;
 
-use cview_core::models::live_catalog::{LiveCatalogQuality, LiveCatalogRow};
+use cview_core::models::live_catalog::LiveCatalogQuality;
 use cview_core::models::LiveChannelItem;
 use cview_core::utils::catalog_sweep;
 use cview_core::utils::following_poll::{
@@ -19,8 +19,8 @@ use super::deps::{
     MenuChannelListSnapshot, RestoredCatalogRows, SnapshotLoadResult,
 };
 use super::promotion::{
-    live_catalog_promotion, CatalogPreviousState, CatalogPromotionDecision, CatalogSweepOutcome,
-    DataOrigin,
+    CatalogPreviousState, CatalogPromotionDecision, CatalogSweepOutcome, DataOrigin,
+    LiveCatalogPromotion,
 };
 use super::{
     live_channel_item_from, HomeState, HomeViewModel, PublishRow, RestoredLiveCache,
@@ -28,12 +28,7 @@ use super::{
 };
 
 /// 재시작 이어 붙이기 검증을 통과한 결과(`StitchedCatalogVerifier.Stitched`).
-#[derive(Debug, Clone, PartialEq)]
-pub struct StitchedCatalog {
-    pub rows: Vec<LiveCatalogRow>,
-    pub replaced_by_restart: usize,
-    pub pages: usize,
-}
+pub use crate::caching::live_catalog_promotion::Stitched;
 
 fn spawn_detached<F>(fut: F)
 where
@@ -153,10 +148,10 @@ impl HomeState {
         let total_viewers: i64 = items.iter().map(|i| i.viewer_count).sum();
         let n = items.len() as i64;
         let generation_before_commit = self.all_stats_network_generation;
-        let decision = live_catalog_promotion::decide(
+        let decision = LiveCatalogPromotion::decide(
             &CatalogSweepOutcome::from_result(result),
             self.catalog_previous_state(previous_quality).as_ref(),
-            &now,
+            now,
         );
         match &result.stop_reason {
             AllLivesStopReason::ReachedEnd => match result.exact_live_count() {
@@ -318,7 +313,7 @@ impl HomeState {
         (self.all_stats_network_generation != generation_before_commit).then_some(decision)
     }
 
-    pub fn apply_stitched_catalog(&mut self, stitched: &StitchedCatalog, now: Date) {
+    pub fn apply_stitched_catalog(&mut self, stitched: &Stitched, now: Date) {
         let items: Vec<LiveChannelItem> = stitched.rows.iter().map(|r| r.item()).collect();
         let n = items.len() as i64;
         self.all_stats_network_generation = self.all_stats_network_generation.wrapping_add(1);
@@ -555,7 +550,7 @@ impl HomeViewModel {
     }
 
     /// 카탈로그 저장소의 `onStitchedResult`.
-    pub fn apply_stitched_catalog(&self, stitched: &StitchedCatalog) {
+    pub fn apply_stitched_catalog(&self, stitched: &Stitched) {
         self.lock().apply_stitched_catalog(stitched, Utc::now());
     }
 

@@ -37,8 +37,10 @@ impl OfflineSessionPolicy {
 }
 
 /// 멀티채팅 워크스페이스 스코프 — 라이브 메뉴 인라인(`Live`)과 사이드바 "멀티채팅"(`Standalone`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum MultiChatScope {
+    #[default]
     Live,
     Standalone,
 }

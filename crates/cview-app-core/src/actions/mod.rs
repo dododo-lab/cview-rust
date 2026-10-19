@@ -15,6 +15,6 @@ pub mod sidebar_quick_action;
 pub use cview_action::{CViewAction, LiveOpenMode};
 pub use registry::{ActionHost, CViewActionRegistry};
 pub use sidebar_quick_action::{
-    PopularMode, QuickActionHost, SearchScope, SidebarPresetDraft, SidebarQuickAction,
+    AllBroadcastsMode, QuickActionHost, SearchScope, SidebarPresetDraft, SidebarQuickAction,
     SidebarQuickActionExecutor,
 };

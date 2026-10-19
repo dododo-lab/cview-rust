@@ -135,7 +135,8 @@ impl FollowingHubMode {
 }
 
 /// 라이브 밖 발견 화면(검색·인기·카테고리).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum LiveDiscoverySection {
     Search,
     Popular,
@@ -182,6 +183,10 @@ impl FollowingBrowserSortOrder {
         }
     }
 
+    pub fn from_raw(raw: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|v| v.raw_value() == raw)
+    }
+
     pub fn title(self) -> &'static str {
         match self {
             Self::Recommended => "추천순",
@@ -220,6 +225,10 @@ impl FollowingBrowserFilter {
             Self::Favorites => "favorites",
             Self::Recent => "recent",
         }
+    }
+
+    pub fn from_raw(raw: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|v| v.raw_value() == raw)
     }
 
     pub fn title(self) -> &'static str {

@@ -12,11 +12,11 @@ use chrono::{DateTime, Duration as ChronoDuration, FixedOffset, TimeZone, Utc};
 
 use cview_app_core::viewmodels::home::deps::{
     FollowingError, HomeDeps, MemoryMenuSnapshots, MenuChannelListSnapshot, NullCatalog,
-    NullFollowingSource, PopularLiveSource, SnapshotLoadResult,
+    NullFollowingPoller, PopularLiveSource, SnapshotLoadResult,
 };
 use cview_app_core::viewmodels::home::promotion::{
-    live_catalog_promotion, CatalogPreviousState, CatalogPromotionDecision, CatalogSweepOutcome,
-    DataOrigin, FreshnessDisplay,
+    verified_live_count_label_in, CatalogPreviousState, CatalogPromotionDecision,
+    CatalogSweepOutcome, DataOrigin, FreshnessDisplay, LiveCatalogPromotion,
 };
 use cview_app_core::viewmodels::home::recommendation::{self, RecommendationInputs};
 use cview_app_core::viewmodels::home::{HomeViewModel, StatsCollectionQuality};
@@ -96,11 +96,11 @@ fn make_vm() -> (
     HomeViewModel,
     Arc<NullCatalog>,
     Arc<MemoryMenuSnapshots>,
-    Arc<NullFollowingSource>,
+    Arc<NullFollowingPoller>,
 ) {
     let catalog = Arc::new(NullCatalog::default());
     let snapshots = Arc::new(MemoryMenuSnapshots::default());
-    let following = Arc::new(NullFollowingSource::default());
+    let following = Arc::new(NullFollowingPoller::default());
     let mut deps = HomeDeps::with_popular(Arc::new(FakePopular {
         count: 30,
         fetched_at: Utc::now(),
@@ -245,10 +245,10 @@ fn incomplete_retry_intervals_follow_policy() {
         (AllLivesStopReason::ReachedPageLimit, 600.0),
     ];
     for (reason, expected) in cases {
-        let d = live_catalog_promotion::decide(
+        let d = LiveCatalogPromotion::decide(
             &CatalogSweepOutcome::new(reason, None, 5),
             Some(&previous),
-            &now,
+            now,
         );
         let CatalogPromotionDecision::KeepPrevious { retry_after, .. } = d else {
             panic!("keepPrevious 여야 한다");
@@ -357,7 +357,7 @@ fn catalog_count_labels() {
         .unwrap()
         .with_timezone(&Utc);
     let label = |q: LiveCatalogQuality, at: Option<&DateTime<Utc>>| {
-        live_catalog_promotion::catalog_count_label_in(&q, at, &tz)
+        LiveCatalogPromotion::catalog_count_label_in(&q, at.copied(), &tz)
     };
     assert_eq!(
         label(LiveCatalogQuality::Verified { exact: 1_102 }, Some(&at)),
@@ -396,7 +396,7 @@ fn catalog_count_labels() {
         .unwrap()
         .with_timezone(&Utc);
     assert_eq!(
-        HomeViewModel::verified_live_count_label_in(1_102, Some(&observed), &tz),
+        verified_live_count_label_in(1_102, Some(observed), &tz),
         "1102개 확인 · 12:34 집계"
     );
 }
@@ -432,7 +432,7 @@ fn previous_states(now: DateTime<Utc>) -> Vec<(Option<CatalogPreviousState>, boo
 fn promotion_matrix() {
     let now = date(1_700_000_000);
     let decide = |r: AllLivesStopReason, exact: Option<i64>, p: &Option<CatalogPreviousState>| {
-        live_catalog_promotion::decide(&CatalogSweepOutcome::new(r, exact, 5), p.as_ref(), &now)
+        LiveCatalogPromotion::decide(&CatalogSweepOutcome::new(r, exact, 5), p.as_ref(), now)
     };
     for (prev, keepable) in previous_states(now) {
         let d = decide(AllLivesStopReason::ReachedEnd, Some(7), &prev);
@@ -508,10 +508,10 @@ fn keep_window_boundary_and_wording() {
         completed_at: now - ChronoDuration::seconds(ago),
     };
     let d = |p: CatalogPreviousState| {
-        live_catalog_promotion::decide(
+        LiveCatalogPromotion::decide(
             &CatalogSweepOutcome::new(AllLivesStopReason::ReachedPageLimit, None, 5),
             Some(&p),
-            &now,
+            now,
         )
     };
     assert!(matches!(
@@ -525,7 +525,7 @@ fn keep_window_boundary_and_wording() {
             observed: 5
         }
     );
-    let partial = live_catalog_promotion::decide(
+    let partial = LiveCatalogPromotion::decide(
         &CatalogSweepOutcome::new(
             AllLivesStopReason::PartialFailure {
                 page: 3,
@@ -535,7 +535,7 @@ fn keep_window_boundary_and_wording() {
             5,
         ),
         Some(&prev(600)),
-        &now,
+        now,
     );
     assert_eq!(
         partial,
@@ -641,7 +641,7 @@ fn sweep_result_keeps_previous_verified_rows_on_unverified_terminal() {
     ));
     assert_eq!(
         s.stats_load_error.as_deref(),
-        Some(live_catalog_promotion::UNVERIFIED_TERMINAL_BANNER)
+        Some(LiveCatalogPromotion::UNVERIFIED_TERMINAL_BANNER)
     );
 }
 

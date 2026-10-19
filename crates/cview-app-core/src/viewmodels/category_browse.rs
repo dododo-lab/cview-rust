@@ -1,38 +1,22 @@
 //! 카테고리 화면 상태 — 그룹 계산 캐시와 그 무효화 키, 선택·필터.
 //!
 //! 원본: `Sources/CViewApp/ViewModels/CategoryBrowseViewModel.swift`.
-//! 그룹·랭킹 값(`CategoryGroup`·`CategoryRanking`)은 Logic 계층(`CategoryGroupsCompute`)의 타입이라
-//! 타입 매개변수로 받는다. `AccentColorCache` 는 색 대신 팔레트 인덱스를 돌려준다.
+//! 그룹·랭킹 값(`CategoryGroup`·`CategoryRanking`·`TypeFilter`)은 Logic 계층
+//! ([`crate::logic::category_groups`])의 타입을 그대로 쓴다. `AccentColorCache` 는 색 대신
+//! 팔레트 인덱스를 돌려준다.
 
 use std::collections::HashMap;
 use std::sync::Arc;
-
-use serde::Serialize;
 
 use cview_core::models::LiveChannelItem;
 use cview_core::utils::stable_hash;
 use cview_core::utils::time::TimeInterval;
 
+pub use crate::logic::category_groups::{
+    CategoryGroup, CategoryRanking, CategorySortMode, ComputedCategoryGroups, TypeFilter,
+};
+
 use super::home::deps::LiveCatalogPort;
-
-/// 유형 필터 칩.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TypeFilter {
-    pub label: String,
-    pub icon: String,
-    pub value: Option<String>,
-}
-
-impl TypeFilter {
-    pub fn all() -> Self {
-        Self {
-            label: "전체".into(),
-            icon: "square.grid.2x2".into(),
-            value: None,
-        }
-    }
-}
 
 /// 카테고리 색 팔레트 인덱스 캐시(팔레트 8색).
 #[derive(Debug, Default, Clone)]
@@ -53,13 +37,13 @@ impl AccentColorCache {
     }
 }
 
-pub struct CategoryBrowseViewModel<G, R> {
-    pub group_cache: Vec<G>,
-    pub pinned_cache: Vec<G>,
-    pub unpinned_cache: Vec<G>,
-    pub trend_ranking_cache: Vec<R>,
+pub struct CategoryBrowseViewModel {
+    pub group_cache: Vec<CategoryGroup>,
+    pub pinned_cache: Vec<CategoryGroup>,
+    pub unpinned_cache: Vec<CategoryGroup>,
+    pub trend_ranking_cache: Vec<CategoryRanking>,
     pub available_type_filters_cache: Vec<TypeFilter>,
-    pub by_category_cache: HashMap<String, G>,
+    pub by_category_cache: HashMap<String, CategoryGroup>,
     last_computed_group_key: Option<String>,
     groups_channels_revision: Option<u64>,
     pub content_width: f64,
@@ -74,7 +58,7 @@ pub struct CategoryBrowseViewModel<G, R> {
     pub accent_color_cache: AccentColorCache,
 }
 
-impl<G, R> Default for CategoryBrowseViewModel<G, R> {
+impl Default for CategoryBrowseViewModel {
     fn default() -> Self {
         Self {
             group_cache: Vec::new(),
@@ -99,7 +83,7 @@ impl<G, R> Default for CategoryBrowseViewModel<G, R> {
     }
 }
 
-impl<G, R> CategoryBrowseViewModel<G, R> {
+impl CategoryBrowseViewModel {
     pub fn new() -> Self {
         Self::default()
     }
@@ -154,6 +138,16 @@ impl<G, R> CategoryBrowseViewModel<G, R> {
             } else {
                 None
             })
+    }
+
+    /// 계산 결과를 캐시에 반영한다(`commitGroups`).
+    pub fn apply_computed(&mut self, computed: ComputedCategoryGroups) {
+        self.group_cache = computed.all;
+        self.pinned_cache = computed.pinned;
+        self.unpinned_cache = computed.unpinned;
+        self.trend_ranking_cache = computed.ranking;
+        self.available_type_filters_cache = computed.type_filters;
+        self.by_category_cache = computed.by_category;
     }
 
     pub fn category_growth_rates(&self) -> HashMap<String, f64> {

@@ -9,7 +9,7 @@
 //!
 //! 버린 것: WebKit 쿠키 동기화(`syncWebKitCookies` — 셸이 inkey 전에 맡는다), `NSWorkspace`
 //! 열기·클립보드 복사(셸 몫 — 여기서는 링크 문자열만 만든다), `QuietDataCommit` 애니메이션 억제.
-//! `UserDefaults` 는 [`FollowingDefaults`] 문자열 저장소에 JSON 으로 넣는다.
+//! `UserDefaults` 는 [`KeyValueStore`] 문자열 값에 JSON 으로 넣는다.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Weak};
@@ -27,8 +27,10 @@ use cview_networking::{ChzzkApiClient, PagedContent};
 use cview_persistence::models::cached_clip::{compute_content_hash, CachedClipData};
 use cview_persistence::DataStore;
 
-use super::following::FollowingDefaults;
+use cview_core::utils::refresh_schedule::{RefreshDemand, RefreshJobId};
+
 use super::support::{Observed, ObservedGuard};
+use crate::services::support::KeyValueStore;
 
 // MARK: - ClipBrowser 열거형
 
@@ -398,13 +400,7 @@ impl ClipCacheStore for DataStore {
     }
 }
 
-/// `RefreshCoordinator` 의 `.clips` 수요 면.
-pub trait ClipRefreshDemand: Send + Sync {
-    fn retain_clips(&self, instance: u64);
-    fn release_clips(&self, instance: u64);
-    /// `noteCompleted(.clipTrending, success:)`.
-    fn note_clip_trending_completed(&self, success: bool);
-}
+pub use crate::services::refresh_coordinator::RefreshDemandSink;
 
 // MARK: - VOD 재생 상태 직렬화 보조
 
@@ -734,7 +730,7 @@ pub struct ClipBrowserState {
     /// DB 캐시.
     pub data_store: Option<Arc<dyn ClipCacheStore>>,
     /// 정기 작업 코디네이터.
-    pub refresh_coordinator: Option<Arc<dyn ClipRefreshDemand>>,
+    pub refresh_coordinator: Option<Arc<dyn RefreshDemandSink>>,
 }
 
 impl ClipBrowserState {
@@ -953,7 +949,7 @@ pub struct ClipBrowserSnapshot {
 /// 공유 셀.
 pub struct ClipBrowserShared {
     obs: Observed<ClipBrowserState>,
-    defaults: Arc<dyn FollowingDefaults>,
+    defaults: Arc<dyn KeyValueStore>,
     instance: u64,
 }
 
@@ -966,7 +962,7 @@ pub struct ClipBrowserViewModel {
 }
 
 impl ClipBrowserViewModel {
-    pub fn new(defaults: Arc<dyn FollowingDefaults>) -> Self {
+    pub fn new(defaults: Arc<dyn KeyValueStore>) -> Self {
         Self {
             shared: Arc::new(ClipBrowserShared {
                 obs: Observed::new(ClipBrowserState::new()),
@@ -1122,8 +1118,8 @@ impl ClipBrowserViewModel {
             st.refresh_coordinator.clone()
         };
         if let Some(c) = coordinator {
-            c.retain_clips(self.shared.instance);
-            c.note_clip_trending_completed(true);
+            c.retain_demand(RefreshDemand::Clips, self.shared.instance);
+            c.note_job_completed(RefreshJobId::ClipTrending, true);
         }
     }
 
@@ -1137,7 +1133,7 @@ impl ClipBrowserViewModel {
             st.refresh_coordinator.clone()
         };
         if let Some(c) = coordinator {
-            c.release_clips(self.shared.instance);
+            c.release_demand(RefreshDemand::Clips, self.shared.instance);
         }
     }
 

@@ -26,6 +26,29 @@ use uuid::Uuid;
 
 use super::support::{lock, system_uptime, Uptime};
 
+/// 화면 뷰모델이 보는 [`RefreshCoordinator`] 의 면 — 수요 retain/release 와 바깥 실행 완료 알림.
+///
+/// 뷰모델은 마운트 인스턴스를 `u64` 로 들고 있으므로 코디네이터 구현은 이를 `Uuid` 로 옮긴다.
+/// 테스트는 기록용 구현을 넣는다.
+pub trait RefreshDemandSink: Send + Sync {
+    fn retain_demand(&self, demand: RefreshDemand, instance: u64);
+    fn release_demand(&self, demand: RefreshDemand, instance: u64);
+    /// `noteCompleted(job, success:)`.
+    fn note_job_completed(&self, job: RefreshJobId, success: bool);
+}
+
+impl RefreshDemandSink for RefreshCoordinator {
+    fn retain_demand(&self, demand: RefreshDemand, instance: u64) {
+        self.retain(demand, Uuid::from_u128(u128::from(instance)));
+    }
+    fn release_demand(&self, demand: RefreshDemand, instance: u64) {
+        self.release(demand, Uuid::from_u128(u128::from(instance)));
+    }
+    fn note_job_completed(&self, job: RefreshJobId, success: bool) {
+        self.note_completed(job, success);
+    }
+}
+
 /// 주입 가능한 잠(초). 취소는 감싼 task 를 abort 해서 한다.
 pub type Sleep = Arc<dyn Fn(TimeInterval) -> BoxFuture<'static, ()> + Send + Sync>;
 /// 작업 본문 — 성공 여부를 돌려준다.
@@ -488,6 +511,19 @@ mod tests {
     use cview_core::utils::time::from_unix;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use tokio::sync::watch;
+
+    #[tokio::test]
+    async fn demand_sink_maps_u64_instances_onto_coordinator_holders() {
+        let c = RefreshCoordinator::default();
+        let sink: &dyn RefreshDemandSink = &c;
+        sink.retain_demand(RefreshDemand::Clips, 7);
+        sink.retain_demand(RefreshDemand::Clips, 7);
+        assert!(c.context().demands.contains(&RefreshDemand::Clips));
+        sink.release_demand(RefreshDemand::Clips, 8);
+        assert!(c.context().demands.contains(&RefreshDemand::Clips));
+        sink.release_demand(RefreshDemand::Clips, 7);
+        assert!(!c.context().demands.contains(&RefreshDemand::Clips));
+    }
 
     /// 수동 sleeper — 길이를 기록하고 `fire()` 가 오기 전까지 잔다.
     #[derive(Clone)]

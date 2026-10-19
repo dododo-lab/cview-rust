@@ -9,7 +9,7 @@ use chrono::Utc;
 use cview_core::logic::mention_detector::{detect, MentionMatch};
 use cview_core::models::chat::{ChatMessageItem, UserRole};
 
-use super::{ChatState, MentionInboxEntry};
+use super::{ChatState, MentionEntry};
 
 impl ChatState {
     pub const MENTION_MATCHES_CAP: usize = 4096;
@@ -77,7 +77,7 @@ impl ChatState {
             if streamer_only {
                 continue;
             }
-            let entry = MentionInboxEntry {
+            let entry = MentionEntry {
                 id: item.id.clone(),
                 stream_channel_id: key.clone(),
                 chat_channel_id: self.active_chat_channel_id().unwrap_or_else(|| key.clone()),

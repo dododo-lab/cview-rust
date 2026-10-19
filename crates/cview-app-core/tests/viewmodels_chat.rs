@@ -597,7 +597,7 @@ async fn welcome_shown_once() {
 
 #[test]
 fn notice_removal_clears_banner_and_only_current_cache() {
-    let store = Arc::new(MemoryPinnedNoticeStore::new());
+    let store = memory_pinned_notice_cache();
     let deps = ChatDeps {
         pinned_notices: store.clone(),
         ..Default::default()

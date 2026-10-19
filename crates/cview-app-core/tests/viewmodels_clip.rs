@@ -14,10 +14,11 @@ use url::Url;
 
 use cview_app_core::viewmodels::clip::{
     channel_resolver, format_time, merging_channel_page, ClipApi, ClipBrowserViewModel,
-    ClipCacheStore, ClipHubPageLifecycleEffects, ClipMood, ClipPlayerViewModel, ClipRefreshDemand,
-    ClipSortOrder, ClipTab, PlaybackStateSnapshot, QUEUE_DEFAULTS_KEY, WATCH_LATER_DEFAULTS_KEY,
+    ClipCacheStore, ClipHubPageLifecycleEffects, ClipMood, ClipPlayerViewModel, ClipSortOrder,
+    ClipTab, PlaybackStateSnapshot, RefreshDemandSink, QUEUE_DEFAULTS_KEY,
+    WATCH_LATER_DEFAULTS_KEY,
 };
-use cview_app_core::viewmodels::following::{FollowingDefaults, MemoryDefaults};
+use cview_app_core::viewmodels::following::{KeyValueStore, MemoryKeyValueStore};
 use cview_core::models::clip::ClipDetail;
 use cview_core::models::search::ClipInfo;
 use cview_core::models::vod::VodPlaybackState;
@@ -110,8 +111,8 @@ impl ClipApi for FakeApi {
     }
 }
 
-fn browser(api: &Arc<FakeApi>) -> (ClipBrowserViewModel, Arc<MemoryDefaults>) {
-    let defaults = Arc::new(MemoryDefaults::default());
+fn browser(api: &Arc<FakeApi>) -> (ClipBrowserViewModel, Arc<MemoryKeyValueStore>) {
+    let defaults = Arc::new(MemoryKeyValueStore::default());
     let vm = ClipBrowserViewModel::new(defaults.clone());
     vm.lock().api = Some(api.clone());
     (vm, defaults)
@@ -400,7 +401,7 @@ async fn trending_refresh_still_prunes_dropped_rows() {
 
 #[tokio::test]
 async fn missing_api_reports_error() {
-    let vm = ClipBrowserViewModel::new(Arc::new(MemoryDefaults::default()));
+    let vm = ClipBrowserViewModel::new(Arc::new(MemoryKeyValueStore::default()));
     vm.load_trending_clips(true).await;
     assert_eq!(
         vm.read().trending_error.as_deref(),
@@ -429,14 +430,18 @@ struct FakeRefresh {
     log: Mutex<Vec<String>>,
 }
 
-impl ClipRefreshDemand for FakeRefresh {
-    fn retain_clips(&self, _i: u64) {
+impl RefreshDemandSink for FakeRefresh {
+    fn retain_demand(&self, _d: cview_core::utils::refresh_schedule::RefreshDemand, _i: u64) {
         self.log.lock().unwrap().push("retain".into());
     }
-    fn release_clips(&self, _i: u64) {
+    fn release_demand(&self, _d: cview_core::utils::refresh_schedule::RefreshDemand, _i: u64) {
         self.log.lock().unwrap().push("release".into());
     }
-    fn note_clip_trending_completed(&self, success: bool) {
+    fn note_job_completed(
+        &self,
+        _job: cview_core::utils::refresh_schedule::RefreshJobId,
+        success: bool,
+    ) {
         self.log.lock().unwrap().push(format!("note:{success}"));
     }
 }
@@ -448,7 +453,7 @@ fn hub_page_lifecycle_effects() {
     let hidden = ClipHubPageLifecycleEffects::resolve(false);
     assert!(!hidden.maintains_auto_refresh && hidden.dismisses_playback);
 
-    let vm = ClipBrowserViewModel::new(Arc::new(MemoryDefaults::default()));
+    let vm = ClipBrowserViewModel::new(Arc::new(MemoryKeyValueStore::default()));
     let refresh = Arc::new(FakeRefresh::default());
     vm.lock().refresh_coordinator = Some(refresh.clone());
     vm.sync_hub_page_activity(true);
@@ -469,7 +474,7 @@ fn hub_page_lifecycle_effects() {
 
 #[test]
 fn watch_later_queue_and_recent_channels_persist() {
-    let defaults = Arc::new(MemoryDefaults::default());
+    let defaults = Arc::new(MemoryKeyValueStore::default());
     let vm = ClipBrowserViewModel::new(defaults.clone());
     let a = clip("a", 1);
     let b = clip("b", 2);
@@ -515,7 +520,7 @@ fn watch_later_queue_and_recent_channels_persist() {
 
 #[test]
 fn clip_tap_routes_to_preview_or_player() {
-    let vm = ClipBrowserViewModel::new(Arc::new(MemoryDefaults::default()));
+    let vm = ClipBrowserViewModel::new(Arc::new(MemoryKeyValueStore::default()));
     vm.lock().handle_clip_tap(clip("a", 1), true);
     assert_eq!(vm.read().preview_clip.as_ref().unwrap().clip_uid, "a");
     assert!(vm.read().selected_clip.is_none());

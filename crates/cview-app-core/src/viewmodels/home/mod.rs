@@ -25,7 +25,7 @@ use std::collections::HashSet;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
-use chrono::{Local, TimeZone, Utc};
+use chrono::Utc;
 use serde::Serialize;
 use uuid::Uuid;
 
@@ -38,47 +38,13 @@ use cview_core::utils::time::{interval_since, Date, TimeInterval};
 use cview_networking::response::LivePageCursor;
 
 use self::boot::{BootExtrasSnapshot, BootFollowingSnapshot, BootHero, BootHydrateReport};
-use self::deps::{AutoRefreshCoordinator, HomeDeps};
+use self::deps::HomeDeps;
 use self::promotion::{DataOrigin, FreshnessDisplay};
 use self::recommendation::ScoredChannel;
 use super::support::{cancel_slot, slot_is, Observed, ObservedGuard, TaskSlot};
+use crate::services::refresh_coordinator::RefreshDemandSink;
 
-/// 전수 수집 품질.
-#[derive(Debug, Clone, PartialEq, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-pub enum StatsCollectionQuality {
-    Unknown,
-    Collecting,
-    Complete {
-        at: Date,
-        count: i64,
-    },
-    Truncated {
-        at: Date,
-        count: i64,
-    },
-    Partial {
-        at: Date,
-        count: i64,
-        message: String,
-    },
-    Failed {
-        message: String,
-        has_previous_data: bool,
-    },
-}
-
-impl StatsCollectionQuality {
-    pub fn needs_partial_banner(&self) -> bool {
-        matches!(self, Self::Truncated { .. } | Self::Partial { .. })
-    }
-    pub fn is_collecting(&self) -> bool {
-        matches!(self, Self::Collecting)
-    }
-    pub fn is_complete(&self) -> bool {
-        matches!(self, Self::Complete { .. })
-    }
-}
+pub use crate::caching::live_catalog_store::StatsCollectionQuality;
 
 /// `computeChannelStats` 결과.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -166,7 +132,7 @@ pub struct HomeState {
     pub has_more_channels: bool,
     pub next_live_cursor: Option<LivePageCursor>,
 
-    pub refresh_coordinator: Option<Arc<dyn AutoRefreshCoordinator>>,
+    pub refresh_coordinator: Option<Arc<dyn RefreshDemandSink>>,
     pub is_auto_refresh_active: bool,
     auto_refresh_gate: AutoRefreshGate,
     pub auto_refresh_settings_enabled_provider: Option<Arc<dyn Fn() -> bool + Send + Sync>>,
@@ -362,27 +328,6 @@ impl HomeViewModel {
         format!("{observed} 관측")
     }
 
-    pub fn verified_live_count_label(count: i64, observed_at: Option<&Date>) -> String {
-        Self::verified_live_count_label_in(count, observed_at, &Local)
-    }
-
-    pub fn verified_live_count_label_in<Tz: TimeZone>(
-        count: i64,
-        observed_at: Option<&Date>,
-        tz: &Tz,
-    ) -> String
-    where
-        Tz::Offset: std::fmt::Display,
-    {
-        match observed_at {
-            None => format!("{count}개 확인"),
-            Some(at) => format!(
-                "{count}개 확인 · {}",
-                data_freshness::aggregated_caption(at, tz)
-            ),
-        }
-    }
-
     pub fn next_freshness_wake(
         popular_at: Option<&Date>,
         following_at: Option<&Date>,
@@ -403,7 +348,7 @@ impl HomeViewModel {
         let mut s = self.lock();
         s.sync_auto_refresh_settings_axis();
         if let Some(c) = &s.refresh_coordinator {
-            c.retain(screen, instance);
+            c.retain_demand(screen, instance);
         }
         if s.auto_refresh_gate
             .retain(AutoRefreshHolder::new(screen, instance))
@@ -415,7 +360,7 @@ impl HomeViewModel {
     pub fn release_auto_refresh(&self, screen: AutoRefreshScreen, instance: u64) {
         let mut s = self.lock();
         if let Some(c) = &s.refresh_coordinator {
-            c.release(screen, instance);
+            c.release_demand(screen, instance);
         }
         if s.auto_refresh_gate
             .release(AutoRefreshHolder::new(screen, instance))

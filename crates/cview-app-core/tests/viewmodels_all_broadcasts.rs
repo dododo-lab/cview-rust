@@ -224,7 +224,7 @@ async fn search_debounces_and_pages() {
 
 #[test]
 fn category_browse_cache_keys() {
-    type Vm = CategoryBrowseViewModel<String, String>;
+    type Vm = CategoryBrowseViewModel;
     let key = Vm::guard_key("category/GAME", 7);
     assert_eq!(key, "category/GAME|r7");
     assert!(Vm::should_commit_groups("a", 1, "a", 1, true, false));
@@ -234,7 +234,12 @@ fn category_browse_cache_keys() {
     assert!(!Vm::should_commit_groups("a", 1, "a", 1, true, true));
     let mut vm = Vm::new();
     assert!(vm.should_recompute_groups(&key), "비었으면 계산한다");
-    vm.group_cache.push("g".into());
+    vm.group_cache
+        .push(cview_app_core::logic::category_groups::CategoryGroup::new(
+            "g".into(),
+            Vec::new(),
+            0,
+        ));
     assert!(vm.should_recompute_groups(&key));
     vm.mark_groups_computed(&key, Some(7));
     assert!(!vm.should_recompute_groups(&key));

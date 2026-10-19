@@ -97,7 +97,12 @@ impl ChatState {
             move || {
                 let source = source.clone();
                 let channel_id = channel_id.clone();
-                async move { source.ranking(&channel_id, rank_count).await }
+                async move {
+                    source
+                        .weekly_donation_ranking(&channel_id, rank_count)
+                        .await
+                        .map_err(|e| e.to_string())
+                }
             },
             ChatState::apply_donation_ranking,
             |s| &s.donation_ranking_task,
@@ -142,7 +147,12 @@ impl ChatState {
             move || {
                 let source = source.clone();
                 let channel_id = channel_id.clone();
-                async move { source.live_status(&channel_id).await }
+                async move {
+                    source
+                        .live_status(&channel_id)
+                        .await
+                        .map_err(|e| e.to_string())
+                }
             },
             ChatState::apply_live_info,
             |s| &s.live_info_task,
@@ -168,7 +178,7 @@ impl ChatViewModel {
         source: &dyn ChannelHeaderSource,
         rank_count: i64,
     ) {
-        match source.ranking(channel_id, rank_count).await {
+        match source.weekly_donation_ranking(channel_id, rank_count).await {
             Ok(r) => self.lock().apply_donation_ranking(r),
             Err(e) => tracing::debug!("주간 후원 랭킹 fetch 실패 (silent to UI): {e}"),
         }

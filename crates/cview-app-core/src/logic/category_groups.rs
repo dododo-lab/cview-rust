@@ -64,7 +64,9 @@ pub struct CategoryRanking {
     pub live_count: i64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// 유형 필터 칩.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TypeFilter {
     pub label: String,
     pub icon: String,
@@ -72,6 +74,11 @@ pub struct TypeFilter {
 }
 
 impl TypeFilter {
+    /// "전체" 칩.
+    pub fn all() -> Self {
+        Self::new("전체", "square.grid.2x2", None)
+    }
+
     fn new(label: &str, icon: &str, value: Option<&str>) -> Self {
         Self {
             label: label.into(),
@@ -88,7 +95,7 @@ const KNOWN_TYPES: [(&str, &str, &str); 3] = [
 ];
 
 fn type_filters(present: &HashSet<String>) -> Vec<TypeFilter> {
-    let mut filters = vec![TypeFilter::new("전체", "square.grid.2x2", None)];
+    let mut filters = vec![TypeFilter::all()];
     for (raw, label, icon) in KNOWN_TYPES {
         if present.contains(raw) {
             filters.push(TypeFilter::new(label, icon, Some(raw)));

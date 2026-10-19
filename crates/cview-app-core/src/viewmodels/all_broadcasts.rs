@@ -84,7 +84,8 @@ pub enum LoadState {
     Error(String),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+/// 인기(전체방송) 화면 모드 — 사이드바 빠른 작업도 이 값을 쓴다.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum AllBroadcastsMode {
     All,

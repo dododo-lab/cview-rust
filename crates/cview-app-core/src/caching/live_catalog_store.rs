@@ -135,7 +135,8 @@ pub struct CatalogDemandHolder {
     pub instance: Uuid,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
 pub enum CatalogSweepReason {
     /// 코디네이터의 `catalogSweep` 작업.
     Scheduled,
@@ -158,8 +159,9 @@ impl CatalogSweepReason {
     }
 }
 
-/// 수집 품질(원본은 `HomeViewModel.swift` 의 `StatsCollectionQuality`).
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+/// 수집 품질(원본은 `HomeViewModel.swift` 의 `StatsCollectionQuality`). 홈 뷰모델도 이 값을 쓴다.
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
 pub enum StatsCollectionQuality {
     /// 아직 한 번도 시도하지 않음.
     #[default]

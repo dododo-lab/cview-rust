@@ -1,32 +1,27 @@
-//! ChatViewModel 이 기대는 외부 협력자 — 서비스 계층(다른 포팅 작업) 대신 작은 trait 으로 둔다.
+//! ChatViewModel 이 기대는 외부 협력자.
 //!
-//! | Swift 협력자 | Rust 경계 |
+//! | Swift 협력자 | Rust |
 //! |---|---|
 //! | `ChatEngine` (actor) | [`ChatEngineHandle`] + [`ChatEngineFactory`] (기본: `cview_chat::ChatEngine`) |
-//! | `MultiChatPreferences.shared` (lastRead·멘션 규칙·미읽음) | [`ChatPreferences`] |
-//! | `MentionInbox` · `MentionNotificationService` | [`MentionSink`] |
-//! | `PinnedNoticeCache` (UserDefaults) | [`PinnedNoticeStore`] + [`MemoryPinnedNoticeStore`] |
-//! | `ChannelHeaderHub.shared` (랭킹·라이브 상태) | [`ChannelHeaderSource`] (기본: `ChzzkApiClient`) |
+//! | `MultiChatPreferences.shared` (lastRead·멘션 규칙·미읽음) | [`MultiChatPreferences`] (서비스 그대로) |
+//! | `MentionInbox` · `MentionNotificationService` | [`MentionSink`] (기본 구현: [`InboxMentionSink`]) |
+//! | `PinnedNoticeCache` (UserDefaults) | [`PinnedNoticeCache`] (서비스 그대로) |
+//! | `ChannelHeaderHub.shared` (랭킹·라이브 상태) | [`ChannelHeaderSource`] (서비스 trait, 기본: `ChzzkApiClient`) |
 //! | `ImageCacheService.shared.prefetch` | [`ImagePrefetcher`] |
 //! | `RenderBudgetController` · `WindowGeometryTransitionSignal` · `SystemLoadMonitor` | [`PacingEnvironment`] |
 //! | `ToastCenter.shared` | [`ToastPresenter`] |
 //! | `ChatTTSService` (AVSpeechSynthesizer) | [`super::tts::ChatTts`] |
 
-use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use chrono::{DateTime, Duration as ChronoDuration, Utc};
-use serde::{Deserialize, Serialize};
 
 use cview_chat::{ChatEngine, ChatEngineConfiguration, ChatEngineEvent, ChatEventStream};
-use cview_core::logic::mention_detector::{MentionDetectionRule, MentionMatch};
-use cview_core::models::chat::{
-    ChatMessage, ChatMessageItem, DonationRankResponse, EmojiMap, MessageType,
-};
-use cview_core::models::LiveInfo;
+use cview_core::models::chat::{ChatMessage, EmojiMap};
 use cview_core::utils::SystemLoadMode;
-use cview_networking::ChzzkApiClient;
+
+use crate::services::notification_service::{MentionNotificationService, Notifier};
+use crate::services::support::MemoryKeyValueStore;
 
 use super::tts::{ChatTts, NoopTts};
 
@@ -100,300 +95,87 @@ impl ChatEngineHandle for LiveChatEngine {
     }
 }
 
-/// `MultiChatScope` — 시청 화면(live) 과 독립 채팅 창(standalone) 의 선호 저장 분리.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum MultiChatScope {
-    #[default]
-    Live,
-    Standalone,
+pub use crate::services::channel_header_hub::ChannelHeaderSource;
+pub use crate::services::mention_inbox::{MentionEntry, MentionInbox};
+pub use crate::services::multi_chat_preferences::{MultiChatPreferences, MultiChatScope};
+pub use crate::services::pinned_notice_cache::PinnedNoticeCache;
+
+/// 테스트·기본값용 메모리 저장소 위의 새 [`MultiChatPreferences`].
+pub fn memory_chat_preferences() -> Arc<MultiChatPreferences> {
+    Arc::new(MultiChatPreferences::new(
+        Arc::new(MemoryKeyValueStore::new()),
+        Arc::new(|| chrono::Utc::now().timestamp_millis() as f64 / 1000.0),
+    ))
 }
 
-/// `MultiChatPreferences` 중 ChatViewModel 이 쓰는 부분.
-pub trait ChatPreferences: Send + Sync {
-    fn last_read_message_id(&self, chat_channel_id: &str, scope: MultiChatScope) -> Option<String>;
-    fn set_last_read_message_id(
-        &self,
-        chat_channel_id: &str,
-        message_id: &str,
-        scope: MultiChatScope,
-    );
-    fn current_mention_rule(&self, nickname: Option<&str>) -> MentionDetectionRule;
-    fn increment_mention_unread(&self, chat_channel_id: &str, scope: MultiChatScope);
-}
-
-/// 메모리 구현 (테스트·기본값).
-#[derive(Debug, Default)]
-pub struct MemoryChatPreferences {
-    inner: Mutex<MemoryPrefsInner>,
-}
-
-#[derive(Debug, Default)]
-struct MemoryPrefsInner {
-    last_read: HashMap<(String, MultiChatScope), String>,
-    keywords: Vec<String>,
-    muted_channels: HashSet<String>,
-    unread: HashMap<(String, MultiChatScope), i64>,
-}
-
-impl MemoryChatPreferences {
-    pub fn new() -> Self {
-        Self::default()
-    }
-    pub fn set_keywords(&self, keywords: Vec<String>) {
-        self.inner.lock().unwrap().keywords = keywords;
-    }
-    pub fn set_muted_channels(&self, muted: HashSet<String>) {
-        self.inner.lock().unwrap().muted_channels = muted;
-    }
-    pub fn mention_unread(&self, chat_channel_id: &str, scope: MultiChatScope) -> i64 {
-        let g = self.inner.lock().unwrap();
-        g.unread
-            .get(&(chat_channel_id.to_string(), scope))
-            .copied()
-            .unwrap_or(0)
-    }
-}
-
-impl ChatPreferences for MemoryChatPreferences {
-    fn last_read_message_id(&self, chat_channel_id: &str, scope: MultiChatScope) -> Option<String> {
-        self.inner
-            .lock()
-            .unwrap()
-            .last_read
-            .get(&(chat_channel_id.to_string(), scope))
-            .cloned()
-    }
-    fn set_last_read_message_id(
-        &self,
-        chat_channel_id: &str,
-        message_id: &str,
-        scope: MultiChatScope,
-    ) {
-        self.inner
-            .lock()
-            .unwrap()
-            .last_read
-            .insert((chat_channel_id.to_string(), scope), message_id.to_string());
-    }
-    fn current_mention_rule(&self, nickname: Option<&str>) -> MentionDetectionRule {
-        let g = self.inner.lock().unwrap();
-        MentionDetectionRule::new(
-            nickname.map(str::to_string),
-            g.keywords.clone(),
-            g.muted_channels.clone(),
-        )
-    }
-    fn increment_mention_unread(&self, chat_channel_id: &str, scope: MultiChatScope) {
-        *self
-            .inner
-            .lock()
-            .unwrap()
-            .unread
-            .entry((chat_channel_id.to_string(), scope))
-            .or_insert(0) += 1;
-    }
-}
-
-/// `MentionInbox.Entry`.
-#[derive(Debug, Clone, PartialEq)]
-pub struct MentionInboxEntry {
-    pub id: String,
-    pub stream_channel_id: String,
-    pub chat_channel_id: String,
-    pub channel_name: String,
-    pub message: ChatMessageItem,
-    pub matches: HashSet<MentionMatch>,
-    pub received_at: DateTime<Utc>,
+/// 테스트·기본값용 메모리 저장소 위의 새 [`PinnedNoticeCache`].
+pub fn memory_pinned_notice_cache() -> Arc<PinnedNoticeCache> {
+    Arc::new(PinnedNoticeCache::new(Arc::new(MemoryKeyValueStore::new())))
 }
 
 /// 멘션 부수효과(인박스 적재 + OS 알림).
 pub trait MentionSink: Send + Sync {
-    fn deliver(&self, entry: MentionInboxEntry, scope: MultiChatScope);
+    fn deliver(&self, entry: MentionEntry, scope: MultiChatScope);
 }
 
 /// 기본: 무시.
 #[derive(Debug, Default)]
 pub struct NoopMentionSink;
 impl MentionSink for NoopMentionSink {
-    fn deliver(&self, _entry: MentionInboxEntry, _scope: MultiChatScope) {}
+    fn deliver(&self, _entry: MentionEntry, _scope: MultiChatScope) {}
+}
+
+/// 실제 경로 — 스코프별 [`MentionInbox`] 에 적재하고, 알림기가 있으면
+/// [`MentionNotificationService`] 로 효과음·알림 센터를 발화한다.
+pub struct InboxMentionSink {
+    pub notifier: Option<Arc<dyn Notifier>>,
+    pub preferences: Arc<MultiChatPreferences>,
+}
+
+impl InboxMentionSink {
+    pub fn new(
+        notifier: Option<Arc<dyn Notifier>>,
+        preferences: Arc<MultiChatPreferences>,
+    ) -> Self {
+        Self {
+            notifier,
+            preferences,
+        }
+    }
+}
+
+impl MentionSink for InboxMentionSink {
+    fn deliver(&self, entry: MentionEntry, scope: MultiChatScope) {
+        if let (Some(notifier), Ok(handle)) =
+            (self.notifier.clone(), tokio::runtime::Handle::try_current())
+        {
+            let prefs = self.preferences.clone();
+            let channel_name = entry.channel_name.clone();
+            let message = entry.message.clone();
+            let matches = entry.matches.clone();
+            handle.spawn(async move {
+                MentionNotificationService::deliver(
+                    notifier.as_ref(),
+                    &prefs,
+                    &channel_name,
+                    &message,
+                    &matches,
+                )
+                .await;
+            });
+        }
+        MentionInbox::scoped(scope).append(entry);
+    }
 }
 
 /// 기록용 구현 (테스트).
 #[derive(Debug, Default)]
 pub struct RecordingMentionSink {
-    pub entries: Mutex<Vec<(MentionInboxEntry, MultiChatScope)>>,
+    pub entries: Mutex<Vec<(MentionEntry, MultiChatScope)>>,
 }
 impl MentionSink for RecordingMentionSink {
-    fn deliver(&self, entry: MentionInboxEntry, scope: MultiChatScope) {
+    fn deliver(&self, entry: MentionEntry, scope: MultiChatScope) {
         self.entries.lock().unwrap().push((entry, scope));
-    }
-}
-
-/// `PinnedNoticeCache` — 채널별 고정 공지 + 닫은 공지 id.
-pub trait PinnedNoticeStore: Send + Sync {
-    fn save(&self, notice: &ChatMessageItem, channel_id: &str);
-    fn load(&self, channel_id: &str) -> Option<ChatMessageItem>;
-    fn mark_dismissed(&self, notice_id: &str);
-    fn is_dismissed(&self, notice_id: &str) -> bool;
-    fn clear(&self, channel_id: &str);
-}
-
-/// `PinnedNoticeCache.PersistedNotice`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PersistedNotice {
-    pub id: String,
-    pub nickname: String,
-    pub content: String,
-    pub timestamp: DateTime<Utc>,
-}
-
-impl PersistedNotice {
-    pub fn from_item(item: &ChatMessageItem) -> Self {
-        Self {
-            id: item.id.clone(),
-            nickname: item.nickname.clone(),
-            content: item.content.clone(),
-            timestamp: item.timestamp,
-        }
-    }
-    fn is_same_notice(&self, other: &Self) -> bool {
-        self.id == other.id && self.nickname == other.nickname && self.content == other.content
-    }
-    pub fn to_chat_message_item(&self) -> ChatMessageItem {
-        ChatMessageItem::new(
-            self.id.clone(),
-            "notice",
-            self.nickname.clone(),
-            self.content.clone(),
-            self.timestamp,
-            MessageType::Notice,
-            EmojiMap::new(),
-            true,
-            false,
-        )
-    }
-}
-
-/// `PinnedNoticeCache` 의 규칙(같은 공지 24h 내 재저장 생략, 채널 200개·닫힘 500개 상한)을
-/// 메모리에 구현한 저장소. 영구 저장은 서비스 계층 구현이 이 trait 을 맞추면 된다.
-#[derive(Debug, Default)]
-pub struct MemoryPinnedNoticeStore {
-    inner: Mutex<PinnedInner>,
-}
-
-#[derive(Debug, Default)]
-struct PinnedInner {
-    notices: HashMap<String, PersistedNotice>,
-    dismissed: VecDeque<String>,
-}
-
-impl MemoryPinnedNoticeStore {
-    pub const DISMISSED_IDS_MAX_COUNT: usize = 500;
-    pub const NOTICE_CHANNEL_MAX_COUNT: usize = 200;
-    pub const RECENCY_REFRESH_INTERVAL_SECS: i64 = 24 * 60 * 60;
-
-    pub fn new() -> Self {
-        Self::default()
-    }
-    pub fn stored(&self, channel_id: &str) -> Option<PersistedNotice> {
-        self.inner.lock().unwrap().notices.get(channel_id).cloned()
-    }
-    pub fn channel_count(&self) -> usize {
-        self.inner.lock().unwrap().notices.len()
-    }
-}
-
-impl PinnedNoticeStore for MemoryPinnedNoticeStore {
-    fn save(&self, notice: &ChatMessageItem, channel_id: &str) {
-        if channel_id.is_empty() || notice.id.is_empty() {
-            return;
-        }
-        let persisted = PersistedNotice::from_item(notice);
-        let mut g = self.inner.lock().unwrap();
-        if let Some(stored) = g.notices.get(channel_id) {
-            if stored.is_same_notice(&persisted)
-                && persisted.timestamp - stored.timestamp
-                    <= ChronoDuration::seconds(Self::RECENCY_REFRESH_INTERVAL_SECS)
-            {
-                return;
-            }
-        }
-        g.notices.insert(channel_id.to_string(), persisted);
-        if g.notices.len() > Self::NOTICE_CHANNEL_MAX_COUNT {
-            let mut dated: Vec<(String, DateTime<Utc>)> = g
-                .notices
-                .iter()
-                .map(|(k, v)| (k.clone(), v.timestamp))
-                .collect();
-            dated.sort_by_key(|(_, t)| *t);
-            let excess = g.notices.len() - Self::NOTICE_CHANNEL_MAX_COUNT;
-            for (k, _) in dated.into_iter().take(excess) {
-                g.notices.remove(&k);
-            }
-        }
-    }
-    fn load(&self, channel_id: &str) -> Option<ChatMessageItem> {
-        if channel_id.is_empty() {
-            return None;
-        }
-        self.stored(channel_id).map(|p| p.to_chat_message_item())
-    }
-    fn mark_dismissed(&self, notice_id: &str) {
-        if notice_id.is_empty() {
-            return;
-        }
-        let mut g = self.inner.lock().unwrap();
-        g.dismissed.retain(|i| i != notice_id);
-        g.dismissed.push_back(notice_id.to_string());
-        while g.dismissed.len() > Self::DISMISSED_IDS_MAX_COUNT {
-            g.dismissed.pop_front();
-        }
-    }
-    fn is_dismissed(&self, notice_id: &str) -> bool {
-        !notice_id.is_empty()
-            && self
-                .inner
-                .lock()
-                .unwrap()
-                .dismissed
-                .iter()
-                .any(|i| i == notice_id)
-    }
-    fn clear(&self, channel_id: &str) {
-        if channel_id.is_empty() {
-            return;
-        }
-        self.inner.lock().unwrap().notices.remove(channel_id);
-    }
-}
-
-/// `ChannelHeaderHub` — 채널 헤더(랭킹·라이브 상태) 공유 조회.
-#[async_trait]
-pub trait ChannelHeaderSource: Send + Sync {
-    async fn ranking(
-        &self,
-        channel_id: &str,
-        rank_count: i64,
-    ) -> Result<DonationRankResponse, String>;
-    async fn live_status(&self, channel_id: &str) -> Result<LiveInfo, String>;
-}
-
-#[async_trait]
-impl ChannelHeaderSource for ChzzkApiClient {
-    async fn ranking(
-        &self,
-        channel_id: &str,
-        rank_count: i64,
-    ) -> Result<DonationRankResponse, String> {
-        self.weekly_donation_ranking(channel_id, rank_count, true)
-            .await
-            .map_err(|e| e.to_string())
-    }
-    async fn live_status(&self, channel_id: &str) -> Result<LiveInfo, String> {
-        ChzzkApiClient::live_status(self, channel_id)
-            .await
-            .map_err(|e| e.to_string())
     }
 }
 
@@ -452,9 +234,9 @@ impl ToastPresenter for NoopToast {
 #[derive(Clone)]
 pub struct ChatDeps {
     pub engine_factory: ChatEngineFactory,
-    pub preferences: Arc<dyn ChatPreferences>,
+    pub preferences: Arc<MultiChatPreferences>,
     pub mention_sink: Arc<dyn MentionSink>,
-    pub pinned_notices: Arc<dyn PinnedNoticeStore>,
+    pub pinned_notices: Arc<PinnedNoticeCache>,
     pub prefetcher: Arc<dyn ImagePrefetcher>,
     pub pacing: Arc<dyn PacingEnvironment>,
     pub toast: Arc<dyn ToastPresenter>,
@@ -465,9 +247,9 @@ impl Default for ChatDeps {
     fn default() -> Self {
         Self {
             engine_factory: LiveChatEngine::factory(),
-            preferences: Arc::new(MemoryChatPreferences::new()),
+            preferences: memory_chat_preferences(),
             mention_sink: Arc::new(NoopMentionSink),
-            pinned_notices: Arc::new(MemoryPinnedNoticeStore::new()),
+            pinned_notices: memory_pinned_notice_cache(),
             prefetcher: Arc::new(NoopPrefetcher),
             pacing: Arc::new(DefaultPacingEnvironment),
             toast: Arc::new(NoopToast),

@@ -291,7 +291,8 @@ pub fn verified_live_count_label(count: i64, observed_at: Option<Date>) -> Strin
     verified_live_count_label_in(count, observed_at, &Local)
 }
 
-fn verified_live_count_label_in<Tz: TimeZone>(
+/// 시간대 주입판(테스트).
+pub fn verified_live_count_label_in<Tz: TimeZone>(
     count: i64,
     observed_at: Option<Date>,
     tz: &Tz,

@@ -2,13 +2,13 @@
 //!
 //! | Swift 협력자 | Rust 경계 |
 //! |---|---|
-//! | `LiveCatalogStore` (전수 수집·요약·행 파일) | [`LiveCatalogPort`] |
-//! | `FollowingStore` (팔로잉 폴) | [`FollowingSource`] |
+//! | `LiveCatalogStore` (전수 수집·요약·행 파일) | [`LiveCatalogPort`] (구현: [`LiveCatalogStore`]) |
+//! | `FollowingStore` (팔로잉 폴) | [`FollowingPoller`] (구현: [`FollowingStore`]) |
 //! | `MenuSnapshotStore.shared` (메뉴 스냅샷 파일) | [`MenuSnapshots`] |
 //! | `ChzzkAPIClient.topLivesWithAge` | [`PopularLiveSource`] (기본: `ChzzkApiClient`) |
 //! | `LiveThumbnailService`·`ImageCacheService` 무효화 | [`HomeImageCache`] |
 //! | `LiveEventBus.shared.restore` | [`LiveActivityRestorer`] |
-//! | `RefreshCoordinator` retain/release | [`AutoRefreshCoordinator`] |
+//! | `RefreshCoordinator` retain/release | [`crate::services::refresh_coordinator::RefreshDemandSink`] |
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -18,22 +18,15 @@ use serde::{Deserialize, Serialize};
 
 use cview_core::models::live_catalog::{LiveCatalogRowsSnapshot, LiveCatalogSummary};
 use cview_core::models::{LiveChannelItem, LiveInfo};
-use cview_core::utils::auto_refresh_gate::AutoRefreshScreen;
 use cview_core::utils::following_poll::{FollowingPollReason, FollowingPollResult};
 use cview_core::utils::time::{Date, TimeInterval};
 use cview_networking::{AgedResponse, ChzzkApiClient, PagedContent};
 
 use super::promotion::CatalogPromotionDecision;
+use crate::caching::following_store::{to_live_channel_item, FollowingStore};
+use crate::caching::live_catalog_store::LiveCatalogStore;
 
-/// 전수 수집을 시작한 사유.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub enum CatalogSweepReason {
-    Scheduled,
-    Demand,
-    Manual,
-    RowsMissing,
-}
+pub use crate::caching::live_catalog_store::CatalogSweepReason;
 
 /// 지연 로드한 행.
 #[derive(Debug, Clone, PartialEq)]
@@ -121,6 +114,75 @@ impl LiveCatalogPort for NullCatalog {
     async fn hydrate_checkpoint(&self) {}
 }
 
+#[async_trait]
+impl FollowingPoller for FollowingStore {
+    fn generation(&self) -> u64 {
+        FollowingStore::generation(self)
+    }
+    async fn poll(&self, reason: FollowingPollReason) -> Option<HomeFollowingResult> {
+        let r = FollowingStore::poll(self, reason).await?;
+        Some(HomeFollowingResult {
+            reason: r.reason,
+            channels: r.channels.iter().map(to_live_channel_item).collect(),
+            fetched_at: r.fetched_at,
+            generation: r.generation,
+            newly_live: r.newly_live,
+            is_baseline: r.is_baseline,
+            list_carries_live_info: r.list_carries_live_info,
+            detail_requests: r.detail_requests,
+        })
+    }
+    fn reset_for_account_boundary(&self) {
+        FollowingStore::reset_for_account_boundary(self);
+    }
+}
+
+/// 실제 카탈로그 저장소. 행·요약 파일 영속화(`+Persistence`·`+Checkpoint`)와 요약 빌드(`promote`)는
+/// 저장소 쪽에 아직 없어 그 면은 비어 있다 — [`LiveCatalogStore`] 모듈 문서 참고.
+#[async_trait]
+impl LiveCatalogPort for LiveCatalogStore {
+    fn usable_summary(&self) -> Option<LiveCatalogSummary> {
+        LiveCatalogStore::usable_summary(self, None)
+    }
+    fn summary_revision(&self) -> u64 {
+        LiveCatalogStore::summary_revision(self)
+    }
+    fn has_summary(&self) -> bool {
+        self.summary().is_some()
+    }
+    fn is_sweeping(&self) -> bool {
+        LiveCatalogStore::is_sweeping(self)
+    }
+    fn last_attempt_at(&self) -> Option<Date> {
+        LiveCatalogStore::last_attempt_at(self)
+    }
+    fn demand_starts_sweep(&self) -> bool {
+        self.demand_kinds().iter().any(|k| k.starts_sweep())
+    }
+    fn request_sweep(&self, reason: CatalogSweepReason) {
+        LiveCatalogStore::request_sweep(self, reason);
+    }
+    fn growth_rates(&self) -> HashMap<String, f64> {
+        LiveCatalogStore::growth_rates(self)
+    }
+    async fn run_manual(&self) {
+        LiveCatalogStore::run_manual(self).await;
+    }
+    async fn load_persisted_rows(&self) -> Option<RestoredCatalogRows> {
+        None
+    }
+    async fn promote(
+        &self,
+        _decision: &CatalogPromotionDecision,
+        _items: &[LiveInfo],
+        _completed_at: Date,
+        _reason: CatalogSweepReason,
+    ) {
+    }
+    async fn hydrate_summary(&self) {}
+    async fn hydrate_checkpoint(&self) {}
+}
+
 /// 팔로잉 폴 실패 원인.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FollowingError {
@@ -132,9 +194,9 @@ pub type HomeFollowingResult = FollowingPollResult<LiveChannelItem>;
 pub type HomeFollowingOutcome =
     cview_core::utils::following_poll::FollowingPollOutcome<LiveChannelItem, FollowingError>;
 
-/// `FollowingStore`. 폴 결과는 스토어가 싱크(`HomeViewModel::receive_following_poll`)로 보낸다.
+/// `FollowingStore` 의 홈 면. 폴 결과는 스토어가 싱크(`HomeViewModel::receive_following_poll`)로 보낸다.
 #[async_trait]
-pub trait FollowingSource: Send + Sync {
+pub trait FollowingPoller: Send + Sync {
     fn generation(&self) -> u64;
     async fn poll(&self, reason: FollowingPollReason) -> Option<HomeFollowingResult>;
     fn reset_for_account_boundary(&self);
@@ -142,13 +204,13 @@ pub trait FollowingSource: Send + Sync {
 
 /// 폴을 기록만 하는 기본값.
 #[derive(Debug, Default)]
-pub struct NullFollowingSource {
+pub struct NullFollowingPoller {
     pub generation: Mutex<u64>,
     pub polls: Mutex<Vec<FollowingPollReason>>,
 }
 
 #[async_trait]
-impl FollowingSource for NullFollowingSource {
+impl FollowingPoller for NullFollowingPoller {
     fn generation(&self) -> u64 {
         *self.generation.lock().unwrap()
     }
@@ -321,18 +383,12 @@ impl LiveActivityRestorer for NoopActivityRestorer {
     async fn restore(&self, _activity: &serde_json::Value, _now: Date) {}
 }
 
-/// `RefreshCoordinator` 의 retain/release 면.
-pub trait AutoRefreshCoordinator: Send + Sync {
-    fn retain(&self, screen: AutoRefreshScreen, instance: u64);
-    fn release(&self, screen: AutoRefreshScreen, instance: u64);
-}
-
 /// HomeViewModel 협력자 묶음.
 #[derive(Clone)]
 pub struct HomeDeps {
     pub popular: Arc<dyn PopularLiveSource>,
     pub catalog: Arc<dyn LiveCatalogPort>,
-    pub following: Arc<dyn FollowingSource>,
+    pub following: Arc<dyn FollowingPoller>,
     pub snapshots: Arc<dyn MenuSnapshots>,
     pub images: Arc<dyn HomeImageCache>,
     pub activity: Arc<dyn LiveActivityRestorer>,
@@ -344,7 +400,7 @@ impl HomeDeps {
         Self {
             popular,
             catalog: Arc::new(NullCatalog::default()),
-            following: Arc::new(NullFollowingSource::default()),
+            following: Arc::new(NullFollowingPoller::default()),
             snapshots: Arc::new(MemoryMenuSnapshots::default()),
             images: Arc::new(NoopImageCache),
             activity: Arc::new(NoopActivityRestorer),

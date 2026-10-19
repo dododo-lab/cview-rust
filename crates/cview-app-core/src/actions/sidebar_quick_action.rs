@@ -13,54 +13,8 @@ use crate::navigation::router::{
 use crate::navigation::sidebar_destination::SidebarDestination;
 use crate::services::channel_preset_store::PresetKind;
 
-/// 검색 범위(`ViewModels/SearchViewModel.swift` 의 `SearchScope`). rawValue 는 영속 식별자다.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum SearchScope {
-    All,
-    Channel,
-    Live,
-    Video,
-    Clip,
-}
-
-impl SearchScope {
-    pub fn raw_value(self) -> &'static str {
-        match self {
-            Self::All => "all",
-            Self::Channel => "channel",
-            Self::Live => "live",
-            Self::Video => "video",
-            Self::Clip => "clip",
-        }
-    }
-
-    pub fn title(self) -> &'static str {
-        match self {
-            Self::All => "전체",
-            Self::Channel => "채널",
-            Self::Live => "라이브",
-            Self::Video => "다시보기",
-            Self::Clip => "클립",
-        }
-    }
-
-    pub fn icon(self) -> &'static str {
-        match self {
-            Self::All => "square.grid.2x2",
-            Self::Channel => "person.2",
-            Self::Live => "play.tv",
-            Self::Video => "film",
-            Self::Clip => "film.stack",
-        }
-    }
-}
-
-/// 인기(전체방송) 화면 모드.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum PopularMode {
-    All,
-    Search,
-}
+pub use crate::viewmodels::all_broadcasts::AllBroadcastsMode;
+pub use crate::viewmodels::search::SearchScope;
 
 /// 메뉴별 명령. 카탈로그에는 타이머·구독·데이터 로딩이 없다.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -290,7 +244,7 @@ pub trait QuickActionHost: Send {
     /// 검색 VM 이 있으면 Some(현재 범위, 검색어 비었는가).
     fn search_state(&self) -> Option<(SearchScope, bool)>;
     /// 인기 VM 이 있으면 Some(모드, 바쁨 여부).
-    fn popular_state(&self) -> Option<(PopularMode, bool)>;
+    fn popular_state(&self) -> Option<(AllBroadcastsMode, bool)>;
     /// 카테고리 VM 이 있으면 Some(유형 필터).
     fn category_type_filter(&self) -> Option<Option<String>>;
 
@@ -311,7 +265,7 @@ pub trait QuickActionHost: Send {
     async fn reconnect_standalone_chats(&mut self);
     async fn set_search_scope(&mut self, scope: SearchScope);
     fn clear_search(&mut self);
-    fn set_popular_mode(&mut self, mode: PopularMode);
+    fn set_popular_mode(&mut self, mode: AllBroadcastsMode);
     async fn refresh_popular(&mut self);
     /// 카테고리 그리드로 돌아가 유형 필터를 바꾼다(분할 선택은 보존).
     fn set_category_type(&mut self, type_filter: Option<String>);
@@ -377,10 +331,10 @@ impl SidebarQuickActionExecutor {
                 SearchScope(scope) => app.search_state().is_some_and(|(s, _)| s == *scope),
                 PopularList => app
                     .popular_state()
-                    .is_some_and(|(m, _)| m == PopularMode::All),
+                    .is_some_and(|(m, _)| m == AllBroadcastsMode::All),
                 PopularSearch => app
                     .popular_state()
-                    .is_some_and(|(m, _)| m == PopularMode::Search),
+                    .is_some_and(|(m, _)| m == AllBroadcastsMode::Search),
                 CategoryAll => app.category_type_filter().is_some_and(|f| f.is_none()),
                 CategoryType(t) => app
                     .category_type_filter()
@@ -479,8 +433,8 @@ impl SidebarQuickActionExecutor {
             QuickActionDomain::Discovery => match action {
                 SearchScope(scope) => app.set_search_scope(*scope).await,
                 ClearSearch => app.clear_search(),
-                PopularList => app.set_popular_mode(PopularMode::All),
-                PopularSearch => app.set_popular_mode(PopularMode::Search),
+                PopularList => app.set_popular_mode(AllBroadcastsMode::All),
+                PopularSearch => app.set_popular_mode(AllBroadcastsMode::Search),
                 RefreshPopular => app.refresh_popular().await,
                 CategoryAll => app.set_category_type(None),
                 CategoryType(t) => app.set_category_type(Some(t.clone())),
@@ -543,7 +497,7 @@ mod tests {
         fn search_state(&self) -> Option<(SearchScope, bool)> {
             self.search
         }
-        fn popular_state(&self) -> Option<(PopularMode, bool)> {
+        fn popular_state(&self) -> Option<(AllBroadcastsMode, bool)> {
             None
         }
         fn category_type_filter(&self) -> Option<Option<String>> {
@@ -584,7 +538,7 @@ mod tests {
             }
         }
         fn clear_search(&mut self) {}
-        fn set_popular_mode(&mut self, _: PopularMode) {}
+        fn set_popular_mode(&mut self, _: AllBroadcastsMode) {}
         async fn refresh_popular(&mut self) {}
         fn set_category_type(&mut self, type_filter: Option<String>) {
             self.category = Some(type_filter);

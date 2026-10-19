@@ -12,9 +12,9 @@ use uuid::Uuid;
 
 use cview_app_core::viewmodels::chat::deps::ToastPresenter;
 use cview_app_core::viewmodels::following::{
-    defaults_key, ChatDockFocus, FollowingBrowserFilter, FollowingChatSessions, FollowingDefaults,
-    FollowingHubMode, FollowingSortOrder, FollowingViewState, FollowingWorkspaceHost,
-    MemoryDefaults, NoopChatSessions, WatchNavigationOutcome,
+    defaults_key, ChatDockFocus, FollowingBrowserFilter, FollowingChatSessions, FollowingHubMode,
+    FollowingSortOrder, FollowingViewState, FollowingWorkspaceHost, KeyValueStore,
+    MemoryKeyValueStore, NoopChatSessions, WatchNavigationOutcome,
 };
 use cview_app_core::viewmodels::multi_live::MultiLiveAddSessionResult;
 use cview_core::models::LiveChannelItem;
@@ -203,7 +203,7 @@ fn make() -> (
     let e2 = epoch.clone();
     let chats = Arc::new(RecordingChats::default());
     let vs = FollowingViewState::new(
-        Arc::new(MemoryDefaults::default()),
+        Arc::new(MemoryKeyValueStore::default()),
         Arc::new(move || e2.load(Ordering::SeqCst)),
         chats.clone(),
     );
@@ -263,7 +263,7 @@ fn hub_mode_tokens() {
 
 #[test]
 fn defaults_migration_and_restore() {
-    let defaults = Arc::new(MemoryDefaults::default());
+    let defaults = Arc::new(MemoryKeyValueStore::default());
     defaults.set_string(defaults_key::CHAT_DOCK_FOCUS, "multi");
     defaults.set_bool(defaults_key::CHAT_DOCK_COLLAPSED, true);
     let vs = FollowingViewState::new(defaults.clone(), Arc::new(|| 0), Arc::new(NoopChatSessions));
