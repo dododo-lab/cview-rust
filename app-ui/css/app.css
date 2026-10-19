@@ -499,14 +499,6 @@ select.select {
 .viewer { position: absolute; inset: 0; z-index: 20; display: flex; background: var(--background); }
 .viewer[hidden] { display: none; }
 .viewer-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.viewer-header {
-  display: flex; align-items: center; gap: var(--sp-md); padding: var(--sp-sm) var(--sp-lg);
-  border-bottom: 1px solid var(--border-subtle); background: var(--surface-base); min-height: 58px;
-}
-.viewer-header .avatar { width: 38px; height: 38px; }
-.viewer-title { min-width: 0; flex: 1; }
-.viewer-title .title { font-weight: 600; }
-.viewer-title .meta { color: var(--text-secondary); font-size: var(--fs-footnote); }
 .player-stage { position: relative; flex: 1; background: var(--video-stage); min-height: 0; }
 .player-stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--video-stage); }
 .player-overlay {
@@ -833,7 +825,6 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .segmented .seg.active { background: var(--surface-base); color: var(--text-primary); font-weight: 600; box-shadow: var(--shadow-sm); }
 
 /* 시청 화면 */
-.viewer-header { background: var(--glass); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
 .player-controls { background: var(--surface-base); padding: 6px var(--sp-md); }
 .chat { background: var(--surface-base); }
 .chat-header strong { font-weight: 700; }
@@ -1057,7 +1048,7 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .clip-grid .thumb { aspect-ratio: 9 / 16; }
 .card-avatar { flex: none; border-radius: 50%; }
 .card-avatar:hover .avatar { box-shadow: 0 0 0 2px var(--primary); }
-.viewer-header .viewer-avatar, .viewer-header .viewer-title { cursor: pointer; }
+.stage-top .viewer-avatar, .stage-top .viewer-title { cursor: pointer; }
 
 /* 시트(메모 등) */
 .sheet-scrim { position: fixed; inset: 0; z-index: 80; background: var(--scrim); display: grid; place-items: center; backdrop-filter: blur(4px); }
@@ -1360,7 +1351,7 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .pp-row.disabled { opacity: 0.5; }
 
 /* ══ 시청 화면 부가 (viewer-extras.js) ═════════════════════════ */
-.viewer-rail { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; max-width: 40%; padding: 2px; }
+.viewer-rail { display: flex; gap: 6px; flex: none; min-width: 0; padding: 2px; }
 .viewer-rail::-webkit-scrollbar { display: none; }
 .rail-item { flex: none; border: 0; padding: 2px; border-radius: 50%; background: conic-gradient(from 210deg, var(--primary), var(--accent-cyan), var(--primary)); cursor: pointer; transition: transform 0.15s var(--ease-out); }
 .rail-item:hover { transform: scale(1.08); }
@@ -1979,3 +1970,29 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .player-stage.paused .stage-center-play { display: grid; }
 /* 오버레이 위로 뜨는 고급 패널·알림 OSD 는 막대보다 위 */
 .player-stage .player-panel { z-index: 7; bottom: 64px; }
+
+/* 시청 화면 머리 — 다른 메뉴와 같은 페이지 제목("라이브"). 채널 정보·바로 전환·창 동작은 영상 위 위쪽 오버레이로. */
+.viewer-header.page-header { position: static; flex: none; margin: 0; }
+.viewer:fullscreen .viewer-header { display: none; }
+.player-stage > .stage-top {
+  position: absolute; left: 0; right: 0; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px 40px; color: #fff; overflow: hidden;
+  background: linear-gradient(to top, transparent, rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0.7));
+  opacity: 0; transform: translateY(-6px); transition: opacity 0.22s ease, transform 0.22s ease; pointer-events: none;
+}
+.player-stage.ctl-visible > .stage-top, .player-stage.paused > .stage-top { opacity: 1; transform: none; pointer-events: auto; }
+.stage-top .viewer-avatar .avatar { width: 36px; height: 36px; box-shadow: 0 0 0 2px #00ffa3; }
+.stage-top .viewer-title { min-width: 140px; flex: 1 1 140px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
+.stage-top .viewer-title .title { font-weight: 700; font-size: 15px; color: #fff; }
+.stage-top .viewer-title .meta { color: rgba(255, 255, 255, 0.78); font-size: 12px; }
+.stage-top .icon-btn { flex: none; width: 36px; height: 36px; border-radius: 8px; color: rgba(255, 255, 255, 0.92); background: none; }
+.stage-top .icon-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.stage-top .icon-btn.active { color: #00ffa3; }
+.stage-top .icon-btn svg { width: 20px; height: 20px; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45)); }
+.stage-top .rail-item { background: rgba(255, 255, 255, 0.35); }
+.stage-top .rail-item:hover { background: #00ffa3; }
+.stage-top .rail-item .avatar { border-color: rgba(0, 0, 0, 0.6); box-shadow: none; }
+.stage-top .rail-item[hidden], .stage-top .rail-more[hidden] { display: none; }
+.stage-top .rail-more { flex: none; height: 32px; min-width: 32px; padding: 0 8px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(0, 0, 0, 0.3); color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
+.stage-top .rail-more:hover { border-color: #fff; background: rgba(255, 255, 255, 0.12); }
