@@ -167,6 +167,10 @@ impl std::fmt::Debug for AppServices {
     }
 }
 
+/// 이 앱의 보안 저장소 서비스명. Swift 앱(`com.cview.auth`)과 같은 키체인 항목을 쓰면 서명이 다른
+/// 이 앱이 읽을 때마다 macOS 가 키체인 비밀번호를 묻는다 — 번들 ID 를 따라 따로 둔다.
+pub const KEYCHAIN_SERVICE_NAME: &str = "app.cview.rust.auth";
+
 impl AppServices {
     /// 서비스를 만든다. tokio 런타임 안에서 불러야 한다(API 캐시 정리 작업을 띄운다).
     /// 인증 복원은 하지 않는다 — 호출자가 `auth.initialize()` 를 따로 부른다.
@@ -177,7 +181,7 @@ impl AppServices {
         webview: Arc<dyn WebViewDataStore>,
         sinks: ShellSinks,
     ) -> Self {
-        let keychain = Arc::new(KeychainService::default());
+        let keychain = Arc::new(KeychainService::new(KEYCHAIN_SERVICE_NAME));
         let cookies = Arc::new(
             CookieManager::new(keychain.clone(), Arc::new(CookieJar::new()))
                 .with_webview_store(webview),
@@ -327,5 +331,18 @@ fn open_store(data_dir: &Path) -> Option<DataStore> {
             tracing::error!("데이터 스토어를 열지 못했습니다 — 저장 없이 실행: {e}");
             None
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn keychain_service_is_separate_from_swift_app() {
+        assert_ne!(
+            KEYCHAIN_SERVICE_NAME,
+            cview_auth::secret_store::DEFAULT_SERVICE_NAME
+        );
     }
 }
