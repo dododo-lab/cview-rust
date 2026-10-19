@@ -32,6 +32,14 @@ GUI 실행에는 X11/Wayland 디스플레이와 D-Bus 세션이 필요하다. �
 `xvfb`·`xauth` 를 설치하고 `dbus-run-session -- xvfb-run -a cargo run -p cview-app --locked`
 로 기동할 수 있다. 실제 로그인·라이브 재생·채팅은 계정과 CHZZK/Naver 네트워크 접근이 필요하다.
 
+로컬 Mac에서는 다음 명령으로 개발 도구를 준비하고 인증서 없이 테스트용 DMG를 만든다:
+
+```sh
+./scripts/build-local-macos.sh
+```
+
+결과는 `dist/CView_0.1.0_<아키텍처>_local.dmg`에 생성된다.
+처음 개발 도구를 설치하는 Mac은 `xcode-select --install`을 먼저 실행한다.
 macOS DMG 릴리즈 빌드·서명·공증 명령과 필요한 환경은 [릴리즈 안내](RELEASE.md)에 정리했다.
 
 ## 검사

@@ -14,12 +14,29 @@ import json, os, sys
 from pathlib import Path
 name = Path(sys.argv[0]).name
 args = sys.argv[1:]
+with open(os.environ['TEST_CALLS'], 'a') as calls:
+    calls.write(json.dumps([name, *args]) + '\n')
 if name == 'uname':
-    print('Darwin' if args == ['-s'] else os.environ.get('TEST_ARCH', 'arm64'))
+    print(os.environ.get('TEST_OS', 'Darwin') if args == ['-s'] else os.environ.get('TEST_ARCH', 'arm64'))
 elif name == 'security':
+    if os.environ.get('TEST_NO_IDENTITY'):
+        sys.exit(1)
     print('Developer ID Application: Test (TESTTEAM)')
+elif name == 'xcode-select' and os.environ.get('TEST_NO_XCODE'):
+    sys.exit(1)
+elif name == 'cargo' and args == ['tauri', '--version']:
+    if os.environ.get('TEST_CLI_MISSING') and not Path('cli-installed').exists():
+        sys.exit(1)
+    print('tauri-cli 2.0.0')
+elif name == 'cargo' and 'install' in args:
+    Path('cli-installed').touch()
 elif name == 'cargo' and 'build' in args:
     assert args[-2:] == ['--', '--locked'], args
+    if os.environ.get('APPLE_SIGNING_IDENTITY') == '-':
+        config = json.loads(args[args.index('--config') + 1])
+        assert config['bundle']['macOS']['signingIdentity'] == '-'
+        for secret in ['APPLE_ID', 'APPLE_PASSWORD', 'APPLE_API_KEY', 'APPLE_CERTIFICATE', 'CVIEW_NOTARIZE_PROFILE']:
+            assert secret not in os.environ, secret
     target = args[args.index('--target') + 1]
     bundle = Path(os.environ['CARGO_TARGET_DIR']) / target / 'release/bundle'
     executable = bundle / 'macos/CView.app/Contents/MacOS/cview-app'
@@ -44,6 +61,7 @@ class ReleaseTests(unittest.TestCase):
         self.root = Path(self.temp.name)
         (self.root / 'scripts').mkdir()
         shutil.copy2(ROOT / 'scripts/release-macos.sh', self.root / 'scripts')
+        shutil.copy2(ROOT / 'scripts/build-local-macos.sh', self.root / 'scripts')
         config = self.root / 'crates/cview-app'
         config.mkdir(parents=True)
         (config / 'tauri.conf.json').write_text(json.dumps({
@@ -55,12 +73,14 @@ class ReleaseTests(unittest.TestCase):
         mock.write_text(f'#!{sys.executable}\n' + MOCK)
         mock.chmod(0o755)
         for name in ['uname', 'security', 'cargo', 'xcode-select', 'codesign',
-                     'lipo', 'spctl', 'xcrun', 'hdiutil']:
+                     'lipo', 'spctl', 'xcrun', 'hdiutil', 'rustup']:
             (bins / name).symlink_to(mock)
         self.env = {**os.environ, 'PATH': f'{bins}:{os.environ["PATH"]}',
                     'CARGO_TARGET_DIR': 'target', 'APPLE_SIGNING_IDENTITY':
                     'Developer ID Application: Test (TESTTEAM)',
-                    'CVIEW_NOTARIZE_PROFILE': 'test-profile'}
+                    'CVIEW_NOTARIZE_PROFILE': 'test-profile',
+                    'CARGO_HOME': str(self.root / 'cargo'),
+                    'TEST_CALLS': str(self.root / 'calls.jsonl')}
 
     def run_release(self, *args):
         return subprocess.run(['zsh', 'scripts/release-macos.sh', '--dmg', *args],
@@ -94,6 +114,53 @@ class ReleaseTests(unittest.TestCase):
         self.env['TEST_BAD_SIGNATURE'] = '1'
         self.assertNotEqual(self.run_release().returncode, 0)
         self.assertFalse((self.root / 'dist').exists())
+
+    def test_local_build_needs_no_identity_or_notarization(self):
+        self.env.update(TEST_NO_IDENTITY='1', APPLE_ID='test@example.invalid',
+                        APPLE_PASSWORD='test-only', APPLE_API_KEY='test-only',
+                        APPLE_CERTIFICATE='test-only')
+        config = self.root / 'crates/cview-app/tauri.conf.json'
+        original = config.read_bytes()
+        result = self.run_release('--local')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue((self.root / 'dist/CView_0.1.0_arm64_local.dmg.sha256').exists())
+        self.assertFalse((self.root / 'dist/CView_0.1.0_arm64.dmg').exists())
+        self.assertEqual(config.read_bytes(), original)
+        calls = [json.loads(line) for line in (self.root / 'calls.jsonl').read_text().splitlines()]
+        self.assertFalse(any(call[0] in ['security', 'spctl', 'xcrun'] for call in calls))
+        self.assertFalse(any('--timestamp' in call for call in calls))
+
+    def test_signed_build_still_requires_identity(self):
+        self.env['TEST_NO_IDENTITY'] = '1'
+        self.assertNotEqual(self.run_release().returncode, 0)
+        self.assertFalse((self.root / 'dist').exists())
+
+    def test_local_bootstrap_targets_and_cli_install(self):
+        self.env['TEST_CLI_MISSING'] = '1'
+        result = subprocess.run(['zsh', 'scripts/build-local-macos.sh', '--target',
+                                 'universal-apple-darwin'], cwd=self.root,
+                                env=self.env, capture_output=True, text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        calls = [json.loads(line) for line in (self.root / 'calls.jsonl').read_text().splitlines()]
+        self.assertIn(['rustup', 'target', 'add', 'aarch64-apple-darwin', 'x86_64-apple-darwin'], calls)
+        self.assertIn(['cargo', 'install', 'tauri-cli', '--version', '^2', '--locked'], calls)
+        self.assertTrue((self.root / 'dist/CView_0.1.0_universal_local.dmg.sha256').exists())
+
+    def test_bootstrap_reports_missing_xcode(self):
+        self.env['TEST_NO_XCODE'] = '1'
+        result = subprocess.run(['zsh', 'scripts/build-local-macos.sh'], cwd=self.root,
+                                env=self.env, capture_output=True, text=True, timeout=20)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('xcode-select --install', result.stderr)
+        self.assertFalse((self.root / 'target').exists())
+
+    def test_local_bootstrap_supports_signed_release(self):
+        result = subprocess.run(['zsh', 'scripts/build-local-macos.sh', '--signed'],
+                                cwd=self.root, env=self.env, capture_output=True,
+                                text=True, timeout=20)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue((self.root / 'dist/CView_0.1.0_arm64.dmg.sha256').exists())
+        self.assertFalse((self.root / 'dist/CView_0.1.0_arm64_local.dmg').exists())
 
 
 if __name__ == '__main__':
