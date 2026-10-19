@@ -49,6 +49,9 @@ struct ParsedExtras {
     is_anonymous: bool,
     is_subscription: bool,
     is_system_message: bool,
+    gift_type: Option<String>,
+    gift_count: Option<i64>,
+    mission_text: Option<String>,
 }
 
 /// `URL(string:)` 근사 — 받아들일 수 없는 값은 nil.
@@ -166,6 +169,10 @@ impl ChatMessageParser {
             streaming_channel_id: None,
             donation: parsed_extras.donation,
             subscription: parsed_extras.subscription,
+            gift_type: parsed_extras.gift_type,
+            gift_count: parsed_extras.gift_count,
+            mission_text: parsed_extras.mission_text,
+            is_anonymous: parsed_extras.is_anonymous.then_some(true),
         });
 
         ChatMessage {
@@ -304,6 +311,19 @@ fn parse_extras(object: Option<&Dict>) -> ParsedExtras {
     {
         result.is_anonymous = true;
     }
+
+    // 선물(구독 선물 등)·미션 내용 — 있을 때만 화면에 보탠다.
+    result.gift_type = ns_str(dict.get("giftType"))
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned);
+    result.gift_count = ChatMessageParser::parse_amount(dict.get("quantity"))
+        .or_else(|| ChatMessageParser::parse_amount(dict.get("giftCount")))
+        .filter(|n| *n > 0);
+    result.mission_text = ns_str(dict.get("missionText"))
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_owned);
 
     if let Some(chat_type) = ns_str(dict.get("chatType")) {
         result.is_subscription = chat_type == "SUBSCRIPTION";

@@ -321,6 +321,18 @@ pub struct ChatExtras {
     pub donation: Option<DonationInfo>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subscription: Option<SubscriptionInfo>,
+    /// 선물 종류(`giftType`, 예: 구독 선물) — 있을 때만.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gift_type: Option<String>,
+    /// 선물 개수(`quantity`/`giftCount`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gift_count: Option<i64>,
+    /// 미션 후원 내용(`missionText`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mission_text: Option<String>,
+    /// 익명 후원.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub is_anonymous: Option<bool>,
 }
 
 /// 채팅 접속 토큰.

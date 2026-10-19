@@ -246,6 +246,22 @@ fn parse_donation_with_amount() {
 }
 
 #[test]
+fn parse_mission_and_gift_extras() {
+    let m = donations(parse(
+        r#"{"cmd":93102,"bdy":[{"msg":"go","uid":"d1","msgTime":2000,"extras":{"payAmount":3000,"donationType":"MISSION","missionText":" 노래 한 곡 ","isAnonymous":true,"chatType":"STREAMING"}}]}"#,
+    ));
+    let e = m[0].extras.as_ref().unwrap();
+    assert_eq!(e.mission_text.as_deref(), Some("노래 한 곡"));
+    assert_eq!(e.is_anonymous, Some(true));
+    let g = donations(parse(
+        r#"{"cmd":93102,"bdy":[{"msg":"","uid":"g1","msgTime":2000,"msgTypeCode":11,"extras":{"giftType":"SUBSCRIPTION_GIFT","quantity":5,"month":1,"chatType":"SUBSCRIPTION"}}]}"#,
+    ));
+    let e = g[0].extras.as_ref().unwrap();
+    assert_eq!(e.gift_type.as_deref(), Some("SUBSCRIPTION_GIFT"));
+    assert_eq!(e.gift_count, Some(5));
+}
+
+#[test]
 fn parse_donation_zero_amount_is_normal() {
     let extras = r#"{"payAmount":0,"chatType":"STREAMING"}"#;
     let json = format!(

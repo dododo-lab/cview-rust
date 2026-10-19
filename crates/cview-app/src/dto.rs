@@ -263,6 +263,11 @@ pub struct ChatMessageDto {
     pub title_name: Option<String>,
     pub title_color: Option<String>,
     pub is_blinded: bool,
+    /// 선물 종류(예: `SUBSCRIPTION_GIFT`) — 있으면 선물 구독으로 그린다.
+    pub gift_type: Option<String>,
+    pub gift_count: Option<i64>,
+    pub mission_text: Option<String>,
+    pub anonymous: bool,
 }
 
 fn message_kind(t: MessageType) -> &'static str {
@@ -319,6 +324,14 @@ impl ChatMessageDto {
             title_name: item.title_name,
             title_color: item.title_color,
             is_blinded: item.is_blinded,
+            gift_type: message.extras.as_ref().and_then(|e| e.gift_type.clone()),
+            gift_count: message.extras.as_ref().and_then(|e| e.gift_count),
+            mission_text: message.extras.as_ref().and_then(|e| e.mission_text.clone()),
+            anonymous: message
+                .extras
+                .as_ref()
+                .and_then(|e| e.is_anonymous)
+                .unwrap_or(false),
         }
     }
 }
