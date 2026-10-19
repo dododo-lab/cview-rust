@@ -167,6 +167,8 @@ export class ViewerControls {
     const hook = () => {
       try {
         const doc = iframe.contentDocument;
+        // 치지직처럼 무대는 테마와 상관없이 검정 — 영상 위아래·좌우 여백도 같은 색.
+        iframe.contentWindow?.setStageBackgroundColor?.('#000');
         if (!doc || doc.__cviewWake) return;
         doc.__cviewWake = true;
         doc.addEventListener('mousemove', this.wake);
@@ -379,22 +381,29 @@ export class ViewerControls {
     }
   }
 
-  /** PiP — WKWebView 는 webkitSetPresentationMode, 그 밖은 표준 API. */
+  /** PiP — 단일 시청 화면의 영상. */
   async togglePip() {
-    const v = this.video;
-    if (!v) return;
-    try {
-      if (typeof v.webkitSetPresentationMode === 'function') {
-        const next = v.webkitPresentationMode === 'picture-in-picture' ? 'inline' : 'picture-in-picture';
-        v.webkitSetPresentationMode(next);
-        this.flash(next === 'inline' ? 'PiP 끔' : 'PiP');
-      } else if (document.pictureInPictureEnabled) {
-        const doc = v.ownerDocument;
-        if (doc.pictureInPictureElement) await doc.exitPictureInPicture();
-        else await v.requestPictureInPicture();
-      } else {
-        toast('이 환경에서는 PiP 를 쓸 수 없습니다');
-      }
-    } catch (er) { toast(`PiP 실패: ${er.message}`); }
+    const label = await togglePipFor(this.video);
+    if (label) this.flash(label);
   }
+}
+
+/** PiP 켜고 끄기 — WKWebView 는 webkitSetPresentationMode, 그 밖은 표준 API. 멀티라이브 패인도 쓴다. */
+export async function togglePipFor(v) {
+  if (!v) return '';
+  try {
+    if (typeof v.webkitSetPresentationMode === 'function') {
+      const next = v.webkitPresentationMode === 'picture-in-picture' ? 'inline' : 'picture-in-picture';
+      v.webkitSetPresentationMode(next);
+      return next === 'inline' ? 'PiP 끔' : 'PiP';
+    }
+    const doc = v.ownerDocument;
+    if (doc.pictureInPictureEnabled || document.pictureInPictureEnabled) {
+      if (doc.pictureInPictureElement) await doc.exitPictureInPicture();
+      else await v.requestPictureInPicture();
+      return '';
+    }
+    toast('이 환경에서는 PiP 를 쓸 수 없습니다');
+  } catch (er) { toast(`PiP 실패: ${er.message}`); }
+  return '';
 }

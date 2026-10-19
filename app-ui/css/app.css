@@ -1974,6 +1974,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 /* 시청 화면 머리 — 다른 메뉴와 같은 페이지 제목("라이브"). 채널 정보·바로 전환·창 동작은 영상 위 위쪽 오버레이로. */
 .viewer-header.page-header { position: static; flex: none; margin: 0; }
 .viewer:fullscreen .viewer-header { display: none; }
+#viewer .player-stage, #viewer .player-stage iframe { background: #000; }
 .player-stage > .stage-top {
   position: absolute; left: 0; right: 0; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px;
   padding: 12px 14px 40px; color: #fff; overflow: hidden;
