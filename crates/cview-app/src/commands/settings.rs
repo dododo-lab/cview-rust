@@ -3,7 +3,7 @@
 //! 쓰기는 부분 패치다: 현재 도메인 JSON 위에 받은 키만 덮어쓴 뒤 도메인 타입으로 다시 해석한다.
 //! 해석에 실패하면(잘못된 값) 아무것도 바꾸지 않는다.
 
-use cview_core::models::settings::{AppearanceSettings, GeneralSettings, PlayerSettings};
+use cview_core::models::settings::{AppTheme, AppearanceSettings, GeneralSettings, PlayerSettings};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json::Value;
@@ -86,6 +86,13 @@ pub async fn settings_update(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn theme_maps_to_window_theme() {
+        assert_eq!(window_theme(AppTheme::System), None);
+        assert_eq!(window_theme(AppTheme::Light), Some(tauri::Theme::Light));
+        assert_eq!(window_theme(AppTheme::Dark), Some(tauri::Theme::Dark));
+    }
     use serde_json::json;
 
     #[test]
@@ -112,4 +119,46 @@ mod tests {
         assert_eq!(patched.volume_level, base.volume_level);
         assert!(apply_patch::<PlayerSettings>(&base, json!({"volumeLevel": "loud"})).is_err());
     }
+}
+
+/// `appearance.theme` 문자열 → 창 테마(`None` = 시스템을 따른다).
+pub fn window_theme(theme: AppTheme) -> Option<tauri::Theme> {
+    match theme {
+        AppTheme::System => None,
+        AppTheme::Light => Some(tauri::Theme::Light),
+        AppTheme::Dark => Some(tauri::Theme::Dark),
+    }
+}
+
+/// 창(타이틀바·웹뷰 `prefers-color-scheme`) 테마를 설정에 맞춘다.
+pub fn apply_window_theme<R: tauri::Runtime>(app: &tauri::AppHandle<R>, theme: AppTheme) {
+    use tauri::Manager;
+    for window in app.webview_windows().values() {
+        if let Err(e) = window.set_theme(window_theme(theme)) {
+            tracing::debug!("창 테마 설정 실패: {e}");
+        }
+        // 웹 화면이 그려지기 전 비치는 창 배경도 테마에 맞춘다(시스템이면 그대로 둔다).
+        let background = match theme {
+            AppTheme::Light => Some(tauri::window::Color(244, 245, 248, 255)),
+            AppTheme::Dark => Some(tauri::window::Color(15, 16, 18, 255)),
+            AppTheme::System => None,
+        };
+        if let Some(color) = background {
+            let _ = window.set_background_color(Some(color));
+        }
+    }
+}
+
+/// 화면 테마 변경 — 설정에 저장하고 창 테마도 바꾼다.
+#[tauri::command]
+pub async fn appearance_set_theme(
+    app: tauri::AppHandle,
+    services: State<'_, AppServices>,
+    theme: AppTheme,
+) -> CmdResult<()> {
+    let mut appearance = services.settings.appearance();
+    appearance.theme = theme;
+    services.settings.set_appearance(appearance);
+    apply_window_theme(&app, theme);
+    Ok(())
 }

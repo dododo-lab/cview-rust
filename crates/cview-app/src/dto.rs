@@ -255,7 +255,11 @@ pub struct ChatMessageDto {
     pub badges: Vec<String>,
     pub emojis: EmojiMap,
     pub donation_amount: Option<i64>,
+    /// 후원 종류 — `chat` / `video` / `mission` 등(치지직 `extras.donation.type` 소문자).
+    pub donation_type: Option<String>,
     pub subscription_months: Option<i64>,
+    /// 구독 티어 이름(있으면).
+    pub subscription_tier: Option<String>,
     pub title_name: Option<String>,
     pub title_color: Option<String>,
     pub is_blinded: bool,
@@ -304,10 +308,49 @@ impl ChatMessageDto {
                 .collect(),
             emojis: item.emojis,
             donation_amount: item.donation_amount,
+            donation_type: donation_type(message),
             subscription_months: item.subscription_months,
+            subscription_tier: message
+                .extras
+                .as_ref()
+                .and_then(|e| e.subscription.as_ref())
+                .and_then(|s| s.tier_name.clone())
+                .filter(|t| !t.trim().is_empty()),
             title_name: item.title_name,
             title_color: item.title_color,
             is_blinded: item.is_blinded,
+        }
+    }
+}
+
+/// 후원 종류(소문자). 후원 메시지가 아니거나 정보가 없으면 `None`.
+pub fn donation_type(message: &ChatMessage) -> Option<String> {
+    if message.r#type != MessageType::Donation {
+        return None;
+    }
+    let t = message.extras.as_ref()?.donation.as_ref()?.r#type.trim();
+    (!t.is_empty()).then(|| t.to_ascii_lowercase())
+}
+
+/// 주간 후원 랭킹 한 줄.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DonationRankDto {
+    pub rank: i64,
+    pub nickname: String,
+    pub amount: i64,
+    pub profile_image_url: Option<String>,
+    pub verified: bool,
+}
+
+impl DonationRankDto {
+    pub fn from_item(item: &cview_core::models::chat::DonationRankItem) -> Self {
+        Self {
+            rank: item.ranking,
+            nickname: item.nick_name.clone(),
+            amount: item.donation_amount,
+            profile_image_url: item.profile_image_url.clone().filter(|u| !u.is_empty()),
+            verified: item.verified_mark.unwrap_or(false),
         }
     }
 }

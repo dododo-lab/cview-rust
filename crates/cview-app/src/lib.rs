@@ -130,6 +130,7 @@ pub fn run() {
                     }
                 }),
             );
+            commands::settings::apply_window_theme(&handle, services.settings.appearance().theme);
             app.manage(services);
             app.manage(shell);
             spawn_multi_live_state_task(handle.clone());
@@ -158,6 +159,8 @@ pub fn run() {
             commands::multi_live::multilive_stop_all,
             commands::multi_live::multilive_player_message,
             commands::chat::chat_connect,
+            commands::chat::chat_donation_ranking,
+            commands::settings::appearance_set_theme,
             commands::chat::chat_disconnect,
             commands::chat::chat_send,
             commands::settings::settings_get,

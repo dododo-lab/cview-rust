@@ -132,3 +132,24 @@ mod tests {
         );
     }
 }
+
+/// 채널의 주간 후원 랭킹(상위 `count`명).
+#[tauri::command]
+pub async fn chat_donation_ranking(
+    services: State<'_, AppServices>,
+    channel_id: String,
+    count: Option<i64>,
+) -> CmdResult<Vec<crate::dto::DonationRankDto>> {
+    let count = count.unwrap_or(10).clamp(1, 50);
+    let response = services
+        .api
+        .weekly_donation_ranking(&channel_id, count, false)
+        .await?;
+    let mut list: Vec<_> = response
+        .rank_list
+        .iter()
+        .map(crate::dto::DonationRankDto::from_item)
+        .collect();
+    list.sort_by_key(|r| r.rank);
+    Ok(list)
+}

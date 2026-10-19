@@ -221,3 +221,31 @@ fn player_events() {
     );
     assert!(PlayerEventDto::from_stream_event(&StreamEvent::TimeShiftEnded).is_none());
 }
+
+#[test]
+fn donation_type_and_subscription_tier() {
+    use cview_core::models::chat::{ChatExtras, DonationInfo, MessageType, SubscriptionInfo};
+    let mut m = ChatMessage::new("후원자", "고마워요");
+    m.r#type = MessageType::Donation;
+    let mut d = DonationInfo::new(1000);
+    d.r#type = "VIDEO".into();
+    m.extras = Some(ChatExtras {
+        donation: Some(d),
+        ..ChatExtras::default()
+    });
+    assert_eq!(donation_type(&m).as_deref(), Some("video"));
+    m.r#type = MessageType::Normal;
+    assert_eq!(donation_type(&m), None, "후원 메시지가 아니면 종류가 없다");
+
+    let mut sub = ChatMessage::new("구독자", "");
+    sub.r#type = MessageType::Subscription;
+    sub.extras = Some(ChatExtras {
+        subscription: Some(SubscriptionInfo {
+            months: 3,
+            tier_name: Some("티어 2".into()),
+        }),
+        ..ChatExtras::default()
+    });
+    let dto = ChatMessageDto::from_message(&sub, false);
+    assert_eq!(dto.subscription_tier.as_deref(), Some("티어 2"));
+}
