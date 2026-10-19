@@ -41,7 +41,9 @@ if true; then
   spctl -a -vvv -t exec "$app" || echo "(공증 전이면 거부될 수 있습니다)"
   xcrun stapler validate "$app" || true
 fi
-dmg=$(ls -t target/release/bundle/dmg/*.dmg 2>/dev/null | head -1 || true)
+# DMG 는 --dmg 로 만들었을 때만 — 예전 빌드에 남은 DMG 를 다시 서명·복사하지 않게. (N): 없으면 빈 목록(zsh).
+dmg=""
+[[ "$bundles" == *dmg* ]] && dmg=$(ls -t target/release/bundle/dmg/*.dmg(N) 2>/dev/null | head -1 || true)
 if [[ -n "$dmg" ]]; then
   echo "── DMG 서명·복사"
   codesign --force --timestamp --sign "$identity" "$dmg"
