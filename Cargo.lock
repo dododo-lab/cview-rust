@@ -282,6 +282,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "cview-core",
+ "futures-util",
  "rand 0.8.8",
  "reqwest",
  "serde",

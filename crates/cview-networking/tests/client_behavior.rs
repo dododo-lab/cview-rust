@@ -3,6 +3,9 @@
 //! 포팅 출처: `ClientStaleFallbackTests.swift`, `UserStatusMemoTests.swift`, `AuthenticationCacheTests.swift`,
 //! `Audit0919NetworkingAPIClientTests.swift`, `LiveDetailFanoutBurstTests.swift`, `RequestPathV2Tests.swift`,
 //! `EmoticonNegativeCacheTests.swift`, `FollowingRowsDecodingTests.swift`.
+//! 채팅 모델 의존 부분: `ChzzkAPIClient+Content.swift`(`resolveEmoticonPacks`·`basicEmoticonPacks`·
+//! `globalBasicEmoticons`), `ChatSessionBootstrap.swift`(`loadMergedEmoticons`·`prepareConnection`·
+//! `resolveLiveSession`) — Swift 쪽에 대응 테스트가 없어 원본 동작을 기준으로 새로 썼다.
 
 use std::sync::atomic::{AtomicI64, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -11,7 +14,9 @@ use std::time::Duration;
 use async_trait::async_trait;
 use chrono::{DateTime, Duration as ChronoDuration, Utc};
 use cview_core::error::ApiError;
+use cview_core::models::chat::EmoticonPack;
 use cview_core::protocols::{AuthTokenProvider, HttpCookie, HttpMethod};
+use cview_networking::bootstrap::{self, ConnectionRequest};
 use cview_networking::cache::Clock;
 use cview_networking::response::AllLivesStopReason;
 use cview_networking::{
@@ -19,6 +24,7 @@ use cview_networking::{
     ResponseCache, TransportError, TraversalOptions,
 };
 use serde_json::{json, Value};
+use std::collections::HashMap;
 
 type Handler = dyn Fn(&HttpRequest, usize) -> Result<HttpResponse, TransportError> + Send + Sync;
 
@@ -582,8 +588,9 @@ async fn chat_access_token_uses_game_api() {
         ok(json!({"accessToken": "a", "extraToken": "e"}))
     });
     let c = client(t.clone(), Some(MockAuth::with_cookies()));
-    let token: Value = c.chat_access_token("chat1").await.unwrap();
-    assert_eq!(token["accessToken"], "a");
+    let token = c.chat_access_token("chat1").await.unwrap();
+    assert_eq!(token.access_token, "a");
+    assert_eq!(token.extra_token.as_deref(), Some("e"));
     let req = t.request(0);
     assert_eq!(
         req.url.as_str(),
@@ -598,14 +605,8 @@ async fn emoticon_negative_cache_per_generation() {
     let auth = MockAuth::with_cookies();
     let t = MockTransport::new(Duration::ZERO, |_, _| status(404));
     let c = client(t.clone(), Some(auth.clone()));
-    assert_eq!(
-        c.emoticon_deploy::<Value>("c").await,
-        Err(ApiError::http(404))
-    );
-    assert_eq!(
-        c.emoticon_deploy::<Value>("c").await,
-        Err(ApiError::http(404))
-    );
+    assert_eq!(c.emoticon_deploy("c").await, Err(ApiError::http(404)));
+    assert_eq!(c.emoticon_deploy("c").await, Err(ApiError::http(404)));
     assert_eq!(t.sends(), 1, "404 뒤에는 같은 family 를 건너뛴다");
     assert!(
         c.emoticon_family_unsupported(cview_networking::emoticon_family::EMOTICON_DEPLOY)
@@ -620,7 +621,7 @@ async fn emoticon_negative_cache_per_generation() {
         !c.emoticon_family_unsupported(cview_networking::emoticon_family::EMOTICON_DEPLOY)
             .await
     );
-    let _ = c.emoticon_deploy::<Value>("c").await;
+    let _ = c.emoticon_deploy("c").await;
     assert_eq!(t.sends(), 2);
 }
 
@@ -748,4 +749,203 @@ async fn retry_count_and_network_settings_apply() {
     let snap = c.request_gate().snapshot();
     assert_eq!(snap.starts_per_second, settings.effective_api_rate_limit());
     assert_eq!(snap.concurrent_limit, settings.effective_api_concurrency());
+}
+
+// MARK: - 채팅 모델 의존 API (이모티콘 · 채팅 부트스트랩 · 후원)
+
+fn pack_json(id: &str, emoticons: &[&str]) -> Value {
+    json!({
+        "emoticonPackId": id,
+        "emoticonPackName": format!("pack-{id}"),
+        "emoticons": emoticons.iter().map(|e| json!({"emoticonId": e, "imageUrl": format!("https://img.test/{e}.png")})).collect::<Vec<_>>()
+    })
+}
+
+fn path_of(req: &HttpRequest) -> String {
+    req.url.path().to_string()
+}
+
+#[tokio::test]
+async fn resolve_emoticon_packs_backfills_empty_packs_in_parallel() {
+    let t = MockTransport::new(Duration::ZERO, |req, _| match path_of(req).as_str() {
+        "/service/v1/emoticon-packs/empty" => ok(pack_json("empty", &["e2"])),
+        "/service/v1/emoticon-packs/broken" => status(403),
+        "/service/v1/emoticon-packs/still-empty" => ok(pack_json("still-empty", &[])),
+        other => panic!("unexpected {other}"),
+    });
+    let c = client(t.clone(), None);
+    let packs: Vec<EmoticonPack> = serde_json::from_value(json!([
+        pack_json("full", &["e1"]),
+        {"emoticonPackId": "empty", "emoticonPackName": "x"},
+        {"emoticonPackId": "broken", "emoticonPackName": "x", "emoticons": []},
+        {"emoticonPackId": "still-empty", "emoticonPackName": "x"}
+    ]))
+    .unwrap();
+    let (map, resolved) = c.resolve_emoticon_packs(&packs).await;
+    let ids: Vec<_> = resolved.iter().map(|p| p.id().to_string()).collect();
+    assert_eq!(ids, ["full", "empty"]);
+    assert_eq!(map.len(), 2);
+    assert_eq!(map["e1"], "https://img.test/e1.png");
+    assert_eq!(map["e2"], "https://img.test/e2.png");
+    assert_eq!(t.sends(), 3, "채워진 팩은 상세를 다시 부르지 않는다");
+
+    let (map, resolved) = c.resolve_emoticon_packs(&[]).await;
+    assert!(map.is_empty() && resolved.is_empty());
+}
+
+#[tokio::test]
+async fn basic_emoticon_packs_falls_back_to_user_emoticons() {
+    let t = MockTransport::new(Duration::ZERO, |req, _| match path_of(req).as_str() {
+        "/service/v1/channels/c1/emoticon-deploy" => ok(json!({
+            "emoticonPacks": [pack_json("basic", &["b"])],
+            "subscriptionEmoticonPacks": [pack_json("sub", &["s"])]
+        })),
+        "/service/v1/channels/c2/emoticon-deploy" => ok(json!({"emoticonPacks": []})),
+        "/service/v2/emoticons" => ok(json!({"emoticonPacks": [pack_json("user", &["u"])]})),
+        other => panic!("unexpected {other}"),
+    });
+    let c = client(t.clone(), Some(MockAuth::with_cookies()));
+    let ids = |v: Vec<EmoticonPack>| v.iter().map(|p| p.id().to_string()).collect::<Vec<_>>();
+    assert_eq!(ids(c.basic_emoticon_packs("c1").await), ["basic", "sub"]);
+    assert_eq!(ids(c.basic_emoticon_packs("c2").await), ["user"]);
+}
+
+#[tokio::test]
+async fn global_basic_emoticons_is_empty_on_404_and_skips_afterwards() {
+    let t = MockTransport::new(Duration::ZERO, |_, _| status(404));
+    let c = client(t.clone(), None);
+    assert!(c.global_basic_emoticons().await.is_empty());
+    assert!(c.global_basic_emoticons().await.is_empty());
+    assert_eq!(t.sends(), 1);
+    assert!(
+        c.emoticon_family_unsupported(cview_networking::emoticon_family::BASIC_EMOTICONS)
+            .await
+    );
+}
+
+#[tokio::test]
+async fn load_merged_emoticons_prefers_channel_values_and_keeps_cache_order() {
+    let t = MockTransport::new(Duration::ZERO, |req, _| match path_of(req).as_str() {
+        "/service/v1/channels/c/emoticon-deploy" => ok(json!({
+            "emoticonPacks": [pack_json("cached", &["x"]), pack_json("chan", &["shared", "y"])]
+        })),
+        other => panic!("unexpected {other}"),
+    });
+    let c = client(t, None);
+    let cached_packs: Vec<EmoticonPack> =
+        serde_json::from_value(json!([pack_json("cached", &["x"])])).unwrap();
+    let cached_map: HashMap<String, String> = [
+        ("shared".to_string(), "old".to_string()),
+        ("g".to_string(), "global".to_string()),
+    ]
+    .into();
+    let bundle = bootstrap::load_merged_emoticons(&c, "c", &cached_map, &cached_packs).await;
+    let ids: Vec<_> = bundle.packs.iter().map(|p| p.id().to_string()).collect();
+    assert_eq!(ids, ["cached", "chan"], "캐시 팩 뒤에 캐시에 없는 채널 팩");
+    assert_eq!(
+        bundle.map["shared"], "https://img.test/shared.png",
+        "채널 값이 이긴다"
+    );
+    assert_eq!(bundle.map["g"], "global");
+    assert_eq!(bundle.map["x"], "https://img.test/x.png");
+}
+
+#[tokio::test]
+async fn prepare_connection_loads_token_uid_and_emoticons() {
+    let t = MockTransport::new(Duration::ZERO, |req, _| match path_of(req).as_str() {
+        "/nng_main/v1/chats/access-token" => ok(json!({"accessToken": "tok", "extraToken": "ex"})),
+        "/nng_main/v1/user/getUserStatus" => ok(
+            json!({"hasProfile": true, "userIdHash": "hash", "nickname": "닉", "loggedIn": true}),
+        ),
+        "/service/v1/channels/s/emoticon-deploy" => {
+            ok(json!({"emoticonPacks": [pack_json("p", &["e"])]}))
+        }
+        other => panic!("unexpected {other}"),
+    });
+    let c = client(t.clone(), Some(MockAuth::with_cookies()));
+    let req = ConnectionRequest {
+        stream_channel_id: "s".into(),
+        chat_channel_id: "chat".into(),
+        channel_name: "채널".into(),
+        is_logged_in: true,
+        fallback_uid: Some("fallback".into()),
+        ..Default::default()
+    };
+    let prep = bootstrap::prepare_connection(&c, &req).await.unwrap();
+    assert_eq!(prep.plan.access_token, "tok");
+    assert_eq!(prep.plan.extra_token.as_deref(), Some("ex"));
+    assert_eq!(prep.plan.uid.as_deref(), Some("hash"));
+    assert_eq!(prep.user_nickname.as_deref(), Some("닉"));
+    assert_eq!(prep.emoticons.map["e"], "https://img.test/e.png");
+    assert_eq!(prep.emoticons.packs.len(), 1);
+
+    // 이모티콘을 건너뛰면 캐시만 돌려주고 이모티콘 API 를 부르지 않는다.
+    let sends = t.sends();
+    let skip = ConnectionRequest {
+        skip_emoticons: true,
+        is_logged_in: false,
+        cached_emoticon_map: [("k".to_string(), "v".to_string())].into(),
+        ..req
+    };
+    let prep = bootstrap::prepare_connection(&c, &skip).await.unwrap();
+    assert_eq!(t.sends(), sends + 1, "토큰만 다시 받는다");
+    assert_eq!(prep.emoticons.map.len(), 1);
+    assert_eq!(prep.plan.uid.as_deref(), Some("fallback"));
+}
+
+fn live_session_client(open: bool) -> ChzzkApiClient {
+    let t = MockTransport::new(Duration::ZERO, move |req, _| match path_of(req).as_str() {
+        "/service/v3/channels/s/live-detail" if open => ok(json!({
+            "liveId": 1, "liveTitle": "t", "status": "OPEN", "concurrentUserCount": 1,
+            "chatChannelId": "chat-1",
+            "channel": {"channelId": "s", "channelName": "이름", "channelImageUrl": "https://img.test/c.png"}
+        })),
+        "/service/v3/channels/s/live-detail" => {
+            ok(json!({"liveId": 1, "liveTitle": "t", "status": "CLOSE", "concurrentUserCount": 0}))
+        }
+        "/nng_main/v1/chats/access-token" => ok(json!({"accessToken": "tok"})),
+        other => panic!("unexpected {other}"),
+    });
+    client(t, None)
+}
+
+#[tokio::test]
+async fn resolve_live_session_ready_and_offline() {
+    let c = live_session_client(true);
+    let plan = bootstrap::resolve_live_session(&c, "s", false, Some("u"), None)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(plan.chat_channel_id, "chat-1");
+    assert_eq!(plan.channel_name, "이름");
+    assert_eq!(plan.access_token, "tok");
+    assert_eq!(plan.uid.as_deref(), Some("u"));
+    assert_eq!(
+        plan.channel_image_url.as_deref(),
+        Some("https://img.test/c.png")
+    );
+
+    let c = live_session_client(false);
+    let outcome =
+        bootstrap::prefetch_restore_session(&c, "s", "저장명", false, None, Some("u")).await;
+    assert_eq!(
+        outcome,
+        bootstrap::LiveChatPrefetchOutcome::Offline {
+            saved_channel_name: "저장명".into()
+        }
+    );
+}
+
+#[tokio::test]
+async fn weekly_donation_ranking_decodes_chat_model() {
+    let t = MockTransport::new(Duration::ZERO, |_, _| {
+        ok(
+            json!({"rankList": [{"userIdHash": "h", "nickName": "n", "verifiedMark": false, "donationAmount": 1000, "ranking": 1}]}),
+        )
+    });
+    let c = client(t, None);
+    let r = c.weekly_donation_ranking("c", 10, false).await.unwrap();
+    assert_eq!(r.rank_list.len(), 1);
+    assert_eq!(r.rank_list[0].donation_amount, 1000);
+    assert_eq!(r.donation_user_weekly_rank, None);
 }

@@ -6,13 +6,14 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use cview_core::error::ApiError;
+use cview_core::models::chat::ChatAccessToken;
 use cview_core::models::live::LiveStatus;
 use cview_core::models::{LiveChannelItem, LiveInfo};
 use cview_core::protocols::{HttpCookie, HttpMethod, QueryItem};
 use tokio::task::JoinSet;
 
 use crate::client::{
-    build_url, transport_to_api_error, AgedResponse, ChzzkApiClient, RequestOptions, ResponseBody,
+    build_url, transport_to_api_error, AgedResponse, ChzzkApiClient, RequestOptions,
     UserStatusFlight,
 };
 use crate::collector::{self, CollectorOptions};
@@ -70,11 +71,11 @@ impl Drop for UserStatusLoadGuard {
 impl ChzzkApiClient {
     // MARK: - 채팅 토큰
 
-    /// 채팅 접속 토큰 (game API). 쿠키가 있으면 SEND 권한, 없으면 READ 토큰. `T` = `ChatAccessToken`.
-    pub async fn chat_access_token<T: ResponseBody>(
+    /// 채팅 접속 토큰 (game API). 쿠키가 있으면 SEND 권한, 없으면 READ 토큰.
+    pub async fn chat_access_token(
         &self,
         chat_channel_id: &str,
-    ) -> Result<T, ApiError> {
+    ) -> Result<ChatAccessToken, ApiError> {
         let query = [
             QueryItem::new("channelId", chat_channel_id),
             QueryItem::new("chatType", "STREAMING"),
@@ -99,10 +100,11 @@ impl ChzzkApiClient {
             tracing::error!("Chat token HTTP {}", response.status);
             return Err(ApiError::http(response.status as i64));
         }
-        let parsed: ChzzkResponse<T> = serde_json::from_slice(&response.body).map_err(|e| {
-            tracing::error!("Chat token decode error: {e}");
-            ApiError::DecodingFailed(e.to_string())
-        })?;
+        let parsed: ChzzkResponse<ChatAccessToken> = serde_json::from_slice(&response.body)
+            .map_err(|e| {
+                tracing::error!("Chat token decode error: {e}");
+                ApiError::DecodingFailed(e.to_string())
+            })?;
         parsed.content.ok_or(ApiError::EmptyContent)
     }
 

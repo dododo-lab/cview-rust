@@ -1,12 +1,12 @@
 //! `ChzzkAPIClient.swift`(편의 메서드) · `ChzzkAPIClient+Content.swift` · `ChzzkAPIClient+Donation.swift` 포팅 —
 //! 채널·검색·VOD·클립·이모티콘·후원 API.
 //!
-//! 채팅 모델(이모티콘·후원 랭킹 등)은 별도 포팅(`cview_core::models::chat`)이 소유하므로, 그 타입을
-//! 돌려주는 메서드는 응답 타입을 제네릭 `T` 로 받는다.
-//! TODO(chat-models): `resolveEmoticonPacks` · `basicEmoticonPacks(channelId:)` 는 `EmoticonPack`/
-//! `EmoticonDeploy.allPacks` 가 필요해 아직 포팅하지 않았다.
+//! 이모티콘·후원 랭킹 타입은 `cview_core::models::chat` 의 채팅 모델을 쓴다.
 
 use cview_core::error::ApiError;
+use std::collections::HashMap;
+
+use cview_core::models::chat::{DonationRankResponse, EmoticonDeploy, EmoticonPack};
 use cview_core::models::clip::{ClipInkeyContent, NaverVodPlayResponse};
 use cview_core::models::{
     ChannelInfo, ChannelSearchItem, ChannelViewerInfo, ClipDetail, ClipInfo, LiveInfo,
@@ -369,8 +369,8 @@ impl ChzzkApiClient {
         }
     }
 
-    /// 채널 이모티콘 배포 정보 (`T` = `EmoticonDeploy`).
-    pub async fn emoticon_deploy<T: ResponseBody>(&self, channel_id: &str) -> Result<T, ApiError> {
+    /// 채널 이모티콘 배포 정보.
+    pub async fn emoticon_deploy(&self, channel_id: &str) -> Result<EmoticonDeploy, ApiError> {
         self.emoticon_request(
             emoticon_family::EMOTICON_DEPLOY,
             ChzzkEndpoint::EmoticonDeploy {
@@ -380,16 +380,16 @@ impl ChzzkApiClient {
         .await
     }
 
-    /// 이모티콘 팩 상세 (`T` = `EmoticonPack`).
-    pub async fn emoticon_pack<T: ResponseBody>(&self, pack_id: &str) -> Result<T, ApiError> {
+    /// 이모티콘 팩 상세.
+    pub async fn emoticon_pack(&self, pack_id: &str) -> Result<EmoticonPack, ApiError> {
         self.request(&ChzzkEndpoint::EmoticonPack {
             pack_id: pack_id.into(),
         })
         .await
     }
 
-    /// 사용자가 쓸 수 있는 전체 이모티콘 (인증 필요, `T` = `EmoticonDeploy`).
-    pub async fn user_emoticons<T: ResponseBody>(&self) -> Result<T, ApiError> {
+    /// 사용자가 쓸 수 있는 전체 이모티콘 (`/service/v2/emoticons`, 인증 필요).
+    pub async fn user_emoticons(&self) -> Result<EmoticonDeploy, ApiError> {
         self.emoticon_request(
             emoticon_family::USER_EMOTICONS,
             ChzzkEndpoint::UserEmoticons,
@@ -397,33 +397,94 @@ impl ChzzkApiClient {
         .await
     }
 
-    /// 치지직 글로벌 기본 이모티콘 (`/service/v1/emoticons`, `T` = `EmoticonDeploy`).
-    /// 원본은 실패 시 빈 배열을 돌려준다 — 여기서는 `None`.
-    pub async fn global_basic_emoticons<T: ResponseBody>(&self) -> Option<T> {
+    /// 팩 목록 → (emoticonId → 이미지 URL 맵, 이모티콘이 채워진 팩 목록).
+    ///
+    /// 이모티콘이 비어 있는 팩은 상세 API 로 병렬 소급한다. 소급에 실패했거나 여전히 빈 팩은 버린다.
+    /// 순서는 입력 순서를 따른다(원본은 task group 완료 순 — 결정적이지 않았다).
+    pub async fn resolve_emoticon_packs(
+        &self,
+        packs: &[EmoticonPack],
+    ) -> (HashMap<String, String>, Vec<EmoticonPack>) {
+        if packs.is_empty() {
+            return (HashMap::new(), Vec::new());
+        }
+        let resolved = futures_util::future::join_all(packs.iter().map(|pack| async move {
+            if pack.emoticons.as_ref().is_some_and(|e| !e.is_empty()) {
+                return Some(pack.clone());
+            }
+            self.emoticon_pack(&pack.emoticon_pack_id).await.ok()
+        }))
+        .await;
+        let resolved: Vec<EmoticonPack> = resolved
+            .into_iter()
+            .flatten()
+            .filter(|p| p.emoticons.as_ref().is_some_and(|e| !e.is_empty()))
+            .collect();
+        let mut map = HashMap::new();
+        for pack in &resolved {
+            for em in pack.emoticons.iter().flatten() {
+                if let Some(url) = &em.image_url {
+                    map.insert(em.emoticon_id.clone(), url.clone());
+                }
+            }
+        }
+        (map, resolved)
+    }
+
+    /// 채널에서 쓸 수 있는 이모티콘 팩 (기본 + 로그인 시 구독 팩, soft auth).
+    /// 채널 배포가 비었거나 실패하면 사용자 전체 이모티콘으로 폴백하고, 그것도 없으면 빈 목록.
+    pub async fn basic_emoticon_packs(&self, channel_id: &str) -> Vec<EmoticonPack> {
+        if let Ok(deploy) = self.emoticon_deploy(channel_id).await {
+            let all: Vec<EmoticonPack> = deploy.all_packs().into_iter().cloned().collect();
+            tracing::info!(
+                "basicEmoticonPacks({channel_id}): {}개 팩 (기본 {}, 구독 {})",
+                all.len(),
+                deploy.emoticon_packs.as_ref().map_or(0, Vec::len),
+                deploy
+                    .subscription_emoticon_packs
+                    .as_ref()
+                    .map_or(0, Vec::len)
+            );
+            if !all.is_empty() {
+                return all;
+            }
+        }
+        match self.user_emoticons().await {
+            Ok(deploy) => deploy.all_packs().into_iter().cloned().collect(),
+            Err(_) => Vec::new(),
+        }
+    }
+
+    /// 치지직 글로벌 기본 이모티콘 (`/service/v1/emoticons`, 채널·인증 불필요). 실패하면 빈 목록.
+    pub async fn global_basic_emoticons(&self) -> Vec<EmoticonPack> {
         match self
-            .emoticon_request::<T>(
+            .emoticon_request::<EmoticonDeploy>(
                 emoticon_family::BASIC_EMOTICONS,
                 ChzzkEndpoint::BasicEmoticonPacks,
             )
             .await
         {
-            Ok(v) => Some(v),
+            Ok(deploy) => {
+                let all: Vec<EmoticonPack> = deploy.all_packs().into_iter().cloned().collect();
+                tracing::info!("globalBasicEmoticons: {}개 팩 로드", all.len());
+                all
+            }
             Err(e) => {
                 tracing::info!("globalBasicEmoticons: API 미지원 ({e:?})");
-                None
+                Vec::new()
             }
         }
     }
 
     // MARK: - 후원
 
-    /// 채널의 주간 후원 랭킹 (`T` = `DonationRankResponse`).
-    pub async fn weekly_donation_ranking<T: ResponseBody>(
+    /// 채널의 주간 후원 랭킹.
+    pub async fn weekly_donation_ranking(
         &self,
         channel_id: &str,
         rank_count: i64,
         with_my_rank: bool,
-    ) -> Result<T, ApiError> {
+    ) -> Result<DonationRankResponse, ApiError> {
         self.request(&ChzzkEndpoint::WeeklyDonationRanking {
             channel_id: channel_id.into(),
             rank_count,
