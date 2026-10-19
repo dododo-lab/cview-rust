@@ -8,6 +8,7 @@ members = [
     "crates/cview-persistence",
     "crates/cview-player",
     "crates/cview-app-core",
+    "crates/cview-app",
 ]
 
 [workspace.package]
