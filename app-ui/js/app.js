@@ -2,8 +2,9 @@
 import { api, listen, Events, isTauri } from './api.js';
 import { esc, safeUrl, toast, icons } from './dom.js';
 import { bindCardOpen } from './cards.js';
-import { HomePage, FollowingPage, PopularPage, SearchPage, SettingsPage } from './pages.js';
+import { FollowingPage, PopularPage, SearchPage, SettingsPage } from './pages.js';
 import { Viewer } from './viewer.js';
+import { HomePage } from './home.js';
 
 // 사이드바 — Swift `AppRouter.SidebarItem` 라벨.
 const ROUTES = [
@@ -102,7 +103,7 @@ async function main() {
   renderNav();
   const content = document.querySelector('.content');
   const page = (id) => content.querySelector(`[data-page="${id}"]`);
-  pages.home = new HomePage(page('home'), { isLoggedIn });
+  pages.home = new HomePage(page('home'), { isLoggedIn, getAuth: () => auth });
   pages.following = new FollowingPage(page('following'), { isLoggedIn });
   pages.popular = new PopularPage(page('popular'));
   pages.search = new SearchPage(page('search'));
