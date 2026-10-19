@@ -7,6 +7,7 @@
 //!   `cview-player` 의 코디네이터·로컬 프록시가 URL 과 수명을 맡는다([`engine`]).
 
 pub mod commands;
+pub mod dock_icon;
 pub mod dto;
 pub mod engine;
 pub mod login;
@@ -165,6 +166,13 @@ pub fn run() {
                             | tauri::WindowEvent::CloseRequested { .. }
                     ) {
                         window_prefs::save_frame(&dir, &w);
+                    }
+                    // 시스템 외형이 바뀌면(앱 테마 "시스템"일 때) Dock 아이콘을 다시 고른다.
+                    if let tauri::WindowEvent::ThemeChanged(_) = event {
+                        let app = w.app_handle();
+                        if let Some(services) = app.try_state::<AppServices>() {
+                            dock_icon::apply(app, services.settings.appearance().theme);
+                        }
                     }
                 });
             }

@@ -310,6 +310,8 @@ pub fn apply_window_theme<R: tauri::Runtime>(app: &tauri::AppHandle<R>, theme: A
             let _ = window.set_background_color(Some(color));
         }
     }
+    // 실행 중 Dock 아이콘도 앱 테마에 맞춘다(밝은·어두운 아이콘).
+    crate::dock_icon::apply(app, theme);
 }
 
 /// 화면 테마 변경 — 설정에 저장하고 창 테마도 바꾼다.
