@@ -280,6 +280,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "cview-app-core"
+version = "0.1.0"
+dependencies = [
+ "cview-auth",
+ "cview-chat",
+ "cview-core",
+ "cview-networking",
+ "cview-persistence",
+ "cview-player",
+]
+
+[[package]]
 name = "cview-auth"
 version = "0.1.0"
 dependencies = [
