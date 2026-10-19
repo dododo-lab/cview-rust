@@ -322,7 +322,7 @@ a { color: var(--primary); }
 .login-icon svg { width: 16px; height: 16px; display: block; }
 
 /* 접힌 사이드바(아이콘 레일) */
-.sidebar.collapsed { width: 72px; padding-left: 12px; padding-right: 12px; }
+.sidebar.collapsed { width: 88px; padding-left: 14px; padding-right: 14px; } /* 신호등(약 x 12–78px)이 접힌 사이드바 안에 여유 있게 들어가도록 */
 .sidebar.collapsed .brand-row { flex-direction: column; height: auto; gap: 10px; padding-left: 0; }
 .sidebar.collapsed .brand { justify-content: center; }
 .sidebar.collapsed .brand-name,
