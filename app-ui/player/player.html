@@ -879,7 +879,8 @@ function timeshiftReloadURL(url) {
 function postToSwift(type, data) {
     try {
         if (window.parent && window.parent !== window && typeof window.parent.__cviewPlayerBridge === 'function') {
-            window.parent.__cviewPlayerBridge({ type, data });
+            // 두 번째 인자로 자기 창을 넘긴다 — 멀티라이브는 iframe 이 여럿이다.
+            window.parent.__cviewPlayerBridge({ type, data }, window);
             return;
         }
         window.webkit.messageHandlers.player.postMessage({ type, data });

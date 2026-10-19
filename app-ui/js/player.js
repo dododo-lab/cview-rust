@@ -6,26 +6,44 @@
 //   보내기 전 명령은 줄 세웠다가 순서대로 실행한다(Swift `pendingSource`).
 // - JS → 네이티브: 페이지의 `postToSwift(type, data)` 가 부모의 `__cviewPlayerBridge` 를 부르고,
 //   여기서 `{ type, data }` 를 그대로 `player_message` 로 넘긴다(메시지 이름 호환).
+// - 멀티라이브는 패인마다 iframe 이 하나다. 페이지가 자기 `window` 를 함께 넘기므로 그 창의 브리지로
+//   보낸다. 패인 브리지는 명령 이벤트를 직접 듣지 않고(`commandEvent: null`) 화면이 슬롯별로 넣어 주며,
+//   메시지는 `forward` 로 `multilive_player_message` 에 넘긴다.
 import { api, listen, Events } from './api.js';
+
+// 창(WindowProxy) → 브리지. iframe 의 contentWindow 는 문서가 바뀌어도 같은 객체다.
+const bridges = new Map();
+let defaultBridge = null;
+
+window.__cviewPlayerBridge = (message, source) => {
+  const bridge = (source && bridges.get(source)) || defaultBridge;
+  if (bridge) bridge.onPageMessage(message);
+};
 
 // Rust 쪽이 소비하는 메시지만 IPC 로 넘긴다(진단 배치 등은 로컬에서 버린다).
 const FORWARDED = new Set(['ready', 'playStarted', 'playbackState', 'metrics', 'fatalError', 'error', 'levels']);
 
 export class PlayerBridge {
-  constructor(iframe) {
+  /**
+   * @param {HTMLIFrameElement} iframe 문서에 붙어 있는 플레이어 iframe
+   * @param {{ commandEvent?: string|null, forward?: (message) => Promise<unknown> }} [options]
+   */
+  constructor(iframe, { commandEvent = Events.playerCommand, forward = (m) => api.playerMessage(m) } = {}) {
     this.iframe = iframe;
+    this.forward = forward;
     this.ready = false;
     // `ready` 를 받은 문서 — 같은 문서의 중복 ready 는 무시하고, 새 문서는 다시 기다린다.
     this.readyDocument = null;
     this.queue = [];
     this.listeners = new Set();
-    window.__cviewPlayerBridge = (message) => this.onPageMessage(message);
+    if (iframe.contentWindow) bridges.set(iframe.contentWindow, this);
+    if (commandEvent === Events.playerCommand && !defaultBridge) defaultBridge = this;
     // 페이지는 스크립트 끝에서 `ready` 를 보내지만 두 경우에 잃는다: 부모 모듈보다 iframe 이 먼저
     // 떠서 브리지가 아직 없을 때, 그리고 `ready` 직후 오는 iframe `load`. 그래서 문서가 다 뜬 시점에
     // 페이지 API 가 있으면 그 문서의 ready 로 본다.
     iframe.addEventListener('load', () => this.adoptLoadedDocument());
     this.adoptLoadedDocument();
-    listen(Events.playerCommand, (payload) => this.exec(payload && payload.script));
+    if (commandEvent) listen(commandEvent, (payload) => this.exec(payload && payload.script));
   }
 
   adoptLoadedDocument() {
@@ -59,7 +77,7 @@ export class PlayerBridge {
       try { fn(message.type, message.data || {}); } catch (e) { console.error(e); }
     }
     if (FORWARDED.has(message.type)) {
-      api.playerMessage(message).catch(() => {});
+      this.forward(message).catch(() => {});
     }
   }
 

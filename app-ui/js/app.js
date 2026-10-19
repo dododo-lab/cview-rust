@@ -6,12 +6,14 @@ import { FollowingPage, PopularPage, SearchPage, SettingsPage } from './pages.js
 import { Viewer } from './viewer.js';
 import { HomePage } from './home.js';
 import { Sidebar } from './sidebar.js';
+import { MultiLivePage, multiLiveIcon, bindMultiLiveAddButtons } from './multilive.js';
 
 // 사이드바 — Swift `AppRouter.SidebarItem` 라벨.
 const ROUTES = [
   { id: 'home', title: '홈', icon: icons.home },
   { id: 'following', title: '팔로잉', icon: icons.following },
   { id: 'popular', title: '인기', icon: icons.popular },
+  { id: 'multilive', title: '멀티라이브', icon: multiLiveIcon },
   { id: 'search', title: '검색', icon: icons.search, section: '탐색' },
   { id: 'settings', title: '설정', icon: icons.settings, section: '앱' },
 ];
@@ -97,6 +99,25 @@ async function openChannel(channelId) {
   viewer.open(channelId, player);
 }
 
+/** 카드·시청 화면의 "멀티라이브에 추가" — 멀티라이브 화면으로 옮겨 패인을 띄운다. */
+async function addToMultiLive(channelId) {
+  if (current !== 'multilive') await navigate('multilive');
+  await pages.multilive.add(channelId);
+}
+
+function installViewerMultiLiveButton() {
+  const close = document.getElementById('viewer-close');
+  const button = document.createElement('button');
+  button.className = 'icon-btn';
+  button.title = '멀티라이브에 추가';
+  button.innerHTML = multiLiveIcon;
+  button.addEventListener('click', () => {
+    const channelId = viewer.channelId;
+    if (channelId) addToMultiLive(channelId);
+  });
+  close.before(button);
+}
+
 async function main() {
   renderNav();
   const content = document.querySelector('.content');
@@ -110,7 +131,10 @@ async function main() {
     onLogin: login,
     onLogout: logout,
   });
+  pages.multilive = new MultiLivePage(content, { isLoggedIn });
   viewer = new Viewer(document.getElementById('viewer'), { isLoggedIn });
+  bindMultiLiveAddButtons(addToMultiLive);
+  installViewerMultiLiveButton();
 
   for (const p of Object.values(pages)) bindCardOpen(p.root.querySelector('.page-body'), openChannel);
   bindCardOpen(document.getElementById('sidebar-live'), openChannel);

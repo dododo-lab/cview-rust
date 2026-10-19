@@ -30,6 +30,8 @@ export const Events = Object.freeze({
   chat: 'chat://event',
   playerCommand: 'player://command',
   playerEvent: 'player://event',
+  multiLiveCommand: 'multilive://command',
+  multiLiveState: 'multilive://state',
 });
 
 export const api = {
@@ -47,6 +49,15 @@ export const api = {
   playerStop: () => invoke('player_stop'),
   playerSetVolume: (volume) => invoke('player_set_volume', { volume }),
   playerMessage: (message) => invoke('player_message', { message }),
+
+  multiLiveState: () => invoke('multilive_state'),
+  multiLiveAdd: (channelId) => invoke('multilive_add', { channelId }),
+  multiLiveRemove: (sessionId) => invoke('multilive_remove', { sessionId }),
+  multiLiveSelect: (sessionId) => invoke('multilive_select', { sessionId }),
+  multiLiveSetLayout: (layout) => invoke('multilive_set_layout', { layout }),
+  multiLiveStageSize: (width, height) => invoke('multilive_stage_size', { width, height }),
+  multiLiveStopAll: () => invoke('multilive_stop_all'),
+  multiLivePlayerMessage: (slot, message) => invoke('multilive_player_message', { slot, message }),
 
   chatConnect: (chatChannelId, channelId) => invoke('chat_connect', { chatChannelId, channelId }),
   chatDisconnect: () => invoke('chat_disconnect'),
