@@ -90,9 +90,9 @@ export const api = {
   openExternal: (url) => invoke('open_external', { url }),
 
   chatEmoticons: (channelId) => invoke('chat_emoticons', { channelId }),
-  chatConnect: (chatChannelId, channelId) => invoke('chat_connect', { chatChannelId, channelId }),
-  chatDisconnect: () => invoke('chat_disconnect'),
-  chatSend: (text) => invoke('chat_send', { text }),
+  chatConnect: (chatChannelId, channelId, session = null) => invoke('chat_connect', { chatChannelId, channelId, session }),
+  chatDisconnect: (session = null) => invoke('chat_disconnect', { session }),
+  chatSend: (text, session = null) => invoke('chat_send', { text, session }),
 
   appInfo: () => invoke('app_info'),
   multiLiveRetry: (sessionId = null) => invoke('multilive_retry', { sessionId }),

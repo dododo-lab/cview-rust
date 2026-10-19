@@ -110,10 +110,10 @@
 
 | ID | 항목 | Swift 원본 | Rust 현황 | 크기 |
 |---|---|---|---|---|
-| MUL-01 | 멀티채팅 화면(여러 채널 채팅만, 탭/그리드, 채널 추가·닫기) | `MultiChatView`, `MCTabBar*`, `MCTabChip`, `MultiChatGridLayouts`, `MultiChatTopChrome` | `MultiChatWorkspaceStore`, `MultiChatPreferences`; 채팅 엔진은 단일 세션(`chat_connect`) | L |
-| MUL-02 | 통합(머지) 채팅(여러 채널 메시지 한 타임라인, 보낼 채널 선택) | `MergedChatView*` | `merged_chat_merge_state.rs`, `merged_budget.rs` | L |
-| MUL-03 | 멀티채팅 메시지 검색(`⌥⌘F`)·다음/이전 채널(`⌃⇥`) | `MultiChatSearchView`, `MultiChatSearchStore` | `MultiChatSearchStore` | M |
-| MUL-04 | 멀티채팅 개요·컨트롤 레일·알림 배너·오프라인 세션 정책 | `MultiChatOverviewView`, `MultiChatControlRail`, `MultiChatNoticeBanner` | `OfflineSessionPolicy` | M |
+| MUL-01 | ✅ 멀티채팅 화면(여러 채널 채팅만, 탭/그리드, 채널 추가·닫기) | `MultiChatView`, `MCTabBar*`, `MCTabChip`, `MultiChatGridLayouts`, `MultiChatTopChrome` | `MultiChatWorkspaceStore`, `MultiChatPreferences`; 채팅 엔진은 단일 세션(`chat_connect`) | L |
+| MUL-02 | ✅ 통합(머지) 채팅(여러 채널 메시지 한 타임라인, 보낼 채널 선택) | `MergedChatView*` | `merged_chat_merge_state.rs`, `merged_budget.rs` | L |
+| MUL-03 | ✅ 멀티채팅 메시지 검색(`⌥⌘F`)·다음/이전 채널(`⌃⇥`) | `MultiChatSearchView`, `MultiChatSearchStore` | `MultiChatSearchStore` | M |
+| MUL-04 | ✅ 멀티채팅 개요·컨트롤 레일·알림 배너·오프라인 세션 정책 | `MultiChatOverviewView`, `MultiChatControlRail`, `MultiChatNoticeBanner` | `OfflineSessionPolicy` | M |
 | MUL-05 | 멀티채팅 독립 창(`⇧⌘M`) | `MultiChatWindowHost` | 없음 | M |
 | MUL-06 | 멀티라이브 레이아웃: 프리셋/사용자 배치(드래그 크기 조절), `⌃⌘1~3` | `MultiLiveGridLayouts`, `PaneResizeGrip`, `MCGridResizeDivider`, `MultiLiveLayoutModePolicy` | 그리드·포커스만(포커스 비율 드래그 있음) | M |
 | MUL-07 | 패인 순서 드래그 재배치·탭 바 | `MLTabReorderDropDelegate`, `MCTabBar` | `order` 계산만, 드래그 없음 | S |
@@ -253,8 +253,8 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 
 ## 선행 작업(여러 항목이 기대는 것)
 
-1. **명령 계층 확장**: 채널 상세·VOD·클립·카테고리·즐겨찾기·메모·북마크·차단 목록 명령. 대부분 app-core 뷰모델이 이미 있어 DTO+명령만 붙이면 된다.
-2. **채팅 엔진 다중 세션화**: 지금 `ChatViewModel` 하나를 셸이 쥐고 있다. 멀티라이브 채팅, 멀티채팅, 머지 채팅, 독립 채팅 창이 모두 세션 ID 기반 명령/이벤트를 요구한다.
-3. **파일 저장 경로**: 스크린샷·녹화·채팅 내보내기·다운로드 모두 저장 대화상자(`tauri-plugin-dialog`)와 쓰기 명령이 필요하다.
-4. **VOD 재생 엔진**: `VodPlayerEngine` 트레잇의 WebView 구현(player.html 의 VOD 모드 또는 별도 vod.html).
-5. **라우터 도입**: 지금 `app.js` 의 라우트는 평면 목록이다. 파라미터 있는 라우트(`channel/:id`, `vod/:no`, `clip/:uid`)와 뒤로 가기 스택이 필요하다.
+1. ✅ **명령 계층 확장**: 채널 상세·VOD·클립·카테고리·즐겨찾기·메모·북마크·차단 목록 명령. 대부분 app-core 뷰모델이 이미 있어 DTO+명령만 붙이면 된다.
+2. ✅ **채팅 엔진 다중 세션화** (세션 키별 ChatViewModel, `chat://session-event`): 지금 `ChatViewModel` 하나를 셸이 쥐고 있다. 멀티라이브 채팅, 멀티채팅, 머지 채팅, 독립 채팅 창이 모두 세션 ID 기반 명령/이벤트를 요구한다.
+3. ✅ **파일 저장 경로** (`save_file`·`reveal_path`, 녹화는 StreamRecordingService): 스크린샷·녹화·채팅 내보내기·다운로드 모두 저장 대화상자(`tauri-plugin-dialog`)와 쓰기 명령이 필요하다.
+4. ✅ **VOD 재생 엔진** (WebView 기본 HLS `<video>`, 클립은 임베드): `VodPlayerEngine` 트레잇의 WebView 구현(player.html 의 VOD 모드 또는 별도 vod.html).
+5. ✅ **라우터 도입** (화면 파라미터·뒤로 가기 스택): 지금 `app.js` 의 라우트는 평면 목록이다. 파라미터 있는 라우트(`channel/:id`, `vod/:no`, `clip/:uid`)와 뒤로 가기 스택이 필요하다.

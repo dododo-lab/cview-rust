@@ -34,16 +34,18 @@ pub async fn chat_connect(
     services: State<'_, AppServices>,
     chat_channel_id: String,
     channel_id: Option<String>,
+    session: Option<String>,
 ) -> CmdResult<ChatConnectedDto> {
+    let chat = services.chat_vm(session.as_deref());
     if chat_channel_id.trim().is_empty() {
-        services.chat.disconnect().await;
+        chat.disconnect().await;
         return Err(CommandError("채팅 채널 정보가 없습니다".into()));
     }
 
     let token = match services.api.chat_access_token(&chat_channel_id).await {
         Ok(t) => t,
         Err(e) => {
-            services.chat.disconnect().await;
+            chat.disconnect().await;
             return Err(e.into());
         }
     };
@@ -58,7 +60,7 @@ pub async fn chat_connect(
     };
 
     {
-        let mut s = services.chat.lock();
+        let mut s = chat.lock();
         s.current_user_uid = uid.clone();
         s.current_user_nickname = nickname;
     }
@@ -75,7 +77,7 @@ pub async fn chat_connect(
         )),
     };
     // 연결 실패는 엔진의 재연결 루프가 맡는다 — 상태는 이벤트로 온다.
-    let vm = services.chat.clone();
+    let vm = chat.clone();
     tauri::async_runtime::spawn(async move { vm.connect(request).await });
 
     Ok(ChatConnectedDto {
@@ -85,29 +87,41 @@ pub async fn chat_connect(
 }
 
 #[tauri::command]
-pub async fn chat_disconnect(services: State<'_, AppServices>) -> CmdResult<()> {
-    services.chat.disconnect().await;
+pub async fn chat_disconnect(
+    services: State<'_, AppServices>,
+    session: Option<String>,
+) -> CmdResult<()> {
+    match session
+        .as_deref()
+        .filter(|k| *k != crate::state::MAIN_CHAT_SESSION)
+    {
+        Some(key) => services.drop_chat_session(key).await,
+        None => services.chat.disconnect().await,
+    }
     Ok(())
 }
 
 /// 채팅 전송. `/` 명령은 뷰모델이 로컬에서 처리한다.
 #[tauri::command]
-pub async fn chat_send(services: State<'_, AppServices>, text: String) -> CmdResult<()> {
+pub async fn chat_send(
+    services: State<'_, AppServices>,
+    text: String,
+    session: Option<String>,
+) -> CmdResult<()> {
+    let chat = services.chat_vm(session.as_deref());
     let Some(text) = sanitize_outgoing(&text) else {
         return Err(CommandError("메시지를 입력하세요".into()));
     };
     if !services.auth.is_authenticated() {
         return Err(CommandError("로그인 후 채팅 참여 가능".into()));
     }
-    match services.chat.send_message(&text).await {
+    match chat.send_message(&text).await {
         MessageSendOutcome::Sent | MessageSendOutcome::HandledLocally => Ok(()),
         MessageSendOutcome::SessionChanged => Err(CommandError(
             "채팅 연결이 바뀌었습니다. 다시 보내 주세요".into(),
         )),
         MessageSendOutcome::Failed => Err(CommandError(
-            services
-                .chat
-                .lock()
+            chat.lock()
                 .error_message
                 .take()
                 .unwrap_or_else(|| "메시지를 보내지 못했습니다".into()),

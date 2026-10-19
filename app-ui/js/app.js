@@ -17,6 +17,7 @@ import { LibraryPage, libraryIcon } from './library.js';
 import { CategoriesPage, categoryIcon } from './categories.js';
 import { CommandPalette } from './palette.js';
 import { ChatOnlyPage } from './chat-only.js';
+import { MultiChatPage, multiChatIcon } from './multichat.js';
 import { installPrefsEffects } from './prefs-effects.js';
 import { showMenu } from './chat.js';
 
@@ -28,6 +29,7 @@ const ROUTES = [
   { id: 'categories', title: '카테고리', icon: categoryIcon },
   { id: 'live', title: '라이브', icon: liveIcon },
   { id: 'multilive', title: '멀티라이브', icon: multiLiveIcon },
+  { id: 'multichat', title: '멀티채팅', icon: multiChatIcon },
   { id: 'library', title: '보관함', icon: libraryIcon },
   { id: 'search', title: '검색', icon: icons.search, section: '탐색' },
   { id: 'settings', title: '설정', icon: icons.settings, section: '앱' },
@@ -401,6 +403,7 @@ async function main() {
   pages.multilive = new MultiLivePage(content, { isLoggedIn });
   pages.live = new LivePage(content, { isLoggedIn });
   pages.categories = new CategoriesPage(content);
+  pages.multichat = new MultiChatPage(content, { isLoggedIn });
   pages.chat = new ChatOnlyPage(content, { isLoggedIn, onBack: goBack, onPlay: openChannel });
   pages.library = new LibraryPage(content, { isLoggedIn, onOpenChannel: openChannelPage });
   pages.media = new MediaPage(content, { onBack: goBack, onOpenChannel: openChannelPage });

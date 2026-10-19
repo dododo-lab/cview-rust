@@ -83,6 +83,7 @@ fn shell_sinks<R: Runtime>(app: &AppHandle<R>) -> ShellSinks {
     let command_app = app.clone();
     let player_app = app.clone();
     let chat_app = app.clone();
+    let session_app = app.clone();
     ShellSinks {
         player_command: Arc::new(move |script: String| {
             if let Err(e) = command_app.emit_to(
@@ -98,6 +99,12 @@ fn shell_sinks<R: Runtime>(app: &AppHandle<R>) -> ShellSinks {
         }),
         chat_event: Arc::new(move |dto| {
             let _ = chat_app.emit(events::CHAT_EVENT, dto);
+        }),
+        chat_session_event: Arc::new(move |session, event| {
+            let _ = session_app.emit(
+                events::CHAT_SESSION_EVENT,
+                serde_json::json!({ "session": session, "event": event }),
+            );
         }),
     }
 }

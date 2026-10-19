@@ -94,8 +94,10 @@ export class ChatPanel {
    * @param {{ isLoggedIn: () => boolean, onHighlight?: (message) => void, onLogin?: () => void }} options
    *   onHighlight — 실시간(최근 기록 제외)으로 들어온 후원·구독 메시지(스트림 알림용)
    */
-  constructor(root, { isLoggedIn, onHighlight = null, onLogin = null }) {
+  constructor(root, { isLoggedIn, onHighlight = null, onLogin = null, session = null }) {
     this.root = root;
+    // 세션 키 — null 이면 기본 세션(chat://event), 있으면 추가 세션(chat://session-event, 멀티채팅).
+    this.session = session;
     this.onHighlight = onHighlight;
     this.onLogin = onLogin;
     this.ranking = new DonationRanking(root);
@@ -124,7 +126,8 @@ export class ChatPanel {
       e.preventDefault();
       if (this.autocomplete.hidden) this.send();
     });
-    listen(Events.chat, (ev) => this.onEvent(ev));
+    if (session) listen('chat://session-event', (p) => { if (p && p.session === session) this.onEvent(p.event); });
+    else listen(Events.chat, (ev) => this.onEvent(ev));
     onChatPrefs(() => this.applyPrefs());
     this.applyPrefs();
     this.updateInput();
@@ -245,7 +248,7 @@ export class ChatPanel {
   // ── 연결 ───────────────────────────────────
 
   async connect(chatChannelId, channelId) {
-    for (const p of PANELS) if (p !== this) p.active = false;
+    if (!this.session) for (const p of PANELS) if (p !== this && !p.session) p.active = false;
     this.clear();
     this.active = true;
     if (this.channelId !== channelId) this.seenEmoji.clear();
@@ -264,7 +267,7 @@ export class ChatPanel {
       return;
     }
     try {
-      const res = await api.chatConnect(chatChannelId, channelId);
+      const res = await api.chatConnect(chatChannelId, channelId, this.session);
       this.canSend = Boolean(res && res.canSend);
     } catch (e) {
       this.setState('failed');
@@ -284,7 +287,7 @@ export class ChatPanel {
     this.connected = false;
     this.canSend = false;
     this.ranking.clear();
-    try { await api.chatDisconnect(); } catch { /* 무시 */ }
+    try { await api.chatDisconnect(this.session); } catch { /* 무시 */ }
     this.setState('disconnected');
     this.updateInput();
   }
@@ -457,7 +460,7 @@ export class ChatPanel {
     }
     this.input.disabled = true;
     try {
-      await api.chatSend(text);
+      await api.chatSend(text, this.session);
       this.input.value = '';
     } catch (e) {
       toast(e.message);

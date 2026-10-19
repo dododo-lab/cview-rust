@@ -54,6 +54,8 @@ pub struct ShellSinks {
     pub player_event: Arc<dyn Fn(PlayerEventDto) + Send + Sync>,
     /// `chat://event`.
     pub chat_event: Arc<dyn Fn(ChatEventDto) + Send + Sync>,
+    /// `chat://session-event` — 추가 채팅 세션(멀티채팅) `{ session, event }`.
+    pub chat_session_event: Arc<dyn Fn(String, ChatEventDto) + Send + Sync>,
 }
 
 impl ShellSinks {
@@ -63,6 +65,7 @@ impl ShellSinks {
             player_command: Arc::new(|_| {}),
             player_event: Arc::new(|_| {}),
             chat_event: Arc::new(|_| {}),
+            chat_session_event: Arc::new(|_, _| {}),
         }
     }
 }
@@ -127,6 +130,9 @@ fn chat_engine_factory(
     })
 }
 
+/// 기본 채팅 세션 키.
+pub const MAIN_CHAT_SESSION: &str = "main";
+
 /// 앱 전역 서비스.
 pub struct AppServices {
     pub api: ChzzkApiClient,
@@ -145,8 +151,10 @@ pub struct AppServices {
     pub popular: AllBroadcastsViewModel,
     /// 통합 검색.
     pub search: SearchViewModel,
-    /// 채팅.
+    /// 채팅(기본 세션 — 시청 화면·멀티라이브·채팅만 보기).
     pub chat: ChatViewModel,
+    /// 추가 채팅 세션(멀티채팅) — 세션 키별 뷰모델(선행 작업 2: 채팅 다중 세션화).
+    pub chat_sessions: Mutex<std::collections::HashMap<String, ChatViewModel>>,
     /// 라이브 재생.
     pub player: PlayerViewModel,
     /// 플레이어 페이지 엔진(앱 수명 동안 하나, 뷰모델에 주입돼 있다).
@@ -272,6 +280,7 @@ impl AppServices {
             popular,
             search,
             chat,
+            chat_sessions: Mutex::new(std::collections::HashMap::new()),
             player,
             engine,
             player_channel: tokio::sync::Mutex::new(None),
@@ -326,6 +335,39 @@ impl AppServices {
         self.end_watch_record();
     }
 
+    /// 세션 키 → 채팅 뷰모델. 없거나 `main` 이면 기본 세션, 아니면 없을 때 새로 만든다.
+    pub fn chat_vm(&self, session: Option<&str>) -> ChatViewModel {
+        let Some(key) = session.filter(|k| !k.is_empty() && *k != MAIN_CHAT_SESSION) else {
+            return self.chat.clone();
+        };
+        let mut map = self.chat_sessions.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(vm) = map.get(key) {
+            return vm.clone();
+        }
+        let emit = self.sinks.chat_session_event.clone();
+        let session_key = key.to_string();
+        let sink: Arc<dyn Fn(ChatEventDto) + Send + Sync> =
+            Arc::new(move |dto| emit(session_key.clone(), dto));
+        let vm = ChatViewModel::with_deps(ChatDeps {
+            engine_factory: chat_engine_factory(self.cookies.clone(), sink),
+            ..ChatDeps::default()
+        });
+        map.insert(key.to_string(), vm.clone());
+        vm
+    }
+
+    /// 추가 채팅 세션을 끊고 지운다.
+    pub async fn drop_chat_session(&self, session: &str) {
+        let vm = self
+            .chat_sessions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(session);
+        if let Some(vm) = vm {
+            vm.disconnect().await;
+        }
+    }
+
     /// 시청 기록 시작 — 채널 행을 저장하고 최근 시청을 갱신한다.
     pub fn begin_watch_record(&self, info: &cview_core::models::LiveInfo) {
         self.end_watch_record();
@@ -373,6 +415,16 @@ impl AppServices {
     pub async fn shutdown(&self) {
         self.stop_player().await;
         self.chat.disconnect().await;
+        let sessions: Vec<_> = self
+            .chat_sessions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .drain()
+            .map(|(_, vm)| vm)
+            .collect();
+        for vm in sessions {
+            vm.disconnect().await;
+        }
         self.settings.flush_pending_save().await;
     }
 }
