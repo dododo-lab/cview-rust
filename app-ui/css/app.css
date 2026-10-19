@@ -1495,3 +1495,63 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .kbd { display: inline-block; min-width: 28px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-base); font: 600 var(--fs-footnote) ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center; }
 .oauth-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 0 10px; }
 .oauth-form input { flex: 1 1 180px; min-width: 0; height: 32px; padding: 0 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-base); color: var(--text-primary); font: inherit; }
+
+/* ── 디자인 토큰 정합 (DSN-01) — 원본 DesignTokens 의 빠진 값 ───────── */
+:root {
+  --success: #00ffa3;
+  --accent-pink: #ff5fa0;
+  --accent-orange: #ff9f0a;
+  --tier-silver: #c0c0c0;
+  --tier-gold: #ffd700;
+  --tier-diamond: #b9f2ff;
+  --medal-gold: #ffd700;
+  --medal-silver: #c0c0c0;
+  --medal-bronze: #cc8033;
+  --text-on-media: #ffffff;
+  --text-on-media-muted: rgba(255, 255, 255, 0.72);
+  --chip-on-media: rgba(0, 0, 0, 0.55);
+  --control-on-media: rgba(255, 255, 255, 0.14);
+  --sp-xxs: 2px;
+  --sp-xxxl: 48px;
+  --fs-display: 34px;
+  --fs-nano: 8px;
+  --radius-xs: 6px;
+}
+:root[data-theme="light"] {
+  --success: #007850;
+  --accent-pink: #bd3269;
+  --accent-orange: #cc7a00;
+  --tier-silver: #8a8a8e;
+  --tier-gold: #b45309;
+  --tier-diamond: #3a8fb0;
+  --medal-gold: #d4a000;
+  --medal-silver: #8a8a8e;
+  --medal-bronze: #9c3f2a;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] {
+    --success: #007850;
+    --accent-pink: #bd3269;
+    --accent-orange: #cc7a00;
+    --tier-silver: #8a8a8e;
+    --tier-gold: #b45309;
+    --tier-diamond: #3a8fb0;
+    --medal-gold: #d4a000;
+    --medal-silver: #8a8a8e;
+    --medal-bronze: #9c3f2a;
+  }
+}
+
+/* ── 채널 프로필 톤 (DSN-04) ───────── */
+.channel-hero[style*="--tone"] { border-color: color-mix(in srgb, var(--tone) 35%, var(--border-subtle)); }
+.channel-hero[style*="--tone"]::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: linear-gradient(120deg, color-mix(in srgb, var(--tone) 22%, transparent), transparent 55%); }
+.channel-hero[style*="--tone"] .channel-hero-main .avatar { box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 70%, transparent); }
+
+/* ── 키보드 포커스 (DSN-06) ───────── */
+.btn:focus-visible, .icon-btn:focus-visible, .chip:focus-visible, .seg:focus-visible, .link-btn:focus-visible,
+.side-quick-btn:focus-visible, .discover-item:focus-visible, .history-row:focus-visible, .dl-row button:focus-visible,
+input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:focus-visible {
+  outline: 2px solid var(--primary); outline-offset: 2px;
+}
+.dense-row:focus-visible { outline-offset: -2px; }

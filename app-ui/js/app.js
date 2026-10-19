@@ -16,6 +16,7 @@ import { MediaPage } from './media.js';
 import { LibraryPage, libraryIcon } from './library.js';
 import { StatsPage, statsIcon } from './stats.js';
 import { loadShortcuts } from './shortcuts.js';
+import { installA11y } from './a11y.js';
 import { HUBS, saveWorkspace, loadWorkspace, installSidebarExtras, hubFlash } from './workspace.js';
 import { CategoriesPage, categoryIcon } from './categories.js';
 import { CommandPalette } from './palette.js';
@@ -469,6 +470,7 @@ async function main() {
     onRefresh: () => MENU_ACTIONS.refresh && MENU_ACTIONS.refresh(),
   });
   installCardMenu();
+  installA11y();
   installPalette();
   installMenuAndShortcuts();
   installPrefsEffects({

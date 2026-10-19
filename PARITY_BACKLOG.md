@@ -198,12 +198,12 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 
 | ID | 항목 | Swift 원본 | Rust 현황 | 크기 |
 |---|---|---|---|---|
-| DSN-01 | 디자인 토큰 정합(간격·반경·의미 색·카테고리 색) | `DesignSystem/DesignTokens*` | `css/app.css` 자체 토큰 | M |
+| DSN-01 | 🧪 디자인 토큰 정합(간격·반경·의미 색·카테고리 색) | `DesignSystem/DesignTokens*` | `css/app.css` 자체 토큰 | M |
 | DSN-02 | ✅ 모션 등급(reduced/balanced/rich)·화면 전환 애니메이션 | `CVAnimation`, `RouteTransitionTiming`, `MotionTransactionPolicy` | `prefers-reduced-motion` 만 | S |
 | DSN-03 | ✅ 콤팩트 밀도 모드 | `CompactDensity`, `compactMode` | 없음 | S |
-| DSN-04 | 채널 프로필 톤(채널 색 강조) | `ChannelProfileTone`, `ChannelIdentity` | 없음 | S |
+| DSN-04 | 🧪 채널 프로필 톤(채널 색 강조) | `ChannelProfileTone`, `ChannelIdentity` | 없음 | S |
 | DSN-05 | ✅ 차트·랭킹 바 스타일(통계용) | `CVChartStyle`, `CVRankingBar` | 없음(DAT-04 와 묶음) | S |
-| DSN-06 | 접근성 레이블·키보드 포커스 이동 정합 | `Components/CardAccessibility`, `CViewCore/Focus` | 일부 aria | S |
+| DSN-06 | 🧪 접근성 레이블·키보드 포커스 이동 정합 | `Components/CardAccessibility`, `CViewCore/Focus` | 일부 aria | S |
 
 ---
 

@@ -83,3 +83,10 @@ export const icons = {
   chevronRight: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></svg>',
   send: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 20.5 21 12 3 3.5V10l12 2-12 2v6.5Z"/></svg>',
 };
+
+/** 채널 프로필 톤 (DSN-04) — 채널 ID 로 정하는 고정 색상(같은 채널은 늘 같은 색). 순수 함수. */
+export function channelTone(id) {
+  let h = 2166136261;
+  for (const ch of String(id || '')) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; }
+  return `hsl(${h % 360} 78% 58%)`;
+}
