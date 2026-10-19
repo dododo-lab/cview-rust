@@ -430,7 +430,20 @@ function installMenuAndShortcuts() {
   });
 }
 
+/** 전체 화면이면 신호등 자리를 비우지 않는다. */
+function trackFullscreen() {
+  const win = window.__TAURI__ && window.__TAURI__.window && window.__TAURI__.window.getCurrentWindow
+    ? window.__TAURI__.window.getCurrentWindow() : null;
+  if (!win) return;
+  const sync = async () => {
+    try { document.documentElement.classList.toggle('is-fullscreen', await win.isFullscreen()); } catch { /* 무시 */ }
+  };
+  win.onResized(sync);
+  sync();
+}
+
 async function main() {
+  trackFullscreen();
   splashStep('화면 준비', 0.2);
   renderNav();
   const content = document.querySelector('.content');

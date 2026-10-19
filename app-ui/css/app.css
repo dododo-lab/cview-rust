@@ -1784,3 +1784,14 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 :is(.chat-line, .stream-alert, .event-chip).ev-gift { --ev: var(--accent-cyan); }
 /* 카드·말풍선 스타일은 줄 배경 대신 말풍선 테두리로 멘션·강조를 보인다 */
 .chat-skin:is(.style-unified,.style-hybrid,.style-kakao,.style-imessage) .chat-line.msg:is(.mention, .highlighted) { background: none; box-shadow: none; padding-left: 0; border-radius: 0; }
+
+/* ══ 오버레이 제목 막대 — 시스템 제목 막대 없이 신호등을 사이드바 위쪽에(원본 hiddenTitleBar + TrafficLightsAnimator) ══ */
+.titlebar-strip { flex: none; height: 30px; margin: -14px -12px 0; -webkit-user-select: none; user-select: none; }
+.content-drag { position: absolute; top: 0; left: 0; right: 0; height: 14px; z-index: 40; }
+.brand-row { -webkit-user-select: none; user-select: none; }
+:root.is-fullscreen .titlebar-strip { height: 14px; }
+/* 보조 창(사이드바 없음): 신호등 아래로 내용을 내린다 */
+:root[data-window] .content-drag { height: 38px; background: var(--deck); border-bottom: 1px solid var(--border-subtle); z-index: 25; }
+:root[data-window] .page, :root[data-window] .viewer { top: 38px; }
+:root[data-window].is-fullscreen .content-drag { height: 0; border: 0; }
+:root[data-window].is-fullscreen .page, :root[data-window].is-fullscreen .viewer { top: 0; }

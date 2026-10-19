@@ -24,7 +24,8 @@
   </div>
   <div class="app">
     <aside class="sidebar">
-      <div class="brand-row">
+      <div class="titlebar-strip" data-tauri-drag-region aria-hidden="true"></div>
+      <div class="brand-row" data-tauri-drag-region>
         <div class="brand"><span class="brand-mark"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"/></svg></span><span class="brand-name">CView</span></div>
       </div>
       <button class="quick-search" data-tip="검색">
@@ -38,8 +39,9 @@
     </aside>
 
     <main class="content">
+      <div class="content-drag" data-tauri-drag-region aria-hidden="true"></div>
       <section class="page page-home" data-page="home" hidden>
-        <header class="home-header">
+        <header class="home-header" data-tauri-drag-region>
           <div class="home-hello">
             <h1 class="home-greeting">안녕하세요</h1>
             <p class="home-summary">지금 볼 만한 라이브를 모았어요</p>
@@ -57,7 +59,7 @@
       </section>
 
       <section class="page" data-page="following" hidden>
-        <header class="page-header">
+        <header class="page-header" data-tauri-drag-region>
           <h1 class="page-title">팔로잉</h1>
           <span class="page-subtitle">방송 중인 팔로우 채널</span>
           <div class="grow"></div>
@@ -67,7 +69,7 @@
       </section>
 
       <section class="page" data-page="popular" hidden>
-        <header class="page-header">
+        <header class="page-header" data-tauri-drag-region>
           <h1 class="page-title">인기</h1>
           <span class="page-subtitle">시청자 많은 순</span>
           <div class="grow"></div>
@@ -77,7 +79,7 @@
       </section>
 
       <section class="page" data-page="search" hidden>
-        <header class="page-header">
+        <header class="page-header" data-tauri-drag-region>
           <h1 class="page-title">검색</h1>
           <form class="search-field" role="search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
@@ -88,14 +90,14 @@
       </section>
 
       <section class="page" data-page="settings" hidden>
-        <header class="page-header"><h1 class="page-title">설정</h1></header>
+        <header class="page-header" data-tauri-drag-region><h1 class="page-title">설정</h1></header>
         <div class="page-body"></div>
       </section>
 
       <!-- 시청 화면: 플레이어 영역 + 채팅 패널 -->
       <section class="viewer" id="viewer" hidden>
         <div class="viewer-main">
-          <header class="viewer-header">
+          <header class="viewer-header" data-tauri-drag-region>
             <div class="viewer-avatar"></div>
             <div class="viewer-title">
               <div class="title ellipsis"></div>

@@ -68,7 +68,7 @@ export class StatsPage {
     this.root.dataset.page = 'stats';
     this.root.hidden = true;
     this.root.innerHTML = `
-      <header class="page-header">
+      <header class="page-header" data-tauri-drag-region>
         <h1 class="page-title">통계</h1>
         <span class="page-subtitle">이 기기에서 본 방송 기록으로 계산합니다</span>
       </header>

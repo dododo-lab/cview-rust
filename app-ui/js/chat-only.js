@@ -15,7 +15,7 @@ export class ChatOnlyPage {
     this.root.dataset.page = 'chat';
     this.root.hidden = true;
     this.root.innerHTML = `
-      <header class="page-header chatonly-head">
+      <header class="page-header chatonly-head" data-tauri-drag-region>
         <button class="back-btn" data-co="back">‹ 뒤로</button>
         <span class="chatonly-avatar"></span>
         <div class="chatonly-title"><h1 class="page-title ellipsis">채팅</h1><span class="page-subtitle ellipsis"></span></div>
