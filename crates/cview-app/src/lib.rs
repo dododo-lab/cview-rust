@@ -163,18 +163,6 @@ pub fn run() {
             app.manage(services);
             app.manage(shell);
             spawn_multi_live_state_task(handle.clone());
-            if let Ok(path) = std::env::var("CVIEW_DEBUG_EVAL") {
-                let h = handle.clone();
-                std::thread::spawn(move || loop {
-                    std::thread::sleep(std::time::Duration::from_millis(500));
-                    if let Ok(js) = std::fs::read_to_string(&path) {
-                        let _ = std::fs::remove_file(&path);
-                        if let Some(w) = h.get_webview_window(MAIN_WINDOW) {
-                            let _ = w.eval(&js);
-                        }
-                    }
-                });
-            }
             spawn_auth_tasks(handle);
             Ok(())
         })
