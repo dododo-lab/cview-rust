@@ -23,7 +23,11 @@ pub fn interval_since(a: &Date, b: &Date) -> TimeInterval {
 /// `date.addingTimeInterval(secs)`. 표현 범위를 넘으면 포화한다.
 pub fn adding(date: &Date, secs: TimeInterval) -> Date {
     if !secs.is_finite() {
-        return if secs > 0.0 { DateTime::<Utc>::MAX_UTC } else { DateTime::<Utc>::MIN_UTC };
+        return if secs > 0.0 {
+            DateTime::<Utc>::MAX_UTC
+        } else {
+            DateTime::<Utc>::MIN_UTC
+        };
     }
     let micros = (secs * 1_000_000.0).round();
     let delta = if micros.abs() < i64::MAX as f64 {

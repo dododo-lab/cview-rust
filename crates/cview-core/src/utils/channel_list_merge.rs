@@ -35,7 +35,10 @@ pub fn merge_first_page<T: Clone, Id: Hash + Eq>(
     page_size: usize,
     id: impl Fn(&T) -> Id,
 ) -> FirstPageMerge<T> {
-    let replace = || FirstPageMerge { merged: fresh.to_vec(), replaced: true };
+    let replace = || FirstPageMerge {
+        merged: fresh.to_vec(),
+        replaced: true,
+    };
     if existing.len() <= page_size || fresh.is_empty() || fresh.len() < page_size {
         return replace();
     }
@@ -43,14 +46,26 @@ pub fn merge_first_page<T: Clone, Id: Hash + Eq>(
     for (index, element) in existing.iter().enumerate() {
         existing_index.entry(id(element)).or_insert(index);
     }
-    let Some(seam) = fresh.iter().rev().find_map(|e| existing_index.get(&id(e)).copied()) else {
+    let Some(seam) = fresh
+        .iter()
+        .rev()
+        .find_map(|e| existing_index.get(&id(e)).copied())
+    else {
         return replace();
     };
     let fresh_ids: HashSet<Id> = fresh.iter().map(&id).collect();
     let mut merged = Vec::with_capacity(fresh.len() + existing.len() - seam - 1);
     merged.extend_from_slice(fresh);
-    merged.extend(existing[seam + 1..].iter().filter(|e| !fresh_ids.contains(&id(e))).cloned());
-    FirstPageMerge { merged, replaced: false }
+    merged.extend(
+        existing[seam + 1..]
+            .iter()
+            .filter(|e| !fresh_ids.contains(&id(e)))
+            .cloned(),
+    );
+    FirstPageMerge {
+        merged,
+        replaced: false,
+    }
 }
 
 /// 다음 페이지를 붙이되 이미 있는 id 는 건너뛴다. 같은 페이지 안의 중복도 하나만 남긴다.
@@ -79,7 +94,10 @@ mod tests {
     }
 
     fn row(id: &str) -> Row {
-        Row { id: id.into(), title: String::new() }
+        Row {
+            id: id.into(),
+            title: String::new(),
+        }
     }
 
     const PAGE: usize = 12;
@@ -142,7 +160,10 @@ mod tests {
         assert!(!r.replaced);
         assert_eq!(r.merged.len(), 60);
         assert_eq!(ids(&r.merged).iter().filter(|i| *i == "e40").count(), 1);
-        assert!(ids(&r.merged).contains(&"e30".to_string()), "이음매 뒤의 누적분을 버리지 않는다");
+        assert!(
+            ids(&r.merged).contains(&"e30".to_string()),
+            "이음매 뒤의 누적분을 버리지 않는다"
+        );
     }
 
     #[test]
@@ -201,7 +222,10 @@ mod tests {
         let r = merge_first_page(&existing, &fresh, 12, |v| v.video_no);
         assert!(!r.replaced);
         let expected: Vec<i64> = std::iter::once(100).chain(0..24).collect();
-        assert_eq!(r.merged.iter().map(|v| v.video_no).collect::<Vec<_>>(), expected);
+        assert_eq!(
+            r.merged.iter().map(|v| v.video_no).collect::<Vec<_>>(),
+            expected
+        );
         let page: Vec<Vod> = (20..30).map(vod).collect();
         let appended = append_skipping_duplicates(&r.merged, &page, |v| v.video_no);
         assert_eq!(appended.appended, 6);

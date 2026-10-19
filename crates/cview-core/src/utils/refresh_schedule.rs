@@ -23,12 +23,22 @@ pub enum RefreshJobId {
 
 impl RefreshJobId {
     /// 선언 순서(Swift `allCases`).
-    pub const ALL: [Self; 5] =
-        [Self::Following, Self::Popular, Self::CatalogSweep, Self::ClipTrending, Self::Insights];
+    pub const ALL: [Self; 5] = [
+        Self::Following,
+        Self::Popular,
+        Self::CatalogSweep,
+        Self::ClipTrending,
+        Self::Insights,
+    ];
 
     /// 우선순위 순서(작을수록 먼저).
-    const ORDERED: [Self; 5] =
-        [Self::Following, Self::Popular, Self::ClipTrending, Self::CatalogSweep, Self::Insights];
+    const ORDERED: [Self; 5] = [
+        Self::Following,
+        Self::Popular,
+        Self::ClipTrending,
+        Self::CatalogSweep,
+        Self::Insights,
+    ];
 
     /// 원본 `rawValue`.
     pub fn as_str(self) -> &'static str {
@@ -43,7 +53,10 @@ impl RefreshJobId {
 
     /// 동시 상한에 세는 네트워크 작업인가. 팔로잉은 항상 허용, 인사이트는 로컬 집계라 세지 않는다.
     fn counts_against_network_limit(self) -> bool {
-        matches!(self, Self::Popular | Self::ClipTrending | Self::CatalogSweep)
+        matches!(
+            self,
+            Self::Popular | Self::ClipTrending | Self::CatalogSweep
+        )
     }
 }
 
@@ -174,7 +187,11 @@ impl RefreshSchedule {
 
     /// 화면이 붙어 있는 수요 집합(카운트 > 0).
     pub fn retained_demands(&self) -> HashSet<RefreshDemand> {
-        self.demand_counts.iter().filter(|(_, &c)| c > 0).map(|(&d, _)| d).collect()
+        self.demand_counts
+            .iter()
+            .filter(|(_, &c)| c > 0)
+            .map(|(&d, _)| d)
+            .collect()
     }
 
     // MARK: 간격 규칙
@@ -196,8 +213,12 @@ impl RefreshSchedule {
             RefreshJobId::Following => Self::following_interval(ctx),
             RefreshJobId::Popular => Self::popular_interval(ctx),
             RefreshJobId::CatalogSweep => Self::sweep_interval(ctx),
-            RefreshJobId::ClipTrending => Self::gated_interval(Self::CLIP_TRENDING_INTERVAL, RefreshDemand::Clips, ctx),
-            RefreshJobId::Insights => Self::gated_interval(Self::INSIGHTS_INTERVAL, RefreshDemand::Insights, ctx),
+            RefreshJobId::ClipTrending => {
+                Self::gated_interval(Self::CLIP_TRENDING_INTERVAL, RefreshDemand::Clips, ctx)
+            }
+            RefreshJobId::Insights => {
+                Self::gated_interval(Self::INSIGHTS_INTERVAL, RefreshDemand::Insights, ctx)
+            }
         }
     }
 
@@ -213,8 +234,11 @@ impl RefreshSchedule {
         let visible = ctx.demands.iter().any(|d| d.is_following_visible());
         let visible_interval = Self::FOLLOWING_VISIBLE_INTERVAL;
         if ctx.auto_refresh_enabled {
-            let base =
-                if visible { ctx.auto_refresh_interval.min(visible_interval) } else { ctx.auto_refresh_interval };
+            let base = if visible {
+                ctx.auto_refresh_interval.min(visible_interval)
+            } else {
+                ctx.auto_refresh_interval
+            };
             return Some(Self::power_aware(base, ctx));
         }
         visible.then(|| Self::power_aware(visible_interval, ctx))
@@ -224,14 +248,23 @@ impl RefreshSchedule {
         if ctx.is_suspended || ctx.is_asleep {
             return None;
         }
-        let page = [RefreshDemand::Home, RefreshDemand::Popular, RefreshDemand::SearchLanding];
+        let page = [
+            RefreshDemand::Home,
+            RefreshDemand::Popular,
+            RefreshDemand::SearchLanding,
+        ];
         page.iter()
             .any(|d| ctx.demands.contains(d))
             .then(|| Self::power_aware(Self::POPULAR_VISIBLE_INTERVAL, ctx))
     }
 
     fn sweep_interval(ctx: &RefreshContext) -> Option<TimeInterval> {
-        if ctx.is_playing || ctx.is_suspended || ctx.is_low_power || ctx.reduce_resource_work || ctx.is_asleep {
+        if ctx.is_playing
+            || ctx.is_suspended
+            || ctx.is_low_power
+            || ctx.reduce_resource_work
+            || ctx.is_asleep
+        {
             return None;
         }
         if ctx.demands.contains(&RefreshDemand::Category) {
@@ -244,7 +277,11 @@ impl RefreshSchedule {
     }
 
     /// 수요가 있을 때만, 가림·슬립이 아닐 때만 도는 단순 작업(클립·인사이트).
-    fn gated_interval(base: TimeInterval, demand: RefreshDemand, ctx: &RefreshContext) -> Option<TimeInterval> {
+    fn gated_interval(
+        base: TimeInterval,
+        demand: RefreshDemand,
+        ctx: &RefreshContext,
+    ) -> Option<TimeInterval> {
         if ctx.is_suspended || ctx.is_asleep || !ctx.demands.contains(&demand) {
             return None;
         }
@@ -254,7 +291,11 @@ impl RefreshSchedule {
     // MARK: 상태 전이
 
     /// 연속 실패 백오프를 적용한 실효 간격. 첫 실패 30초, 이후 두 배씩, 120초 상한, 간격보다 길지 않다.
-    pub fn effective_interval(&self, job: RefreshJobId, ctx: &RefreshContext) -> Option<TimeInterval> {
+    pub fn effective_interval(
+        &self,
+        job: RefreshJobId,
+        ctx: &RefreshContext,
+    ) -> Option<TimeInterval> {
         let base = Self::interval(job, ctx)?;
         let streak = self.failure_streak.get(&job).copied().unwrap_or(0);
         if streak == 0 {
@@ -286,7 +327,9 @@ impl RefreshSchedule {
 
     /// 짝 없는 release 는 무시한다.
     pub fn release(&mut self, demand: RefreshDemand) {
-        let Some(count) = self.demand_counts.get_mut(&demand) else { return };
+        let Some(count) = self.demand_counts.get_mut(&demand) else {
+            return;
+        };
         if *count <= 1 {
             self.demand_counts.remove(&demand);
         } else {
@@ -296,9 +339,16 @@ impl RefreshSchedule {
 
     // MARK: 판정
 
-    fn time_until_due(&self, job: RefreshJobId, now: TimeInterval, ctx: &RefreshContext) -> Option<TimeInterval> {
+    fn time_until_due(
+        &self,
+        job: RefreshJobId,
+        now: TimeInterval,
+        ctx: &RefreshContext,
+    ) -> Option<TimeInterval> {
         let interval = self.effective_interval(job, ctx)?;
-        let Some(&last) = self.last_run.get(&job) else { return Some(0.0) };
+        let Some(&last) = self.last_run.get(&job) else {
+            return Some(0.0);
+        };
         // 호출자가 다른 기준을 섞은 미래 값은 "도래" 로 본다.
         if last > now {
             return Some(0.0);
@@ -308,7 +358,11 @@ impl RefreshSchedule {
 
     /// 지금 시작할 작업(우선순위 순). 이미 도는 작업은 빼고, 네트워크 작업은 동시 상한 2 를 넘기지 않는다.
     pub fn due(&self, now: TimeInterval, ctx: &RefreshContext) -> Vec<RefreshJobId> {
-        let busy = self.running.iter().filter(|j| j.counts_against_network_limit()).count();
+        let busy = self
+            .running
+            .iter()
+            .filter(|j| j.counts_against_network_limit())
+            .count();
         let mut slots = Self::NETWORK_CONCURRENCY_LIMIT.saturating_sub(busy);
         let mut result = Vec::new();
         for job in RefreshJobId::ORDERED {
@@ -339,7 +393,9 @@ impl RefreshSchedule {
             if self.running.contains(&job) {
                 continue;
             }
-            let Some(wait) = self.time_until_due(job, now, ctx) else { continue };
+            let Some(wait) = self.time_until_due(job, now, ctx) else {
+                continue;
+            };
             if wait <= 0.0 && !due_now.contains(&job) {
                 continue;
             }
@@ -403,7 +459,13 @@ mod tests {
     }
 
     fn logged_out(demands: &[D]) -> RefreshContext {
-        ctx_with(demands, Opts { logged_in: false, ..Opts::default() })
+        ctx_with(
+            demands,
+            Opts {
+                logged_in: false,
+                ..Opts::default()
+            },
+        )
     }
 
     fn iv(job: J, c: &RefreshContext) -> Option<f64> {
@@ -417,12 +479,27 @@ mod tests {
 
     #[test]
     fn following_short_setting() {
-        assert_eq!(iv(J::Following, &ctx_with(&[D::Home], Opts { interval: 60.0, ..Opts::default() })), Some(60.0));
+        assert_eq!(
+            iv(
+                J::Following,
+                &ctx_with(
+                    &[D::Home],
+                    Opts {
+                        interval: 60.0,
+                        ..Opts::default()
+                    }
+                )
+            ),
+            Some(60.0)
+        );
     }
 
     #[test]
     fn following_setting_off() {
-        let off = Opts { auto: false, ..Opts::default() };
+        let off = Opts {
+            auto: false,
+            ..Opts::default()
+        };
         assert_eq!(iv(J::Following, &ctx_with(&[D::Home], off)), Some(180.0));
         assert_eq!(iv(J::Following, &ctx_with(&[], off)), None);
     }
@@ -436,7 +513,11 @@ mod tests {
     fn suspended_with_notifications() {
         let c = ctx_with(
             &[D::Home, D::Category, D::Clips, D::Insights, D::Popular],
-            Opts { suspended: true, notify: true, ..Opts::default() },
+            Opts {
+                suspended: true,
+                notify: true,
+                ..Opts::default()
+            },
         );
         assert_eq!(iv(J::Following, &c), Some(600.0));
         for job in J::ALL.into_iter().filter(|j| *j != J::Following) {
@@ -446,35 +527,85 @@ mod tests {
 
     #[test]
     fn suspended_without_notifications() {
-        assert_eq!(iv(J::Following, &ctx_with(&[D::Home], Opts { suspended: true, ..Opts::default() })), None);
-        let o = Opts { suspended: true, auto: false, notify: true, ..Opts::default() };
+        assert_eq!(
+            iv(
+                J::Following,
+                &ctx_with(
+                    &[D::Home],
+                    Opts {
+                        suspended: true,
+                        ..Opts::default()
+                    }
+                )
+            ),
+            None
+        );
+        let o = Opts {
+            suspended: true,
+            auto: false,
+            notify: true,
+            ..Opts::default()
+        };
         assert_eq!(iv(J::Following, &ctx_with(&[D::Home], o)), None);
     }
 
     #[test]
     fn following_logged_out_or_asleep() {
         assert_eq!(iv(J::Following, &logged_out(&[D::Home])), None);
-        assert_eq!(iv(J::Following, &ctx_with(&[D::Home], Opts { asleep: true, ..Opts::default() })), None);
+        assert_eq!(
+            iv(
+                J::Following,
+                &ctx_with(
+                    &[D::Home],
+                    Opts {
+                        asleep: true,
+                        ..Opts::default()
+                    }
+                )
+            ),
+            None
+        );
     }
 
     #[test]
     fn popular_intervals() {
-        let lp = Opts { low_power: true, ..Opts::default() };
+        let lp = Opts {
+            low_power: true,
+            ..Opts::default()
+        };
         assert_eq!(iv(J::Popular, &ctx(&[D::Home])), Some(120.0));
         assert_eq!(iv(J::Popular, &ctx(&[D::Popular])), Some(120.0));
         assert_eq!(iv(J::Popular, &ctx(&[D::SearchLanding])), Some(120.0));
         assert_eq!(iv(J::Popular, &ctx(&[])), None);
         assert_eq!(iv(J::Popular, &ctx_with(&[D::Home], lp)), Some(240.0));
         assert_eq!(iv(J::Popular, &ctx_with(&[], lp)), None);
-        assert_eq!(iv(J::Popular, &ctx_with(&[D::Home], Opts { suspended: true, ..Opts::default() })), None);
+        assert_eq!(
+            iv(
+                J::Popular,
+                &ctx_with(
+                    &[D::Home],
+                    Opts {
+                        suspended: true,
+                        ..Opts::default()
+                    }
+                )
+            ),
+            None
+        );
         assert_eq!(iv(J::Popular, &ctx(&[D::Category])), None);
     }
 
     #[test]
     fn sweep_intervals() {
-        let off = Opts { auto: false, ..Opts::default() };
+        let off = Opts {
+            auto: false,
+            ..Opts::default()
+        };
         assert_eq!(iv(J::CatalogSweep, &ctx(&[D::Category])), Some(600.0));
-        assert_eq!(iv(J::CatalogSweep, &ctx_with(&[D::Category], off)), Some(600.0));
+        assert_eq!(
+            iv(J::CatalogSweep, &ctx_with(&[D::Category], off)),
+            Some(600.0)
+        );
         assert_eq!(iv(J::CatalogSweep, &ctx(&[D::Home])), Some(1800.0));
         assert_eq!(iv(J::CatalogSweep, &ctx_with(&[D::Home], off)), None);
         assert_eq!(iv(J::CatalogSweep, &ctx(&[D::LiveOverview])), None);
@@ -483,9 +614,18 @@ mod tests {
     #[test]
     fn sweep_gates() {
         for o in [
-            Opts { playing: true, ..Opts::default() },
-            Opts { low_power: true, ..Opts::default() },
-            Opts { suspended: true, ..Opts::default() },
+            Opts {
+                playing: true,
+                ..Opts::default()
+            },
+            Opts {
+                low_power: true,
+                ..Opts::default()
+            },
+            Opts {
+                suspended: true,
+                ..Opts::default()
+            },
         ] {
             assert_eq!(iv(J::CatalogSweep, &ctx_with(&[D::Category], o)), None);
         }
@@ -493,7 +633,10 @@ mod tests {
 
     #[test]
     fn clip_and_insights() {
-        let sus = Opts { suspended: true, ..Opts::default() };
+        let sus = Opts {
+            suspended: true,
+            ..Opts::default()
+        };
         assert_eq!(iv(J::ClipTrending, &ctx(&[D::Clips])), Some(300.0));
         assert_eq!(iv(J::Insights, &ctx(&[D::Insights])), Some(30.0));
         assert_eq!(iv(J::ClipTrending, &ctx(&[])), None);
@@ -520,8 +663,17 @@ mod tests {
 
     #[test]
     fn due_ordering_and_immediate() {
-        let c = ctx_with(&[D::Home, D::Category, D::Clips], Opts { interval: 180.0, ..Opts::default() });
-        assert_eq!(RefreshSchedule::new().due(1000.0, &c), vec![J::Following, J::Popular, J::ClipTrending]);
+        let c = ctx_with(
+            &[D::Home, D::Category, D::Clips],
+            Opts {
+                interval: 180.0,
+                ..Opts::default()
+            },
+        );
+        assert_eq!(
+            RefreshSchedule::new().due(1000.0, &c),
+            vec![J::Following, J::Popular, J::ClipTrending]
+        );
     }
 
     #[test]
@@ -584,7 +736,10 @@ mod tests {
             insights.mark_started(J::Insights, 0.0);
             insights.mark_finished(J::Insights, false);
         }
-        assert_eq!(insights.effective_interval(J::Insights, &ctx(&[D::Insights])), Some(30.0));
+        assert_eq!(
+            insights.effective_interval(J::Insights, &ctx(&[D::Insights])),
+            Some(30.0)
+        );
         s.mark_started(J::Popular, 0.0);
         s.mark_finished(J::Popular, true);
         assert_eq!(s.effective_interval(J::Popular, &c), Some(120.0));
@@ -607,7 +762,10 @@ mod tests {
             s.mark_started(J::Popular, 0.0);
             s.mark_finished(J::Popular, false);
         }
-        assert_eq!(s.effective_interval(J::Popular, &ctx(&[D::Popular])), Some(120.0));
+        assert_eq!(
+            s.effective_interval(J::Popular, &ctx(&[D::Popular])),
+            Some(120.0)
+        );
     }
 
     #[test]

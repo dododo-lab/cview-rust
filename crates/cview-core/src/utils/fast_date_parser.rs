@@ -46,7 +46,9 @@ pub fn parse_in<Tz: TimeZone>(s: &str, local: &Tz) -> Option<DateTime<Utc>> {
     }
 
     let num = |a: usize, b: usize| -> Option<i64> {
-        u[a..b].iter().try_fold(0i64, |v, &c| c.is_ascii_digit().then(|| v * 10 + i64::from(c - b'0')))
+        u[a..b].iter().try_fold(0i64, |v, &c| {
+            c.is_ascii_digit().then(|| v * 10 + i64::from(c - b'0'))
+        })
     };
     let year = num(0, 4)?;
     let month = num(5, 7)?;
@@ -75,7 +77,10 @@ pub fn parse_in<Tz: TimeZone>(s: &str, local: &Tz) -> Option<DateTime<Utc>> {
             minute as u32,
             second as u32,
         )?;
-        return local.from_local_datetime(&naive).earliest().map(|d| d.with_timezone(&Utc));
+        return local
+            .from_local_datetime(&naive)
+            .earliest()
+            .map(|d| d.with_timezone(&Utc));
     }
 
     // ── 형식 B: ISO8601 "yyyy-MM-ddTHH:mm:ss[.fff](Z|±HH:MM|±HHMM)" ──
@@ -153,7 +158,12 @@ mod tests {
 
     fn reference_local(y: i32, mo: u32, d: u32, h: u32, mi: u32, se: u32) -> Option<i64> {
         let naive = NaiveDate::from_ymd_opt(y, mo, d)?.and_hms_opt(h, mi, se)?;
-        Some(kst().from_local_datetime(&naive).single()?.timestamp_millis())
+        Some(
+            kst()
+                .from_local_datetime(&naive)
+                .single()?
+                .timestamp_millis(),
+        )
     }
 
     fn reference_utc(y: i32, mo: u32, d: u32, h: u32, mi: u32, se: u32) -> Option<i64> {
@@ -180,16 +190,28 @@ mod tests {
     #[test]
     fn iso8601_offsets_and_fractions() {
         let base = reference_utc(2026, 8, 19, 11, 58, 13).unwrap();
-        assert_eq!(ts("2024-01-15T12:00:00Z"), reference_utc(2024, 1, 15, 12, 0, 0));
-        assert_eq!(ts("2024-12-25T09:30:00.123Z"), reference_utc(2024, 12, 25, 9, 30, 0).map(|v| v + 123));
+        assert_eq!(
+            ts("2024-01-15T12:00:00Z"),
+            reference_utc(2024, 1, 15, 12, 0, 0)
+        );
+        assert_eq!(
+            ts("2024-12-25T09:30:00.123Z"),
+            reference_utc(2024, 12, 25, 9, 30, 0).map(|v| v + 123)
+        );
         assert_eq!(ts("2026-08-19T11:58:13Z"), Some(base));
         assert_eq!(ts("2026-08-19T11:58:13.5Z"), Some(base + 500));
         assert_eq!(ts("2026-08-19T11:58:13.999Z"), Some(base + 999));
         assert_eq!(ts("2026-08-19T11:58:13+09:00"), Some(base - 9 * 3_600_000));
         assert_eq!(ts("2026-08-19T11:58:13-05:00"), Some(base + 5 * 3_600_000));
-        assert_eq!(ts("2026-08-19T11:58:13.250+09:00"), Some(base - 9 * 3_600_000 + 250));
+        assert_eq!(
+            ts("2026-08-19T11:58:13.250+09:00"),
+            Some(base - 9 * 3_600_000 + 250)
+        );
         assert_eq!(ts("2026-08-19T11:58:13+0900"), Some(base - 9 * 3_600_000));
-        assert_eq!(ts("2026-08-19T00:00:00+00:00"), reference_utc(2026, 8, 19, 0, 0, 0));
+        assert_eq!(
+            ts("2026-08-19T00:00:00+00:00"),
+            reference_utc(2026, 8, 19, 0, 0, 0)
+        );
     }
 
     #[test]
@@ -237,24 +259,38 @@ mod tests {
 
     #[test]
     fn leap_second_rejected() {
-        for s in ["2024-06-15 18:30:60", "2024-06-15T18:30:60Z", "2016-12-31T23:59:60Z"] {
+        for s in [
+            "2024-06-15 18:30:60",
+            "2024-06-15T18:30:60Z",
+            "2016-12-31T23:59:60Z",
+        ] {
             assert_eq!(ts(s), None, "{s}");
         }
     }
 
     #[test]
     fn valid_inputs_take_fast_path() {
-        for s in ["2024-02-29 12:00:00", "2024-01-31 23:59:59", "2026-04-30 00:00:00", "2026-08-19T11:58:13.123Z"] {
+        for s in [
+            "2024-02-29 12:00:00",
+            "2024-01-31 23:59:59",
+            "2026-04-30 00:00:00",
+            "2026-08-19T11:58:13.123Z",
+        ] {
             assert!(ts(s).is_some(), "{s}");
         }
-        assert!(parse("2026-08-19T11:58:13.123Z").is_some(), "시스템 로컬 경로");
+        assert!(
+            parse("2026-08-19T11:58:13.123Z").is_some(),
+            "시스템 로컬 경로"
+        );
     }
 
     #[test]
     fn randomized_equivalence() {
         let mut seed: u64 = 0x5EED_1234;
         let mut next = |bound: u64| -> u32 {
-            seed = seed.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1_442_695_040_888_963_407);
+            seed = seed
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
             ((seed >> 33) % bound) as u32
         };
         for _ in 0..500 {

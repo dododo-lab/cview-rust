@@ -36,15 +36,24 @@ mod tests {
 
     #[test]
     fn determinism() {
-        for s in ["리그 오브 레전드", "스타크래프트", "발로란트", "", "A", "🎮"] {
+        for s in [
+            "리그 오브 레전드",
+            "스타크래프트",
+            "발로란트",
+            "",
+            "A",
+            "🎮",
+        ] {
             assert_eq!(fnv1a(s), fnv1a(s));
         }
     }
 
     #[test]
     fn collision_sanity() {
-        let unique: HashSet<u64> =
-            ["a", "b", "c", "ab", "ba", "리그", "발로", "스타"].iter().map(|s| fnv1a(s)).collect();
+        let unique: HashSet<u64> = ["a", "b", "c", "ab", "ba", "리그", "발로", "스타"]
+            .iter()
+            .map(|s| fnv1a(s))
+            .collect();
         assert_eq!(unique.len(), 8);
     }
 

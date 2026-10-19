@@ -68,11 +68,26 @@ mod tests {
 
     #[test]
     fn mode_from_thermal_state() {
-        assert_eq!(SystemLoadMode::from_thermal_state(ThermalState::Nominal, false), SystemLoadMode::Normal);
-        assert_eq!(SystemLoadMode::from_thermal_state(ThermalState::Fair, true), SystemLoadMode::Warm);
-        assert_eq!(SystemLoadMode::from_thermal_state(ThermalState::Serious, false), SystemLoadMode::Hot);
-        assert_eq!(SystemLoadMode::from_thermal_state(ThermalState::Critical, true), SystemLoadMode::Hot);
-        assert!(SystemLoadMode::Normal < SystemLoadMode::Warm && SystemLoadMode::Warm < SystemLoadMode::Hot);
+        assert_eq!(
+            SystemLoadMode::from_thermal_state(ThermalState::Nominal, false),
+            SystemLoadMode::Normal
+        );
+        assert_eq!(
+            SystemLoadMode::from_thermal_state(ThermalState::Fair, true),
+            SystemLoadMode::Warm
+        );
+        assert_eq!(
+            SystemLoadMode::from_thermal_state(ThermalState::Serious, false),
+            SystemLoadMode::Hot
+        );
+        assert_eq!(
+            SystemLoadMode::from_thermal_state(ThermalState::Critical, true),
+            SystemLoadMode::Hot
+        );
+        assert!(
+            SystemLoadMode::Normal < SystemLoadMode::Warm
+                && SystemLoadMode::Warm < SystemLoadMode::Hot
+        );
     }
 
     #[test]
@@ -80,6 +95,9 @@ mod tests {
         assert_eq!(SystemLoadMode::Normal.adjusted_decoder_threads(6), 6);
         assert_eq!(SystemLoadMode::Warm.adjusted_decoder_threads(6), 4);
         assert_eq!(SystemLoadMode::Hot.adjusted_decoder_threads(6), 2);
-        assert_eq!(SystemLoadMode::Hot.adjusted_chat_flush_interval_ns(33_000_000), 132_000_000);
+        assert_eq!(
+            SystemLoadMode::Hot.adjusted_chat_flush_interval_ns(33_000_000),
+            132_000_000
+        );
     }
 }

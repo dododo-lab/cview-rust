@@ -23,17 +23,32 @@ pub struct FreshnessPolicy {
 
 impl FreshnessPolicy {
     /// 인기 라이브 — 1분 fresh, 10분 stale.
-    pub const POPULAR: Self = Self { fresh: 60.0, stale: 600.0 };
+    pub const POPULAR: Self = Self {
+        fresh: 60.0,
+        stale: 600.0,
+    };
     /// 팔로잉 — 홈 폴 180초 한 번은 fresh, 15분 stale.
-    pub const FOLLOWING: Self = Self { fresh: 180.0, stale: 900.0 };
+    pub const FOLLOWING: Self = Self {
+        fresh: 180.0,
+        stale: 900.0,
+    };
     /// 전수 수집 카탈로그 — 30분 fresh, 하루 stale.
-    pub const CATALOG: Self = Self { fresh: 1_800.0, stale: 86_400.0 };
+    pub const CATALOG: Self = Self {
+        fresh: 1_800.0,
+        stale: 86_400.0,
+    };
     /// 채널 상세 프로필 — 5분 fresh, 7일 stale(채널 스냅샷 보존 기한).
-    pub const CHANNEL_PROFILE: Self = Self { fresh: 300.0, stale: 604_800.0 };
+    pub const CHANNEL_PROFILE: Self = Self {
+        fresh: 300.0,
+        stale: 604_800.0,
+    };
 
     /// `stale` 이 `fresh` 보다 짧게 들어와도 구간이 뒤집히지 않게 `max(fresh, stale)` 로 올린다.
     pub fn new(fresh: TimeInterval, stale: TimeInterval) -> Self {
-        Self { fresh, stale: fresh.max(stale) }
+        Self {
+            fresh,
+            stale: fresh.max(stale),
+        }
     }
 }
 
@@ -51,7 +66,9 @@ pub enum FreshnessBand {
 /// - 구간은 반열림이다: [0, fresh) fresh, [fresh, stale) stale, 그 뒤 expired.
 /// - `fetched_at` 이 `None` 이면(받은 적 없음) expired 다.
 pub fn band(fetched_at: Option<&Date>, policy: &FreshnessPolicy, now: &Date) -> FreshnessBand {
-    let Some(fetched_at) = fetched_at else { return FreshnessBand::Expired };
+    let Some(fetched_at) = fetched_at else {
+        return FreshnessBand::Expired;
+    };
     let age = interval_since(now, fetched_at);
     if age < 0.0 {
         FreshnessBand::Stale
@@ -65,7 +82,11 @@ pub fn band(fetched_at: Option<&Date>, policy: &FreshnessPolicy, now: &Date) -> 
 }
 
 /// 다음에 구간이 바뀌는 시각. 이미 만료면 `None`. 미래 시각은 그 시각이 되면 fresh 로 돌아온다.
-pub fn next_band_change(fetched_at: Option<&Date>, policy: &FreshnessPolicy, now: &Date) -> Option<Date> {
+pub fn next_band_change(
+    fetched_at: Option<&Date>,
+    policy: &FreshnessPolicy,
+    now: &Date,
+) -> Option<Date> {
     let fetched_at = fetched_at?;
     match band(Some(fetched_at), policy, now) {
         FreshnessBand::Fresh => Some(adding(fetched_at, policy.fresh)),
@@ -127,29 +148,64 @@ mod tests {
     #[test]
     fn policy_table() {
         assert_eq!(FreshnessPolicy::POPULAR, FreshnessPolicy::new(60.0, 600.0));
-        assert_eq!(FreshnessPolicy::FOLLOWING, FreshnessPolicy::new(180.0, 900.0));
-        assert_eq!(FreshnessPolicy::CATALOG, FreshnessPolicy::new(1_800.0, 86_400.0));
-        assert_eq!(FreshnessPolicy::CHANNEL_PROFILE, FreshnessPolicy::new(300.0, 604_800.0));
+        assert_eq!(
+            FreshnessPolicy::FOLLOWING,
+            FreshnessPolicy::new(180.0, 900.0)
+        );
+        assert_eq!(
+            FreshnessPolicy::CATALOG,
+            FreshnessPolicy::new(1_800.0, 86_400.0)
+        );
+        assert_eq!(
+            FreshnessPolicy::CHANNEL_PROFILE,
+            FreshnessPolicy::new(300.0, 604_800.0)
+        );
         assert_eq!(FreshnessPolicy::new(100.0, 10.0).stale, 100.0);
     }
 
     #[test]
     fn band_boundaries_half_open() {
         use FreshnessBand::*;
-        for (age, expected) in
-            [(0.0, Fresh), (59.9, Fresh), (60.0, Stale), (599.9, Stale), (600.0, Expired), (86_400.0, Expired)]
-        {
+        for (age, expected) in [
+            (0.0, Fresh),
+            (59.9, Fresh),
+            (60.0, Stale),
+            (599.9, Stale),
+            (600.0, Expired),
+            (86_400.0, Expired),
+        ] {
             let fetched = base();
-            assert_eq!(band(Some(&fetched), &FreshnessPolicy::POPULAR, &adding(&fetched, age)), expected, "{age}");
+            assert_eq!(
+                band(
+                    Some(&fetched),
+                    &FreshnessPolicy::POPULAR,
+                    &adding(&fetched, age)
+                ),
+                expected,
+                "{age}"
+            );
         }
     }
 
     #[test]
     fn future_and_missing() {
         let b = base();
-        assert_eq!(band(Some(&adding(&b, 5.0)), &FreshnessPolicy::FOLLOWING, &b), FreshnessBand::Stale);
-        assert_eq!(band(Some(&adding(&b, 86_400.0 * 30.0)), &FreshnessPolicy::CATALOG, &b), FreshnessBand::Stale);
-        assert_eq!(band(None, &FreshnessPolicy::POPULAR, &b), FreshnessBand::Expired);
+        assert_eq!(
+            band(Some(&adding(&b, 5.0)), &FreshnessPolicy::FOLLOWING, &b),
+            FreshnessBand::Stale
+        );
+        assert_eq!(
+            band(
+                Some(&adding(&b, 86_400.0 * 30.0)),
+                &FreshnessPolicy::CATALOG,
+                &b
+            ),
+            FreshnessBand::Stale
+        );
+        assert_eq!(
+            band(None, &FreshnessPolicy::POPULAR, &b),
+            FreshnessBand::Expired
+        );
     }
 
     #[test]
@@ -162,11 +218,17 @@ mod tests {
 
         let second = next_band_change(Some(&fetched), &policy, &first).unwrap();
         assert_eq!(second, adding(&fetched, 900.0));
-        assert_eq!(band(Some(&fetched), &policy, &second), FreshnessBand::Expired);
+        assert_eq!(
+            band(Some(&fetched), &policy, &second),
+            FreshnessBand::Expired
+        );
         assert_eq!(next_band_change(Some(&fetched), &policy, &second), None);
 
         let future = adding(&fetched, 30.0);
-        assert_eq!(next_band_change(Some(&future), &policy, &fetched), Some(future));
+        assert_eq!(
+            next_band_change(Some(&future), &policy, &fetched),
+            Some(future)
+        );
         assert_eq!(band(Some(&future), &policy, &future), FreshnessBand::Fresh);
         assert_eq!(next_band_change(None, &policy, &fetched), None);
     }
@@ -185,7 +247,11 @@ mod tests {
         ];
         let now = base();
         for (age, expected) in cases {
-            assert_eq!(age_caption(&adding(&now, -age), &now).as_deref(), expected, "{age}");
+            assert_eq!(
+                age_caption(&adding(&now, -age), &now).as_deref(),
+                expected,
+                "{age}"
+            );
         }
     }
 
@@ -194,7 +260,10 @@ mod tests {
         let now = base();
         let p_follow = FreshnessPolicy::FOLLOWING;
         let p_pop = FreshnessPolicy::POPULAR;
-        assert_eq!(section_caption(Some(&adding(&now, -90.0)), false, &p_follow, &now), None);
+        assert_eq!(
+            section_caption(Some(&adding(&now, -90.0)), false, &p_follow, &now),
+            None
+        );
         assert_eq!(
             section_caption(Some(&adding(&now, -90.0)), true, &p_follow, &now).as_deref(),
             Some("1분 전 기준")
@@ -203,16 +272,26 @@ mod tests {
             section_caption(Some(&adding(&now, -300.0)), false, &p_pop, &now).as_deref(),
             Some("5분 전 기준")
         );
-        assert_eq!(section_caption(Some(&adding(&now, -10.0)), true, &p_pop, &now), None);
+        assert_eq!(
+            section_caption(Some(&adding(&now, -10.0)), true, &p_pop, &now),
+            None
+        );
         assert_eq!(section_caption(None, true, &p_pop, &now), None);
     }
 
     #[test]
     fn aggregated_caption_two_digit_24h() {
         let seoul = FixedOffset::east_opt(9 * 3600).unwrap();
-        for (h, m, expected) in [(14, 5, "14:05 집계"), (9, 3, "09:03 집계"), (0, 0, "00:00 집계"), (23, 59, "23:59 집계")]
-        {
-            let date = seoul.with_ymd_and_hms(2026, 9, 29, h, m, 42).unwrap().to_utc();
+        for (h, m, expected) in [
+            (14, 5, "14:05 집계"),
+            (9, 3, "09:03 집계"),
+            (0, 0, "00:00 집계"),
+            (23, 59, "23:59 집계"),
+        ] {
+            let date = seoul
+                .with_ymd_and_hms(2026, 9, 29, h, m, 42)
+                .unwrap()
+                .to_utc();
             assert_eq!(aggregated_caption(&date, &seoul), expected);
         }
     }

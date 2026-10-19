@@ -26,7 +26,12 @@ mod tests {
 
     #[test]
     fn accepts_naver() {
-        for d in ["naver.com", ".naver.com", "nid.naver.com", ".CHZZK.NAVER.COM"] {
+        for d in [
+            "naver.com",
+            ".naver.com",
+            "nid.naver.com",
+            ".CHZZK.NAVER.COM",
+        ] {
             assert!(matches_domain(d), "{d}");
         }
     }

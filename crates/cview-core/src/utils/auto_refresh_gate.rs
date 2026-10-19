@@ -48,7 +48,10 @@ impl Default for AutoRefreshGate {
 
 impl AutoRefreshGate {
     pub fn new(is_enabled_by_settings: bool) -> Self {
-        Self { holders: HashSet::new(), is_enabled_by_settings }
+        Self {
+            holders: HashSet::new(),
+            is_enabled_by_settings,
+        }
     }
 
     /// 현재 자동 갱신을 요구 중인 마운트들.
@@ -68,8 +71,11 @@ impl AutoRefreshGate {
 
     /// 전수 수집을 요구하는가 — 카테고리가 떠 있으면 설정과 무관하게, 홈만이면 설정이 켜져 있을 때만.
     pub fn is_sweep_active(&self) -> bool {
-        self.holders.iter().any(|h| h.screen == RefreshDemand::Category)
-            || (self.is_enabled_by_settings && self.holders.iter().any(|h| h.screen == RefreshDemand::Home))
+        self.holders
+            .iter()
+            .any(|h| h.screen == RefreshDemand::Category)
+            || (self.is_enabled_by_settings
+                && self.holders.iter().any(|h| h.screen == RefreshDemand::Home))
     }
 
     /// `is_active` 가 실제로 바뀌었으면 `true`(= 태스크 시작/정지 필요).
@@ -98,10 +104,22 @@ mod tests {
     //! 원본: `Tests/CViewCoreTests/AutoRefreshGateTests.swift`
     use super::*;
 
-    const HOME_A: AutoRefreshHolder = AutoRefreshHolder { screen: RefreshDemand::Home, instance: 1 };
-    const LIVE_A: AutoRefreshHolder = AutoRefreshHolder { screen: RefreshDemand::LIVE, instance: 2 };
-    const LIVE_B: AutoRefreshHolder = AutoRefreshHolder { screen: RefreshDemand::LIVE, instance: 3 };
-    const CATEGORY_A: AutoRefreshHolder = AutoRefreshHolder { screen: RefreshDemand::Category, instance: 4 };
+    const HOME_A: AutoRefreshHolder = AutoRefreshHolder {
+        screen: RefreshDemand::Home,
+        instance: 1,
+    };
+    const LIVE_A: AutoRefreshHolder = AutoRefreshHolder {
+        screen: RefreshDemand::LIVE,
+        instance: 2,
+    };
+    const LIVE_B: AutoRefreshHolder = AutoRefreshHolder {
+        screen: RefreshDemand::LIVE,
+        instance: 3,
+    };
+    const CATEGORY_A: AutoRefreshHolder = AutoRefreshHolder {
+        screen: RefreshDemand::Category,
+        instance: 4,
+    };
 
     #[test]
     fn idle_gate_is_inactive() {
@@ -115,7 +133,10 @@ mod tests {
         assert!(gate.is_active());
         gate.retain(LIVE_A);
         gate.release(HOME_A);
-        assert!(gate.is_active(), "새 화면(라이브)이 요구 중인데 폴링이 꺼졌다");
+        assert!(
+            gate.is_active(),
+            "새 화면(라이브)이 요구 중인데 폴링이 꺼졌다"
+        );
         gate.release(LIVE_A);
         assert!(!gate.is_active(), "마지막 화면이 나갔는데도 폴링이 남았다");
     }
@@ -126,7 +147,10 @@ mod tests {
         gate.retain(LIVE_A);
         gate.retain(LIVE_B);
         gate.release(LIVE_B);
-        assert!(gate.is_active(), "아직 메인 창이 라이브 화면을 띄우고 있는데 폴링이 멈췄다");
+        assert!(
+            gate.is_active(),
+            "아직 메인 창이 라이브 화면을 띄우고 있는데 폴링이 멈췄다"
+        );
         gate.release(LIVE_A);
         assert!(!gate.is_active());
     }

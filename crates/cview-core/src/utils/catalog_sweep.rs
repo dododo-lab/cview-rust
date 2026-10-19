@@ -161,7 +161,11 @@ pub enum CatalogSweepDecision {
 
 /// 수집 수요로 치는 화면(카테고리·홈) — 나머지는 수요가 아니다.
 pub fn sweep_demands(demands: &HashSet<RefreshDemand>) -> HashSet<RefreshDemand> {
-    demands.iter().copied().filter(|d| matches!(d, RefreshDemand::Category | RefreshDemand::Home)).collect()
+    demands
+        .iter()
+        .copied()
+        .filter(|d| matches!(d, RefreshDemand::Category | RefreshDemand::Home))
+        .collect()
 }
 
 pub fn retry_cooldown(retry_class: CatalogRetryClass) -> TimeInterval {
@@ -182,7 +186,11 @@ pub fn base_interval(demands: &HashSet<RefreshDemand>) -> Option<TimeInterval> {
     }
 }
 
-pub fn resume_decision(checkpoint: &CatalogSweepCheckpoint, now: &Date, app_build: &str) -> CatalogResumeDecision {
+pub fn resume_decision(
+    checkpoint: &CatalogSweepCheckpoint,
+    now: &Date,
+    app_build: &str,
+) -> CatalogResumeDecision {
     use CatalogResumeDiscardReason::*;
     let since_update = interval_since(now, &checkpoint.updated_at);
     if !(0.0..=RESUME_WINDOW).contains(&since_update) {
@@ -258,7 +266,7 @@ fn decide_by_interval(input: &CatalogSweepInputs) -> CatalogSweepDecision {
     };
     let age = interval_since(&input.now, promoted);
     // 시계가 거꾸로 간 기록은 "도래" 로 본다.
-    let stale = age < 0.0 || age > SUMMARY_MAX_AGE;
+    let stale = !(0.0..=SUMMARY_MAX_AGE).contains(&age);
     if input.is_low_power && !stale {
         return CatalogSweepDecision::Idle(CatalogSweepIdleReason::LowPower);
     }
@@ -272,7 +280,9 @@ fn decide_by_interval(input: &CatalogSweepInputs) -> CatalogSweepDecision {
     if age < 0.0 || age >= interval {
         CatalogSweepDecision::Run(CatalogSweepRunReason::Interval)
     } else {
-        CatalogSweepDecision::Wait { until: adding(promoted, interval) }
+        CatalogSweepDecision::Wait {
+            until: adding(promoted, interval),
+        }
     }
 }
 
@@ -299,7 +309,12 @@ mod tests {
     }
 
     /// 부팅 유예가 지난 기본 입력(요약 있음, 방금 승격).
-    fn inputs_at(demands: &[D], now: Date, promoted_ago: Option<f64>, has_summary: bool) -> CatalogSweepInputs {
+    fn inputs_at(
+        demands: &[D],
+        now: Date,
+        promoted_ago: Option<f64>,
+        has_summary: bool,
+    ) -> CatalogSweepInputs {
         let mut v = CatalogSweepInputs::new(now, demands.iter().copied().collect());
         v.last_promoted_at = promoted_ago.map(|a| adding(&now, -a));
         v.app_build = "100".into();
@@ -312,7 +327,10 @@ mod tests {
         inputs_at(demands, t0(), promoted_ago, true)
     }
 
-    fn with(mut v: CatalogSweepInputs, f: impl FnOnce(&mut CatalogSweepInputs)) -> CatalogSweepInputs {
+    fn with(
+        mut v: CatalogSweepInputs,
+        f: impl FnOnce(&mut CatalogSweepInputs),
+    ) -> CatalogSweepInputs {
         f(&mut v);
         v
     }
@@ -345,26 +363,52 @@ mod tests {
 
     #[test]
     fn non_demands() {
-        for d in [D::LiveWatch, D::LiveOverview, D::Popular, D::SearchLanding, D::Clips, D::Insights] {
-            assert_eq!(decide(&inputs(&[d], Some(100_000.0))), Dec::Idle(Idle::NoDemand));
+        for d in [
+            D::LiveWatch,
+            D::LiveOverview,
+            D::Popular,
+            D::SearchLanding,
+            D::Clips,
+            D::Insights,
+        ] {
+            assert_eq!(
+                decide(&inputs(&[d], Some(100_000.0))),
+                Dec::Idle(Idle::NoDemand)
+            );
         }
-        assert_eq!(decide(&inputs(&[D::LiveOverview, D::LiveWatch], Some(100_000.0))), Dec::Idle(Idle::NoDemand));
+        assert_eq!(
+            decide(&inputs(&[D::LiveOverview, D::LiveWatch], Some(100_000.0))),
+            Dec::Idle(Idle::NoDemand)
+        );
     }
 
     #[test]
     fn auto_refresh_off() {
-        let home = with(inputs(&[D::Home], Some(5000.0)), |v| v.auto_refresh_enabled = false);
+        let home = with(inputs(&[D::Home], Some(5000.0)), |v| {
+            v.auto_refresh_enabled = false
+        });
         assert_eq!(decide(&home), Dec::Idle(Idle::AutoRefreshOff));
-        let cat = with(inputs(&[D::Category], Some(5000.0)), |v| v.auto_refresh_enabled = false);
+        let cat = with(inputs(&[D::Category], Some(5000.0)), |v| {
+            v.auto_refresh_enabled = false
+        });
         assert_eq!(decide(&cat), Dec::Run(Run::Interval));
     }
 
     #[test]
     fn boot_grace() {
         let settled = at(-5.0);
-        let waiting = with(inputs(&[D::Home], Some(5000.0)), |v| v.boot_settled_at = Some(settled));
-        assert_eq!(decide(&waiting), Dec::Wait { until: adding(&settled, 20.0) });
-        let after = with(inputs(&[D::Home], Some(5000.0)), |v| v.boot_settled_at = Some(at(-20.0)));
+        let waiting = with(inputs(&[D::Home], Some(5000.0)), |v| {
+            v.boot_settled_at = Some(settled)
+        });
+        assert_eq!(
+            decide(&waiting),
+            Dec::Wait {
+                until: adding(&settled, 20.0)
+            }
+        );
+        let after = with(inputs(&[D::Home], Some(5000.0)), |v| {
+            v.boot_settled_at = Some(at(-20.0))
+        });
         assert_eq!(decide(&after), Dec::Run(Run::Interval));
     }
 
@@ -372,13 +416,23 @@ mod tests {
     fn boot_exception_for_empty_category() {
         let unsettled = with(inputs(&[D::Home], Some(0.0)), |v| v.boot_settled_at = None);
         assert_eq!(decide(&unsettled), Dec::Idle(Idle::BootUnsettled));
-        let empty = with(inputs_at(&[D::Category], t0(), None, false), |v| v.boot_settled_at = None);
+        let empty = with(inputs_at(&[D::Category], t0(), None, false), |v| {
+            v.boot_settled_at = None
+        });
         assert_eq!(decide(&empty), Dec::Run(Run::FirstFill));
-        let filled = with(inputs(&[D::Category], Some(5000.0)), |v| v.boot_settled_at = Some(at(-1.0)));
+        let filled = with(inputs(&[D::Category], Some(5000.0)), |v| {
+            v.boot_settled_at = Some(at(-1.0))
+        });
         assert_eq!(decide(&filled), wait(19.0));
     }
 
-    fn checkpoint(updated_ago: f64, started_ago: f64, pauses: u32, build: &str, rows: i64) -> CatalogSweepCheckpoint {
+    fn checkpoint(
+        updated_ago: f64,
+        started_ago: f64,
+        pauses: u32,
+        build: &str,
+        rows: i64,
+    ) -> CatalogSweepCheckpoint {
         CatalogSweepCheckpoint {
             updated_at: at(-updated_ago),
             started_at: at(-started_ago),
@@ -405,17 +459,26 @@ mod tests {
         assert_eq!(d(checkpoint(10.0, 600.0, 0, "100", 500)), Resume);
         assert_eq!(d(checkpoint(10.0, 601.0, 0, "100", 500)), Discard(TooOld));
         assert_eq!(d(checkpoint(10.0, 100.0, 2, "100", 500)), Resume);
-        assert_eq!(d(checkpoint(10.0, 100.0, 3, "100", 500)), Discard(TooManyPauses));
-        assert_eq!(d(checkpoint(10.0, 100.0, 0, "99", 500)), Discard(BuildChanged));
+        assert_eq!(
+            d(checkpoint(10.0, 100.0, 3, "100", 500)),
+            Discard(TooManyPauses)
+        );
+        assert_eq!(
+            d(checkpoint(10.0, 100.0, 0, "99", 500)),
+            Discard(BuildChanged)
+        );
         assert_eq!(d(checkpoint(10.0, 100.0, 0, "100", 0)), Discard(NoRows));
     }
 
     #[test]
     fn checkpoint_in_decide() {
-        let resumed = with(inputs(&[D::Category], Some(1.0)), |v| v.checkpoint = Some(cp()));
+        let resumed = with(inputs(&[D::Category], Some(1.0)), |v| {
+            v.checkpoint = Some(cp())
+        });
         assert_eq!(decide(&resumed), Dec::Resume);
-        let ignored =
-            with(inputs(&[D::Category], Some(1.0)), |v| v.checkpoint = Some(checkpoint(10.0, 100.0, 3, "100", 500)));
+        let ignored = with(inputs(&[D::Category], Some(1.0)), |v| {
+            v.checkpoint = Some(checkpoint(10.0, 100.0, 3, "100", 500))
+        });
         assert_eq!(decide(&ignored), wait(599.0));
     }
 
@@ -423,7 +486,10 @@ mod tests {
     fn retry_cooldowns() {
         let d = |ago: f64, cls: CatalogRetryClass| {
             decide(&with(inputs(&[D::Category], Some(5000.0)), |v| {
-                v.last_attempt = Some(CatalogSweepAttempt { at: at(-ago), retry_class: cls })
+                v.last_attempt = Some(CatalogSweepAttempt {
+                    at: at(-ago),
+                    retry_class: cls,
+                })
             }))
         };
         use CatalogRetryClass::*;
@@ -438,10 +504,19 @@ mod tests {
     #[test]
     fn interval_boundaries() {
         assert_eq!(decide(&inputs(&[D::Category], Some(599.0))), wait(1.0));
-        assert_eq!(decide(&inputs(&[D::Category], Some(600.0))), Dec::Run(Run::Interval));
+        assert_eq!(
+            decide(&inputs(&[D::Category], Some(600.0))),
+            Dec::Run(Run::Interval)
+        );
         assert_eq!(decide(&inputs(&[D::Home], Some(1799.0))), wait(1.0));
-        assert_eq!(decide(&inputs(&[D::Home], Some(1800.0))), Dec::Run(Run::Interval));
-        assert_eq!(decide(&inputs(&[D::Home, D::Category], Some(600.0))), Dec::Run(Run::Interval));
+        assert_eq!(
+            decide(&inputs(&[D::Home], Some(1800.0))),
+            Dec::Run(Run::Interval)
+        );
+        assert_eq!(
+            decide(&inputs(&[D::Home, D::Category], Some(600.0))),
+            Dec::Run(Run::Interval)
+        );
     }
 
     #[test]
@@ -454,7 +529,11 @@ mod tests {
 
     #[test]
     fn low_power() {
-        let lp = |ago: f64| decide(&with(inputs(&[D::Category], Some(ago)), |v| v.is_low_power = true));
+        let lp = |ago: f64| {
+            decide(&with(inputs(&[D::Category], Some(ago)), |v| {
+                v.is_low_power = true
+            }))
+        };
         assert_eq!(lp(5000.0), Dec::Idle(Idle::LowPower));
         assert_eq!(lp(86_400.0), Dec::Idle(Idle::LowPower));
         assert_eq!(lp(86_401.0), Dec::Run(Run::Interval));
@@ -463,8 +542,14 @@ mod tests {
     #[test]
     fn first_fill_and_clock_skew() {
         assert_eq!(decide(&inputs(&[D::Home], None)), Dec::Run(Run::FirstFill));
-        assert_eq!(decide(&inputs_at(&[D::Home], t0(), Some(5.0), false)), Dec::Run(Run::FirstFill));
-        assert_eq!(decide(&inputs(&[D::Home], Some(-50.0))), Dec::Run(Run::Interval));
+        assert_eq!(
+            decide(&inputs_at(&[D::Home], t0(), Some(5.0), false)),
+            Dec::Run(Run::FirstFill)
+        );
+        assert_eq!(
+            decide(&inputs(&[D::Home], Some(-50.0))),
+            Dec::Run(Run::Interval)
+        );
     }
 
     /// 60초 걸음으로 60분을 돌려 실행 횟수를 센다. 실행하면 승격 시각이 지금이 된다.

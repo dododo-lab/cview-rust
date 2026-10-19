@@ -31,7 +31,9 @@ where
     let mut group = JoinSet::new();
 
     let mut submit = |group: &mut JoinSet<()>| -> bool {
-        let Some(element) = pending.next() else { return false };
+        let Some(element) = pending.next() else {
+            return false;
+        };
         let op = Arc::clone(&operation);
         group.spawn(async move { op(element).await });
         true
@@ -62,7 +64,10 @@ pub fn prefetch_concurrency_limit(
     high_performance: bool,
     load: SystemLoadMode,
 ) -> i64 {
-    let base = requested.max(1).min(active_processors.max(1)).min(if high_performance { 4 } else { 2 });
+    let base = requested
+        .max(1)
+        .min(active_processors.max(1))
+        .min(if high_performance { 4 } else { 2 });
     load.adjusted_decoder_threads(base)
 }
 
@@ -205,9 +210,21 @@ mod tests {
         }
         assert_eq!(SystemLoadMode::Warm.adjusted_decoder_threads(1), 1);
         assert_eq!(SystemLoadMode::Warm.adjusted_decoder_threads(6), 4);
-        assert_eq!(prefetch_concurrency_limit(120, 12, true, SystemLoadMode::Normal), 4);
-        assert_eq!(prefetch_concurrency_limit(120, 12, false, SystemLoadMode::Normal), 2);
-        assert_eq!(prefetch_concurrency_limit(120, 1, true, SystemLoadMode::Warm), 1);
-        assert_eq!(prefetch_concurrency_limit(4, 12, true, SystemLoadMode::Hot), 1);
+        assert_eq!(
+            prefetch_concurrency_limit(120, 12, true, SystemLoadMode::Normal),
+            4
+        );
+        assert_eq!(
+            prefetch_concurrency_limit(120, 12, false, SystemLoadMode::Normal),
+            2
+        );
+        assert_eq!(
+            prefetch_concurrency_limit(120, 1, true, SystemLoadMode::Warm),
+            1
+        );
+        assert_eq!(
+            prefetch_concurrency_limit(4, 12, true, SystemLoadMode::Hot),
+            1
+        );
     }
 }

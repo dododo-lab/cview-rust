@@ -20,7 +20,9 @@ pub(crate) fn is_valid_dns_name(host: &str) -> bool {
                 && label.len() <= 63
                 && !label.starts_with('-')
                 && !label.ends_with('-')
-                && label.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+                && label
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
         })
 }
 
@@ -51,7 +53,9 @@ pub fn is_clip_document(url: Option<&Url>) -> bool {
     if !allows(url) {
         return false;
     }
-    let Some(host) = url.host_str().map(str::to_lowercase) else { return false };
+    let Some(host) = url.host_str().map(str::to_lowercase) else {
+        return false;
+    };
     host_matches(&host, "naver.com") || host == "ssl.pstatic.net" || host == "video.pstatic.net"
 }
 
@@ -73,7 +77,9 @@ mod tests {
         let document = Url::parse("https://chzzk.naver.com/embed/clip/abc").ok();
         let media = "https://video.pstatic.net/clip/index.m3u8?token=a%2Bb";
         assert_eq!(
-            clip_media_url(media, document.as_ref()).map(|u| u.to_string()).as_deref(),
+            clip_media_url(media, document.as_ref())
+                .map(|u| u.to_string())
+                .as_deref(),
             Some(media)
         );
         for value in [
@@ -83,7 +89,10 @@ mod tests {
             "https://127.0.0.1/a.m3u8",
             "https://video.pstatic.net.evil.com/a.m3u8",
         ] {
-            assert!(clip_media_url(value, document.as_ref()).is_none(), "{value}");
+            assert!(
+                clip_media_url(value, document.as_ref()).is_none(),
+                "{value}"
+            );
         }
         for value in [
             "https://evil.com",
@@ -98,8 +107,14 @@ mod tests {
 
     #[test]
     fn rejects_fragment_and_port() {
-        assert!(!allows(&Url::parse("https://video.pstatic.net/a#x").unwrap()));
-        assert!(!allows(&Url::parse("https://video.pstatic.net:8443/a").unwrap()));
-        assert!(allows(&Url::parse("https://video.pstatic.net:443/a").unwrap()));
+        assert!(!allows(
+            &Url::parse("https://video.pstatic.net/a#x").unwrap()
+        ));
+        assert!(!allows(
+            &Url::parse("https://video.pstatic.net:8443/a").unwrap()
+        ));
+        assert!(allows(
+            &Url::parse("https://video.pstatic.net:443/a").unwrap()
+        ));
     }
 }

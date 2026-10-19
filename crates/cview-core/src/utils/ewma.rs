@@ -21,7 +21,11 @@ impl EwmaCalculator {
     /// `alpha` 가 `(0, 1]` 밖이면 패닉한다(원본의 `precondition`).
     pub fn new(alpha: f64) -> Self {
         assert!(alpha > 0.0 && alpha <= 1.0, "Alpha must be in (0, 1]");
-        Self { alpha, estimate: None, total_weight: 0.0 }
+        Self {
+            alpha,
+            estimate: None,
+            total_weight: 0.0,
+        }
     }
 
     /// 새 샘플로 EWMA 업데이트 후 현재 추정값 반환.

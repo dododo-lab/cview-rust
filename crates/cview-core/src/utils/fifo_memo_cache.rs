@@ -166,7 +166,7 @@ mod tests {
             h.join().unwrap();
         }
         assert!(cache.len() <= 32);
-        assert!(cache.len() > 0);
+        assert!(!cache.is_empty());
     }
 
     #[test]

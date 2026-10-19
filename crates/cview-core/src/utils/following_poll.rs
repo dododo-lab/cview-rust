@@ -115,7 +115,12 @@ pub struct FollowingPollResult<T> {
 
 impl<T: FollowingPublishItem> FollowingPollResult<T> {
     /// 나머지 필드는 원본 기본값(비어 있음/거짓).
-    pub fn new(reason: FollowingPollReason, channels: Vec<T>, fetched_at: Date, generation: u64) -> Self {
+    pub fn new(
+        reason: FollowingPollReason,
+        channels: Vec<T>,
+        fetched_at: Date,
+        generation: u64,
+    ) -> Self {
         Self {
             reason,
             channels,
@@ -191,11 +196,12 @@ impl FollowingPublishThrottle {
         reason: FollowingPollReason,
         now: Date,
     ) -> bool {
-        let publish = if reason.persists_immediately() || !Self::same_except_viewers(current, next) {
+        let publish = if reason.persists_immediately() || !Self::same_except_viewers(current, next)
+        {
             true
         } else if let Some(last) = &self.last_publish_at {
             let age = interval_since(&now, last);
-            age < 0.0 || age >= Self::VIEWER_ONLY_INTERVAL
+            !(0.0..Self::VIEWER_ONLY_INTERVAL).contains(&age)
         } else {
             true
         };
@@ -223,13 +229,19 @@ pub struct FollowingPersistThrottle;
 impl FollowingPersistThrottle {
     pub const MIN_INTERVAL: TimeInterval = 180.0;
 
-    pub fn should_persist(reason: FollowingPollReason, last_persist_at: Option<&Date>, now: &Date) -> bool {
+    pub fn should_persist(
+        reason: FollowingPollReason,
+        last_persist_at: Option<&Date>,
+        now: &Date,
+    ) -> bool {
         if reason.persists_immediately() {
             return true;
         }
-        let Some(last) = last_persist_at else { return true };
+        let Some(last) = last_persist_at else {
+            return true;
+        };
         let age = interval_since(now, last);
-        age < 0.0 || age >= Self::MIN_INTERVAL
+        !(0.0..Self::MIN_INTERVAL).contains(&age)
     }
 }
 
@@ -269,7 +281,10 @@ impl LiveDetectedTiming {
             ("detect_ms", ms(self.detect_seconds)),
             ("notify_ms", ms(self.notify_seconds)),
             ("path", self.path.clone()),
-            ("carries_live_info", if self.carries_live_info { "1" } else { "0" }.to_string()),
+            (
+                "carries_live_info",
+                if self.carries_live_info { "1" } else { "0" }.to_string(),
+            ),
         ]);
         if let Some(lag) = self.lag_seconds {
             f.insert("lag_ms", ms(lag.max(0.0)));
@@ -316,31 +331,64 @@ mod tests {
     }
 
     fn viewers(id: &str, v: i64) -> MergedFollowingItem {
-        MergedFollowingItem { viewer_count: v, ..item(id) }
+        MergedFollowingItem {
+            viewer_count: v,
+            ..item(id)
+        }
     }
 
-    const MANUAL: Reason = Reason::Manual { invalidate_thumbnails: false };
+    const MANUAL: Reason = Reason::Manual {
+        invalidate_thumbnails: false,
+    };
 
     #[test]
     fn reason_properties() {
-        let all = [Reason::Boot, Reason::Login, Reason::Scheduled, Reason::ScreenEntry, MANUAL];
+        let all = [
+            Reason::Boot,
+            Reason::Login,
+            Reason::Scheduled,
+            Reason::ScreenEntry,
+            MANUAL,
+        ];
         let seeds: Vec<_> = all.iter().copied().filter(|r| r.seeds_baseline()).collect();
-        let immediate: Vec<_> = all.iter().copied().filter(|r| r.persists_immediately()).collect();
+        let immediate: Vec<_> = all
+            .iter()
+            .copied()
+            .filter(|r| r.persists_immediately())
+            .collect();
         let manuals: Vec<_> = all.iter().copied().filter(|r| r.is_manual()).collect();
         let paths: Vec<_> = all.iter().map(|r| r.capture_path()).collect();
         assert_eq!(seeds, vec![Reason::Boot, Reason::Login]);
         assert_eq!(immediate, vec![Reason::Boot, Reason::Login, MANUAL]);
         assert_eq!(manuals, vec![MANUAL]);
-        assert!(Reason::Manual { invalidate_thumbnails: true }.is_manual());
-        assert_eq!(paths, ["boot", "login", "scheduled", "screen_entry", "manual"]);
-        assert_ne!(Reason::Manual { invalidate_thumbnails: true }, MANUAL);
+        assert!(Reason::Manual {
+            invalidate_thumbnails: true
+        }
+        .is_manual());
+        assert_eq!(
+            paths,
+            ["boot", "login", "scheduled", "screen_entry", "manual"]
+        );
+        assert_ne!(
+            Reason::Manual {
+                invalidate_thumbnails: true
+            },
+            MANUAL
+        );
     }
 
     #[test]
     fn result_live_count_skips_closed_rows() {
         let r = FollowingPollResult::new(
             Reason::Scheduled,
-            vec![item("a"), MergedFollowingItem { is_live: false, ..item("b") }, item("c")],
+            vec![
+                item("a"),
+                MergedFollowingItem {
+                    is_live: false,
+                    ..item("b")
+                },
+                item("c"),
+            ],
             base(),
             3,
         );
@@ -352,10 +400,19 @@ mod tests {
     #[test]
     fn outcome_generation() {
         let failure: FollowingPollOutcome<MergedFollowingItem, &str> =
-            FollowingPollOutcome::Failure(FollowingPollFailure { reason: Reason::Scheduled, generation: 0, error: "x" });
+            FollowingPollOutcome::Failure(FollowingPollFailure {
+                reason: Reason::Scheduled,
+                generation: 0,
+                error: "x",
+            });
         assert_eq!(failure.generation(), 0);
         let success: FollowingPollOutcome<MergedFollowingItem, &str> =
-            FollowingPollOutcome::Success(FollowingPollResult::new(Reason::Boot, vec![], base(), 7));
+            FollowingPollOutcome::Success(FollowingPollResult::new(
+                Reason::Boot,
+                vec![],
+                base(),
+                7,
+            ));
         assert_eq!(success.generation(), 7);
     }
 
@@ -385,17 +442,68 @@ mod tests {
         let changes: Vec<(&str, Vec<MergedFollowingItem>)> = vec![
             ("구성", vec![item("a"), item("b"), item("c")]),
             ("순서", vec![item("b"), item("a")]),
-            ("라이브 여부", vec![item("a"), MergedFollowingItem { is_live: false, ..b.clone() }]),
-            ("제목", vec![item("a"), MergedFollowingItem { live_title: "new".into(), ..b.clone() }]),
-            ("카테고리", vec![item("a"), MergedFollowingItem { category_name: Some("other".into()), ..b.clone() }]),
-            ("썸네일", vec![item("a"), MergedFollowingItem { thumbnail_url: Some("https://t/1".into()), ..b.clone() }]),
-            ("방송 시작", vec![item("a"), MergedFollowingItem { open_date: Some(base()), ..b.clone() }]),
+            (
+                "라이브 여부",
+                vec![
+                    item("a"),
+                    MergedFollowingItem {
+                        is_live: false,
+                        ..b.clone()
+                    },
+                ],
+            ),
+            (
+                "제목",
+                vec![
+                    item("a"),
+                    MergedFollowingItem {
+                        live_title: "new".into(),
+                        ..b.clone()
+                    },
+                ],
+            ),
+            (
+                "카테고리",
+                vec![
+                    item("a"),
+                    MergedFollowingItem {
+                        category_name: Some("other".into()),
+                        ..b.clone()
+                    },
+                ],
+            ),
+            (
+                "썸네일",
+                vec![
+                    item("a"),
+                    MergedFollowingItem {
+                        thumbnail_url: Some("https://t/1".into()),
+                        ..b.clone()
+                    },
+                ],
+            ),
+            (
+                "방송 시작",
+                vec![
+                    item("a"),
+                    MergedFollowingItem {
+                        open_date: Some(base()),
+                        ..b.clone()
+                    },
+                ],
+            ),
         ];
         for (label, next) in changes {
             let mut t = FollowingPublishThrottle::new(Some(base()));
-            assert!(t.should_publish(&start, &next, Reason::Scheduled, at(10.0)), "{label} 변경이 스로틀에 걸렸다");
+            assert!(
+                t.should_publish(&start, &next, Reason::Scheduled, at(10.0)),
+                "{label} 변경이 스로틀에 걸렸다"
+            );
         }
-        assert!(FollowingPublishThrottle::same_except_viewers(&start, &[viewers("a", 1), viewers("b", 2)]));
+        assert!(FollowingPublishThrottle::same_except_viewers(
+            &start,
+            &[viewers("a", 1), viewers("b", 2)]
+        ));
     }
 
     #[test]
@@ -403,7 +511,10 @@ mod tests {
         let same = vec![item("a")];
         for reason in [MANUAL, Reason::Boot, Reason::Login] {
             let mut t = FollowingPublishThrottle::new(Some(base()));
-            assert!(t.should_publish(&same, &same, reason, at(1.0)), "{reason:?}");
+            assert!(
+                t.should_publish(&same, &same, reason, at(1.0)),
+                "{reason:?}"
+            );
         }
         let mut t = FollowingPublishThrottle::new(Some(base()));
         assert!(t.should_publish(&same, &same, Reason::Scheduled, at(-30.0)));
@@ -461,11 +572,18 @@ mod tests {
             detail_seconds: None,
             notify_seconds: 2.0,
             poll_seconds: None,
-            path: Reason::Manual { invalidate_thumbnails: true }.capture_path().into(),
+            path: Reason::Manual {
+                invalidate_thumbnails: true,
+            }
+            .capture_path()
+            .into(),
             carries_live_info: true,
         };
         let pf = partial.fields();
-        assert_eq!(pf.keys().copied().collect::<Vec<_>>(), ["carries_live_info", "detect_ms", "notify_ms", "path"]);
+        assert_eq!(
+            pf.keys().copied().collect::<Vec<_>>(),
+            ["carries_live_info", "detect_ms", "notify_ms", "path"]
+        );
         assert_eq!(pf["path"], "manual");
         assert_eq!(pf["carries_live_info"], "1");
 

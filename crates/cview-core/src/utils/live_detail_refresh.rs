@@ -87,8 +87,14 @@ pub enum LiveDetailReason {
 }
 
 impl LiveDetailReason {
-    pub const ALL: [Self; 6] =
-        [Self::NewLive, Self::MissingMeta, Self::NotifyWatch, Self::VisibleDue, Self::BackgroundDue, Self::Manual];
+    pub const ALL: [Self; 6] = [
+        Self::NewLive,
+        Self::MissingMeta,
+        Self::NotifyWatch,
+        Self::VisibleDue,
+        Self::BackgroundDue,
+        Self::Manual,
+    ];
 }
 
 /// 계획 한 줄 — 이 채널의 상세를 이 사유로 받는다.
@@ -100,7 +106,10 @@ pub struct LiveDetailRequest {
 
 impl LiveDetailRequest {
     pub fn new(channel_id: impl Into<String>, reason: LiveDetailReason) -> Self {
-        Self { channel_id: channel_id.into(), reason }
+        Self {
+            channel_id: channel_id.into(),
+            reason,
+        }
     }
 }
 
@@ -136,7 +145,11 @@ impl Default for LiveDetailRefreshConfig {
 
 impl LiveDetailRefreshConfig {
     /// 보이지 않는 채널의 수명. 가림이 가장 먼저다.
-    pub fn background_ttl_for(&self, list_carries_live_info: bool, suspended: bool) -> TimeInterval {
+    pub fn background_ttl_for(
+        &self,
+        list_carries_live_info: bool,
+        suspended: bool,
+    ) -> TimeInterval {
         if suspended {
             self.suspended_ttl
         } else if list_carries_live_info {
@@ -208,7 +221,12 @@ pub fn plan(
 
     // 1) 새 라이브 — 맨 앞, 상한 없음.
     if let Some(prev) = previous_live {
-        let fresh: Vec<_> = planner.live.iter().copied().filter(|r| !prev.contains(&r.channel_id)).collect();
+        let fresh: Vec<_> = planner
+            .live
+            .iter()
+            .copied()
+            .filter(|r| !prev.contains(&r.channel_id))
+            .collect();
         planner.take(&fresh, LiveDetailReason::NewLive, usize::MAX);
     }
 
@@ -220,12 +238,25 @@ pub fn plan(
     }
 
     // 2) 상세가 없는 채널 — 보이는 채널 먼저, 상한 안에서.
-    let missing: Vec<_> = planner.visible_first().into_iter().filter(|r| !meta.contains_key(&r.channel_id)).collect();
-    planner.take(&missing, LiveDetailReason::MissingMeta, config.missing_meta_cap_per_poll);
+    let missing: Vec<_> = planner
+        .visible_first()
+        .into_iter()
+        .filter(|r| !meta.contains_key(&r.channel_id))
+        .collect();
+    planner.take(
+        &missing,
+        LiveDetailReason::MissingMeta,
+        config.missing_meta_cap_per_poll,
+    );
 
     // 3) 알림 감시 채널 — 목록이 제목·카테고리를 싣지 않을 때만, 상한 없음.
     if !options.list_carries_live_info {
-        let watched: Vec<_> = planner.live.iter().copied().filter(|r| notify_watch(&r.channel_id)).collect();
+        let watched: Vec<_> = planner
+            .live
+            .iter()
+            .copied()
+            .filter(|r| notify_watch(&r.channel_id))
+            .collect();
         planner.take(&watched, LiveDetailReason::NotifyWatch, usize::MAX);
     }
 
@@ -262,7 +293,10 @@ pub fn merge(
             channel_id: row.channel_id.clone(),
             ..MergedFollowingItem::default()
         };
-        return LiveDetailMergeResult { item: offline, meta: None };
+        return LiveDetailMergeResult {
+            item: offline,
+            meta: None,
+        };
     }
 
     let source: Option<LiveDetailMeta> = match detail {
@@ -274,8 +308,14 @@ pub fn merge(
                 title: d.live_title.clone(),
                 viewers: d.concurrent_user_count,
                 category: d.live_category_value.clone(),
-                category_type: d.category_type.clone().or_else(|| carry.and_then(|c| c.category_type.clone())),
-                thumbnail_url: d.thumbnail_url.clone().or_else(|| carry.and_then(|c| c.thumbnail_url.clone())),
+                category_type: d
+                    .category_type
+                    .clone()
+                    .or_else(|| carry.and_then(|c| c.category_type.clone())),
+                thumbnail_url: d
+                    .thumbnail_url
+                    .clone()
+                    .or_else(|| carry.and_then(|c| c.thumbnail_url.clone())),
                 open_date: d.open_date.or_else(|| carry.and_then(|c| c.open_date)),
                 is_open: !d.is_closed,
             })
@@ -293,13 +333,23 @@ pub fn merge(
             .clone()
             .or_else(|| source.as_ref().map(|s| s.title.clone()))
             .unwrap_or_default(),
-        viewer_count: row.list_viewers.or(source.as_ref().map(|s| s.viewers)).unwrap_or(0),
-        category_name: row.list_category.clone().or_else(|| source.as_ref().and_then(|s| s.category.clone())),
+        viewer_count: row
+            .list_viewers
+            .or(source.as_ref().map(|s| s.viewers))
+            .unwrap_or(0),
+        category_name: row
+            .list_category
+            .clone()
+            .or_else(|| source.as_ref().and_then(|s| s.category.clone())),
         category_type: source.as_ref().and_then(|s| s.category_type.clone()),
         thumbnail_url: source.as_ref().and_then(|s| s.thumbnail_url.clone()),
         channel_id: row.channel_id.clone(),
         is_live,
-        open_date: if is_live { source.as_ref().and_then(|s| s.open_date) } else { None },
+        open_date: if is_live {
+            source.as_ref().and_then(|s| s.open_date)
+        } else {
+            None
+        },
     };
     LiveDetailMergeResult { item, meta: source }
 }
@@ -322,12 +372,20 @@ impl<'a> Planner<'a> {
             .iter()
             .filter(|r| r.is_live && !r.channel_id.is_empty() && seen.insert(r.channel_id.as_str()))
             .collect();
-        Self { live, visible, requests: Vec::new(), taken: HashSet::new() }
+        Self {
+            live,
+            visible,
+            requests: Vec::new(),
+            taken: HashSet::new(),
+        }
     }
 
     /// 보이는 채널 먼저, 그 안에서는 목록 순.
     fn visible_first(&self) -> Vec<&'a FollowingRowSnapshot> {
-        let (vis, rest): (Vec<_>, Vec<_>) = self.live.iter().partition(|r| self.visible.contains(&r.channel_id));
+        let (vis, rest): (Vec<_>, Vec<_>) = self
+            .live
+            .iter()
+            .partition(|r| self.visible.contains(&r.channel_id));
         vis.into_iter().chain(rest).collect()
     }
 
@@ -339,7 +397,8 @@ impl<'a> Planner<'a> {
                 break;
             }
             if self.taken.insert(row.channel_id.as_str()) {
-                self.requests.push(LiveDetailRequest::new(row.channel_id.clone(), reason));
+                self.requests
+                    .push(LiveDetailRequest::new(row.channel_id.clone(), reason));
                 budget -= 1;
             }
         }
@@ -364,21 +423,42 @@ impl<'a> Planner<'a> {
             if self.taken.contains(row.channel_id.as_str()) {
                 continue;
             }
-            let Some(entry) = meta.get(&row.channel_id) else { continue };
+            let Some(entry) = meta.get(&row.channel_id) else {
+                continue;
+            };
             let is_visible = self.visible.contains(&row.channel_id);
             let raw_age = now - entry.fetched_at_uptime;
             // 미래 시각(재부팅 뒤 남은 uptime·시계 역행)은 가장 오래된 것으로 친다.
-            let age = if raw_age < 0.0 { f64::INFINITY } else { raw_age };
-            if age < if is_visible { visible_ttl } else { background_ttl } {
+            let age = if raw_age < 0.0 {
+                f64::INFINITY
+            } else {
+                raw_age
+            };
+            if age
+                < if is_visible {
+                    visible_ttl
+                } else {
+                    background_ttl
+                }
+            {
                 continue;
             }
-            due.push(Candidate { index, age, is_visible });
+            due.push(Candidate {
+                index,
+                age,
+                is_visible,
+            });
         }
         due.sort_by(|a, b| b.age.total_cmp(&a.age).then(a.index.cmp(&b.index)));
         for c in due.into_iter().take(limit) {
             let row = self.live[c.index];
-            let reason = if c.is_visible { LiveDetailReason::VisibleDue } else { LiveDetailReason::BackgroundDue };
-            self.requests.push(LiveDetailRequest::new(row.channel_id.clone(), reason));
+            let reason = if c.is_visible {
+                LiveDetailReason::VisibleDue
+            } else {
+                LiveDetailReason::BackgroundDue
+            };
+            self.requests
+                .push(LiveDetailRequest::new(row.channel_id.clone(), reason));
             self.taken.insert(row.channel_id.as_str());
         }
     }
@@ -405,12 +485,17 @@ pub trait ChannelNotificationLookup {
 ///
 /// 싱크는 ① 자동 새로고침이 켜져 있어야 돌고 ② 알림이 켜져 있을 때만 알리며
 /// ③ 종류별 전역 스위치와 채널별 설정을 AND 한다.
-pub fn notify_watches(channel_id: &str, general: &NotifyWatchGeneral, channels: &impl ChannelNotificationLookup) -> bool {
+pub fn notify_watches(
+    channel_id: &str,
+    general: &NotifyWatchGeneral,
+    channels: &impl ChannelNotificationLookup,
+) -> bool {
     if !general.notifications_enabled || !general.auto_refresh_enabled {
         return false;
     }
     (general.notify_on_title_change && channels.is_title_change_notification_enabled(channel_id))
-        || (general.notify_on_category_change && channels.is_category_change_notification_enabled(channel_id))
+        || (general.notify_on_category_change
+            && channels.is_category_change_notification_enabled(channel_id))
 }
 
 #[cfg(test)]
@@ -433,7 +518,10 @@ mod tests {
     }
 
     fn offline(id: &str) -> FollowingRowSnapshot {
-        FollowingRowSnapshot { is_live: false, ..row(id) }
+        FollowingRowSnapshot {
+            is_live: false,
+            ..row(id)
+        }
     }
 
     fn meta_at(fetched_at: f64) -> LiveDetailMeta {
@@ -468,7 +556,13 @@ mod tests {
     }
 
     fn bare_detail(live_id: i64) -> LiveDetailSnapshot {
-        LiveDetailSnapshot { live_id, category_type: None, thumbnail_url: None, open_date: None, ..detail() }
+        LiveDetailSnapshot {
+            live_id,
+            category_type: None,
+            thumbnail_url: None,
+            open_date: None,
+            ..detail()
+        }
     }
 
     fn set(ids: &[&str]) -> HashSet<String> {
@@ -509,7 +603,14 @@ mod tests {
     #[test]
     fn no_live_rows_plans_nothing() {
         let rows = [offline("a"), offline("b")];
-        let p = P { previous_live: Some(set(&[])), options: PlanOptions { manual: true, ..Default::default() }, ..Default::default() };
+        let p = P {
+            previous_live: Some(set(&[])),
+            options: PlanOptions {
+                manual: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
         assert!(run(&rows, p).is_empty());
     }
 
@@ -517,7 +618,10 @@ mod tests {
     fn fresh_meta_plans_nothing() {
         let all = ids("c", 71);
         let rows: Vec<_> = all.iter().map(|i| row(i)).collect();
-        let meta = all.iter().map(|i| (i.clone(), meta_at(NOW - 30.0))).collect();
+        let meta = all
+            .iter()
+            .map(|i| (i.clone(), meta_at(NOW - 30.0)))
+            .collect();
         let p = P {
             previous_live: Some(all.iter().cloned().collect()),
             meta,
@@ -533,38 +637,83 @@ mod tests {
         let new = ids("new", 30);
         let mut rows: Vec<_> = old.iter().chain(&new).map(|i| row(i)).collect();
         rows.push(offline("off"));
-        let meta = old.iter().map(|i| (i.clone(), meta_at(NOW - 5_000.0))).collect();
+        let meta = old
+            .iter()
+            .map(|i| (i.clone(), meta_at(NOW - 5_000.0)))
+            .collect();
         let result = run(
             &rows,
-            P { previous_live: Some(old.iter().cloned().collect()), meta, visible: set(&[&old[0]]), ..Default::default() },
+            P {
+                previous_live: Some(old.iter().cloned().collect()),
+                meta,
+                visible: set(&[&old[0]]),
+                ..Default::default()
+            },
         );
-        let new_live: Vec<_> =
-            result.iter().take_while(|r| r.reason == R::NewLive).map(|r| r.channel_id.clone()).collect();
+        let new_live: Vec<_> = result
+            .iter()
+            .take_while(|r| r.reason == R::NewLive)
+            .map(|r| r.channel_id.clone())
+            .collect();
         assert_eq!(new_live, new);
         assert_eq!(result.len(), new.len() + old.len());
-        assert!(result[new.len()..].iter().all(|r| matches!(r.reason, R::VisibleDue | R::BackgroundDue)));
+        assert!(result[new.len()..]
+            .iter()
+            .all(|r| matches!(r.reason, R::VisibleDue | R::BackgroundDue)));
         assert!(!result.iter().any(|r| r.channel_id == "off"));
     }
 
     #[test]
     fn previous_live_none_versus_empty() {
         let rows = [row("a"), row("b")];
-        assert!(run(&rows, P::default()).iter().all(|r| r.reason == R::MissingMeta));
-        let after = run(&rows, P { previous_live: Some(set(&[])), ..Default::default() });
-        assert_eq!(after.iter().map(|r| r.reason).collect::<Vec<_>>(), vec![R::NewLive, R::NewLive]);
+        assert!(run(&rows, P::default())
+            .iter()
+            .all(|r| r.reason == R::MissingMeta));
+        let after = run(
+            &rows,
+            P {
+                previous_live: Some(set(&[])),
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            after.iter().map(|r| r.reason).collect::<Vec<_>>(),
+            vec![R::NewLive, R::NewLive]
+        );
     }
 
     #[test]
     fn missing_meta_cap_visible_first() {
         let all = ids("c", 30);
         let rows: Vec<_> = all.iter().map(|i| row(i)).collect();
-        let first = run(&rows, P { visible: set(&["c25", "c28"]), ..Default::default() });
+        let first = run(
+            &rows,
+            P {
+                visible: set(&["c25", "c28"]),
+                ..Default::default()
+            },
+        );
         assert_eq!(first.len(), 24);
         assert!(first.iter().all(|r| r.reason == R::MissingMeta));
-        assert_eq!(first[..2].iter().map(|r| r.channel_id.as_str()).collect::<Vec<_>>(), ["c25", "c28"]);
-        assert_eq!(first[2..].iter().map(|r| r.channel_id.clone()).collect::<Vec<_>>(), all[..22].to_vec());
+        assert_eq!(
+            first[..2]
+                .iter()
+                .map(|r| r.channel_id.as_str())
+                .collect::<Vec<_>>(),
+            ["c25", "c28"]
+        );
+        assert_eq!(
+            first[2..]
+                .iter()
+                .map(|r| r.channel_id.clone())
+                .collect::<Vec<_>>(),
+            all[..22].to_vec()
+        );
 
-        let meta = first.iter().map(|r| (r.channel_id.clone(), meta_at(NOW))).collect();
+        let meta = first
+            .iter()
+            .map(|r| (r.channel_id.clone(), meta_at(NOW)))
+            .collect();
         let second = run(
             &rows,
             P {
@@ -576,7 +725,10 @@ mod tests {
             },
         );
         assert_eq!(
-            second.iter().map(|r| r.channel_id.as_str()).collect::<Vec<_>>(),
+            second
+                .iter()
+                .map(|r| r.channel_id.as_str())
+                .collect::<Vec<_>>(),
             ["c22", "c23", "c24", "c26", "c27", "c29"]
         );
         assert!(second.iter().all(|r| r.reason == R::MissingMeta));
@@ -585,7 +737,10 @@ mod tests {
     #[test]
     fn notify_watch_only_without_list_live_info() {
         let rows = [row("a"), row("b"), row("c")];
-        let meta: HashMap<_, _> = ["a", "b", "c"].iter().map(|i| (i.to_string(), meta_at(NOW - 1.0))).collect();
+        let meta: HashMap<_, _> = ["a", "b", "c"]
+            .iter()
+            .map(|i| (i.to_string(), meta_at(NOW - 1.0)))
+            .collect();
         let without = run(
             &rows,
             P {
@@ -595,14 +750,20 @@ mod tests {
                 ..Default::default()
             },
         );
-        assert_eq!(without, vec![req("b", R::NotifyWatch), req("c", R::NotifyWatch)]);
+        assert_eq!(
+            without,
+            vec![req("b", R::NotifyWatch), req("c", R::NotifyWatch)]
+        );
         let with = run(
             &rows,
             P {
                 previous_live: Some(set(&["a", "b", "c"])),
                 meta,
                 watching: set(&["b", "c"]),
-                options: PlanOptions { list_carries_live_info: true, ..Default::default() },
+                options: PlanOptions {
+                    list_carries_live_info: true,
+                    ..Default::default()
+                },
                 ..Default::default()
             },
         );
@@ -612,7 +773,13 @@ mod tests {
     #[test]
     fn notify_watch_beyond_missing_meta_cap() {
         let rows: Vec<_> = ids("c", 30).iter().map(|i| row(i)).collect();
-        let result = run(&rows, P { watching: set(&["c29"]), ..Default::default() });
+        let result = run(
+            &rows,
+            P {
+                watching: set(&["c29"]),
+                ..Default::default()
+            },
+        );
         assert_eq!(result.len(), 25);
         assert_eq!(result.last(), Some(&req("c29", R::NotifyWatch)));
     }
@@ -633,26 +800,44 @@ mod tests {
     #[test]
     fn visible_boundary() {
         assert!(single(meta_at(NOW - 119.9), true, PlanOptions::default()).is_empty());
-        assert_eq!(single(meta_at(NOW - 120.0), true, PlanOptions::default()), vec![req("a", R::VisibleDue)]);
+        assert_eq!(
+            single(meta_at(NOW - 120.0), true, PlanOptions::default()),
+            vec![req("a", R::VisibleDue)]
+        );
     }
 
     #[test]
     fn background_boundary() {
         let d = PlanOptions::default();
-        let info = PlanOptions { list_carries_live_info: true, ..Default::default() };
+        let info = PlanOptions {
+            list_carries_live_info: true,
+            ..Default::default()
+        };
         assert!(single(meta_at(NOW - 599.9), false, d).is_empty());
-        assert_eq!(single(meta_at(NOW - 600.0), false, d), vec![req("a", R::BackgroundDue)]);
+        assert_eq!(
+            single(meta_at(NOW - 600.0), false, d),
+            vec![req("a", R::BackgroundDue)]
+        );
         assert!(single(meta_at(NOW - 600.0), false, info).is_empty());
         assert!(single(meta_at(NOW - 1799.9), false, info).is_empty());
-        assert_eq!(single(meta_at(NOW - 1800.0), false, info), vec![req("a", R::BackgroundDue)]);
+        assert_eq!(
+            single(meta_at(NOW - 1800.0), false, info),
+            vec![req("a", R::BackgroundDue)]
+        );
     }
 
     #[test]
     fn suspended_boundary() {
-        let sus = PlanOptions { suspended: true, ..Default::default() };
+        let sus = PlanOptions {
+            suspended: true,
+            ..Default::default()
+        };
         assert!(single(meta_at(NOW - 600.0), true, sus).is_empty());
         assert!(single(meta_at(NOW - 1799.9), false, sus).is_empty());
-        assert_eq!(single(meta_at(NOW - 1800.0), false, sus), vec![req("a", R::BackgroundDue)]);
+        assert_eq!(
+            single(meta_at(NOW - 1800.0), false, sus),
+            vec![req("a", R::BackgroundDue)]
+        );
     }
 
     #[test]
@@ -669,16 +854,34 @@ mod tests {
         let prev: HashSet<String> = all.iter().cloned().collect();
         let result = run(
             &rows,
-            P { previous_live: Some(prev.clone()), meta: meta.clone(), visible: set(&["c1"]), ..Default::default() },
+            P {
+                previous_live: Some(prev.clone()),
+                meta: meta.clone(),
+                visible: set(&["c1"]),
+                ..Default::default()
+            },
         );
         assert_eq!(result.len(), 12);
         let expected: Vec<String> = (8..20).rev().map(|i| format!("c{i}")).collect();
-        assert_eq!(result.iter().map(|r| r.channel_id.clone()).collect::<Vec<_>>(), expected);
+        assert_eq!(
+            result
+                .iter()
+                .map(|r| r.channel_id.clone())
+                .collect::<Vec<_>>(),
+            expected
+        );
         assert!(result.iter().all(|r| r.reason == R::BackgroundDue));
 
         meta.insert("c1".into(), meta_at(NOW - 1_000_000.0));
-        let with_visible =
-            run(&rows, P { previous_live: Some(prev), meta, visible: set(&["c1"]), ..Default::default() });
+        let with_visible = run(
+            &rows,
+            P {
+                previous_live: Some(prev),
+                meta,
+                visible: set(&["c1"]),
+                ..Default::default()
+            },
+        );
         assert_eq!(with_visible.first(), Some(&req("c1", R::VisibleDue)));
         assert_eq!(with_visible.len(), 12);
     }
@@ -686,40 +889,76 @@ mod tests {
     #[test]
     fn due_tie_keeps_list_order() {
         let all = ids("c", 15);
-        let meta = all.iter().map(|i| (i.clone(), meta_at(NOW - 900.0))).collect();
+        let meta = all
+            .iter()
+            .map(|i| (i.clone(), meta_at(NOW - 900.0)))
+            .collect();
         let rows: Vec<_> = all.iter().map(|i| row(i)).collect();
-        let result = run(&rows, P { previous_live: Some(all.iter().cloned().collect()), meta, ..Default::default() });
-        assert_eq!(result.iter().map(|r| r.channel_id.clone()).collect::<Vec<_>>(), all[..12].to_vec());
+        let result = run(
+            &rows,
+            P {
+                previous_live: Some(all.iter().cloned().collect()),
+                meta,
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            result
+                .iter()
+                .map(|r| r.channel_id.clone())
+                .collect::<Vec<_>>(),
+            all[..12].to_vec()
+        );
     }
 
     #[test]
     fn future_meta_is_due() {
-        assert_eq!(single(meta_at(NOW + 50_000.0), false, PlanOptions::default()), vec![req("a", R::BackgroundDue)]);
+        assert_eq!(
+            single(meta_at(NOW + 50_000.0), false, PlanOptions::default()),
+            vec![req("a", R::BackgroundDue)]
+        );
     }
 
     #[test]
     fn manual_takes_all_live() {
         let rows = [row("a"), row("b"), offline("off"), row("c"), row("n")];
-        let meta = ["a", "b", "c"].iter().map(|i| (i.to_string(), meta_at(NOW))).collect();
+        let meta = ["a", "b", "c"]
+            .iter()
+            .map(|i| (i.to_string(), meta_at(NOW)))
+            .collect();
         let result = run(
             &rows,
             P {
                 previous_live: Some(set(&["a", "b", "c"])),
                 meta,
                 visible: set(&["c"]),
-                options: PlanOptions { manual: true, ..Default::default() },
+                options: PlanOptions {
+                    manual: true,
+                    ..Default::default()
+                },
                 ..Default::default()
             },
         );
         assert_eq!(
             result,
-            vec![req("n", R::NewLive), req("c", R::Manual), req("a", R::Manual), req("b", R::Manual)]
+            vec![
+                req("n", R::NewLive),
+                req("c", R::Manual),
+                req("a", R::Manual),
+                req("b", R::Manual)
+            ]
         );
     }
 
     #[test]
     fn duplicate_rows_planned_once() {
-        let result = run(&[row("a"), row("a"), row("")], P { previous_live: Some(set(&[])), ..Default::default() });
+        let result = run(
+            &[row("a"), row("a"), row("")],
+            P {
+                previous_live: Some(set(&[])),
+                ..Default::default()
+            },
+        );
         assert_eq!(result, vec![req("a", R::NewLive)]);
     }
 
@@ -727,7 +966,17 @@ mod tests {
     fn reason_ordering() {
         let mut all = LiveDetailReason::ALL;
         all.sort();
-        assert_eq!(all, [R::NewLive, R::MissingMeta, R::NotifyWatch, R::VisibleDue, R::BackgroundDue, R::Manual]);
+        assert_eq!(
+            all,
+            [
+                R::NewLive,
+                R::MissingMeta,
+                R::NotifyWatch,
+                R::VisibleDue,
+                R::BackgroundDue,
+                R::Manual
+            ]
+        );
     }
 
     // MARK: 병합
@@ -744,7 +993,10 @@ mod tests {
         assert_eq!(listed.item.live_title, "list-title");
         assert_eq!(listed.item.viewer_count, 99);
         assert_eq!(listed.item.category_name.as_deref(), Some("list-cat"));
-        assert_eq!(listed.item.thumbnail_url.as_deref(), Some("https://thumb/detail"));
+        assert_eq!(
+            listed.item.thumbnail_url.as_deref(),
+            Some("https://thumb/detail")
+        );
         assert_eq!(listed.item.category_type.as_deref(), Some("SPORTS"));
         assert_eq!(listed.item.open_date, Some(from_unix(2_000.0)));
         let m = listed.meta.unwrap();
@@ -776,7 +1028,10 @@ mod tests {
 
     #[test]
     fn merge_partial_list_values() {
-        let r = FollowingRowSnapshot { list_viewers: Some(7), ..row("a") };
+        let r = FollowingRowSnapshot {
+            list_viewers: Some(7),
+            ..row("a")
+        };
         let m = merge(&r, None, Some(&meta_at(0.0)), NOW);
         assert_eq!(m.item.viewer_count, 7);
         assert_eq!(m.item.live_title, "meta-title");
@@ -792,7 +1047,10 @@ mod tests {
         assert_eq!(r.item.thumbnail_url.as_deref(), Some("https://thumb/meta"));
         assert_eq!(r.item.open_date, Some(from_unix(1_000.0)));
         assert_eq!(r.item.category_type.as_deref(), Some("GAME"));
-        assert_eq!(r.meta.unwrap().thumbnail_url.as_deref(), Some("https://thumb/meta"));
+        assert_eq!(
+            r.meta.unwrap().thumbnail_url.as_deref(),
+            Some("https://thumb/meta")
+        );
     }
 
     #[test]
@@ -818,10 +1076,25 @@ mod tests {
         assert_eq!(off.item.thumbnail_url, None);
         assert_eq!(off.item.open_date, None);
 
-        let p = run(&[row("a")], P { previous_live: Some(set(&[])), now: Some(NOW + 60.0), ..Default::default() });
+        let p = run(
+            &[row("a")],
+            P {
+                previous_live: Some(set(&[])),
+                now: Some(NOW + 60.0),
+                ..Default::default()
+            },
+        );
         assert_eq!(p, vec![req("a", R::NewLive)]);
 
-        let restarted = merge(&row("a"), Some(&LiveDetailSnapshot { live_id: 6, ..detail() }), off.meta.as_ref(), NOW + 60.0);
+        let restarted = merge(
+            &row("a"),
+            Some(&LiveDetailSnapshot {
+                live_id: 6,
+                ..detail()
+            }),
+            off.meta.as_ref(),
+            NOW + 60.0,
+        );
         assert_eq!(restarted.meta.unwrap().live_id, 6);
         assert!(restarted.item.is_live);
         assert_eq!(restarted.item.open_date, Some(from_unix(2_000.0)));
@@ -829,14 +1102,25 @@ mod tests {
 
     #[test]
     fn merge_close_detail() {
-        let closed = merge(&row("a"), Some(&LiveDetailSnapshot { is_closed: true, ..detail() }), None, NOW);
+        let closed = merge(
+            &row("a"),
+            Some(&LiveDetailSnapshot {
+                is_closed: true,
+                ..detail()
+            }),
+            None,
+            NOW,
+        );
         assert!(!closed.item.is_live);
         assert_eq!(closed.item.open_date, None);
         let closed_meta = closed.meta.unwrap();
         assert!(!closed_meta.is_open);
 
         let next = merge(&row("a"), None, Some(&closed_meta), NOW + 60.0);
-        assert!(!next.item.is_live, "폴마다 라이브↔오프라인이 뒤집히면 배지·알림이 흔들린다");
+        assert!(
+            !next.item.is_live,
+            "폴마다 라이브↔오프라인이 뒤집히면 배지·알림이 흔들린다"
+        );
 
         let p = run(
             &[row("a")],
@@ -895,15 +1179,29 @@ mod tests {
                 notify_on_title_change: mask & 4 != 0,
                 auto_refresh_enabled: mask & 8 != 0,
             };
-            let c = OneChannel { category: mask & 16 != 0, title: mask & 32 != 0 };
+            let c = OneChannel {
+                category: mask & 16 != 0,
+                title: mask & 32 != 0,
+            };
             for id in ["set", "absent"] {
-                assert_eq!(notify_watches(id, &g, &c), sink_would_notify(id, &g, &c), "mask={mask} id={id}");
+                assert_eq!(
+                    notify_watches(id, &g, &c),
+                    sink_would_notify(id, &g, &c),
+                    "mask={mask} id={id}"
+                );
             }
         }
     }
 
     #[test]
     fn default_settings_watch_nothing() {
-        assert!(!notify_watches("a", &NotifyWatchGeneral::default(), &OneChannel { category: true, title: true }));
+        assert!(!notify_watches(
+            "a",
+            &NotifyWatchGeneral::default(),
+            &OneChannel {
+                category: true,
+                title: true
+            }
+        ));
     }
 }
