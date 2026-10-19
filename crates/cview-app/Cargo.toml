@@ -18,6 +18,7 @@ path = "src/main.rs"
 tauri-build = { version = "2.7", features = [] }
 
 [dependencies]
+base64 = "0.22"
 uuid = { workspace = true }
 cview-core = { path = "../cview-core" }
 cview-networking = { path = "../cview-networking" }

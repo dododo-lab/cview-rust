@@ -153,6 +153,8 @@ pub struct AppServices {
     pub engine: Arc<WebViewHlsEngine>,
     /// 재생 시작·정지 직렬화 — 지금 재생 중인 채널.
     pub player_channel: tokio::sync::Mutex<Option<String>>,
+    /// 진행 중인 시청 기록 — (채널, 시작 시각). 정지할 때 끝낸다(원본 WatchHeartbeatCenter).
+    pub watch_record: Mutex<Option<(String, chrono::DateTime<chrono::Utc>)>>,
     pub sinks: ShellSinks,
     /// 열린 로그인 창 작업.
     pub login_task: Mutex<Option<JoinHandle<()>>>,
@@ -269,6 +271,7 @@ impl AppServices {
             player,
             engine,
             player_channel: tokio::sync::Mutex::new(None),
+            watch_record: Mutex::new(None),
             sinks,
             login_task: Mutex::new(None),
         }
@@ -308,6 +311,50 @@ impl AppServices {
         let mut channel = self.player_channel.lock().await;
         if channel.take().is_some() {
             self.player.stop_stream().await;
+        }
+        self.end_watch_record();
+    }
+
+    /// 시청 기록 시작 — 채널 행을 저장하고 최근 시청을 갱신한다.
+    pub fn begin_watch_record(&self, info: &cview_core::models::LiveInfo) {
+        self.end_watch_record();
+        let (Some(store), Some(channel)) = (&self.data_store, &info.channel) else {
+            return;
+        };
+        let favorite = store.is_favorite(&channel.channel_id).unwrap_or(false);
+        if let Err(e) = store.save_channel(channel, favorite) {
+            tracing::debug!("채널 저장 실패: {e}");
+        }
+        if let Err(e) = store.update_last_watched(&channel.channel_id) {
+            tracing::debug!("최근 시청 기록 실패: {e}");
+        }
+        let thumb = info.resolved_live_image_url().map(|u| u.to_string());
+        match store.start_watch_record(
+            &channel.channel_id,
+            &channel.channel_name,
+            thumb.as_deref(),
+            info.live_category_value.as_deref(),
+            chrono::Utc::now(),
+        ) {
+            Ok(started) => {
+                *self.watch_record.lock().unwrap_or_else(|e| e.into_inner()) =
+                    Some((channel.channel_id.clone(), started));
+            }
+            Err(e) => tracing::debug!("시청 기록 시작 실패: {e}"),
+        }
+    }
+
+    /// 진행 중인 시청 기록을 끝낸다.
+    pub fn end_watch_record(&self) {
+        let record = self
+            .watch_record
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        if let (Some(store), Some((channel_id, started))) = (&self.data_store, record) {
+            if let Err(e) = store.end_watch_record(&channel_id, started, chrono::Utc::now()) {
+                tracing::debug!("시청 기록 종료 실패: {e}");
+            }
         }
     }
 

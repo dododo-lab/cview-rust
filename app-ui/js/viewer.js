@@ -5,6 +5,7 @@ import { PlayerBridge } from './player.js';
 import { ChatPanel } from './chat.js';
 import { StreamAlerts } from './donations.js';
 import { installChatSplitter } from './splitter.js';
+import { ViewerControls } from './viewer-controls.js';
 
 const PHASE_TEXT = {
   idle: '',
@@ -59,6 +60,7 @@ export class Viewer {
     this.audioSuspended = false;
     this.mutedBeforeSuspend = false;
     installChatSplitter({ container: root, chat: root.querySelector('.chat'), key: 'viewer' });
+    this.controls = new ViewerControls(this);
   }
 
   /** 재생 중인 채널이 있는가(화면을 숨겨도 재생은 이어진다). */

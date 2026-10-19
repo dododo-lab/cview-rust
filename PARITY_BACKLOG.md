@@ -3,6 +3,10 @@
 기준: `Sources/` Swift macOS 앱과 `rust/` Tauri 앱(`rust/app-ui` 정적 JS, `crates/cview-app/src/commands/*.rs`, `cview-app-core` 뷰모델)을 2026-10 시점으로 비교했다.
 `PORTING_PLAN.md` 이후 Rust UI 에 들어간 것(홈 재설계, 사이드바, 라이브 메뉴, 멀티라이브 그리드/포커스, 스플리터, 테마 3종, 후원·구독 카드/랭킹/스트림 알림)은 "있음"으로 본다.
 
+## 진행 표시
+
+✅ 완료 · 🟡 부분 · ⏸ 보류 — 항목 이름 앞에 붙인다. 커밋은 `git log --grep <ID>` 로 찾는다.
+
 ## 지금 Rust 가 가진 것 (요약)
 
 - **Tauri 명령**: `auth_status/login/logout`, `following_lives`, `popular_lives`, `search`(라이브+채널만), `channel_info`, `live_detail`, `player_start/stop/set_volume/message`, `chat_connect/disconnect/send`, `chat_donation_ranking`, `multilive_*`(add/remove/select/layout/focus/stage_size/stop_all/audio_suspended/player_message), `settings_get/update`(도메인 `player`·`general`·`appearance`·`chat`), `appearance_set_theme`.
@@ -19,7 +23,7 @@
 
 | ID | 항목 | Swift 원본 | Rust 현황 | 크기 |
 |---|---|---|---|---|
-| NAV-01 | 채널 상세 화면(헤더·팔로워·방송 중 배지·정보/VOD/클립 탭) | `ChannelInfoView`, `ChannelInfoHeaderView`, `ChannelInfoTabContent`, `ChannelVODClipTab`, `ChannelMediaCards` | `channel_info` 명령 + `ChannelDetailModel` VM, 화면 없음 | M |
+| NAV-01 | ✅ 채널 상세 화면(헤더·팔로워·방송 중 배지·정보/VOD/클립 탭) | `ChannelInfoView`, `ChannelInfoHeaderView`, `ChannelInfoTabContent`, `ChannelVODClipTab`, `ChannelMediaCards` | `channel_info` 명령 + `ChannelDetailModel` VM, 화면 없음 | M |
 | NAV-02 | 카테고리 둘러보기(카테고리 카드 → 카테고리별 라이브, 정렬·고정) | `CategoryBrowseView`, `Category/CategoryBrowseCards`, `CategoryBrowseModels` | `CategoryBrowseViewModel`, `category_groups`, `pinned_category_decoder`, 명령·화면 없음 | M |
 | NAV-03 | 인기(전체방송) 화면 고도화: 30개 페이지네이션, 정렬, 카테고리 필터, 미리보기 인스펙터 | `AllBroadcasts/AllBroadcastsView`, `BroadcastPreviewInspector`, `Components/PaginationBar` | `AllBroadcastsViewModel` 사용, 단순 격자만 | M |
 | NAV-04 | 팔로잉 허브: 오프라인 채널 포함 목록, 정렬(시청자/이름/최근), 카테고리 필터, 간결 보기, 채널 독 | `FollowingView*`, `Following/FollowingChannelSidebar`, `FollowingChannelDenseRow`, `FollowingChannelDock`, `FollowingSortOrder` | `FollowingStore`·`following_browser_query`·`following_channel_sidebar` 로직, UI 는 방송 중 격자만 | M |
@@ -29,7 +33,7 @@
 | NAV-08 | 라이브러리 허브(클립·다시보기·받은 영상 탭) | `LibraryHubView` | 없음 | S |
 | NAV-09 | 최근 시청·즐겨찾기 화면(즐겨찾기 토글, 최근 기록 삭제) | `RecentFavoritesView` | `FavoritesStore`·`RecentChannelsStore`·persistence `toggle_favorite`; UI 는 localStorage 최근 시청만 | M |
 | NAV-10 | 카드 우클릭 메뉴(재생/멀티라이브 추가/채팅만 열기/채널 상세/즐겨찾기/링크 복사/치지직에서 열기) | `HomeV3/LiveCardActionMenu`, `ClipboardActions` | 카드에 "멀티라이브에 추가" 버튼만 | S |
-| NAV-11 | 뒤로 가기 내비게이션 스택(`⌘[`) | `AppRouter`, `Navigation/*` | `navigation/router.rs`, UI 는 단일 라우트 | S |
+| NAV-11 | ✅ 뒤로 가기 내비게이션 스택(`⌘[`) | `AppRouter`, `Navigation/*` | `navigation/router.rs`, UI 는 단일 라우트 | S |
 | NAV-12 | 커맨드 팔레트(`⌘K`): 채널·화면·액션 검색 실행 | `CommandPaletteView`, `Actions/CViewActionRegistry` | `actions/registry.rs`·`cview_action.rs`; `⌘K` 는 검색 화면 이동만 | M |
 | NAV-13 | 사이드바 빠른 액션·위젯·재생 인사이트 | `Components/SidebarQuickActions`, `SidebarWidgets`, `SidebarPlaybackInsights` | `sidebar_quick_action.rs`, 없음 | S |
 | NAV-14 | 홈 보강: 인기 클립 레일, 이어보기(VOD 진행률), 빠른 멀티 묶음, 타임라인 | `HomeV3/HomeV3Rail`, `HomeV3QuickMulti`, `HomeV3Timeline`, `HomeV3Discovery` | 홈 VM(`recommendation`, `promotion`) 일부만 화면 반영 | M |
@@ -40,26 +44,26 @@
 
 | ID | 항목 | Swift 원본 | Rust 현황 | 크기 |
 |---|---|---|---|---|
-| PLY-01 | 화질 선택기(자동/1080p/720p…, 현재 화질 표시) | `LiveStreamView`, `PlayerSettingsTab`, `MultiLiveOverlays`("재생 품질") | player.html `getLevels/requestManualLevel/setForcedHeight`, 상태줄 텍스트만 | S |
-| PLY-02 | 재생/일시정지·라이브로 복귀 버튼, 지연 배지 | `LiveStreamView+Logic`, `LiveStreamHeader` | `seekToLiveEdge` 있음, 버튼 없음(지연은 상태 텍스트) | S |
+| PLY-01 | ✅ 화질 선택기(자동/1080p/720p…, 현재 화질 표시) | `LiveStreamView`, `PlayerSettingsTab`, `MultiLiveOverlays`("재생 품질") | player.html `getLevels/requestManualLevel/setForcedHeight`, 상태줄 텍스트만 | S |
+| PLY-02 | ✅ 재생/일시정지·라이브로 복귀 버튼, 지연 배지 | `LiveStreamView+Logic`, `LiveStreamHeader` | `seekToLiveEdge` 있음, 버튼 없음(지연은 상태 텍스트) | S |
 | PLY-03 | 라이브 되감기(타임시프트) 레일·`←/→` 10초, `⇧←/→` 1분 | `LiveRewindRail`, `TimelineSlider`, `StreamCoordinator+Timeshift` | 서버 타임머신·`seekTimeshift` 있음, 로컬 녹화기 미등록, UI 없음 | L |
 | PLY-04 | 재생 속도 조절 | `PlayerAdvancedSettings+MediaTabs`(재생 탭) | `setRate` 있음, UI 없음 | S |
 | PLY-05 | 플레이어 고급 설정 패널(이퀄라이저/비디오/화면/재생/지연/도구 탭) | `PlayerAdvancedSettingsView`, `PlayerAdvancedSettings+*`, `MLSettingsWindowView`, `ML*Tab` | 없음 | L |
 | PLY-06 | 이퀄라이저(프리셋·프리앰프·10밴드) | `PlayerAdvancedSettings+Equalizer`, `MLEqualizerTab`, `EqualizerPreset` | player.html `setEqualizer*`, `can_use_equalizer` VM, 설정 키 저장만 | M |
 | PLY-07 | 비디오 보정(밝기·대비·채도·색조·감마), 선명한 화면, 자동 보정, 업스케일 | `MLVideoTab`, `PlayerViewModel+AudioVideoAdjust` | player.html `applyVideoAdjust`·`setSharpPixelScaling`·`setPictureEnhancement` | M |
 | PLY-08 | 화면 비율 강제 | `PlayerAdvancedSettings+MediaTabs`(화면) | `setForcedAspectRatio` 있음 | S |
-| PLY-09 | 스크린샷 저장(`⌘S`, PNG/JPEG, 저장 경로) | `PlayerViewModel+Screenshot`, `HLSJSPlayerEngine+Screenshot`, `ScreenshotEncoder` | `takeScreenshot` + `can_take_screenshot`, 파일 저장 명령 없음 | S |
+| PLY-09 | ✅ 스크린샷 저장(`⌘S`, PNG/JPEG, 저장 경로) | `PlayerViewModel+Screenshot`, `HLSJSPlayerEngine+Screenshot`, `ScreenshotEncoder` | `takeScreenshot` + `can_take_screenshot`, 파일 저장 명령 없음 | S |
 | PLY-10 | 녹화 시작/중지(`⌥⌘R`) | `PlayerViewModel+Recording`, `HLSJSRecordingWriter`, `StreamRecordingService` | `startRecording/stopRecording`(MediaRecorder), 저장 명령 없음 | M |
-| PLY-11 | 전체 화면 모드 2종(영상만 / 영상+채팅), `⇧⌘F`·`⌃⌘F` | `LiveFullscreenPresentation` | 플레이어 영역 전체화면 버튼만 | S |
+| PLY-11 | ✅ 전체 화면 모드 2종(영상만 / 영상+채팅), `⇧⌘F`·`⌃⌘F` | `LiveFullscreenPresentation` | 플레이어 영역 전체화면 버튼만 | S |
 | PLY-12 | 채팅 표시 모드(사이드/오버레이/숨김) + 오버레이 위치·크기·투명도 | `ChatOverlayView`, `ChatDisplayMode`, 설정 `overlay*` | 사이드 고정 | M |
-| PLY-13 | 로딩/오류/종료 오버레이 고도화(재시도, 다시 확인, 브랜드 로딩) | `StreamLoadingOverlay`, `BrandedLoadingView`, `ErrorStateView` | 스피너+문구 오버레이 | S |
+| PLY-13 | ✅ 로딩/오류/종료 오버레이 고도화(재시도, 다시 확인, 브랜드 로딩) | `StreamLoadingOverlay`, `BrandedLoadingView`, `ErrorStateView` | 스피너+문구 오버레이 | S |
 | PLY-14 | 헤더 채널 레일(다른 라이브 채널 전환, 채널 관리 패널) | `LiveChannelHeaderRail`, `LiveChannelHeaderControl`, `LiveChannelManagementPanel` | 아바타·제목·메타만 | M |
-| PLY-15 | 오버레이 볼륨 슬라이더(스크롤 조절, % 표시) | `OverlayVolumeSlider`, `Components/VolumeSymbol` | 하단 range 슬라이더 | S |
+| PLY-15 | ✅ 오버레이 볼륨 슬라이더(스크롤 조절, % 표시) | `OverlayVolumeSlider`, `Components/VolumeSymbol` | 하단 range 슬라이더 | S |
 | PLY-16 | 스트림 알림 위치·크기 조정(위치 조정 모드) | `StreamAlertOverlayView`, 설정 `streamAlertAnchorX/Y/Scale` | 알림은 있음, 위치 고정 | S |
-| PLY-17 | 스트림 북마크(`bookmarkStream` 단축키, 북마크 목록·삭제) | `ShortcutAction.bookmarkStream`, `DataStore+Bookmarks` | persistence `save_bookmark/fetch_bookmarks`, 명령 없음 | S |
+| PLY-17 | 🟡 스트림 북마크(`bookmarkStream` 단축키, 북마크 목록·삭제) | `ShortcutAction.bookmarkStream`, `DataStore+Bookmarks` | persistence `save_bookmark/fetch_bookmarks`, 명령 없음 | S |
 | PLY-18 | 별도 플레이어 창(`⌘N`, 창 분리) | `CViewApp` `player-window` | 단일 창 | M |
 | PLY-19 | 백그라운드 재생 끄기/가림 시 일시정지·화질 상한 | 설정 `continuePlaybackInBackground`, `OcclusionResolutionCap` | 미구현 | S |
-| PLY-20 | 시청 기록 기록(시작/종료) | `WatchHeartbeatCenter`, `DataStore+WatchHistorySync` | persistence `start/end_watch_record`, 셸 미호출 | S |
+| PLY-20 | ✅ 시청 기록 기록(시작/종료) | `WatchHeartbeatCenter`, `DataStore+WatchHistorySync` | persistence `start/end_watch_record`, 셸 미호출 | S |
 
 ## 3. VOD·클립·다운로드 (VOD)
 
@@ -69,7 +73,7 @@
 | VOD-02 | VOD 플레이어(시크바, 속도, 화질, 이어보기 저장) | `VODPlayerView`, `TimelineSlider`, `VODStreamResolver` | `VodPlayerViewModel`·`VodProgressPersistenceWriter`, `VodPlayerEngine` 트레잇만 — WebView `<video>`/hls.js 엔진 필요 | L |
 | VOD-03 | 클립 플레이어(임베드/스트림, 필름스트립 독, 다음 클립) | `ClipPlayerView`, `ClipEmbedWebView`, `ClipFilmstripDock` | `ClipPlayerViewModel`, `clip_detail`/`clip_stream_url` API | M |
 | VOD-04 | 인기 클립 화면(기간 필터, 정렬, 히어로, 미리보기) | `PopularClipsView`, `PopularClipCards`, `Clips/ClipHeroComponents`, `ClipPreviewInspector` | `ClipBrowserViewModel`, `home_popular_clips` | M |
-| VOD-05 | 채널 상세의 VOD·클립 탭 | `ChannelVODClipTab` | `VodChannelBrowser`, `clip_list`/`vod_list` API | M |
+| VOD-05 | ✅ 채널 상세의 VOD·클립 탭 | `ChannelVODClipTab` | `VodChannelBrowser`, `clip_list`/`vod_list` API | M |
 | VOD-06 | 다운로드(VOD/클립 HLS 세그먼트 결합 저장, 진행률, 취소·재시도) | `VideoDownloadService`, `VideoDownloadButton`, `VideoDownloadViews` | `media_download`(작업 모델·폴더 규칙)만, 다운로더 없음 | L |
 | VOD-07 | 다운로드 보관함(진행 중/완료, 끝난 항목 지우기, 폴더 열기) | `DownloadsLibraryView`, `DownloadHistoryStore` | `DownloadHistoryStore`, persistence `download_history` | M |
 
@@ -151,9 +155,9 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 
 | ID | 항목 | Swift 원본 | Rust 현황 | 크기 |
 |---|---|---|---|---|
-| DAT-01 | 채널 메모(작성·편집 시트) | `ChannelMemoSheet` | persistence `fetch_memo/save_memo`, 명령 없음 | S |
-| DAT-02 | 즐겨찾기(카드·채널 상세에서 토글, 사이드바 우선 표시) | `FavoritesStore`, `LiveCardActionMenu` | `FavoritesStore`, persistence | S |
-| DAT-03 | 최근 시청을 DB 로 이관(지금은 localStorage) | `RecentChannelsStore` | `RecentChannelsStore` | S |
+| DAT-01 | ✅ 채널 메모(작성·편집 시트) | `ChannelMemoSheet` | persistence `fetch_memo/save_memo`, 명령 없음 | S |
+| DAT-02 | 🟡 즐겨찾기(카드·채널 상세에서 토글, 사이드바 우선 표시) | `FavoritesStore`, `LiveCardActionMenu` | `FavoritesStore`, persistence | S |
+| DAT-03 | 🟡 최근 시청을 DB 로 이관(지금은 localStorage) | `RecentChannelsStore` | `RecentChannelsStore` | S |
 | DAT-04 | 통계/인사이트 화면(세션·스트리밍·채팅·기록 탭, KPI 카드) | `Statistics/StatisticsView`, `Tabs/*`, `Components/KPICard` | persistence `aggregate_insights`, `watch_time_by_channel/category`, `current_watch_streak` | L |
 | DAT-05 | 통계 독립 창(`⇧⌘T`) | `CViewApp` `statistics-window` | 없음 | S |
 | DAT-06 | 저장소 복구·로컬 데이터 정리 UI | `AppState+StoreRecovery`, `AppState+LocalDataHygiene` | `store_open_health`, `maintenance` | M |

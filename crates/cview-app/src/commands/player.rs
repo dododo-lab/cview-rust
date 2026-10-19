@@ -83,11 +83,7 @@ pub async fn player_start(
     *channel = Some(channel_id.clone());
     drop(channel);
 
-    if let (Some(store), Some(channel)) = (&services.data_store, &info.channel) {
-        if let Err(e) = store.update_last_watched(&channel.channel_id) {
-            tracing::debug!("최근 시청 기록 실패: {e}");
-        }
-    }
+    services.begin_watch_record(&info);
 
     Ok(PlaybackStartedDto {
         live: LiveDetailDto::from_live_info(&info, &channel_id),

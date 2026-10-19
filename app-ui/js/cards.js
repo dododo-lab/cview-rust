@@ -18,7 +18,7 @@ export function liveCard(live) {
         ${uptime ? `<span class="badge-uptime">${esc(uptime)}</span>` : ''}
       </div>
       <div class="card-body">
-        ${avatar ? `<img class="avatar" src="${esc(avatar)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<div class="avatar"></div>'}
+        <span class="card-avatar" data-open-channel title="채널 정보">${avatar ? `<img class="avatar" src="${esc(avatar)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<div class="avatar"></div>'}</span>
         <div class="card-text">
           <div class="card-title">${esc(live.liveTitle || '제목 없음')}</div>
           <div class="card-meta ellipsis">${esc(live.channelName)}${category}</div>
@@ -96,6 +96,10 @@ export function rememberChannel({ channelId, channelName = '', channelImage = ''
 export function bindCardOpen(root, onOpen) {
   const open = (el) => {
     const card = el.closest('[data-channel-id]');
+    if (card && el.closest('[data-open-channel]')) {
+      window.dispatchEvent(new CustomEvent('cview:open-channel', { detail: { channelId: card.dataset.channelId } }));
+      return;
+    }
     if (!card) return;
     rememberChannel(card.dataset);
     onOpen(card.dataset.channelId, card.dataset);

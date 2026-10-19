@@ -9,6 +9,7 @@ import { Sidebar } from './sidebar.js';
 import { setTheme, syncTheme, resolvedTheme, onThemeChange } from './theme.js';
 import { MultiLivePage, multiLiveIcon, bindMultiLiveAddButtons } from './multilive.js';
 import { LivePage, liveIcon } from './live.js';
+import { ChannelPage } from './channel.js';
 
 // 사이드바 — Swift `AppRouter.SidebarItem` 라벨.
 const ROUTES = [
@@ -88,10 +89,19 @@ function setAudioOwner(owner) {
   }
 }
 
-let previousRoute = 'home';
-async function navigate(route) {
-  if (current && current !== 'live') previousRoute = current;
+// 내비게이션 스택 — 원본 AppRouter. 화면마다 파라미터(채널 ID 등)를 가진다.
+const backStack = [];
+let currentParams = {};
+const BACK_MAX = 50;
+
+async function navigate(route, params = {}, { push = true } = {}) {
+  if (!pages[route]) return;
+  if (push && current && !(current === route && JSON.stringify(currentParams) === JSON.stringify(params))) {
+    backStack.push({ route: current, params: currentParams });
+    if (backStack.length > BACK_MAX) backStack.shift();
+  }
   current = route;
+  currentParams = params;
   sidebar.setActive(route);
   // 라이브 메뉴는 재생 중이면 시청 화면, 아니면 이어 볼 채널 목록이다.
   const showViewer = route === 'live' && viewer.isPlaying;
@@ -105,14 +115,27 @@ async function navigate(route) {
   }
   viewer.hide();
   if (route === 'multilive') setAudioOwner('multilive');
-  pages[route].show();
+  // 파라미터는 받겠다고 표시한 화면(채널 상세 등)에만 넘긴다 — 목록 화면의 show(refresh) 와 겹치지 않게.
+  if (pages[route].acceptsParams) pages[route].show(params);
+  else pages[route].show();
+}
+
+/** 뒤로 가기 (`⌘[`, 마우스 뒤로 버튼). 스택이 비면 홈. */
+function goBack() {
+  const prev = backStack.pop();
+  if (prev) navigate(prev.route, prev.params, { push: false });
+  else if (current !== 'home') navigate('home', {}, { push: false });
+}
+
+function openChannelPage(channelId) {
+  if (channelId) navigate('channel', { channelId });
 }
 
 function onViewerClosed() {
   sidebar.setPlaying('live', false);
   api.multiLiveSetAudioSuspended(false).catch(() => {});
   audioOwner = null;
-  if (current === 'live') navigate(previousRoute || 'home');
+  if (current === 'live') goBack();
 }
 
 function renderAccount() {
@@ -194,6 +217,7 @@ async function main() {
   });
   pages.multilive = new MultiLivePage(content, { isLoggedIn });
   pages.live = new LivePage(content, { isLoggedIn });
+  pages.channel = new ChannelPage(content, { onBack: goBack, onPlay: openChannel, onAddMulti: addToMultiLive });
   viewer = new Viewer(document.getElementById('viewer'), { isLoggedIn, onClose: onViewerClosed });
   bindMultiLiveAddButtons(addToMultiLive);
   installViewerMultiLiveButton();
@@ -208,6 +232,17 @@ async function main() {
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && viewer.isOpen && !document.fullscreenElement) viewer.close();
+    const typing = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA');
+    if ((e.metaKey && e.key === '[') || (e.altKey && e.key === 'ArrowLeft' && !typing)) {
+      e.preventDefault();
+      goBack();
+    }
+  });
+  window.addEventListener('mouseup', (e) => { if (e.button === 3) goBack(); });
+  window.addEventListener('cview:open-channel', (e) => openChannelPage(e.detail && e.detail.channelId));
+  // 시청 화면 헤더(아바타·채널명)를 누르면 채널 상세
+  document.querySelector('#viewer .viewer-header').addEventListener('click', (e) => {
+    if (e.target.closest('.viewer-avatar, .viewer-title') && viewer.channelId) openChannelPage(viewer.channelId);
   });
 
   listen(Events.authChanged, onAuthChanged);
