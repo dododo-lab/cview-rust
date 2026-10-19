@@ -1,0 +1,800 @@
+{
+  "entities" : [
+    {
+      "attributes" : [
+        {
+          "hasDefault" : false,
+          "name" : "categoryName",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "fetchedAt",
+          "optional" : false,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "liveCount",
+          "optional" : false,
+          "type" : 300
+        },
+        {
+          "hasDefault" : false,
+          "name" : "topChannelId",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "topChannelName",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "totalViewers",
+          "optional" : false,
+          "type" : 300
+        }
+      ],
+      "name" : "CachedCategoryStat",
+      "relationships" : [
+
+      ]
+    },
+    {
+      "attributes" : [
+        {
+          "hasDefault" : false,
+          "name" : "channelId",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "channelImageURL",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "channelName",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "clipTitle",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "clipUID",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "clipURL",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "contentHash",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "createdDate",
+          "optional" : true,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "duration",
+          "optional" : false,
+          "type" : 300
+        },
+        {
+          "hasDefault" : false,
+          "name" : "fetchedAt",
+          "optional" : false,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "readCount",
+          "optional" : false,
+          "type" : 300
+        },
+        {
+          "hasDefault" : false,
+          "name" : "sources",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "thumbnailImageURL",
+          "optional" : true,
+          "type" : 700
+        }
+      ],
+      "name" : "CachedClip",
+      "relationships" : [
+
+      ]
+    },
+    {
+      "attributes" : [
+        {
+          "hasDefault" : false,
+          "name" : "accessCount",
+          "optional" : false,
+          "type" : 300
+        },
+        {
+          "hasDefault" : false,
+          "name" : "accessedAt",
+          "optional" : false,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "etag",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "expiresAt",
+          "optional" : true,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "fetchedAt",
+          "optional" : false,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "lastModified",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "mimeType",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "relativePath",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "sizeBytes",
+          "optional" : false,
+          "type" : 300
+        },
+        {
+          "hasDefault" : false,
+          "name" : "source",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "urlHash",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "urlString",
+          "optional" : true,
+          "type" : 700
+        }
+      ],
+      "name" : "CachedImageEntry",
+      "relationships" : [
+
+      ]
+    },
+    {
+      "attributes" : [
+        {
+          "hasDefault" : false,
+          "name" : "categoryName",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "categoryType",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "channelId",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "channelImageUrl",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "channelName",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "fetchedAt",
+          "optional" : false,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "isLive",
+          "optional" : false,
+          "type" : 800
+        },
+        {
+          "hasDefault" : false,
+          "name" : "liveTitle",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "openDate",
+          "optional" : true,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "sources",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "thumbnailUrl",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "viewerCount",
+          "optional" : false,
+          "type" : 300
+        }
+      ],
+      "name" : "CachedLiveChannel",
+      "relationships" : [
+
+      ]
+    },
+    {
+      "attributes" : [
+        {
+          "hasDefault" : false,
+          "name" : "channelId",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "channelImageURL",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "channelName",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "contentHash",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "duration",
+          "optional" : false,
+          "type" : 300
+        },
+        {
+          "hasDefault" : false,
+          "name" : "fetchedAt",
+          "optional" : false,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "publishDate",
+          "optional" : true,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "readCount",
+          "optional" : false,
+          "type" : 300
+        },
+        {
+          "hasDefault" : false,
+          "name" : "sources",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "thumbnailImageURL",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "videoId",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "videoNo",
+          "optional" : false,
+          "type" : 300
+        },
+        {
+          "hasDefault" : false,
+          "name" : "videoTitle",
+          "optional" : false,
+          "type" : 700
+        }
+      ],
+      "name" : "CachedVOD",
+      "relationships" : [
+
+      ]
+    },
+    {
+      "attributes" : [
+        {
+          "hasDefault" : false,
+          "name" : "capturedAt",
+          "optional" : false,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "category",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "liveCount",
+          "optional" : false,
+          "type" : 300
+        },
+        {
+          "hasDefault" : false,
+          "name" : "viewerTotal",
+          "optional" : false,
+          "type" : 300
+        }
+      ],
+      "name" : "CategorySnapshot",
+      "relationships" : [
+
+      ]
+    },
+    {
+      "attributes" : [
+        {
+          "hasDefault" : false,
+          "name" : "addedAt",
+          "optional" : false,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "channelId",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "channelName",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "imageURL",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "isFavorite",
+          "optional" : false,
+          "type" : 800
+        },
+        {
+          "hasDefault" : false,
+          "name" : "lastWatched",
+          "optional" : true,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "memo",
+          "optional" : true,
+          "type" : 700
+        }
+      ],
+      "name" : "PersistedChannel",
+      "relationships" : [
+        {
+          "deleteRule" : 2,
+          "destination" : "PersistedStatistic",
+          "name" : "statistics",
+          "optional" : true,
+          "toMany" : true
+        }
+      ]
+    },
+    {
+      "attributes" : [
+        {
+          "hasDefault" : false,
+          "name" : "channelName",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "clipTitle",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "clipUID",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "durationSec",
+          "optional" : false,
+          "type" : 500
+        },
+        {
+          "hasDefault" : false,
+          "name" : "lastPositionSec",
+          "optional" : false,
+          "type" : 500
+        },
+        {
+          "hasDefault" : false,
+          "name" : "lastSeenAt",
+          "optional" : false,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "thumbnailURLString",
+          "optional" : true,
+          "type" : 700
+        }
+      ],
+      "name" : "PersistedClipPlayback",
+      "relationships" : [
+
+      ]
+    },
+    {
+      "attributes" : [
+        {
+          "hasDefault" : false,
+          "name" : "key",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "updatedAt",
+          "optional" : false,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "valueData",
+          "optional" : false,
+          "type" : 1000
+        }
+      ],
+      "name" : "PersistedSetting",
+      "relationships" : [
+
+      ]
+    },
+    {
+      "attributes" : [
+        {
+          "hasDefault" : false,
+          "name" : "averageLatency",
+          "optional" : true,
+          "type" : 500
+        },
+        {
+          "hasDefault" : false,
+          "name" : "channelId",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "timestamp",
+          "optional" : false,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "viewerCount",
+          "optional" : false,
+          "type" : 300
+        },
+        {
+          "hasDefault" : false,
+          "name" : "watchDuration",
+          "optional" : false,
+          "type" : 500
+        }
+      ],
+      "name" : "PersistedStatistic",
+      "relationships" : [
+        {
+          "deleteRule" : 1,
+          "destination" : "PersistedChannel",
+          "name" : "channel",
+          "optional" : true,
+          "toMany" : false
+        }
+      ]
+    },
+    {
+      "attributes" : [
+        {
+          "hasDefault" : false,
+          "name" : "channelName",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "durationSec",
+          "optional" : false,
+          "type" : 500
+        },
+        {
+          "hasDefault" : false,
+          "name" : "lastPositionSec",
+          "optional" : false,
+          "type" : 500
+        },
+        {
+          "hasDefault" : false,
+          "name" : "lastSeenAt",
+          "optional" : false,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "thumbnailURLString",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "videoNo",
+          "optional" : false,
+          "type" : 300
+        },
+        {
+          "hasDefault" : false,
+          "name" : "videoTitle",
+          "optional" : false,
+          "type" : 700
+        }
+      ],
+      "name" : "PersistedVODPlayback",
+      "relationships" : [
+
+      ]
+    },
+    {
+      "attributes" : [
+        {
+          "hasDefault" : false,
+          "name" : "addedAt",
+          "optional" : false,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "channelName",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "durationSec",
+          "optional" : false,
+          "type" : 500
+        },
+        {
+          "hasDefault" : false,
+          "name" : "thumbnailURLString",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "videoNo",
+          "optional" : false,
+          "type" : 300
+        },
+        {
+          "hasDefault" : false,
+          "name" : "videoTitle",
+          "optional" : false,
+          "type" : 700
+        }
+      ],
+      "name" : "PersistedVODWatchLater",
+      "relationships" : [
+
+      ]
+    },
+    {
+      "attributes" : [
+        {
+          "hasDefault" : false,
+          "name" : "capturedAt",
+          "optional" : false,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "categoryName",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "channelId",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "channelName",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "liveTitle",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "liveUptime",
+          "optional" : false,
+          "type" : 500
+        },
+        {
+          "hasDefault" : false,
+          "name" : "note",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "thumbnailURL",
+          "optional" : true,
+          "type" : 700
+        }
+      ],
+      "name" : "StreamBookmark",
+      "relationships" : [
+
+      ]
+    },
+    {
+      "attributes" : [
+        {
+          "hasDefault" : false,
+          "name" : "categoryName",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "channelId",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "channelName",
+          "optional" : false,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "duration",
+          "optional" : false,
+          "type" : 500
+        },
+        {
+          "hasDefault" : false,
+          "name" : "endedAt",
+          "optional" : true,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "startedAt",
+          "optional" : false,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "syncedAt",
+          "optional" : true,
+          "type" : 900
+        },
+        {
+          "hasDefault" : false,
+          "name" : "thumbnailURL",
+          "optional" : true,
+          "type" : 700
+        },
+        {
+          "hasDefault" : false,
+          "name" : "updatedAt",
+          "optional" : true,
+          "type" : 900
+        }
+      ],
+      "name" : "WatchHistory",
+      "relationships" : [
+
+      ]
+    }
+  ]
+}
