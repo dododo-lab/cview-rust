@@ -11,6 +11,7 @@ pub mod all_broadcasts;
 pub mod category_browse;
 pub mod channel_detail;
 pub mod chat;
+pub mod clip;
 pub mod following;
 pub mod home;
 pub mod multi_live;
