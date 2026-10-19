@@ -13,6 +13,7 @@ pub mod manifest;
 pub mod policy;
 pub mod proxy;
 pub mod reconnection;
+pub mod recording;
 pub mod seek_arbiter;
 pub mod vod;
 

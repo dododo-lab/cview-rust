@@ -24,6 +24,8 @@ http = "1.1"
 bytes = "1.7"
 percent-encoding = "2.3"
 uuid.workspace = true
+aes = "0.8.4"
+cbc = { version = "0.1.2", features = ["alloc"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
