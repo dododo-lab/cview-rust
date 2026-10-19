@@ -136,6 +136,7 @@ const CHAT_TOGGLES = [
   ['emoticonEnabled', '이모티콘 표시', '끄면 이모티콘을 :이름: 글자로 보여 줍니다'],
   ['highlightRoles', '역할 색', '스트리머·매니저 닉네임에 색을 입힙니다'],
   ['highlightMentions', '멘션 강조', '나를 부른 메시지를 강조하고 모아 둡니다'],
+  ['mentionNotify', '멘션 알림', '앱이 뒤에 있을 때 나를 부르면 시스템 알림을 띄웁니다'],
   ['autoScroll', '자동 스크롤', '맨 아래를 보고 있을 때 새 메시지를 따라갑니다 (⌘J)'],
   ['showDonation', '후원·구독 표시', '끄면 채팅에서 후원·구독 카드를 숨깁니다'],
   ['showDonationsOnly', '후원만 보기', '후원·구독 메시지만 보여 줍니다'],
@@ -246,6 +247,11 @@ export class SettingsPage {
             ${THEMES.map((t) => `<button class="seg ${t === currentTheme() ? 'active' : ''}" data-theme-choice="${t}" role="radio" aria-checked="${t === currentTheme()}">${THEME_LABELS[t]}</button>`).join('')}
           </div>
         </div>
+      </section>
+      <section class="settings-group" data-g="overview"><h3>앱</h3>
+        <div class="setting" data-search="업데이트 확인 버전"><span class="setting-label">업데이트 확인<small class="update-status">GitHub 최신 릴리스와 비교합니다</small></span><button class="btn" data-sys="update">확인</button></div>
+        <div class="setting" data-search="알림 권한 시스템 알림"><span class="setting-label">시스템 알림 권한<small class="notify-status">방송 시작·멘션 알림에 필요합니다</small></span><button class="btn" data-sys="notify">권한 확인</button></div>
+        <div class="setting" data-search="딥 링크 cview url"><span class="setting-label">링크로 열기<small>cview://live?channelId=… · cview://search?q=… · cview://multilive</small></span></div>
       </section>`;
   }
 
@@ -371,7 +377,31 @@ export class SettingsPage {
     }
   }
 
+  async onSystem(b) {
+    b.disabled = true;
+    try {
+      if (b.dataset.sys === 'update') {
+        const u = await api.updateCheck();
+        const el = this.body.querySelector('.update-status');
+        if (!u.latest) el.textContent = `현재 ${u.current} · 공개된 릴리스가 없습니다`;
+        else if (u.newer) {
+          el.textContent = `새 버전 ${u.latest} 이 있습니다 (현재 ${u.current})`;
+          if (u.url) toast(`새 버전 ${u.latest}`, 8000, { label: '릴리스 페이지', run: () => api.openExternal(u.url) });
+        } else el.textContent = `최신 버전입니다 (${u.current})`;
+      } else if (b.dataset.sys === 'notify') {
+        let st = await api.notifyPermission(false);
+        if (st.state !== 'granted') st = await api.notifyPermission(true);
+        const label = { granted: '허용됨', denied: '거부됨 — 시스템 설정 › 알림에서 CView 를 켜 주세요', prompt: '아직 묻지 않음', 'prompt-with-rationale': '아직 묻지 않음' };
+        this.body.querySelector('.notify-status').textContent = label[st.state] || st.state;
+        if (st.state === 'granted') api.notifySend('CView', '알림이 이렇게 표시됩니다').catch(() => {});
+      }
+    } catch (er) { toast(er.message); }
+    b.disabled = false;
+  }
+
   async onClick(e) {
+    const sys = e.target.closest('[data-sys]');
+    if (sys) { this.onSystem(sys); return; }
     const g = e.target.closest('[data-group]');
     if (g) { this.group = g.dataset.group; this.query = ''; this.render(); return; }
     if (e.target.closest('[data-adv]')) { e.preventDefault(); this.showAdvanced = !this.showAdvanced; this.render(); return; }

@@ -127,6 +127,7 @@ export class ChannelPage {
             ${live ? '<button class="btn primary lg" data-ch="play">▶ 라이브 보기</button><button class="btn" data-ch="multi">멀티라이브에 추가</button>' : ''}
             <button class="icon-btn round fav${d.isFavorite ? ' on' : ''}" data-ch="favorite" title="${d.isFavorite ? '즐겨찾기 해제' : '즐겨찾기'}">${d.isFavorite ? ICON_STAR : ICON_STAR_LINE}</button>
             <button class="icon-btn round" data-ch="memo" title="메모">${ICON_NOTE}</button>
+            <button class="icon-btn round" data-ch="notify" title="이 채널 알림 설정">🔔</button>
             <button class="icon-btn round" data-ch="external" title="치지직에서 열기">${ICON_EXT}</button>
           </div>
         </div>
@@ -220,12 +221,44 @@ export class ChannelPage {
         break;
       }
       case 'memo': this.editMemo(); break;
+      case 'notify': this.editNotify(a); break;
       case 'more':
         this.pages[this.tab] += 1;
         this.renderTab(true);
         break;
       default: break;
     }
+  }
+
+  /** 채널별 알림 (SET-13) — 방송 시작·카테고리·제목 변경. 전역 스위치는 설정 › 일반. */
+  async editNotify(anchor) {
+    document.querySelector('.notify-pop')?.remove();
+    let all = {};
+    try { all = (await api.settingsGet()).channelNotifications?.settings || {}; } catch { /* 기본값 */ }
+    const id = this.channelId;
+    const name = this.detail?.channelName || this.detail?.channel?.channelName || id;
+    const cur = all[id] || { channelId: id, channelName: name, notifyOnLive: true, notifyOnCategoryChange: true, notifyOnTitleChange: true };
+    const pop = document.createElement('div');
+    pop.className = 'notify-pop';
+    const row = (k, l) => `<label class="setting"><span class="setting-label">${l}</span><span class="toggle"><input type="checkbox" data-nk="${k}" ${cur[k] ? 'checked' : ''}><span></span></span></label>`;
+    pop.innerHTML = `<strong>${esc(name)} 알림</strong>${row('notifyOnLive', '방송 시작')}${row('notifyOnCategoryChange', '카테고리 변경')}${row('notifyOnTitleChange', '제목 변경')}<small class="muted">팔로우한 채널만 · 전체 켜기/끄기는 설정 › 일반</small>`;
+    document.body.append(pop);
+    const r = anchor.getBoundingClientRect();
+    pop.style.top = `${r.bottom + 8}px`;
+    pop.style.left = `${Math.max(12, Math.min(window.innerWidth - 292, r.right - 280))}px`;
+    pop.addEventListener('change', async (e) => {
+      const k = e.target.dataset.nk;
+      if (!k) return;
+      cur[k] = e.target.checked;
+      cur.channelName = name;
+      try {
+        const fresh = (await api.settingsGet()).channelNotifications?.settings || {};
+        await api.settingsUpdate('channelNotifications', { settings: { ...fresh, [id]: cur } });
+      } catch (er) { toast(er.message); }
+    });
+    setTimeout(() => document.addEventListener('pointerdown', function off(ev) {
+      if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener('pointerdown', off); }
+    }), 0);
   }
 
   editMemo() {

@@ -346,7 +346,13 @@ export class ChatPanel {
       for (const [id, url] of Object.entries(m.emojis || {})) {
         if (url && !this.seenEmoji.has(id)) this.seenEmoji.set(id, url);
       }
-      if (prefs.highlightMentions && mentionsMe(m)) this.mentions.push(m);
+      if (prefs.highlightMentions && mentionsMe(m)) {
+        this.mentions.push(m);
+        // 멘션 알림 (SYS-05) — 앱이 뒤에 있을 때만, 메인 채팅 패널 한 곳에서만.
+        if (prefs.mentionNotify !== false && !document.hasFocus() && this.active && !this.session) {
+          api.notifySend(`@${m.nickname} 님이 불렀어요`, String(m.content || '').slice(0, 140)).catch(() => {});
+        }
+      }
     }
     if (this.recentNicks.size > 400) {
       const keep = [...this.recentNicks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 300);

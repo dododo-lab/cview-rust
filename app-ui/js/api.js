@@ -33,6 +33,7 @@ export const Events = Object.freeze({
   multiLiveCommand: 'multilive://command',
   multiLiveState: 'multilive://state',
   downloadUpdate: 'download://update',
+  deepLink: 'deeplink://open',
 });
 
 export const api = {
@@ -111,6 +112,10 @@ export const api = {
   chatSend: (text, session = null) => invoke('chat_send', { text, session }),
 
   appInfo: () => invoke('app_info'),
+  updateCheck: () => invoke('update_check'),
+  notifySend: (title, body) => invoke('notify_send', { title, body }),
+  notifyPermission: (request) => invoke('notify_permission', { request }),
+  deeplinkTakePending: () => invoke('deeplink_take_pending'),
   multiLiveRetry: (sessionId = null) => invoke('multilive_retry', { sessionId }),
   settingsExport: () => invoke('settings_export'),
   settingsImport: (json) => invoke('settings_import', { json }),

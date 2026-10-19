@@ -8,6 +8,7 @@ export const CHAT_DEFAULTS = Object.freeze({
   showTimestamp: true,
   showBadge: true,
   highlightMentions: true,
+  mentionNotify: true,
   highlightRoles: true,
   maxVisibleMessages: 300,
   emoticonEnabled: true,

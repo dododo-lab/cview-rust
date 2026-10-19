@@ -145,7 +145,7 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 | SET-10 | 🟡 성능 탭(`maxMemoryMB`, `debugMode`, 하드웨어·메모리, 캐시 & 초기화, 로컬 진단 로그) | `PerformanceSettingsTab` | 없음 | M |
 | SET-11 | ✅ 네트워크 탭(프리셋 balanced/stability/lowLatency/performance/custom, 요청 한도·동시성·타임아웃·재시도·재연결·`forceStreamProxy`·오프라인 대기) | `NetworkSettingsTab`, `NetworkPreset` | `NetworkSettings` 모델, 도메인 없음 | M |
 | SET-12 | 키보드 단축키 편집(`KeyboardShortcutSettings` 바인딩) | `GeneralSettingsTab` "키보드 단축키" | 모델 있음 | M |
-| SET-13 | 채널별 알림 설정(방송 시작/카테고리/제목 변경) | `ChannelNotificationSettings`, 채널 상세 | 모델 있음 | S |
+| SET-13 | 🧪 채널별 알림 설정(방송 시작/카테고리/제목 변경) | `ChannelNotificationSettings`, 채널 상세 | 모델 있음 | S |
 | SET-14 | 치지직 OAuth 연동(클라이언트 ID/Secret 입력, 연결 상태) | `OAuthCredentialsSection`, `CViewAuth/ChzzkOAuthService` | `cview-auth` OAuth 이식, UI 없음(쿠키 로그인만) | M |
 | SET-15 | 🟡 시청 기록 동기화(`SyncSettings` opt-in, 엔드포인트) | `AppState+Sync`, `WatchHistorySyncService` | `sync/watch_history_sync.rs` | S |
 | SET-16 | ✅ `settings_update` 도메인 확장(network/multiLive/multiChat/keyboard/channelNotifications/sync) | — | 4도메인만 | S |
@@ -169,11 +169,11 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 | SYS-01 | ✅ 전역 단축키 체계(재생 Space/M/↑↓, `⌘1~4`, `⌘R` 새로고침, `⌘,` 설정, `⌘F` 검색) | `CViewApp` Commands, `KeyboardShortcutSettings` | `⌘K`·`⌘\`·Esc 만 | M |
 | SYS-02 | ✅ 키보드 단축키 도움말(`⌘/`) | `KeyboardShortcutsHelpView` | 없음 | S |
 | SYS-03 | ✅ 앱 메뉴 바(재생/채팅/윈도우/도움말 메뉴) | `CViewApp` `CommandMenu` | Tauri 기본 메뉴 | M |
-| SYS-04 | 팔로우 채널 방송 시작·카테고리·제목 변경 알림 | `NotificationService*`, `BackgroundUpdateService` | `BackgroundUpdateService` diff + `NotificationService`(Noop), `tauri-plugin-notification` 미도입 | M |
-| SYS-05 | 멘션 알림 | `MentionNotificationService` | `MentionNotificationService` | S |
-| SYS-06 | 딥 링크 `cview://live/…`·`channel`·`following`·`multilive`·`search`·`clip`·`login` | `DeepLinkRouter`, `DeepLinkInbox` | `deep_link.rs`·`deep_link_inbox.rs`, `tauri-plugin-deep-link` 미도입 | S |
-| SYS-07 | 단일 인스턴스(두 번째 실행 시 기존 창 활성화·링크 전달) | `SingleInstanceGuard` | `SingleInstanceGuard` 로직, `tauri-plugin-single-instance` 미도입 | S |
-| SYS-08 | 업데이트 확인 시트(GitHub 릴리스) | `UpdateSheetView`, `UpdateService` | `UpdateService`(GitHub 릴리스 파싱) | S |
+| SYS-04 | 🧪 팔로우 채널 방송 시작·카테고리·제목 변경 알림 | `NotificationService*`, `BackgroundUpdateService` | `BackgroundUpdateService` diff + `NotificationService`(Noop), `tauri-plugin-notification` 미도입 | M |
+| SYS-05 | 🧪 멘션 알림 | `MentionNotificationService` | `MentionNotificationService` | S |
+| SYS-06 | 🧪 딥 링크 `cview://live/…`·`channel`·`following`·`multilive`·`search`·`clip`·`login` | `DeepLinkRouter`, `DeepLinkInbox` | `deep_link.rs`·`deep_link_inbox.rs`, `tauri-plugin-deep-link` 미도입 | S |
+| SYS-07 | 🧪 단일 인스턴스(두 번째 실행 시 기존 창 활성화·링크 전달) | `SingleInstanceGuard` | `SingleInstanceGuard` 로직, `tauri-plugin-single-instance` 미도입 | S |
+| SYS-08 | 🧪 업데이트 확인 시트(GitHub 릴리스) | `UpdateSheetView`, `UpdateService` | `UpdateService`(GitHub 릴리스 파싱) | S |
 | SYS-09 | ✅ 정보(About) 창·오픈소스 고지 | `AboutPanelView` | 없음 | S |
 | SYS-10 | 스플래시·부트 진행 표시 | `SplashView`, `SplashContentView`, `BootProgress` | `BootProgress`, 없음 | S |
 | SYS-11 | 환영 안내(첫 실행 온보딩, 다시 보기) | `Components/WelcomeOverlay` | 없음 | S |

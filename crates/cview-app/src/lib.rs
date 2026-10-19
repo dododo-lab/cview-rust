@@ -14,6 +14,7 @@ pub mod menu;
 pub mod multi_live;
 pub mod playback;
 pub mod state;
+pub mod system;
 pub mod webview_store;
 pub mod window_prefs;
 
@@ -113,6 +114,12 @@ fn shell_sinks<R: Runtime>(app: &AppHandle<R>) -> ShellSinks {
 pub fn run() {
     init_tracing();
     let app = tauri::Builder::default()
+        // 단일 인스턴스는 다른 플러그인보다 먼저 등록해야 한다(SYS-07).
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            system::on_second_instance(app, argv);
+        }))
+        .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_notification::init())
         .menu(menu::build)
         .on_menu_event(|handle, event| menu::forward(handle, event.id().as_ref()))
         .setup(|app| {
@@ -162,7 +169,19 @@ pub fn run() {
             app.manage(commands::download::Downloads::new(&data_dir));
             app.manage(services);
             app.manage(shell);
+            app.manage(system::PendingDeepLinks::default());
             spawn_multi_live_state_task(handle.clone());
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                let h = handle.clone();
+                app.deep_link().on_open_url(move |event| {
+                    system::handle_urls(&h, event.urls().into_iter().map(|u| u.to_string()));
+                });
+                if let Ok(Some(urls)) = app.deep_link().get_current() {
+                    system::handle_urls(&handle, urls.into_iter().map(|u| u.to_string()));
+                }
+            }
+            system::spawn_live_notifications(handle.clone());
             spawn_auth_tasks(handle);
             Ok(())
         })
@@ -197,6 +216,10 @@ pub fn run() {
             commands::multi_live::preset_delete,
             commands::insights::insights_overview,
             commands::download::download_list,
+            system::deeplink_take_pending,
+            system::notify_send,
+            system::notify_permission,
+            system::update_check,
             commands::content::open_path,
             commands::download::download_start,
             commands::download::download_cancel,

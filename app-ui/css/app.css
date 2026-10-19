@@ -1489,3 +1489,5 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .sidebar.collapsed .side-widget-value { font-size: 10px; }
 .sidebar.collapsed .side-widget::after { display: none; }
 .sidebar.collapsed .side-quick { grid-template-columns: 1fr; }
+.notify-pop { position: fixed; z-index: 60; width: 280px; display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: var(--radius-lg); background: var(--surface-popover); border: 1px solid var(--border); box-shadow: var(--shadow-lg); }
+.notify-pop .setting { padding: 6px 0; }

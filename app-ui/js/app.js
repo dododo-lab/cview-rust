@@ -503,9 +503,35 @@ async function main() {
   // 작업 공간 복원 (NAV-16) — "실행 시 창 복원"이 켜져 있으면 마지막 화면으로. 방송은 자동 재생하지 않고 묻는다.
   const ws = settings?.general?.restoreWindowOnLaunch !== false ? loadWorkspace() : null;
   navigate('home', {}, { push: false });
+  // 딥 링크 (SYS-06) — 준비 전에 온 링크가 있으면 작업 공간 복원보다 우선한다.
+  listen(Events.deepLink, (p) => { api.deeplinkTakePending().catch(() => {}); openDeepLink(p); });
+  let pendingLinks = [];
+  try { pendingLinks = await api.deeplinkTakePending(); } catch { /* 없음 */ }
+  if (pendingLinks.length) { for (const p of pendingLinks) openDeepLink(p); return; }
   if (ws && ws.route !== 'home') navigate(ws.route, ws.params || {});
   if (ws && ws.channelId) {
     toast('지난번에 보던 방송이 있어요', 8000, { label: '이어 보기', run: () => openChannel(ws.channelId) });
+  }
+}
+
+/** `cview://` 링크 열기 — 원본 DeepLinkRouter.apply. */
+const HUB_ROUTE = { 탐색: 'following', 시청: 'live', 멀티: 'multilive', 검색: 'search', 인기: 'popular', 카테고리: 'categories' };
+function openDeepLink(p) {
+  if (!p || !p.kind) return;
+  switch (p.kind) {
+    case 'live':
+      if (p.mode === 'multi') addToMultiLive(p.channelId);
+      else if (p.mode === 'chatonly') navigate('chat', { channelId: p.channelId });
+      else openChannel(p.channelId);
+      break;
+    case 'channel': openChannelPage(p.channelId); break;
+    case 'following': navigate(HUB_ROUTE[p.mode] || 'following'); break;
+    case 'multilive': navigate('multilive'); break;
+    case 'home': navigate('home'); break;
+    case 'search': navigate('search', p.query ? { query: p.query } : {}); break;
+    case 'clip': navigate('media', { kind: 'clip', id: p.uid }); break;
+    case 'login': if (!isLoggedIn()) login(); break;
+    default: break;
   }
 }
 
