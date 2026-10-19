@@ -191,6 +191,18 @@ button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; -webkit-appearance: none; appearance: none; border: 0; background: none; margin: 0; padding: 0; line-height: inherit; text-align: inherit; }
 button:disabled { cursor: default; opacity: 0.5; }
 button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+/* 글자 입력 기본 — 클래스별 규칙이 없으면 토큰 모양을 쓴다(:where 로 구체성 0) */
+:where(input:not([type]), input[type="text"], input[type="search"], input[type="password"], input[type="number"], input[type="url"], textarea) {
+  -webkit-appearance: none; appearance: none; min-width: 0;
+  background: var(--surface-base); color: var(--text-primary);
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 6px 10px;
+  transition: border-color .15s var(--ease-out), box-shadow .15s var(--ease-out);
+}
+:where(input:not([type]), input[type="text"], input[type="search"], input[type="password"], input[type="number"], input[type="url"], textarea):focus { outline: none; border-color: var(--primary); box-shadow: var(--focus-ring); }
+:where(input, textarea)::placeholder { color: var(--text-tertiary); }
+input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
+:where(input[type="range"]) { accent-color: var(--primary); }
+:where(input[type="checkbox"], input[type="radio"]) { accent-color: var(--primary); }
 img { display: block; }
 a { color: var(--primary); }
 
@@ -1811,3 +1823,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 :root[data-window] .page, :root[data-window] .viewer { top: 38px; }
 :root[data-window].is-fullscreen .content-drag { height: 0; border: 0; }
 :root[data-window].is-fullscreen .page, :root[data-window].is-fullscreen .viewer { top: 0; }
+/* 테두리 없는 검색 칸(감싸는 필드가 테두리·초점을 그린다) — 기본 입력 모양을 걷는다 */
+.search-field input, .palette-input input { padding: 0; border-radius: 0; }
+.search-field input:focus, .palette-input input:focus { box-shadow: none; }
+.search-field:focus-within { border-color: var(--primary); box-shadow: var(--focus-ring); }
