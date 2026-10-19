@@ -190,6 +190,7 @@ pub fn run() {
             commands::content::open_external,
             commands::chat::chat_connect,
             commands::chat::chat_donation_ranking,
+            commands::chat::chat_emoticons,
             commands::settings::appearance_set_theme,
             commands::chat::chat_disconnect,
             commands::chat::chat_send,

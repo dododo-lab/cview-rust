@@ -7,6 +7,7 @@ import { Viewer } from './viewer.js';
 import { HomePage } from './home.js';
 import { Sidebar } from './sidebar.js';
 import { setTheme, syncTheme, resolvedTheme, onThemeChange } from './theme.js';
+import { loadChatPrefs, setMyNickname } from './chat-prefs.js';
 import { MultiLivePage, multiLiveIcon, bindMultiLiveAddButtons } from './multilive.js';
 import { LivePage, liveIcon } from './live.js';
 import { ChannelPage } from './channel.js';
@@ -148,6 +149,7 @@ function renderAccount() {
 function onAuthChanged(status) {
   const wasLoggedIn = isLoggedIn();
   auth = status || { loggedIn: false, state: 'loggedOut' };
+  setMyNickname(auth.loggedIn ? auth.nickname : '');
   renderAccount();
   if (wasLoggedIn !== isLoggedIn()) refreshSidebarFollowing();
   if (viewer) viewer.refreshAuth();
@@ -253,6 +255,8 @@ async function main() {
   });
 
   listen(Events.authChanged, onAuthChanged);
+  window.addEventListener('cview:login', login);
+  loadChatPrefs();
   listen(Events.loginFailed, (p) => p && p.message && toast(p.message));
 
   renderAccount();

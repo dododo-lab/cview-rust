@@ -89,6 +89,7 @@ export const api = {
   revealPath: (path) => invoke('reveal_path', { path }),
   openExternal: (url) => invoke('open_external', { url }),
 
+  chatEmoticons: (channelId) => invoke('chat_emoticons', { channelId }),
   chatConnect: (chatChannelId, channelId) => invoke('chat_connect', { chatChannelId, channelId }),
   chatDisconnect: () => invoke('chat_disconnect'),
   chatSend: (text) => invoke('chat_send', { text }),

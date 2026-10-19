@@ -153,3 +153,23 @@ pub async fn chat_donation_ranking(
     list.sort_by_key(|r| r.rank);
     Ok(list)
 }
+
+/// 채널에서 쓸 수 있는 이모티콘 팩(기본 + 채널·구독) — 이모티콘 선택기·자동완성용.
+#[tauri::command]
+pub async fn chat_emoticons(
+    services: State<'_, AppServices>,
+    channel_id: String,
+) -> CmdResult<Vec<cview_core::models::chat::EmoticonPack>> {
+    let bundle = cview_networking::bootstrap::load_merged_emoticons(
+        &services.api,
+        &channel_id,
+        &std::collections::HashMap::new(),
+        &[],
+    )
+    .await;
+    Ok(bundle
+        .packs
+        .into_iter()
+        .filter(|p| p.emoticons.as_ref().is_some_and(|e| !e.is_empty()))
+        .collect())
+}
