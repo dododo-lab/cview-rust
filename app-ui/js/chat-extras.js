@@ -5,7 +5,7 @@
 import { api } from './api.js';
 import { esc, toast } from './dom.js';
 import { chatPrefs, onChatPrefs, updateChatPrefs } from './chat-prefs.js';
-import { formatCheese, donationKindLabel } from './donations.js';
+import { formatCheese, donationKindLabel, eventMeta, EVENT_ICONS } from './donations.js';
 
 export const DESIGN_STYLES = [
   ['unified', '기본'], ['chzzk', '치지직'], ['hybrid', '하이브리드'], ['kakao', '말풍선'],
@@ -54,7 +54,11 @@ export function installChatExtras(panel) {
   anchor.after(rail);
   const renderRail = () => {
     rail.hidden = events.length === 0;
-    rail.innerHTML = events.slice(0, 12).map((m) => `<span class="event-chip ${m.kind}" title="${esc(m.content || '')}"><b>${esc(m.nickname || '익명')}</b> ${esc(m.kind === 'subscription' ? `${m.subscriptionMonths || ''}개월 구독` : formatCheese(m.donationAmount))}</span>`).join('');
+    rail.innerHTML = events.slice(0, 12).map((m) => {
+      const e = eventMeta(m);
+      if (!e) return '';
+      return `<span class="event-chip ev-${e.tone} ev-tier-${e.tier}" title="${esc(`${e.title} · ${m.content || ''}`)}"><span class="event-chip-icon">${EVENT_ICONS[e.icon] || ''}</span><b>${esc(m.nickname || '익명')}</b><span class="event-chip-value">${esc(e.value)}</span></span>`;
+    }).join('');
   };
 
   // ── 통계 버튼 (CHT-24) ──

@@ -5,6 +5,7 @@
 import { api, listen } from './api.js';
 import { esc, safeUrl, toast } from './dom.js';
 import { ChatPanel, renderContent } from './chat.js';
+import { eventCardHtml, eventClasses } from './donations.js';
 
 export const multiChatIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H8l-4 3V5Z"/><path d="M18 8h1a2 2 0 0 1 2 2v10l-3.5-2.6H11a2 2 0 0 1-2-2V15h5a4 4 0 0 0 4-4V8Z" opacity=".6"/></svg>';
 const COLORS = ['#00c77f', '#5ba3ff', '#ff8a3d', '#c77dff', '#ff5d8f', '#2ec4b6', '#f4c430', '#8d99ae'];
@@ -181,8 +182,16 @@ export class MultiChatPage {
     if (!p || !p.event || p.event.type !== 'messages' || this.root.hidden || this.layout !== 'merged') return;
     const c = this.channels.find((x) => x.session === p.session);
     if (!c) return;
-    const html = (p.event.messages || []).filter((m) => m.kind !== 'system').map((m) => `
-      <div class="chat-line merged-line" style="--mc-color:${c.color}"><span class="mc-tag">${esc(c.name)}</span><span class="nick">${esc(m.nickname || '익명')}</span><span class="text">${renderContent(m.content, m.emojis)}</span></div>`).join('');
+    const tag = `<span class="mc-tag">${esc(c.name)}</span>`;
+    const html = (p.event.messages || []).filter((m) => m.kind !== 'system').map((m) => {
+      const ev = eventClasses(m);
+      if (ev.length) {
+        const body = m.content && m.content.trim() ? renderContent(m.content, m.emojis) : '';
+        return `<div class="chat-line merged-line ${ev.join(' ')}" style="--mc-color:${c.color}">${eventCardHtml(m, { tag, nick: `<span class="nick">${esc(m.nickname || '익명')}</span>`, content: body })}</div>`;
+      }
+      return `
+      <div class="chat-line merged-line" style="--mc-color:${c.color}">${tag}<span class="nick">${esc(m.nickname || '익명')}</span><span class="text">${renderContent(m.content, m.emojis)}</span></div>`;
+    }).join('');
     if (!html) return;
     const atBottom = this.mergedList.scrollHeight - this.mergedList.scrollTop - this.mergedList.clientHeight < 40;
     this.mergedList.insertAdjacentHTML('beforeend', html);

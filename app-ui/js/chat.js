@@ -5,7 +5,7 @@
 // CHT-16 후원 필터, CHT-20 입력 상태 배너.
 import { api, listen, Events } from './api.js';
 import { esc, safeUrl, toast } from './dom.js';
-import { DonationRanking, eventHead } from './donations.js';
+import { DonationRanking, eventCardHtml, eventClasses, EVENT_ICONS } from './donations.js';
 import { installChatExtras } from './chat-extras.js';
 import {
   chatPrefs, onChatPrefs, updateChatPrefs, passesFilters, mentionsMe, getMyNickname,
@@ -56,7 +56,7 @@ function lineHtml(m, prefs) {
     .join('');
   const style = m.titleColor && /^#[0-9a-f]{3,8}$/i.test(m.titleColor) ? ` style="color:${m.titleColor}"` : '';
   if (m.kind === 'system') {
-    return `<div class="chat-line system" data-id="${esc(m.id)}">${esc(m.content)}</div>`;
+    return `<div class="chat-line system" data-id="${esc(m.id)}"><span class="sys-pill">${esc(m.content)}</span></div>`;
   }
   const classes = ['chat-line'];
   if (m.isBlinded) classes.push('blinded');
@@ -67,10 +67,14 @@ function lineHtml(m, prefs) {
   const nick = `<span class="nick${roleClass(m.role)}"${style}>${esc(m.nickname || '익명')}</span>`;
   const text = `<span class="text">${renderContent(m.content, m.emojis, prefs.emoticonEnabled)}</span>`;
   const data = `data-id="${esc(m.id)}" data-uid="${esc(m.userId || '')}" data-nick="${esc(m.nickname || '')}" data-role="${esc(m.role || '')}"`;
-  const event = eventHead(m);
-  if (event) {
-    classes.push(...event.classes);
-    return `<div class="${classes.join(' ')}" ${data}><div class="event-head">${time}${badges}${nick}${event.head}</div>${text}</div>`;
+  const evClasses = eventClasses(m);
+  if (evClasses.length) {
+    classes.push(...evClasses);
+    const body = m.content && m.content.trim() ? renderContent(m.content, m.emojis, prefs.emoticonEnabled) : '';
+    return `<div class="${classes.join(' ')}" ${data}>${eventCardHtml(m, { time, badges: badges ? `<span class="badges">${badges}</span>` : '', nick, content: body })}</div>`;
+  }
+  if (m.kind === 'notice') {
+    return `<div class="${classes.join(' ')}" ${data}><span class="notice-icon">${EVENT_ICONS.megaphone}</span><div class="notice-body"><div class="notice-from">${nick}<span class="notice-tag">공지</span>${time}</div>${text}</div></div>`;
   }
   return `<div class="${classes.join(' ')}" ${data}>${time}<span class="badges">${badges}</span>${nick}${text}</div>`;
 }
