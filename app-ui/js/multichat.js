@@ -39,7 +39,7 @@ export class MultiChatPage {
         <h1 class="page-title">멀티채팅</h1>
         <span class="page-subtitle mc-count"></span>
         <div class="grow"></div>
-        <input type="search" class="mc-search" placeholder="메시지 검색 (⌥⌘F)">
+        <input type="search" class="mc-search" aria-label="멀티채팅 메시지 검색" placeholder="메시지 검색 (⌥⌘F)">
         <div class="segmented"><button class="seg" data-mc-layout="tabs">탭</button><button class="seg" data-mc-layout="grid">그리드</button><button class="seg" data-mc-layout="merged">통합</button></div>
         <button class="btn primary" data-mc="add">+ 채널</button>
         <button class="btn ghost" data-mc="close-all">모두 닫기</button>
@@ -50,10 +50,10 @@ export class MultiChatPage {
         <div class="mc-panes"></div>
         <div class="mc-merged" hidden>
           <div class="chat-list mc-merged-list"></div>
-          <form class="chat-input mc-merged-input"><select class="select mc-target"></select><input type="text" maxlength="100" placeholder="선택한 채널로 보내기" autocomplete="off"><button class="btn primary">보내기</button></form>
+          <form class="chat-input mc-merged-input"><select class="select mc-target" aria-label="메시지를 보낼 채널"></select><input type="text" maxlength="100" placeholder="선택한 채널로 보내기" autocomplete="off"><button class="btn primary">보내기</button></form>
         </div>
       </div>
-      <div class="ml-picker mc-picker" hidden><div class="ml-picker-panel"><header class="ml-picker-head"><strong>채널 추가</strong><input type="search" class="ml-picker-filter" placeholder="채널·제목으로 찾기"><button class="icon-btn" data-mc="picker-close">✕</button></header><div class="ml-picker-list"></div></div></div>`;
+      <div class="ml-picker mc-picker" hidden><div class="ml-picker-panel" role="dialog" aria-modal="true" aria-label="채널 추가"><header class="ml-picker-head"><strong>채널 추가</strong><input type="search" class="ml-picker-filter" aria-label="추가할 채널 검색" placeholder="채널·제목으로 찾기"><button class="icon-btn" data-mc="picker-close" title="채널 추가 닫기">✕</button></header><div class="ml-picker-list"></div></div></div>`;
     content.append(this.root);
     this.panesBox = this.root.querySelector('.mc-panes');
     this.overview = this.root.querySelector('.mc-overview');

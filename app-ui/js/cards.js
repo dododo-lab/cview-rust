@@ -18,7 +18,7 @@ export function liveCard(live) {
         ${uptime ? `<span class="badge-uptime">${esc(uptime)}</span>` : ''}
       </div>
       <div class="card-body">
-        <span class="card-avatar" data-open-channel title="채널 정보">${avatar ? `<img class="avatar" src="${esc(avatar)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<div class="avatar"></div>'}</span>
+        <button class="card-avatar" type="button" data-open-channel title="채널 정보" aria-label="${esc(live.channelName)} 채널 정보">${avatar ? `<img class="avatar" src="${esc(avatar)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}</button>
         <div class="card-text">
           <div class="card-title">${esc(live.liveTitle || '제목 없음')}</div>
           <div class="card-meta ellipsis">${esc(live.channelName)}${category}</div>
@@ -119,7 +119,6 @@ export function bindCardOpen(root, onOpen) {
     onOpen(card.dataset.channelId, card.dataset);
   };
   root.addEventListener('click', (e) => open(e.target));
-  root.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') open(e.target);
-  });
+  // Card keyboard activation is centralized in installA11y; nested buttons retain
+  // native Enter/Space behavior without opening the stream a second time.
 }

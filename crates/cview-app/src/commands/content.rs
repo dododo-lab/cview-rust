@@ -506,8 +506,23 @@ pub fn sanitize_file_name(name: &str) -> String {
             c => c,
         })
         .collect();
-    let trimmed = cleaned.trim().trim_start_matches('.').to_string();
-    let limited: String = trimmed.chars().take(120).collect();
+    let trimmed = cleaned.trim().trim_matches('.');
+    // Keep the extension, and leave room for collision suffixes under NAME_MAX (255 bytes).
+    let (stem, extension) = trimmed
+        .rsplit_once('.')
+        .filter(|(_, ext)| {
+            !ext.is_empty() && ext.len() <= 10 && ext.bytes().all(|b| b.is_ascii_alphanumeric())
+        })
+        .map(|(stem, ext)| (stem, format!(".{ext}")))
+        .unwrap_or((trimmed, String::new()));
+    let mut limited = String::new();
+    for c in stem.chars().take(120 - extension.len()) {
+        if limited.len() + c.len_utf8() > 240 - extension.len() {
+            break;
+        }
+        limited.push(c);
+    }
+    limited.push_str(&extension);
     if limited.is_empty() {
         "cview".into()
     } else {
@@ -516,19 +531,58 @@ pub fn sanitize_file_name(name: &str) -> String {
 }
 
 /// 같은 이름이 있으면 ` (2)` 를 붙인다.
-pub(crate) fn unique_path(dir: &Path, file_name: &str) -> PathBuf {
-    let candidate = dir.join(file_name);
-    if !candidate.exists() {
-        return candidate;
+fn numbered_file_name(file_name: &str, n: usize) -> String {
+    if n == 1 {
+        return file_name.to_string();
     }
     let (stem, ext) = match file_name.rsplit_once('.') {
         Some((s, e)) => (s.to_string(), format!(".{e}")),
         None => (file_name.to_string(), String::new()),
     };
-    (2..1000)
-        .map(|n| dir.join(format!("{stem} ({n}){ext}")))
-        .find(|p| !p.exists())
-        .unwrap_or(candidate)
+    format!("{stem} ({n}){ext}")
+}
+
+pub(crate) fn unique_path(dir: &Path, file_name: &str) -> std::io::Result<PathBuf> {
+    for n in 1..1000 {
+        let path = dir.join(numbered_file_name(file_name, n));
+        match path.symlink_metadata() {
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(path),
+            Err(e) => return Err(e),
+            Ok(_) => {}
+        }
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "같은 이름의 파일이 너무 많습니다",
+    ))
+}
+
+/// Reserve the filename atomically so concurrent exports cannot truncate each other.
+fn save_unique_file(dir: &Path, file_name: &str, bytes: &[u8]) -> std::io::Result<PathBuf> {
+    use std::io::Write;
+    std::fs::create_dir_all(dir)?;
+    for n in 1..1000 {
+        let path = dir.join(numbered_file_name(file_name, n));
+        let mut file = match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        };
+        if let Err(e) = file.write_all(bytes).and_then(|()| file.sync_all()) {
+            drop(file);
+            let _ = std::fs::remove_file(&path);
+            return Err(e);
+        }
+        return Ok(path);
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "같은 이름의 파일이 너무 많습니다",
+    ))
 }
 
 /// 파일 저장 — `data` 는 base64(바이너리) 또는 `text`(문자열) 중 하나. 저장한 경로를 돌려준다.
@@ -558,10 +612,12 @@ pub async fn save_file(
         .filter(|p| !p.trim().is_empty())
         .map(|p| PathBuf::from(shellexpand_home(&p, &home)));
     let dir = configured.unwrap_or_else(|| default_save_dir(&home, &kind));
-    std::fs::create_dir_all(&dir)
-        .map_err(|e| CommandError(format!("폴더를 만들 수 없습니다: {e}")))?;
-    let path = unique_path(&dir, &sanitize_file_name(&file_name));
-    std::fs::write(&path, bytes).map_err(|e| CommandError(format!("저장하지 못했습니다: {e}")))?;
+    let path = tauri::async_runtime::spawn_blocking(move || {
+        save_unique_file(&dir, &sanitize_file_name(&file_name), &bytes)
+    })
+    .await
+    .map_err(|e| CommandError(format!("저장 작업에 실패했습니다: {e}")))?
+    .map_err(|e| CommandError(format!("저장하지 못했습니다: {e}")))?;
     Ok(path.to_string_lossy().into_owned())
 }
 
@@ -638,21 +694,43 @@ pub async fn open_external(url: String) -> CmdResult<()> {
     if !matches!(parsed.scheme(), "http" | "https") {
         return Err(CommandError("http(s) 주소만 열 수 있습니다".into()));
     }
-    #[cfg(target_os = "macos")]
-    let result = std::process::Command::new("open")
-        .arg(parsed.as_str())
-        .spawn();
     #[cfg(target_os = "windows")]
-    let result = std::process::Command::new("cmd")
-        .args(["/C", "start", "", parsed.as_str()])
-        .spawn();
-    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
-    let result = std::process::Command::new("xdg-open")
-        .arg(parsed.as_str())
-        .spawn();
-    result
-        .map(|_| ())
-        .map_err(|e| CommandError(format!("열 수 없습니다: {e}")))
+    {
+        // Passing URLs through cmd /C start interprets &, | and other shell syntax.
+        // ShellExecuteW hands the URL directly to the registered browser instead.
+        let target: Vec<u16> = parsed.as_str().encode_utf16().chain(Some(0)).collect();
+        // SAFETY: target is a NUL-terminated UTF-16 string alive for the call.
+        // Other optional arguments are null and no pointer is retained by this API.
+        let result = unsafe {
+            windows_sys::Win32::UI::Shell::ShellExecuteW(
+                std::ptr::null_mut(),
+                std::ptr::null(),
+                target.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null(),
+                1,
+            )
+        } as isize;
+        if result > 32 {
+            Ok(())
+        } else {
+            Err(CommandError(format!(
+                "열 수 없습니다 (Windows 오류 {result})"
+            )))
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        #[cfg(target_os = "macos")]
+        let opener = "open";
+        #[cfg(not(target_os = "macos"))]
+        let opener = "xdg-open";
+        std::process::Command::new(opener)
+            .arg(parsed.as_str())
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| CommandError(format!("열 수 없습니다: {e}")))
+    }
 }
 
 #[cfg(test)]
@@ -672,7 +750,20 @@ mod tests {
         assert_eq!(sanitize_file_name("a/b:c?.png"), "a_b_c_.png");
         assert_eq!(sanitize_file_name("..hidden"), "hidden");
         assert_eq!(sanitize_file_name("   "), "cview");
-        assert_eq!(sanitize_file_name(&"가".repeat(300)).chars().count(), 120);
+        assert!(sanitize_file_name(&"가".repeat(300)).len() <= 240);
+    }
+
+    #[test]
+    fn long_unicode_exports_keep_the_extension_and_fit_the_filesystem() {
+        let dir = tempfile::tempdir().unwrap();
+        let name = sanitize_file_name(&format!("{}.mp4", "방송 제목".repeat(100)));
+        assert!(name.ends_with(".mp4"));
+        assert!(name.len() <= 240);
+        assert!(name.chars().count() <= 120);
+        let path = save_unique_file(dir.path(), &name, b"video").unwrap();
+        let duplicate = save_unique_file(dir.path(), &name, b"second video").unwrap();
+        assert_ne!(path, duplicate);
+        assert_eq!(duplicate.extension().unwrap(), "mp4");
     }
 
     #[test]
@@ -686,9 +777,73 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("cview-save-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(dir.join("a.txt"), "x").unwrap();
-        assert_eq!(unique_path(&dir, "a.txt"), dir.join("a (2).txt"));
-        assert_eq!(unique_path(&dir, "b.txt"), dir.join("b.txt"));
+        assert_eq!(unique_path(&dir, "a.txt").unwrap(), dir.join("a (2).txt"));
+        assert_eq!(unique_path(&dir, "b.txt").unwrap(), dir.join("b.txt"));
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(shellexpand_home("~/Pics", home), "/Users/x/Pics");
+    }
+
+    #[test]
+    fn concurrent_exports_keep_each_file_intact() {
+        let dir = tempfile::tempdir().unwrap();
+        let barrier = std::sync::Barrier::new(8);
+        let paths = std::thread::scope(|scope| {
+            let jobs: Vec<_> = (0..8)
+                .map(|n| {
+                    let dir = dir.path();
+                    let barrier = &barrier;
+                    scope.spawn(move || {
+                        barrier.wait();
+                        let bytes = vec![n; 1024];
+                        let path = save_unique_file(dir, "chat.txt", &bytes).unwrap();
+                        (path, bytes)
+                    })
+                })
+                .collect();
+            jobs.into_iter()
+                .map(|job| job.join().unwrap())
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 8);
+        for (path, bytes) in paths {
+            assert_eq!(std::fs::read(path).unwrap(), bytes);
+        }
+    }
+
+    #[test]
+    fn exhausted_names_never_fall_back_to_overwriting() {
+        let dir = tempfile::tempdir().unwrap();
+        for n in 1..1000 {
+            std::fs::write(
+                dir.path().join(numbered_file_name("chat.txt", n)),
+                b"original",
+            )
+            .unwrap();
+        }
+        assert_eq!(
+            unique_path(dir.path(), "chat.txt").unwrap_err().kind(),
+            std::io::ErrorKind::AlreadyExists
+        );
+        assert_eq!(
+            save_unique_file(dir.path(), "chat.txt", b"replacement")
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::AlreadyExists
+        );
+        assert_eq!(
+            std::fs::read(dir.path().join("chat.txt")).unwrap(),
+            b"original"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn exports_do_not_follow_existing_symlinks() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("target.txt");
+        std::os::unix::fs::symlink(&target, dir.path().join("chat.txt")).unwrap();
+        let path = save_unique_file(dir.path(), "chat.txt", b"export").unwrap();
+        assert_eq!(path, dir.path().join("chat (2).txt"));
+        assert!(!target.exists());
     }
 }

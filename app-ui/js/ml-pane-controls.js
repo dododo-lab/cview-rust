@@ -46,11 +46,12 @@ export function paneControlsHtml() {
       </div>
       <div class="ml-pane-menu ml-gear-menu" role="menu" hidden></div>
       <div class="ml-pane-menu ml-more-pane" role="menu" hidden>
-        <button class="ml-menu-item" data-ml="select">${I.chat}<span>이 패인 채팅 보기</span></button>
-        <button class="ml-menu-item" data-ml="info">${I.info}<span>채널 정보</span></button>
-        <button class="ml-menu-item" data-ml="retry">${I.retry}<span>다시 연결</span></button>
-        <button class="ml-menu-item ml-narrow-only" data-mp="pip">${I.pip}<span>PiP</span></button>
-        <button class="ml-menu-item ml-narrow-only" data-ml="single">${I.expand}<span>이 채널만 크게</span></button>
+        <button class="ml-menu-item" role="menuitem" data-ml="select">${I.chat}<span>이 패인 채팅 보기</span></button>
+        <button class="ml-menu-item" role="menuitem" data-ml="info">${I.info}<span>채널 정보</span></button>
+        <button class="ml-menu-item" role="menuitem" data-ml="retry">${I.retry}<span>다시 연결</span></button>
+        <button role="menuitem" class="ml-menu-item ml-narrow-only" data-mp="pip">${I.pip}<span>PiP</span></button>
+        <button role="menuitem" class="ml-menu-item ml-narrow-only" data-ml="single">${I.expand}<span>이 채널만 크게</span></button>
+        <button role="menuitem" class="ml-menu-item ml-tiny-only" data-mp="fullscreen">${I.fullscreen}<span>전체 화면</span></button>
       </div>`;
 }
 
@@ -220,10 +221,10 @@ export class PaneControls {
     const lat = Number.isFinite(this.latency) && this.latency > 0 ? `${this.latency.toFixed(1)}초` : '—';
     this.gearMenu.innerHTML = `
       <div class="ml-menu-head">화질${height ? ` <span>${height}p</span>` : ''}</div>
-      ${items.map((o) => `<button class="ml-menu-item ml-level${o.index === this.manualIndex ? ' active' : ''}" role="menuitemradio" data-mp="level" data-level="${o.index}"><span>${esc(o.label)}</span></button>`).join('')}
+      ${items.map((o) => `<button class="ml-menu-item ml-level${o.index === this.manualIndex ? ' active' : ''}" role="menuitemradio" aria-checked="${o.index === this.manualIndex}" data-mp="level" data-level="${o.index}"><span>${esc(o.label)}</span></button>`).join('')}
       <div class="ml-menu-sep"></div>
       <div class="ml-menu-head">지연 <span>${lat}</span></div>
-      <button class="ml-menu-item" data-mp="live"><span>라이브로 이동 (따라잡기)</span></button>`;
+      <button class="ml-menu-item" role="menuitem" data-mp="live"><span>라이브로 이동 (따라잡기)</span></button>`;
   }
 
   chooseLevel(index) {

@@ -217,7 +217,7 @@ pub fn decide(input: &CatalogSweepInputs) -> CatalogSweepDecision {
     }
     let category_demanded = input.demands.contains(&RefreshDemand::Category);
     // 부팅 유예 — 카테고리 화면이 비어 있으면(요약 없음) 기다리게 하지 않는다.
-    if !(category_demanded && !input.has_summary) {
+    if !category_demanded || input.has_summary {
         let Some(settled) = input.boot_settled_at else {
             return CatalogSweepDecision::Idle(CatalogSweepIdleReason::BootUnsettled);
         };

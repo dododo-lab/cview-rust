@@ -250,7 +250,7 @@ export class ViewerControls {
   renderQualityMenu() {
     const items = [{ index: -1, label: '자동' }, ...this.levels];
     this.qualityMenu.innerHTML = items.map((o) => `
-      <button class="quality-item${o.index === this.manualIndex ? ' active' : ''}" role="menuitemradio" data-level="${o.index}">
+      <button class="quality-item${o.index === this.manualIndex ? ' active' : ''}" role="menuitemradio" aria-checked="${o.index === this.manualIndex}" data-level="${o.index}">
         ${esc(o.label)}${o.height >= 1080 ? '<span class="hd">HD</span>' : ''}
       </button>`).join('') || '<div class="quality-empty">화질 정보를 불러오는 중…</div>';
   }

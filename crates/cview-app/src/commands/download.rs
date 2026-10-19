@@ -342,7 +342,8 @@ async fn run_job(
         Some(c) => format!("{c}_{title}_{target}.{ext}"),
         None => format!("{title}_{target}.{ext}"),
     });
-    let output = unique_path(folder, &name);
+    let output =
+        unique_path(folder, &name).map_err(|e| DownloadError::WriteFailed(e.to_string()))?;
     let last_emit = Arc::new(Mutex::new(Instant::now()));
     let handle = app.clone();
     let job_id = id.to_string();

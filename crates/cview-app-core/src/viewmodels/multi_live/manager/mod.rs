@@ -1063,7 +1063,7 @@ impl ManagerState {
             };
             let id = Some(s.id());
             let keep_visible = id == stage || id == handoff_warm || id == self.pip_session_id;
-            hls.set_video_surface_visible(!(stage.is_some() && !keep_visible));
+            hls.set_video_surface_visible(stage.is_none() || keep_visible);
         }
     }
 
@@ -1106,7 +1106,7 @@ impl ManagerState {
             };
             let pane_count = {
                 let mut st = shared.obs.lock();
-                if !st.tm_revert_tasks.get(&sid).is_some_and(|t| t.id() == tid) {
+                if st.tm_revert_tasks.get(&sid).is_none_or(|t| t.id() != tid) {
                     return;
                 }
                 st.tm_revert_tasks.remove(&sid);

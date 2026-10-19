@@ -1282,7 +1282,7 @@ impl ClipBrowserViewModel {
             }
             let needed = (page + 1) * DISPLAY_PAGE_SIZE;
             st.channel_display_page = page;
-            !(st.channel_clips.len() >= needed || !st.channel_has_more)
+            st.channel_clips.len() < needed && st.channel_has_more
         };
         if need_more {
             self.load_more_channel_clips_if_needed();

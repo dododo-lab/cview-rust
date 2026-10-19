@@ -1,6 +1,6 @@
 /* 멀티라이브 — 패인 그리드 + 선택 패인 채팅 (원본 MultiLiveView). */
 
-.page-multilive { display: flex; flex-direction: column; overflow: hidden; padding: var(--sp-lg) var(--sp-xl) var(--sp-lg); }
+.page-multilive { display: flex; flex-direction: column; overflow: hidden; padding: var(--sp-xl) var(--sp-xxl) var(--sp-lg); }
 .page-multilive[hidden] { display: none; }
 .ml-header { flex: none; gap: var(--sp-sm); }
 .ml-header .btn svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
@@ -165,10 +165,10 @@
 :root[data-motion="reduced"] .ml-pane.audible::after { animation: none; }
 
 /* ══ 상단 바(툴바) — 한 줄 그룹, 높이 30px 통일, 옅은 구분선 ══ */
-.ml-header { flex-wrap: nowrap; min-width: 0; }
+.ml-header { flex-wrap: wrap; min-width: 0; }
 .ml-header .page-title { white-space: nowrap; }
 .ml-count { flex: none; font-size: var(--fs-micro); font-weight: 600; color: var(--text-secondary); padding: 2px 8px; border-radius: 999px; background: var(--hover); font-variant-numeric: tabular-nums; }
-.ml-toolbar { display: flex; align-items: center; gap: 6px; min-width: 0; flex: none; }
+.ml-toolbar { display: flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; flex: 0 1 auto; flex-wrap: wrap; row-gap: 8px; }
 .ml-toolbar .ml-focus-controls { gap: 6px; }
 .ml-tb-sep { width: 1px; height: 18px; background: var(--border-subtle); margin: 0 4px; flex: none; }
 .ml-toolbar .segmented { height: 30px; padding: 2px; border-radius: 9px; align-items: stretch; }
@@ -247,9 +247,9 @@
 .ml-vol:hover .ml-vol-range, .ml-vol:focus-within .ml-vol-range { width: 64px; opacity: 1; margin: 0 8px 0 2px; }
 .ml-vol .ml-vol-range::-webkit-slider-thumb { -webkit-appearance: none; width: 11px; height: 11px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
 .ml-pane.audible .ml-vol [data-ml="audio"] { color: #00ffa3; }
-.ml-live-pill { flex: none; height: 18px; margin: 0 6px 0 4px; padding: 0 6px; border: 0; border-radius: 4px; display: inline-flex; align-items: center; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; color: #fff; background: #ff2b2b; cursor: pointer; font-variant-numeric: tabular-nums; }
+.ml-live-pill { flex: none; height: 18px; margin: 0 6px 0 4px; padding: 0 6px; border: 0; border-radius: 4px; display: inline-flex; align-items: center; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; color: #fff; background: var(--live-fill); cursor: pointer; font-variant-numeric: tabular-nums; }
 .ml-live-pill.behind { background: rgba(255, 255, 255, 0.2); }
-.ml-live-pill.behind:hover { background: #ff2b2b; }
+.ml-live-pill.behind:hover { background: var(--live-fill); }
 .ml-pane-cap { font-size: 10px; font-weight: 700; color: #fff; background: rgba(255, 255, 255, 0.18); border-radius: 4px; padding: 1px 6px; }
 .ml-pane-cap:empty { display: none; }
 /* 가운데 재생(일시정지일 때) · 버퍼링 */
@@ -278,6 +278,7 @@
 .ml-menu-head { display: flex; justify-content: space-between; gap: 8px; padding: 5px 9px 3px; font-size: 11px; font-weight: 700; color: rgba(255, 255, 255, 0.6); }
 .ml-menu-head span { color: rgba(255, 255, 255, 0.85); font-weight: 600; font-variant-numeric: tabular-nums; }
 .ml-more-pane .ml-narrow-only { display: none; }
+.ml-more-pane .ml-tiny-only { display: none; }
 /* 패인 전체 화면 */
 .ml-pane:fullscreen { border-radius: 0; outline: 0; }
 /* 좁은 패인 — 덜 쓰는 버튼은 ⋯ 로 */
@@ -292,7 +293,14 @@
   .ml-pane-btn svg { width: 16px; height: 16px; }
   .ml-vol:hover .ml-vol-range { width: 44px; }
 }
-@container (max-width: 260px) { .ml-pane-text, .ml-pane-avatar { display: none; } }
+@container (max-width: 260px) {
+  .ml-pane-text, .ml-pane-avatar, .ml-pane-bar [data-mp="fullscreen"] { display: none; }
+  .ml-more-pane .ml-tiny-only { display: flex; }
+  .ml-pane-menu { min-width: min(170px, calc(100% - 16px)); max-width: calc(100% - 16px); }
+  .ml-vol { position: relative; }
+  .ml-vol .ml-vol-range { position: absolute; bottom: 40px; left: 0; margin: 0; }
+  .ml-vol:hover .ml-vol-range, .ml-vol:focus-within .ml-vol-range { width: 64px; margin: 0; }
+}
 /* 포커스 메인 패인은 큰 막대·큰 아이콘 */
 .ml-stage.ml-focus .ml-pane.ml-first .ml-pane-btn, .ml-stage.ml-focus .ml-pane.ml-first .ml-pane-close { width: 34px; height: 34px; }
 .ml-stage.ml-focus .ml-pane.ml-first .ml-pane-btn svg { width: 20px; height: 20px; }
@@ -300,3 +308,9 @@
 .ml-stage.ml-focus .ml-pane.ml-first .ml-pane-avatar img { width: 36px; height: 36px; }
 .ml-stage.ml-focus .ml-pane.ml-first .ml-pane-bar { padding: 36px 12px 8px; }
 .ml-stage.ml-focus .ml-pane.ml-first .ml-pane-top { padding: 10px 12px 30px; }
+
+.ml-pane:has(.ml-pane-top :focus-visible, .ml-pane-bar :focus-visible) .ml-pane-top, .ml-pane:has(.ml-pane-top :focus-visible, .ml-pane-bar :focus-visible) .ml-pane-bar { opacity: 1; transform: none; }
+.ml-pane:not(.ctl-visible):not(.paused):has(.ml-pane-top :focus-visible, .ml-pane-bar :focus-visible) :is(.ml-pane-top, .ml-pane-bar) * { pointer-events: auto !important; }
+.ml-toolbar input[type="range"]:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 5px; }
+
+.ml-vol-range:focus-visible { outline: 2px solid #fff; outline-offset: 5px; }

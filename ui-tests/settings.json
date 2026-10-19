@@ -1,0 +1,170 @@
+{
+  "channelNotifications": {
+    "settings": {}
+  },
+  "keyboard": {
+    "bindings": [
+      "bookmarkStream",
+      {
+        "key": "b",
+        "modifiers": 1
+      },
+      "screenshot",
+      {
+        "key": "s",
+        "modifiers": 1
+      },
+      "toggleChat",
+      {
+        "key": "c",
+        "modifiers": 0
+      },
+      "toggleFullscreen",
+      {
+        "key": "f",
+        "modifiers": 0
+      },
+      "toggleMute",
+      {
+        "key": "m",
+        "modifiers": 0
+      },
+      "togglePiP",
+      {
+        "key": "p",
+        "modifiers": 0
+      },
+      "togglePlay",
+      {
+        "key": "space",
+        "modifiers": 0
+      },
+      "volumeDown",
+      {
+        "key": "downArrow",
+        "modifiers": 0
+      },
+      "volumeUp",
+      {
+        "key": "upArrow",
+        "modifiers": 0
+      }
+    ]
+  },
+  "sync": {
+    "endpoint": "https://cv.dododo.app",
+    "explicitlyOptedIn": false,
+    "watchHistorySyncEnabled": false
+  },
+  "multiChat": {
+    "gridFocusRatio": 0.7,
+    "gridHorizontalRatio": 0.5,
+    "gridLayoutMode": "preset",
+    "gridVerticalRatio": 0.5,
+    "isGridLayout": false,
+    "panelWidthRatio": 0.2,
+    "savedSessions": []
+  },
+  "appearance": {
+    "compactMode": false,
+    "debugMode": false,
+    "frameRateMode": "adaptive",
+    "maxMemoryMB": 512,
+    "motionQuality": "reduced",
+    "sidebarScale": 1.0,
+    "sidebarWidth": 204.0,
+    "theme": "dark",
+    "transparencyMode": "system"
+  },
+  "general": {
+    "alwaysOnTop": false,
+    "autoRefreshEnabled": false,
+    "autoRefreshInterval": 60.0,
+    "launchAtLogin": false,
+    "notificationsEnabled": true,
+    "notifyOnCategoryChange": false,
+    "notifyOnLiveStart": true,
+    "notifyOnTitleChange": false,
+    "restoreWindowOnLaunch": true,
+    "showInMenuBar": true
+  },
+  "network": {
+    "apiResourceTimeout": 12,
+    "autoReconnect": true,
+    "cacheExpiry": 300,
+    "connectionTimeout": 15,
+    "forceStreamProxy": true,
+    "maxConcurrentAPIRequests": 4,
+    "maxConnectionsPerHost": 6,
+    "maxReconnectAttempts": 10,
+    "pauseRefreshWhenOffline": true,
+    "reconnectBaseDelay": 1.0,
+    "reduceBackgroundActivity": true,
+    "requestRateLimit": 10,
+    "retryCount": 3,
+    "streamConnectionTimeout": 10
+  },
+  "multiLive": {
+    "autoReconnect": true,
+    "autoReconnectMaxRetries": 10,
+    "backgroundQualityReduction": true,
+    "bandwidthCoordinationEnabled": true,
+    "chatOverlayFontSize": 12.0,
+    "chatOverlayInGrid": false,
+    "chatOverlayOpacity": 0.5,
+    "defaultFocusDirection": "left",
+    "defaultLayoutMode": "preset",
+    "levelCappingEnabled": true,
+    "maxConcurrentSessions": 4,
+    "multiAudioEnabled": false,
+    "rememberLastLayout": true,
+    "secondaryVolume": 0.30000001192092896,
+    "selectedSessionBWWeight": 1.5
+  },
+  "chat": {},
+  "player": {
+    "autoPictureEnhancement": false,
+    "autoPlay": true,
+    "bufferDuration": 2.0,
+    "catchupRate": 1.05,
+    "continuePlaybackInBackground": true,
+    "equalizerBands": [],
+    "equalizerPreAmp": 0.0,
+    "experimentalMatchWebV2": false,
+    "experimentalServerTimeMachine": false,
+    "forceHighestQuality": false,
+    "hardwareDecoding": true,
+    "latencyCatchUpThreshold": 0.55,
+    "latencyMax": 8.0,
+    "latencyMaxRate": 1.03,
+    "latencyMin": 1.5,
+    "latencyMinRate": 0.97,
+    "latencyPidKd": 0.02,
+    "latencyPidKi": 0.03,
+    "latencyPidKp": 0.35,
+    "latencyPreset": "matchWeb",
+    "latencySlowDownThreshold": 0.55,
+    "latencyTarget": 3.0,
+    "liveRewindDiskBudgetMB": 5120,
+    "liveRewindEnabled": true,
+    "liveRewindWindowMinutes": 60,
+    "lowLatencyMode": true,
+    "quality": "1080p",
+    "screenshotFormat": "png",
+    "screenshotPath": "~/Pictures/CView Screenshots",
+    "sharpPixelScaling": false,
+    "startMuted": false,
+    "streamAlertAnchorX": 0.5,
+    "streamAlertAnchorY": 0.08,
+    "streamAlertScale": 1.0,
+    "streamProxyMode": "localProxy",
+    "videoAdjustEnabled": false,
+    "videoBrightness": 1.0,
+    "videoContrast": 1.0,
+    "videoGamma": 1.0,
+    "videoHue": 0.0,
+    "videoSaturation": 1.0,
+    "videoUpscaling": false,
+    "volumeLevel": 1.0
+  }
+}

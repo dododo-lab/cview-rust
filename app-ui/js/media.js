@@ -39,8 +39,8 @@ export class MediaPage {
   }
 
   async show(params = {}) {
-    const seq = ++this.seq;
     this.leave();
+    const seq = this.seq;
     this.kind = params.kind;
     this.body.innerHTML = loadingState();
     try {
@@ -147,7 +147,10 @@ export class MediaPage {
   }
 
   leave() {
+    // Invalidate pending play/detail requests before they can start hidden playback.
+    this.seq += 1;
     clearInterval(this.saveTimer);
+    this.saveTimer = 0;
     const v = this.video;
     if (v) {
       this.saveProgress();
@@ -155,6 +158,9 @@ export class MediaPage {
       v.removeAttribute('src');
       v.load();
     }
+    const clip = this.body.querySelector('.clip-embed');
+    if (clip) clip.removeAttribute('src');
+    this.info = null;
   }
 
   async onClick(e) {

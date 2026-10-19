@@ -24,10 +24,10 @@ export class CommandPalette {
     this.el.className = 'palette-scrim';
     this.el.hidden = true;
     this.el.innerHTML = `
-      <div class="palette" role="dialog" aria-label="명령 팔레트">
+      <div class="palette" role="dialog" aria-modal="true" aria-label="명령 팔레트">
         <div class="palette-input"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
-          <input type="text" placeholder="화면, 동작, 채널을 찾거나 검색어를 입력하세요" autocomplete="off" spellcheck="false"><kbd>esc</kbd></div>
-        <div class="palette-list" role="listbox"></div>
+          <input type="text" role="combobox" aria-label="명령 또는 채널 검색" aria-autocomplete="list" aria-controls="cview-command-list" aria-expanded="false" placeholder="화면, 동작, 채널을 찾거나 검색어를 입력하세요" autocomplete="off" spellcheck="false"><kbd>esc</kbd></div>
+        <div class="palette-list" id="cview-command-list" role="listbox" aria-label="명령 및 채널"></div>
       </div>`;
     document.body.append(this.el);
     this.input = this.el.querySelector('input');
@@ -54,6 +54,7 @@ export class CommandPalette {
 
   async open() {
     this.el.hidden = false;
+    this.input.setAttribute('aria-expanded', 'true');
     this.input.value = '';
     this.input.focus();
     this.render();
@@ -74,6 +75,8 @@ export class CommandPalette {
 
   close() {
     this.el.hidden = true;
+    this.input.setAttribute('aria-expanded', 'false');
+    this.input.removeAttribute('aria-activedescendant');
   }
 
   render() {
@@ -99,15 +102,23 @@ export class CommandPalette {
       const head = it.group !== lastGroup ? `<div class="palette-group">${esc(it.group)}</div>` : '';
       lastGroup = it.group;
       const img = safeUrl(it.image);
-      return `${head}<div class="palette-item${i === 0 ? ' active' : ''}" role="option" data-i="${i}">
+      return `${head}<div class="palette-item${i === 0 ? ' active' : ''}" id="cview-command-${i}" role="option" aria-selected="${i === 0}" data-i="${i}">
         ${it.group === '채널' ? (img ? `<img class="avatar" src="${esc(img)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>') : ''}
         <span class="palette-label">${esc(it.label)}${it.live ? ' <b class="live-dot">LIVE</b>' : ''}</span>
         <span class="palette-hint ellipsis">${esc(it.hint || '')}</span></div>`;
     }).join('') || '<div class="tray-empty">일치하는 항목이 없습니다</div>';
+    this.highlight();
   }
 
   highlight() {
-    for (const el of this.list.querySelectorAll('.palette-item')) el.classList.toggle('active', Number(el.dataset.i) === this.index);
+    for (const el of this.list.querySelectorAll('.palette-item')) {
+      const active = Number(el.dataset.i) === this.index;
+      el.classList.toggle('active', active);
+      el.setAttribute('aria-selected', String(active));
+    }
+    const active = this.list.querySelector('.palette-item.active');
+    if (active) this.input.setAttribute('aria-activedescendant', active.id);
+    else this.input.removeAttribute('aria-activedescendant');
     this.list.querySelector('.palette-item.active')?.scrollIntoView({ block: 'nearest' });
   }
 

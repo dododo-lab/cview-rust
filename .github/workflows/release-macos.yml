@@ -1,0 +1,103 @@
+name: Build signed macOS DMG
+
+on:
+  push:
+    branches:
+      - codex/dmg-release
+  workflow_dispatch:
+    inputs:
+      target:
+        description: macOS architecture
+        required: true
+        default: aarch64-apple-darwin
+        type: choice
+        options:
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
+          - universal-apple-darwin
+
+permissions:
+  contents: read
+
+jobs:
+  dmg:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}/target
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify distribution credentials
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Required repository secret is missing: $name"
+              exit 1
+            fi
+          done
+      - name: Set up Rust and Tauri CLI
+        run: |
+          rustup show active-toolchain
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          cargo install tauri-cli --version '^2' --locked
+      - name: Import signing identity into temporary keychain
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          umask 077
+          keychain_path="$RUNNER_TEMP/cview-release.keychain-db"
+          certificate_path="$RUNNER_TEMP/cview-release.p12"
+          keychain_password="$(openssl rand -hex 32)"
+          echo "::add-mask::$keychain_password"
+          python3 -c 'import base64,os,pathlib; pathlib.Path(os.environ["RUNNER_TEMP"], "cview-release.p12").write_bytes(base64.b64decode(os.environ["APPLE_CERTIFICATE"], validate=True))'
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 7200 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain_path"
+          security list-keychains -d user -s "$keychain_path" "$HOME/Library/Keychains/login.keychain-db"
+          rm -f "$certificate_path"
+      - name: Configure notarization profile
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcrun notarytool store-credentials cview-ci \
+            --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" --keychain "$RUNNER_TEMP/cview-release.keychain-db"
+      - name: Build, sign and notarize DMG
+        env:
+          RELEASE_TARGET: ${{ inputs.target || 'aarch64-apple-darwin' }}
+          APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
+          CVIEW_NOTARIZE_PROFILE: cview-ci
+        run: scripts/release-macos.sh --dmg --target "$RELEASE_TARGET"
+      - name: Require notarization and Gatekeeper acceptance
+        run: |
+          dmgs=(dist/*.dmg)
+          [[ ${#dmgs[@]} -eq 1 && -f "${dmgs[0]}" ]]
+          xcrun stapler validate "${dmgs[0]}"
+          spctl --assess --type open --context context:primary-signature --verbose=2 "${dmgs[0]}"
+          shasum -a 256 --check "${dmgs[0]}.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CView-DMG-${{ inputs.target || 'aarch64-apple-darwin' }}
+          path: |
+            dist/*.dmg
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove signing materials
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/cview-release.p12"
+          if [[ -f "$RUNNER_TEMP/cview-release.keychain-db" ]]; then
+            security delete-keychain "$RUNNER_TEMP/cview-release.keychain-db"
+          fi

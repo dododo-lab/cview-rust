@@ -207,8 +207,8 @@ export class SettingsPage {
   render() {
     if (!this.settings) return;
     const tabs = `<div class="settings-top">
-      <div class="chips settings-tabs">${GROUPS.map(([id, l]) => `<button class="chip${this.group === id ? ' active' : ''}" data-group="${id}">${l}</button>`).join('')}</div>
-      <input type="search" class="settings-search" placeholder="설정 검색" value="${esc(this.query)}">
+      <div class="chips settings-tabs" role="tablist" aria-label="설정 분류">${GROUPS.map(([id, l]) => `<button class="chip${this.group === id ? ' active' : ''}" data-group="${id}" role="tab" aria-selected="${this.group === id}">${l}</button>`).join('')}</div>
+      <input type="search" class="settings-search" aria-label="설정 검색" placeholder="설정 검색" value="${esc(this.query)}">
     </div>`;
     this.body.innerHTML = `${tabs}<div class="settings-groups">${this.groupHtml()}</div>`;
     this.applySearch();
@@ -246,8 +246,8 @@ export class SettingsPage {
       <section class="settings-group oauth-group" data-g="overview"><h3>치지직 OAuth 연동 <small class="muted">선택</small></h3>
         <div class="setting" data-search="oauth 치지직 연동 client id secret 개발자"><span class="setting-label">애플리케이션 자격 증명<small class="oauth-status">치지직 개발자 센터에 등록한 앱의 Client ID·Secret — 키체인에 저장합니다</small></span></div>
         <div class="oauth-form">
-          <input type="text" name="clientId" placeholder="Client ID" autocomplete="off" spellcheck="false">
-          <input type="password" name="clientSecret" placeholder="Client Secret" autocomplete="off">
+          <input type="text" name="clientId" aria-label="OAuth Client ID" placeholder="Client ID" autocomplete="off" spellcheck="false">
+          <input type="password" name="clientSecret" aria-label="OAuth Client Secret" placeholder="Client Secret" autocomplete="off">
           <button type="button" class="btn" data-oauth="save">저장</button>
           <button type="button" class="btn primary" data-oauth="connect">연결</button>
           <button type="button" class="link-btn" data-oauth="clear">지우기</button>
@@ -255,9 +255,9 @@ export class SettingsPage {
       </section>
       <section class="settings-group" data-g="overview"><h3>화면</h3>
         <div class="setting" data-search="테마 다크 라이트 시스템">
-          <span class="setting-label">테마<small>시스템은 macOS 화면 모드를 따릅니다</small></span>
+          <span class="setting-label">테마<small>시스템은 운영체제의 화면 모드를 따릅니다</small></span>
           <div class="segmented" role="radiogroup" aria-label="테마">
-            ${THEMES.map((t) => `<button class="seg ${t === currentTheme() ? 'active' : ''}" data-theme-choice="${t}" role="radio" aria-checked="${t === currentTheme()}">${THEME_LABELS[t]}</button>`).join('')}
+            ${THEMES.map((t) => `<button class="seg ${t === currentTheme() ? 'active' : ''}" data-theme-choice="${t}" role="radio" aria-checked="${t === currentTheme()}" tabindex="${t === currentTheme() ? 0 : -1}">${THEME_LABELS[t]}</button>`).join('')}
           </div>
         </div>
       </section>
@@ -490,7 +490,13 @@ export class SettingsPage {
     const sys = e.target.closest('[data-sys]');
     if (sys) { this.onSystem(sys); return; }
     const g = e.target.closest('[data-group]');
-    if (g) { this.group = g.dataset.group; this.query = ''; this.render(); return; }
+    if (g) {
+      this.group = g.dataset.group;
+      this.query = '';
+      this.render();
+      this.body.querySelector(`[data-group="${this.group}"]`)?.focus();
+      return;
+    }
     if (e.target.closest('[data-adv]')) { e.preventDefault(); this.showAdvanced = !this.showAdvanced; this.render(); return; }
     const action = e.target.closest('[data-action]');
     if (action) {
@@ -499,7 +505,13 @@ export class SettingsPage {
       return;
     }
     const choice = e.target.closest('[data-theme-choice]');
-    if (choice) { await setTheme(choice.dataset.themeChoice); this.render(); return; }
+    if (choice) {
+      const theme = choice.dataset.themeChoice;
+      await setTheme(theme);
+      this.render();
+      this.body.querySelector(`[data-theme-choice="${theme}"]`)?.focus();
+      return;
+    }
     const w = e.target.closest('[data-remove-word]');
     if (w) { await updateChatPrefs({ blockedWords: (chatPrefs().blockedWords || []).filter((x) => x !== w.dataset.removeWord) }); this.render(); return; }
     const u = e.target.closest('[data-unblock]');

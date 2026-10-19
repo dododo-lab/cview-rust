@@ -35,6 +35,9 @@ export class Sidebar {
     this.liveCount = null;
     this.playing = new Set();
     this.nav = root.querySelector('#nav');
+    new ResizeObserver(() => {
+      this.nav.querySelector('.nav-item.active')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }).observe(this.nav);
     this.liveBox = root.querySelector('#sidebar-live');
     this.account = root.querySelector('#account');
 
@@ -129,7 +132,10 @@ export class Sidebar {
     for (const el of this.nav.querySelectorAll('.nav-item')) {
       const on = el.dataset.route === route;
       el.classList.toggle('active', on);
-      if (on) el.setAttribute('aria-current', 'page');
+      if (on) {
+        el.setAttribute('aria-current', 'page');
+        el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      }
       else el.removeAttribute('aria-current');
     }
   }
