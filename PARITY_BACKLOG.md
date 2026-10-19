@@ -61,7 +61,7 @@
 | PLY-15 | ✅ 오버레이 볼륨 슬라이더(스크롤 조절, % 표시) | `OverlayVolumeSlider`, `Components/VolumeSymbol` | 하단 range 슬라이더 | S |
 | PLY-16 | ✅ 스트림 알림 위치·크기 조정(위치 조정 모드) | `StreamAlertOverlayView`, 설정 `streamAlertAnchorX/Y/Scale` | 알림은 있음, 위치 고정 | S |
 | PLY-17 | ✅ 스트림 북마크(`bookmarkStream` 단축키, 북마크 목록·삭제) | `ShortcutAction.bookmarkStream`, `DataStore+Bookmarks` | persistence `save_bookmark/fetch_bookmarks`, 명령 없음 | S |
-| PLY-18 | 별도 플레이어 창(`⌘N`, 창 분리) | `CViewApp` `player-window` | 단일 창 | M |
+| PLY-18 | 🧪 별도 플레이어 창(`⌘N`, 창 분리) | `CViewApp` `player-window` | 단일 창 | M |
 | PLY-19 | ✅ 백그라운드 재생 끄기/가림 시 일시정지·화질 상한 | 설정 `continuePlaybackInBackground`, `OcclusionResolutionCap` | 미구현 | S |
 | PLY-20 | ✅ 시청 기록 기록(시작/종료) | `WatchHeartbeatCenter`, `DataStore+WatchHistorySync` | persistence `start/end_watch_record`, 셸 미호출 | S |
 
@@ -103,7 +103,7 @@
 | CHT-20 | ✅ 입력 상태 배너(로그인 필요·슬로우 모드·제한 사유) | `ChatInputStatusBanner`, `ChatRestrictionReason` | placeholder 문구만 | S |
 | CHT-21 | 🟡 채팅 화면 갱신 상한·최대 표시 줄 수 | `ChatSettingsQualityView`, `maxUpdateRate`/`maxVisibleMessages` | `pacing.rs`, UI 는 300줄 고정 | S |
 | CHT-22 | ✅ 채팅만 보기 화면(영상 없이) | `ChatOnlyView`, 라우트 `chatOnly` | 없음 | S |
-| CHT-23 | 독립 채팅 창(`⇧⌘C`, 채널 피커) | `IndependentChatWindow`, `ChatChannelPickerView` | 없음 | M |
+| CHT-23 | 🧪 독립 채팅 창(`⇧⌘C`, 채널 피커) | `IndependentChatWindow`, `ChatChannelPickerView` | 없음 | M |
 | CHT-24 | ✅ 채팅 통계(분당 메시지·참여자) | `ChatViewModel+Stats`, `Statistics/Tabs/ChatStatsView` | `stats.rs` | S |
 
 ## 5. 멀티채팅·멀티라이브 (MUL)
@@ -114,7 +114,7 @@
 | MUL-02 | ✅ 통합(머지) 채팅(여러 채널 메시지 한 타임라인, 보낼 채널 선택) | `MergedChatView*` | `merged_chat_merge_state.rs`, `merged_budget.rs` | L |
 | MUL-03 | ✅ 멀티채팅 메시지 검색(`⌥⌘F`)·다음/이전 채널(`⌃⇥`) | `MultiChatSearchView`, `MultiChatSearchStore` | `MultiChatSearchStore` | M |
 | MUL-04 | ✅ 멀티채팅 개요·컨트롤 레일·알림 배너·오프라인 세션 정책 | `MultiChatOverviewView`, `MultiChatControlRail`, `MultiChatNoticeBanner` | `OfflineSessionPolicy` | M |
-| MUL-05 | 멀티채팅 독립 창(`⇧⌘M`) | `MultiChatWindowHost` | 없음 | M |
+| MUL-05 | 🧪 멀티채팅 독립 창(`⇧⌘M`) | `MultiChatWindowHost` | 없음 | M |
 | MUL-06 | ✅ 멀티라이브 레이아웃: 프리셋/사용자 배치(드래그 크기 조절), `⌃⌘1~3` | `MultiLiveGridLayouts`, `PaneResizeGrip`, `MCGridResizeDivider`, `MultiLiveLayoutModePolicy` | 그리드·포커스만(포커스 비율 드래그 있음) | M |
 | MUL-07 | ✅ 패인 순서 드래그 재배치·탭 바 | `MLTabReorderDropDelegate`, `MCTabBar` | `order` 계산만, 드래그 없음 | S |
 | MUL-08 | 🟡 패인 개별 컨트롤(볼륨·음소거·화질·재연결·채널 상세) | `MultiLivePaneOverlays`, `MLPlaybackVolumePanel` | 선택·닫기만 | M |
@@ -159,7 +159,7 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 | DAT-02 | ✅ 즐겨찾기(카드·채널 상세에서 토글, 사이드바 우선 표시) | `FavoritesStore`, `LiveCardActionMenu` | `FavoritesStore`, persistence | S |
 | DAT-03 | ✅ 최근 시청을 DB 로 이관(지금은 localStorage) | `RecentChannelsStore` | `RecentChannelsStore` | S |
 | DAT-04 | ✅ 통계/인사이트 화면(세션·스트리밍·채팅·기록 탭, KPI 카드) | `Statistics/StatisticsView`, `Tabs/*`, `Components/KPICard` | persistence `aggregate_insights`, `watch_time_by_channel/category`, `current_watch_streak` | L |
-| DAT-05 | 통계 독립 창(`⇧⌘T`) | `CViewApp` `statistics-window` | 없음 | S |
+| DAT-05 | 🧪 통계 독립 창(`⇧⌘T`) | `CViewApp` `statistics-window` | 없음 | S |
 | DAT-06 | 🟡 저장소 복구·로컬 데이터 정리 UI | `AppState+StoreRecovery`, `AppState+LocalDataHygiene` | `store_open_health`, `maintenance` | M |
 
 ## 8. 앱 셸·시스템 연동 (SYS)

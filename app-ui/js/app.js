@@ -41,6 +41,9 @@ const ROUTES = [
   { id: 'settings', title: '설정', icon: icons.settings, section: '앱' },
 ];
 
+/** 보조 창 종류 — player · chat · multichat · stats (없으면 메인 창). */
+const AUX = new URLSearchParams(location.search).get('w');
+
 let auth = { loggedIn: false, state: 'loggedOut' };
 const isLoggedIn = () => Boolean(auth && auth.loggedIn);
 
@@ -125,7 +128,7 @@ async function navigate(route, params = {}, { push = true } = {}) {
   current = route;
   currentParams = params;
   sidebar.setActive(route);
-  saveWorkspace(route, params, viewer && viewer.isPlaying ? viewer.channelId : null);
+  if (!AUX) saveWorkspace(route, params, viewer && viewer.isPlaying ? viewer.channelId : null);
   // 라이브 메뉴는 재생 중이면 시청 화면, 아니면 이어 볼 채널 목록이다.
   const showViewer = route === 'live' && viewer.isPlaying;
   for (const [id, page] of Object.entries(pages)) {
@@ -155,6 +158,7 @@ function openChannelPage(channelId) {
 }
 
 function onViewerClosed() {
+  if (AUX === 'player') { api.windowCloseSelf().catch(() => {}); return; }
   sidebar.setPlaying('live', false);
   api.multiLiveSetAudioSuspended(false).catch(() => {});
   audioOwner = null;
@@ -224,6 +228,15 @@ function installViewerMultiLiveButton() {
     if (channelId) addToMultiLive(channelId);
   });
   close.before(button);
+  // 새 플레이어 창으로 분리 (PLY-18, ⌘N) — 보조 창 안에서는 숨긴다.
+  if (!AUX) {
+    const pop = document.createElement('button');
+    pop.className = 'icon-btn';
+    pop.title = '새 창으로 분리 (⌘N)';
+    pop.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="13" height="13" rx="2"/><path d="M10 4h10v10M20 4l-8 8"/></svg>';
+    pop.addEventListener('click', () => MENU_ACTIONS['window-player']());
+    button.before(pop);
+  }
 }
 
 /** 카드 우클릭 메뉴 — 원본 LiveCardActionMenu (NAV-10). */
@@ -358,6 +371,19 @@ const MENU_ACTIONS = {
   'go-live': () => viewer.isOpen && viewer.controls.goLive(),
   screenshot: () => viewer.isPlaying && viewer.controls.screenshot(),
   bookmark: () => viewer.isPlaying && viewer.controls.bookmark(),
+  'window-player': () => {
+    if (viewer.isPlaying) {
+      const id = viewer.channelId;
+      viewer.close();
+      api.windowOpen('player', { channelId: id }).catch((er) => toast(er.message));
+    } else api.windowOpen('player').catch((er) => toast(er.message));
+  },
+  'window-chat': () => {
+    const id = viewer.isOpen ? viewer.channelId : (current === 'chat' ? pages.chat.channelId : null);
+    api.windowOpen('chat', id ? { channelId: id } : null).catch((er) => toast(er.message));
+  },
+  'window-multichat': () => api.windowOpen('multichat').catch((er) => toast(er.message)),
+  'window-stats': () => api.windowOpen('stats').catch((er) => toast(er.message)),
   pip: () => (viewer.isPlaying ? viewer.controls.togglePip() : toast('재생 중인 방송이 없습니다')),
   welcome: () => showWelcome({ force: true, onLogin: login }),
   fullscreen: () => viewer.isOpen && viewer.controls.fullscreen(false),
@@ -374,9 +400,10 @@ const MENU_ACTIONS = {
 };
 
 function installMenuAndShortcuts() {
+  // 메뉴 이벤트는 모든 창에 간다 — 앞에 있는 창만 실행한다.
   listen('menu://action', (p) => {
     const run = p && MENU_ACTIONS[p.id];
-    if (run) run();
+    if (run && document.hasFocus()) run();
   });
   // 메뉴가 없는 환경(브라우저 미리보기 등)과 ⌘/ 보조.
   document.addEventListener('keydown', (e) => {
@@ -420,7 +447,7 @@ async function main() {
   pages.live = new LivePage(content, { isLoggedIn });
   pages.categories = new CategoriesPage(content);
   pages.multichat = new MultiChatPage(content, { isLoggedIn });
-  pages.chat = new ChatOnlyPage(content, { isLoggedIn, onBack: goBack, onPlay: openChannel });
+  pages.chat = new ChatOnlyPage(content, { isLoggedIn, onBack: goBack, onPlay: openChannel, session: AUX === 'chat' ? `win-${Date.now()}` : null, standalone: AUX === 'chat' });
   pages.library = new LibraryPage(content, { isLoggedIn, onOpenChannel: openChannelPage });
   pages.stats = new StatsPage(content, { onOpenChannel: openChannelPage });
   pages.media = new MediaPage(content, { onBack: goBack, onOpenChannel: openChannelPage });
@@ -509,8 +536,9 @@ async function main() {
   let settings = null;
   splashStep('설정 불러오기', 0.8);
   try { settings = await api.settingsGet(); } catch { /* 기본값 */ }
-  setTimeout(() => { hideSplash(); showWelcome({ onLogin: login }); }, 120);
   syncTheme(settings && settings.appearance && settings.appearance.theme);
+  setTimeout(() => { hideSplash(); if (!AUX) showWelcome({ onLogin: login }); }, 120);
+  if (AUX) { openAuxWindow(); return; }
   // 작업 공간 복원 (NAV-16) — "실행 시 창 복원"이 켜져 있으면 마지막 화면으로. 방송은 자동 재생하지 않고 묻는다.
   const ws = settings?.general?.restoreWindowOnLaunch !== false ? loadWorkspace() : null;
   navigate('home', {}, { push: false });
@@ -523,6 +551,16 @@ async function main() {
   if (ws && ws.channelId) {
     toast('지난번에 보던 방송이 있어요', 8000, { label: '이어 보기', run: () => openChannel(ws.channelId) });
   }
+}
+
+/** 보조 창 첫 화면 (PLY-18·CHT-23·MUL-05·DAT-05). */
+function openAuxWindow() {
+  const q = new URLSearchParams(location.search);
+  const channelId = q.get('channelId');
+  if (AUX === 'player') { if (channelId) openChannel(channelId); else navigate('live', {}, { push: false }); }
+  else if (AUX === 'chat') navigate('chat', channelId ? { channelId } : {}, { push: false });
+  else if (AUX === 'multichat') navigate('multichat', {}, { push: false });
+  else if (AUX === 'stats') navigate('stats', {}, { push: false });
 }
 
 /** `cview://` 링크 열기 — 원본 DeepLinkRouter.apply. */

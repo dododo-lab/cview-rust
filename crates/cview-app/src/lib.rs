@@ -18,6 +18,7 @@ pub mod system;
 pub mod tray;
 pub mod webview_store;
 pub mod window_prefs;
+pub mod windows;
 
 use std::sync::Arc;
 
@@ -89,7 +90,7 @@ fn shell_sinks<R: Runtime>(app: &AppHandle<R>) -> ShellSinks {
     ShellSinks {
         player_command: Arc::new(move |script: String| {
             if let Err(e) = command_app.emit_to(
-                MAIN_WINDOW,
+                windows::player_target().as_str(),
                 events::PLAYER_COMMAND,
                 PlayerCommandPayload { script },
             ) {
@@ -221,6 +222,8 @@ pub fn run() {
             commands::insights::insights_overview,
             commands::download::download_list,
             system::deeplink_take_pending,
+            windows::window_open,
+            windows::window_close_self,
             commands::oauth::oauth_status,
             commands::oauth::oauth_set_credentials,
             commands::oauth::oauth_clear_credentials,

@@ -113,6 +113,8 @@ export const api = {
 
   appInfo: () => invoke('app_info'),
   updateCheck: () => invoke('update_check'),
+  windowOpen: (kind, params) => invoke('window_open', { kind, params: params || null }),
+  windowCloseSelf: () => invoke('window_close_self'),
   oauthStatus: () => invoke('oauth_status'),
   oauthSetCredentials: (clientId, clientSecret) => invoke('oauth_set_credentials', { clientId, clientSecret }),
   oauthClearCredentials: () => invoke('oauth_clear_credentials'),

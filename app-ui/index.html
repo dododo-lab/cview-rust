@@ -8,6 +8,8 @@
     // 첫 페인트 전에 테마를 정한다(설정 값은 js/theme.js 가 다시 맞춘다).
     try { document.documentElement.dataset.theme = localStorage.getItem('cview.theme') || 'dark'; }
     catch (e) { document.documentElement.dataset.theme = 'dark'; }
+    // 보조 창(?w=player|chat|multichat|stats)은 사이드바 없이 한 화면만 그린다.
+    try { var w = new URLSearchParams(location.search).get('w'); if (w) document.documentElement.dataset.window = w; } catch (e) { /* 무시 */ }
   </script>
   <link rel="stylesheet" href="css/app.css">
   <link rel="stylesheet" href="css/multilive.css">

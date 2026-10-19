@@ -1,9 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "메인 창 — 앱 명령과 이벤트 수신만 허용한다. 로그인 창(원격 nid.naver.com)에는 IPC 권한을 주지 않는다.",
+  "description": "메인 창과 보조 창(플레이어·채팅·멀티채팅·통계) — 앱 명령과 이벤트 수신만 허용한다. 로그인 창(원격 nid.naver.com)에는 IPC 권한을 주지 않는다.",
   "windows": [
-    "main"
+    "main",
+    "player-*",
+    "chat-*",
+    "multichat",
+    "stats"
   ],
   "permissions": [
     "core:default",

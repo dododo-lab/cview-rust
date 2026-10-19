@@ -29,10 +29,13 @@ pub use crate::state::PLAYER_PROFILE;
 /// 라이브 재생 시작.
 #[tauri::command]
 pub async fn player_start(
+    window: tauri::Window,
     services: State<'_, AppServices>,
     channel_id: String,
 ) -> CmdResult<PlaybackStartedDto> {
     services.stop_player().await;
+    // 재생을 시작한 창이 플레이어 명령을 받는다(보조 플레이어 창, PLY-18).
+    crate::windows::set_player_target(window.label());
 
     let info = services.api.live_detail(&channel_id, true).await?;
     if info.status != LiveStatus::Open {

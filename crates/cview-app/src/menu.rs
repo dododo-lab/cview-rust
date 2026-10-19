@@ -66,6 +66,13 @@ const CHAT: &[Item] = &[
     ("chat-reconnect", "채팅 다시 연결", None),
 ];
 
+const WINDOWS: &[Item] = &[
+    ("window-player", "새 플레이어 창", Some("CmdOrCtrl+N")),
+    ("window-chat", "채팅 창", Some("CmdOrCtrl+Shift+C")),
+    ("window-multichat", "멀티채팅 창", Some("CmdOrCtrl+Shift+M")),
+    ("window-stats", "통계 창", Some("CmdOrCtrl+Shift+T")),
+];
+
 const HELP: &[Item] = &[
     ("shortcuts", "키보드 단축키", Some("CmdOrCtrl+/")),
     ("welcome", "처음 안내 다시 보기", None),
@@ -191,6 +198,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let view = sub("보기", VIEW)?;
     let playback = sub("재생", PLAYBACK)?;
     let chat = sub("채팅", CHAT)?;
+    let window_items = items(app, WINDOWS)?;
     let window = Submenu::with_items(
         app,
         "윈도우",
@@ -199,6 +207,11 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &PredefinedMenuItem::minimize(app, Some("최소화"))?,
             &PredefinedMenuItem::maximize(app, Some("확대/축소"))?,
             &PredefinedMenuItem::fullscreen(app, Some("전체 화면"))?,
+            &PredefinedMenuItem::separator(app)?,
+            &window_items[0],
+            &window_items[1],
+            &window_items[2],
+            &window_items[3],
         ],
     )?;
     let help = sub("도움말", HELP)?;
@@ -217,7 +230,7 @@ pub fn forward<R: Runtime>(app: &AppHandle<R>, id: &str) {
 
 pub fn is_known(id: &str) -> bool {
     matches!(id, "about" | "settings")
-        || [VIEW, PLAYBACK, CHAT, HELP]
+        || [VIEW, PLAYBACK, CHAT, WINDOWS, HELP]
             .iter()
             .any(|list| list.iter().any(|(i, _, _)| *i == id))
 }
