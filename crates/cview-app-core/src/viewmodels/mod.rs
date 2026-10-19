@@ -15,5 +15,7 @@ pub mod clip;
 pub mod following;
 pub mod home;
 pub mod multi_live;
+pub mod playback_launch;
 pub mod search;
 pub mod support;
+pub mod vod_library;
