@@ -25,6 +25,7 @@ export const READING_WIDTHS = [['full', '전체', null], ['wide', '넓게', 720]
 export function applyChatSkin(el, p = chatPrefs()) {
   const style = DESIGN_STYLES.some(([v]) => v === p.designStyle) ? p.designStyle : 'unified';
   el.classList.add('chat-skin');
+  el.classList.toggle('no-nick-colors', p.nicknameColors === false);
   for (const [v] of DESIGN_STYLES) el.classList.toggle(`style-${v}`, v === style);
   const w = READING_WIDTHS.find(([v]) => v === p.readingWidth);
   if (w && w[2]) { el.dataset.readWidth = w[0]; el.style.setProperty('--chat-read-width', `${w[2]}px`); }

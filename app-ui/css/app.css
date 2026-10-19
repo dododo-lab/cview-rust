@@ -1827,3 +1827,26 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .search-field input, .palette-input input { padding: 0; border-radius: 0; }
 .search-field input:focus, .palette-input input:focus { box-shadow: none; }
 .search-field:focus-within { border-color: var(--primary); box-shadow: var(--focus-ring); }
+
+/* ══ 닉네임 색 — 원본 ChatNicknamePalette(역할색과 겹치지 않는 9색, 다크·라이트 각 4.5:1 이상) ══ */
+:root { --nc-0: #93cc3d; --nc-1: #c8bfa0; --nc-2: #ff9f0a; --nc-3: #bf5fff; --nc-4: #ff5fa0; --nc-5: #00e5cc; --nc-6: #ffd60a; --nc-7: #ff6b6b; --nc-8: #64d2ff; }
+:root[data-theme="light"] { --nc-0: #4f730b; --nc-1: #5e5436; --nc-2: #9a5700; --nc-3: #703a96; --nc-4: #ad2c62; --nc-5: #00667a; --nc-6: #866400; --nc-7: #ac3a3a; --nc-8: #246d99; }
+@media (prefers-color-scheme: light) { :root[data-theme="system"] { --nc-0: #4f730b; --nc-1: #5e5436; --nc-2: #9a5700; --nc-3: #703a96; --nc-4: #ad2c62; --nc-5: #00667a; --nc-6: #866400; --nc-7: #ac3a3a; --nc-8: #246d99; } }
+/* 영상 위 채팅(어두운 면)은 테마와 상관없이 다크 값 */
+.viewer.chat-mode-overlay .chat, .ml-body.chat-overlay .ml-chat { --nc-0: #93cc3d; --nc-1: #c8bfa0; --nc-2: #ff9f0a; --nc-3: #bf5fff; --nc-4: #ff5fa0; --nc-5: #00e5cc; --nc-6: #ffd60a; --nc-7: #ff6b6b; --nc-8: #64d2ff; }
+.nick.nc-0 { --nc: var(--nc-0); }
+.nick.nc-1 { --nc: var(--nc-1); }
+.nick.nc-2 { --nc: var(--nc-2); }
+.nick.nc-3 { --nc: var(--nc-3); }
+.nick.nc-4 { --nc: var(--nc-4); }
+.nick.nc-5 { --nc: var(--nc-5); }
+.nick.nc-6 { --nc: var(--nc-6); }
+.nick.nc-7 { --nc: var(--nc-7); }
+.nick.nc-8 { --nc: var(--nc-8); }
+/* 해시색이 스타일별 닉네임 색보다 앞선다(메신저 말풍선은 원본처럼 이름을 한 가지 색으로) */
+.chat-line .nick.nc,
+.chat-skin:not(.no-nick-colors):not(.style-kakao):not(.style-imessage) .chat-line .nick.nc,
+.chat-skin:not(.no-nick-colors):not(.style-kakao):not(.style-imessage) .ev-from .nick.nc { color: var(--nc); }
+.chat-skin.no-nick-colors .chat-line .nick.nc { color: var(--cs-ink, var(--text-secondary)); }
+.chat-skin.style-chzzk.no-nick-colors .chat-line .nick.nc { color: var(--cs-sub); }
+.chat-skin:is(.style-kakao,.style-imessage) .chat-line .nick.nc { color: var(--cs-sub); }
