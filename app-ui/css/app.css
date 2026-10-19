@@ -1769,3 +1769,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .sw-calm, .sw-compact, .sw-dashboard { background: var(--surface-base); }
 .sw-calm::before, .sw-compact::before, .sw-dashboard::before { background: var(--border); }
 .sw-calm::after, .sw-compact::after, .sw-dashboard::after { background: var(--border-subtle); }
+/* 설정 › 채팅 디자인 스타일 카드 */
+.style-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; padding: 2px 0 12px; }
+.style-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 10px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle); background: var(--surface-base); text-align: left; color: inherit; }
+.style-card:hover { background: var(--hover); }
+.style-card.on { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-dim); }
+.style-card .design-swatch { width: 100%; height: 44px; border-radius: 9px; }
+.style-card b { font-size: var(--fs-footnote); }
+.style-card small { font-size: var(--fs-micro); color: var(--text-tertiary); line-height: 1.35; }
+.mc-merged.chat-skin { border-radius: var(--radius-lg); overflow: hidden; }

@@ -10,7 +10,7 @@ import { emptyState } from './cards.js';
 import { THEMES, THEME_LABELS, currentTheme, setTheme } from './theme.js';
 import { streamAlertsEnabled, setStreamAlertsEnabled } from './donations.js';
 import { chatPrefs, updateChatPrefs, blockedLabel, loadChatPrefs } from './chat-prefs.js';
-import { DESIGN_STYLES, BACKGROUNDS } from './chat-extras.js';
+import { DESIGN_STYLES, BACKGROUNDS, READING_WIDTHS } from './chat-extras.js';
 
 const opt = (pairs) => pairs.map(([value, label]) => ({ value, label }));
 
@@ -286,8 +286,13 @@ export class SettingsPage {
           <select class="select" data-chat="maxVisibleMessages">${[150, 300, 500, 1000].map((n) => `<option value="${n}" ${Number(p.maxVisibleMessages) === n ? 'selected' : ''}>${n}줄</option>`).join('')}</select></label>
       </section>
       <section class="settings-group" data-g="chat"><h3>디자인 · 배경</h3>
-        <label class="setting" data-search="채팅 디자인 스타일"><span class="setting-label">디자인 스타일<small>메시지 모양 — 말풍선·촘촘하게·대시보드 등</small></span>
-          <select class="select" data-chat-str="designStyle">${DESIGN_STYLES.map(([v, l]) => `<option value="${v}" ${p.designStyle === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <div class="setting style-setting" data-search="채팅 디자인 스타일 라운지 치지직 하이브리드 카카오 imessage 말풍선"><span class="setting-label">디자인 스타일<small>모든 채팅 화면에 함께 적용 · 채팅 머리글의 팔레트 버튼으로도 바꿀 수 있어요</small></span></div>
+        <div class="style-cards" data-search="채팅 디자인 스타일">${DESIGN_STYLES.map(([v, l, d]) => {
+          const on = (DESIGN_STYLES.some(([x]) => x === p.designStyle) ? p.designStyle : 'unified') === v;
+          return `<button type="button" class="style-card${on ? ' on' : ''}" data-design-style="${v}" aria-pressed="${on}"><span class="design-swatch sw-${v}"></span><b>${esc(l)}</b><small>${esc(d)}</small></button>`;
+        }).join('')}</div>
+        <label class="setting" data-search="읽기 폭 채팅 너비"><span class="setting-label">읽기 폭<small>넓은 채팅 창에서 메시지 줄 길이를 제한합니다</small></span>
+          <select class="select" data-chat-str="readingWidth">${READING_WIDTHS.map(([v, l]) => `<option value="${v}" ${(p.readingWidth || 'full') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="setting" data-search="채팅 배경"><span class="setting-label">배경</span>
           <select class="select" data-chat-bg="mode">${BACKGROUNDS.map(([v, l]) => `<option value="${v}" ${(p.background || {}).mode === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="setting" data-search="배경 강도"><span class="setting-label">배경 강도</span>
@@ -477,6 +482,8 @@ export class SettingsPage {
     if (bind) { this.captureBinding(bind); return; }
     const bindReset = e.target.closest('[data-bind-reset]');
     if (bindReset) { try { await saveBinding(bindReset.dataset.bindReset, null); this.render(); } catch (er) { toast(er.message); } return; }
+    const ds = e.target.closest('[data-design-style]');
+    if (ds) { updateChatPrefs({ designStyle: ds.dataset.designStyle }); this.render(); return; }
     const oa = e.target.closest('[data-oauth]');
     if (oa) { e.preventDefault(); this.onOAuth(oa); return; }
     const sys = e.target.closest('[data-sys]');

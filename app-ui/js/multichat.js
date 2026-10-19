@@ -6,6 +6,8 @@ import { api, listen } from './api.js';
 import { esc, safeUrl, toast } from './dom.js';
 import { ChatPanel, renderContent } from './chat.js';
 import { eventCardHtml, eventClasses } from './donations.js';
+import { applyChatSkin } from './chat-extras.js';
+import { onChatPrefs } from './chat-prefs.js';
 
 export const multiChatIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H8l-4 3V5Z"/><path d="M18 8h1a2 2 0 0 1 2 2v10l-3.5-2.6H11a2 2 0 0 1-2-2V15h5a4 4 0 0 0 4-4V8Z" opacity=".6"/></svg>';
 const COLORS = ['#00c77f', '#5ba3ff', '#ff8a3d', '#c77dff', '#ff5d8f', '#2ec4b6', '#f4c430', '#8d99ae'];
@@ -56,6 +58,10 @@ export class MultiChatPage {
     this.overview = this.root.querySelector('.mc-overview');
     this.merged = this.root.querySelector('.mc-merged');
     this.mergedList = this.root.querySelector('.mc-merged-list');
+    // 통합 목록도 채팅 디자인 스타일을 따른다.
+    const skin = () => applyChatSkin(this.merged);
+    onChatPrefs(skin);
+    skin();
     this.target = this.root.querySelector('.mc-target');
     this.picker = this.root.querySelector('.mc-picker');
     this.search = this.root.querySelector('.mc-search');
