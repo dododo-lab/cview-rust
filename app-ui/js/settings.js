@@ -4,6 +4,7 @@
 // SET-10 성능, SET-11 네트워크(프리셋), SET-13 채널 알림, SET-15 동기화, SET-16 도메인, SET-17 백업·복원·초기화,
 // MUL-16 멀티라이브 설정.
 import { api } from './api.js';
+import { ACTIONS, FIXED, currentBindings, bindingLabel, bindingFromEvent, saveBinding, conflictOf } from './shortcuts.js';
 import { esc, toast } from './dom.js';
 import { emptyState } from './cards.js';
 import { THEMES, THEME_LABELS, currentTheme, setTheme } from './theme.js';
@@ -210,6 +211,7 @@ export class SettingsPage {
     </div>`;
     this.body.innerHTML = `${tabs}<div class="settings-groups">${this.groupHtml()}</div>`;
     this.applySearch();
+    this.refreshOAuth();
   }
 
   /** 검색 중이면 모든 그룹, 아니면 선택 그룹. */
@@ -240,6 +242,16 @@ export class SettingsPage {
       : '<div class="setting" data-search="계정 로그인"><span class="setting-label">로그인되지 않음<small>팔로잉 목록과 채팅 참여에 네이버 로그인이 필요합니다</small></span><button class="btn primary" data-action="login">로그인</button></div>';
     return `
       <section class="settings-group" data-g="overview"><h3>계정</h3>${account}</section>
+      <section class="settings-group oauth-group" data-g="overview"><h3>치지직 OAuth 연동 <small class="muted">선택</small></h3>
+        <div class="setting" data-search="oauth 치지직 연동 client id secret 개발자"><span class="setting-label">애플리케이션 자격 증명<small class="oauth-status">치지직 개발자 센터에 등록한 앱의 Client ID·Secret — 키체인에 저장합니다</small></span></div>
+        <div class="oauth-form">
+          <input type="text" name="clientId" placeholder="Client ID" autocomplete="off" spellcheck="false">
+          <input type="password" name="clientSecret" placeholder="Client Secret" autocomplete="off">
+          <button type="button" class="btn" data-oauth="save">저장</button>
+          <button type="button" class="btn primary" data-oauth="connect">연결</button>
+          <button type="button" class="link-btn" data-oauth="clear">지우기</button>
+        </div>
+      </section>
       <section class="settings-group" data-g="overview"><h3>화면</h3>
         <div class="setting" data-search="테마 다크 라이트 시스템">
           <span class="setting-label">테마<small>시스템은 macOS 화면 모드를 따릅니다</small></span>
@@ -298,8 +310,13 @@ export class SettingsPage {
   }
 
   shortcutsHtml() {
-    return `<section class="settings-group" data-g="general"><h3>키보드 단축키</h3>
-      <div class="setting" data-search="단축키 키보드"><span class="setting-label">단축키 목록<small>메뉴 막대와 ⌘/ 로 볼 수 있습니다</small></span><button class="btn" data-open-shortcuts>보기</button></div></section>`;
+    const b = currentBindings();
+    const rows = ACTIONS.map(([id, label, fixed]) => `
+      <div class="setting" data-search="${esc(`단축키 키보드 ${label}`)}"><span class="setting-label">${esc(label)}${FIXED.has(id) ? '<small>메뉴가 정한 고정 키</small>' : ''}</span>
+        ${FIXED.has(id) ? `<kbd class="kbd">${esc(fixed)}</kbd>` : `<span class="shortcut-edit"><kbd class="kbd">${esc(bindingLabel(b[id]))}</kbd><button class="btn" data-bind="${id}">바꾸기</button><button class="link-btn" data-bind-reset="${id}">기본값</button></span>`}
+      </div>`).join('');
+    return `<section class="settings-group" data-g="general"><h3>키보드 단축키</h3>${rows}
+      <div class="setting" data-search="단축키 키보드 목록"><span class="setting-label">전체 단축키 목록<small>메뉴 막대와 ⌘/ 로 볼 수 있습니다 · ⌘ 가 들어간 단축키는 메뉴 막대에도 반영됩니다</small></span><button class="btn" data-open-shortcuts>보기</button></div></section>`;
   }
 
   backupHtml() {
@@ -377,6 +394,60 @@ export class SettingsPage {
     }
   }
 
+  /** 다음 키 조합을 받아 바인딩으로 저장한다. Esc 취소. */
+  captureBinding(btn) {
+    const action = btn.dataset.bind;
+    btn.textContent = '키를 누르세요…';
+    btn.classList.add('primary');
+    const onKey = async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === 'Escape') { done(); this.render(); return; }
+      const b = bindingFromEvent(e);
+      if (!b) return;
+      done();
+      const clash = conflictOf(action, b);
+      if (clash) toast(`${ACTIONS.find(([a]) => a === clash)?.[1] || clash} 와 겹칩니다 — 그 동작도 같은 키로 실행됩니다`, 4000);
+      try { await saveBinding(action, b); } catch (er) { toast(er.message); }
+      this.render();
+    };
+    const done = () => document.removeEventListener('keydown', onKey, true);
+    document.addEventListener('keydown', onKey, true);
+  }
+
+  async refreshOAuth() {
+    const el = this.body.querySelector('.oauth-status');
+    if (!el) return;
+    try {
+      const st = await api.oauthStatus();
+      el.textContent = st.connected
+        ? `연결됨 · ${st.clientIdHint || ''}`
+        : st.hasCredentials ? `자격 증명 저장됨 (${st.clientIdHint || ''}) · 아직 연결 안 됨 · 리디렉트 ${st.redirectUri}` : `미설정 · 리디렉트 URI 를 ${st.redirectUri} 로 등록하세요`;
+    } catch { /* 앱 밖 */ }
+  }
+
+  async onOAuth(b) {
+    const form = this.body.querySelector('.oauth-form');
+    b.disabled = true;
+    try {
+      if (b.dataset.oauth === 'save') {
+        const secret = form.querySelector('[name=clientSecret]');
+        await api.oauthSetCredentials(form.querySelector('[name=clientId]').value, secret.value);
+        secret.value = '';
+        toast('자격 증명을 저장했습니다', 1500);
+      } else if (b.dataset.oauth === 'clear') {
+        await api.oauthClearCredentials();
+        toast('자격 증명을 지웠습니다', 1500);
+      } else {
+        toast('브라우저에서 치지직 연동을 허용해 주세요 (5분 안)', 5000);
+        await api.oauthConnect();
+        toast('치지직 OAuth 연결을 마쳤습니다', 2000);
+      }
+    } catch (er) { toast(er.message); }
+    b.disabled = false;
+    this.refreshOAuth();
+  }
+
   async onSystem(b) {
     b.disabled = true;
     try {
@@ -400,6 +471,12 @@ export class SettingsPage {
   }
 
   async onClick(e) {
+    const bind = e.target.closest('[data-bind]');
+    if (bind) { this.captureBinding(bind); return; }
+    const bindReset = e.target.closest('[data-bind-reset]');
+    if (bindReset) { try { await saveBinding(bindReset.dataset.bindReset, null); this.render(); } catch (er) { toast(er.message); } return; }
+    const oa = e.target.closest('[data-oauth]');
+    if (oa) { e.preventDefault(); this.onOAuth(oa); return; }
     const sys = e.target.closest('[data-sys]');
     if (sys) { this.onSystem(sys); return; }
     const g = e.target.closest('[data-group]');

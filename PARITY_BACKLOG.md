@@ -144,9 +144,9 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 | SET-09 | ✅ 외관 키: `transparencyMode`, `motionQuality`, `frameRateMode`, `compactMode`, `sidebarWidth/Scale`, 테마 미리보기 | `GeneralSettingsTab`, `GeneralSettingsTab+ThemePreview` | 테마만 | S |
 | SET-10 | 🟡 성능 탭(`maxMemoryMB`, `debugMode`, 하드웨어·메모리, 캐시 & 초기화, 로컬 진단 로그) | `PerformanceSettingsTab` | 없음 | M |
 | SET-11 | ✅ 네트워크 탭(프리셋 balanced/stability/lowLatency/performance/custom, 요청 한도·동시성·타임아웃·재시도·재연결·`forceStreamProxy`·오프라인 대기) | `NetworkSettingsTab`, `NetworkPreset` | `NetworkSettings` 모델, 도메인 없음 | M |
-| SET-12 | 키보드 단축키 편집(`KeyboardShortcutSettings` 바인딩) | `GeneralSettingsTab` "키보드 단축키" | 모델 있음 | M |
+| SET-12 | 🧪 키보드 단축키 편집(`KeyboardShortcutSettings` 바인딩) | `GeneralSettingsTab` "키보드 단축키" | 모델 있음 | M |
 | SET-13 | 🧪 채널별 알림 설정(방송 시작/카테고리/제목 변경) | `ChannelNotificationSettings`, 채널 상세 | 모델 있음 | S |
-| SET-14 | 치지직 OAuth 연동(클라이언트 ID/Secret 입력, 연결 상태) | `OAuthCredentialsSection`, `CViewAuth/ChzzkOAuthService` | `cview-auth` OAuth 이식, UI 없음(쿠키 로그인만) | M |
+| SET-14 | 🧪 치지직 OAuth 연동(클라이언트 ID/Secret 입력, 연결 상태) | `OAuthCredentialsSection`, `CViewAuth/ChzzkOAuthService` | `cview-auth` OAuth 이식, UI 없음(쿠키 로그인만) | M |
 | SET-15 | 🟡 시청 기록 동기화(`SyncSettings` opt-in, 엔드포인트) | `AppState+Sync`, `WatchHistorySyncService` | `sync/watch_history_sync.rs` | S |
 | SET-16 | ✅ `settings_update` 도메인 확장(network/multiLive/multiChat/keyboard/channelNotifications/sync) | — | 4도메인만 | S |
 | SET-17 | ✅ 설정 백업·복원/초기화 | `SettingsStore+SnapshotRestore`, `SettingsSnapshotFile` | persistence `settings_snapshot_file`, `store_backup` | S |

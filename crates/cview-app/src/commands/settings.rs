@@ -138,6 +138,9 @@ pub async fn settings_update(
     if domain == "general" {
         crate::window_prefs::apply_general(&app, &services.settings.general());
     }
+    if domain == "keyboard" {
+        crate::menu::rebuild(&app);
+    }
     Ok(snapshot(&services))
 }
 

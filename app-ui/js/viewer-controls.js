@@ -4,6 +4,7 @@
 // PLY-13 오류 오버레이 재시도, PLY-15 휠 볼륨·% 표시, PLY-17 북마크, 시청 화면 단축키.
 import { api } from './api.js';
 import { esc, toast } from './dom.js';
+import { matchPlainAction } from './shortcuts.js';
 
 const ICON = {
   play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5-13-7.5Z"/></svg>',
@@ -265,6 +266,13 @@ export class ViewerControls {
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
     const mod = e.metaKey || e.ctrlKey;
     const range = this.root.querySelector('#volume');
+    // 사용자 단축키(맨 글자) — 수식 키 바인딩은 메뉴가 받는다 (SET-12).
+    const act = matchPlainAction(e);
+    if (act) {
+      e.preventDefault();
+      this.runAction(act);
+      return;
+    }
     if (e.key === ' ' && !mod) {
       e.preventDefault();
       this.togglePlay();
@@ -277,9 +285,6 @@ export class ViewerControls {
       range.dispatchEvent(new Event('input'));
       range.dispatchEvent(new Event('change'));
       this.flash(`볼륨 ${range.value}%`);
-    } else if (mod && e.key.toLowerCase() === 's') {
-      e.preventDefault();
-      this.screenshot();
     } else if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 'f') {
       e.preventDefault();
       this.fullscreen(false);
@@ -288,8 +293,36 @@ export class ViewerControls {
       this.fullscreen(true);
     } else if (e.key.toLowerCase() === 'l' && !mod) {
       this.goLive();
-    } else if (e.key.toLowerCase() === 'b' && !mod) {
-      this.bookmark();
     }
+  }
+
+  runAction(action) {
+    switch (action) {
+      case 'toggleFullscreen': this.fullscreen(false); break;
+      case 'toggleChat': this.viewer.extras?.cycleMode(); break;
+      case 'togglePiP': this.togglePip(); break;
+      case 'screenshot': this.screenshot(); break;
+      case 'bookmarkStream': this.bookmark(); break;
+      default: break;
+    }
+  }
+
+  /** PiP — WKWebView 는 webkitSetPresentationMode, 그 밖은 표준 API. */
+  async togglePip() {
+    const v = this.video;
+    if (!v) return;
+    try {
+      if (typeof v.webkitSetPresentationMode === 'function') {
+        const next = v.webkitPresentationMode === 'picture-in-picture' ? 'inline' : 'picture-in-picture';
+        v.webkitSetPresentationMode(next);
+        this.flash(next === 'inline' ? 'PiP 끔' : 'PiP');
+      } else if (document.pictureInPictureEnabled) {
+        const doc = v.ownerDocument;
+        if (doc.pictureInPictureElement) await doc.exitPictureInPicture();
+        else await v.requestPictureInPicture();
+      } else {
+        toast('이 환경에서는 PiP 를 쓸 수 없습니다');
+      }
+    } catch (er) { toast(`PiP 실패: ${er.message}`); }
   }
 }

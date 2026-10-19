@@ -1491,3 +1491,7 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .sidebar.collapsed .side-quick { grid-template-columns: 1fr; }
 .notify-pop { position: fixed; z-index: 60; width: 280px; display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: var(--radius-lg); background: var(--surface-popover); border: 1px solid var(--border); box-shadow: var(--shadow-lg); }
 .notify-pop .setting { padding: 6px 0; }
+.shortcut-edit { display: inline-flex; align-items: center; gap: 8px; }
+.kbd { display: inline-block; min-width: 28px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-base); font: 600 var(--fs-footnote) ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center; }
+.oauth-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 0 10px; }
+.oauth-form input { flex: 1 1 180px; min-width: 0; height: 32px; padding: 0 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-base); color: var(--text-primary); font: inherit; }

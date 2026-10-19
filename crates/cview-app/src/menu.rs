@@ -4,8 +4,11 @@
 //! 두고 고르면 `menu://action` `{ id }` 로 화면에 넘긴다. 화면(app.js)이 같은 동작을 실행한다.
 //! 편집 메뉴(복사·붙여넣기)는 기본 항목으로 둬야 입력창의 ⌘C/⌘V 가 산다.
 
+use cview_core::models::settings_ui::{
+    KeyBinding, KeyboardShortcutSettings, ShortcutAction, ShortcutModifiers,
+};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::{AppHandle, Emitter, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 /// 화면으로 보내는 메뉴 이벤트 이름.
 pub const MENU_ACTION: &str = "menu://action";
@@ -69,9 +72,79 @@ const HELP: &[Item] = &[
 ];
 
 fn items<R: Runtime>(app: &AppHandle<R>, list: &[Item]) -> tauri::Result<Vec<MenuItem<R>>> {
+    let keyboard = app
+        .try_state::<crate::state::AppServices>()
+        .map(|s| s.settings.keyboard())
+        .unwrap_or_default();
     list.iter()
-        .map(|(id, label, accel)| MenuItem::with_id(app, *id, *label, true, *accel))
+        .map(|(id, label, accel)| match user_accelerator(&keyboard, id) {
+            // 사용자 단축키가 있는 항목 — 수식 키가 있을 때만 메뉴에 단다(맨 글자는 입력을 빼앗는다).
+            Some(user) => MenuItem::with_id(app, *id, *label, true, user.as_deref()),
+            None => MenuItem::with_id(app, *id, *label, true, *accel),
+        })
         .collect()
+}
+
+/// 메뉴 항목 ↔ 사용자 단축키 동작 (SET-12).
+fn shortcut_action(menu_id: &str) -> Option<ShortcutAction> {
+    match menu_id {
+        "screenshot" => Some(ShortcutAction::Screenshot),
+        "bookmark" => Some(ShortcutAction::BookmarkStream),
+        "fullscreen" => Some(ShortcutAction::ToggleFullscreen),
+        _ => None,
+    }
+}
+
+/// 사용자 바인딩이 걸린 메뉴 항목이면 `Some(가속기)`(수식 키가 없으면 `Some(None)`), 아니면 `None`.
+fn user_accelerator(keyboard: &KeyboardShortcutSettings, menu_id: &str) -> Option<Option<String>> {
+    let action = shortcut_action(menu_id)?;
+    Some(accelerator(&keyboard.binding(action)))
+}
+
+/// `KeyBinding` → Tauri 가속기 문자열. 수식 키가 없거나 키가 비면 `None`. 순수 함수.
+pub fn accelerator(b: &KeyBinding) -> Option<String> {
+    if b.modifiers == ShortcutModifiers::empty() || b.key.is_empty() {
+        return None;
+    }
+    let mut parts: Vec<String> = Vec::new();
+    if b.modifiers.contains(ShortcutModifiers::COMMAND) {
+        parts.push("CmdOrCtrl".into());
+    }
+    if b.modifiers.contains(ShortcutModifiers::CONTROL) {
+        parts.push("Ctrl".into());
+    }
+    if b.modifiers.contains(ShortcutModifiers::OPTION) {
+        parts.push("Alt".into());
+    }
+    if b.modifiers.contains(ShortcutModifiers::SHIFT) {
+        parts.push("Shift".into());
+    }
+    let key = match b.key.as_str() {
+        "space" => "Space".to_string(),
+        "upArrow" => "Up".into(),
+        "downArrow" => "Down".into(),
+        "leftArrow" => "Left".into(),
+        "rightArrow" => "Right".into(),
+        "return" => "Enter".into(),
+        "escape" => "Escape".into(),
+        "tab" => "Tab".into(),
+        "delete" => "Backspace".into(),
+        k => k.to_uppercase(),
+    };
+    parts.push(key);
+    Some(parts.join("+"))
+}
+
+/// 단축키 설정이 바뀌면 메뉴를 다시 만든다.
+pub fn rebuild<R: Runtime>(app: &AppHandle<R>) {
+    match build(app) {
+        Ok(menu) => {
+            if let Err(e) = app.set_menu(menu) {
+                tracing::warn!("메뉴 갱신 실패: {e}");
+            }
+        }
+        Err(e) => tracing::warn!("메뉴 만들기 실패: {e}"),
+    }
 }
 
 /// 메뉴를 만든다.
@@ -163,5 +236,25 @@ mod tests {
         }
         assert!(is_known("settings"));
         assert!(!is_known("rm -rf"));
+    }
+}
+
+#[cfg(test)]
+mod accel_tests {
+    use super::*;
+
+    #[test]
+    fn bindings_to_accelerators() {
+        let b = KeyBinding::new("s", ShortcutModifiers::COMMAND);
+        assert_eq!(accelerator(&b).as_deref(), Some("CmdOrCtrl+S"));
+        let b = KeyBinding::new(
+            "upArrow",
+            ShortcutModifiers::COMMAND | ShortcutModifiers::SHIFT,
+        );
+        assert_eq!(accelerator(&b).as_deref(), Some("CmdOrCtrl+Shift+Up"));
+        assert_eq!(
+            accelerator(&KeyBinding::new("f", ShortcutModifiers::empty())),
+            None
+        );
     }
 }

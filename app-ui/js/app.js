@@ -15,6 +15,7 @@ import { ChannelPage } from './channel.js';
 import { MediaPage } from './media.js';
 import { LibraryPage, libraryIcon } from './library.js';
 import { StatsPage, statsIcon } from './stats.js';
+import { loadShortcuts } from './shortcuts.js';
 import { HUBS, saveWorkspace, loadWorkspace, installSidebarExtras, hubFlash } from './workspace.js';
 import { CategoriesPage, categoryIcon } from './categories.js';
 import { CommandPalette } from './palette.js';
@@ -487,6 +488,7 @@ async function main() {
   listen(Events.authChanged, onAuthChanged);
   window.addEventListener('cview:login', login);
   loadChatPrefs();
+  loadShortcuts();
   listen(Events.loginFailed, (p) => p && p.message && toast(p.message));
 
   renderAccount();
