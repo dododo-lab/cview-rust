@@ -112,6 +112,73 @@ export class ViewerControls {
 
     viewer.player.onMessage((type, data) => this.onMessage(type, data));
     document.addEventListener('keydown', (e) => this.onKey(e));
+    this.installOverlay();
+  }
+
+  /**
+   * 치지직 플레이어식 오버레이 — 컨트롤 막대를 영상 위 아래쪽 그라데이션으로 옮기고,
+   * 마우스를 움직이면 나타났다가 재생 중 2.5초 가만히 있으면 커서와 함께 숨긴다.
+   * 일시정지·메뉴가 열려 있으면 계속 보인다. 일시정지면 가운데 큰 재생 표시.
+   */
+  installOverlay() {
+    const stage = this.stage;
+    const bar = this.bar;
+    bar.classList.add('chzzk-bar');
+    // 볼륨: 아이콘에 마우스를 올리면 슬라이더가 펼쳐진다
+    const mute = bar.querySelector('#mute');
+    const volume = bar.querySelector('#volume');
+    const vol = document.createElement('div');
+    vol.className = 'vol-group';
+    mute.before(vol);
+    vol.append(mute, volume);
+    const syncVolumeFill = () => volume.style.setProperty('--fill', `${volume.value}%`);
+    volume.addEventListener('input', syncVolumeFill);
+    new MutationObserver(syncVolumeFill).observe(volume, { attributes: true, attributeFilter: ['value'] });
+    syncVolumeFill();
+    stage.append(bar);
+    this.center = document.createElement('button');
+    this.center.className = 'stage-center-play';
+    this.center.setAttribute('aria-label', '재생');
+    this.center.innerHTML = ICON.play;
+    this.center.addEventListener('click', () => this.togglePlay());
+    stage.append(this.center);
+
+    const menuOpen = () => !this.qualityMenu.hidden || Boolean(this.root.querySelector('.player-panel:not([hidden])'));
+    const hide = () => {
+      if (stage.classList.contains('paused') || menuOpen() || bar.matches(':hover')) { this.wake(); return; }
+      stage.classList.remove('ctl-visible');
+      stage.classList.add('idle');
+    };
+    this.wake = () => {
+      stage.classList.add('ctl-visible');
+      stage.classList.remove('idle');
+      clearTimeout(this.idleTimer);
+      this.idleTimer = setTimeout(hide, 2500);
+    };
+    stage.addEventListener('mousemove', this.wake);
+    stage.addEventListener('mousedown', this.wake);
+    stage.addEventListener('mouseleave', () => { clearTimeout(this.idleTimer); this.idleTimer = setTimeout(hide, 400); });
+    bar.addEventListener('focusin', this.wake);
+    // 영상은 iframe 안이라 그 문서의 마우스 움직임도 받는다(같은 출처).
+    const iframe = stage.querySelector('iframe');
+    const hook = () => {
+      try {
+        const doc = iframe.contentDocument;
+        if (!doc || doc.__cviewWake) return;
+        doc.__cviewWake = true;
+        doc.addEventListener('mousemove', this.wake);
+        doc.addEventListener('mousedown', this.wake);
+        const style = doc.createElement('style');
+        style.textContent = 'html.cview-idle, html.cview-idle * { cursor: none !important; }';
+        doc.head.append(style);
+      } catch { /* 다른 출처면 무시 */ }
+    };
+    iframe.addEventListener('load', hook);
+    hook();
+    new MutationObserver(() => {
+      try { iframe.contentDocument.documentElement.classList.toggle('cview-idle', stage.classList.contains('idle')); } catch { /* 무시 */ }
+    }).observe(stage, { attributes: true, attributeFilter: ['class'] });
+    this.wake();
   }
 
   get video() {
@@ -138,6 +205,8 @@ export class ViewerControls {
   renderStatus() {
     const v = this.video;
     const paused = !v || v.paused;
+    this.stage.classList.toggle('paused', Boolean(v && v.paused && v.readyState > 0));
+    if (this.stage.classList.contains('paused') && this.wake) this.wake();
     this.playButton.innerHTML = paused ? ICON.play : ICON.pause;
     this.playButton.title = paused ? '재생 (Space)' : '일시정지 (Space)';
     const badge = liveBadgeState(this.latency);
