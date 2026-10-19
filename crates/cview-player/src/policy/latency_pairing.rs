@@ -141,12 +141,11 @@ impl LatencyPresetPairing {
 #[cfg(test)]
 mod tests {
     //! `LatencyPairingParityTests.swift` · `MatchWebV2PairingTests.swift` 포팅.
-    //! HTML 은 `Sources/CViewPlayer/Resources/hlsjs-player.html` 원본을 직접 파싱한다.
+    //! HTML 은 원본 `Sources/CViewPlayer/Resources/hlsjs-player.html` 을 옮긴 `app-ui/player/player.html` 을 직접 파싱한다.
     use super::*;
     use cview_core::models::match_web_v2::MatchWebV2Flag;
 
-    const HTML: &str =
-        include_str!("../../../../../Sources/CViewPlayer/Resources/hlsjs-player.html");
+    const HTML: &str = include_str!("../../../../app-ui/player/player.html");
 
     fn js_profile_target(key: &str) -> f64 {
         let start = HTML

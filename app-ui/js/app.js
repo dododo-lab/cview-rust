@@ -367,7 +367,7 @@ const MENU_ACTIONS = {
   settings: () => navigate('settings'),
   about: () => showAbout(),
   shortcuts: () => showShortcuts(),
-  'report-issue': () => api.openExternal('https://github.com/dododo-lab/cview-v2/issues').catch((e) => toast(e.message)),
+  'report-issue': () => api.openExternal('https://github.com/dododo-lab/cview-rust/issues').catch((e) => toast(e.message)),
   'notification-settings': () => api.openNotificationSettings().catch((e) => toast(e.message)),
   'open-logs': async () => { try { const i = await api.appInfo(); await api.revealPath(i.dataDir); } catch (e) { toast(e.message); } },
   'play-pause': () => viewer.isOpen && viewer.controls.togglePlay(),

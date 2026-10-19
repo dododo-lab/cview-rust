@@ -52,7 +52,7 @@ pub struct SupportActions;
 
 impl SupportActions {
     /// 릴리스 저장소. `SupportFiles/ReleaseContract.json` 의 `repositorySlug` 와 같아야 한다.
-    pub const REPOSITORY_SLUG: &'static str = "dododo-lab/cview-v2";
+    pub const REPOSITORY_SLUG: &'static str = "dododo-lab/cview-rust";
 
     /// 열기 실패 기록이 있으면 '저장소 열기 실패 N회 (domain code)', 없으면 None.
     pub fn store_open_line(health: &StoreOpenHealth) -> Option<String> {
@@ -223,6 +223,8 @@ mod tests {
         };
         SupportActions::report_problem(&mut ok, "1", "2", "os", &StoreOpenHealth::default());
         assert_eq!(ok.opened.len(), 1);
-        assert!(ok.opened[0].starts_with("https://github.com/dododo-lab/cview-v2/issues/new?body="));
+        assert!(
+            ok.opened[0].starts_with("https://github.com/dododo-lab/cview-rust/issues/new?body=")
+        );
     }
 }

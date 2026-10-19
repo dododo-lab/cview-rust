@@ -1,7 +1,7 @@
 # CView v2 → Rust 포팅 계획
 
-원본: `Sources/` 아래 Swift 6 / SwiftUI macOS 앱 (약 19만 줄, 8개 모듈, 테스트 581개 파일).
-대상: 이 저장소의 `rust/` Cargo 워크스페이스 (브랜치 `rust-port`).
+원본: `dododo-lab/cview-v2` 저장소 `Sources/` 아래 Swift 6 / SwiftUI macOS 앱 (약 19만 줄, 8개 모듈, 테스트 581개 파일).
+대상: 이 저장소(`dododo-lab/cview-rust`)의 Cargo 워크스페이스. 2026-10-20 에 `cview-v2` 의 `rust/`(브랜치 `rust-port`)에서 히스토리째 분리했다.
 
 ## 원칙
 

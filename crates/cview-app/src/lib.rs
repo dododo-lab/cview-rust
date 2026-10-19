@@ -1,6 +1,6 @@
 //! CView v2 데스크톱 앱 — Tauri 2 셸 (포팅 계획 단계 7).
 //!
-//! - 화면은 `rust/app-ui` 의 정적 HTML/CSS/ES 모듈(번들러 없음)이다.
+//! - 화면은 `app-ui` 의 정적 HTML/CSS/ES 모듈(번들러 없음)이다.
 //! - Rust 쪽은 하위 크레이트 서비스를 [`state::AppServices`] 로 묶어 관리 상태로 두고,
 //!   얇은 명령 계층([`commands`])으로 노출한다. 결과는 [`dto`] 로 평평하게 만든다.
 //! - 라이브 재생은 WebView 안의 기존 hls.js 플레이어(`app-ui/player/player.html`)가 하고,

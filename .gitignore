@@ -1,2 +1,5 @@
 target/
 /dist/
+.DS_Store
+/app-icons/build/
+/crates/cview-app/gen/

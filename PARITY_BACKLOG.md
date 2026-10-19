@@ -1,6 +1,6 @@
 # Swift ↔ Rust(Tauri) 기능 동등성 백로그
 
-기준: `Sources/` Swift macOS 앱과 `rust/` Tauri 앱(`rust/app-ui` 정적 JS, `crates/cview-app/src/commands/*.rs`, `cview-app-core` 뷰모델)을 2026-10 시점으로 비교했다.
+기준: `dododo-lab/cview-v2` 의 `Sources/` Swift macOS 앱과 이 저장소의 Tauri 앱(`app-ui` 정적 JS, `crates/cview-app/src/commands/*.rs`, `cview-app-core` 뷰모델)을 2026-10 시점으로 비교했다.
 `PORTING_PLAN.md` 이후 Rust UI 에 들어간 것(홈 재설계, 사이드바, 라이브 메뉴, 멀티라이브 그리드/포커스, 스플리터, 테마 3종, 후원·구독 카드/랭킹/스트림 알림)은 "있음"으로 본다.
 
 ## 진행 표시

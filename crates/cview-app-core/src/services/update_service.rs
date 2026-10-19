@@ -269,7 +269,7 @@ pub struct UpdateService {
 
 impl UpdateService {
     /// GitHub 저장소(owner/repo).
-    pub const REPOSITORY: &'static str = "dododo-lab/cview-v2";
+    pub const REPOSITORY: &'static str = "dododo-lab/cview-rust";
     /// 자동 설치 — 원본과 같이 꺼 둔다(릴리스 페이지를 연다).
     pub const IS_AUTO_INSTALL_ENABLED: bool = false;
 
