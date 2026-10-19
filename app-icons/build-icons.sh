@@ -20,5 +20,9 @@ cp "$work/car/Assets.car" "$out/Assets.car"
 "$work/render" icon-light.svg "$out/dock-light.png" 512 >/dev/null
 "$work/render" icon-dark.svg "$out/dock-dark.png" 512 >/dev/null
 "$work/render" tray-template.svg "$out/tray-template.png" 44 >/dev/null
+# 화면 안 로고(사이드바·스플래시·정보) — 앱 테마에 맞춰 CSS 가 고른다
+mkdir -p ../app-ui/img
+"$work/render" icon-light.svg ../app-ui/img/logo-light.png 256 >/dev/null
+"$work/render" icon-dark.svg ../app-ui/img/logo-dark.png 256 >/dev/null
 rm -rf "$work"
 echo "아이콘 생성 완료 → $out"

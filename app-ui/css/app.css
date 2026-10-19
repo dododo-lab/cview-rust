@@ -1850,3 +1850,15 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .chat-skin.no-nick-colors .chat-line .nick.nc { color: var(--cs-ink, var(--text-secondary)); }
 .chat-skin.style-chzzk.no-nick-colors .chat-line .nick.nc { color: var(--cs-sub); }
 .chat-skin:is(.style-kakao,.style-imessage) .chat-line .nick.nc { color: var(--cs-sub); }
+
+/* ══ 앱 로고(새 아이콘) — 앱 테마에 맞춰 밝은·어두운 그림을 고른다 ══ */
+.brand-mark, .brand-mark.big, .splash-mark { background: none; box-shadow: none; overflow: visible; position: relative; }
+.app-logo { width: 124.3%; height: 124.3%; margin: -12.15%; object-fit: contain; pointer-events: none; -webkit-user-drag: none; filter: drop-shadow(0 3px 8px var(--primary-glow)); }
+.brand-mark .app-logo { filter: none; }
+.logo-light { display: none; }
+:root[data-theme="light"] .logo-light { display: block; }
+:root[data-theme="light"] .logo-dark { display: none; }
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] .logo-light { display: block; }
+  :root[data-theme="system"] .logo-dark { display: none; }
+}
