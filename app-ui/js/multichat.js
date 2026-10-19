@@ -7,6 +7,7 @@ import { esc, safeUrl, toast } from './dom.js';
 import { ChatPanel, renderContent } from './chat.js';
 import { eventCardHtml, eventClasses } from './donations.js';
 import { applyChatSkin } from './chat-extras.js';
+import { nickColorClass } from './nick-color.js';
 import { onChatPrefs } from './chat-prefs.js';
 
 export const multiChatIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H8l-4 3V5Z"/><path d="M18 8h1a2 2 0 0 1 2 2v10l-3.5-2.6H11a2 2 0 0 1-2-2V15h5a4 4 0 0 0 4-4V8Z" opacity=".6"/></svg>';
@@ -193,10 +194,10 @@ export class MultiChatPage {
       const ev = eventClasses(m);
       if (ev.length) {
         const body = m.content && m.content.trim() ? renderContent(m.content, m.emojis) : '';
-        return `<div class="chat-line merged-line ${ev.join(' ')}" style="--mc-color:${c.color}">${eventCardHtml(m, { tag, nick: `<span class="nick">${esc(m.nickname || '익명')}</span>`, content: body })}</div>`;
+        return `<div class="chat-line merged-line ${ev.join(' ')}" style="--mc-color:${c.color}">${eventCardHtml(m, { tag, nick: `<span class="nick${['streamer', 'manager', 'channelManager'].includes(m.role) ? ` ${m.role}` : ''}${nickColorClass(m.nickname, m.role)}">${esc(m.nickname || '익명')}</span>`, content: body })}</div>`;
       }
       return `
-      <div class="chat-line merged-line" style="--mc-color:${c.color}">${tag}<span class="nick">${esc(m.nickname || '익명')}</span><span class="text">${renderContent(m.content, m.emojis)}</span></div>`;
+      <div class="chat-line merged-line" style="--mc-color:${c.color}">${tag}<span class="nick${['streamer', 'manager', 'channelManager'].includes(m.role) ? ` ${m.role}` : ''}${nickColorClass(m.nickname, m.role)}">${esc(m.nickname || '익명')}</span><span class="text">${renderContent(m.content, m.emojis)}</span></div>`;
     }).join('');
     if (!html) return;
     const atBottom = this.mergedList.scrollHeight - this.mergedList.scrollTop - this.mergedList.clientHeight < 40;

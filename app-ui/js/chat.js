@@ -7,6 +7,7 @@ import { api, listen, Events } from './api.js';
 import { esc, safeUrl, toast } from './dom.js';
 import { DonationRanking, eventCardHtml, eventClasses, EVENT_ICONS } from './donations.js';
 import { installChatExtras } from './chat-extras.js';
+import { nickColorClass } from './nick-color.js';
 import {
   chatPrefs, onChatPrefs, updateChatPrefs, passesFilters, mentionsMe, getMyNickname,
 } from './chat-prefs.js';
@@ -64,7 +65,8 @@ function lineHtml(m, prefs) {
   if (prefs.highlightMentions && mentionsMe(m)) classes.push('mention');
   if ((prefs.highlightedUsers || []).includes(m.userId)) classes.push('highlighted');
   const time = `<time class="chat-time">${esc(timeText(m.timestamp))}</time>`;
-  const nick = `<span class="nick${roleClass(m.role)}"${style}>${esc(m.nickname || '익명')}</span>`;
+  const isMe = Boolean(getMyNickname()) && m.nickname === getMyNickname();
+  const nick = `<span class="nick${roleClass(m.role)}${nickColorClass(m.nickname, m.role, isMe)}"${style}>${esc(m.nickname || '익명')}</span>`;
   const text = `<span class="text">${renderContent(m.content, m.emojis, prefs.emoticonEnabled)}</span>`;
   const data = `data-id="${esc(m.id)}" data-uid="${esc(m.userId || '')}" data-nick="${esc(m.nickname || '')}" data-role="${esc(m.role || '')}"`;
   const evClasses = eventClasses(m);
