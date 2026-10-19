@@ -1,10 +1,11 @@
 // CView 메인 — 사이드바 라우팅, 인증 상태, 시청 화면 연결.
 import { api, listen, Events, isTauri } from './api.js';
-import { esc, safeUrl, toast, icons } from './dom.js';
+import { toast, icons } from './dom.js';
 import { bindCardOpen } from './cards.js';
 import { FollowingPage, PopularPage, SearchPage, SettingsPage } from './pages.js';
 import { Viewer } from './viewer.js';
 import { HomePage } from './home.js';
+import { Sidebar } from './sidebar.js';
 
 // 사이드바 — Swift `AppRouter.SidebarItem` 라벨.
 const ROUTES = [
@@ -21,24 +22,33 @@ const isLoggedIn = () => Boolean(auth && auth.loggedIn);
 const pages = {};
 let current = null;
 let viewer = null;
+let sidebar = null;
 
 function renderNav() {
-  const nav = document.getElementById('nav');
-  nav.innerHTML = ROUTES.map((r) => `
-    ${r.section ? `<div class="nav-section">${esc(r.section)}</div>` : ''}
-    <button class="nav-item" data-route="${r.id}">${r.icon}<span>${esc(r.title)}</span></button>`).join('');
-  nav.addEventListener('click', (e) => {
-    const item = e.target.closest('[data-route]');
-    if (item) navigate(item.dataset.route);
-  });
+  sidebar = new Sidebar(document.querySelector('.sidebar'), { routes: ROUTES, onNavigate: navigate });
+}
+
+// 사이드바 "방송 중" 목록 — Rust FollowingStore 가 60초 안의 결과를 재사용하므로 주기 호출이 가볍다.
+const SIDEBAR_FOLLOWING_MS = 120000;
+let followingTimer = 0;
+async function refreshSidebarFollowing() {
+  clearTimeout(followingTimer);
+  if (!isLoggedIn()) {
+    sidebar.setFollowing(null);
+    return;
+  }
+  try {
+    sidebar.setFollowing(await api.followingLives(false));
+  } catch {
+    sidebar.setFollowing(null);
+  }
+  followingTimer = setTimeout(refreshSidebarFollowing, SIDEBAR_FOLLOWING_MS);
 }
 
 async function navigate(route) {
   if (viewer && viewer.isOpen) await viewer.close();
   current = route;
-  for (const el of document.querySelectorAll('.nav-item')) {
-    el.classList.toggle('active', el.dataset.route === route);
-  }
+  sidebar.setActive(route);
   for (const [id, page] of Object.entries(pages)) {
     page.root.hidden = id !== route;
   }
@@ -46,26 +56,14 @@ async function navigate(route) {
 }
 
 function renderAccount() {
-  const el = document.getElementById('account');
-  if (isLoggedIn()) {
-    const avatar = safeUrl(auth.profileImageUrl);
-    el.innerHTML = `
-      ${avatar ? `<img class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '<div class="avatar"></div>'}
-      <div class="account-name ellipsis">${esc(auth.nickname || '로그인됨')}<small>네이버 계정</small></div>
-      <button class="btn ghost" data-action="logout" title="로그아웃">로그아웃</button>`;
-  } else {
-    const busy = auth.state === 'loggingIn';
-    el.innerHTML = `
-      <div class="avatar"></div>
-      <div class="account-name">비로그인<small>${busy ? '로그인 중…' : '네이버 로그인이 필요합니다'}</small></div>
-      <button class="btn primary" data-action="login" ${busy ? 'disabled' : ''}>로그인</button>`;
-  }
+  sidebar.renderAccount(auth);
 }
 
 function onAuthChanged(status) {
   const wasLoggedIn = isLoggedIn();
   auth = status || { loggedIn: false, state: 'loggedOut' };
   renderAccount();
+  if (wasLoggedIn !== isLoggedIn()) refreshSidebarFollowing();
   if (viewer) viewer.refreshAuth();
   if (wasLoggedIn !== isLoggedIn() && current && current !== 'search' && !(viewer && viewer.isOpen)) {
     pages[current].show();
@@ -115,6 +113,7 @@ async function main() {
   viewer = new Viewer(document.getElementById('viewer'), { isLoggedIn });
 
   for (const p of Object.values(pages)) bindCardOpen(p.root.querySelector('.page-body'), openChannel);
+  bindCardOpen(document.getElementById('sidebar-live'), openChannel);
   document.addEventListener('click', (e) => {
     const action = e.target.closest('[data-action]');
     if (!action) return;

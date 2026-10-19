@@ -10,8 +10,15 @@
 <body>
   <div class="app">
     <aside class="sidebar">
-      <div class="brand"><span class="brand-mark">▶</span>CView</div>
-      <nav id="nav"></nav>
+      <div class="brand-row">
+        <div class="brand"><span class="brand-mark"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"/></svg></span><span class="brand-name">CView</span></div>
+      </div>
+      <button class="quick-search" data-tip="검색">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+        <span class="nav-label">검색</span><kbd></kbd>
+      </button>
+      <nav id="nav" aria-label="메뉴"></nav>
+      <div class="sidebar-live" id="sidebar-live" hidden></div>
       <div class="sidebar-spacer"></div>
       <div class="account" id="account"></div>
     </aside>
