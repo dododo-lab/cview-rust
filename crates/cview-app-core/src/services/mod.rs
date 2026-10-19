@@ -9,6 +9,7 @@ pub mod download_history_store;
 pub mod mention_inbox;
 pub mod menu_transition_gate;
 pub mod multi_chat_preferences;
+pub mod multi_chat_workspace_store;
 pub mod multi_live_proposer;
 pub mod notification_service;
 pub mod pinned_notice_cache;
