@@ -103,6 +103,19 @@ pub enum TransportError {
     Other(String),
 }
 
+impl TransportError {
+    /// 짧은 종류 이름(디버그 로그용).
+    pub fn kind(&self) -> &'static str {
+        match self {
+            TransportError::Cancelled => "cancelled",
+            TransportError::TimedOut(_) => "timeout",
+            TransportError::ConnectionLost(_) => "connection_lost",
+            TransportError::NotConnected => "not_connected",
+            TransportError::Other(_) => "other",
+        }
+    }
+}
+
 /// HTTP 전송.
 #[async_trait]
 pub trait HttpTransport: Send + Sync {

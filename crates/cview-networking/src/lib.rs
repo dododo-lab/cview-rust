@@ -22,6 +22,7 @@ pub mod constants;
 pub mod endpoint;
 pub mod gate;
 pub mod headers;
+pub mod observer;
 pub mod response;
 pub mod transport;
 pub mod validator;

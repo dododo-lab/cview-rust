@@ -523,7 +523,28 @@ impl ChzzkApiClient {
                 .unwrap_or(Duration::from_secs(60))
                 .min(applied),
         );
-        self.inner.transport.send(request).await
+        if !crate::observer::is_active() {
+            return self.inner.transport.send(request).await;
+        }
+        // 디버그 로그 — 시도마다(재시도 포함) 경로·상태·시간·크기.
+        let method = request.method.as_str();
+        let path = crate::observer::redacted_path(&request.url);
+        let started = std::time::Instant::now();
+        let result = self.inner.transport.send(request).await;
+        let (status, error, bytes) = match &result {
+            Ok(r) => (Some(r.status), None, r.body.len()),
+            Err(e) => (None, Some(e.kind()), 0),
+        };
+        crate::observer::observe(&crate::observer::RequestRecord {
+            method,
+            path,
+            status,
+            error,
+            duration_ms: started.elapsed().as_secs_f64() * 1000.0,
+            bytes,
+            cache_hit: false,
+        });
+        result
     }
 
     // MARK: - 공개 요청 API
@@ -658,6 +679,17 @@ impl ChzzkApiClient {
                     .lookup::<T>(&cache_key, ttl, stale_window, None)
                 {
                     Lookup::Fresh { value, fetched_at } => {
+                        if crate::observer::is_active() {
+                            crate::observer::observe(&crate::observer::RequestRecord {
+                                method: "GET",
+                                path: endpoint.path().to_string(),
+                                status: None,
+                                error: None,
+                                duration_ms: 0.0,
+                                bytes: 0,
+                                cache_hit: true,
+                            });
+                        }
                         self.check_auth_context(context).await?;
                         return Ok(AgedResponse {
                             value,
