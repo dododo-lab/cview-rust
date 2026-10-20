@@ -1,0 +1,1 @@
+(()=>{ if(location.search) return; fetch('http://127.0.0.1:47999/',{method:'POST',body:'S heroHover='+!!document.querySelector('.hero:hover')+' anims='+document.getAnimations().filter(a=>a.playState==='running').length}).then(()=>fetch('http://127.0.0.1:47999/',{method:'POST',body:'Z done'}));})()

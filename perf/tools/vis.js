@@ -1,0 +1,1 @@
+(()=>{ if(location.search) return; fetch('http://127.0.0.1:47999/',{method:'POST',body:'S vis='+document.visibilityState+' focus='+document.hasFocus()}).then(()=>fetch('http://127.0.0.1:47999/',{method:'POST',body:'Z done'}));})()

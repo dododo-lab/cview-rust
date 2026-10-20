@@ -12,7 +12,7 @@ def cputime():
         r[int(pid)] = (sec, int(rss), comm.split('/')[-1])
     return r
 def gpu():
-    out = subprocess.run(['ioreg', '-l', '-w0'], capture_output=True, text=True).stdout
+    out = subprocess.run(['ioreg', '-l', '-w0'], capture_output=True).stdout.decode('utf-8', 'replace')
     tot = {}; cur = None
     for line in out.splitlines():
         m = re.search(r'"IOUserClientCreator" = "pid (\d+),', line)
