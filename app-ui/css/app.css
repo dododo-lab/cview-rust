@@ -2000,3 +2000,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .stage-top .rail-more { flex: none; height: 32px; min-width: 32px; padding: 0 8px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.28);
   background: rgba(0, 0, 0, 0.3); color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
 .stage-top .rail-more:hover { border-color: #fff; background: rgba(255, 255, 255, 0.12); }
+
+/* ══ Windows — 시스템 제목 막대가 있으므로 신호등 자리·끌기 띠를 걷는다 ══ */
+:root[data-platform="windows"] .titlebar-strip { height: 0; margin-top: 0; }
+:root[data-platform="windows"] .content-drag { display: none; }
+:root[data-platform="windows"][data-window] .page, :root[data-platform="windows"][data-window] .viewer { top: 0; }
+:root[data-platform="windows"] .sidebar.collapsed { width: 72px; padding-left: 10px; padding-right: 10px; } /* 신호등이 없으니 접힌 레일을 좁게 */
