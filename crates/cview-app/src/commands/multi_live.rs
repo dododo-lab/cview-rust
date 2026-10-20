@@ -32,10 +32,12 @@ pub async fn multilive_add(
     shell: State<'_, MultiLiveShell>,
     channel_id: String,
 ) -> CmdResult<MultiLiveStateDto> {
+    enforce_hub_mode(&shell);
     let result = shell
         .manager
         .add_session(&channel_id, AddSessionOptions::default(), None)
         .await;
+    enforce_hub_mode(&shell);
     tracing::info!(channel_id = %channel_id, ?result, "멀티라이브 세션 추가");
     if let Some(message) = add_result_message(&result) {
         return Err(CommandError(message));
@@ -51,6 +53,7 @@ pub async fn multilive_remove(
     let id = parse_id(&session_id)?;
     shell.manager.remove_session(id).await;
     shell.prune_registry();
+    enforce_hub_mode(&shell);
     Ok(shell.state_dto())
 }
 
@@ -63,6 +66,46 @@ pub async fn multilive_select(
     let id = parse_id(&session_id)?;
     shell.manager.lock().select_session(id, true);
     Ok(shell.state_dto())
+}
+
+/// 라이브 메뉴에서 이 세션만 보기(`Some`) / 멀티라이브로 돌아가기(`None`) — 원본 시청·멀티 허브 모드.
+///
+/// 같은 세션(플레이어·채팅 소켓)을 그대로 무대에 올리므로 다시 연결하지 않는다. 무대가 있으면 매니저의
+/// 시청 디코드 규칙(`watch_mode_allows_decode`)이 무대·직전 무대·선택·PiP·소리 패인만 디코딩하고
+/// 나머지는 로딩을 멈춘다. 돌아가면 모든 패인이 다시 디코딩한다(레이아웃은 그대로).
+#[tauri::command]
+pub async fn multilive_watch(
+    shell: State<'_, MultiLiveShell>,
+    session_id: Option<String>,
+) -> CmdResult<MultiLiveStateDto> {
+    {
+        let mut st = shell.manager.lock();
+        if let Some(id) = session_id.as_deref() {
+            let id = parse_id(id)?;
+            st.select_session(id, true);
+            st.set_grid_layout(false);
+            st.set_stage_session(Some(id));
+        }
+        shell
+            .watching
+            .store(session_id.is_some(), std::sync::atomic::Ordering::SeqCst);
+    }
+    enforce_hub_mode(&shell);
+    Ok(shell.state_dto())
+}
+
+/// 멀티라이브 패인을 잠시 접는다(`true`, 원본 `parkVideoSurfacesForResidentMenuLeave`) — 다른 채널을 라이브
+/// 시청 화면에서 보는 동안. 일시정지 뒤 2.5초가 지나면 로딩·폴링·채팅까지 멈춘다. `false` 면 되살린다
+/// (`restoreVideoSurfacesForMenuEnter`).
+#[tauri::command]
+pub async fn multilive_park(shell: State<'_, MultiLiveShell>, parked: bool) -> CmdResult<()> {
+    let mut st = shell.manager.lock();
+    if parked {
+        st.park_video_surfaces_for_resident_menu_leave();
+    } else {
+        st.restore_video_surfaces_for_menu_enter();
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -100,7 +143,33 @@ pub async fn multilive_stage_size(
 pub async fn multilive_stop_all(shell: State<'_, MultiLiveShell>) -> CmdResult<MultiLiveStateDto> {
     shell.manager.stop_all().await;
     shell.prune_registry();
+    enforce_hub_mode(&shell);
     Ok(shell.state_dto())
+}
+
+/// 멀티 허브 모드 규칙 — 앱이 시청 모드(`multilive_watch`)에 들어가 있지 않으면 그리드를 켜고 무대를 비운다.
+/// 원본 매니저는 세션이 1개 이하가 되면 그리드를 끄고, 꺼진 상태에서 추가한 패인을 무대로 올린다(원본에선 단독
+/// 무대가 자연스럽다). 이 앱은 라이브 메뉴로 들어갈 때만 시청 모드이므로, 그대로 두면 모두 닫고 다시 추가한
+/// 첫 패인이 '라이브'로 바뀌고 다른 패인 디코드가 시청 규칙에 묶인다. 무대 세션이 닫혀도 시청 모드를 끝낸다.
+fn enforce_hub_mode(shell: &MultiLiveShell) {
+    let mut st = shell.manager.lock();
+    if shell.watching.load(std::sync::atomic::Ordering::SeqCst) {
+        let alive = st
+            .stage_session_id()
+            .is_some_and(|stage| st.sessions().iter().any(|s| s.id() == stage));
+        if alive {
+            return;
+        }
+        shell
+            .watching
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+    if st.stage_session_id().is_some() {
+        st.set_stage_session(None);
+    }
+    if !st.is_grid_layout() {
+        st.set_grid_layout(true);
+    }
 }
 
 /// 패인 플레이어 페이지의 `postToSwift` 메시지.

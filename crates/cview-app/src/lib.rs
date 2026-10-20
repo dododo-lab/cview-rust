@@ -215,6 +215,8 @@ pub fn run() {
             commands::multi_live::multilive_add,
             commands::multi_live::multilive_remove,
             commands::multi_live::multilive_select,
+            commands::multi_live::multilive_watch,
+            commands::multi_live::multilive_park,
             commands::multi_live::multilive_set_layout,
             commands::multi_live::multilive_stage_size,
             commands::multi_live::multilive_stop_all,

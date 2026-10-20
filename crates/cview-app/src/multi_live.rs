@@ -78,6 +78,8 @@ pub struct PaneEngine {
     loading_suspended: AtomicBool,
     suspend_intent: AtomicBool,
     playback_desired: AtomicBool,
+    /// 숨김 단계(`SessionTier::Hidden`)가 멈춘 로딩 — 이 단계가 멈춘 것만 되돌린다(디코드 예산 정지는 건드리지 않는다).
+    tier_suspended: AtomicBool,
 }
 
 impl PaneEngine {
@@ -90,6 +92,7 @@ impl PaneEngine {
             loading_suspended: AtomicBool::new(false),
             suspend_intent: AtomicBool::new(false),
             playback_desired: AtomicBool::new(true),
+            tier_suspended: AtomicBool::new(false),
         }
     }
 
@@ -120,6 +123,7 @@ impl PaneEngine {
         self.loading_suspended.store(false, Ordering::SeqCst);
         self.suspend_intent.store(false, Ordering::SeqCst);
         self.playback_desired.store(true, Ordering::SeqCst);
+        self.tier_suspended.store(false, Ordering::SeqCst);
     }
 }
 
@@ -190,7 +194,18 @@ impl MultiLiveHlsEngine for PaneEngine {
         };
         self.send_caps(caps);
     }
-    fn set_gpu_render_tier(&self, _tier: SessionTier) {}
+    /// 원본 GPU 렌더 단계 — 이 앱에서는 숨김(메뉴 이탈 뒤 해제)만 의미가 있다: 로딩을 멈추고(뒤 버퍼 유지),
+    /// 보이는 단계로 돌아오면 그 정지만 푼다.
+    fn set_gpu_render_tier(&self, tier: SessionTier) {
+        if tier == SessionTier::Hidden {
+            if !self.loading_suspended.load(Ordering::SeqCst) {
+                self.tier_suspended.store(true, Ordering::SeqCst);
+                self.suspend_loading();
+            }
+        } else if self.tier_suspended.swap(false, Ordering::SeqCst) {
+            self.resume_loading();
+        }
+    }
     fn set_video_surface_visible(&self, _visible: bool) {}
     fn pause(&self) {
         self.playback_desired.store(false, Ordering::SeqCst);
@@ -746,6 +761,8 @@ pub struct MultiLiveShell {
     pub manager: MultiLiveManager,
     pub pool: Arc<PanePool>,
     pub registry: Arc<PaneRegistry>,
+    /// 라이브 메뉴 단독 보기 중(`multilive_watch(Some)`) — 아니면 멀티 허브 규칙(그리드·무대 없음)을 지킨다.
+    pub watching: AtomicBool,
 }
 
 impl MultiLiveShell {
@@ -782,10 +799,14 @@ impl MultiLiveShell {
             None,
             None,
         );
+        // 원본 멀티 허브 모드는 그리드(`isGridLayout = true`)다. 라이브 메뉴 단독 보기(`multilive_watch`)만
+        // 그리드를 끄고 무대를 세운다 — 꺼진 채로 두면 새로 추가한 패인이 선택될 때 무대로 올라간다.
+        manager.lock().set_grid_layout(true);
         Self {
             manager,
             pool,
             registry,
+            watching: AtomicBool::new(false),
         }
     }
 
@@ -845,6 +866,7 @@ impl MultiLiveShell {
             horizontal_ratio: st.layout_ratios().horizontal_ratio,
             vertical_ratio: st.layout_ratios().vertical_ratio,
             multi_audio: st.is_multi_audio_mode(),
+            watch_id: st.stage_session_id().map(|u| u.to_string()),
         }
     }
 }
@@ -946,6 +968,8 @@ pub struct MultiLiveStateDto {
     pub vertical_ratio: f64,
     /// 여러 패인 소리 모드.
     pub multi_audio: bool,
+    /// 라이브 메뉴에서 단독으로 보는(무대에 올린) 세션 — 원본 `FollowingHubMode.watch` 의 stage.
+    pub watch_id: Option<String>,
 }
 
 /// `multilive://command` 페이로드.
