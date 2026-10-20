@@ -267,7 +267,7 @@ a { color: var(--primary); }
 .nav-item.active .nav-icon { color: var(--primary-text); }
 .nav-icon { display: grid; place-items: center; flex: none; }
 .nav-icon svg { width: 20px; height: 20px; }
-.nav-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.nav-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-item .nav-label { flex: 1; }
 .nav-badge {
   min-width: 20px; height: 18px; padding: 0 6px; border-radius: 9px; display: grid; place-items: center;
@@ -523,7 +523,7 @@ select.select {
   display: flex; align-items: center; gap: var(--sp-sm); padding: 0 var(--sp-md); min-height: 58px;
   border-bottom: 1px solid var(--border-subtle);
 }
-.chat-header strong { font-size: var(--fs-body); }
+.chat-header strong { font-size: var(--fs-body); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-state { font-size: var(--fs-micro); color: var(--text-tertiary); }
 .chat-state.ok { color: var(--primary-text); }
 .chat-state.warn { color: var(--warning); }
@@ -1274,7 +1274,6 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .palette-hint { flex: 1; text-align: right; color: var(--text-tertiary); font-size: var(--fs-footnote); }
 
 /* ══ 셸 (SYS-02·09·12·13·14) ═══════════════════════════════════ */
-#toast { display: none !important; }
 .toast-stack { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
 .toast-stack .toast {
   position: static; transform: none; pointer-events: auto; display: flex; align-items: center; gap: 12px;

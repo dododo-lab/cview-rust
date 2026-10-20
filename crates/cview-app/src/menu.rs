@@ -46,10 +46,10 @@ const PLAYBACK: &[Item] = &[
     ("go-live", "라이브로 이동", None),
     ("screenshot", "스크린샷", Some("CmdOrCtrl+S")),
     ("bookmark", "북마크", Some("CmdOrCtrl+Shift+B")),
-    ("fullscreen", "영상 전체화면", Some("CmdOrCtrl+Shift+F")),
+    ("fullscreen", "영상 전체 화면", Some("CmdOrCtrl+Shift+F")),
     (
         "fullscreen-chat",
-        "영상+채팅 전체화면",
+        "영상+채팅 전체 화면",
         Some(FULLSCREEN_CHAT_ACCEL),
     ),
     ("pip", "화면 속 화면(PiP)", Some("Alt+CmdOrCtrl+P")),

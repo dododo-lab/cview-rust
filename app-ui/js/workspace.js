@@ -59,7 +59,7 @@ export function installSidebarExtras({ onRandomLive, onQueueMulti, onRefresh }) 
     <div class="side-quick">
       <button class="side-quick-btn" data-q="random" title="팔로잉 중 아무 방송이나 보기" aria-label="아무 방송이나 보기">${QUICK_ICONS.random}<span class="nav-label">아무거나</span></button>
       <button class="side-quick-btn" data-q="multi" title="팔로잉 상위 4개를 멀티라이브로" aria-label="멀티라이브로 열기">${QUICK_ICONS.multi}<span class="nav-label">멀티로</span></button>
-      <button class="side-quick-btn" data-q="refresh" title="${kbd('새로고침 (⌘R)')}" aria-label="새로고침">${QUICK_ICONS.refresh}<span class="nav-label">새로 고침</span></button>
+      <button class="side-quick-btn" data-q="refresh" title="${kbd('새로고침 (⌘R)')}" aria-label="새로고침">${QUICK_ICONS.refresh}<span class="nav-label">새로고침</span></button>
     </div>`;
   nav.after(box);
   box.addEventListener('click', (e) => {

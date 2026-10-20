@@ -65,12 +65,11 @@
 .ml-pane iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--video-stage); }
 .ml-pane-hit { position: absolute; inset: 0; cursor: pointer; }
 
-.ml-pane-top, .ml-pane-info {
+.ml-pane-top {
   position: absolute; left: 0; right: 0; display: flex; align-items: center; gap: 6px; padding: 8px 10px;
   pointer-events: none; opacity: 0; transition: opacity 0.15s;
 }
 .ml-pane-top { top: 0; background: linear-gradient(rgba(0, 0, 0, 0.55), transparent); }
-.ml-pane-info { bottom: 0; background: linear-gradient(transparent, rgba(0, 0, 0, 0.7)); }
 .ml-pane-top .grow { flex: 1; }
 .ml-pane-close {
   pointer-events: auto; width: 26px; height: 26px; border-radius: 50%; border: 0; display: grid; place-items: center;
@@ -305,3 +304,6 @@
 .ml-watch-back { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 9px; font-size: var(--fs-footnote); font-weight: 600; }
 .ml-watch-back[hidden] { display: none; }
 .ml-watch-back svg { width: 14px; height: 14px; }
+
+/* 패인 볼륨 슬라이더 키보드 초점 */
+.ml-vol .ml-vol-range:focus-visible { width: 64px; opacity: 1; margin: 0 8px 0 2px; outline: 2px solid #00ffa3; outline-offset: 3px; border-radius: 2px; }

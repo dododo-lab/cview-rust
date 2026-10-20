@@ -150,8 +150,12 @@ export class PaneControls {
     }
     this.el.classList.toggle('buffering', Boolean(v && !v.paused && v.readyState > 0 && v.readyState < 3));
     const playing = v && !v.paused;
-    this.playButton.innerHTML = playing ? PANE_ICON.pause : PANE_ICON.play;
-    this.playButton.title = playing ? '일시정지' : '재생';
+    // 아이콘은 바뀔 때만 다시 그린다(700ms 마다 SVG 를 다시 파싱하지 않게).
+    if (this.playButton.dataset.playing !== String(Boolean(playing))) {
+      this.playButton.dataset.playing = String(Boolean(playing));
+      this.playButton.innerHTML = playing ? PANE_ICON.pause : PANE_ICON.play;
+      this.playButton.title = playing ? '일시정지' : '재생';
+    }
     const badge = liveBadgeState(this.latency);
     this.liveButton.textContent = badge.text;
     this.liveButton.classList.toggle('behind', badge.behind || !playing);
@@ -207,6 +211,7 @@ export class PaneControls {
   goLive() {
     const v = this.video;
     if (v && v.paused) this.bridge.call('play');
+    if (v && v.playbackRate !== 1) this.bridge.call('setRate', 1);
     this.bridge.call('seekToLiveEdge');
     toast('라이브로 이동', 1000);
   }
@@ -232,7 +237,8 @@ export class PaneControls {
   chooseLevel(index) {
     this.closeMenus();
     if (index < 0) {
-      this.bridge.run('if (typeof setLockTopLevel === "function") setLockTopLevel(false); if (hls) { hls.currentLevel = -1; hls.loadLevel = -1; }');
+      // 자동 — 매니저가 건 패인 화질 상한(applyAdaptiveLevelCap)은 그대로 둔다.
+      this.bridge.run('if (typeof setLockTopLevel === "function") setLockTopLevel(false); if (hls) { hls.currentLevel = -1; hls.loadLevel = -1; if (typeof applyAdaptiveLevelCap === "function") applyAdaptiveLevelCap(); }');
     } else {
       this.bridge.run(`if (typeof setLockTopLevel === "function") setLockTopLevel(false); requestManualLevel(${Number(index)});`);
     }

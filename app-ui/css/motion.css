@@ -55,7 +55,7 @@
 /* ── 메뉴 전환 — 짧은 페이드 + 8px 슬라이드, 불러온 내용은 살짝 떠오르며 ── */
 .page:not([hidden]) { animation: page-in .26s cubic-bezier(.2, .8, .2, 1) both; }
 .viewer:not([hidden]) .viewer-main { animation: page-in .26s cubic-bezier(.2, .8, .2, 1) both; }
-.page-body > .grid, .page-body > .channel-list, .page-body > section, .insight-panel .ip-body > * { animation: content-in .32s cubic-bezier(.2, .8, .2, 1) both; }
+.page-body > .grid, .page-body > .channel-list, .page-body > section, .insight-panel .ip-scroll > * { animation: content-in .32s cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes page-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes content-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
@@ -87,10 +87,10 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 /* ── 모션 줄이기 — 정지한 로고·즉시 전환(무한 반복을 0.01ms 로 돌리지 않게 none) ── */
 @media (prefers-reduced-motion: reduce) {
   .spinner, .spinner::before, .spinner::after, .sk, .ip-skeleton span, .ip-skeleton i,
-  .page:not([hidden]), .viewer:not([hidden]) .viewer-main, .page-body > *, .insight-panel .ip-body > *,
+  .page:not([hidden]), .viewer:not([hidden]) .viewer-main, .page-body > *, .insight-panel .ip-scroll > *,
   .splash-logo *, .splash-name, .splash-bar, .splash-step, body.app-entering .app { animation: none !important; }
 }
-:root[data-motion="reduced"] :is(.spinner, .sk, .ip-skeleton span, .ip-skeleton i, .page, .viewer-main, .page-body > *, .insight-panel .ip-body > *, .splash-logo *, .splash-name, .splash-bar, .splash-step, .app),
+:root[data-motion="reduced"] :is(.spinner, .sk, .ip-skeleton span, .ip-skeleton i, .page, .viewer-main, .page-body > *, .insight-panel .ip-scroll > *, .splash-logo *, .splash-name, .splash-bar, .splash-step, .app),
 :root[data-motion="reduced"] .spinner::before, :root[data-motion="reduced"] .spinner::after { animation: none !important; }
 
 /* 카드 스켈레톤 위 작은 로더 줄 */

@@ -10,7 +10,7 @@ export const ACTIONS = [
   ['toggleMute', '음소거 전환', 'M'],
   ['volumeUp', '볼륨 올리기', '↑'],
   ['volumeDown', '볼륨 내리기', '↓'],
-  ['toggleFullscreen', '전체화면 전환'],
+  ['toggleFullscreen', '전체 화면 전환'],
   ['toggleChat', '채팅 표시 방식 바꾸기'],
   ['togglePiP', 'PiP 전환'],
   ['screenshot', '스크린샷'],

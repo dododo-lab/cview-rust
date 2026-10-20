@@ -1,6 +1,6 @@
 // 시청 화면 컨트롤 — 원본 LiveStreamView 하단 바·OverlayVolumeSlider·StreamLoadingOverlay.
 //
-// PLY-01 화질 선택, PLY-02 재생/일시정지·라이브 복귀·지연 배지, PLY-09 스크린샷, PLY-11 전체화면 2종,
+// PLY-01 화질 선택, PLY-02 재생/일시정지·라이브 복귀·지연 배지, PLY-09 스크린샷, PLY-11 전체 화면 2종,
 // PLY-13 오류 오버레이 재시도, PLY-15 휠 볼륨·% 표시, PLY-17 북마크, 시청 화면 단축키.
 import { api } from './api.js';
 import { esc, toast } from './dom.js';
@@ -58,7 +58,7 @@ export class ViewerControls {
     mute.insertAdjacentHTML('beforebegin', `
       <button class="icon-btn" id="ctl-play" title="일시정지 (Space)" aria-label="일시정지">${ICON.pause}</button>
       <button class="live-chip" id="ctl-live" title="라이브로 이동">LIVE</button>`);
-    // 오른쪽: 화질 · 스크린샷 · 북마크 · 전체화면(영상+채팅)
+    // 오른쪽: 화질 · 스크린샷 · 북마크 · 전체 화면(영상+채팅)
     const reload = root.querySelector('#reload');
     reload.insertAdjacentHTML('beforebegin', `
       <div class="quality-wrap">
@@ -68,8 +68,8 @@ export class ViewerControls {
       <button class="icon-btn" id="ctl-shot" title="${kbd('스크린샷 (⌘S)')}" aria-label="스크린샷">${ICON.camera}</button>
       <button class="icon-btn" id="ctl-bookmark" title="북마크" aria-label="북마크">${ICON.bookmark}</button>`);
     root.querySelector('#fullscreen').insertAdjacentHTML('afterend',
-      `<button class="icon-btn" id="ctl-fullscreen-chat" title="${kbd('영상+채팅 전체화면 (⌃⌘F)')}" aria-label="영상과 채팅 전체화면">${ICON.chatFull}</button>`);
-    root.querySelector('#fullscreen').title = kbd('영상 전체화면 (⇧⌘F)');
+      `<button class="icon-btn" id="ctl-fullscreen-chat" title="${kbd('영상+채팅 전체 화면 (⌃⌘F)')}" aria-label="영상과 채팅 전체 화면">${ICON.chatFull}</button>`);
+    root.querySelector('#fullscreen').title = kbd('영상 전체 화면 (⇧⌘F)');
 
     this.playButton = root.querySelector('#ctl-play');
     this.liveButton = root.querySelector('#ctl-live');
@@ -224,8 +224,11 @@ export class ViewerControls {
     // 버퍼링 표시는 미디어 이벤트가 켜고 끄지만, 이벤트를 놓쳐도 데이터가 충분하면 지운다.
     if (v && v.readyState >= 3) this.stage.classList.remove('buffering');
     if (this.stage.classList.contains('paused') && this.wake) this.wake();
-    this.playButton.innerHTML = paused ? ICON.play : ICON.pause;
-    this.playButton.title = paused ? '재생 (Space)' : '일시정지 (Space)';
+    if (this.playButton.dataset.paused !== String(paused)) {
+      this.playButton.dataset.paused = String(paused);
+      this.playButton.innerHTML = paused ? ICON.play : ICON.pause;
+      this.playButton.title = paused ? '재생 (Space)' : '일시정지 (Space)';
+    }
     const badge = liveBadgeState(this.latency);
     this.liveButton.textContent = badge.text;
     this.liveButton.classList.toggle('behind', badge.behind || paused);
@@ -271,7 +274,8 @@ export class ViewerControls {
     this.qualityMenu.hidden = true;
     const run = (s) => this.viewer.player.run(s);
     if (index < 0) {
-      run('if (typeof setLockTopLevel === "function") setLockTopLevel(false); if (hls) { hls.currentLevel = -1; hls.loadLevel = -1; hls.autoLevelCapping = -1; }');
+      // 자동 — 상한을 -1 로 지우지 않고 앱 화질 상한·백그라운드 절약 상한을 다시 적용한다.
+      run('if (typeof setLockTopLevel === "function") setLockTopLevel(false); if (hls) { hls.currentLevel = -1; hls.loadLevel = -1; if (typeof applyAdaptiveLevelCap === "function") applyAdaptiveLevelCap(); }');
       this.flash('화질 자동');
     } else {
       run(`if (typeof setLockTopLevel === "function") setLockTopLevel(false); requestManualLevel(${Number(index)});`);

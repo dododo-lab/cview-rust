@@ -172,7 +172,7 @@ export class StatsPage {
       return;
     }
     const cleanups = [
-      ['liveCache', '라이브 목록 캐시 비우기', '다음 새로 고침 때 다시 받아 옵니다'],
+      ['liveCache', '라이브 목록 캐시 비우기', '다음 새로고침 때 다시 받아 옵니다'],
       ['imageIndex', '이미지 캐시 색인 비우기', '썸네일을 다시 받아 옵니다'],
       ['oldHistory', '90일 지난 시청 기록 지우기', '통계에서 빠집니다'],
       ['recent', '최근 시청 목록 비우기', '즐겨찾기는 그대로 둡니다'],

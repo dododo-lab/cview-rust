@@ -32,7 +32,7 @@ export async function startDownload(kind, target, title, channelName) {
   try {
     latest = await api.downloadStart(kind, String(target), title || null, channelName || null);
     for (const fn of subscribers) fn(latest);
-    toast('받기를 시작했습니다 — 보관함 › 다운로드에서 볼 수 있어요', 3500, {
+    toast('받기를 시작했습니다 — 보관함 › 다운로드에서 볼 수 있습니다', 3500, {
       label: '열기', run: () => window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: 'library', params: { tab: 'downloads' } } })),
     });
   } catch (e) {

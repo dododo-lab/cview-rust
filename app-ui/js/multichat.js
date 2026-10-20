@@ -88,7 +88,8 @@ export class MultiChatPage {
         this.focus(next.channelId);
       }
     });
-    setInterval(() => this.renderOverview(), 5000);
+    // 개요 칩은 화면이 보일 때만 갱신한다.
+    setInterval(() => { if (!this.root.hidden && !document.hidden) this.renderOverview(); }, 5000);
   }
 
   async show() {
