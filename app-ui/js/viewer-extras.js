@@ -89,18 +89,25 @@ export class ViewerExtras {
     const items = [...this.rail.querySelectorAll('.rail-item')];
     const more = this.rail.querySelector('.rail-more');
     if (!more) return;
+    // 한 번 재고 계산한다(예전엔 하나 숨길 때마다 scrollWidth 를 읽어 항목 수만큼 레이아웃을 다시 했다).
     for (const b of items) b.hidden = false;
     more.hidden = true;
     const top = this.rail.parentElement;
-    const room = () => top.scrollWidth <= top.clientWidth;
+    const overflow = top.scrollWidth - top.clientWidth;
+    if (overflow <= 0 || !items.length) return;
+    const gap = parseFloat(getComputedStyle(this.rail).columnGap) || 6;
+    const widths = items.map((b) => b.getBoundingClientRect().width + gap);
+    const moreWidth = 44; // "+N" 알약 대략 폭(간격 포함)
+    let freed = 0;
     let hiddenCount = 0;
-    for (let i = items.length - 1; i >= 0 && !room(); i--) {
-      items[i].hidden = true;
+    for (let i = items.length - 1; i >= 0 && freed < overflow + moreWidth; i--) {
+      freed += widths[i];
       hiddenCount++;
-      more.hidden = false;
-      more.textContent = `+${hiddenCount}`;
-      more.title = `팔로잉 라이브 ${hiddenCount}개 더 — 팔로잉 화면에서 보기`;
     }
+    for (let i = items.length - hiddenCount; i < items.length; i++) items[i].hidden = true;
+    more.hidden = false;
+    more.textContent = `+${hiddenCount}`;
+    more.title = `팔로잉 라이브 ${hiddenCount}개 더 — 팔로잉 화면에서 보기`;
   }
 
   // ── 라이브 되감기 키 (PLY-03, 부분) ────────

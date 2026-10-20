@@ -213,10 +213,19 @@ export class MultiChatPage {
     }).join('');
     if (!html) return;
     const atBottom = this.mergedList.scrollHeight - this.mergedList.scrollTop - this.mergedList.clientHeight < 40;
+    const before = this.mergedList.lastElementChild;
     this.mergedList.insertAdjacentHTML('beforeend', html);
+    // 검색 중이면 새로 붙은 줄만 거른다(예전엔 메시지 묶음마다 600줄 + 모든 패널을 다시 훑었다).
+    const q = this.search.value.trim();
+    if (q) {
+      for (let line = before ? before.nextElementSibling : this.mergedList.firstElementChild; line; line = line.nextElementSibling) {
+        const ok = lineMatches(line.textContent, q);
+        line.classList.toggle('search-hidden', !ok);
+        line.classList.toggle('search-hit', ok);
+      }
+    }
     while (this.mergedList.children.length > 600) this.mergedList.firstElementChild.remove();
     if (atBottom) this.mergedList.scrollTop = this.mergedList.scrollHeight;
-    if (this.search.value) this.applySearch();
   }
 
   async sendMerged() {
