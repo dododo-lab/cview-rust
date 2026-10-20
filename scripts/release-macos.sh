@@ -24,10 +24,17 @@
 #   3) 버전 patch+1(--minor/--major 면 그 자리 +1, 아래 자리 0)·빌드 번호 +1.
 #   4) 빌드 → DMG 서명 → 공증(Accepted 확인) → 스테이플 → 확인.
 #      여기서 하나라도 실패하면 올린 파일을 git 으로 되돌리고 끝낸다(trap).
+#   4b) 같은 버전의 Windows 설치 파일(NSIS, x64)을 이 Mac 에서 교차 빌드한다(x86_64-pc-windows-gnu · mingw-w64 · makensis).
+#       → dist/CView_X.Y.Z_x64-setup.exe. 코드 서명 인증서가 없어 서명되지 않는다(SmartScreen 경고).
+#       도구가 없으면(rustup target add x86_64-pc-windows-gnu · brew install mingw-w64 nsis) 실패로 보고 되돌린다.
+#       CVIEW_SKIP_WINDOWS=1 이면 건너뛴다.
 #   5) 성공하면 "release: vX.Y.Z (build N)" 커밋과 주석 태그 vX.Y.Z 를 만들고, origin 이 있으면 푸시한다.
 #      공증 프로파일 없이(서명만) 돌리면 4)의 서명 DMG 까지만 만들고 번호는 되돌린다 — 공증 안 된 DMG 에 번호를 쓰지 않는다.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# makensis(Homebrew 3.13)는 로캘이 비어 있으면 bad_alloc 으로 죽는다.
+export LANG="${LANG:-en_US.UTF-8}" LC_ALL="${LC_ALL:-en_US.UTF-8}"
+[[ "$LANG" == "C" || -z "$LANG" ]] && export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
 CONF=crates/cview-app/tauri.conf.json
 dist_build=0
@@ -165,6 +172,17 @@ if (( dist_build )); then
   spctl -a -vv -t install "$out"
   shasum -a 256 "$out"
   stat -f "   %z bytes" "$out"
+  if [[ -z "${CVIEW_SKIP_WINDOWS:-}" ]]; then
+    echo "── Windows 설치 파일(x64, 교차 빌드)"
+    win_out="dist/CView_${version}_x64-setup.exe"
+    rm -f target/x86_64-pc-windows-gnu/release/bundle/nsis/*.exe(N) "$win_out"
+    (cd crates/cview-app && cargo tauri build --target x86_64-pc-windows-gnu --bundles nsis)
+    win_exe=$(ls -t target/x86_64-pc-windows-gnu/release/bundle/nsis/*.exe(N) | head -1)
+    [[ -n "$win_exe" ]] || { echo "✗ Windows 설치 파일을 찾지 못했습니다"; exit 1; }
+    cp "$win_exe" "$win_out"
+    shasum -a 256 "$win_out"
+    stat -f "   %z bytes" "$win_out"
+  fi
   echo "── 커밋·태그 v$version (빌드 $build)"
   git add $BUMPED_FILES
   git commit -q -m "release: v$version (build $build)" -m "공증 제출 $sub_id — Accepted. dist/CView_${version}_arm64.dmg"
