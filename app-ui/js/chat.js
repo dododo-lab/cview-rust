@@ -306,6 +306,7 @@ export class ChatPanel {
   }
 
   clear(byUser = false) {
+    this.pendingLines = [];
     this.list.innerHTML = `<div class="empty">${byUser ? '채팅을 지웠습니다' : '메시지 대기 중…'}</div>`;
     if (!byUser) this.notice.hidden = true;
     this.unread = 0;
@@ -342,18 +343,15 @@ export class ChatPanel {
     return this.list.scrollHeight - this.list.scrollTop - this.list.clientHeight < 40;
   }
 
+  /**
+   * 메시지 추가 — 거르기·멘션 알림 같은 장부 일은 바로, DOM 넣기는 프레임마다 한 번으로 묶는다.
+   * 붐비는 채널은 초당 수십 번 이벤트가 오는데, 매번 넣고 스크롤 위치를 읽고 쓰면 그때마다 레이아웃을 다시 계산한다.
+   */
   append(messages) {
     if (!messages || !messages.length) return;
     const prefs = chatPrefs();
     const shown = messages.filter((m) => passesFilters(m, prefs));
     if (!shown.length) return;
-    const placeholder = this.list.querySelector('.empty');
-    if (placeholder) placeholder.remove();
-    const follow = prefs.autoScroll && this.atBottom;
-    if (!follow && !this.list.querySelector('.read-divider') && this.list.children.length) {
-      this.list.insertAdjacentHTML('beforeend', '<div class="read-divider"><span>여기까지 읽음</span></div>');
-    }
-    this.list.insertAdjacentHTML('beforeend', shown.map((m) => lineHtml(m, prefs)).join(''));
     for (const m of shown) {
       if (m.nickname && m.kind !== 'system') this.recentNicks.set(m.nickname, Date.now());
       for (const [id, url] of Object.entries(m.emojis || {})) {
@@ -371,11 +369,39 @@ export class ChatPanel {
       const keep = [...this.recentNicks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 300);
       this.recentNicks = new Map(keep);
     }
+    this.pendingLines = (this.pendingLines || []).concat(shown);
+    // 안 보이는 동안 쌓여도 화면에 남을 만큼만 그린다.
+    if (this.pendingLines.length > this.maxLines) this.pendingLines = this.pendingLines.slice(-this.maxLines);
+    if (!this.flushScheduled) {
+      this.flushScheduled = true;
+      // 보이면 다음 프레임, 창이 숨어 rAF 가 멈춰도 타이머로 결국 그린다.
+      const run = () => this.flushLines();
+      this.flushRaf = requestAnimationFrame(run);
+      this.flushTimer = setTimeout(run, 250);
+    }
+  }
+
+  flushLines() {
+    cancelAnimationFrame(this.flushRaf);
+    clearTimeout(this.flushTimer);
+    this.flushScheduled = false;
+    const shown = this.pendingLines || [];
+    this.pendingLines = [];
+    if (!shown.length) return;
+    const prefs = chatPrefs();
+    const placeholder = this.list.querySelector('.empty');
+    if (placeholder) placeholder.remove();
+    const follow = prefs.autoScroll && this.atBottom;
+    if (!follow && !this.list.querySelector('.read-divider') && this.list.children.length) {
+      this.list.insertAdjacentHTML('beforeend', '<div class="read-divider"><span>여기까지 읽음</span></div>');
+    }
+    this.list.insertAdjacentHTML('beforeend', shown.map((m) => lineHtml(m, prefs)).join(''));
     this.renderMentionCount();
     for (const fn of this.appendHooks) {
       try { fn(shown); } catch (e) { console.error(e); }
     }
-    while (this.list.children.length > this.maxLines) this.list.firstElementChild.remove();
+    let extra = this.list.children.length - this.maxLines;
+    while (extra-- > 0) this.list.firstElementChild.remove();
     if (follow) this.list.scrollTop = this.list.scrollHeight;
     else { this.unread += shown.length; this.renderJump(); }
   }
