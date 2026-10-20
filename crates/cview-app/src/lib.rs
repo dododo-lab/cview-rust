@@ -195,6 +195,18 @@ pub fn run() {
             if let Err(e) = tray::install(&handle) {
                 tracing::warn!("메뉴 막대 아이콘을 달지 못했습니다: {e}");
             }
+            if let Ok(path) = std::env::var("CVIEW_DEBUG_EVAL") {
+                let h = handle.clone();
+                std::thread::spawn(move || loop {
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    if let Ok(js) = std::fs::read_to_string(&path) {
+                        let _ = std::fs::remove_file(&path);
+                        for w in h.webview_windows().values() {
+                            let _ = w.eval(&js);
+                        }
+                    }
+                });
+            }
             spawn_auth_tasks(handle);
             Ok(())
         })

@@ -155,6 +155,8 @@ pub struct AppServices {
     pub chat: ChatViewModel,
     /// 추가 채팅 세션(멀티채팅) — 세션 키별 뷰모델(선행 작업 2: 채팅 다중 세션화).
     pub chat_sessions: Mutex<std::collections::HashMap<String, ChatViewModel>>,
+    /// 추가 채팅 세션 → 그 세션을 연 창 라벨. 보조 창이 OS 닫기로 사라져도 세션을 정리하려고.
+    pub chat_session_windows: Mutex<std::collections::HashMap<String, String>>,
     /// 라이브 재생.
     pub player: PlayerViewModel,
     /// 플레이어 페이지 엔진(앱 수명 동안 하나, 뷰모델에 주입돼 있다).
@@ -281,6 +283,7 @@ impl AppServices {
             search,
             chat,
             chat_sessions: Mutex::new(std::collections::HashMap::new()),
+            chat_session_windows: Mutex::new(std::collections::HashMap::new()),
             player,
             engine,
             player_channel: tokio::sync::Mutex::new(None),
@@ -358,6 +361,10 @@ impl AppServices {
 
     /// 추가 채팅 세션을 끊고 지운다.
     pub async fn drop_chat_session(&self, session: &str) {
+        self.chat_session_windows
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(session);
         let vm = self
             .chat_sessions
             .lock()
@@ -365,6 +372,32 @@ impl AppServices {
             .remove(session);
         if let Some(vm) = vm {
             vm.disconnect().await;
+        }
+    }
+
+    /// 이 추가 채팅 세션을 연 창을 기록한다(메인 창 세션은 기록하지 않는다).
+    pub fn note_chat_session_window(&self, session: &str, window_label: &str) {
+        if window_label == crate::MAIN_WINDOW {
+            return;
+        }
+        self.chat_session_windows
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(session.to_string(), window_label.to_string());
+    }
+
+    /// 창이 사라지면 그 창이 연 추가 채팅 세션을 모두 끊는다(웹소켓·핑·감시 작업이 죽은 창으로 계속 보내지 않게).
+    pub async fn drop_chat_sessions_of_window(&self, window_label: &str) {
+        let sessions: Vec<String> = self
+            .chat_session_windows
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .filter(|(_, w)| w.as_str() == window_label)
+            .map(|(s, _)| s.clone())
+            .collect();
+        for s in sessions {
+            self.drop_chat_session(&s).await;
         }
     }
 
@@ -434,9 +467,60 @@ pub fn store_path(data_dir: &Path) -> PathBuf {
     data_dir.join(STORE_FILE_NAME)
 }
 
+/// 스토어 열기 — 사전 점검·업그레이드 전 백업·열기 기록(store-health.json)이 붙은 경로로 연다.
+/// 파일이 손상돼 열리지 않으면(예전엔 매번 저장 없이 실행) 최신 백업으로 되돌리고, 백업이 없으면 손상 파일을
+/// `.corrupt-<시각>` 으로 옮겨 두고 새로 시작한다. 지우지는 않는다. 손상이 아닌 오류(잠김 등)는 저장 없이 실행.
 fn open_store(data_dir: &Path) -> Option<DataStore> {
-    match DataStore::open(store_path(data_dir)) {
-        Ok(store) => Some(store),
+    use cview_persistence::store_backup::StoreBackup;
+    use cview_persistence::store_open_health::StoreOpenHealthRecorder;
+    let path = store_path(data_dir);
+    let health = StoreOpenHealthRecorder::new(data_dir.join(StoreOpenHealthRecorder::FILE_NAME));
+    let backup = StoreBackup::new(&path);
+    let build = env!("CARGO_PKG_VERSION");
+    let error = match DataStore::create_container_at(&path, &health, &backup, build) {
+        Ok(store) => return Some(store),
+        Err(e) => e,
+    };
+    let message = error.to_string().to_lowercase();
+    let corrupt = [
+        "not a database",
+        "malformed",
+        "corrupt",
+        "file is encrypted",
+    ]
+    .iter()
+    .any(|k| message.contains(k));
+    if !corrupt {
+        tracing::error!("데이터 스토어를 열지 못했습니다 — 저장 없이 실행: {error}");
+        return None;
+    }
+    if let Some(latest) = backup.list().into_iter().next() {
+        match backup.restore(&latest) {
+            Ok(()) => {
+                tracing::warn!("손상된 스토어를 백업 {} 으로 되돌렸습니다", latest.id);
+                if let Ok(store) = DataStore::open(&path) {
+                    return Some(store);
+                }
+            }
+            Err(e) => tracing::error!("백업 복원 실패: {e:?}"),
+        }
+    }
+    // 백업이 없거나 복원도 열리지 않으면 손상 파일을 옆으로 옮기고 새로 시작한다.
+    let stamp = chrono::Utc::now().format("%Y%m%d-%H%M%S");
+    for name in backup.store_file_names() {
+        let file = path.with_file_name(&name);
+        if file.exists() {
+            let _ = std::fs::rename(
+                &file,
+                path.with_file_name(format!("{name}.corrupt-{stamp}")),
+            );
+        }
+    }
+    match DataStore::open(&path) {
+        Ok(store) => {
+            tracing::warn!("손상된 스토어를 .corrupt-{stamp} 로 옮기고 새로 시작합니다");
+            Some(store)
+        }
         Err(e) => {
             tracing::error!("데이터 스토어를 열지 못했습니다 — 저장 없이 실행: {e}");
             None
@@ -447,6 +531,27 @@ fn open_store(data_dir: &Path) -> Option<DataStore> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn corrupt_store_is_moved_aside_and_fresh_store_opens() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = store_path(dir.path());
+        std::fs::write(
+            &path,
+            b"this is not a sqlite database at all, just garbage bytes",
+        )
+        .unwrap();
+        let store = open_store(dir.path());
+        assert!(
+            store.is_some(),
+            "손상 파일이 있어도 새 스토어로 열려야 한다"
+        );
+        let moved = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .any(|e| e.file_name().to_string_lossy().contains(".corrupt-"));
+        assert!(moved, "손상 파일은 지우지 않고 옆으로 옮긴다");
+    }
 
     #[test]
     fn keychain_service_is_separate_from_swift_app() {

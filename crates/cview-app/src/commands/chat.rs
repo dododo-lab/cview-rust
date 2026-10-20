@@ -31,11 +31,18 @@ pub struct ChatConnectedDto {
 /// 채팅 연결. 기존 연결은 뷰모델이 끊는다.
 #[tauri::command]
 pub async fn chat_connect(
+    window: tauri::Window,
     services: State<'_, AppServices>,
     chat_channel_id: String,
     channel_id: Option<String>,
     session: Option<String>,
 ) -> CmdResult<ChatConnectedDto> {
+    if let Some(key) = session
+        .as_deref()
+        .filter(|k| !k.is_empty() && *k != crate::state::MAIN_CHAT_SESSION)
+    {
+        services.note_chat_session_window(key, window.label());
+    }
     let chat = services.chat_vm(session.as_deref());
     if chat_channel_id.trim().is_empty() {
         chat.disconnect().await;

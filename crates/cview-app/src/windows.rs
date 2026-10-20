@@ -92,19 +92,28 @@ pub async fn window_open(
     let window = builder
         .build()
         .map_err(|e| CommandError(format!("창을 열지 못했습니다: {e}")))?;
-    if kind == "player" {
-        let handle = app.clone();
-        let l = label.clone();
-        window.on_window_event(move |event| {
-            if matches!(event, tauri::WindowEvent::Destroyed) && player_target() == l {
-                set_player_target(crate::MAIN_WINDOW);
-                let h = handle.clone();
-                tauri::async_runtime::spawn(async move {
-                    h.state::<AppServices>().stop_player().await;
-                });
+    let handle = app.clone();
+    let l = label.clone();
+    let is_player = kind == "player";
+    window.on_window_event(move |event| {
+        if !matches!(event, tauri::WindowEvent::Destroyed) {
+            return;
+        }
+        // 보조 창이 연 채팅 세션 — OS 닫기 버튼으로 닫혀도 정리한다(예전엔 웹소켓이 계속 돌았다).
+        let h = handle.clone();
+        let label = l.clone();
+        let stop_player = is_player && player_target() == l;
+        if stop_player {
+            set_player_target(crate::MAIN_WINDOW);
+        }
+        tauri::async_runtime::spawn(async move {
+            let services = h.state::<AppServices>();
+            services.drop_chat_sessions_of_window(&label).await;
+            if stop_player {
+                services.stop_player().await;
             }
         });
-    }
+    });
     Ok(label)
 }
 
