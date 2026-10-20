@@ -1,0 +1,99 @@
+:root {
+  --logo-bubble: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%22214 190 640 600%22%3E%3Cdefs%3E%3ClinearGradient id=%22m%22 x1=%22.1%22 y1=%220%22 x2=%22.9%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%2300D188%22/%3E%3Cstop offset=%221%22 stop-color=%22%2300A3D9%22/%3E%3C/linearGradient%3E%3ClinearGradient id=%22h%22 x1=%220%22 y1=%220%22 x2=%220%22 y2=%221%22%3E%3Cstop offset=%220%22 stop-color=%22%23fff%22 stop-opacity=%22.28%22/%3E%3Cstop offset=%22.45%22 stop-color=%22%23fff%22 stop-opacity=%220%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath fill=%22url%28%23m%29%22 d=%22M330 262 H694 A98 98 0 0 1 792 360 V598 A98 98 0 0 1 694 696 H452 L342 786 A14 14 0 0 1 320 774 L330 696 A98 98 0 0 1 232 598 V360 A98 98 0 0 1 330 262 Z%22/%3E%3Cpath fill=%22url%28%23h%29%22 d=%22M330 262 H694 A98 98 0 0 1 792 360 V598 A98 98 0 0 1 694 696 H452 L342 786 A14 14 0 0 1 320 774 L330 696 A98 98 0 0 1 232 598 V360 A98 98 0 0 1 330 262 Z%22/%3E%3C/svg%3E");
+  --logo-play: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%22214 190 640 600%22%3E%3Cpath fill=%22%23fff%22 stroke=%22%23fff%22 stroke-width=%2234%22 stroke-linejoin=%22round%22 d=%22M462 392 L462 566 L612 479 Z%22/%3E%3C/svg%3E");
+  --logo-dot: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%22214 190 640 600%22%3E%3Ccircle cx=%22776%22 cy=%22258%22 r=%2244%22 fill=%22%23FF3B30%22/%3E%3C/svg%3E");
+  --logo-muted: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%22214 190 640 600%22%3E%3Cpath fill=%22%238E8E93%22 d=%22M330 262 H694 A98 98 0 0 1 792 360 V598 A98 98 0 0 1 694 696 H452 L342 786 A14 14 0 0 1 320 774 L330 696 A98 98 0 0 1 232 598 V360 A98 98 0 0 1 330 262 Z%22/%3E%3Cpath fill=%22%23fff%22 stroke=%22%23fff%22 stroke-width=%2234%22 stroke-linejoin=%22round%22 d=%22M462 392 L462 566 L612 479 Z%22/%3E%3C/svg%3E");
+}
+
+/* ══ 로고 모션 — 로딩·버퍼링·스플래시·화면 전환 ═══════════════════
+   앱 아이콘(화면 겸 말풍선 + 재생 삼각형 + LIVE 점)을 부분별로 움직인다.
+   성능 규칙(perf/results.md): transform·opacity 만 애니메이션한다(width·box-shadow·filter·배경 위치 X).
+   로더는 보일 때만 존재하므로(숨은 화면은 display:none) 대기 화면에서 상시 도는 애니메이션은 없다.
+   모션 줄이기(시스템 또는 설정 "절약")면 정지한 로고만 보인다. */
+
+/* ── 로고 로더 — 기존 .spinner 자리 전부(메뉴 로딩·패인 로딩·플레이어 연결 중·채팅 목록 등) ── */
+.spinner {
+  --s: 40px;
+  position: relative; flex: none; width: var(--s); height: var(--s); border: 0; border-radius: 0;
+  background: var(--logo-bubble) center / contain no-repeat;
+  animation: logo-breathe 1.3s cubic-bezier(.45, 0, .55, 1) infinite alternate;
+  will-change: transform;
+}
+.spinner::before, .spinner::after { content: ""; position: absolute; inset: 0; background: center / contain no-repeat; }
+.spinner::before { background-image: var(--logo-play); animation: logo-play 1.3s cubic-bezier(.45, 0, .55, 1) infinite alternate; }
+.spinner::after { background-image: var(--logo-dot); animation: logo-dot .9s ease-in-out infinite alternate; }
+.spinner[hidden] { display: none; }
+@keyframes logo-breathe { from { transform: scale(.9); } to { transform: scale(1.02); } }
+@keyframes logo-play { from { transform: translateX(-3%) scale(.82); opacity: .7; } to { transform: translateX(1.5%) scale(1.06); opacity: 1; } }
+@keyframes logo-dot { from { opacity: 1; } to { opacity: .2; } }
+.empty > .spinner { --s: 44px; }
+.empty > .spinner + span, .empty > .spinner + .loading-caption { animation: fade-in .3s ease-out both; }
+
+/* ── 빈 화면·오류 — 흐린 정지 로고 ── */
+.empty-logo { width: 46px; height: 46px; background: var(--logo-muted) center / contain no-repeat; opacity: .32; margin-bottom: 2px; }
+.empty.error .empty-logo { opacity: .45; }
+
+/* ── 스켈레톤 — 배경 위치 반짝임(매 프레임 다시 그리기) 대신 투명도 맥박 ── */
+.sk, .ip-skeleton span, .ip-skeleton i {
+  background: var(--surface-elevated); background-size: auto;
+  animation: sk-pulse 1.3s ease-in-out infinite alternate;
+}
+@keyframes sk-pulse { from { opacity: 1; } to { opacity: .45; } }
+
+/* ── 버퍼링 — 영상 위 가운데 로고(단독 시청·멀티라이브 패인) ── */
+.stage-buffer, .ml-buffer {
+  position: absolute; left: 50%; top: 50%; z-index: 3; display: none; pointer-events: none;
+  translate: -50% -50%; filter: drop-shadow(0 4px 14px rgba(0, 0, 0, .45));
+}
+.stage-buffer { --s: 64px; }
+.ml-buffer { --s: clamp(28px, 12cqw, 56px); }
+.player-stage.buffering:not(.paused) .stage-buffer { display: block; }
+.ml-pane.buffering:not(.paused) .ml-buffer { display: block; }
+.player-overlay .spinner { --s: 64px; }
+.ml-pane-state .spinner { --s: clamp(28px, 12cqw, 56px); }
+
+/* ── 메뉴 전환 — 짧은 페이드 + 8px 슬라이드, 불러온 내용은 살짝 떠오르며 ── */
+.page:not([hidden]) { animation: page-in .26s cubic-bezier(.2, .8, .2, 1) both; }
+.viewer:not([hidden]) .viewer-main { animation: page-in .26s cubic-bezier(.2, .8, .2, 1) both; }
+.page-body > .grid, .page-body > .channel-list, .page-body > section, .insight-panel .ip-body > * { animation: content-in .32s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes page-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes content-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* ── 스플래시 — 말풍선이 튀어 오르고, 재생 삼각형이 터지고, LIVE 점이 울리고, 광택이 지나간다 ── */
+.splash-mark { width: 112px; height: 105px; animation: none; background: none; box-shadow: none; }
+.splash-logo { width: 100%; height: 100%; overflow: visible; }
+.splash-logo .sp-bubble, .splash-logo .sp-play, .splash-logo .sp-dot, .splash-logo .sp-dot-ring, .splash-logo .sp-ping { transform-box: fill-box; transform-origin: center; }
+.splash-logo .sp-bubble { animation: sp-bubble-in .7s cubic-bezier(.34, 1.56, .64, 1) both; }
+.splash-logo .sp-play { animation: sp-pop .45s cubic-bezier(.34, 1.7, .64, 1) .32s both; }
+.splash-logo .sp-dot-ring { fill: var(--background); animation: sp-pop .35s cubic-bezier(.34, 1.7, .64, 1) .5s both; }
+.splash-logo .sp-dot { animation: sp-pop .35s cubic-bezier(.34, 1.7, .64, 1) .5s both; }
+.splash-logo .sp-ping { opacity: 0; animation: sp-ping 1.6s cubic-bezier(.2, .7, .3, 1) .85s infinite; }
+.splash-logo .sp-sheen { transform-box: fill-box; animation: sp-sheen 2.4s cubic-bezier(.45, 0, .2, 1) .55s infinite; transform: translateX(-120%) skewX(-18deg); }
+.splash-name { animation: sp-rise .45s cubic-bezier(.2, .8, .2, 1) .25s both; }
+.splash-bar, .splash-step { animation: sp-rise .45s cubic-bezier(.2, .8, .2, 1) .4s both; }
+/* 진행 막대도 width 가 아니라 scaleX */
+.splash-bar span { width: 100% !important; transform: scaleX(var(--p, .08)); transform-origin: left center; transition: transform .35s cubic-bezier(.2, .8, .2, 1); }
+@keyframes sp-bubble-in { from { opacity: 0; transform: scale(.55) translateY(10%); } to { opacity: 1; transform: none; } }
+@keyframes sp-pop { from { opacity: 0; transform: scale(0); } to { opacity: 1; transform: none; } }
+@keyframes sp-ping { 0% { opacity: .7; transform: scale(1); } 70%, 100% { opacity: 0; transform: scale(2.3); } }
+@keyframes sp-sheen { 0% { transform: translateX(-120%) skewX(-18deg); } 55%, 100% { transform: translateX(380%) skewX(-18deg); } }
+@keyframes sp-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* 걷힐 때 — 로고가 살짝 커지며 사라지고, 앱이 그 뒤에서 떠오른다 */
+.splash.leaving .splash-mark { transition: transform .34s cubic-bezier(.4, 0, .2, 1), opacity .3s ease; transform: scale(1.14); opacity: 0; }
+body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes app-in { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: none; } }
+
+/* ── 모션 줄이기 — 정지한 로고·즉시 전환(무한 반복을 0.01ms 로 돌리지 않게 none) ── */
+@media (prefers-reduced-motion: reduce) {
+  .spinner, .spinner::before, .spinner::after, .sk, .ip-skeleton span, .ip-skeleton i,
+  .page:not([hidden]), .viewer:not([hidden]) .viewer-main, .page-body > *, .insight-panel .ip-body > *,
+  .splash-logo *, .splash-name, .splash-bar, .splash-step, body.app-entering .app { animation: none !important; }
+}
+:root[data-motion="reduced"] :is(.spinner, .sk, .ip-skeleton span, .ip-skeleton i, .page, .viewer-main, .page-body > *, .insight-panel .ip-body > *, .splash-logo *, .splash-name, .splash-bar, .splash-step, .app),
+:root[data-motion="reduced"] .spinner::before, :root[data-motion="reduced"] .spinner::after { animation: none !important; }
+
+/* 카드 스켈레톤 위 작은 로더 줄 */
+.loading-row { display: flex; align-items: center; gap: 10px; margin: 0 0 var(--sp-md); color: var(--text-tertiary); font-size: var(--fs-footnote); }
+.loading-row .spinner { --s: 26px; }
+.loading-caption { font-size: var(--fs-footnote); }

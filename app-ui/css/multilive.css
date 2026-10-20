@@ -259,10 +259,7 @@
 .ml-center-play svg { width: 24px; height: 24px; margin-left: 3px; }
 .ml-center-play:hover { transform: scale(1.06); background: rgba(0, 0, 0, 0.62); }
 .ml-pane.paused .ml-center-play { display: grid; }
-.ml-pane.buffering::after { content: ""; position: absolute; left: 50%; top: 50%; z-index: 1; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%;
-  border: 3px solid rgba(255, 255, 255, 0.25); border-top-color: #fff; animation: ml-spin 0.9s linear infinite; pointer-events: none; }
-.ml-pane.paused.buffering::after { display: none; }
-@keyframes ml-spin { to { transform: rotate(360deg); } }
+/* 버퍼링 표시는 motion.css 의 로고 로더(.ml-buffer) */
 /* 톱니·⋯ 메뉴 */
 .ml-pane-menu { position: absolute; right: 8px; z-index: 6; min-width: 170px; max-height: calc(100% - 60px); overflow-y: auto; padding: 5px; border-radius: 10px;
   background: rgba(24, 25, 28, 0.9); border: 1px solid rgba(255, 255, 255, 0.12); color: #fff; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
