@@ -725,7 +725,7 @@ async fn preflight_answers_204_then_ranged_get_on_same_connection() {
     let port = proxy.start(HOST).await.unwrap();
     let mut s = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
     s.write_all(
-        b"OPTIONS /r/a.m4s HTTP/1.1\r\nHost: x\r\nOrigin: http://localhost\r\nAccess-Control-Request-Method: GET\r\nAccess-Control-Request-Headers: range, x-evil\r\n\r\n",
+        b"OPTIONS /r/a.m4s HTTP/1.1\r\nHost: x\r\nOrigin: tauri://localhost\r\nAccess-Control-Request-Method: GET\r\nAccess-Control-Request-Headers: range, x-evil\r\n\r\n",
     )
     .await
     .unwrap();
@@ -1099,5 +1099,19 @@ async fn supply_gap_is_noted_only_for_segments() {
         proxy.note_segment_request_arrived(far),
         Some(SupplyGapCause::Client)
     );
+    proxy.stop();
+}
+
+#[tokio::test]
+async fn foreign_origin_is_refused() {
+    let mock = spawn_mock(range_handler()).await;
+    let proxy = proxy_for(&mock);
+    let port = proxy.start(HOST).await.unwrap();
+    let mut s = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    s.write_all(b"GET /r/a.m4s HTTP/1.1\r\nHost: x\r\nOrigin: https://evil.example\r\n\r\n")
+        .await
+        .unwrap();
+    let (status, _, _) = read_response(&mut s).await;
+    assert!(status.starts_with("HTTP/1.1 403"), "{status}");
     proxy.stop();
 }
