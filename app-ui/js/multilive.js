@@ -313,6 +313,8 @@ export class MultiLivePage {
     for (const [slot, pane] of this.panes) pane.el.classList.toggle('ml-single-target', this.single === slot);
     for (const [slot, pane] of this.panes) {
       if (!live.has(slot)) {
+        // 닫힌 패인 — 숨기기만 하면 iframe 이 MediaSource 버퍼를 계속 쥔다(모두 닫은 뒤 RSS 3GB대).
+        if (pane.sessionId || !pane.el.hidden) pane.bridge.run('try { stop(); video.removeAttribute("src"); video.load(); } catch (e) {}');
         pane.el.hidden = true;
         pane.sessionId = null;
       }
