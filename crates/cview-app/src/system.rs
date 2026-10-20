@@ -143,7 +143,14 @@ pub fn spawn_live_notifications(app: AppHandle) {
             let services = app.state::<AppServices>();
             let general = services.settings.general();
             let interval = general.auto_refresh_interval.clamp(30.0, 900.0);
-            if !general.notifications_enabled || !services.auth.is_authenticated() {
+            // 이 루프가 주기 갱신을 맡는 동안에는 저장소에 주기를 알려, 화면 진입(사이드바·인사이트·홈)이
+            // 주기의 1.15배 안의 결과를 다시 쓰게 한다 — 주기가 60초를 조금 넘길 때마다 전체 목록(여러 페이지 +
+            // 채널 상세)을 또 받던 것을 막는다(perf/baseline-2.md 대기 중 24요청/분).
+            let polling = general.notifications_enabled && services.auth.is_authenticated();
+            services
+                .following
+                .set_scheduled_cadence(polling.then_some(interval));
+            if !polling {
                 baseline = None;
             } else if let Some(result) = services
                 .following
