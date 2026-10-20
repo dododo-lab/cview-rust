@@ -21,7 +21,11 @@ export async function invoke(command, args = {}) {
 /** 이벤트 구독. 해제 함수를 돌려준다. (Tauri 2 의 전역 listen 은 다른 창으로 보낸 emit_to 도 받는다.) */
 export async function listen(event, handler) {
   if (!isTauri) return () => {};
-  return tauri.event.listen(event, (e) => handler(e.payload));
+  return tauri.event.listen(event, (e) => {
+    // 디버그 로그 수집기가 켜져 있을 때만 있는 계수기(IPC 이벤트 수).
+    if (globalThis.__cviewPerf) globalThis.__cviewPerf.ipc += 1;
+    handler(e.payload);
+  });
 }
 
 /** 이 창으로 보낸 이벤트만 구독 — 플레이어·멀티라이브 명령처럼 창마다 따로인 것(보조 창). */
@@ -124,6 +128,8 @@ export const api = {
   chatSend: (text, session = null) => invoke('chat_send', { text, session }),
 
   appInfo: () => invoke('app_info'),
+  perfLog: (kind, data) => invoke('perf_log', { kind, data }),
+  perfLogStatus: () => invoke('perf_log_status'),
   updateCheck: () => invoke('update_check'),
   windowOpen: (kind, params) => invoke('window_open', { kind, params: params || null }),
   windowCloseSelf: () => invoke('window_close_self'),

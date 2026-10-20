@@ -418,6 +418,7 @@ export class ChatPanel {
       this.list.insertAdjacentHTML('beforeend', '<div class="read-divider"><span>여기까지 읽음</span></div>');
     }
     this.list.insertAdjacentHTML('beforeend', shown.map((m) => lineHtml(m, prefs)).join(''));
+    if (globalThis.__cviewPerf) globalThis.__cviewPerf.chatLines += shown.length;
     this.renderMentionCount();
     for (const fn of this.appendHooks) {
       try { fn(shown); } catch (e) { console.error(e); }

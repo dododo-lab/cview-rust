@@ -122,7 +122,8 @@ export const SCHEMA = [
   ]],
   ['advanced', '성능 · 진단', [
     { d: 'appearance', k: 'maxMemoryMB', label: '메모리 목표(MB)', type: 'range', min: 256, max: 4096, step: 128 },
-    { d: 'appearance', k: 'debugMode', label: '디버그 모드', help: '추가 진단 정보를 남깁니다', type: 'toggle' },
+    { d: 'appearance', k: 'debugMode', label: '디버그 로그', help: '시작 단계·API 요청·CPU/메모리·프레임·채팅·플레이어 지표를 로그 파일에 남깁니다(쿠키·토큰은 가림). 끄면 기록하지 않습니다', type: 'toggle' },
+    { type: 'action', action: 'open-logs', label: '로그 폴더', help: 'debug.jsonl — 10MB 마다 새 파일, 5개까지', button: '로그 폴더 열기' },
   ]],
 ];
 
@@ -158,6 +159,8 @@ function itemHtml(item, values) {
   const search = esc(`${item.label} ${item.help || ''} ${item.k || ''}`.toLowerCase());
   const wrap = (inner) => `<label class="setting${item.adv ? ' adv' : ''}" data-search="${search}">${label}${inner}</label>`;
   switch (item.type) {
+    case 'action':
+      return `<div class="setting" data-search="${search}">${label}<button class="btn" data-setting-action="${esc(item.action)}">${esc(item.button)}</button></div>`;
     case 'toggle':
       return wrap(`<span class="toggle"><input type="checkbox" ${attrs} ${v ? 'checked' : ''}><span></span></span>`);
     case 'select':
@@ -515,6 +518,11 @@ export class SettingsPage {
     const preset = e.target.closest('[data-net-preset]');
     if (preset) {
       try { this.settings = await api.networkPreset(preset.dataset.netPreset); toast(`네트워크: ${preset.textContent}`, 1500); this.render(); } catch (er) { toast(er.message); }
+      return;
+    }
+    const settingAction = e.target.closest('[data-setting-action]');
+    if (settingAction && settingAction.dataset.settingAction === 'open-logs') {
+      api.perfLogStatus().then((s) => api.revealPath(s.file && s.enabled ? s.file : s.dir)).catch((er) => toast(`로그 폴더를 열 수 없습니다 — 디버그 로그를 한 번 켜 주세요 (${er.message || er})`));
       return;
     }
     if (e.target.closest('[data-open-shortcuts]')) { window.dispatchEvent(new CustomEvent('cview:menu', { detail: 'shortcuts' })); return; }

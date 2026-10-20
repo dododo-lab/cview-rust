@@ -26,6 +26,7 @@ import { ChatOnlyPage } from './chat-only.js';
 import { MultiChatPage, multiChatIcon } from './multichat.js';
 import { installPrefsEffects } from './prefs-effects.js';
 import { installBackgroundSaver, setMenuHidden } from './background-saver.js';
+import { installPerfCollector } from './perf-collector.js';
 import { showMenu } from './chat.js';
 import { kbd } from './platform.js';
 
@@ -554,6 +555,7 @@ async function main() {
   bindMultiLiveAddButtons(addToMultiLive);
   installViewerMultiLiveButton();
   installBackgroundSaver();
+  installPerfCollector();
 
   for (const p of Object.values(pages)) {
     const body = p.root.querySelector('.page-body');
