@@ -2,6 +2,7 @@
 // 바인딩은 설정 keyboard 도메인(`{ bindings: [동작, {key, modifiers}, …] }`)에 있다. 수식 키가 있는 바인딩은
 // 메뉴 막대가 가속기로 받고(셸이 메뉴를 다시 만든다), 맨 글자 바인딩은 여기서 시청 화면 키로 받는다.
 import { api } from './api.js';
+import { kbd } from './platform.js';
 
 export const MOD = { cmd: 1, shift: 2, option: 4, control: 8 };
 export const ACTIONS = [
@@ -52,7 +53,7 @@ export function bindingFromEvent(e) {
 export function bindingLabel(b) {
   if (!b || !b.key) return '없음';
   const m = b.modifiers || 0;
-  return `${m & MOD.control ? '⌃' : ''}${m & MOD.option ? '⌥' : ''}${m & MOD.shift ? '⇧' : ''}${m & MOD.cmd ? '⌘' : ''}${KEY_LABELS[b.key] || b.key.toUpperCase()}`;
+  return kbd(`${m & MOD.control ? '⌃' : ''}${m & MOD.option ? '⌥' : ''}${m & MOD.shift ? '⇧' : ''}${m & MOD.cmd ? '⌘' : ''}`) + (KEY_LABELS[b.key] || b.key.toUpperCase());
 }
 
 export function currentBindings() {

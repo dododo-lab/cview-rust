@@ -2,6 +2,7 @@
 import { api } from './api.js';
 import { esc, safeUrl, toast } from './dom.js';
 import { ChatPanel } from './chat.js';
+import { kbd } from './platform.js';
 
 export class ChatOnlyPage {
   constructor(content, { isLoggedIn, onBack, onPlay, session = null, standalone = false }) {
@@ -20,7 +21,7 @@ export class ChatOnlyPage {
         <span class="chatonly-avatar"></span>
         <div class="chatonly-title"><h1 class="page-title ellipsis">채팅</h1><span class="page-subtitle ellipsis"></span></div>
         <div class="grow"></div>
-        ${standalone ? '<button class="btn" data-co="pick">채널 바꾸기</button>' : '<button class="btn ghost" data-co="window" title="이 채팅을 새 창으로 (⇧⌘C)">새 창</button>'}
+        ${standalone ? '<button class="btn" data-co="pick">채널 바꾸기</button>' : `<button class="btn ghost" data-co="window" title="${kbd('이 채팅을 새 창으로 (⇧⌘C)')}">새 창</button>`}
         <button class="btn primary" data-co="play">▶ 영상 보기</button>
       </header>
       <div class="chat-picker" hidden></div>

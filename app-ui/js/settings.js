@@ -11,6 +11,7 @@ import { THEMES, THEME_LABELS, currentTheme, setTheme } from './theme.js';
 import { streamAlertsEnabled, setStreamAlertsEnabled } from './donations.js';
 import { chatPrefs, updateChatPrefs, blockedLabel, loadChatPrefs } from './chat-prefs.js';
 import { DESIGN_STYLES, BACKGROUNDS, READING_WIDTHS } from './chat-extras.js';
+import { kbd } from './platform.js';
 
 const opt = (pairs) => pairs.map(([value, label]) => ({ value, label }));
 
@@ -139,7 +140,7 @@ const CHAT_TOGGLES = [
   ['nicknameColors', '닉네임 색상', '시청자마다 다른 색으로 닉네임을 칠해 구분하기 쉽게 합니다(같은 이름은 늘 같은 색)'],
   ['highlightMentions', '멘션 강조', '나를 부른 메시지를 강조하고 모아 둡니다'],
   ['mentionNotify', '멘션 알림', '앱이 뒤에 있을 때 나를 부르면 시스템 알림을 띄웁니다'],
-  ['autoScroll', '자동 스크롤', '맨 아래를 보고 있을 때 새 메시지를 따라갑니다 (⌘J)'],
+  ['autoScroll', '자동 스크롤', kbd('맨 아래를 보고 있을 때 새 메시지를 따라갑니다 (⌘J)')],
   ['showDonation', '후원·구독 표시', '끄면 채팅에서 후원·구독 카드를 숨깁니다'],
   ['showDonationsOnly', '후원만 보기', '후원·구독 메시지만 보여 줍니다'],
 ];
@@ -322,7 +323,7 @@ export class SettingsPage {
         ${FIXED.has(id) ? `<kbd class="kbd">${esc(fixed)}</kbd>` : `<span class="shortcut-edit"><kbd class="kbd">${esc(bindingLabel(b[id]))}</kbd><button class="btn" data-bind="${id}">바꾸기</button><button class="link-btn" data-bind-reset="${id}">기본값</button></span>`}
       </div>`).join('');
     return `<section class="settings-group" data-g="general"><h3>키보드 단축키</h3>${rows}
-      <div class="setting" data-search="단축키 키보드 목록"><span class="setting-label">전체 단축키 목록<small>메뉴 막대와 ⌘/ 로 볼 수 있습니다 · ⌘ 가 들어간 단축키는 메뉴 막대에도 반영됩니다</small></span><button class="btn" data-open-shortcuts>보기</button></div></section>`;
+      <div class="setting" data-search="단축키 키보드 목록"><span class="setting-label">전체 단축키 목록<small>${kbd('메뉴 막대와 ⌘/ 로 볼 수 있습니다 · ⌘ 가 들어간 단축키는 메뉴 막대에도 반영됩니다')}</small></span><button class="btn" data-open-shortcuts>보기</button></div></section>`;
   }
 
   backupHtml() {

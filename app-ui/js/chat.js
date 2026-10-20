@@ -8,6 +8,7 @@ import { esc, safeUrl, toast } from './dom.js';
 import { DonationRanking, eventCardHtml, eventClasses, EVENT_ICONS } from './donations.js';
 import { installChatExtras } from './chat-extras.js';
 import { nickColorClass } from './nick-color.js';
+import { kbd } from './platform.js';
 import {
   chatPrefs, onChatPrefs, updateChatPrefs, passesFilters, mentionsMe, getMyNickname,
 } from './chat-prefs.js';
@@ -154,7 +155,7 @@ export class ChatPanel {
     header.insertAdjacentHTML('beforeend', `
       <div class="grow"></div>
       <button class="icon-btn chat-hbtn mention-btn" title="나를 부른 메시지" aria-label="멘션">${ICON.at}<span class="mention-count" hidden></span></button>
-      <button class="icon-btn chat-hbtn" data-chat="clear" title="채팅 지우기 (⇧⌘K)" aria-label="채팅 지우기">${ICON.trash}</button>
+      <button class="icon-btn chat-hbtn" data-chat="clear" title="${kbd('채팅 지우기 (⇧⌘K)')}" aria-label="채팅 지우기">${ICON.trash}</button>
       <button class="icon-btn chat-hbtn" data-chat="reconnect" title="다시 연결" aria-label="다시 연결">${ICON.refresh}</button>`);
     header.addEventListener('click', (e) => {
       const b = e.target.closest('[data-chat], .mention-btn');

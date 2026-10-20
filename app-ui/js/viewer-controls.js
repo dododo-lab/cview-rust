@@ -5,6 +5,7 @@
 import { api } from './api.js';
 import { esc, toast } from './dom.js';
 import { matchPlainAction } from './shortcuts.js';
+import { kbd } from './platform.js';
 
 const ICON = {
   play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5-13-7.5Z"/></svg>',
@@ -64,11 +65,11 @@ export class ViewerControls {
         <button class="quality-btn" id="ctl-quality" title="화질" aria-haspopup="menu">자동</button>
         <div class="quality-menu" role="menu" hidden></div>
       </div>
-      <button class="icon-btn" id="ctl-shot" title="스크린샷 (⌘S)" aria-label="스크린샷">${ICON.camera}</button>
+      <button class="icon-btn" id="ctl-shot" title="${kbd('스크린샷 (⌘S)')}" aria-label="스크린샷">${ICON.camera}</button>
       <button class="icon-btn" id="ctl-bookmark" title="북마크" aria-label="북마크">${ICON.bookmark}</button>`);
     root.querySelector('#fullscreen').insertAdjacentHTML('afterend',
-      `<button class="icon-btn" id="ctl-fullscreen-chat" title="영상+채팅 전체화면 (⌃⌘F)" aria-label="영상과 채팅 전체화면">${ICON.chatFull}</button>`);
-    root.querySelector('#fullscreen').title = '영상 전체화면 (⇧⌘F)';
+      `<button class="icon-btn" id="ctl-fullscreen-chat" title="${kbd('영상+채팅 전체화면 (⌃⌘F)')}" aria-label="영상과 채팅 전체화면">${ICON.chatFull}</button>`);
+    root.querySelector('#fullscreen').title = kbd('영상 전체화면 (⇧⌘F)');
 
     this.playButton = root.querySelector('#ctl-play');
     this.liveButton = root.querySelector('#ctl-live');

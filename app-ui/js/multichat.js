@@ -9,6 +9,7 @@ import { eventCardHtml, eventClasses } from './donations.js';
 import { applyChatSkin } from './chat-extras.js';
 import { nickColorClass } from './nick-color.js';
 import { onChatPrefs } from './chat-prefs.js';
+import { kbd } from './platform.js';
 
 export const multiChatIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H8l-4 3V5Z"/><path d="M18 8h1a2 2 0 0 1 2 2v10l-3.5-2.6H11a2 2 0 0 1-2-2V15h5a4 4 0 0 0 4-4V8Z" opacity=".6"/></svg>';
 const COLORS = ['#00c77f', '#5ba3ff', '#ff8a3d', '#c77dff', '#ff5d8f', '#2ec4b6', '#f4c430', '#8d99ae'];
@@ -39,7 +40,7 @@ export class MultiChatPage {
         <h1 class="page-title">멀티채팅</h1>
         <span class="page-subtitle mc-count"></span>
         <div class="grow"></div>
-        <input type="search" class="mc-search" placeholder="메시지 검색 (⌥⌘F)">
+        <input type="search" class="mc-search" placeholder="${kbd('메시지 검색 (⌥⌘F)')}">
         <div class="segmented"><button class="seg" data-mc-layout="tabs">탭</button><button class="seg" data-mc-layout="grid">그리드</button><button class="seg" data-mc-layout="merged">통합</button></div>
         <button class="btn primary" data-mc="add">+ 채널</button>
         <button class="btn ghost" data-mc="close-all">모두 닫기</button>

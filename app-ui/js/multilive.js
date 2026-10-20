@@ -13,6 +13,7 @@ import { StreamAlerts } from './donations.js';
 import { PaneControls, paneControlsHtml, PANE_ICON } from './ml-pane-controls.js';
 import { installChatSplitter } from './splitter.js';
 import { FOCUS_DIRECTIONS, FOCUS_RATIO, focusGrid, ratioFromPointer, clampFocusRatio } from './focus-layout.js';
+import { kbd } from './platform.js';
 
 export const multiLiveIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5Zm9 9a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2v-5ZM14 3h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM5 12h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2Z" opacity=".9"/></svg>';
 
@@ -66,9 +67,9 @@ export class MultiLivePage {
             <span class="ml-tb-sep" aria-hidden="true"></span>
           </div>
           <div class="segmented ml-tb-seg" role="group" aria-label="레이아웃">
-            <button class="seg" data-layout="grid" title="균등 분할 (⌃⌘1)">그리드</button>
-            <button class="seg" data-layout="focus" title="포커스 — 한 방송을 크게 (⌃⌘2)">포커스</button>
-            <button class="seg" data-layout="custom" title="사용자 배치 — 경계를 끌어 크기 조절 (⌃⌘3)">사용자</button>
+            <button class="seg" data-layout="grid" title="${kbd('균등 분할 (⌃⌘1)')}">그리드</button>
+            <button class="seg" data-layout="focus" title="${kbd('포커스 — 한 방송을 크게 (⌃⌘2)')}">포커스</button>
+            <button class="seg" data-layout="custom" title="${kbd('사용자 배치 — 경계를 끌어 크기 조절 (⌃⌘3)')}">사용자</button>
           </div>
           <span class="ml-tb-sep" aria-hidden="true"></span>
           <button class="ml-tb-icon ml-multiaudio" data-ml="multi-audio" title="여러 소리 — 선택하지 않은 패인 소리도 함께 듣기" aria-label="여러 소리" aria-pressed="false">${ICON_SOUND}</button>

@@ -1,3 +1,4 @@
+import { kbd } from './platform.js';
 // 스플래시·부트 진행(SYS-10, 원본 SplashView/BootProgress)과 첫 실행 환영 안내(SYS-11, 원본 WelcomeOverlay).
 const WELCOME_KEY = 'cview.welcomed.v1';
 
@@ -28,7 +29,7 @@ const STEPS = [
   ['👋', 'CView 에 오신 걸 환영해요', '치지직 라이브를 데스크톱 앱으로 편하게 봅니다. 몇 가지만 알려 드릴게요.'],
   ['🔑', '로그인', '네이버로 로그인하면 팔로잉 방송·채팅 참여·알림을 쓸 수 있어요. 비밀번호는 네이버 로그인 창에만 입력됩니다.'],
   ['▦', '멀티라이브 · 멀티채팅', '여러 방송을 한 화면에 띄우고, 여러 채팅을 한곳에서 볼 수 있어요. 카드의 ＋ 버튼이나 ⌘4 로 시작합니다.'],
-  ['⌘', '키보드', '⌘K 명령 팔레트, ⌘F 검색, ⌘⌥1~6 화면 전환, ⌘/ 단축키 목록. 설정에서 단축키를 바꿀 수 있어요.'],
+  ['⌨', '키보드', '⌘K 명령 팔레트, ⌘F 검색, ⌘1~7 메뉴 이동, ⌘/ 단축키 목록. 설정에서 단축키를 바꿀 수 있어요.'],
   ['🔔', '알림 · 메뉴 막대', '팔로잉 방송 시작을 알려 드리고, 메뉴 막대 아이콘에서 방송 중 채널을 바로 열 수 있어요.'],
 ];
 
@@ -42,7 +43,7 @@ export function showWelcome({ force = false, onLogin } = {}) {
     const [icon, title, body] = STEPS[i];
     scrim.innerHTML = `<div class="sheet welcome" role="dialog" aria-modal="true" aria-label="환영 안내">
       <div class="welcome-icon">${icon}</div>
-      <h2>${title}</h2><p>${body}</p>
+      <h2>${title}</h2><p>${kbd(body)}</p>
       <div class="welcome-dots">${STEPS.map((_, k) => `<span class="${k === i ? 'on' : ''}"></span>`).join('')}</div>
       <div class="sheet-actions">
         <button class="btn ghost" data-w="skip">건너뛰기</button>

@@ -27,6 +27,7 @@ import { MultiChatPage, multiChatIcon } from './multichat.js';
 import { installPrefsEffects } from './prefs-effects.js';
 import { installBackgroundSaver, setMenuHidden } from './background-saver.js';
 import { showMenu } from './chat.js';
+import { kbd } from './platform.js';
 
 // 사이드바 — Swift `AppRouter.SidebarItem` 라벨.
 const ROUTES = [
@@ -307,7 +308,7 @@ function installViewerMultiLiveButton() {
   if (!AUX) {
     const pop = document.createElement('button');
     pop.className = 'icon-btn';
-    pop.title = '새 창으로 분리 (⌘N)';
+    pop.title = kbd('새 창으로 분리 (⌘N)');
     pop.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="13" height="13" rx="2"/><path d="M10 4h10v10M20 4l-8 8"/></svg>';
     pop.addEventListener('click', () => MENU_ACTIONS['window-player']());
     button.before(pop);
@@ -366,9 +367,9 @@ function installPalette() {
       { group: '통계', label: '시청 통계', hint: '통계', run: () => navigate('stats') },
       { group: '통계', label: '데이터 관리 · 백업', hint: '저장소', run: () => navigate('stats', { tab: 'data' }) },
       { group: '동작', label: resolvedTheme() === 'dark' ? '라이트 테마로 전환' : '다크 테마로 전환', hint: '테마', run: () => setTheme(resolvedTheme() === 'dark' ? 'light' : 'dark') },
-      { group: '동작', label: '뒤로 가기', hint: '⌘[', run: goBack },
-      { group: '동작', label: '사이드바 접기/펼치기', hint: '⌘\\', run: () => sidebar.toggle() },
-      { group: '동작', label: '현재 화면 새로고침', hint: '⌘R', run: () => pages[current] && (pages[current].acceptsParams ? pages[current].show(currentParams) : pages[current].show(true)) },
+      { group: '동작', label: '뒤로 가기', hint: kbd('⌘['), run: goBack },
+      { group: '동작', label: '사이드바 접기/펼치기', hint: kbd('⌘\\'), run: () => sidebar.toggle() },
+      { group: '동작', label: '현재 화면 새로고침', hint: kbd('⌘R'), run: () => pages[current] && (pages[current].acceptsParams ? pages[current].show(currentParams) : pages[current].show(true)) },
       ...(isLoggedIn() ? [{ group: '동작', label: '로그아웃', hint: '계정', run: logout }] : [{ group: '동작', label: '네이버 로그인', hint: '계정', run: login }]),
     ],
   });
@@ -404,7 +405,7 @@ function showSheet(html, cls = '') {
 
 function showShortcuts() {
   showSheet(`<h2>키보드 단축키</h2><div class="shortcut-cols">${SHORTCUTS.map(([g, list]) => `
-    <section><h3>${g}</h3>${list.map(([k, d]) => `<div class="shortcut-row"><kbd>${k}</kbd><span>${d}</span></div>`).join('')}</section>`).join('')}</div>`, 'wide');
+    <section><h3>${g}</h3>${list.map(([k, d]) => `<div class="shortcut-row"><kbd>${kbd(k)}</kbd><span>${kbd(d)}</span></div>`).join('')}</section>`).join('')}</div>`, 'wide');
 }
 
 /** "0.1.1 (빌드 3)" — 빌드 번호가 없거나 0 이면 버전만. */

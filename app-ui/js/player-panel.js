@@ -4,6 +4,7 @@
 // PLY-10 녹화 시작·중지(MediaRecorder 조각 → Rust 파일). 값은 플레이어 설정에 저장하고 새 재생마다 다시 건다.
 import { api } from './api.js';
 import { esc, toast } from './dom.js';
+import { kbd } from './platform.js';
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
 // macOS WKWebView 는 MSE 영상의 오디오를 Web Audio 그래프로 넘기지 않는다(소스 노드 출력이 0 — 실측).
@@ -36,7 +37,7 @@ export class PlayerPanel {
 
     const reload = viewer.root.querySelector('#reload');
     reload.insertAdjacentHTML('beforebegin', `
-      <button class="icon-btn rec-btn" id="ctl-record" title="녹화 시작 (⌥⌘R)" aria-label="녹화"><span class="rec-dot"></span></button>
+      <button class="icon-btn rec-btn" id="ctl-record" title="${kbd('녹화 시작 (⌥⌘R)')}" aria-label="녹화"><span class="rec-dot"></span></button>
       <button class="icon-btn" id="ctl-panel" title="플레이어 설정" aria-label="플레이어 설정"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>`);
     this.recButton = viewer.root.querySelector('#ctl-record');
     this.el = document.createElement('div');
@@ -262,7 +263,7 @@ export class PlayerPanel {
 
   setRecUi(on) {
     this.recButton.classList.toggle('recording', on);
-    this.recButton.title = on ? '녹화 중지 (⌥⌘R)' : '녹화 시작 (⌥⌘R)';
+    this.recButton.title = kbd(on ? '녹화 중지 (⌥⌘R)' : '녹화 시작 (⌥⌘R)');
     if (!this.el.hidden && this.tab === 'tools') this.render();
   }
 }

@@ -50,11 +50,17 @@ const PLAYBACK: &[Item] = &[
     (
         "fullscreen-chat",
         "영상+채팅 전체화면",
-        Some("CmdOrCtrl+Ctrl+F"),
+        Some(FULLSCREEN_CHAT_ACCEL),
     ),
     ("pip", "화면 속 화면(PiP)", Some("Alt+CmdOrCtrl+P")),
     ("close-viewer", "시청 화면 닫기", Some("CmdOrCtrl+W")),
 ];
+
+/// ⌃⌘F — Windows 에는 ⌘·⌃ 가 따로 없어(CmdOrCtrl+Ctrl = Ctrl+F, 검색과 겹침) Ctrl+Shift+Alt+F.
+#[cfg(target_os = "macos")]
+const FULLSCREEN_CHAT_ACCEL: &str = "Cmd+Ctrl+F";
+#[cfg(not(target_os = "macos"))]
+const FULLSCREEN_CHAT_ACCEL: &str = "Ctrl+Shift+Alt+F";
 
 const CHAT: &[Item] = &[
     ("chat-clear", "채팅 지우기", Some("CmdOrCtrl+Shift+K")),
@@ -117,16 +123,27 @@ pub fn accelerator(b: &KeyBinding) -> Option<String> {
         return None;
     }
     let mut parts: Vec<String> = Vec::new();
-    if b.modifiers.contains(ShortcutModifiers::COMMAND) {
-        parts.push("CmdOrCtrl".into());
-    }
-    if b.modifiers.contains(ShortcutModifiers::CONTROL) {
+    let cmd = b.modifiers.contains(ShortcutModifiers::COMMAND);
+    let ctrl = b.modifiers.contains(ShortcutModifiers::CONTROL);
+    let mut alt = b.modifiers.contains(ShortcutModifiers::OPTION);
+    let mut shift = b.modifiers.contains(ShortcutModifiers::SHIFT);
+    // Windows 에는 ⌘·⌃ 가 따로 없다 — ⌃⌘ 는 화면 규칙과 같게 Ctrl+Shift+Alt 로.
+    if cfg!(not(target_os = "macos")) && cmd && ctrl {
         parts.push("Ctrl".into());
+        alt = true;
+        shift = true;
+    } else {
+        if cmd {
+            parts.push("CmdOrCtrl".into());
+        }
+        if ctrl {
+            parts.push("Ctrl".into());
+        }
     }
-    if b.modifiers.contains(ShortcutModifiers::OPTION) {
+    if alt {
         parts.push("Alt".into());
     }
-    if b.modifiers.contains(ShortcutModifiers::SHIFT) {
+    if shift {
         parts.push("Shift".into());
     }
     let key = match b.key.as_str() {
