@@ -2,7 +2,7 @@
 // NAV-01 헤더·방송 중 배지·정보/다시보기/클립 탭, VOD-05 채널 VOD·클립 탭, DAT-01 메모, DAT-02 즐겨찾기.
 import { api } from './api.js';
 import { esc, safeUrl, toast, channelTone } from './dom.js';
-import { emptyState, loadingState, compactCount } from './cards.js';
+import { emptyState, loadingState, compactCount, errorState } from './cards.js';
 
 const ICON_STAR = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></svg>';
 const ICON_STAR_LINE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></svg>';
@@ -100,7 +100,7 @@ export class ChannelPage {
       this.render();
     } catch (e) {
       if (seq !== this.seq) return;
-      this.body.innerHTML = emptyState('채널 정보를 불러오지 못했습니다', e.message);
+      this.body.innerHTML = errorState('채널 정보를 불러오지 못했습니다', e);
     }
   }
 
@@ -179,7 +179,7 @@ export class ChannelPage {
       box.querySelector('.load-more')?.remove();
       if (page.hasMore) box.insertAdjacentHTML('beforeend', '<button class="btn load-more" data-ch="more">더 보기</button>');
     } catch (e) {
-      if (!append) box.innerHTML = emptyState('불러오지 못했습니다', e.message);
+      if (!append) box.innerHTML = errorState('불러오지 못했습니다', e);
       else toast(e.message);
     }
   }

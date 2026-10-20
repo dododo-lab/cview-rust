@@ -3,7 +3,7 @@
 // NAV-09 즐겨찾기·최근 시청(DB, 지우기), PLY-17 북마크 목록·삭제.
 import { api } from './api.js';
 import { esc, safeUrl, toast } from './dom.js';
-import { emptyState, loadingState } from './cards.js';
+import { emptyState, loadingState, errorState } from './cards.js';
 import { vodCard, clipCard, relativeDate, formatDuration } from './channel.js';
 import { continueCard } from './media.js';
 import { mountDownloads } from './downloads.js';
@@ -150,7 +150,7 @@ export class LibraryPage {
         default: break;
       }
     } catch (e) {
-      html = emptyState('불러오지 못했습니다', e.message);
+      html = errorState('불러오지 못했습니다', e);
     }
     if (seq === this.seq) this.body.innerHTML = html;
   }

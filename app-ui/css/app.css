@@ -2006,3 +2006,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 :root[data-platform="windows"] .content-drag { display: none; }
 :root[data-platform="windows"][data-window] .page, :root[data-platform="windows"][data-window] .viewer { top: 0; }
 :root[data-platform="windows"] .sidebar.collapsed { width: 72px; padding-left: 10px; padding-right: 10px; } /* 신호등이 없으니 접힌 레일을 좁게 */
+
+/* 실패 화면 — 쉬운 안내 + 다시 시도 + 원문 접기 */
+.empty.error .error-actions { display: flex; gap: var(--sp-sm); margin-top: var(--sp-xs); }
+.empty.error .error-detail { max-width: 520px; margin-top: var(--sp-xs); font-size: var(--fs-micro); color: var(--text-tertiary); }
+.empty.error .error-detail summary { cursor: pointer; }
+.empty.error .error-detail code { display: block; margin-top: 6px; white-space: pre-wrap; word-break: break-all; text-align: left; }

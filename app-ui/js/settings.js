@@ -6,7 +6,7 @@
 import { api } from './api.js';
 import { ACTIONS, FIXED, currentBindings, bindingLabel, bindingFromEvent, saveBinding, conflictOf } from './shortcuts.js';
 import { esc, toast } from './dom.js';
-import { emptyState } from './cards.js';
+import { emptyState, errorState } from './cards.js';
 import { THEMES, THEME_LABELS, currentTheme, setTheme } from './theme.js';
 import { streamAlertsEnabled, setStreamAlertsEnabled } from './donations.js';
 import { chatPrefs, updateChatPrefs, blockedLabel, loadChatPrefs } from './chat-prefs.js';
@@ -199,7 +199,7 @@ export class SettingsPage {
     try {
       this.settings = await api.settingsGet();
     } catch (e) {
-      this.body.innerHTML = emptyState('설정을 불러오지 못했습니다', e.message);
+      this.body.innerHTML = errorState('설정을 불러오지 못했습니다', e);
       return;
     }
     this.render();

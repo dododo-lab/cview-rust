@@ -1,7 +1,7 @@
 // 사이드바 화면들 — 팔로잉 / 인기 / 검색 / 설정. 홈은 home.js.
 import { api } from './api.js';
 import { esc, safeUrl } from './dom.js';
-import { liveGrid, channelRow, emptyState, loadingState, compactCount, skeletonGrid, freshnessText } from './cards.js';
+import { liveGrid, channelRow, emptyState, loadingState, compactCount, skeletonGrid, freshnessText, errorState } from './cards.js';
 import { vodCard } from './channel.js';
 
 const loginAction = '<button class="btn primary" data-action="login">로그인</button>';
@@ -60,7 +60,7 @@ export class PopularPage {
       this.loadedAt = Date.now();
       this.render();
     } catch (e) {
-      if (seq === this.seq) this.body.innerHTML = emptyState('불러오지 못했습니다', e.message);
+      if (seq === this.seq) this.body.innerHTML = errorState('불러오지 못했습니다', e);
     }
   }
 
@@ -126,7 +126,7 @@ export class FollowingPage {
       else this.channels = await api.followingChannelsAll(refresh);
       if (seq === this.seq) this.render();
     } catch (e) {
-      if (seq === this.seq) this.body.innerHTML = emptyState('불러오지 못했습니다', e.message);
+      if (seq === this.seq) this.body.innerHTML = errorState('불러오지 못했습니다', e);
     }
   }
 

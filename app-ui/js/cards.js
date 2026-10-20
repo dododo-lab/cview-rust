@@ -48,6 +48,29 @@ export function emptyState(title, detail = '', action = '') {
   return `<div class="empty"><div class="empty-logo" aria-hidden="true"></div><strong>${esc(title)}</strong>${detail ? `<span>${esc(detail)}</span>` : ''}${action}</div>`;
 }
 
+/** 오류를 사람이 읽을 안내로 — 원문은 자세히 보기에 둔다. 순수 함수. */
+export function friendlyError(err) {
+  const raw = String((err && err.message) || err || '');
+  if (/network|연결|timed? ?out|시간 초과|dns|offline|connect/i.test(raw)) return '인터넷 연결을 확인한 뒤 다시 시도해 주세요';
+  if (/401|403|로그인|unauthor|forbidden|인증/i.test(raw)) return '로그인이 필요하거나 접근 권한이 없습니다';
+  if (/429|한도|rate/i.test(raw)) return '요청이 많아 잠시 막혔습니다 — 조금 뒤 다시 시도해 주세요';
+  if (/5\d\d|server|서버/i.test(raw)) return '서버가 응답하지 않습니다 — 잠시 뒤 다시 시도해 주세요';
+  return '잠시 뒤 다시 시도해 주세요';
+}
+
+/**
+ * 실패 화면 — 흐린 로고 + 제목 + 쉬운 안내 + "다시 시도"(app.js 가 현재 화면을 다시 불러온다) + 원문 접기.
+ * `extra` 는 추가 버튼 HTML.
+ */
+export function errorState(title, err, extra = '') {
+  const raw = String((err && err.message) || err || '');
+  return `<div class="empty error"><div class="empty-logo" aria-hidden="true"></div><strong>${esc(title)}</strong>`
+    + `<span>${esc(friendlyError(err))}</span>`
+    + `<div class="error-actions"><button class="btn" data-retry>다시 시도</button>${extra}</div>`
+    + (raw ? `<details class="error-detail"><summary>자세히</summary><code>${esc(raw)}</code></details>` : '')
+    + '</div>';
+}
+
 /** 로딩 — 로고 로더(motion.css) + 문구. */
 export function loadingState(caption = '불러오는 중…') {
   return `<div class="empty loading"><div class="spinner" aria-hidden="true"></div><span class="loading-caption">${esc(caption)}</span></div>`;

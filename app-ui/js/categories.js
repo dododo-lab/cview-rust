@@ -2,7 +2,7 @@
 // 고르면 그 카테고리 라이브만 본다. 자주 보는 카테고리는 고정한다 (NAV-02).
 import { api } from './api.js';
 import { esc, safeUrl } from './dom.js';
-import { liveGrid, emptyState, loadingState, compactCount, skeletonGrid } from './cards.js';
+import { liveGrid, emptyState, loadingState, compactCount, skeletonGrid, errorState } from './cards.js';
 import { categoryGroups, arrangeLives } from './pages.js';
 
 export const categoryIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="8" height="8" rx="2.5"/><rect x="13" y="3" width="8" height="8" rx="2.5" opacity=".6"/><rect x="3" y="13" width="8" height="8" rx="2.5" opacity=".6"/><rect x="13" y="13" width="8" height="8" rx="2.5"/></svg>';
@@ -60,7 +60,7 @@ export class CategoriesPage {
       this.lives = lives;
       this.render();
     } catch (e) {
-      if (seq === this.seq) this.body.innerHTML = emptyState('불러오지 못했습니다', e.message);
+      if (seq === this.seq) this.body.innerHTML = errorState('불러오지 못했습니다', e);
     }
   }
 

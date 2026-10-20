@@ -3,7 +3,7 @@
 // DAT-04 통계 화면, DSN-05 차트·랭킹 바, DAT-06 저장소 상태·정리·백업.
 import { api } from './api.js';
 import { esc, safeUrl, toast } from './dom.js';
-import { emptyState, loadingState } from './cards.js';
+import { emptyState, loadingState, errorState } from './cards.js';
 import { relativeDate } from './channel.js';
 
 export const statsIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>';
@@ -103,7 +103,7 @@ export class StatsPage {
       else if (this.tab === 'time') this.renderTime(d);
       else this.renderHistory(d);
     } catch (e) {
-      if (seq === this.seq) this.body.innerHTML = emptyState('통계를 불러오지 못했습니다', e.message);
+      if (seq === this.seq) this.body.innerHTML = errorState('통계를 불러오지 못했습니다', e);
     }
   }
 

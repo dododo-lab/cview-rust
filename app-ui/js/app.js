@@ -578,6 +578,12 @@ async function main() {
   window.addEventListener('cview:menu', (e) => { const run = MENU_ACTIONS[e.detail]; if (run) run(); });
   window.addEventListener('cview:play', (e) => e.detail && openChannel(e.detail.channelId));
   window.addEventListener('cview:ml-watch', (e) => e.detail && enterWatch(e.detail.sessionId));
+  // 실패 화면의 "다시 시도" — 지금 화면을 다시 불러온다.
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('[data-retry]')) return;
+    const page = pages[current];
+    if (page) page.acceptsParams ? page.show(currentParams) : page.show(true);
+  });
   listen(Events.multiLiveState, () => setTimeout(() => {
     syncLiveIndicators();
     // 라이브 무대의 채널이 닫혔으면 멀티라이브(남은 패인이 있으면) 또는 이전 화면으로.

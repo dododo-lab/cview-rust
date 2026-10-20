@@ -4,7 +4,7 @@
 // 쓴다. 클립은 원본처럼 치지직 임베드 페이지가 주 경로다(대부분 ABR_HLS 라 인키 재생이 막힌다).
 import { api } from './api.js';
 import { esc, safeUrl, toast } from './dom.js';
-import { emptyState, loadingState, compactCount } from './cards.js';
+import { emptyState, loadingState, compactCount, errorState } from './cards.js';
 import { formatDuration, relativeDate, clipCard } from './channel.js';
 import { startDownload } from './downloads.js';
 
@@ -47,7 +47,7 @@ export class MediaPage {
       if (params.kind === 'vod') await this.openVod(Number(params.id), seq);
       else if (params.kind === 'clip') await this.openClip(String(params.id), seq);
     } catch (e) {
-      if (seq === this.seq) this.body.innerHTML = emptyState('재생할 수 없습니다', e.message, '<button class="btn" data-media="back">뒤로</button>');
+      if (seq === this.seq) this.body.innerHTML = errorState('재생할 수 없습니다', e, '<button class="btn" data-media="back">뒤로</button>');
     }
   }
 
