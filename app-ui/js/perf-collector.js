@@ -1,5 +1,5 @@
 // 디버그 로그 화면 수집기 — 설정 "디버그 로그"가 켜져 있을 때만 돈다(꺼지면 rAF·타이머를 모두 멈춘다).
-// 10초마다 Rust perf_log 로 보낸다: 프레임 시간(p50/p95/최대, 50ms 넘은 긴 프레임 수), DOM 요소 수,
+// 10초마다 Rust perf_log 로 보낸다: 프레임 시간(10초 중 1초 표본의 p50/p95/최대, 50ms 넘은 긴 프레임 수), DOM 요소 수,
 // IPC 이벤트·채팅 렌더 줄 수, 재생 중인 영상마다 해상도·화질 단계·버퍼·라이브 지연·떨어진 프레임·버퍼링 횟수와 시간.
 // 시작 표시(조작 가능 시점)와 재생 요청 → 첫 라이브 프레임도 한 번씩 남긴다.
 import { api, listen } from './api.js';
@@ -12,10 +12,22 @@ let lastFrame = 0;
 let frames = [];
 let sentStartup = false;
 
+// 프레임은 10초마다 1초만 잰다 — 매 프레임 rAF 를 계속 돌리면 그 자체가 렌더러를 깨워 CPU 를 쓴다.
+const SAMPLE_MS = 1000;
+let sampleUntil = 0;
+
 function frameLoop(t) {
   if (!on) return;
   if (lastFrame && !document.hidden) frames.push(t - lastFrame);
   lastFrame = t;
+  if (t < sampleUntil) raf = requestAnimationFrame(frameLoop);
+  else lastFrame = 0;
+}
+
+function sampleFrames() {
+  if (!on || document.hidden) return;
+  sampleUntil = performance.now() + SAMPLE_MS;
+  lastFrame = 0;
   raf = requestAnimationFrame(frameLoop);
 }
 
@@ -111,6 +123,7 @@ function flush() {
   }).catch(() => {});
   if (perf) { perf.ipc = 0; perf.chatLines = 0; }
   frames = [];
+  sampleFrames();
   const players = playerStats();
   if (players.length) api.perfLog('player', { players }).catch(() => {});
 }
@@ -138,7 +151,7 @@ function start() {
   globalThis.__cviewPerf = { ipc: 0, chatLines: 0 };
   lastFrame = 0;
   frames = [];
-  raf = requestAnimationFrame(frameLoop);
+  sampleFrames();
   timer = setInterval(flush, FLUSH_MS);
   sendStartupOnce();
 }

@@ -246,34 +246,52 @@ fn rotate(path: &Path) {
 
 /// 10초 표본 — 앱과 웹뷰 도우미(이 앱 뒤에 시작된 WebKit/WebView2 프로세스)의 CPU·메모리·스레드, 채팅 처리량.
 fn sampler_loop() {
-    use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+    use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, System};
     let mut sys = System::new();
     let me = Pid::from_u32(std::process::id());
-    let refresh = ProcessRefreshKind::nothing()
+    // 이름·시작 시각은 PID 찾기에만 — 10초 표본은 찾아 둔 몇 개 프로세스의 CPU·메모리만 다시 읽는다
+    // (시스템 전체 목록을 10초마다 새로 읽으면 그것만으로 앱 CPU 가 몇 % 올랐다).
+    let find_kind = ProcessRefreshKind::nothing();
+    let sample_kind = ProcessRefreshKind::nothing()
         .with_cpu()
         .with_memory()
-        .with_exe(UpdateKind::OnlyIfNotSet);
-    sys.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh);
-    let my_start = sys.process(me).map(|p| p.start_time()).unwrap_or(0);
+        .with_tasks();
+    let mut watched: Vec<Pid> = vec![me];
+    let mut my_start = 0;
+    let mut tick: u64 = 0;
     loop {
         std::thread::sleep(SAMPLE_EVERY);
         if !enabled() {
             continue;
         }
-        sys.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh);
+        // 60초마다(처음 포함) 도우미 PID 를 다시 찾는다 — 웹뷰가 프로세스를 새로 띄울 수 있다.
+        if tick.is_multiple_of(6) {
+            sys.refresh_processes_specifics(ProcessesToUpdate::All, true, find_kind);
+            if my_start == 0 {
+                my_start = sys.process(me).map(|p| p.start_time()).unwrap_or(0);
+            }
+            watched = sys
+                .processes()
+                .iter()
+                .filter(|(pid, p)| {
+                    let name = p.name().to_string_lossy();
+                    **pid == me
+                        || ((name.contains("WebKit") || name.contains("msedgewebview2"))
+                            && p.start_time() + 2 >= my_start)
+                })
+                .map(|(pid, _)| *pid)
+                .collect();
+        }
+        tick += 1;
+        sys.refresh_processes_specifics(ProcessesToUpdate::Some(&watched), true, sample_kind);
         let mut procs = Vec::new();
         let (mut cpu, mut rss) = (0.0f64, 0u64);
-        for (pid, p) in sys.processes() {
-            let name = p.name().to_string_lossy();
-            let helper = (name.contains("WebKit") || name.contains("msedgewebview2"))
-                && p.start_time() + 2 >= my_start;
-            if *pid != me && !helper {
-                continue;
-            }
+        for pid in &watched {
+            let Some(p) = sys.process(*pid) else { continue };
             cpu += f64::from(p.cpu_usage());
             rss += p.memory();
             procs.push(json!({
-                "name": name,
+                "name": p.name().to_string_lossy(),
                 "pid": pid.as_u32(),
                 "cpu": round1(f64::from(p.cpu_usage())),
                 "rss_mb": round1(p.memory() as f64 / 1_048_576.0),
