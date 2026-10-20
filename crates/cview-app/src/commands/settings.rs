@@ -334,6 +334,8 @@ pub async fn appearance_set_theme(
 pub struct AppInfoDto {
     pub name: String,
     pub version: String,
+    /// 빌드 번호(CFBundleVersion).
+    pub build: String,
     pub data_dir: String,
     pub os: String,
     pub arch: String,
@@ -346,6 +348,14 @@ pub async fn app_info(app: tauri::AppHandle) -> CmdResult<AppInfoDto> {
     Ok(AppInfoDto {
         name: info.name.clone(),
         version: info.version.to_string(),
+        // 빌드 번호(CFBundleVersion) — tauri.conf.json bundle.macOS.bundleVersion, 배포 빌드마다 +1.
+        build: app
+            .config()
+            .bundle
+            .macos
+            .bundle_version
+            .clone()
+            .unwrap_or_default(),
         data_dir: app
             .path()
             .app_data_dir()

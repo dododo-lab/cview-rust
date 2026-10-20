@@ -9,21 +9,99 @@
 #     APPLE_API_ISSUER · APPLE_API_KEY · APPLE_API_KEY_PATH   (App Store Connect API 키, 권장)
 #     APPLE_ID · APPLE_PASSWORD(앱 암호) · APPLE_TEAM_ID
 #
-# 사용: scripts/release-macos.sh [--dmg]   (DMG 는 서명해 dist/CView_<버전>_arm64.dmg 로 복사)
+# 사용: scripts/release-macos.sh [--dmg [--minor|--major]]
+#   --dmg 없이: 로컬 서명 빌드만(버전 그대로).
+#   --dmg     : 배포 빌드 — 버전과 빌드 번호를 **항상** 올린다(아래 "배포 빌드 순서").
 #   공증: CVIEW_NOTARIZE_PROFILE=cview-notarize scripts/release-macos.sh --dmg  (notarytool 프로파일이 있을 때)
+#
+# 버전의 기준은 하나다: crates/cview-app/tauri.conf.json
+#   "version"                    → CFBundleShortVersionString · 앱 정보 · 업데이트 비교 (Cargo 작업공간 버전도 같게 맞춘다)
+#   "bundle.macOS.bundleVersion" → CFBundleVersion(빌드 번호, 단조 증가 정수)
+#
+# 배포 빌드 순서(--dmg) — 반쯤 올린 상태가 남지 않게:
+#   1) 작업 트리가 깨끗해야 한다(되돌리기가 안전하도록).
+#   2) 검사(fmt · clippy -D warnings · 전체 테스트 · node --check)를 **올리기 전에** 통과해야 한다.
+#   3) 버전 patch+1(--minor/--major 면 그 자리 +1, 아래 자리 0)·빌드 번호 +1.
+#   4) 빌드 → DMG 서명 → 공증(Accepted 확인) → 스테이플 → 확인.
+#      여기서 하나라도 실패하면 올린 파일을 git 으로 되돌리고 끝낸다(trap).
+#   5) 성공하면 "release: vX.Y.Z (build N)" 커밋과 주석 태그 vX.Y.Z 를 만들고, origin 이 있으면 푸시한다.
+#      공증 프로파일 없이(서명만) 돌리면 4)의 서명 DMG 까지만 만들고 번호는 되돌린다 — 공증 안 된 DMG 에 번호를 쓰지 않는다.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+CONF=crates/cview-app/tauri.conf.json
+dist_build=0
+part=patch
+for arg in "$@"; do
+  case "$arg" in
+    --dmg) dist_build=1 ;;
+    --minor) part=minor ;;
+    --major) part=major ;;
+    *) echo "알 수 없는 옵션: $arg"; exit 2 ;;
+  esac
+done
 bundles="app"
-[[ "${1:-}" == "--dmg" ]] && bundles="app,dmg"
+(( dist_build )) && bundles="app,dmg"
 
-identity="${APPLE_SIGNING_IDENTITY:-$(python3 -c 'import json;print(json.load(open("crates/cview-app/tauri.conf.json"))["bundle"]["macOS"].get("signingIdentity") or "")')}"
+identity="${APPLE_SIGNING_IDENTITY:-$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["bundle"]["macOS"].get("signingIdentity") or "")' "$CONF")}"
 if [[ -z "$identity" ]] || ! security find-identity -v -p codesigning | grep -qF "$identity"; then
   echo "✗ 서명 인증서를 찾지 못했습니다: '$identity' — 키체인에 Developer ID 인증서가 있어야 합니다."; exit 1
 fi
 echo "서명 인증서: $identity"
-if [[ -z "${APPLE_API_KEY:-}${APPLE_ID:-}" ]]; then
+if [[ -z "${APPLE_API_KEY:-}${APPLE_ID:-}${CVIEW_NOTARIZE_PROFILE:-}" ]]; then
   echo "⚠︎ 공증 자격 증명이 없어 서명만 하고 공증은 건너뜁니다."
+fi
+
+BUMPED_FILES=($CONF Cargo.toml Cargo.lock)
+bumped=0
+revert_bump() {
+  if (( bumped )); then
+    echo "↩︎ 배포 빌드가 끝나지 않아 버전·빌드 번호를 되돌립니다."
+    git checkout -- $BUMPED_FILES
+    bumped=0
+  fi
+}
+
+if (( dist_build )); then
+  if [[ -n "$(git status --porcelain)" ]]; then
+    echo "✗ 작업 트리가 깨끗하지 않습니다 — 배포 빌드는 커밋된 코드로만 만듭니다."; git status --short; exit 1
+  fi
+  echo "── 검사(올리기 전에)"
+  cargo fmt --all --check
+  cargo clippy --workspace --all-targets -q -- -D warnings
+  cargo test --workspace -q 2>&1 | grep -E "^test result|FAILED|panicked" \
+    | awk '{p+=$4; f+=$6} /FAILED|panicked/ {print} END {print "   테스트 통과", p, "실패", f; exit (f > 0)}'
+  for f in app-ui/js/*.js; do node --check "$f"; done
+  echo "── 버전·빌드 번호 올리기($part)"
+  trap revert_bump EXIT INT TERM
+  bumped=1
+  read -r version build < <(python3 - "$CONF" "$part" <<'PY'
+import json, re, sys
+conf, part = sys.argv[1], sys.argv[2]
+d = json.load(open(conf))
+major, minor, patch = (int(x) for x in d["version"].split("."))
+if part == "major": major, minor, patch = major + 1, 0, 0
+elif part == "minor": minor, patch = minor + 1, 0
+else: patch += 1
+version = f"{major}.{minor}.{patch}"
+try: build = int(d["bundle"]["macOS"].get("bundleVersion") or 0) + 1
+except ValueError: build = 1
+# 들여쓰기·키 순서를 그대로 두려고 텍스트에서 바꾼다.
+s = open(conf).read()
+s = re.sub(r'("version":\s*")[^"]+(")', rf'\g<1>{version}\2', s, count=1)
+s = re.sub(r'("bundleVersion":\s*")[^"]*(")', rf'\g<1>{build}\2', s, count=1)
+assert json.loads(s)["version"] == version and json.loads(s)["bundle"]["macOS"]["bundleVersion"] == str(build)
+open(conf, "w").write(s)
+c = open("Cargo.toml").read()
+c2 = re.sub(r'(\[workspace\.package\][^\[]*?\nversion\s*=\s*")[^"]+(")', rf'\g<1>{version}\2', c, count=1, flags=re.S)
+assert c2 != c, "Cargo.toml 작업공간 버전을 찾지 못했습니다"
+open("Cargo.toml", "w").write(c2)
+print(version, build)
+PY
+)
+  echo "   → v$version (빌드 $build)"
+  # 예전 DMG 를 다시 쓰지 않게 지운다.
+  rm -f target/release/bundle/dmg/*.dmg(N) dist/CView_${version}_arm64.dmg(N)
 fi
 
 (cd crates/cview-app && cargo tauri build --bundles "$bundles")
@@ -33,28 +111,52 @@ app="target/release/bundle/macos/CView.app"
 echo "── 산출물"
 ls -la "$app/Contents/MacOS"
 lipo -info "$app/Contents/MacOS/"* || true
-if true; then
-  echo "── 서명 확인"
-  codesign --verify --deep --strict --verbose=2 "$app"
-  codesign -dv --verbose=2 "$app" 2>&1 | grep -E "Authority|TeamIdentifier|Runtime" || true
-  echo "── Gatekeeper 평가"
-  spctl -a -vvv -t exec "$app" || echo "(공증 전이면 거부될 수 있습니다)"
-  xcrun stapler validate "$app" || true
-fi
-# DMG 는 --dmg 로 만들었을 때만 — 예전 빌드에 남은 DMG 를 다시 서명·복사하지 않게. (N): 없으면 빈 목록(zsh).
-dmg=""
-[[ "$bundles" == *dmg* ]] && dmg=$(ls -t target/release/bundle/dmg/*.dmg(N) 2>/dev/null | head -1 || true)
-if [[ -n "$dmg" ]]; then
-  echo "── DMG 서명·복사"
+echo "   CFBundleShortVersionString $(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist")"
+echo "   CFBundleVersion $(plutil -extract CFBundleVersion raw "$app/Contents/Info.plist")"
+echo "── 서명 확인"
+codesign --verify --deep --strict --verbose=2 "$app"
+codesign -dv --verbose=2 "$app" 2>&1 | grep -E "Authority|TeamIdentifier|Runtime" || true
+echo "── Gatekeeper 평가"
+spctl -a -vvv -t exec "$app" || echo "(공증 전이면 거부될 수 있습니다)"
+xcrun stapler validate "$app" || true
+
+if (( dist_build )); then
+  dmg=$(ls -t target/release/bundle/dmg/*.dmg(N) 2>/dev/null | head -1 || true)
+  [[ -n "$dmg" ]] || { echo "✗ DMG 를 찾지 못했습니다"; exit 1; }
+  out="dist/CView_${version}_arm64.dmg"
+  echo "── DMG 서명·복사 → $out"
   codesign --force --timestamp --sign "$identity" "$dmg"
-  version=$(python3 -c 'import json;print(json.load(open("crates/cview-app/tauri.conf.json"))["version"])')
-  mkdir -p dist && cp "$dmg" "dist/CView_${version}_arm64.dmg"
-  if [[ -n "${CVIEW_NOTARIZE_PROFILE:-}" ]]; then
-    echo "── 공증(프로파일 $CVIEW_NOTARIZE_PROFILE)"
-    xcrun notarytool submit "dist/CView_${version}_arm64.dmg" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --wait
-    xcrun stapler staple "dist/CView_${version}_arm64.dmg"
+  mkdir -p dist && cp "$dmg" "$out"
+  if [[ -z "${CVIEW_NOTARIZE_PROFILE:-}" ]]; then
+    echo "⚠︎ 공증 프로파일이 없어 서명만 한 DMG 입니다(배포용 아님) — 번호는 되돌립니다: $out"
+    exit 0
   fi
-  spctl -a -vv -t install "dist/CView_${version}_arm64.dmg" || echo "(공증 전이면 거부됩니다)"
-  shasum -a 256 "dist/CView_${version}_arm64.dmg"
+  echo "── 공증(프로파일 $CVIEW_NOTARIZE_PROFILE)"
+  # notarytool 은 결과가 Invalid 여도 0 으로 끝나므로 상태를 직접 확인한다.
+  result=$(xcrun notarytool submit "$out" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --wait --output-format json)
+  echo "$result"
+  sub_status=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("status",""))' "$result")
+  sub_id=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("id",""))' "$result")
+  if [[ "$sub_status" != "Accepted" ]]; then
+    echo "✗ 공증 결과: $sub_status — 로그:"
+    xcrun notarytool log "$sub_id" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" || true
+    exit 1
+  fi
+  xcrun stapler staple "$out"
+  xcrun stapler validate "$out"
+  spctl -a -vv -t install "$out"
+  shasum -a 256 "$out"
+  stat -f "   %z bytes" "$out"
+  echo "── 커밋·태그 v$version (빌드 $build)"
+  git add $BUMPED_FILES
+  git commit -q -m "release: v$version (build $build)" -m "공증 제출 $sub_id — Accepted. dist/CView_${version}_arm64.dmg"
+  git tag -a "v$version" -m "CView v$version (build $build)"
+  bumped=0
+  trap - EXIT INT TERM
+  if git remote get-url origin >/dev/null 2>&1; then
+    git push -q origin HEAD
+    git push -q origin "v$version"
+    echo "   푸시: $(git rev-parse --short HEAD) + 태그 v$version"
+  fi
 fi
 echo "완료: $app"

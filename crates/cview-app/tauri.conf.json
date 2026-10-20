@@ -45,6 +45,7 @@
     "shortDescription": "치지직 라이브 데스크톱 뷰어",
     "macOS": {
       "minimumSystemVersion": "13.0",
+      "bundleVersion": "0",
       "hardenedRuntime": true,
       "entitlements": "Entitlements.plist",
       "signingIdentity": "Developer ID Application: Kim Sun Dong (MZ8NB937SB)",

@@ -203,7 +203,7 @@ const PROVIDERS = {
   },
   async settings({ isLoggedIn }) {
     const [info, health, auth] = await Promise.all([safe(api.appInfo(), null), safe(api.dataHealth(), null), safe(api.authStatus(), null)]);
-    return header('앱 상태', info ? `CView ${info.version}` : 'CView')
+    return header('앱 상태', info ? `CView ${info.version}${info.build && info.build !== '0' ? ` (${info.build})` : ''}` : 'CView')
       + tiles([[info ? info.version : '—', '버전'], [auth && auth.loggedIn ? '로그인' : '로그아웃', '계정'], [health ? bytesText(health.storeBytes) : '—', '저장소'], [health ? `${health.backups.length}개` : '—', '백업']])
       + section('gear', '환경', info ? rows([['운영체제', `${info.os} · ${info.arch}`], ['계정', auth && auth.loggedIn ? (auth.nickname || '로그인됨') : (isLoggedIn() ? '로그인됨' : '로그인 안 됨')], ['남은 디스크', health && health.freeBytes != null ? bytesText(health.freeBytes) : '—']]) : '')
       + section('box', '저장된 항목', health ? bars(health.tables.filter((t) => t.rows > 0).slice(0, 5).map((t) => ({ name: t.label, value: t.rows })), (v) => `${v}`) : '');

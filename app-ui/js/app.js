@@ -409,12 +409,17 @@ function showShortcuts() {
     <section><h3>${g}</h3>${list.map(([k, d]) => `<div class="shortcut-row"><kbd>${k}</kbd><span>${d}</span></div>`).join('')}</section>`).join('')}</div>`, 'wide');
 }
 
+/** "0.1.1 (빌드 3)" — 빌드 번호가 없거나 0 이면 버전만. */
+function versionText(info) {
+  return info.build && info.build !== '0' ? `${info.version} (빌드 ${info.build})` : info.version;
+}
+
 async function showAbout() {
   let info = null;
   try { info = await api.appInfo(); } catch { /* 앱 밖 */ }
   showSheet(`<div class="about"><span class="brand-mark big"><img class="app-logo logo-light" src="img/logo-light.png" alt=""><img class="app-logo logo-dark" src="img/logo-dark.png" alt=""></span><h2>CView</h2>
     <p>치지직 라이브·채팅 데스크톱 앱 (Rust/Tauri 포팅판)</p>
-    <p class="muted">버전 ${info ? info.version : '-'} · ${info ? `${info.os} ${info.arch}` : ''}</p>
+    <p class="muted">버전 ${info ? versionText(info) : '-'} · ${info ? `${info.os} ${info.arch}` : ''}</p>
     <p class="muted small">재생: hls.js (Apache-2.0) · 셸: Tauri (MIT/Apache-2.0)</p></div>`);
 }
 
