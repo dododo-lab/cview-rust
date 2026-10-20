@@ -31,7 +31,7 @@ export function renderContent(content, emojis, showEmoji = true) {
       const m = /^\{:([^{}:]+):\}$/.exec(part);
       const url = m && safeUrl(map[m[1]]);
       if (!url) return esc(part);
-      return showEmoji ? `<img class="emoji" src="${esc(url)}" alt="${esc(m[1])}" referrerpolicy="no-referrer">` : `<span class="emoji-text">:${esc(m[1])}:</span>`;
+      return showEmoji ? `<img decoding="async" class="emoji" src="${esc(url)}" alt="${esc(m[1])}" referrerpolicy="no-referrer">` : `<span class="emoji-text">:${esc(m[1])}:</span>`;
     })
     .join('');
 }
@@ -54,7 +54,7 @@ function lineHtml(m, prefs) {
   const badges = (m.badges || [])
     .map((u) => safeUrl(u))
     .filter(Boolean)
-    .map((u) => `<img class="badge" src="${esc(u)}" alt="" referrerpolicy="no-referrer">`)
+    .map((u) => `<img decoding="async" class="badge" src="${esc(u)}" alt="" referrerpolicy="no-referrer">`)
     .join('');
   const style = m.titleColor && /^#[0-9a-f]{3,8}$/i.test(m.titleColor) ? ` style="color:${m.titleColor}"` : '';
   if (m.kind === 'system') {

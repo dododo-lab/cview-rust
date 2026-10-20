@@ -76,7 +76,7 @@ function heroSlide(live, source) {
   return `
     <article class="hero-main card" tabindex="0" ${channelData(live)}>
       <div class="hero-media">
-        ${thumb ? `<img src="${esc(thumb)}" alt="" referrerpolicy="no-referrer">` : ''}
+        ${thumb ? `<img loading="lazy" decoding="async" src="${esc(thumb)}" alt="" referrerpolicy="no-referrer">` : ''}
       </div>
       <div class="hero-shade"></div>
       <div class="hero-info">

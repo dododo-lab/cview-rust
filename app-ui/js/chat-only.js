@@ -56,7 +56,7 @@ export class ChatOnlyPage {
     try { lives = this.isLoggedIn() ? await api.followingLives(false) : await api.popularLives(30, false); } catch (e) { toast(e.message); }
     box.innerHTML = `<h3 class="section-title">채팅을 볼 채널</h3><div class="picker-list">${lives.map((l) => {
       const a = safeUrl(l.channelImageUrl);
-      return `<button class="picker-row" data-co="pick-channel" data-channel-id="${esc(l.channelId)}">${a ? `<img class="avatar" src="${esc(a)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}<span class="ellipsis"><b>${esc(l.channelName)}</b> ${esc(l.categoryName || '')}</span><small>${esc(l.viewerCountText)}</small></button>`;
+      return `<button class="picker-row" data-co="pick-channel" data-channel-id="${esc(l.channelId)}">${a ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(a)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}<span class="ellipsis"><b>${esc(l.channelName)}</b> ${esc(l.categoryName || '')}</span><small>${esc(l.viewerCountText)}</small></button>`;
     }).join('') || '<p class="muted">방송 중인 채널이 없습니다</p>'}</div>`;
   }
 
@@ -70,7 +70,7 @@ export class ChatOnlyPage {
       const live = await api.liveDetail(params.channelId, true);
       if (seq !== this.seq) return;
       const avatar = safeUrl(live.channelImageUrl);
-      this.root.querySelector('.chatonly-avatar').innerHTML = avatar ? `<img class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '';
+      this.root.querySelector('.chatonly-avatar').innerHTML = avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '';
       this.root.querySelector('.chatonly-title .page-title').textContent = live.channelName || '채팅';
       this.root.querySelector('.chatonly-title .page-subtitle').textContent = live.isLive ? `${live.liveTitle || ''} · ${live.viewerCountText}명 시청 중` : '방송 중이 아닙니다';
       await this.chat.connect(live.chatChannelId, live.channelId);

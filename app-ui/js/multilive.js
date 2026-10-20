@@ -350,7 +350,7 @@ export class MultiLivePage {
     if (viewers) viewers.textContent = s.viewerCountText ? `${s.viewerCountText}명` : '';
     const avatar = safeUrl(s.profileImageUrl);
     el.querySelector('.ml-pane-avatar').innerHTML = avatar
-      ? `<img src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '';
+      ? `<img loading="lazy" decoding="async" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '';
     el.querySelector('.ml-pane-cap').textContent = s.maxHeightCap > 0 ? `≤${s.maxHeightCap}p` : '';
     const kind = s.state && s.state.kind;
     const text = kind === 'error' ? (s.state.message || '재생 오류') : (STATE_TEXT[kind] ?? '');

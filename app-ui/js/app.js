@@ -639,19 +639,16 @@ async function main() {
   listen(Events.loginFailed, (p) => p && p.message && toast(p.message));
 
   renderAccount();
-  splashStep('계정 확인', 0.55);
-  if (!isTauri) {
-    toast('CView 앱(cargo run -p cview-app) 안에서 실행해야 데이터가 표시됩니다', 6000);
-  } else {
-    try {
-      onAuthChanged(await api.authStatus());
-    } catch { /* 상태 이벤트를 기다린다 */ }
-  }
-  let settings = null;
-  splashStep('설정 불러오기', 0.8);
-  try { settings = await api.settingsGet(); } catch { /* 기본값 */ }
+  splashStep('계정·설정 확인', 0.55);
+  if (!isTauri) toast('CView 앱(cargo run -p cview-app) 안에서 실행해야 데이터가 표시됩니다', 6000);
+  // 계정 상태와 설정은 서로 기다릴 필요가 없어 함께 부른다(예전엔 차례로 기다렸다).
+  const [authRes, settingsRes] = await Promise.allSettled(isTauri ? [api.authStatus(), api.settingsGet()] : []);
+  if (authRes && authRes.status === 'fulfilled') onAuthChanged(authRes.value);
+  const settings = settingsRes && settingsRes.status === 'fulfilled' ? settingsRes.value : null;
   syncTheme(settings && settings.appearance && settings.appearance.theme);
-  setTimeout(() => { hideSplash(); if (!AUX) showWelcome({ onLogin: login }); }, 120);
+  // 스플래시는 hideSplash 가 최소 0.4초를 지킨다 — 따로 더 기다리지 않는다.
+  hideSplash();
+  if (!AUX) showWelcome({ onLogin: login });
   if (AUX) { openAuxWindow(); return; }
   // 작업 공간 복원 (NAV-16) — "실행 시 창 복원"이 켜져 있으면 마지막 화면으로. 방송은 자동 재생하지 않고 묻는다.
   const ws = settings?.general?.restoreWindowOnLaunch !== false ? loadWorkspace() : null;

@@ -163,7 +163,7 @@ export class DonationRanking {
         const avatar = safeUrl(r.profileImageUrl);
         return `<span class="rank-chip ${r.rank === 1 ? 'top1' : ''}" title="${esc(r.nickname)} · ${esc(formatCheese(r.amount))}">
           <span class="rank-no">${esc(r.rank)}</span>
-          ${avatar ? `<img class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}
+          ${avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}
           <span class="rank-name">${esc(r.nickname)}</span>
           <span class="rank-amount">${esc((r.amount || 0).toLocaleString('ko-KR'))}</span>
         </span>`;

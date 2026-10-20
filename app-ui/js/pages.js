@@ -177,7 +177,7 @@ export function followingInsights(lives, shown, now = Date.now()) {
 function denseRow(l) {
   const avatar = safeUrl(l.channelImageUrl);
   return `<div class="dense-row card" tabindex="0" data-channel-id="${esc(l.channelId)}" data-channel-name="${esc(l.channelName)}" data-channel-image="${esc(avatar)}">
-    <span class="card-avatar" data-open-channel>${avatar ? `<img class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}</span>
+    <span class="card-avatar" data-open-channel>${avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}</span>
     <span class="dense-name ellipsis"><b>${esc(l.channelName)}</b> <span>${esc(l.categoryName || '')}</span></span>
     <span class="dense-title ellipsis">${esc(l.liveTitle || '')}</span>
     <span class="dense-viewers"><i class="dot"></i>${esc(l.viewerCountText)}</span>
@@ -187,7 +187,7 @@ function denseRow(l) {
 function followedRow(c) {
   const avatar = safeUrl(c.channelImageUrl);
   return `<div class="dense-row${c.isLive ? ' card' : ''}" tabindex="0" ${c.isLive ? `data-channel-id="${esc(c.channelId)}"` : `data-open-channel-id="${esc(c.channelId)}"`}>
-    <span class="card-avatar" ${c.isLive ? 'data-open-channel' : ''}>${avatar ? `<img class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}</span>
+    <span class="card-avatar" ${c.isLive ? 'data-open-channel' : ''}>${avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}</span>
     <span class="dense-name ellipsis"><b>${esc(c.channelName)}</b> <span>${c.isLive ? esc(c.categoryName || '방송 중') : '오프라인'}</span></span>
     <span class="dense-title ellipsis">${esc(c.liveTitle || '')}</span>
     ${c.isLive ? `<span class="dense-viewers"><i class="dot"></i>${esc(compactCount(c.viewerCount || 0))}</span>` : '<span class="dense-viewers off">채널 보기</span>'}
@@ -265,7 +265,7 @@ export class SearchPage {
       ${d.cats.length ? `<div class="section-head"><h2 class="section-title">지금 많이 보는 카테고리</h2></div>
         <div class="chips">${d.cats.map((c) => `<button class="chip" data-discover-cat="${esc(c.name)}">${esc(c.name)} <span class="chip-count">${compactCount(c.viewers)}</span></button>`).join('')}</div>` : ''}
       ${d.top.length ? `<div class="section-head"><h2 class="section-title">인기 채널</h2></div>
-        <div class="discover-rail">${d.top.map((l) => { const a = safeUrl(l.channelImageUrl); return `<button class="discover-item" data-recent="${esc(l.channelName)}" title="${esc(l.liveTitle || '')}">${a ? `<img class="avatar" src="${esc(a)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}<span class="ellipsis">${esc(l.channelName)}</span><small>${esc(l.viewerCountText)}</small></button>`; }).join('')}</div>` : ''}`;
+        <div class="discover-rail">${d.top.map((l) => { const a = safeUrl(l.channelImageUrl); return `<button class="discover-item" data-recent="${esc(l.channelName)}" title="${esc(l.liveTitle || '')}">${a ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(a)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}<span class="ellipsis">${esc(l.channelName)}</span><small>${esc(l.viewerCountText)}</small></button>`; }).join('')}</div>` : ''}`;
   }
 
   renderIdle() {

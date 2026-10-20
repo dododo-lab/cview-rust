@@ -45,7 +45,7 @@ export class LivePage {
         const live = liveIds.get(r.channelId);
         const avatar = safeUrl(r.channelImageUrl);
         return `<button class="recent-item${live ? ' is-live' : ''}" data-channel-id="${esc(r.channelId)}" data-channel-name="${esc(r.channelName)}" data-channel-image="${esc(avatar)}">
-          ${avatar ? `<img class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}
+          ${avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}
           <span class="recent-text"><span class="ellipsis">${esc(r.channelName || r.channelId)}</span>
           <span class="recent-meta ellipsis">${live ? `<b>LIVE</b> ${esc(live.viewerCountText)}명` : '오프라인일 수 있음'}</span></span>
         </button>`;

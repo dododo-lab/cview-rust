@@ -95,7 +95,7 @@ function liveRows(lives, meta) {
   if (!lives.length) return '';
   return `<div class="ip-lives">${lives.map((l) => {
     const a = safeUrl(l.channelImageUrl);
-    return `<button class="ip-live" data-ip-play="${esc(l.channelId)}" title="${esc(l.liveTitle || '')}">${a ? `<img class="avatar" src="${esc(a)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}<span class="ip-live-text"><b class="ellipsis">${esc(l.channelName)}</b><small class="ellipsis">${esc(meta(l))}</small></span></button>`;
+    return `<button class="ip-live" data-ip-play="${esc(l.channelId)}" title="${esc(l.liveTitle || '')}">${a ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(a)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}<span class="ip-live-text"><b class="ellipsis">${esc(l.channelName)}</b><small class="ellipsis">${esc(meta(l))}</small></span></button>`;
   }).join('')}</div>`;
 }
 function columns(values, labels) {

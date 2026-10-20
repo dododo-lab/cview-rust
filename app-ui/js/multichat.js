@@ -190,7 +190,7 @@ export class MultiChatPage {
       const state = c.panel.state.className.includes('ok') ? 'ok' : (c.panel.state.className.includes('bad') ? 'bad' : 'warn');
       const avatar = safeUrl(c.image);
       return `<button class="mc-chip${c.channelId === this.active ? ' active' : ''}" data-mc-focus="${esc(c.channelId)}" style="--mc-color:${c.color}">
-        ${avatar ? `<img class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}
+        ${avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}
         <span class="mc-chip-name">${esc(c.name)}</span><i class="mc-dot ${state}"></i><span class="mc-rate">${c.rate.length}/분</span>
         <span class="mc-chip-x" data-mc-remove="${esc(c.channelId)}" title="닫기">✕</span></button>`;
     }).join('');
@@ -275,7 +275,7 @@ export class MultiChatPage {
     const items = this.pickItems.filter((l) => !q || l.channelName.toLowerCase().includes(q) || (l.liveTitle || '').toLowerCase().includes(q));
     this.picker.querySelector('.ml-picker-list').innerHTML = items.map((l) => `
       <button class="ml-pick" data-mc-pick="${esc(l.channelId)}" ${added.has(l.channelId) ? 'disabled' : ''}>
-        <span class="ml-pick-thumb">${safeUrl(l.channelImageUrl) ? `<img src="${esc(safeUrl(l.channelImageUrl))}" alt="" referrerpolicy="no-referrer">` : ''}</span>
+        <span class="ml-pick-thumb">${safeUrl(l.channelImageUrl) ? `<img loading="lazy" decoding="async" src="${esc(safeUrl(l.channelImageUrl))}" alt="" referrerpolicy="no-referrer">` : ''}</span>
         <span class="ml-pick-text"><span class="ml-pick-name ellipsis">${esc(l.channelName)} · ${esc(l.group)}</span><span class="ml-pick-title ellipsis">${esc(l.liveTitle || '')}</span></span>
         <span class="ml-pick-viewers">${esc(l.viewerCountText)}명</span></button>`).join('') || '<div class="empty"><strong>추가할 채널이 없습니다</strong></div>';
   }
