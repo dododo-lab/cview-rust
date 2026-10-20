@@ -789,6 +789,7 @@ dependencies = [
  "tauri-plugin-deep-link",
  "tauri-plugin-notification",
  "tauri-plugin-single-instance",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "tracing",

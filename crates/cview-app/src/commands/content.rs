@@ -594,12 +594,34 @@ pub async fn reveal_path(path: String) -> CmdResult<()> {
         .map_err(|e| CommandError(format!("열 수 없습니다: {e}")))
 }
 
-/// 파일·폴더를 기본 앱으로 연다(받은 영상 재생 등).
+/// 기본 앱으로 열어도 되는 파일 — 받은 영상·녹화·스크린샷·내보낸 채팅. 웹뷰가 넘긴 경로로 앱 번들·스크립트·
+/// 실행 파일을 실행하지 못하게, 일반 파일이고 이 확장자일 때만 연다(그 밖은 Finder 에서 보이기를 쓴다).
+const OPENABLE_EXTENSIONS: &[&str] = &[
+    "mp4", "m4v", "mov", "mkv", "webm", "ts", "m4a", "aac", "mp3", "png", "jpg", "jpeg", "gif",
+    "webp", "txt", "json", "csv",
+];
+
+/// 순수 함수 — 열어도 되는 파일인지(일반 파일 + 허용 확장자).
+pub fn is_openable_file(p: &std::path::Path) -> bool {
+    let is_file = std::fs::symlink_metadata(p).is_ok_and(|m| m.is_file());
+    let ext_ok = p
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| OPENABLE_EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()));
+    is_file && ext_ok
+}
+
+/// 받은 영상 등 미디어 파일을 기본 앱으로 연다. 폴더·앱·실행 파일은 열지 않는다.
 #[tauri::command]
 pub async fn open_path(path: String) -> CmdResult<()> {
     let p = PathBuf::from(&path);
     if !p.exists() {
         return Err(CommandError("파일이 없습니다".into()));
+    }
+    if !is_openable_file(&p) {
+        return Err(CommandError(
+            "이 파일은 열 수 없습니다 — Finder 에서 보기를 쓰세요".into(),
+        ));
     }
     #[cfg(target_os = "macos")]
     let result = std::process::Command::new("open").arg(&p).spawn();
@@ -642,9 +664,10 @@ pub async fn open_external(url: String) -> CmdResult<()> {
     let result = std::process::Command::new("open")
         .arg(parsed.as_str())
         .spawn();
+    // cmd /C start 는 URL 의 & | 를 명령 구분자로 읽어 주입이 된다 — 셸을 거치지 않는 URL 처리기로.
     #[cfg(target_os = "windows")]
-    let result = std::process::Command::new("cmd")
-        .args(["/C", "start", "", parsed.as_str()])
+    let result = std::process::Command::new("rundll32")
+        .args(["url.dll,FileProtocolHandler", parsed.as_str()])
         .spawn();
     #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
     let result = std::process::Command::new("xdg-open")
@@ -658,6 +681,23 @@ pub async fn open_external(url: String) -> CmdResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn openable_files_only_media_regular_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let mp4 = dir.path().join("a.MP4");
+        std::fs::write(&mp4, b"x").unwrap();
+        assert!(is_openable_file(&mp4));
+        let sh = dir.path().join("run.command");
+        std::fs::write(&sh, b"x").unwrap();
+        assert!(!is_openable_file(&sh));
+        let app = dir.path().join("Evil.app");
+        std::fs::create_dir(&app).unwrap();
+        assert!(!is_openable_file(&app));
+        let fake = dir.path().join("dir.mp4");
+        std::fs::create_dir(&fake).unwrap();
+        assert!(!is_openable_file(&fake));
+    }
 
     #[test]
     fn page_has_more_follows_total_or_size() {
