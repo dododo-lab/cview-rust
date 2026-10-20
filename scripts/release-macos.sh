@@ -74,6 +74,10 @@ if (( dist_build )); then
   echo "── 검사(올리기 전에)"
   cargo fmt --all --check
   cargo clippy --workspace --all-targets -q -- -D warnings
+  # Windows 판도 만들므로 Windows 타깃 clippy 도(타깃이 있을 때).
+  if [[ -z "${CVIEW_SKIP_WINDOWS:-}" ]] && rustup target list --installed 2>/dev/null | grep -q x86_64-pc-windows-gnu; then
+    cargo clippy -p cview-app --target x86_64-pc-windows-gnu -q -- -D warnings
+  fi
   cargo test --workspace -q 2>&1 | grep -E "^test result|FAILED|panicked" \
     | awk '{p+=$4; f+=$6} /FAILED|panicked/ {print} END {print "   테스트 통과", p, "실패", f; exit (f > 0)}'
   for f in app-ui/js/*.js; do node --check "$f"; done
