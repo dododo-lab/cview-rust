@@ -20,6 +20,8 @@ export function hideSplash() {
   const wait = SPLASH_MIN_MS - performance.now();
   if (wait > 0) { setTimeout(hideSplash, wait); return; }
   splashStep('완료', 1);
+  // 시작 시간 측정용 표시(perf/) — 화면을 조작할 수 있게 된 순간.
+  try { performance.mark('cview:interactive'); } catch { /* 무시 */ }
   el.classList.add('leaving');
   document.body.classList.add('app-entering');
   setTimeout(() => { el.remove(); document.body.classList.remove('app-entering'); }, 460);

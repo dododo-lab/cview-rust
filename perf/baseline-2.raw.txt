@@ -1,0 +1,39 @@
+run1 S startup interactive_ms=1746 page_load_to_interactive=401 dcl=147
+run1 S first_live_frame_ms=778
+run2 S startup interactive_ms=833 page_load_to_interactive=402 dcl=150
+run2 S first_live_frame_ms=765
+run3 S startup interactive_ms=811 page_load_to_interactive=401 dcl=145
+run3 S first_live_frame_ms=715
+{"label": "base-e", "secs": 61.7, "cpu_pct": 34.4, "cpu_by": {"cview-app:73755": 4.6, "com.apple.WebKit.GPU:73758": 17.4, "com.apple.WebKit.WebContent:73759": 9.0, "com.apple.WebKit.Networking:73760": 3.4}, "gpu_ms_per_s": 3.81, "energy_impact": 34.1, "idle_wakeups_per_s": 266.0, "rss_mb": 848.0}
+{"label": "base-a", "secs": 61.7, "cpu_pct": 16.1, "cpu_by": {"cview-app:73755": 3.6, "com.apple.WebKit.GPU:73758": 2.5, "com.apple.WebKit.WebContent:73759": 9.4, "com.apple.WebKit.Networking:73760": 0.7}, "gpu_ms_per_s": 6.95, "energy_impact": 16.1, "idle_wakeups_per_s": 400.0, "rss_mb": 1236.0}
+{"label": "base-b", "secs": 61.7, "cpu_pct": 66.9, "cpu_by": {"cview-app:73755": 9.7, "com.apple.WebKit.GPU:73758": 25.2, "com.apple.WebKit.WebContent:73759": 24.7, "com.apple.WebKit.Networking:73760": 7.2}, "gpu_ms_per_s": 59.06, "energy_impact": 67.0, "idle_wakeups_per_s": 564.0, "rss_mb": 2002.0}
+{"label": "base-c", "secs": 61.7, "cpu_pct": 20.7, "cpu_by": {"cview-app:73755": 4.5, "com.apple.WebKit.GPU:73758": 8.8, "com.apple.WebKit.WebContent:73759": 5.9, "com.apple.WebKit.Networking:73760": 1.5}, "gpu_ms_per_s": 3.14, "energy_impact": 20.2, "idle_wakeups_per_s": 750.0, "rss_mb": 1319.0}
+{"label": "base-d", "secs": 61.6, "cpu_pct": 21.1, "cpu_by": {"cview-app:73755": 3.6, "com.apple.WebKit.GPU:73758": 10.3, "com.apple.WebKit.WebContent:73759": 5.5, "com.apple.WebKit.Networking:73760": 1.7}, "gpu_ms_per_s": 2.39, "energy_impact": 21.1, "idle_wakeups_per_s": 945.0, "rss_mb": 1211.0}
+{"label": "base-f", "secs": 61.7, "cpu_pct": 22.6, "cpu_by": {"cview-app:73755": 4.6, "com.apple.WebKit.GPU:73758": 10.1, "com.apple.WebKit.WebContent:73759": 6.3, "com.apple.WebKit.Networking:73760": 1.6}, "gpu_ms_per_s": 3.08, "energy_impact": 22.7, "idle_wakeups_per_s": 1235.0, "rss_mb": 1250.0}
+S scroll following frames=241 p50=17.0 p95=18.0 max=49.0 over20=1.2% height=3480 items=75
+S scroll popular frames=242 p50=17.0 p95=18.0 max=18.0 over20=0.0% height=1518 items=30
+S scroll categories frames=239 p50=17.0 p95=18.0 max=43.0 over20=0.8% height=2342 items=71
+S net idle_requests_per_min=24
+  idle-path 32 /service/v1/channels/followings
+  idle-path 10 /service/v1/lives
+  idle-path 2 /service/v3/channels/df4fb2f6e3d593f9d1c19f4cfcbe2f1e/live-detail
+  idle-path 1 /service/v3/channels/feb20a676694b1163fed010da0848303/live-detail
+  idle-path 1 /service/v3/channels/fc00d47a77ed2d1156cd5997eba30310/live-detail
+  idle-path 1 /service/v3/channels/fbdae0fabcf5e7f2bab4449e4aafae15/live-detail
+  idle-path 1 /service/v3/channels/f39c3d74e33a81ab3080356b91bb8de5/live-detail
+  idle-path 1 /service/v3/channels/f3228c570a0b3b1f0f8306e3479ea46b/live-detail
+S net watching_requests_per_min=9
+  watch-path 49 /service/v1/channels/followings
+  watch-path 10 /service/v1/lives
+  watch-path 2 /service/v3/channels/df4fb2f6e3d593f9d1c19f4cfcbe2f1e/live-detail
+  watch-path 2 /service/v3/channels/b628d1039a84ecc703804e17acee2eb3/live-detail
+  watch-path 2 /service/v1/home/recommended/clips
+  watch-path 1 /service/v3/channels/feb20a676694b1163fed010da0848303/live-detail
+  watch-path 1 /service/v3/channels/fc00d47a77ed2d1156cd5997eba30310/live-detail
+  watch-path 1 /service/v3/channels/fbdae0fabcf5e7f2bab4449e4aafae15/live-detail
+S scroll chat frames=233 p50=17.0 p95=18.0 max=107.0 over20=2.6% height=2305 items=52
+S chat rate=25/s frames=300 p50=17.0 p95=18.0 over20=1.3% lines=151
+S chat rate=50/s frames=302 p50=17.0 p95=18.0 over20=0.7% lines=299
+S chat rate=100/s frames=301 p50=17.0 p95=18.0 over20=1.3% lines=299
+S chat rate=200/s frames=301 p50=17.0 p95=18.0 over20=1.0% lines=299
+S chat rate=400/s frames=302 p50=17.0 p95=18.0 over20=1.3% lines=299
