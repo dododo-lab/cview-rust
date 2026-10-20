@@ -2448,7 +2448,7 @@ function setBackgroundSaver(maxHeight) {
     _backgroundCapHeight = next;
     applyAdaptiveLevelCap();
     if (_forcedHeight > 0) applyForcedHeight();
-    else if (_lockTopLevel) applyTopLevelLock();
+    else if (_lockTopLevel) applyTopLevelLock(true);
     if (_preferSourceQuality && !_lockTopLevel) requestPreferredSourceLevel();
 }
 let _decoderPressureCap = -1;
@@ -2684,6 +2684,7 @@ function setAdaptiveCaps(maxHeight, maxKbps) {
     //   `autoLevelCapping` 은 ABR 이 꺼진 세션에서 무시되므로 위 호출만으로는 아무 일도
     //   일어나지 않는다. 캡 해제(0) 도 같은 경로로 원래 목표를 복원한다.
     if (_forcedHeight > 0) applyForcedHeight();
+    else if (_lockTopLevel) applyTopLevelLock(true);
     if (_preferSourceQuality && !_lockTopLevel) requestPreferredSourceLevel();
 }
 
@@ -2799,16 +2800,25 @@ function requestManualLevel(target) {
     } else hls.currentLevel = target;
 }
 
-function applyTopLevelLock() {
+function applyTopLevelLock(smooth) {
     if (!hls) return;
     const levels = hls.levels || [];
     if (!levels.length) return;
     // hls.js levels 는 bitrate 오름차순 정렬 — 마지막이 최고 화질.
     let top = levels.length - 1;
-    // [BG-SAVER] 창이 오래 안 보이는 동안만 백그라운드 높이 상한 아래 최고 레벨로. requestManualLevel 은
-    //   버퍼가 있으면 nextLevel(플러시 없음)로 바꾸므로 소리가 끊기지 않고, 다시 보이면 같은 길로 돌아온다.
-    if (_backgroundCapHeight > 0) {
-        while (top > 0 && (Number(levels[top].height) || 0) > _backgroundCapHeight) top--;
+    // [LOCK-CAP 2026-10-20] 높이 상한(앱 화질 캡 · 멀티라이브 패인 캡 · 백그라운드 절약) 아래 최고 레벨로.
+    //   종전엔 고정이 캡을 통째로 무시해, 매니저가 비선택 패인에 360p 캡을 걸어도 4패인 모두 1080p 를
+    //   디코딩했다. 비트레이트 캡은 종전대로 고정이 우선(대역폭 강등은 LEVEL_SWITCHED 복원 경로가 맡는다).
+    //   requestManualLevel 은 버퍼가 있으면 nextLevel(플러시 없음)로 바꾸므로 소리가 끊기지 않는다.
+    const capHeight = effectiveCapHeight();
+    if (capHeight > 0) {
+        while (top > 0 && (Number(levels[top].height) || 0) > capHeight) top--;
+    }
+    // 캡이 바뀌어 다시 고르는 경우(smooth)는 nextLevel 만 — 시작 직후 버퍼가 없을 때 currentLevel 경로를
+    //   타면 즉시 전환이 영상을 멈춘 채 두는 것을 멀티라이브 4패인에서 확인했다.
+    if (smooth) {
+        if (hls.manualLevel !== top) hls.nextLevel = top;
+        return;
     }
     requestManualLevel(top);
 }
