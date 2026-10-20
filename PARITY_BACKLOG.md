@@ -32,7 +32,7 @@
 | NAV-07 | ✅ 검색 디스커버리(태그 칩, 인사이트 레일) | `Search/LiveDiscoveryWorkspace`, `DiscoveryInsight*`, `DiscoveryDesign` | 없음 | M |
 | NAV-08 | ✅ 라이브러리 허브(클립·다시보기·받은 영상 탭) | `LibraryHubView` | 없음 | S |
 | NAV-09 | ✅ 최근 시청·즐겨찾기 화면(즐겨찾기 토글, 최근 기록 삭제) | `RecentFavoritesView` | `FavoritesStore`·`RecentChannelsStore`·persistence `toggle_favorite`; UI 는 localStorage 최근 시청만 | M |
-| NAV-10 | 🟡 카드 우클릭 메뉴(재생/멀티라이브 추가/채팅만 열기/채널 상세/즐겨찾기/링크 복사/치지직에서 열기) | `HomeV3/LiveCardActionMenu`, `ClipboardActions` | 카드에 "멀티라이브에 추가" 버튼만 | S |
+| NAV-10 | 🧪 카드 우클릭 메뉴(재생/멀티라이브 추가/채팅만 열기/채널 상세/즐겨찾기/링크 복사/치지직에서 열기) | `HomeV3/LiveCardActionMenu`, `ClipboardActions` | 카드에 "멀티라이브에 추가" 버튼만 | S |
 | NAV-11 | ✅ 뒤로 가기 내비게이션 스택(`⌘[`) | `AppRouter`, `Navigation/*` | `navigation/router.rs`, UI 는 단일 라우트 | S |
 | NAV-12 | ✅ 커맨드 팔레트(`⌘K`): 채널·화면·액션 검색 실행 | `CommandPaletteView`, `Actions/CViewActionRegistry` | `actions/registry.rs`·`cview_action.rs`; `⌘K` 는 검색 화면 이동만 | M |
 | NAV-13 | ✅ 사이드바 빠른 액션·위젯·재생 인사이트 | `Components/SidebarQuickActions`, `SidebarWidgets`, `SidebarPlaybackInsights` | `sidebar_quick_action.rs`, 없음 | S |
@@ -49,11 +49,11 @@
 | PLY-03 | 🟡 라이브 되감기(타임시프트) 레일·`←/→` 10초, `⇧←/→` 1분 | `LiveRewindRail`, `TimelineSlider`, `StreamCoordinator+Timeshift` | 서버 타임머신·`seekTimeshift` 있음, 로컬 녹화기 미등록, UI 없음 | L |
 | PLY-04 | ✅ 재생 속도 조절 | `PlayerAdvancedSettings+MediaTabs`(재생 탭) | `setRate` 있음, UI 없음 | S |
 | PLY-05 | ✅ 플레이어 고급 설정 패널(이퀄라이저/비디오/화면/재생/지연/도구 탭) | `PlayerAdvancedSettingsView`, `PlayerAdvancedSettings+*`, `MLSettingsWindowView`, `ML*Tab` | 없음 | L |
-| PLY-06 | 🟡 이퀄라이저(프리셋·프리앰프·10밴드) | `PlayerAdvancedSettings+Equalizer`, `MLEqualizerTab`, `EqualizerPreset` | player.html `setEqualizer*`, `can_use_equalizer` VM, 설정 키 저장만 | M |
+| PLY-06 | 🧪 이퀄라이저(프리셋·프리앰프·10밴드) | `PlayerAdvancedSettings+Equalizer`, `MLEqualizerTab`, `EqualizerPreset` | player.html `setEqualizer*`, `can_use_equalizer` VM, 설정 키 저장만 | M |
 | PLY-07 | ✅ 비디오 보정(밝기·대비·채도·색조·감마), 선명한 화면, 자동 보정, 업스케일 | `MLVideoTab`, `PlayerViewModel+AudioVideoAdjust` | player.html `applyVideoAdjust`·`setSharpPixelScaling`·`setPictureEnhancement` | M |
 | PLY-08 | ✅ 화면 비율 강제 | `PlayerAdvancedSettings+MediaTabs`(화면) | `setForcedAspectRatio` 있음 | S |
 | PLY-09 | ✅ 스크린샷 저장(`⌘S`, PNG/JPEG, 저장 경로) | `PlayerViewModel+Screenshot`, `HLSJSPlayerEngine+Screenshot`, `ScreenshotEncoder` | `takeScreenshot` + `can_take_screenshot`, 파일 저장 명령 없음 | S |
-| PLY-10 | 🟡 녹화 시작/중지(`⌥⌘R`) | `PlayerViewModel+Recording`, `HLSJSRecordingWriter`, `StreamRecordingService` | `startRecording/stopRecording`(MediaRecorder), 저장 명령 없음 | M |
+| PLY-10 | 🧪 녹화 시작/중지(`⌥⌘R`) | `PlayerViewModel+Recording`, `HLSJSRecordingWriter`, `StreamRecordingService` | `startRecording/stopRecording`(MediaRecorder), 저장 명령 없음 | M |
 | PLY-11 | ✅ 전체 화면 모드 2종(영상만 / 영상+채팅), `⇧⌘F`·`⌃⌘F` | `LiveFullscreenPresentation` | 플레이어 영역 전체화면 버튼만 | S |
 | PLY-12 | ✅ 채팅 표시 모드(사이드/오버레이/숨김) + 오버레이 위치·크기·투명도 | `ChatOverlayView`, `ChatDisplayMode`, 설정 `overlay*` | 사이드 고정 | M |
 | PLY-13 | ✅ 로딩/오류/종료 오버레이 고도화(재시도, 다시 확인, 브랜드 로딩) | `StreamLoadingOverlay`, `BrandedLoadingView`, `ErrorStateView` | 스피너+문구 오버레이 | S |
@@ -95,13 +95,13 @@
 | CHT-12 | ✅ 채팅 지우기(`⇧⌘K`)·다시 연결 버튼 | `CViewApp` 채팅 메뉴, `ChatConnectionStatusBadge` | 상태 텍스트만 | S |
 | CHT-13 | ✅ 채팅 디자인 스타일 8종(unified/chzzk/hybrid/kakao/imessage/calm/compact/dashboard) | `ChatCHZZKDesign`, `ChatHybridDesign`, `ChatMessengerDesign`, `ChatPanelView+Lounge`, `ChatMessageRow+*` | 단일 스타일 | L |
 | CHT-14 | ✅ 표시 옵션: 글자 크기·줄 간격·타임스탬프·배지·이모티콘·정렬·읽기 폭 | `ChatSettingsTab`, `ChatReadingWidthMenu`, `ChatRowMetrics` | 설정 `chat` 도메인은 저장 가능, UI·렌더 미반영 | M |
-| CHT-15 | 🟡 채팅 배경(채널 색/사용자 색/중립, 강도) | `ChatBackgroundScope`, `CViewUI/ChatBackgroundPalette`, `Components/ChatBackgroundSettingsRows` | 없음 | S |
+| CHT-15 | 🧪 채팅 배경(채널 색/사용자 색/중립, 강도) | `ChatBackgroundScope`, `CViewUI/ChatBackgroundPalette`, `Components/ChatBackgroundSettingsRows` | 없음 | S |
 | CHT-16 | ✅ 후원만 보기·후원 표시 끄기 | 설정 `showDonation`/`showDonationsOnly` | 없음 | S |
-| CHT-17 | 🟡 후원·구독 TTS(음량·속도·음성) | `ChatTTSService` | `TtsQueue`(NoopTts) — Web Speech API 로 구현 가능 | M |
+| CHT-17 | 🧪 후원·구독 TTS(음량·속도·음성) | `ChatTTSService` | `TtsQueue`(NoopTts) — Web Speech API 로 구현 가능 | M |
 | CHT-18 | ✅ 채팅 이벤트 레일·하이브리드 이벤트 선반 | `ChatPanelEventRail`, `ChatHybridEventShelf` | 후원 랭킹 칩 줄만 | M |
 | CHT-19 | ✅ 채팅 내보내기(텍스트 저장) | `ChatPanelView`("채팅 내보내기"), `/export` | 없음 | S |
 | CHT-20 | ✅ 입력 상태 배너(로그인 필요·슬로우 모드·제한 사유) | `ChatInputStatusBanner`, `ChatRestrictionReason` | placeholder 문구만 | S |
-| CHT-21 | 🟡 채팅 화면 갱신 상한·최대 표시 줄 수 | `ChatSettingsQualityView`, `maxUpdateRate`/`maxVisibleMessages` | `pacing.rs`, UI 는 300줄 고정 | S |
+| CHT-21 | 🧪 채팅 화면 갱신 상한·최대 표시 줄 수 | `ChatSettingsQualityView`, `maxUpdateRate`/`maxVisibleMessages` | `pacing.rs`, UI 는 300줄 고정 | S |
 | CHT-22 | ✅ 채팅만 보기 화면(영상 없이) | `ChatOnlyView`, 라우트 `chatOnly` | 없음 | S |
 | CHT-23 | ✅ 독립 채팅 창(`⇧⌘C`, 채널 피커) | `IndependentChatWindow`, `ChatChannelPickerView` | 없음 | M |
 | CHT-24 | ✅ 채팅 통계(분당 메시지·참여자) | `ChatViewModel+Stats`, `Statistics/Tabs/ChatStatsView` | `stats.rs` | S |
@@ -117,9 +117,9 @@
 | MUL-05 | ✅ 멀티채팅 독립 창(`⇧⌘M`) | `MultiChatWindowHost` | 없음 | M |
 | MUL-06 | ✅ 멀티라이브 레이아웃: 프리셋/사용자 배치(드래그 크기 조절), `⌃⌘1~3` | `MultiLiveGridLayouts`, `PaneResizeGrip`, `MCGridResizeDivider`, `MultiLiveLayoutModePolicy` | 그리드·포커스만(포커스 비율 드래그 있음) | M |
 | MUL-07 | ✅ 패인 순서 드래그 재배치·탭 바 | `MLTabReorderDropDelegate`, `MCTabBar` | `order` 계산만, 드래그 없음 | S |
-| MUL-08 | 🟡 패인 개별 컨트롤(볼륨·음소거·화질·재연결·채널 상세) | `MultiLivePaneOverlays`, `MLPlaybackVolumePanel` | 선택·닫기만 | M |
+| MUL-08 | ✅ 패인 개별 컨트롤(볼륨·음소거·화질·재연결·채널 상세) | `MultiLivePaneOverlays`, `MLPlaybackVolumePanel` | 선택·닫기만 | M |
 | MUL-09 | ✅ 다중 오디오(보조 패인 볼륨)·오디오 글로우 | `MultiLiveAudioGlow`, 설정 `multiAudioEnabled`/`secondaryVolume` | 선택 패인만 소리 | S |
-| MUL-10 | 🟡 그리드 채팅 오버레이(투명도·글자 크기) | 설정 `chatOverlayInGrid` 등 | 사이드 채팅만 | M |
+| MUL-10 | 🧪 그리드 채팅 오버레이(투명도·글자 크기) | 설정 `chatOverlayInGrid` 등 | 사이드 채팅만 | M |
 | MUL-11 | ✅ 싱글 채널 스테이지(멀티에서 한 채널 크게) | `MLSingleChannelStage` | 포커스 레이아웃으로 대체 | S |
 | MUL-12 | ✅ 모든 스트림 재연결·일괄 해제 | `MultiLiveOverlays` | "모두 닫기"만 | S |
 | MUL-13 | 🟡 멀티라이브 제안 토스트(자주 같이 보는 채널) | `MultiLiveProposerToast`, `MultiLiveProposer` | `MultiLiveProposer` | S |
@@ -146,7 +146,7 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 | SET-11 | ✅ 네트워크 탭(프리셋 balanced/stability/lowLatency/performance/custom, 요청 한도·동시성·타임아웃·재시도·재연결·`forceStreamProxy`·오프라인 대기) | `NetworkSettingsTab`, `NetworkPreset` | `NetworkSettings` 모델, 도메인 없음 | M |
 | SET-12 | ✅ 키보드 단축키 편집(`KeyboardShortcutSettings` 바인딩) | `GeneralSettingsTab` "키보드 단축키" | 모델 있음 | M |
 | SET-13 | ✅ 채널별 알림 설정(방송 시작/카테고리/제목 변경) | `ChannelNotificationSettings`, 채널 상세 | 모델 있음 | S |
-| SET-14 | 🟡 치지직 OAuth 연동(클라이언트 ID/Secret 입력, 연결 상태) | `OAuthCredentialsSection`, `CViewAuth/ChzzkOAuthService` | `cview-auth` OAuth 이식, UI 없음(쿠키 로그인만) | M |
+| SET-14 | 🧪 치지직 OAuth 연동(클라이언트 ID/Secret 입력, 연결 상태) | `OAuthCredentialsSection`, `CViewAuth/ChzzkOAuthService` | `cview-auth` OAuth 이식, UI 없음(쿠키 로그인만) | M |
 | SET-15 | 🟡 시청 기록 동기화(`SyncSettings` opt-in, 엔드포인트) | `AppState+Sync`, `WatchHistorySyncService` | `sync/watch_history_sync.rs` | S |
 | SET-16 | ✅ `settings_update` 도메인 확장(network/multiLive/multiChat/keyboard/channelNotifications/sync) | — | 4도메인만 | S |
 | SET-17 | ✅ 설정 백업·복원/초기화 | `SettingsStore+SnapshotRestore`, `SettingsSnapshotFile` | persistence `settings_snapshot_file`, `store_backup` | S |
@@ -169,11 +169,11 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 | SYS-01 | ✅ 전역 단축키 체계(재생 Space/M/↑↓, `⌘1~4`, `⌘R` 새로고침, `⌘,` 설정, `⌘F` 검색) | `CViewApp` Commands, `KeyboardShortcutSettings` | `⌘K`·`⌘\`·Esc 만 | M |
 | SYS-02 | ✅ 키보드 단축키 도움말(`⌘/`) | `KeyboardShortcutsHelpView` | 없음 | S |
 | SYS-03 | ✅ 앱 메뉴 바(재생/채팅/윈도우/도움말 메뉴) | `CViewApp` `CommandMenu` | Tauri 기본 메뉴 | M |
-| SYS-04 | 🟡 팔로우 채널 방송 시작·카테고리·제목 변경 알림 | `NotificationService*`, `BackgroundUpdateService` | `BackgroundUpdateService` diff + `NotificationService`(Noop), `tauri-plugin-notification` 미도입 | M |
-| SYS-05 | 🟡 멘션 알림 | `MentionNotificationService` | `MentionNotificationService` | S |
+| SYS-04 | 🧪 팔로우 채널 방송 시작·카테고리·제목 변경 알림 | `NotificationService*`, `BackgroundUpdateService` | `BackgroundUpdateService` diff + `NotificationService`(Noop), `tauri-plugin-notification` 미도입 | M |
+| SYS-05 | 🧪 멘션 알림 | `MentionNotificationService` | `MentionNotificationService` | S |
 | SYS-06 | ✅ 딥 링크 `cview://live/…`·`channel`·`following`·`multilive`·`search`·`clip`·`login` | `DeepLinkRouter`, `DeepLinkInbox` | `deep_link.rs`·`deep_link_inbox.rs`, `tauri-plugin-deep-link` 미도입 | S |
 | SYS-07 | ✅ 단일 인스턴스(두 번째 실행 시 기존 창 활성화·링크 전달) | `SingleInstanceGuard` | `SingleInstanceGuard` 로직, `tauri-plugin-single-instance` 미도입 | S |
-| SYS-08 | 🟡 업데이트 확인 시트(GitHub 릴리스) | `UpdateSheetView`, `UpdateService` | `UpdateService`(GitHub 릴리스 파싱) | S |
+| SYS-08 | 🧪 업데이트 확인 시트(GitHub 릴리스) | `UpdateSheetView`, `UpdateService` | `UpdateService`(GitHub 릴리스 파싱) | S |
 | SYS-09 | ✅ 정보(About) 창·오픈소스 고지 | `AboutPanelView` | 없음 | S |
 | SYS-10 | ✅ 스플래시·부트 진행 표시 | `SplashView`, `SplashContentView`, `BootProgress` | `BootProgress`, 없음 | S |
 | SYS-11 | ✅ 환영 안내(첫 실행 온보딩, 다시 보기) | `Components/WelcomeOverlay` | 없음 | S |
@@ -184,14 +184,14 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 | SYS-16 | ✅ 창 위치·크기 저장/복원 | `WindowFrameAutosave`, `restoreWindowOnLaunch` | 없음(`tauri-plugin-window-state` 로 대체 가능) | S |
 | SYS-17 | ✅ 항상 위(`alwaysOnTop`) | `GeneralSettings.alwaysOnTop` | 없음(`set_always_on_top`) | S |
 | SYS-18 | ✅ 로그인 시 자동 실행 | `launchAtLogin` | 없음(`tauri-plugin-autostart`) | S |
-| SYS-19 | 🟡 도움말 액션(문제 보고, 알림 설정 열기, 로그 폴더 열기) | `SupportActions`, `SystemSettingsActions` | 없음 | S |
-| SYS-20 | 🟡 메뉴 막대 앱(방송 중 팔로잉 목록, 열기/종료) | `MenuBarView`, `MenuBar/*` | 없음(Tauri 트레이 아이콘으로 근사) | M |
+| SYS-19 | 🧪 도움말 액션(문제 보고, 알림 설정 열기, 로그 폴더 열기) | `SupportActions`, `SystemSettingsActions` | 없음 | S |
+| SYS-20 | 🧪 메뉴 막대 앱(방송 중 팔로잉 목록, 열기/종료) | `MenuBarView`, `MenuBar/*` | 없음(Tauri 트레이 아이콘으로 근사) | M |
 | SYS-21 | ✅ 화면 속 화면(PiP, `⌥⌘P`) | `PiPController`, `AppState+PiP` | 없음(WebView `requestPictureInPicture`) | M |
 | SYS-22 | ✅ 창 투명도/Liquid Glass·트래픽 라이트 애니메이션 | `DesignSystem/LiquidGlass`, `TransparencyPolicy`, `TrafficLightsAnimator` | 없음 | M |
-| SYS-23 | 🟡 앱 아이콘 동적 렌더(라이브 수 배지 등) | `AppIconRenderer`, `Components/AppIconView` | 없음 | S |
+| SYS-23 | 🧪 앱 아이콘 동적 렌더(라이브 수 배지 등) | `AppIconRenderer`, `Components/AppIconView` | 없음 | S |
 | SYS-24 | ⏸ 위젯(WidgetKit) | `AppState+Widget`, `WidgetSnapshotWriter`, `CViewWidgets` | 없음 | L |
 | SYS-25 | ⏸ App Intents(단축어/Siri) | `Intents/CViewIntents` | 없음 | M |
-| SYS-26 | 🟡 서명·공증·배포 스크립트 | 공증 스크립트 | Tauri 번들 설정 미작성 | S |
+| SYS-26 | ✅ 서명·공증·배포 스크립트 | 공증 스크립트 | Tauri 번들 설정 미작성 | S |
 | SYS-27 | ⏸ 인증서 피닝 | `CertificatePinningDelegate` | 제외됨 | M |
 
 ## 9. 디자인 (DSN)
@@ -258,3 +258,5 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 3. ✅ **파일 저장 경로** (`save_file`·`reveal_path`, 녹화는 StreamRecordingService): 스크린샷·녹화·채팅 내보내기·다운로드 모두 저장 대화상자(`tauri-plugin-dialog`)와 쓰기 명령이 필요하다.
 4. ✅ **VOD 재생 엔진** (WebView 기본 HLS `<video>`, 클립은 임베드): `VodPlayerEngine` 트레잇의 WebView 구현(player.html 의 VOD 모드 또는 별도 vod.html).
 5. ✅ **라우터 도입** (화면 파라미터·뒤로 가기 스택): 지금 `app.js` 의 라우트는 평면 목록이다. 파라미터 있는 라우트(`channel/:id`, `vod/:no`, `clip/:uid`)와 뒤로 가기 스택이 필요하다.
+
+> 2026-10-20 고도화 점검(REFINEMENT_BACKLOG.md Q-5): 코드가 이미 있는데 🟡 로 남아 있던 항목을 갱신했다 — SYS-26·MUL-08 ✅, 나머지는 🧪(마지막 기능 테스트에서 확인).
