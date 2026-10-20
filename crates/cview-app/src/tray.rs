@@ -98,10 +98,15 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
         .menu(&menu)
         .show_menu_on_left_click(true)
         .on_menu_event(|app, event| on_menu(app, event.id().as_ref()));
-    // 메뉴 막대는 단색 템플릿 아이콘 — macOS 가 메뉴 막대 외형(밝음·어두움)에 맞춰 색을 입힌다.
-    match tauri::image::Image::from_bytes(include_bytes!("../icons/tray-template.png")) {
-        Ok(icon) => builder = builder.icon(icon).icon_as_template(true),
-        Err(_) => {
+    // macOS 메뉴 막대는 단색 템플릿 아이콘 — 메뉴 막대 외형(밝음·어두움)에 맞춰 시스템이 색을 입힌다.
+    // Windows 알림 영역은 템플릿이 없어 검은 아이콘이 어두운 작업 표시줄에 묻히므로 컬러 앱 아이콘을 쓴다.
+    #[cfg(target_os = "macos")]
+    let template = tauri::image::Image::from_bytes(include_bytes!("../icons/tray-template.png")).ok();
+    #[cfg(not(target_os = "macos"))]
+    let template: Option<tauri::image::Image<'static>> = None;
+    match template {
+        Some(icon) => builder = builder.icon(icon).icon_as_template(true),
+        None => {
             if let Some(icon) = app.default_window_icon() {
                 builder = builder.icon(icon.clone());
             }
