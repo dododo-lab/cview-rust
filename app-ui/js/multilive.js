@@ -53,6 +53,7 @@ export class MultiLivePage {
         <h1 class="page-title">멀티라이브</h1>
         <span class="page-subtitle ml-count"></span>
         <div class="grow"></div>
+        <button class="btn ml-watch-back" data-ml="watch-exit" hidden title="이 채널을 멀티라이브 배치로 돌려보내기">${multiLiveIcon}<span>멀티라이브로</span></button>
         <div class="ml-toolbar">
           <div class="ml-focus-controls" hidden>
             <div class="segmented ml-tb-seg" role="group" aria-label="포커스 방향">
@@ -140,7 +141,7 @@ export class MultiLivePage {
     this.bindDrag();
     this.stage.addEventListener('dblclick', (e) => {
       const pane = e.target.closest('.ml-pane');
-      if (pane && !e.target.closest('.ml-pane-bar, .ml-pane-top, .ml-pane-menu')) this.toggleSingle(Number(pane.dataset.slot));
+      if (pane && this.watchSlot == null && !e.target.closest('.ml-pane-bar, .ml-pane-top, .ml-pane-menu')) this.toggleSingle(Number(pane.dataset.slot));
     });
     document.addEventListener('keydown', (e) => {
       if (this.root.hidden || !(e.metaKey && e.ctrlKey)) return;
@@ -231,6 +232,7 @@ export class MultiLivePage {
           <div class="ml-pane-title ellipsis"></div>
         </div>
         <div class="grow"></div>
+        <button class="ml-pane-btn ml-sec ml-watch-btn" data-ml="watch" title="라이브로 크게 보기 — 다시 연결 없이 라이브 메뉴로" aria-label="라이브로 크게 보기">${PANE_ICON.live}</button>
         <button class="ml-pane-btn ml-sec" data-ml="select" title="이 패인 채팅 보기" aria-label="이 패인 채팅 보기">${PANE_ICON.chat}</button>
         <button class="ml-pane-btn ml-sec" data-ml="info" title="채널 정보" aria-label="채널 정보">${PANE_ICON.info}</button>
         <button class="ml-pane-btn ml-sec" data-ml="retry" title="다시 연결" aria-label="다시 연결">${PANE_ICON.retry}</button>
@@ -286,9 +288,16 @@ export class MultiLivePage {
     restore.hidden = n > 0 || !savedIds.length;
     restore.textContent = `지난 구성 다시 열기 (${savedIds.length}개)`;
     if (this.single != null && !sessions.some((x) => x.slot === this.single)) this.single = null;
+    // 라이브 메뉴 단독 보기(원본 시청 모드) — 같은 세션을 무대에 올려 다시 연결하지 않는다.
+    const watched = state.watchId ? sessions.find((x) => x.id === state.watchId) : null;
+    this.watchSlot = watched && watched.slot != null ? watched.slot : null;
+    this.root.classList.toggle('as-watch', this.watchSlot != null);
+    this.root.querySelector('.ml-header .page-title').textContent = this.watchSlot != null ? '라이브' : '멀티라이브';
+    this.root.querySelector('.ml-watch-back').hidden = this.watchSlot == null;
+    const single = this.watchSlot ?? this.single;
 
     const focus = state.layout === 'focus' && n > 1;
-    this.stage.className = `ml-stage ml-n${n <= 4 ? n : (n <= 9 ? 'many' : 'lots')} ${focus ? `ml-focus dir-${state.focusDirection}` : ''} ${state.layout === 'custom' && n > 1 && n <= 4 ? 'ml-custom' : ''} ${this.single != null ? 'ml-single' : ''}`;
+    this.stage.className = `ml-stage ml-n${n <= 4 ? n : (n <= 9 ? 'many' : 'lots')} ${focus ? `ml-focus dir-${state.focusDirection}` : ''} ${state.layout === 'custom' && n > 1 && n <= 4 ? 'ml-custom' : ''} ${single != null ? 'ml-single' : ''}`;
     this.empty.hidden = n > 0;
     this.focusControls.hidden = state.layout !== 'focus';
     for (const b of this.root.querySelectorAll('[data-direction]')) {
@@ -309,8 +318,8 @@ export class MultiLivePage {
       this.renderPane(pane, s, order.indexOf(s.id), s.id === state.selectedId);
     }
     this.applyFocusGrid(focus, order);
-    this.applyCustomGrid(state.layout === 'custom' && n > 1 && n <= 4 && this.single == null, n);
-    for (const [slot, pane] of this.panes) pane.el.classList.toggle('ml-single-target', this.single === slot);
+    this.applyCustomGrid(state.layout === 'custom' && n > 1 && n <= 4 && single == null, n);
+    for (const [slot, pane] of this.panes) pane.el.classList.toggle('ml-single-target', single === slot);
     for (const [slot, pane] of this.panes) {
       if (!live.has(slot)) {
         // 닫힌 패인 — 숨기기만 하면 iframe 이 MediaSource 버퍼를 계속 쥔다(모두 닫은 뒤 RSS 3GB대).
@@ -634,7 +643,9 @@ export class MultiLivePage {
         if (this.state.multiAudio) this.run(api.multiLiveAudio(sessionId, false));
         else this.run(api.multiLiveSelect(sessionId));
         break;
-      case 'single': if (pane) this.toggleSingle(Number(pane.dataset.slot)); break;
+      case 'single': if (pane && this.watchSlot == null) this.toggleSingle(Number(pane.dataset.slot)); break;
+      case 'watch': if (sessionId) window.dispatchEvent(new CustomEvent('cview:ml-watch', { detail: { sessionId } })); break;
+      case 'watch-exit': window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: 'multilive' } })); break;
       case 'multi-audio': this.run(api.multiLiveAudio(null, true)); break;
       case 'presets': this.showPresets(); break;
       case 'restore': this.restoreSessions(this.savedSessionIds()); break;

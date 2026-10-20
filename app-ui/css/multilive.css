@@ -301,3 +301,10 @@
 .ml-stage.ml-focus .ml-pane.ml-first .ml-pane-avatar img { width: 36px; height: 36px; }
 .ml-stage.ml-focus .ml-pane.ml-first .ml-pane-bar { padding: 36px 12px 8px; }
 .ml-stage.ml-focus .ml-pane.ml-first .ml-pane-top { padding: 10px 12px 30px; }
+
+/* 라이브 메뉴 단독 보기(원본 시청 모드) — 같은 패인을 무대 하나로, 배치 도구는 숨긴다 */
+.page-multilive.as-watch .ml-toolbar, .page-multilive.as-watch .ml-count { display: none; }
+.page-multilive.as-watch .ml-watch-btn, .page-multilive.as-watch [data-ml="single"] { display: none !important; }
+.ml-watch-back { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 9px; font-size: var(--fs-footnote); font-weight: 600; }
+.ml-watch-back[hidden] { display: none; }
+.ml-watch-back svg { width: 14px; height: 14px; }

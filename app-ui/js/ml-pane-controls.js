@@ -22,6 +22,7 @@ export const PANE_ICON = {
   more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg>',
   chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg>',
   info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 7.6v.2"/></svg>',
+  live: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="13" rx="2"/><path d="M8 21h8M10.5 9.5v5l4-2.5z"/></svg>',
   retry: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5a8 8 0 1 0-2.4 5.9"/><path d="M20 4.5v7h-7"/></svg>',
 };
 
@@ -46,6 +47,7 @@ export function paneControlsHtml() {
       </div>
       <div class="ml-pane-menu ml-gear-menu" role="menu" hidden></div>
       <div class="ml-pane-menu ml-more-pane" role="menu" hidden>
+        <button class="ml-menu-item ml-watch-btn" data-ml="watch">${I.live}<span>라이브로 크게 보기</span></button>
         <button class="ml-menu-item" data-ml="select">${I.chat}<span>이 패인 채팅 보기</span></button>
         <button class="ml-menu-item" data-ml="info">${I.info}<span>채널 정보</span></button>
         <button class="ml-menu-item" data-ml="retry">${I.retry}<span>다시 연결</span></button>
