@@ -105,7 +105,7 @@ fi
 (cd crates/cview-app && cargo tauri build --bundles app)
 if (( dist_build )); then
   # DMG 만들기는 임시 이미지를 떼어 낼 때 "리소스 사용 중"(새 볼륨을 Spotlight·Finder 가 잠깐 잡음)으로 가끔 실패한다.
-  # 남은 임시 이미지를 강제로 떼고 몇 번 다시 시도한다(앱은 위에서 이미 빌드·서명됐으므로 bundle 만 다시).
+  # 남은 임시 이미지를 강제로 떼고 몇 번 다시 시도한다(컴파일은 위에서 끝났으므로 bundle 만 다시 — dmg 만 묶으면 tauri 가 .app 을 지우므로 app,dmg 로).
   dmg_ok=0
   for attempt in 1 2 3; do
     for dev in $(hdiutil info -plist | python3 -c '
@@ -117,7 +117,7 @@ for img in plistlib.loads(sys.stdin.buffer.read()).get("images", []):
       hdiutil detach "$dev" -force >/dev/null 2>&1 || true
     done
     rm -f target/release/bundle/macos/rw.*.dmg(N)
-    if (cd crates/cview-app && cargo tauri bundle --bundles dmg); then dmg_ok=1; break; fi
+    if (cd crates/cview-app && cargo tauri bundle --bundles app,dmg); then dmg_ok=1; break; fi
     echo "⚠︎ DMG 만들기 실패($attempt/3) — 잠시 뒤 다시 시도합니다."
     sleep 5
   done
