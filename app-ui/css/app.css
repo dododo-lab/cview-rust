@@ -85,7 +85,7 @@
 :root[data-theme="light"] {
   color-scheme: light;
   --primary: #00d38a;
-  --primary-text: #00875a;
+  --primary-text: #007a52;
   --primary-dim: rgba(0, 170, 110, 0.12);
   --primary-ring: rgba(0, 170, 110, 0.35);
   --primary-glow: rgba(0, 190, 120, 0.25);
@@ -105,17 +105,17 @@
   --active: rgba(15, 20, 30, 0.075);
   --text-primary: #14161a;
   --text-secondary: #4d525b;
-  --text-tertiary: #7b818b;
+  --text-tertiary: #686d76;
   --border: #d9dce3;
   --border-subtle: #e8eaef;
   --live: #f03a2e;
-  --donation: #b77c00;
+  --donation: #8f6100;
   --donation-bg: rgba(255, 190, 30, 0.14);
   --donation-border: rgba(214, 150, 0, 0.4);
   --subscription: #7a4fd6;
   --subscription-bg: rgba(122, 79, 214, 0.1);
   --error: #e1352a;
-  --warning: #b86e00;
+  --warning: #9a5c00;
   --warning-bg: rgba(255, 170, 0, 0.1);
   --warning-border: rgba(214, 140, 0, 0.3);
   --accent-blue: #2f6fe0;
@@ -132,7 +132,7 @@
   :root[data-theme="system"] {
     color-scheme: light;
     --primary: #00d38a;
-    --primary-text: #00875a;
+    --primary-text: #007a52;
     --primary-dim: rgba(0, 170, 110, 0.12);
     --primary-ring: rgba(0, 170, 110, 0.35);
     --primary-glow: rgba(0, 190, 120, 0.25);
@@ -152,17 +152,17 @@
     --active: rgba(15, 20, 30, 0.075);
     --text-primary: #14161a;
     --text-secondary: #4d525b;
-    --text-tertiary: #7b818b;
+    --text-tertiary: #686d76;
     --border: #d9dce3;
     --border-subtle: #e8eaef;
     --live: #f03a2e;
-    --donation: #b77c00;
+    --donation: #8f6100;
     --donation-bg: rgba(255, 190, 30, 0.14);
     --donation-border: rgba(214, 150, 0, 0.4);
     --subscription: #7a4fd6;
     --subscription-bg: rgba(122, 79, 214, 0.1);
     --error: #e1352a;
-    --warning: #b86e00;
+    --warning: #9a5c00;
     --warning-bg: rgba(255, 170, 0, 0.1);
     --warning-border: rgba(214, 140, 0, 0.3);
     --accent-blue: #2f6fe0;
@@ -775,7 +775,7 @@ html, body {
     radial-gradient(1100px 420px at 15% -12%, var(--primary-dim), transparent 62%),
     var(--deck);
 }
-:focus-visible { outline: none; }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; } /* 전역 기본 초점 링 — 개별 규칙이 없는 요소도 키보드 초점이 보이게(예전엔 outline: none 으로 지웠다) */
 .btn, .icon-btn, .chip, .seg, .link-btn, .nav-item, .queue-item, .recent-item, select.select {
   transition: background 0.16s var(--ease-out), color 0.16s var(--ease-out), border-color 0.16s var(--ease-out),
     box-shadow 0.16s var(--ease-out), transform 0.16s var(--ease-out);

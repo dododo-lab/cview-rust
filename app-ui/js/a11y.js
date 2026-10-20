@@ -27,19 +27,37 @@ export function nextIndex(rects, from, dir) {
 
 const DIRS = { ArrowRight: 'right', ArrowLeft: 'left', ArrowDown: 'down', ArrowUp: 'up' };
 
-function labelIconButtons(root) {
-  for (const b of root.querySelectorAll('button[title]:not([aria-label]), [role=button][title]:not([aria-label])')) {
-    if (!b.textContent.trim() || b.classList.contains('icon-btn')) b.setAttribute('aria-label', b.title);
-  }
+const ICON_BUTTON = 'button[title]:not([aria-label]), [role=button][title]:not([aria-label])';
+
+function labelOne(b) {
+  if (!b.textContent.trim() || b.classList.contains('icon-btn')) b.setAttribute('aria-label', b.title);
 }
+
+function labelIconButtons(root) {
+  if (root.matches && root.matches(ICON_BUTTON)) labelOne(root);
+  for (const b of root.querySelectorAll(ICON_BUTTON)) labelOne(b);
+}
+
+// 채팅 목록은 줄이 프레임마다 들어오지만 아이콘 버튼이 없다 — 그 안의 변화는 보지 않는다.
+const SKIP = '.chat-list, .mc-merged-list';
 
 export function installA11y() {
   labelIconButtons(document);
+  // 새로 붙은 노드만 훑는다(예전엔 변화마다 문서 전체를 다시 검색해 채팅 묶음마다 비용이 들었다).
+  const queue = new Set();
   let pending = false;
-  new MutationObserver(() => {
-    if (pending) return;
+  new MutationObserver((records) => {
+    for (const r of records) {
+      if (r.target.closest && r.target.closest(SKIP)) continue;
+      for (const n of r.addedNodes) if (n.nodeType === 1) queue.add(n);
+    }
+    if (pending || !queue.size) return;
     pending = true;
-    requestAnimationFrame(() => { pending = false; labelIconButtons(document); });
+    requestAnimationFrame(() => {
+      pending = false;
+      for (const n of queue) if (n.isConnected) labelIconButtons(n);
+      queue.clear();
+    });
   }).observe(document.body, { childList: true, subtree: true });
 
   document.addEventListener('keydown', (e) => {

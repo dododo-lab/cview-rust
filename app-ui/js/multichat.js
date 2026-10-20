@@ -54,7 +54,7 @@ export class MultiChatPage {
           <form class="chat-input mc-merged-input"><select class="select mc-target"></select><input type="text" maxlength="100" placeholder="선택한 채널로 보내기" autocomplete="off"><button class="btn primary">보내기</button></form>
         </div>
       </div>
-      <div class="ml-picker mc-picker" hidden><div class="ml-picker-panel"><header class="ml-picker-head"><strong>채널 추가</strong><input type="search" class="ml-picker-filter" placeholder="채널·제목으로 찾기"><button class="icon-btn" data-mc="picker-close">✕</button></header><div class="ml-picker-list"></div></div></div>`;
+      <div class="ml-picker mc-picker" hidden><div class="ml-picker-panel"><header class="ml-picker-head"><strong>채널 추가</strong><input type="search" class="ml-picker-filter" placeholder="채널·제목으로 찾기"><button class="icon-btn" data-mc="picker-close" title="닫기" aria-label="닫기">✕</button></header><div class="ml-picker-list"></div></div></div>`;
     content.append(this.root);
     this.panesBox = this.root.querySelector('.mc-panes');
     this.overview = this.root.querySelector('.mc-overview');
