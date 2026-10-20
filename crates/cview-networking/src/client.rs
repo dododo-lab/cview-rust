@@ -744,6 +744,8 @@ impl ChzzkApiClient {
         let mut rate_limit_retries: i64 = 0;
         let attempt_limit = self.lock_state().max_retries;
 
+        // POST(팔로우 등)는 같은 요청을 두 번 보내면 두 번 적용될 수 있어 시간 초과·5xx 에 다시 보내지 않는다.
+        let retry_safe = !matches!(endpoint.method(), HttpMethod::Post);
         'retry: while attempt < attempt_limit {
             self.check_auth_context(context).await?;
             tracing::debug!(
@@ -759,7 +761,7 @@ impl ChzzkApiClient {
                     Err(TransportError::TimedOut(m)) | Err(TransportError::ConnectionLost(m)) => {
                         tracing::warn!("Request transport failure: {} error={m}", endpoint.path());
                         last_error = Some(ApiError::NetworkError(m));
-                        if attempt < attempt_limit - 1 {
+                        if retry_safe && attempt < attempt_limit - 1 {
                             tokio::time::sleep(backoff(attempt + 1)).await;
                             attempt += 1;
                             continue 'retry;
@@ -813,7 +815,7 @@ impl ChzzkApiClient {
                     }
                     500..=599 => {
                         last_error = Some(ApiError::http(status as i64));
-                        if attempt < attempt_limit - 1 {
+                        if retry_safe && attempt < attempt_limit - 1 {
                             tokio::time::sleep(backoff(attempt + 1)).await;
                             attempt += 1;
                             continue 'retry;

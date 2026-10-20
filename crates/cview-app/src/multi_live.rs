@@ -735,7 +735,8 @@ impl LayoutPrefsStore for FileLayoutPrefsStore {
         std::fs::read(self.path(key)).ok()
     }
     fn set(&self, key: &str, data: Vec<u8>) {
-        if let Err(e) = std::fs::write(self.path(key), data) {
+        // 원자적으로(임시 파일 + 이름 바꾸기) — 쓰는 중 앱이 죽어도 배치 파일이 잘리지 않게.
+        if let Err(e) = cview_persistence::json::write_atomic(&self.path(key), &data) {
             tracing::warn!("멀티라이브 레이아웃 저장 실패: {e}");
         }
     }

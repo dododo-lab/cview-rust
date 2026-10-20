@@ -73,7 +73,12 @@ impl VodLibraryMutationQueue {
     }
 
     pub fn has_pending(&self) -> bool {
-        !self.inner.lock().unwrap().jobs.is_empty()
+        !self
+            .inner
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .jobs
+            .is_empty()
     }
 
     /// 앞선 같은 항목 작업이 끝난 뒤 `write` 를 실행한다. 작업은 호출자가 기다리지 않아도 돈다.
@@ -88,7 +93,7 @@ impl VodLibraryMutationQueue {
         W: std::future::Future<Output = Result<(), String>> + Send + 'static,
     {
         let (token, task) = {
-            let mut inner = self.inner.lock().unwrap();
+            let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
             inner.sequence = inner.sequence.wrapping_add(1);
             let token = inner.sequence;
             let previous = inner.jobs.get(&video_no).map(|j| j.task.clone());
@@ -142,7 +147,7 @@ impl VodLibraryMutationQueue {
     }
 
     pub fn finish(&self, video_no: i64, token: u64) {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         if inner.jobs.get(&video_no).map(|j| j.token) == Some(token) {
             inner.jobs.remove(&video_no);
         }

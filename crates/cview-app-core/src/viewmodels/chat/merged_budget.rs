@@ -41,7 +41,7 @@ impl MergedChatBudgetCoordinator {
     /// 멤버 등록 후 즉시 재계산. 어떤 뷰모델 잠금도 쥐지 않은 채 불러야 한다.
     pub fn register(&self, view_models: &[ChatViewModel]) {
         {
-            let mut g = self.inner.lock().unwrap();
+            let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
             g.members = view_models.iter().map(|vm| vm.downgrade()).collect();
             g.cached_loads = vec![0; g.members.len()];
             g.last_recompute_at = None;
@@ -50,7 +50,7 @@ impl MergedChatBudgetCoordinator {
     }
 
     pub fn clear(&self) {
-        let mut g = self.inner.lock().unwrap();
+        let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         g.members.clear();
         g.cached_loads.clear();
         g.last_recompute_at = None;
@@ -59,7 +59,7 @@ impl MergedChatBudgetCoordinator {
     pub fn registered_count(&self) -> usize {
         self.inner
             .lock()
-            .unwrap()
+            .unwrap_or_else(|e| e.into_inner())
             .members
             .iter()
             .filter(|w| w.strong_count() > 0)
@@ -74,7 +74,7 @@ impl MergedChatBudgetCoordinator {
     }
 
     fn is_throttled(&self, now: Instant) -> bool {
-        let g = self.inner.lock().unwrap();
+        let g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         matches!(g.last_recompute_at, Some(last) if now.saturating_duration_since(last) < Self::RECOMPUTE_INTERVAL)
     }
 
@@ -92,7 +92,7 @@ impl MergedChatBudgetCoordinator {
     }
 
     fn recompute_with(&self, now: Instant, mut current: Option<&mut ChatState>) {
-        let mut g = self.inner.lock().unwrap();
+        let mut g = self.inner.lock().unwrap_or_else(|e| e.into_inner());
         g.last_recompute_at = Some(now);
         let current_ptr = current.as_ref().map(|s| s.this.as_ptr());
         let live: Vec<(usize, Arc<ChatShared>)> = g

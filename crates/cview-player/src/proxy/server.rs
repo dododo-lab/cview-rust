@@ -273,9 +273,31 @@ fn mask(url: &Url) -> String {
     s.chars().skip(n.saturating_sub(80)).collect()
 }
 
+/// 이 앱 웹뷰의 출처 — macOS `tauri://localhost`, Windows `http(s)://tauri.localhost`.
+const APP_ORIGINS: &[&str] = &[
+    "tauri://localhost",
+    "http://tauri.localhost",
+    "https://tauri.localhost",
+];
+
+/// 프록시를 써도 되는 출처인지. 출처 머리가 없는 요청(영상 요소의 직접 요청·앱 내부 녹화)은 허용하고,
+/// 있으면 앱 출처만 — 사용자가 브라우저로 연 다른 웹페이지가 로컬 포트를 찾아 로그인 쿠키가 붙은 키·재생 목록을
+/// 읽지 못하게. `null` 출처는 샌드박스 iframe 으로 흉내 낼 수 있어 받지 않는다. 순수 함수.
+pub fn origin_allowed(origin: Option<&str>) -> bool {
+    match origin {
+        None => true,
+        Some(o) => APP_ORIGINS.contains(&o.trim()),
+    }
+}
+
 impl LocalStreamProxy {
     /// 요청 하나 처리.
     pub(crate) async fn handle(&self, req: Request<Incoming>) -> Response<Body> {
+        let origin = req.headers().get("origin").and_then(|v| v.to_str().ok());
+        if !origin_allowed(origin) {
+            tracing::warn!(origin = ?origin, "프록시: 앱이 아닌 출처의 요청을 거절");
+            return error_response(403, "Forbidden", false);
+        }
         let uri = req.uri();
         // 절대형 요청 대상(`GET http://x/ HTTP/1.1`)은 경로 검사에서 거절되도록 원문 그대로 둔다.
         let raw = if uri.scheme().is_some() || uri.authority().is_some() {
@@ -805,5 +827,20 @@ impl Drop for MediaStream {
             }
             self.trace.finish("clientAbort");
         }
+    }
+}
+
+#[cfg(test)]
+mod origin_tests {
+    use super::origin_allowed;
+
+    #[test]
+    fn only_app_origins_or_none() {
+        assert!(origin_allowed(None));
+        assert!(origin_allowed(Some("tauri://localhost")));
+        assert!(origin_allowed(Some("http://tauri.localhost")));
+        assert!(!origin_allowed(Some("https://evil.example")));
+        assert!(!origin_allowed(Some("null")));
+        assert!(!origin_allowed(Some("http://localhost:3000")));
     }
 }

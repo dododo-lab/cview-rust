@@ -286,37 +286,69 @@ pub struct VaultSecretStore {
     item: Box<dyn SingleItem>,
     /// `None` = 아직 안 읽음, `Some(Ok)` = 캐시, `Some(Err)` = 읽기 실패(다시 묻지 않음).
     cache: Mutex<Option<VaultCache>>,
+    /// 해석하지 못한 금고 원본을 덮어쓰기 전에 남겨 둘 항목(`vault-backup`).
+    backup: Option<Box<dyn SingleItem>>,
 }
 
 impl VaultSecretStore {
     pub const ACCOUNT: &'static str = "vault";
+    pub const BACKUP_ACCOUNT: &'static str = "vault-backup";
 
     pub fn new(item: Box<dyn SingleItem>) -> Self {
         Self {
             item,
             cache: Mutex::new(None),
+            backup: None,
         }
     }
 
-    /// 실제 키체인 — 서비스 이름 아래 `vault` 항목.
-    pub fn keyring(service_name: &str) -> Result<Self, StoreError> {
-        Ok(Self::new(Box::new(KeyringItem::new(
-            service_name,
-            Self::ACCOUNT,
-        )?)))
+    /// 해석 실패 원본을 남길 항목을 붙인다.
+    pub fn with_backup(mut self, backup: Box<dyn SingleItem>) -> Self {
+        self.backup = Some(backup);
+        self
     }
 
-    fn decode(bytes: &[u8]) -> HashMap<String, Vec<u8>> {
+    /// 실제 키체인 — 서비스 이름 아래 `vault` 항목(+ 해석 실패 대비 `vault-backup`).
+    pub fn keyring(service_name: &str) -> Result<Self, StoreError> {
+        let store = Self::new(Box::new(KeyringItem::new(service_name, Self::ACCOUNT)?));
+        Ok(match KeyringItem::new(service_name, Self::BACKUP_ACCOUNT) {
+            Ok(b) => store.with_backup(Box::new(b)),
+            Err(_) => store,
+        })
+    }
+
+    /// 금고 원본 해석. JSON 이 깨졌으면 `None`(호출자가 원본을 백업한다).
+    fn decode(bytes: &[u8]) -> Option<HashMap<String, Vec<u8>>> {
         use base64::Engine;
-        let raw: HashMap<String, String> = serde_json::from_slice(bytes).unwrap_or_default();
-        raw.into_iter()
-            .filter_map(|(k, v)| {
-                base64::engine::general_purpose::STANDARD
-                    .decode(v)
-                    .ok()
-                    .map(|d| (k, d))
-            })
-            .collect()
+        let raw: HashMap<String, String> = serde_json::from_slice(bytes).ok()?;
+        Some(
+            raw.into_iter()
+                .filter_map(|(k, v)| {
+                    base64::engine::general_purpose::STANDARD
+                        .decode(v)
+                        .ok()
+                        .map(|d| (k, d))
+                })
+                .collect(),
+        )
+    }
+
+    /// 읽은 원본을 지도로 — 깨졌으면 원본을 `vault-backup` 에 남기고 빈 금고로 계속한다.
+    /// 예전엔 조용히 비운 뒤 다음 저장 때 원본(OAuth 토큰·쿠키)을 덮어써 되살릴 길이 없었다.
+    fn decode_or_backup(&self, bytes: &[u8]) -> HashMap<String, Vec<u8>> {
+        if let Some(map) = Self::decode(bytes) {
+            return map;
+        }
+        tracing::error!(
+            bytes = bytes.len(),
+            "비밀 금고를 해석하지 못했습니다 — 원본을 vault-backup 에 남기고 빈 금고로 계속"
+        );
+        if let Some(b) = &self.backup {
+            if let Err(e) = b.set(bytes) {
+                tracing::error!("금고 원본 백업 실패: {e:?}");
+            }
+        }
+        HashMap::new()
     }
 
     fn encode(map: &HashMap<String, Vec<u8>>) -> Result<Vec<u8>, StoreError> {
@@ -338,7 +370,7 @@ impl VaultSecretStore {
             *guard = Some(
                 self.item
                     .get()
-                    .map(|d| d.map(|b| Self::decode(&b)).unwrap_or_default()),
+                    .map(|d| d.map(|b| self.decode_or_backup(&b)).unwrap_or_default()),
             );
         }
         match guard.as_mut().expect("채움") {
@@ -771,6 +803,39 @@ mod tests {
         v2.delete("cookies").unwrap();
         v2.delete("oauth_tokens").unwrap();
         assert_eq!(item.get().unwrap(), None, "비면 항목을 지운다");
+    }
+
+    #[test]
+    fn vault_corrupt_original_is_backed_up_before_overwrite() {
+        struct Shared(Arc<MemoryItem>);
+        impl SingleItem for Shared {
+            fn get(&self) -> Result<Option<Vec<u8>>, StoreError> {
+                self.0.get()
+            }
+            fn set(&self, d: &[u8]) -> Result<(), StoreError> {
+                self.0.set(d)
+            }
+            fn remove(&self) -> Result<(), StoreError> {
+                self.0.remove()
+            }
+        }
+        let item = Arc::new(MemoryItem::default());
+        let backup = Arc::new(MemoryItem::default());
+        item.set(b"{not json").unwrap();
+        let v = VaultSecretStore::new(Box::new(Shared(item.clone())))
+            .with_backup(Box::new(Shared(backup.clone())));
+        assert_eq!(
+            v.load("cookies").unwrap(),
+            None,
+            "깨진 금고는 빈 금고로 계속"
+        );
+        assert_eq!(
+            backup.get().unwrap().as_deref(),
+            Some(&b"{not json"[..]),
+            "원본은 백업에"
+        );
+        v.save("cookies", b"new").unwrap();
+        assert_eq!(v.load("cookies").unwrap().as_deref(), Some(&b"new"[..]));
     }
 
     #[test]

@@ -52,7 +52,7 @@ pub fn save_frame<R: Runtime>(dir: &Path, window: &WebviewWindow<R>) {
     };
     if frame.is_sane() {
         if let Ok(json) = serde_json::to_vec(&frame) {
-            let _ = std::fs::write(dir.join(FRAME_FILE), json);
+            let _ = cview_persistence::json::write_atomic(&dir.join(FRAME_FILE), &json);
         }
     }
 }

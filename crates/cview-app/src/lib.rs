@@ -300,11 +300,24 @@ pub fn run() {
 
     app.run(|handle, event| {
         if let RunEvent::Exit = event {
+            // 정리는 길어야 3초 — 네트워크가 막혀도 앱이 끝나지 않는 일이 없게.
+            const LIMIT: std::time::Duration = std::time::Duration::from_secs(3);
             if let Some(services) = handle.try_state::<AppServices>() {
-                tauri::async_runtime::block_on(services.shutdown());
+                if tauri::async_runtime::block_on(tokio::time::timeout(LIMIT, services.shutdown()))
+                    .is_err()
+                {
+                    tracing::warn!("종료 정리가 3초를 넘어 건너뜁니다");
+                }
             }
             if let Some(shell) = handle.try_state::<MultiLiveShell>() {
-                tauri::async_runtime::block_on(shell.manager.stop_all());
+                if tauri::async_runtime::block_on(tokio::time::timeout(
+                    LIMIT,
+                    shell.manager.stop_all(),
+                ))
+                .is_err()
+                {
+                    tracing::warn!("멀티라이브 정리가 3초를 넘어 건너뜁니다");
+                }
             }
         }
     });
