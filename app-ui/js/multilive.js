@@ -152,11 +152,13 @@ export class MultiLivePage {
     setInterval(() => this.proposeTick(), 120000);
     // 패인 재생 상태(일시정지·버퍼링·지연) — 화면이 보일 때만 맞춘다.
     setInterval(() => {
-      if (this.root.hidden) return;
+      if (this.root.hidden || document.hidden) return;
+      const now = Date.now();
       for (const p of this.panes.values()) {
         if (!p.sessionId) continue;
         const s = (this.state.sessions || []).find((x) => x.id === p.sessionId);
         p.controls.sync(Boolean(s && s.isAudible));
+        this.watchFirstFrame(p, s, now);
       }
     }, 700);
     this.chat = new ChatPanel(this.root.querySelector('.ml-chat'), { isLoggedIn, onHighlight: (m) => this.alerts.push(m) });
@@ -265,6 +267,8 @@ export class MultiLivePage {
 
   render(state) {
     if (!state) return;
+    // 늦게 도착한 낡은 상태는 무시한다 — 그대로 그리면 방금 재사용된 슬롯을 '닫힌 패인'으로 보고 멈춘다.
+    if (this.state && typeof state.rev === 'number' && typeof this.state.rev === 'number' && state.rev < this.state.rev) return;
     this.state = state;
     const sessions = state.sessions || [];
     const n = sessions.length;
@@ -512,6 +516,28 @@ export class MultiLivePage {
       this.dragId = null;
       if (target && dragged && target !== dragged) this.run(api.multiLiveReorder(dragged, target));
     });
+  }
+
+  /**
+   * 첫 프레임 감시 — 상태는 '재생 중'인데 영상 데이터가 20초 넘게 하나도 없으면 그 패인만 다시 연결한다(최대 2번).
+   * 일부러 로딩을 멈춘 패인(디코드 예산·시청 모드)과 화면에 안 보이는 패인은 보지 않는다.
+   */
+  watchFirstFrame(pane, s, now) {
+    const kind = s && s.state && s.state.kind;
+    let video = null;
+    try { video = pane.bridge.iframe.contentDocument.getElementById('video'); } catch { /* 준비 전 */ }
+    const stuck = kind === 'playing' && !s.decodeSuspended && !pane.el.hidden && video && video.readyState === 0;
+    if (!stuck) {
+      pane.zeroSince = null;
+      if (video && video.readyState > 0) pane.frameRetries = 0;
+      return;
+    }
+    pane.zeroSince ??= now;
+    if (now - pane.zeroSince < 20000 || (pane.frameRetries || 0) >= 2) return;
+    pane.frameRetries = (pane.frameRetries || 0) + 1;
+    pane.zeroSince = now;
+    toast(`${s.channelName || '패인'} 영상이 시작되지 않아 다시 연결합니다`, 2200);
+    this.run(api.multiLiveRetry(s.id));
   }
 
   /** 패인 볼륨을 올리면 그 패인 소리를 켠다(여러 소리 모드면 더하고, 아니면 선택). */

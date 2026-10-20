@@ -763,6 +763,8 @@ pub struct MultiLiveShell {
     pub registry: Arc<PaneRegistry>,
     /// 라이브 메뉴 단독 보기 중(`multilive_watch(Some)`) — 아니면 멀티 허브 규칙(그리드·무대 없음)을 지킨다.
     pub watching: AtomicBool,
+    rev: AtomicU64,
+    last_state: Mutex<Option<MultiLiveStateDto>>,
 }
 
 impl MultiLiveShell {
@@ -807,6 +809,8 @@ impl MultiLiveShell {
             pool,
             registry,
             watching: AtomicBool::new(false),
+            rev: AtomicU64::new(0),
+            last_state: Mutex::new(None),
         }
     }
 
@@ -819,8 +823,22 @@ impl MultiLiveShell {
         self.registry.retain(&players, &chats);
     }
 
-    /// 프런트엔드 상태.
+    /// 프런트엔드 상태 — 내용이 바뀔 때만 오르는 `rev` 를 붙인다. 화면은 상태를 이벤트·명령 응답·1초 주기
+    /// 세 경로로 순서 없이 받으므로, 늦게 온 낡은 상태(재사용된 슬롯을 '닫힌 패인'으로 보고 멈추게 하던 것)를
+    /// `rev` 로 걸러 낸다.
     pub fn state_dto(&self) -> MultiLiveStateDto {
+        let mut dto = self.state_dto_raw();
+        let mut last = self.last_state.lock().unwrap_or_else(|e| e.into_inner());
+        let changed = last.as_ref() != Some(&dto);
+        if changed {
+            *last = Some(dto.clone());
+            self.rev.fetch_add(1, Ordering::SeqCst);
+        }
+        dto.rev = self.rev.load(Ordering::SeqCst);
+        dto
+    }
+
+    fn state_dto_raw(&self) -> MultiLiveStateDto {
         let st = self.manager.read();
         let selected = st.selected_session_id();
         let sessions = st
@@ -848,6 +866,8 @@ impl MultiLiveShell {
                         .chat_of(s.chat())
                         .and_then(|c| c.chat_channel_id()),
                     max_height_cap: engine.as_ref().map(|e| e.max_height_cap()).unwrap_or(0),
+                    decode_suspended: st.decode_active(s.id()) == Some(false)
+                        || engine.as_ref().is_some_and(|e| e.is_loading_suspended()),
                 }
             })
             .collect();
@@ -867,6 +887,7 @@ impl MultiLiveShell {
             vertical_ratio: st.layout_ratios().vertical_ratio,
             multi_audio: st.is_multi_audio_mode(),
             watch_id: st.stage_session_id().map(|u| u.to_string()),
+            rev: 0,
         }
     }
 }
@@ -947,6 +968,8 @@ pub struct MultiLivePaneDto {
     pub chat_channel_id: Option<String>,
     /// 대역폭 코디네이터가 건 높이 상한(0 = 없음).
     pub max_height_cap: i64,
+    /// 디코드 예산·가림·시청 모드로 로딩을 멈춘 패인 — 화면의 첫 프레임 감시가 다시 연결하지 않게.
+    pub decode_suspended: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -970,6 +993,8 @@ pub struct MultiLiveStateDto {
     pub multi_audio: bool,
     /// 라이브 메뉴에서 단독으로 보는(무대에 올린) 세션 — 원본 `FollowingHubMode.watch` 의 stage.
     pub watch_id: Option<String>,
+    /// 상태 순번 — 내용이 바뀔 때만 오른다(같은 내용 비교에서는 0 으로 둔 값끼리 비교).
+    pub rev: u64,
 }
 
 /// `multilive://command` 페이로드.
