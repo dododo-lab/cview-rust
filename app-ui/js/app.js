@@ -25,7 +25,7 @@ import { CommandPalette } from './palette.js';
 import { ChatOnlyPage } from './chat-only.js';
 import { MultiChatPage, multiChatIcon } from './multichat.js';
 import { installPrefsEffects } from './prefs-effects.js';
-import { installBackgroundSaver } from './background-saver.js';
+import { installBackgroundSaver, setMenuHidden } from './background-saver.js';
 import { showMenu } from './chat.js';
 
 // 사이드바 — Swift `AppRouter.SidebarItem` 라벨.
@@ -117,6 +117,42 @@ function setAudioOwner(owner) {
   }
 }
 
+// ── 라이브 ↔ 멀티라이브 연동 (원본 시청/멀티 허브 모드) ──────────────
+// - 멀티라이브에 있는 채널을 라이브로 보면 같은 세션(플레이어·채팅 소켓)을 무대에 올린다 — 다시 연결 없음.
+//   무대가 있는 동안 매니저가 나머지 패인의 로딩을 멈추고, 멀티라이브로 돌아가면 배치 그대로 되살린다.
+// - 멀티라이브에 없는 채널을 라이브 시청 화면(별도 플레이어)으로 보는 동안 멀티라이브 패인은 접어 둔다
+//   (일시정지 → 2.5초 뒤 로딩 정지). 같은 채널이 두 곳에서 동시에 재생되지 않는다.
+const isWatching = () => Boolean(pages.multilive && pages.multilive.watchSlot != null);
+let multiLiveParked = false;
+function setMultiLiveParked(on) {
+  const hasSessions = Boolean(pages.multilive && (pages.multilive.state.sessions || []).length);
+  if (on && !hasSessions) return;
+  if (on === multiLiveParked) return;
+  multiLiveParked = on;
+  api.multiLivePark(on).catch(() => {});
+}
+function multiLiveSessionFor(channelId) {
+  return (pages.multilive.state.sessions || []).find((x) => x.channelId === channelId && x.slot != null) || null;
+}
+let closingForHandoff = false;
+async function enterWatch(sessionId) {
+  if (viewer.isPlaying) { closingForHandoff = true; viewer.close(); closingForHandoff = false; }
+  try {
+    pages.multilive.render(await api.multiLiveWatch(sessionId));
+  } catch (e) { toast(e.message); return; }
+  syncLiveIndicators();
+  await navigate('live');
+}
+async function exitWatch() {
+  try { pages.multilive.render(await api.multiLiveWatch(null)); } catch { /* 앱 밖 */ }
+  syncLiveIndicators();
+}
+/** 사이드바 — 라이브는 재생 중 점, 멀티라이브는 패인 수. */
+function syncLiveIndicators() {
+  sidebar.setPlaying('live', Boolean(viewer && viewer.isPlaying) || isWatching());
+  sidebar.setBadge('multilive', (pages.multilive && (pages.multilive.state.sessions || []).length) || 0);
+}
+
 // 내비게이션 스택 — 원본 AppRouter. 화면마다 파라미터(채널 ID 등)를 가진다.
 const backStack = [];
 let currentParams = {};
@@ -131,20 +167,38 @@ async function navigate(route, params = {}, { push = true } = {}) {
   current = route;
   currentParams = params;
   sidebar.setActive(route);
-  if (insights) insights.show(route === 'live' && viewer && viewer.isPlaying ? 'live' : route);
+  const watching = isWatching();
+  if (insights) insights.show(route === 'live' && viewer && (viewer.isPlaying || watching) ? 'live' : route);
   if (!AUX) saveWorkspace(route, params, viewer && viewer.isPlaying ? viewer.channelId : null);
   // 라이브 메뉴는 재생 중이면 시청 화면, 아니면 이어 볼 채널 목록이다.
+  // 멀티라이브에 있는 채널을 라이브로 볼 때(시청 모드)는 멀티라이브 화면을 단독 무대로 보여 준다.
   const showViewer = route === 'live' && viewer.isPlaying;
+  const showWatch = route === 'live' && !showViewer && watching;
   for (const [id, page] of Object.entries(pages)) {
-    page.root.hidden = showViewer || id !== route;
+    page.root.hidden = showViewer || id !== (showWatch ? 'multilive' : route);
   }
   if (showViewer) {
+    setMenuHidden(viewer.player.iframe, false);
     viewer.reveal();
     setAudioOwner('live');
+    setMultiLiveParked(true);
     return;
   }
   viewer.hide();
-  if (route === 'multilive') { setAudioOwner('multilive'); pages.multilive.chatKey = null; }
+  if (showWatch) {
+    setMultiLiveParked(false);
+    setAudioOwner('multilive');
+    pages.multilive.show();
+    return;
+  }
+  if (route === 'multilive') {
+    if (watching) await exitWatch();
+    // 소리만 꺼진 채 뒤에서 도는 라이브 시청 화면은 화질을 낮춰 디코딩을 줄인다.
+    if (viewer.isPlaying) setMenuHidden(viewer.player.iframe, true);
+    setMultiLiveParked(false);
+    setAudioOwner('multilive');
+    pages.multilive.chatKey = null;
+  }
   // 파라미터는 받겠다고 표시한 화면(채널 상세 등)에만 넘긴다 — 목록 화면의 show(refresh) 와 겹치지 않게.
   if (pages[route].acceptsParams) pages[route].show(params);
   else pages[route].show();
@@ -163,9 +217,11 @@ function openChannelPage(channelId) {
 
 function onViewerClosed() {
   if (AUX === 'player') { api.windowCloseSelf().catch(() => {}); return; }
-  sidebar.setPlaying('live', false);
+  syncLiveIndicators();
   api.multiLiveSetAudioSuspended(false).catch(() => {});
   audioOwner = null;
+  if (closingForHandoff) return;
+  setMultiLiveParked(false);
   if (current === 'live') goBack();
 }
 
@@ -205,20 +261,37 @@ async function logout() {
 }
 
 async function openChannel(channelId) {
+  // 이미 멀티라이브에 있는 채널 — 같은 플레이어를 라이브 무대로(원본 commitExistingWatch).
+  const existing = !AUX && pages.multilive ? multiLiveSessionFor(channelId) : null;
+  if (existing) { await enterWatch(existing.id); return; }
+  if (isWatching()) await exitWatch();
   let player = null;
   try {
     player = (await api.settingsGet()).player;
   } catch { /* 기본값 */ }
   viewer.open(channelId, player);
-  sidebar.setPlaying('live', true);
+  syncLiveIndicators();
   audioOwner = null;
   await navigate('live');
 }
 
 /** 카드·시청 화면의 "멀티라이브에 추가" — 멀티라이브 화면으로 옮겨 패인을 띄운다. */
 async function addToMultiLive(channelId) {
+  // 라이브 시청 화면의 채널이면 넘겨준다 — 시청 화면을 닫고(같은 채널 두 번 재생 없음) 볼륨을 이어받아 선택 패인으로.
+  const handoff = viewer.isPlaying && viewer.channelId === channelId;
+  const volume = handoff ? (viewer.player.isMuted() ? 0 : Number(viewer.volume.value) / 100) : null;
+  if (handoff) { closingForHandoff = true; viewer.close(); closingForHandoff = false; }
   if (current !== 'multilive') await navigate('multilive');
   await pages.multilive.add(channelId);
+  const s = multiLiveSessionFor(channelId);
+  if (!s) return;
+  if (s.id !== pages.multilive.state.selectedId) await pages.multilive.run(api.multiLiveSelect(s.id));
+  const pane = pages.multilive.panes.get(s.slot);
+  if (pane && volume != null) {
+    pane.controls.range.value = String(Math.round(volume * 100));
+    pane.controls.setGain(volume);
+  }
+  syncLiveIndicators();
 }
 
 function installViewerMultiLiveButton() {
@@ -500,6 +573,15 @@ async function main() {
   window.addEventListener('cview:open-clip', (e) => e.detail && navigate('media', { kind: 'clip', id: e.detail.clipUid }));
   window.addEventListener('cview:menu', (e) => { const run = MENU_ACTIONS[e.detail]; if (run) run(); });
   window.addEventListener('cview:play', (e) => e.detail && openChannel(e.detail.channelId));
+  window.addEventListener('cview:ml-watch', (e) => e.detail && enterWatch(e.detail.sessionId));
+  listen(Events.multiLiveState, () => setTimeout(() => {
+    syncLiveIndicators();
+    // 라이브 무대의 채널이 닫혔으면 멀티라이브(남은 패인이 있으면) 또는 이전 화면으로.
+    if (current === 'live' && !viewer.isPlaying && !isWatching()) {
+      if ((pages.multilive.state.sessions || []).length) navigate('multilive', {}, { push: false });
+      else goBack();
+    }
+  }, 0));
   window.addEventListener('cview:navigate', (e) => e.detail && navigate(e.detail.route, e.detail.params || {}));
   window.addEventListener('cview:multi-queue', (e) => e.detail && queueMulti(e.detail.channelIds || []));
   installSidebarExtras({

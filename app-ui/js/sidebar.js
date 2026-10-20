@@ -107,14 +107,25 @@ export class Sidebar {
   renderNav() {
     // 검색은 위쪽 빠른 검색 버튼이 맡는다(같은 메뉴를 두 번 두지 않는다).
     this.nav.innerHTML = this.routes.filter((r) => r.id !== 'search').map((r) => {
-      const badge = r.id === 'following' && this.liveCount
-        ? `<span class="nav-badge">${this.liveCount > 99 ? '99+' : this.liveCount}</span>` : '';
+      const count = r.id === 'following' ? this.liveCount : (this.badges && this.badges.get(r.id));
+      const badge = count ? `<span class="nav-badge">${count > 99 ? '99+' : count}</span>` : '';
       return `
         ${r.section ? `<div class="nav-section">${esc(r.section)}</div>` : ''}
         <button class="nav-item${this.playing.has(r.id) ? ' playing' : ''}" data-route="${r.id}" data-tip="${esc(r.title)}">
           <span class="nav-icon">${r.icon}</span><span class="nav-label">${esc(r.title)}</span>${badge}
         </button>`;
     }).join('');
+  }
+
+  /** 메뉴 옆 숫자(멀티라이브 패인 수 등). 0 이면 지운다. */
+  setBadge(route, count) {
+    if (!this.badges) this.badges = new Map();
+    if ((this.badges.get(route) || 0) === (count || 0)) return;
+    if (count) this.badges.set(route, count); else this.badges.delete(route);
+    const item = this.nav.querySelector(`[data-route="${route}"]`);
+    if (!item) return;
+    item.querySelector('.nav-badge')?.remove();
+    if (count) item.insertAdjacentHTML('beforeend', `<span class="nav-badge">${count > 99 ? '99+' : count}</span>`);
   }
 
   /** 메뉴 옆 "재생 중" 표시(라이브 메뉴). */
