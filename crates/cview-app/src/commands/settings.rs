@@ -135,6 +135,14 @@ pub async fn settings_update(
     patch: Value,
 ) -> CmdResult<SettingsDto> {
     apply_domain(&services, &domain, patch)?;
+    if domain == "appearance" {
+        // 설정 "디버그 로그"를 켜고 끄면 바로 반영하고 화면 수집기에 알린다.
+        if let Ok(dir) = tauri::Manager::path(&app).app_data_dir() {
+            let on = crate::perf_log::forced_by_env() || services.settings.appearance().debug_mode;
+            crate::perf_log::set_enabled(&dir, on);
+            let _ = tauri::Emitter::emit(&app, "perf://enabled", on);
+        }
+    }
     if domain == "general" {
         crate::window_prefs::apply_general(&app, &services.settings.general());
     }
@@ -364,4 +372,38 @@ pub async fn app_info(app: tauri::AppHandle) -> CmdResult<AppInfoDto> {
         os: std::env::consts::OS.into(),
         arch: std::env::consts::ARCH.into(),
     })
+}
+
+/// 화면 수집기의 기록 한 줄(`ui.<kind>`). 디버그 로그가 꺼져 있으면 버린다.
+#[tauri::command]
+pub fn perf_log(kind: String, data: Value) {
+    if crate::perf_log::enabled() {
+        crate::perf_log::count_ui_event();
+        let kind: String = kind
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '.')
+            .take(40)
+            .collect();
+        crate::perf_log::emit(&format!("ui.{kind}"), data);
+    }
+}
+
+/// 디버그 로그 상태 — 켜짐 여부·파일·폴더(설정의 "로그 폴더 열기").
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PerfLogStatusDto {
+    pub enabled: bool,
+    pub forced_by_env: bool,
+    pub file: Option<String>,
+    pub dir: Option<String>,
+}
+
+#[tauri::command]
+pub fn perf_log_status() -> PerfLogStatusDto {
+    PerfLogStatusDto {
+        enabled: crate::perf_log::enabled(),
+        forced_by_env: crate::perf_log::forced_by_env(),
+        file: crate::perf_log::log_file().map(|p| p.to_string_lossy().into_owned()),
+        dir: crate::perf_log::log_dir().map(|p| p.to_string_lossy().into_owned()),
+    }
 }

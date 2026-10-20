@@ -123,6 +123,7 @@ pub async fn player_set_volume(services: State<'_, AppServices>, volume: f32) ->
 /// 플레이어 페이지 `postToSwift(type, data)` 메시지 (`{ type, data }`).
 #[tauri::command]
 pub async fn player_message(services: State<'_, AppServices>, message: Value) -> CmdResult<()> {
+    log_player_page_message("viewer", &message);
     let Some((_, parsed)) = JsMessage::parse(&message, now_seconds()) else {
         return Ok(());
     };
@@ -162,4 +163,21 @@ pub fn now_seconds() -> f64 {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs_f64())
         .unwrap_or(0.0)
+}
+
+/// 디버그 로그 — 플레이어 페이지의 오류·버퍼링·화질 신호(지표 메시지는 화면 수집기가 10초 표본으로 남긴다).
+pub fn log_player_page_message(source: &str, message: &Value) {
+    if !crate::perf_log::enabled() {
+        return;
+    }
+    let kind = message.get("type").and_then(Value::as_str).unwrap_or("");
+    if matches!(
+        kind,
+        "fatalError" | "error" | "playbackState" | "levels" | "forcedHeight" | "playStarted"
+    ) {
+        crate::perf_log::emit(
+            "player.event",
+            serde_json::json!({ "source": source, "type": kind, "data": message.get("data").cloned().unwrap_or(Value::Null) }),
+        );
+    }
 }

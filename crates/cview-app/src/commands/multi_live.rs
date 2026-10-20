@@ -179,6 +179,7 @@ pub async fn multilive_player_message(
     slot: u32,
     message: Value,
 ) -> CmdResult<()> {
+    crate::commands::player::log_player_page_message(&format!("pane{slot}"), &message);
     let Some((_, parsed)) = JsMessage::parse(&message, now_seconds()) else {
         return Ok(());
     };

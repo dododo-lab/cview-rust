@@ -13,6 +13,7 @@ pub mod engine;
 pub mod login;
 pub mod menu;
 pub mod multi_live;
+pub mod perf_log;
 pub mod playback;
 pub mod state;
 pub mod system;
@@ -102,9 +103,24 @@ fn shell_sinks<R: Runtime>(app: &AppHandle<R>) -> ShellSinks {
             let _ = player_app.emit(events::PLAYER_EVENT, dto);
         }),
         chat_event: Arc::new(move |dto| {
+            match &dto {
+                crate::dto::ChatEventDto::Messages { messages, .. } => {
+                    perf_log::count_chat_batch(messages.len());
+                }
+                crate::dto::ChatEventDto::State { state, .. } => {
+                    perf_log::emit("chat.state", serde_json::json!({ "state": state }));
+                }
+                crate::dto::ChatEventDto::Reconnecting => {
+                    perf_log::emit("chat.state", serde_json::json!({ "state": "reconnecting" }));
+                }
+                _ => {}
+            }
             let _ = chat_app.emit(events::CHAT_EVENT, dto);
         }),
         chat_session_event: Arc::new(move |session, event| {
+            if let crate::dto::ChatEventDto::Messages { messages, .. } = &event {
+                perf_log::count_chat_batch(messages.len());
+            }
             let _ = session_app.emit(
                 events::CHAT_SESSION_EVENT,
                 serde_json::json!({ "session": session, "event": event }),
@@ -115,6 +131,7 @@ fn shell_sinks<R: Runtime>(app: &AppHandle<R>) -> ShellSinks {
 
 /// 앱 실행.
 pub fn run() {
+    perf_log::mark_process_start();
     init_tracing();
     let app = tauri::Builder::default()
         // 단일 인스턴스는 다른 플러그인보다 먼저 등록해야 한다(SYS-07).
@@ -129,6 +146,11 @@ pub fn run() {
             let handle = app.handle().clone();
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
+            // 디버그 로그 — 환경 변수로 강제하면 설정을 읽기 전부터 시작 단계를 남긴다.
+            if perf_log::forced_by_env() {
+                perf_log::set_enabled(&data_dir, true);
+            }
+            perf_log::emit("startup.setup_begin", serde_json::json!({}));
             tracing::info!("데이터 디렉터리: {}", data_dir.display());
             let webview = Arc::new(TauriWebViewStore::new(handle.clone()));
             let services = tauri::async_runtime::block_on(AppServices::initialize(
@@ -152,6 +174,11 @@ pub fn run() {
                 }),
                 &data_dir,
             );
+            perf_log::set_enabled(
+                &data_dir,
+                perf_log::forced_by_env() || services.settings.appearance().debug_mode,
+            );
+            perf_log::emit("startup.services_ready", serde_json::json!({}));
             commands::settings::apply_window_theme(&handle, services.settings.appearance().theme);
             window_prefs::apply_on_launch(&handle, &data_dir, &services.settings.general());
             // 창 위치·크기 저장 — 움직이거나 크기를 바꾸면 기록한다(SYS-16).
@@ -196,6 +223,7 @@ pub fn run() {
                 tracing::warn!("메뉴 막대 아이콘을 달지 못했습니다: {e}");
             }
             spawn_auth_tasks(handle);
+            perf_log::emit("startup.setup_end", serde_json::json!({}));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -294,6 +322,8 @@ pub fn run() {
             commands::chat::chat_send,
             commands::settings::settings_get,
             commands::settings::settings_update,
+            commands::settings::perf_log,
+            commands::settings::perf_log_status,
         ])
         .build(tauri::generate_context!())
         .expect("Tauri 앱을 만들지 못했습니다");

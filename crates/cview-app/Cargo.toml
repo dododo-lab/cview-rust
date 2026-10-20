@@ -39,6 +39,7 @@ async-trait.workspace = true
 futures-util.workspace = true
 reqwest.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+sysinfo = { version = "0.39", default-features = false, features = ["system"] }
 tauri-plugin-notification = "2"
 tauri-plugin-deep-link = "2"
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
