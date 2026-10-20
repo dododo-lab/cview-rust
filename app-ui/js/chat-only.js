@@ -64,15 +64,18 @@ export class ChatOnlyPage {
     if (!params.channelId) { if (this.standalone && !this.channelId) this.showPicker(); return; }
     this.root.querySelector('.chat-picker').hidden = true;
     this.channelId = params.channelId;
+    // 빠르게 채널을 바꾸면 늦게 온 정보가 새 채널 머리·채팅을 덮지 않게 순번을 본다.
+    const seq = this.seq = (this.seq || 0) + 1;
     try {
       const live = await api.liveDetail(params.channelId, true);
+      if (seq !== this.seq) return;
       const avatar = safeUrl(live.channelImageUrl);
       this.root.querySelector('.chatonly-avatar').innerHTML = avatar ? `<img class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '';
       this.root.querySelector('.chatonly-title .page-title').textContent = live.channelName || '채팅';
       this.root.querySelector('.chatonly-title .page-subtitle').textContent = live.isLive ? `${live.liveTitle || ''} · ${live.viewerCountText}명 시청 중` : '방송 중이 아닙니다';
       await this.chat.connect(live.chatChannelId, live.channelId);
     } catch (e) {
-      toast(e.message);
+      if (seq === this.seq) toast(e.message);
     }
   }
 }

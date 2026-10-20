@@ -135,14 +135,18 @@ export class ChatPanel {
     this.appendHooks = [];
     this.sendHooks = [];
     PANELS.add(this);
+    // 정리할 것들 — 멀티채팅에서 패널을 닫으면 destroy() 가 푼다.
+    this.cleanups = [];
     this.buildChrome();
     root.querySelector('.chat-input').addEventListener('submit', (e) => {
       e.preventDefault();
       if (this.autocomplete.hidden) this.send();
     });
-    if (session) listen('chat://session-event', (p) => { if (p && p.session === session) this.onEvent(p.event); });
-    else listen(Events.chat, (ev) => this.onEvent(ev));
-    onChatPrefs(() => this.applyPrefs());
+    const unlisten = session
+      ? listen('chat://session-event', (p) => { if (p && p.session === session) this.onEvent(p.event); })
+      : listen(Events.chat, (ev) => this.onEvent(ev));
+    this.cleanups.push(() => Promise.resolve(unlisten).then((un) => typeof un === 'function' && un()).catch(() => {}));
+    this.cleanups.push(onChatPrefs(() => this.applyPrefs()));
     this.applyPrefs();
     this.updateInput();
     installChatExtras(this);
@@ -215,10 +219,12 @@ export class ChatPanel {
     this.emojiButton.addEventListener('click', (e) => { e.stopPropagation(); this.togglePicker(); });
     this.picker.addEventListener('click', (e) => this.onPickerClick(e));
     this.picker.addEventListener('input', () => this.renderPicker());
-    document.addEventListener('click', (e) => {
+    const onDocClick = (e) => {
       if (!this.picker.contains(e.target) && e.target !== this.emojiButton) this.picker.hidden = true;
       if (!this.tray.contains(e.target) && !e.target.closest('.mention-btn')) this.tray.hidden = true;
-    });
+    };
+    document.addEventListener('click', onDocClick);
+    this.cleanups.push(() => document.removeEventListener('click', onDocClick));
 
     this.autocomplete = document.createElement('div');
     this.autocomplete.className = 'chat-autocomplete';
@@ -237,7 +243,7 @@ export class ChatPanel {
       const line = e.target.closest('.chat-line[data-uid]');
       if (line && line.dataset.uid) this.showProfile(line.dataset.uid, line.dataset.nick);
     });
-    document.addEventListener('keydown', (e) => {
+    const onDocKey = (e) => {
       if (!this.active || !this.root.offsetParent) return;
       if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); this.clear(true); }
       if (e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'j') {
@@ -246,7 +252,16 @@ export class ChatPanel {
         updateChatPrefs({ autoScroll: on });
         toast(on ? '자동 스크롤 켬' : '자동 스크롤 끔', 1200);
       }
-    });
+    };
+    document.addEventListener('keydown', onDocKey);
+    this.cleanups.push(() => document.removeEventListener('keydown', onDocKey));
+  }
+
+  /** 패널을 버린다(멀티채팅에서 채널 닫기) — 이벤트 구독·문서 리스너·설정 구독·패널 목록에서 뺀다. */
+  async destroy() {
+    await this.disconnect();
+    for (const fn of this.cleanups.splice(0)) { try { await fn(); } catch { /* 무시 */ } }
+    PANELS.delete(this);
   }
 
   applyPrefs() {

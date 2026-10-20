@@ -148,6 +148,8 @@ export class MediaPage {
 
   leave() {
     clearInterval(this.saveTimer);
+    // 클립은 치지직 임베드 iframe 이라 화면을 떠나도 소리가 계속 났다 — 비운다.
+    for (const f of this.root.querySelectorAll('iframe.clip-embed')) f.src = 'about:blank';
     const v = this.video;
     if (v) {
       this.saveProgress();

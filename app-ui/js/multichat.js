@@ -97,7 +97,10 @@ export class MultiChatPage {
       try {
         const s = await api.settingsGet();
         const mc = s.multiChat || {};
-        this.layout = mc.isGridLayout ? 'grid' : 'tabs';
+        // 설정에는 그리드 여부만 있어 '통합' 배치는 이 기기에 따로 기억한다.
+        let saved = null;
+        try { saved = localStorage.getItem('cview.mc.layout'); } catch { /* 저장 불가 */ }
+        this.layout = ['grid', 'tabs', 'merged'].includes(saved) ? saved : (mc.isGridLayout ? 'grid' : 'tabs');
         for (const saved of (mc.savedSessions || []).slice(0, MAX_CHANNELS)) await this.add(saved.channelId, false);
         if (mc.selectedChannelId) this.focus(mc.selectedChannelId);
       } catch { /* 처음 */ }
@@ -111,13 +114,20 @@ export class MultiChatPage {
       selectedChannelId: this.active,
       isGridLayout: this.layout === 'grid',
     }).catch(() => {});
+    try { localStorage.setItem('cview.mc.layout', this.layout); } catch { /* 저장 불가 */ }
   }
 
   async add(channelId, save = true) {
     if (!channelId || this.channels.some((c) => c.channelId === channelId)) { this.focus(channelId); return; }
-    if (this.channels.length >= MAX_CHANNELS) { toast(`최대 ${MAX_CHANNELS}개까지 볼 수 있어요`); return; }
+    // 추가 중인 채널 — 더블클릭·복원과 사용자 추가가 겹쳐 같은 채널이 두 번(같은 세션 키로) 붙지 않게.
+    this.pendingAdds ??= new Set();
+    if (this.pendingAdds.has(channelId)) return;
+    if (this.channels.length + this.pendingAdds.size >= MAX_CHANNELS) { toast(`최대 ${MAX_CHANNELS}개까지 볼 수 있습니다`); return; }
+    this.pendingAdds.add(channelId);
     let live;
-    try { live = await api.liveDetail(channelId, false); } catch (e) { toast(e.message); return; }
+    try { live = await api.liveDetail(channelId, false); } catch (e) { this.pendingAdds.delete(channelId); toast(e.message); return; }
+    this.pendingAdds.delete(channelId);
+    if (this.channels.some((c) => c.channelId === channelId)) { this.focus(channelId); return; }
     const color = COLORS[this.channels.length % COLORS.length];
     const el = document.createElement('div');
     el.className = 'mc-pane';
@@ -143,7 +153,7 @@ export class MultiChatPage {
     const i = this.channels.findIndex((c) => c.channelId === channelId);
     if (i < 0) return;
     const [c] = this.channels.splice(i, 1);
-    await c.panel.disconnect();
+    await c.panel.destroy();
     c.el.remove();
     if (this.active === channelId) this.active = this.channels[0]?.channelId || null;
     this.persist();
