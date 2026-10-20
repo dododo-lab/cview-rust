@@ -2,7 +2,7 @@
 // 고르면 그 카테고리 라이브만 본다. 자주 보는 카테고리는 고정한다 (NAV-02).
 import { api } from './api.js';
 import { esc, safeUrl } from './dom.js';
-import { liveGrid, emptyState, loadingState, compactCount } from './cards.js';
+import { liveGrid, emptyState, loadingState, compactCount, skeletonGrid } from './cards.js';
 import { categoryGroups, arrangeLives } from './pages.js';
 
 export const categoryIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="8" height="8" rx="2.5"/><rect x="13" y="3" width="8" height="8" rx="2.5" opacity=".6"/><rect x="3" y="13" width="8" height="8" rx="2.5" opacity=".6"/><rect x="13" y="13" width="8" height="8" rx="2.5"/></svg>';
@@ -53,7 +53,7 @@ export class CategoriesPage {
   async show(params = {}) {
     if (params.category !== undefined) this.category = params.category;
     const seq = ++this.seq;
-    if (!this.lives.length || params.refresh) this.body.innerHTML = loadingState();
+    if (!this.lives.length || params.refresh) this.body.innerHTML = skeletonGrid(12);
     try {
       const lives = await api.popularLives(300, Boolean(params.refresh));
       if (seq !== this.seq) return;

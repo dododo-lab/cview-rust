@@ -45,16 +45,17 @@ export function channelRow(channel) {
 }
 
 export function emptyState(title, detail = '', action = '') {
-  return `<div class="empty"><strong>${esc(title)}</strong>${detail ? `<span>${esc(detail)}</span>` : ''}${action}</div>`;
+  return `<div class="empty"><div class="empty-logo" aria-hidden="true"></div><strong>${esc(title)}</strong>${detail ? `<span>${esc(detail)}</span>` : ''}${action}</div>`;
 }
 
-export function loadingState() {
-  return '<div class="empty"><div class="spinner"></div></div>';
+/** 로딩 — 로고 로더(motion.css) + 문구. */
+export function loadingState(caption = '불러오는 중…') {
+  return `<div class="empty loading"><div class="spinner" aria-hidden="true"></div><span class="loading-caption">${esc(caption)}</span></div>`;
 }
 
 /** 카드 격자 스켈레톤 — 원본 SkeletonViews (SYS-14). */
 export function skeletonGrid(n = 8) {
-  return `<div class="grid">${Array.from({ length: n }, () => '<div class="sk-card"><div class="sk thumb-sk"></div><div class="sk line"></div><div class="sk line short"></div></div>').join('')}</div>`;
+  return `<div class="loading-row"><div class="spinner" aria-hidden="true"></div><span>불러오는 중…</span></div><div class="grid">${Array.from({ length: n }, () => '<div class="sk-card"><div class="sk thumb-sk"></div><div class="sk line"></div><div class="sk line short"></div></div>').join('')}</div>`;
 }
 
 /** 갱신 시각 캡션 — 원본 FreshnessCaption. */

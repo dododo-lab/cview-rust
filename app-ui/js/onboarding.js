@@ -6,16 +6,22 @@ export function splashStep(text, fraction) {
   const el = document.getElementById('splash');
   if (!el) return;
   el.querySelector('.splash-step').textContent = text;
-  if (fraction != null) el.querySelector('.splash-bar span').style.width = `${Math.round(fraction * 100)}%`;
+  if (fraction != null) el.querySelector('.splash-bar span').style.setProperty('--p', String(Math.max(0.04, Math.min(1, fraction))));
 }
 
-/** 스플래시를 걷는다(짧게 페이드). */
+// 너무 빨리 준비돼도 로고가 번쩍이고 사라지지 않게 최소 0.4초는 보인다(인위적 지연은 그뿐).
+const SPLASH_MIN_MS = 400;
+
+/** 스플래시를 걷는다 — 로고가 살짝 커지며 사라지고 앱이 그 뒤에서 떠오른다. */
 export function hideSplash() {
   const el = document.getElementById('splash');
-  if (!el) return;
+  if (!el || el.classList.contains('leaving')) return;
+  const wait = SPLASH_MIN_MS - performance.now();
+  if (wait > 0) { setTimeout(hideSplash, wait); return; }
   splashStep('완료', 1);
   el.classList.add('leaving');
-  setTimeout(() => el.remove(), 360);
+  document.body.classList.add('app-entering');
+  setTimeout(() => { el.remove(); document.body.classList.remove('app-entering'); }, 460);
 }
 
 const STEPS = [

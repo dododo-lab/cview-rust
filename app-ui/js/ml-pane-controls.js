@@ -31,6 +31,7 @@ export function paneControlsHtml() {
   const I = PANE_ICON;
   return `
       <button class="ml-center-play" data-mp="play" aria-label="재생">${I.play}</button>
+      <div class="spinner ml-buffer" aria-hidden="true"></div>
       <div class="ml-pane-bar">
         <button class="ml-pane-btn" data-mp="play" title="일시정지" aria-label="일시정지">${I.pause}</button>
         <div class="ml-vol">

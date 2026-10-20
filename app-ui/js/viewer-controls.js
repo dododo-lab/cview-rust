@@ -142,6 +142,11 @@ export class ViewerControls {
     this.center.innerHTML = ICON.play;
     this.center.addEventListener('click', () => this.togglePlay());
     stage.append(this.center);
+    // 버퍼링 — 영상 가운데 로고 로더(motion.css). 재생 중 데이터가 모자라면 보이고 다시 재생되면 숨는다.
+    const buffer = document.createElement('div');
+    buffer.className = 'spinner stage-buffer';
+    buffer.setAttribute('aria-hidden', 'true');
+    stage.append(buffer);
 
     // 위쪽 오버레이(채널·제목·바로 전환·창 동작)도 아래 막대와 함께 나타나고 숨는다.
     const top = stage.querySelector('.stage-top');
@@ -173,6 +178,10 @@ export class ViewerControls {
         doc.__cviewWake = true;
         doc.addEventListener('mousemove', this.wake);
         doc.addEventListener('mousedown', this.wake);
+        // 미디어 이벤트는 거품이 일지 않아 캡처로 받는다.
+        const setBuffering = (on) => stage.classList.toggle('buffering', on);
+        doc.addEventListener('waiting', () => setBuffering(true), true);
+        for (const t of ['playing', 'canplay', 'pause', 'emptied', 'ended']) doc.addEventListener(t, () => setBuffering(false), true);
         const style = doc.createElement('style');
         style.textContent = 'html.cview-idle, html.cview-idle * { cursor: none !important; }';
         doc.head.append(style);
@@ -211,6 +220,8 @@ export class ViewerControls {
     const v = this.video;
     const paused = !v || v.paused;
     this.stage.classList.toggle('paused', Boolean(v && v.paused && v.readyState > 0));
+    // 버퍼링 표시는 미디어 이벤트가 켜고 끄지만, 이벤트를 놓쳐도 데이터가 충분하면 지운다.
+    if (v && v.readyState >= 3) this.stage.classList.remove('buffering');
     if (this.stage.classList.contains('paused') && this.wake) this.wake();
     this.playButton.innerHTML = paused ? ICON.play : ICON.pause;
     this.playButton.title = paused ? '재생 (Space)' : '일시정지 (Space)';
