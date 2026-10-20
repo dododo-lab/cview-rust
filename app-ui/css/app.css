@@ -689,10 +689,12 @@ select.select {
   background: var(--surface-elevated);
 }
 .queue-thumb img { width: 100%; height: 100%; object-fit: cover; }
-.queue-progress { position: absolute; left: 0; bottom: 0; height: 3px; width: 0; background: var(--primary); }
+/* 진행 막대는 width 가 아니라 transform 으로 — width 애니메이션은 매 프레임 레이아웃·페인트에 위의 흐림 층 재합성까지 불러
+   홈 대기 중 CPU 125%·GPU 283 ms/s 를 썼다(perf/baseline.md). scaleX 는 합성기만 움직인다. */
+.queue-progress { position: absolute; left: 0; bottom: 0; height: 3px; width: 100%; background: var(--primary); transform: scaleX(0); transform-origin: left center; will-change: transform; }
 .queue-item.active .queue-progress { animation: queue-progress 7s linear forwards; }
 .hero:hover .queue-item.active .queue-progress { animation-play-state: paused; }
-@keyframes queue-progress { to { width: 100%; } }
+@keyframes queue-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 .queue-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .queue-title {
   font-size: var(--fs-caption); font-weight: 600; line-height: 1.3;
@@ -971,7 +973,8 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .sidebar.collapsed .nav-item.playing::after {
   content: ""; position: absolute; top: 7px; right: 9px; width: 7px; height: 7px; border-radius: 50%; background: var(--live);
 }
-@keyframes live-pulse { 50% { box-shadow: 0 0 0 5px rgba(255, 59, 48, 0); } }
+/* 깜박임은 box-shadow 가 아니라 opacity 로 — box-shadow 애니메이션은 재생 내내 매 프레임 다시 그린다. */
+@keyframes live-pulse { 50% { opacity: 0.35; } }
 
 /* ══ 시청 화면 컨트롤 (viewer-controls.js) ═══════════════════ */
 .live-chip {

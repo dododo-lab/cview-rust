@@ -160,8 +160,9 @@
 /* 오디오 글로우 (MUL-09) — 소리가 나는 패인 테두리가 은은하게 숨 쉰다 */
 .ml-pane.audible::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 4;
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary) 70%, transparent), 0 0 18px var(--primary-glow);
-  animation: ml-audio-glow 2.4s ease-in-out infinite; }
-@keyframes ml-audio-glow { 50% { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary) 35%, transparent), 0 0 6px transparent; } }
+  animation: ml-audio-glow 2.4s ease-in-out infinite; will-change: opacity; }
+/* 숨 쉬기는 opacity 로 — 패인 크기 box-shadow 를 애니메이션하면 영상 위를 매 프레임 다시 그린다. */
+@keyframes ml-audio-glow { 50% { opacity: 0.45; } }
 :root[data-motion="reduced"] .ml-pane.audible::after { animation: none; }
 
 /* ══ 상단 바(툴바) — 한 줄 그룹, 높이 30px 통일, 옅은 구분선 ══ */
