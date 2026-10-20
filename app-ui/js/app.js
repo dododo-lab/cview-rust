@@ -134,9 +134,8 @@ function setMultiLiveParked(on) {
 function multiLiveSessionFor(channelId) {
   return (pages.multilive.state.sessions || []).find((x) => x.channelId === channelId && x.slot != null) || null;
 }
-let closingForHandoff = false;
 async function enterWatch(sessionId) {
-  if (viewer.isPlaying) { closingForHandoff = true; viewer.close(); closingForHandoff = false; }
+  if (viewer.isPlaying) await viewer.close({ silent: true });
   try {
     pages.multilive.render(await api.multiLiveWatch(sessionId));
   } catch (e) { toast(e.message); return; }
@@ -220,7 +219,6 @@ function onViewerClosed() {
   syncLiveIndicators();
   api.multiLiveSetAudioSuspended(false).catch(() => {});
   audioOwner = null;
-  if (closingForHandoff) return;
   setMultiLiveParked(false);
   if (current === 'live') goBack();
 }
@@ -280,7 +278,7 @@ async function addToMultiLive(channelId) {
   // 라이브 시청 화면의 채널이면 넘겨준다 — 시청 화면을 닫고(같은 채널 두 번 재생 없음) 볼륨을 이어받아 선택 패인으로.
   const handoff = viewer.isPlaying && viewer.channelId === channelId;
   const volume = handoff ? (viewer.player.isMuted() ? 0 : Number(viewer.volume.value) / 100) : null;
-  if (handoff) { closingForHandoff = true; viewer.close(); closingForHandoff = false; }
+  if (handoff) await viewer.close({ silent: true });
   if (current !== 'multilive') await navigate('multilive');
   await pages.multilive.add(channelId);
   const s = multiLiveSessionFor(channelId);

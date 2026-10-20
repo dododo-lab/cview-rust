@@ -175,10 +175,26 @@ export class LibraryPage {
     const a = e.target.closest('[data-lib]');
     if (!a) return;
     if (a.dataset.lib === 'recent-clear') {
+      // 시청 기록 전체 삭제는 되돌릴 수 없어 한 번 더 눌러야 지운다.
+      if (a.dataset.armed !== '1') {
+        const label = a.textContent;
+        a.dataset.armed = '1';
+        a.textContent = '한 번 더 누르면 모두 지웁니다';
+        setTimeout(() => { if (a.dataset.armed === '1') { a.dataset.armed = ''; a.textContent = label; } }, 3000);
+        return;
+      }
+      a.dataset.armed = '';
       try { await api.recentChannelsClear(); toast('최근 시청 기록을 지웠습니다', 1500); this.load(); } catch (er) { toast(er.message); }
     } else if (a.dataset.lib === 'bookmark-delete') {
+      // 바로 지우지 않고 숨긴 뒤, 되돌리기 시간이 지나면 지운다.
       const row = a.closest('[data-bookmark-id]');
-      try { await api.bookmarkDelete(row.dataset.bookmarkId); row.remove(); } catch (er) { toast(er.message); }
+      row.hidden = true;
+      let undone = false;
+      toast('북마크를 지웠습니다', 5000, { label: '되돌리기', run: () => { undone = true; row.hidden = false; } });
+      setTimeout(async () => {
+        if (undone) return;
+        try { await api.bookmarkDelete(row.dataset.bookmarkId); row.remove(); } catch (er) { row.hidden = false; toast(er.message); }
+      }, 5200);
     } else if (a.dataset.lib === 'bookmark-channel') {
       this.onOpenChannel(a.dataset.channelId);
     }

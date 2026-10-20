@@ -260,7 +260,9 @@ export class ChatPanel {
 
   // ── 연결 ───────────────────────────────────
 
+  // 연결 순번 — 빠른 채널·패인 전환 때 늦게 끝난 connect/disconnect 가 새 연결 상태를 덮지 않게.
   async connect(chatChannelId, channelId) {
+    const seq = this.connSeq = (this.connSeq || 0) + 1;
     if (!this.session) for (const p of PANELS) if (p !== this && !p.session) p.active = false;
     this.clear();
     this.active = true;
@@ -281,8 +283,10 @@ export class ChatPanel {
     }
     try {
       const res = await api.chatConnect(chatChannelId, channelId, this.session);
+      if (seq !== this.connSeq) return;
       this.canSend = Boolean(res && res.canSend);
     } catch (e) {
+      if (seq !== this.connSeq) return;
       this.setState('failed');
       this.system(e.message);
     }
@@ -296,11 +300,13 @@ export class ChatPanel {
   }
 
   async disconnect() {
+    const seq = this.connSeq = (this.connSeq || 0) + 1;
     this.active = false;
     this.connected = false;
     this.canSend = false;
     this.ranking.clear();
     try { await api.chatDisconnect(this.session); } catch { /* 무시 */ }
+    if (seq !== this.connSeq) return;
     this.setState('disconnected');
     this.updateInput();
   }

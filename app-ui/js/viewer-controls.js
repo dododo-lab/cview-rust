@@ -83,7 +83,7 @@ export class ViewerControls {
     const overlay = root.querySelector('.player-overlay');
     overlay.insertAdjacentHTML('beforeend', '<button class="btn primary overlay-retry" hidden>다시 시도</button>');
     this.retry = overlay.querySelector('.overlay-retry');
-    this.retry.addEventListener('click', () => viewer.channelId && viewer.open(viewer.channelId));
+    this.retry.addEventListener('click', () => viewer.channelId && viewer.open(viewer.channelId, viewer.lastSettings));
     // 오버레이 표시·문구가 바뀔 때만 버튼을 맞춘다(버튼 자체는 감시하지 않는다 — 자기 변경으로 다시 깨지 않게).
     const label = overlay.querySelector('span');
     const sync = () => {

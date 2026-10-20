@@ -43,7 +43,8 @@ export class Viewer {
     listen(Events.playerEvent, (ev) => this.onPlayerEvent(ev));
 
     root.querySelector('#viewer-close').addEventListener('click', () => this.close());
-    root.querySelector('#reload').addEventListener('click', () => this.channelId && this.open(this.channelId));
+    // 다시 연결은 처음 열 때의 플레이어 설정(음소거로 시작 등)을 그대로 쓴다.
+    root.querySelector('#reload').addEventListener('click', () => this.channelId && this.open(this.channelId, this.lastSettings));
     root.querySelector('#fullscreen').addEventListener('click', () => {
       const stage = root.querySelector('.player-stage');
       if (document.fullscreenElement) document.exitFullscreen();
@@ -124,6 +125,7 @@ export class Viewer {
   async open(channelId, settings) {
     const token = ++this.startToken;
     this.channelId = channelId;
+    if (settings) this.lastSettings = settings;
     this.root.hidden = false;
     this.renderHeader(null);
     this.showOverlay(PHASE_TEXT.loadingInfo);
@@ -154,14 +156,18 @@ export class Viewer {
     }
   }
 
-  async close() {
-    this.startToken += 1;
+  /**
+   * 닫기. `silent` 면 onClose(뒤로 가기 등)를 부르지 않는다 — 채널을 멀티라이브로 넘기는 경우.
+   * 기다리는 동안 다른 방송을 열면(open 이 토큰을 올림) 낡은 onClose 가 새 방송에서 뒤로 가지 않게 건너뛴다.
+   */
+  async close({ silent = false } = {}) {
+    const token = ++this.startToken;
     this.root.hidden = true;
     this.channelId = null;
     this.alerts.clear();
     this.showOverlay('');
     await Promise.allSettled([api.playerStop(), this.chat.disconnect()]);
-    if (this.onClose) this.onClose();
+    if (!silent && token === this.startToken && this.onClose) this.onClose();
   }
 
   setMuted(muted) {
@@ -197,7 +203,8 @@ export class Viewer {
   }
 
   onPlayerEvent(ev) {
-    if (!ev || !this.isOpen) return;
+    // 다른 메뉴로 가서 화면만 숨었어도 재생은 계속되므로 종료·오류는 받아 둔다(돌아왔을 때 낡은 화면이 남지 않게).
+    if (!ev || !this.channelId) return;
     if (ev.type === 'phase') {
       if (ev.phase === 'playing' || ev.phase === 'idle') return;
       const text = PHASE_TEXT[ev.phase];
