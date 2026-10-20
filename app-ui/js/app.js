@@ -25,6 +25,7 @@ import { CommandPalette } from './palette.js';
 import { ChatOnlyPage } from './chat-only.js';
 import { MultiChatPage, multiChatIcon } from './multichat.js';
 import { installPrefsEffects } from './prefs-effects.js';
+import { installBackgroundSaver } from './background-saver.js';
 import { showMenu } from './chat.js';
 
 // 사이드바 — Swift `AppRouter.SidebarItem` 라벨.
@@ -473,6 +474,7 @@ async function main() {
   if (!AUX) insights = new InsightPanel(content, { isLoggedIn });
   bindMultiLiveAddButtons(addToMultiLive);
   installViewerMultiLiveButton();
+  installBackgroundSaver();
 
   for (const p of Object.values(pages)) {
     const body = p.root.querySelector('.page-body');

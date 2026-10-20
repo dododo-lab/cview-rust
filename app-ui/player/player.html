@@ -2435,6 +2435,22 @@ function setRate(rate) {
 // 1080p 저비트레이트 variant가 다시 허용되고, 반대 순서에서는 720p 고비트레이트
 // variant가 허용된다. 원본 한계를 저장한 뒤 둘 다 만족하는 최고 레벨만 적용한다.
 const _adaptiveLevelCap = { maxKbps: 0, maxHeight: 0 };
+// [BG-SAVER 2026-10-20] 창이 오래 안 보이면 앱이 거는 백그라운드 높이 상한(0 = 없음). 소리는 계속 나야 해서
+//   재생은 멈출 수 없으니 보이지 않는 1080p 디코딩만 줄인다. 다른 높이 캡과 함께 더 작은 쪽을 쓴다.
+let _backgroundCapHeight = 0;
+function effectiveCapHeight() {
+    const a = _adaptiveLevelCap.maxHeight, b = _backgroundCapHeight;
+    return a > 0 && b > 0 ? Math.min(a, b) : (a || b);
+}
+function setBackgroundSaver(maxHeight) {
+    const next = Number.isFinite(maxHeight) && maxHeight > 0 ? maxHeight : 0;
+    if (next === _backgroundCapHeight) return;
+    _backgroundCapHeight = next;
+    applyAdaptiveLevelCap();
+    if (_forcedHeight > 0) applyForcedHeight();
+    else if (_lockTopLevel) applyTopLevelLock();
+    if (_preferSourceQuality && !_lockTopLevel) requestPreferredSourceLevel();
+}
 let _decoderPressureCap = -1;
 let _lastFrameQuality = null;
 let _highDropWindows = 0;
@@ -2603,7 +2619,8 @@ function updateDecoderPressure() {
 ///   decoder-pressure" 불변식이며, 대역폭 부족과 디코더 부하는 원인이 다르다.
 function adaptiveCapCeilingIndex(levels) {
     const hasBitrateCap = _adaptiveLevelCap.maxKbps > 0;
-    const hasHeightCap = _adaptiveLevelCap.maxHeight > 0;
+    const capHeight = effectiveCapHeight();
+    const hasHeightCap = capHeight > 0;
     if (!hasBitrateCap && !hasHeightCap) return -1;
     if (!levels || !levels.length) return -1;
     for (let i = levels.length - 1; i >= 0; i--) {
@@ -2611,7 +2628,7 @@ function adaptiveCapCeilingIndex(levels) {
         const fitsBitrate = !hasBitrateCap
             || ((Number(level.bitrate) || 0) / 1000) <= _adaptiveLevelCap.maxKbps;
         const fitsHeight = !hasHeightCap
-            || (Number(level.height) || 0) <= _adaptiveLevelCap.maxHeight;
+            || (Number(level.height) || 0) <= capHeight;
         if (fitsBitrate && fitsHeight) return i;
     }
     return 0;
@@ -2621,7 +2638,8 @@ function applyAdaptiveLevelCap() {
     if (!hls) return;
     const levels = hls.levels || [];
     const hasBitrateCap = _adaptiveLevelCap.maxKbps > 0;
-    const hasHeightCap = _adaptiveLevelCap.maxHeight > 0;
+    const capHeight = effectiveCapHeight();
+    const hasHeightCap = capHeight > 0;
     const hasDecoderCap = _decoderPressureCap >= 0;
 
     if (!hasBitrateCap && !hasHeightCap && !hasDecoderCap) {
@@ -2639,7 +2657,7 @@ function applyAdaptiveLevelCap() {
     for (let i = levels.length - 1; i >= 0; i--) {
         const level = levels[i];
         const fitsBitrate = !hasBitrateCap || (level.bitrate / 1000) <= _adaptiveLevelCap.maxKbps;
-        const fitsHeight = !hasHeightCap || level.height <= _adaptiveLevelCap.maxHeight;
+        const fitsHeight = !hasHeightCap || level.height <= capHeight;
         if (fitsBitrate && fitsHeight) {
             selectedLevel = i;
             break;
@@ -2786,7 +2804,12 @@ function applyTopLevelLock() {
     const levels = hls.levels || [];
     if (!levels.length) return;
     // hls.js levels 는 bitrate 오름차순 정렬 — 마지막이 최고 화질.
-    const top = levels.length - 1;
+    let top = levels.length - 1;
+    // [BG-SAVER] 창이 오래 안 보이는 동안만 백그라운드 높이 상한 아래 최고 레벨로. requestManualLevel 은
+    //   버퍼가 있으면 nextLevel(플러시 없음)로 바꾸므로 소리가 끊기지 않고, 다시 보이면 같은 길로 돌아온다.
+    if (_backgroundCapHeight > 0) {
+        while (top > 0 && (Number(levels[top].height) || 0) > _backgroundCapHeight) top--;
+    }
     requestManualLevel(top);
 }
 function setLockTopLevel(on) {
