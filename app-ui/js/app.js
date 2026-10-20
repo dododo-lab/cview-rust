@@ -188,6 +188,8 @@ async function navigate(route, params = {}, { push = true } = {}) {
     return;
   }
   viewer.hide();
+  // 다른 메뉴로 옮겨 뒤에서 소리만 나는 라이브 시청 화면은 화질을 낮춰 보이지 않는 1080p 디코딩을 줄인다(PiP 중이면 그대로).
+  if (viewer.isPlaying) setMenuHidden(viewer.player.iframe, true);
   if (showWatch) {
     setMultiLiveParked(false);
     setAudioOwner('multilive');
@@ -196,8 +198,6 @@ async function navigate(route, params = {}, { push = true } = {}) {
   }
   if (route === 'multilive') {
     if (watching) await exitWatch();
-    // 소리만 꺼진 채 뒤에서 도는 라이브 시청 화면은 화질을 낮춰 디코딩을 줄인다.
-    if (viewer.isPlaying) setMenuHidden(viewer.player.iframe, true);
     setMultiLiveParked(false);
     setAudioOwner('multilive');
     pages.multilive.chatKey = null;
@@ -221,6 +221,7 @@ function openChannelPage(channelId) {
 function onViewerClosed() {
   if (AUX === 'player') { api.windowCloseSelf().catch(() => {}); return; }
   syncLiveIndicators();
+  setMenuHidden(viewer.player.iframe, false);
   api.multiLiveSetAudioSuspended(false).catch(() => {});
   audioOwner = null;
   setMultiLiveParked(false);

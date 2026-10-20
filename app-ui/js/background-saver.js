@@ -7,17 +7,27 @@ const BACKGROUND_HEIGHT = 360;
 // 메뉴를 옮겨 화면에서 빠진 플레이어(예: 멀티라이브를 보는 동안의 라이브 시청 화면) — 창이 다시 보여도 상한을 유지한다.
 const menuHidden = new WeakSet();
 
-/** 화면에서 빠진 플레이어에 백그라운드 상한을 바로 건다/푼다. */
+/** PiP 로 떠 있는 영상 — 메인 창에서 빠져도 사용자는 보고 있으니 상한을 걸지 않는다. */
+function inPip(iframe) {
+  try {
+    const d = iframe.contentDocument;
+    const v = d && d.getElementById('video');
+    return !!v && (v.webkitPresentationMode === 'picture-in-picture' || d.pictureInPictureElement === v);
+  } catch { return false; }
+}
+
+/** 화면에서 빠진 플레이어에 백그라운드 상한을 바로 건다/푼다(PiP 중이면 걸지 않는다). */
 export function setMenuHidden(iframe, on) {
   if (!iframe) return;
   if (on) menuHidden.add(iframe); else menuHidden.delete(iframe);
-  try { iframe.contentWindow?.setBackgroundSaver?.(on ? BACKGROUND_HEIGHT : 0); } catch { /* 준비 전 */ }
+  const cap = on && !inPip(iframe) ? BACKGROUND_HEIGHT : 0;
+  try { iframe.contentWindow?.setBackgroundSaver?.(cap); } catch { /* 준비 전 */ }
 }
 
 function players() {
   const out = [];
   for (const f of document.querySelectorAll('iframe')) {
-    if (menuHidden.has(f)) continue;
+    if (menuHidden.has(f) || inPip(f)) continue;
     try {
       const w = f.contentWindow;
       if (w && typeof w.setBackgroundSaver === 'function') out.push(w);
