@@ -40,8 +40,6 @@ for arg in "$@"; do
     *) echo "알 수 없는 옵션: $arg"; exit 2 ;;
   esac
 done
-bundles="app"
-(( dist_build )) && bundles="app,dmg"
 
 identity="${APPLE_SIGNING_IDENTITY:-$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["bundle"]["macOS"].get("signingIdentity") or "")' "$CONF")}"
 if [[ -z "$identity" ]] || ! security find-identity -v -p codesigning | grep -qF "$identity"; then
@@ -104,7 +102,27 @@ PY
   rm -f target/release/bundle/dmg/*.dmg(N) dist/CView_${version}_arm64.dmg(N)
 fi
 
-(cd crates/cview-app && cargo tauri build --bundles "$bundles")
+(cd crates/cview-app && cargo tauri build --bundles app)
+if (( dist_build )); then
+  # DMG 만들기는 임시 이미지를 떼어 낼 때 "리소스 사용 중"(새 볼륨을 Spotlight·Finder 가 잠깐 잡음)으로 가끔 실패한다.
+  # 남은 임시 이미지를 강제로 떼고 몇 번 다시 시도한다(앱은 위에서 이미 빌드·서명됐으므로 bundle 만 다시).
+  dmg_ok=0
+  for attempt in 1 2 3; do
+    for dev in $(hdiutil info -plist | python3 -c '
+import plistlib, sys
+for img in plistlib.loads(sys.stdin.buffer.read()).get("images", []):
+    if "/rw." in img.get("image-path", "") and "CView_" in img.get("image-path", ""):
+        ents = [e["dev-entry"] for e in img.get("system-entities", []) if "dev-entry" in e]
+        if ents: print(min(ents, key=len))'); do
+      hdiutil detach "$dev" -force >/dev/null 2>&1 || true
+    done
+    rm -f target/release/bundle/macos/rw.*.dmg(N)
+    if (cd crates/cview-app && cargo tauri bundle --bundles dmg); then dmg_ok=1; break; fi
+    echo "⚠︎ DMG 만들기 실패($attempt/3) — 잠시 뒤 다시 시도합니다."
+    sleep 5
+  done
+  (( dmg_ok )) || { echo "✗ DMG 를 만들지 못했습니다"; exit 1; }
+fi
 
 app="target/release/bundle/macos/CView.app"
 [[ -d "$app" ]] || { echo "번들을 찾지 못했습니다: $app"; exit 1; }
