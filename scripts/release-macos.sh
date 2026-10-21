@@ -162,7 +162,22 @@ if (( dist_build )); then
   fi
   echo "── 공증(프로파일 $CVIEW_NOTARIZE_PROFILE)"
   # notarytool 은 결과가 Invalid 여도 0 으로 끝나므로 상태를 직접 확인한다.
-  result=$(xcrun notarytool submit "$out" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --wait --output-format json)
+  # notarytool 이 기다리는 중 스스로 죽는 일이 있다(2026-10-21 SIGBUS — 문자열 포맷 중 스택 가드, 애플 도구 쪽).
+  # 시그널로 끝났으면(종료 코드 > 128) 다시 낸다. 앞 제출은 서버에서 그냥 끝난다.
+  result=""
+  for attempt in 1 2 3; do
+    if result=$(xcrun notarytool submit "$out" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --wait --no-progress --output-format json); then
+      break
+    else
+      code=$?
+      if (( code <= 128 || attempt == 3 )); then
+        echo "✗ notarytool 실패(종료 코드 $code)"
+        exit 1
+      fi
+      echo "⚠︎ notarytool 이 시그널 $((code - 128)) 로 끝났습니다($attempt/3) — 다시 제출합니다"
+      sleep 5
+    fi
+  done
   echo "$result"
   sub_status=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("status",""))' "$result")
   sub_id=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("id",""))' "$result")
