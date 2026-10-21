@@ -102,6 +102,18 @@ const emoticonCache = new Map();
 /** 모든 채팅 패널 — Rust 채팅 세션은 하나라 마지막으로 연결한 패널만 이벤트를 그린다. */
 const PANELS = new Set();
 
+/**
+ * 로그인 상태가 바뀌면(로그인·만료·로그아웃) 열린 채팅을 새 신원으로 다시 연결한다 — 비로그인으로 붙은 채팅은
+ * 로그인한 뒤에도 익명 연결이라 보내기가 되지 않았다(닫았다 열어야 했다). 입력창 상태도 함께 고친다.
+ */
+export function refreshChatAuth() {
+  for (const p of PANELS) {
+    p.updateInput();
+    const live = p.chatChannelId && (p.session || p.active);
+    if (live && p.authAtConnect !== p.isLoggedIn()) p.connect(p.chatChannelId, p.channelId);
+  }
+}
+
 export class ChatPanel {
   /**
    * @param {HTMLElement} root `.chat` 패널
@@ -292,6 +304,7 @@ export class ChatPanel {
     this.ranking.load(channelId);
     this.loadEmoticons(channelId);
     this.setState('connecting');
+    this.authAtConnect = this.isLoggedIn();
     if (!chatChannelId) {
       this.setState('failed');
       this.system('채팅 채널 정보가 없습니다');

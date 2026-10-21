@@ -27,7 +27,7 @@ import { MultiChatPage, multiChatIcon } from './multichat.js';
 import { installPrefsEffects } from './prefs-effects.js';
 import { installBackgroundSaver, setMenuHidden } from './background-saver.js';
 import { installPerfCollector } from './perf-collector.js';
-import { showMenu } from './chat.js';
+import { showMenu, refreshChatAuth } from './chat.js';
 import { kbd } from './platform.js';
 
 // 사이드바 — Swift `AppRouter.SidebarItem` 라벨.
@@ -242,6 +242,7 @@ function onAuthChanged(status) {
   renderAccount();
   if (wasLoggedIn !== isLoggedIn()) refreshSidebarFollowing();
   if (viewer) viewer.refreshAuth();
+  if (wasLoggedIn !== isLoggedIn()) refreshChatAuth();
   if (wasLoggedIn !== isLoggedIn() && current && current !== 'search' && !(viewer && viewer.isOpen)) {
     pages[current].show();
   }
