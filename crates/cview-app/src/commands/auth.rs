@@ -2,6 +2,9 @@
 
 use tauri::{AppHandle, Emitter, Runtime, State};
 
+use cview_core::error::ApiError;
+use cview_networking::response::UserStatusInfo;
+
 use super::{events, CmdResult};
 use crate::dto::AuthStatusDto;
 use crate::state::AppServices;
@@ -17,17 +20,83 @@ pub async fn current_status(services: &AppServices) -> AuthStatusDto {
     if !status.logged_in {
         return status;
     }
-    match services.api.user_status().await {
-        Ok(user) if user.logged_in == Some(false) => {
+    let result = services.api.user_status().await;
+    match session_check(&result) {
+        SessionCheck::ServerLoggedOut => {
             if services.auth.expire_cookie_session(generation) {
                 return AuthStatusDto::from_state(&services.auth.auth_state());
             }
             status
         }
-        Ok(user) => status.with_profile(user.nickname, user.profile_image_url),
-        Err(e) => {
-            tracing::debug!("사용자 상태 조회 실패: {e}");
+        SessionCheck::Valid => match result {
+            Ok(user) => status.with_profile(user.nickname, user.profile_image_url),
+            Err(_) => status,
+        },
+        SessionCheck::Unknown => {
+            if let Err(e) = &result {
+                tracing::debug!("사용자 상태 조회 실패: {e}");
+            }
             status
+        }
+    }
+}
+
+/// 사용자 상태 응답으로 본 세션 판정.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SessionCheck {
+    /// 서버가 로그인으로 본다(또는 판정 값이 없다 — 로그인을 잃지 않는 쪽).
+    Valid,
+    /// 서버가 분명히 로그아웃이라고 답했다.
+    ServerLoggedOut,
+    /// 네트워크·서버 오류 — 알 수 없음, 상태를 바꾸지 않는다.
+    Unknown,
+}
+
+pub(crate) fn session_check(result: &Result<UserStatusInfo, ApiError>) -> SessionCheck {
+    match result {
+        Ok(user) if user.logged_in == Some(false) => SessionCheck::ServerLoggedOut,
+        Ok(_) => SessionCheck::Valid,
+        Err(_) => SessionCheck::Unknown,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn user(logged_in: Option<bool>) -> Result<UserStatusInfo, ApiError> {
+        Ok(UserStatusInfo {
+            has_profile: None,
+            user_id_hash: None,
+            nickname: None,
+            profile_image_url: None,
+            penalties: None,
+            logged_in,
+        })
+    }
+
+    #[test]
+    fn only_a_definite_server_logout_expires_the_session() {
+        assert_eq!(
+            session_check(&user(Some(false))),
+            SessionCheck::ServerLoggedOut
+        );
+        assert_eq!(session_check(&user(Some(true))), SessionCheck::Valid);
+        // 판정 값이 없으면 로그인을 잃지 않는 쪽.
+        assert_eq!(session_check(&user(None)), SessionCheck::Valid);
+    }
+
+    #[test]
+    fn network_and_server_errors_are_unknown() {
+        for e in [
+            ApiError::NetworkError("timed out".into()),
+            ApiError::RateLimited { retry_after: 1.0 },
+            ApiError::http(500),
+            ApiError::http(503),
+            ApiError::Unauthorized,
+            ApiError::Cancelled,
+        ] {
+            assert_eq!(session_check(&Err(e)), SessionCheck::Unknown);
         }
     }
 }
