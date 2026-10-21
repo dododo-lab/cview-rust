@@ -286,17 +286,24 @@ async function openChannel(channelId) {
 async function addToMultiLive(channelId) {
   // 라이브 시청 화면의 채널이면 넘겨준다 — 시청 화면을 닫고(같은 채널 두 번 재생 없음) 볼륨을 이어받아 선택 패인으로.
   const handoff = viewer.isPlaying && viewer.channelId === channelId;
-  const volume = handoff ? (viewer.player.isMuted() ? 0 : Number(viewer.volume.value) / 100) : null;
-  if (handoff) await viewer.close({ silent: true });
+  const muted = handoff && viewer.player.isMuted();
+  if (handoff) {
+    // 패인은 설정의 볼륨을 기본으로 튼다 — 시청 화면 볼륨을 먼저 저장해 같은 크기로 이어받는다.
+    // (예전엔 이 값을 패인 배율에도 넣어 볼륨이 제곱으로 줄었다: 30% → 9%.)
+    await api.playerSetVolume(Number(viewer.volume.value) / 100).catch(() => {});
+    await viewer.close({ silent: true });
+  }
   if (current !== 'multilive') await navigate('multilive');
   await pages.multilive.add(channelId);
   const s = multiLiveSessionFor(channelId);
   if (!s) return;
   if (s.id !== pages.multilive.state.selectedId) await pages.multilive.run(api.multiLiveSelect(s.id));
   const pane = pages.multilive.panes.get(s.slot);
-  if (pane && volume != null) {
-    pane.controls.range.value = String(Math.round(volume * 100));
-    pane.controls.setGain(volume);
+  // 음소거였으면 패인도 끈 채로(소리 버튼을 누르면 원래 크기로).
+  if (pane && muted) {
+    pane.controls.lastGain = 1;
+    pane.controls.range.value = '0';
+    pane.controls.setGain(0);
   }
   syncLiveIndicators();
 }
