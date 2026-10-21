@@ -128,7 +128,10 @@ for img in plistlib.loads(sys.stdin.buffer.read()).get("images", []):
       hdiutil detach "$dev" -force >/dev/null 2>&1 || true
     done
     rm -f target/release/bundle/macos/rw.*.dmg(N)
-    if (cd crates/cview-app && cargo tauri bundle --bundles app,dmg); then dmg_ok=1; break; fi
+    # CI=true → tauri 가 bundle_dmg.sh 에 --skip-jenkins 를 넘긴다: Finder 를 열어 아이콘을 배치하는 AppleScript 를 건너뛰어
+    # 만드는 동안 화면에 창이 뜨지 않는다(사용자 요청 2026-10-21). 임시 이미지는 원래 -noautoopen -nobrowse 로 붙는다.
+    # 대신 창 크기·아이콘 위치 같은 꾸밈은 없다 — Applications 바로가기(끌어다 설치)는 그대로 들어간다.
+    if (cd crates/cview-app && CI=true cargo tauri bundle --bundles app,dmg); then dmg_ok=1; break; fi
     echo "⚠︎ DMG 만들기 실패($attempt/3) — 잠시 뒤 다시 시도합니다."
     sleep 5
   done
