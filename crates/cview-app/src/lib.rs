@@ -170,8 +170,10 @@ pub fn run() {
             perf_log::emit("startup.setup_begin", serde_json::json!({}));
             tracing::info!("데이터 디렉터리: {}", data_dir.display());
             let webview = Arc::new(TauriWebViewStore::new(handle.clone()));
+            let keychain_service = state::keychain_service_name(&handle.config().identifier);
             let services = tauri::async_runtime::block_on(AppServices::initialize(
                 &data_dir,
+                &keychain_service,
                 webview,
                 shell_sinks(&handle),
             ));

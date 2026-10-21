@@ -187,6 +187,12 @@ impl std::fmt::Debug for AppServices {
 /// 이 앱이 읽을 때마다 macOS 가 키체인 비밀번호를 묻는다 — 번들 ID 를 따라 따로 둔다.
 pub const KEYCHAIN_SERVICE_NAME: &str = "app.cview.rust.auth";
 
+/// 번들 ID 를 따르는 키체인 서비스명 — 배포 앱(`app.cview.rust`)은 [`KEYCHAIN_SERVICE_NAME`] 그대로이고,
+/// 다른 ID 로 만든 시험 빌드는 자기 항목을 쓴다(배포 앱의 항목을 읽다가 키체인 암호 창을 띄우지 않게).
+pub fn keychain_service_name(identifier: &str) -> String {
+    format!("{identifier}.auth")
+}
+
 impl AppServices {
     /// 서비스를 만든다. tokio 런타임 안에서 불러야 한다(API 캐시 정리 작업을 띄운다).
     /// 인증 복원은 하지 않는다 — 호출자가 `auth.initialize()` 를 따로 부른다.
@@ -194,10 +200,11 @@ impl AppServices {
     /// `data_dir` 아래에 SQLite 스토어와 설정 미러를 둔다. 스토어를 열지 못하면 저장 없이 동작한다.
     pub async fn initialize(
         data_dir: &Path,
+        keychain_service: &str,
         webview: Arc<dyn WebViewDataStore>,
         sinks: ShellSinks,
     ) -> Self {
-        let keychain = Arc::new(KeychainService::new(KEYCHAIN_SERVICE_NAME));
+        let keychain = Arc::new(KeychainService::new(keychain_service));
         let cookies = Arc::new(
             CookieManager::new(keychain.clone(), Arc::new(CookieJar::new()))
                 .with_webview_store(webview),
@@ -551,6 +558,12 @@ mod tests {
             .filter_map(|e| e.ok())
             .any(|e| e.file_name().to_string_lossy().contains(".corrupt-"));
         assert!(moved, "손상 파일은 지우지 않고 옆으로 옮긴다");
+    }
+
+    #[test]
+    fn release_app_keeps_its_keychain_service() {
+        assert_eq!(keychain_service_name("app.cview.rust"), KEYCHAIN_SERVICE_NAME);
+        assert_ne!(keychain_service_name("app.cview.rust.test"), KEYCHAIN_SERVICE_NAME);
     }
 
     #[test]
