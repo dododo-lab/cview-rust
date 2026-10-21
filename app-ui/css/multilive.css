@@ -222,6 +222,11 @@
 .ml-pane.ctl-visible .ml-pane-top, .ml-pane.ctl-visible .ml-pane-bar, .ml-pane.paused .ml-pane-top, .ml-pane.paused .ml-pane-bar { opacity: 1; transform: none; }
 .ml-pane:not(.ctl-visible):not(.paused) :is(.ml-pane-top, .ml-pane-bar) * { pointer-events: none !important; }
 .ml-pane-top .ml-pane-text, .ml-pane-top .grow, .ml-pane-bar .grow { pointer-events: none; }
+/* 막대가 보일 때 조작 요소는 마우스를 받는다. 막대 자체는 영상 클릭(패인 선택)을 막지 않게 none 인데, 그 none 이 상속돼
+   단추(.ml-pane-btn)만 빼고 볼륨 슬라이더·LIVE 알약·아바타가 마우스를 받지 못했다 — 소리 아이콘에 올려 펼쳐도
+   슬라이더로 옮기는 순간 아래 패인으로 빠져 다시 접혔다(라이브 메뉴의 단독 보기도 이 패인이다). */
+.ml-pane.ctl-visible :is(.ml-pane-top, .ml-pane-bar) :is(button, input, .ml-vol, .ml-pane-avatar),
+.ml-pane.paused :is(.ml-pane-top, .ml-pane-bar) :is(button, input, .ml-vol, .ml-pane-avatar) { pointer-events: auto; }
 .ml-pane.idle, .ml-pane.idle .ml-pane-hit { cursor: none; }
 .ml-pane-btn, .ml-pane-close { flex: none; width: 30px; height: 30px; border-radius: 7px; border: 0; display: grid; place-items: center; background: none; color: rgba(255, 255, 255, 0.92); cursor: pointer; transition: background 0.15s ease, color 0.15s ease; }
 .ml-pane-btn svg { width: 18px; height: 18px; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5)); }
