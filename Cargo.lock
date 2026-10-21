@@ -765,7 +765,7 @@ checksum = "914a755b7c2d4af2bdcff7ce1739e2db9a1b81a9b07123d8015786ae03c0980d"
 
 [[package]]
 name = "cview-app"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -801,7 +801,7 @@ dependencies = [
 
 [[package]]
 name = "cview-app-core"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "async-trait",
  "chrono",
@@ -825,7 +825,7 @@ dependencies = [
 
 [[package]]
 name = "cview-auth"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -848,7 +848,7 @@ dependencies = [
 
 [[package]]
 name = "cview-chat"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "chrono",
  "cview-core",
@@ -866,7 +866,7 @@ dependencies = [
 
 [[package]]
 name = "cview-core"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "async-trait",
  "chrono",
@@ -882,7 +882,7 @@ dependencies = [
 
 [[package]]
 name = "cview-networking"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "async-trait",
  "chrono",
@@ -900,7 +900,7 @@ dependencies = [
 
 [[package]]
 name = "cview-persistence"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -921,7 +921,7 @@ dependencies = [
 
 [[package]]
 name = "cview-player"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "aes",
  "async-trait",
