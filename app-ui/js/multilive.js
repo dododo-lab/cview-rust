@@ -334,7 +334,7 @@ export class MultiLivePage {
       if (pane.sessionId !== s.id) {
         const used = [...this.panes.values()].filter((p) => p !== pane && p.sessionId && p.hue != null).map((p) => p.hue);
         pane.hue = pickTintHue(used);
-        pane.el.style.setProperty('--ml-tint', `hsl(${pane.hue} 75% 62%)`);
+        pane.el.style.setProperty('--ml-hue', String(pane.hue));
       }
       pane.sessionId = s.id;
       this.renderPane(pane, s, order.indexOf(s.id), s.id === state.selectedId);
@@ -355,7 +355,7 @@ export class MultiLivePage {
     const shown = [...this.panes.values()].find((p) => p.sessionId && p.sessionId === state.selectedId);
     const chatEl = this.root.querySelector('.ml-chat');
     chatEl.classList.toggle('tinted', Boolean(shown));
-    if (shown) chatEl.style.setProperty('--ml-tint', `hsl(${shown.hue} 75% 62%)`);
+    if (shown) chatEl.style.setProperty('--ml-hue', String(shown.hue));
   }
 
   renderPane(pane, s, index, selected) {
