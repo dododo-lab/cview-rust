@@ -330,25 +330,39 @@ pub fn run() {
 
     app.run(|handle, event| {
         if let RunEvent::Exit = event {
-            // 정리는 길어야 3초 — 네트워크가 막혀도 앱이 끝나지 않는 일이 없게.
-            const LIMIT: std::time::Duration = std::time::Duration::from_secs(3);
-            if let Some(services) = handle.try_state::<AppServices>() {
-                if tauri::async_runtime::block_on(tokio::time::timeout(LIMIT, services.shutdown()))
-                    .is_err()
-                {
-                    tracing::warn!("종료 정리가 3초를 넘어 건너뜁니다");
-                }
-            }
-            if let Some(shell) = handle.try_state::<MultiLiveShell>() {
-                if tauri::async_runtime::block_on(tokio::time::timeout(
-                    LIMIT,
-                    shell.manager.stop_all(),
-                ))
-                .is_err()
-                {
-                    tracing::warn!("멀티라이브 정리가 3초를 넘어 건너뜁니다");
-                }
+            // 종료 정리는 tao 의 applicationWillTerminate(extern "C") 안에서 돈다 — 여기서 패닉이 나면 풀 수 없어
+            // 앱이 abort 로 죽는다(재부팅·로그아웃·⌘Q 때 크래시 보고서). 그래서 패닉을 잡아 기록만 하고 넘긴다.
+            let cleanup = std::panic::AssertUnwindSafe(|| exit_cleanup(handle));
+            if std::panic::catch_unwind(cleanup).is_err() {
+                tracing::error!("종료 정리 중 패닉 — 정리를 건너뛰고 끝냅니다");
             }
         }
     });
+}
+
+/// 종료 정리(서비스·멀티라이브)를 함께 돌리고 길어야 3초만 기다린다 — 네트워크가 막혀도 앱이 끝나지 않는 일이 없게.
+/// 타이머(`tokio::time::timeout`)는 반드시 런타임 안(async 블록)에서 만든다: 밖에서 만들면 "no reactor running" 패닉.
+fn exit_cleanup<R: Runtime>(handle: &AppHandle<R>) {
+    const LIMIT: std::time::Duration = std::time::Duration::from_secs(3);
+    let started = std::time::Instant::now();
+    let services = handle.try_state::<AppServices>();
+    let shell = handle.try_state::<MultiLiveShell>();
+    // block_on 은 이 스레드를 막고 기다리므로 State 를 빌린 채로 넘겨도 된다.
+    let done = tauri::async_runtime::block_on(async {
+        let services = async {
+            if let Some(services) = &services {
+                services.shutdown().await;
+            }
+        };
+        let multilive = async {
+            if let Some(shell) = &shell {
+                shell.manager.stop_all().await;
+            }
+        };
+        tokio::time::timeout(LIMIT, async { tokio::join!(services, multilive) }).await
+    });
+    if done.is_err() {
+        tracing::warn!("종료 정리가 3초를 넘어 건너뜁니다");
+    }
+    tracing::info!(ms = started.elapsed().as_millis() as u64, "종료 정리 끝");
 }
