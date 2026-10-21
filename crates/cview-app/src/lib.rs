@@ -46,12 +46,29 @@ fn spawn_auth_tasks<R: Runtime>(app: AppHandle<R>) {
     tauri::async_runtime::spawn(async move {
         let services = app.state::<AppServices>();
         let mut states = services.auth.auth_state_stream();
+        let mut expired = services.api.subscribe_session_expired();
         services.auth.initialize().await;
         services.sync_authentication().await;
+        // broadcast_status 는 쿠키 세션을 서버에 확인한다 — 죽은 세션이면 여기서 만료로 바뀌고 아래 루프가 다시 알린다.
         broadcast_status(&app, &services).await;
-        while states.recv().await.is_some() {
-            // 상태 전이마다(로그인·로그아웃·만료) 최신 상태를 다시 계산해 보낸다.
-            while states.try_recv().is_ok() {}
+        loop {
+            tokio::select! {
+                state = states.recv() => {
+                    if state.is_none() {
+                        break;
+                    }
+                    // 상태 전이마다(로그인·로그아웃·만료) 최신 상태를 다시 계산해 보낸다.
+                    while states.try_recv().is_ok() {}
+                }
+                signal = expired.recv() => {
+                    if matches!(signal, Err(tokio::sync::broadcast::error::RecvError::Closed)) {
+                        break;
+                    }
+                    // 쓰는 도중 서버가 401 을 줬다 — 메모된 사용자 상태를 버리고 서버에 다시 확인한다.
+                    while expired.try_recv().is_ok() {}
+                    services.api.invalidate_authentication_cache().await;
+                }
+            }
             services.sync_authentication().await;
             broadcast_status(&app, &services).await;
         }

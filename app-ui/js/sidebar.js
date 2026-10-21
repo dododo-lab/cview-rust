@@ -183,9 +183,10 @@ export class Sidebar {
         <button class="icon-btn account-action" data-action="logout" data-tip="로그아웃" aria-label="로그아웃">${icons.logout}</button>`;
     } else {
       const busy = auth && auth.state === 'loggingIn';
+      const expired = auth && auth.state === 'expired';
       el.innerHTML = `
         <div class="account-avatar"><div class="avatar guest">${icons.user}</div></div>
-        <div class="account-name">비로그인<small>${busy ? '로그인 중…' : '팔로우·채팅 이용'}</small></div>
+        <div class="account-name">${expired ? '로그인 만료' : '비로그인'}<small>${busy ? '로그인 중…' : expired ? '다시 로그인해 주세요' : '팔로우·채팅 이용'}</small></div>
         <button class="btn primary account-login" data-action="login" data-tip="네이버 로그인" ${busy ? 'disabled' : ''}>
           <span class="login-icon">${icons.login}</span><span class="nav-label">로그인</span>
         </button>`;

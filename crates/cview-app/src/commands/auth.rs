@@ -6,13 +6,24 @@ use super::{events, CmdResult};
 use crate::dto::AuthStatusDto;
 use crate::state::AppServices;
 
-/// 현재 인증 상태. 로그인 상태면 게임 API 사용자 상태에서 닉네임·프로필을 붙인다(실패해도 무시).
+/// 현재 인증 상태. 로그인 상태면 게임 API 사용자 상태에서 닉네임·프로필을 붙인다.
+///
+/// 쿠키 세션은 이 조회가 곧 서버 확인이다 — 서버가 분명히 로그아웃(`loggedIn=false`)이라고 답하면
+/// (재부팅 사이 세션 만료·다른 기기에서 로그아웃 등) 로그인 만료로 바꾼다. 네트워크·서버 오류는
+/// 알 수 없음이라 상태를 그대로 둔다(유효한 로그인을 잃지 않게).
 pub async fn current_status(services: &AppServices) -> AuthStatusDto {
+    let generation = services.auth.authentication_generation();
     let status = AuthStatusDto::from_state(&services.auth.auth_state());
     if !status.logged_in {
         return status;
     }
     match services.api.user_status().await {
+        Ok(user) if user.logged_in == Some(false) => {
+            if services.auth.expire_cookie_session(generation) {
+                return AuthStatusDto::from_state(&services.auth.auth_state());
+            }
+            status
+        }
         Ok(user) => status.with_profile(user.nickname, user.profile_image_url),
         Err(e) => {
             tracing::debug!("사용자 상태 조회 실패: {e}");

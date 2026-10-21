@@ -30,7 +30,7 @@ pub mod pkce;
 pub mod refresh_failures;
 pub mod secret_store;
 
-pub use cookie::{CookieJar, CookieManager, StoredCookie, WebViewDataStore};
+pub use cookie::{CookieJar, CookieManager, CookieRestore, StoredCookie, WebViewDataStore};
 pub use credentials::{OAuthClientCredentials, OAuthCredentialStore};
 pub use generation::{AuthSessionGeneration, Cancelled};
 pub use login_flow::{LoginAction, LoginPhase, UnifiedLoginFlow};

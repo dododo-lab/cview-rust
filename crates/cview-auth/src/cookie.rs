@@ -170,6 +170,17 @@ impl std::fmt::Debug for CookieManager {
     }
 }
 
+/// 키체인 쿠키 복원 결과.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CookieRestore {
+    /// 인증 쿠키를 되살렸다.
+    Restored,
+    /// 저장된 쿠키가 없다(또는 해석할 수 없다).
+    Empty,
+    /// 키체인을 읽지 못했다(잠김·거부) — 저장된 값은 그대로다.
+    ReadFailed,
+}
+
 impl CookieManager {
     pub fn new(keychain: Arc<KeychainService>, jar: Arc<CookieJar>) -> Self {
         Self {
@@ -238,6 +249,12 @@ impl CookieManager {
 
     /// 보안 저장소에서 쿠키를 복원한다. 두 인증 쿠키가 모두 있으면 true.
     pub fn restore_cookies_from_keychain(&self) -> bool {
+        self.restore_cookies_from_keychain_detailed() == CookieRestore::Restored
+    }
+
+    /// 키체인 쿠키 복원 — 읽기 실패(잠긴 키체인 등)와 "저장된 쿠키 없음"을 구분한다.
+    /// 읽기 실패는 아무것도 지우지 않으며, 호출자가 잠시 뒤 다시 시도할 수 있다.
+    pub fn restore_cookies_from_keychain_detailed(&self) -> CookieRestore {
         let generation = self.session_generation.current();
         let result = (|| -> Result<usize, StoreError> {
             let Some(data) = self.keychain.load(COOKIE_KEYCHAIN_KEY)? else {
@@ -261,14 +278,22 @@ impl CookieManager {
             Ok(entries.len())
         })();
         match result {
-            Ok(0) => false,
+            Ok(0) => CookieRestore::Empty,
             Ok(n) => {
                 tracing::info!("Cookies restored from keychain ({n} cookies)");
-                self.has_cookies()
+                if self.has_cookies() {
+                    CookieRestore::Restored
+                } else {
+                    CookieRestore::Empty
+                }
+            }
+            Err(e @ (StoreError::Backend(_) | StoreError::Io(_))) => {
+                tracing::warn!("Failed to read cookies from keychain: {e}");
+                CookieRestore::ReadFailed
             }
             Err(e) => {
                 tracing::error!("Failed to restore cookies: {e}");
-                false
+                CookieRestore::Empty
             }
         }
     }

@@ -234,7 +234,10 @@ function renderAccount() {
 
 function onAuthChanged(status) {
   const wasLoggedIn = isLoggedIn();
+  const wasExpired = Boolean(auth && auth.state === 'expired');
   auth = status || { loggedIn: false, state: 'loggedOut' };
+  // 서버가 저장된 로그인을 받아 주지 않는다(재부팅 사이 세션 만료 등) — 시작 때든 쓰는 도중이든 한 번 알린다.
+  if (auth.state === 'expired' && !wasExpired) toast('로그인이 만료되었습니다. 다시 로그인해 주세요', 6000);
   setMyNickname(auth.loggedIn ? auth.nickname : '');
   renderAccount();
   if (wasLoggedIn !== isLoggedIn()) refreshSidebarFollowing();

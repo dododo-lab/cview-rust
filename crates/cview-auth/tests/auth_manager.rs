@@ -909,3 +909,106 @@ async fn valid_stored_tokens_restore_without_refresh() {
     assert_eq!(stub.refreshes(), 0);
     f.manager.logout().await;
 }
+
+// MARK: - 재부팅 뒤 세션 확인 (2026-10-21)
+
+fn cookie_fixture(store: Arc<RecordingStore>) -> Fixture {
+    fixture(
+        fixture_config(),
+        keychain_with(store),
+        token_fn(|_| async { Err(unclassified()) }),
+        None,
+        None,
+    )
+}
+
+async fn cookie_login(f: &Fixture) {
+    for name in ["NID_AUT", "NID_SES"] {
+        f.jar
+            .set_cookie(StoredCookie::new(name, "v", "nid.naver.com"));
+    }
+    f.manager.handle_login_success().await;
+    assert_eq!(f.manager.auth_state(), logged_in("cookie"));
+}
+
+/// 로그인 때 지운 OAuth 토큰 기록은 빼고, 이후의 삭제만 본다.
+fn forget_deletions(store: &RecordingStore) {
+    store.deleted_keys.lock().unwrap().clear();
+}
+
+#[tokio::test]
+async fn server_logged_out_expires_cookie_session_without_wiping_keychain() {
+    let store = RecordingStore::new();
+    let f = cookie_fixture(store.clone());
+    cookie_login(&f).await;
+    forget_deletions(&store);
+    let generation = f.manager.authentication_generation();
+    assert!(f.manager.expire_cookie_session(generation));
+    assert_eq!(f.manager.auth_state(), AuthState::Expired);
+    assert!(!f.manager.is_authenticated());
+    // 만료되면 요청에 쿠키를 붙이지 않는다.
+    assert!(AuthTokenProvider::cookies(&f.manager).await.is_none());
+    // 저장된 쿠키는 남는다(다시 로그인하면 덮어쓴다).
+    assert!(store.deleted_keys.lock().unwrap().is_empty());
+    assert_eq!(*store.delete_all_calls.lock().unwrap(), 0);
+    // 두 번째 호출은 이미 만료라 바꾸지 않는다.
+    assert!(!f.manager.expire_cookie_session(generation));
+}
+
+#[tokio::test]
+async fn stale_validation_cannot_expire_newer_login() {
+    let f = cookie_fixture(RecordingStore::new());
+    cookie_login(&f).await;
+    let old = f.manager.authentication_generation();
+    cookie_login(&f).await;
+    assert!(!f.manager.expire_cookie_session(old));
+    assert_eq!(f.manager.auth_state(), logged_in("cookie"));
+}
+
+#[tokio::test]
+async fn expire_ignores_oauth_and_logged_out_states() {
+    let f = cookie_fixture(RecordingStore::new());
+    let g = f.manager.authentication_generation();
+    assert!(!f.manager.expire_cookie_session(g));
+    assert_eq!(f.manager.auth_state(), AuthState::LoggedOut);
+}
+
+#[tokio::test(start_paused = true)]
+async fn locked_keychain_at_boot_is_retried_not_logged_out() {
+    // 쿠키를 저장해 둔 키체인 — 처음엔 잠겨 있다가 풀린다.
+    let store = RecordingStore::new();
+    {
+        let f = cookie_fixture(store.clone());
+        cookie_login(&f).await;
+    }
+    forget_deletions(&store);
+    *store.deny_load.lock().unwrap() = true;
+    let f = cookie_fixture(store.clone());
+    let unlock = {
+        let store = store.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(2_000)).await;
+            *store.deny_load.lock().unwrap() = false;
+        })
+    };
+    f.manager.initialize().await;
+    unlock.await.unwrap();
+    assert_eq!(f.manager.auth_state(), logged_in("cookie"));
+    assert!(store.deleted_keys.lock().unwrap().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn keychain_that_stays_locked_reports_logged_out_and_keeps_values() {
+    let store = RecordingStore::new();
+    {
+        let f = cookie_fixture(store.clone());
+        cookie_login(&f).await;
+    }
+    forget_deletions(&store);
+    *store.deny_load.lock().unwrap() = true;
+    let f = cookie_fixture(store.clone());
+    f.manager.initialize().await;
+    assert_eq!(f.manager.auth_state(), AuthState::LoggedOut);
+    assert!(store.deleted_keys.lock().unwrap().is_empty());
+    assert_eq!(*store.delete_all_calls.lock().unwrap(), 0);
+}

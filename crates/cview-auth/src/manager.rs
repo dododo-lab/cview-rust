@@ -27,7 +27,7 @@ use tokio::sync::mpsc;
 use tokio::task::{AbortHandle, JoinHandle};
 use tokio::time::Instant;
 
-use crate::cookie::CookieManager;
+use crate::cookie::{CookieManager, CookieRestore};
 use crate::oauth_models::{OAuthTokens, OAuthUserProfile};
 use crate::oauth_service::ChzzkOAuthService;
 use crate::refresh_failures::AuthServiceError;
@@ -45,6 +45,11 @@ pub const OFFLINE_REFRESH_RETRY: Duration = Duration::from_secs(15);
 const AUTO_REFRESH_LEAD_SECS: i64 = 15 * 60;
 /// 자동 회전 1차 실패 뒤 재시도 간격.
 const AUTO_REFRESH_RETRY_DELAY: Duration = Duration::from_secs(30);
+/// 시작 때 키체인 읽기 실패(잠김·준비 전)를 다시 시도하는 횟수와 간격.
+const KEYCHAIN_RESTORE_ATTEMPTS: usize = 3;
+const KEYCHAIN_RESTORE_RETRY_DELAY: Duration = Duration::from_millis(1_500);
+/// 쿠키 로그인 상태의 `user_id`.
+pub const COOKIE_METHOD: &str = "cookie";
 
 type SharedBool = Shared<BoxFuture<'static, bool>>;
 type SharedUnit = Shared<BoxFuture<'static, ()>>;
@@ -249,7 +254,25 @@ impl AuthManager {
         }
         let generation = self.begin_session();
         let cm = &self.inner.cookie_manager;
-        let mut restored = cm.restore_cookies_from_keychain();
+        // 재부팅 직후 로그인 항목으로 뜨면 키체인이 아직 준비되지 않아 읽기가 실패할 수 있다 —
+        // 읽기 실패는 "로그인 정보 없음"이 아니므로 잠시 뒤 몇 번 더 읽는다(저장된 값은 건드리지 않는다).
+        let mut restored = false;
+        for attempt in 0..KEYCHAIN_RESTORE_ATTEMPTS {
+            if attempt > 0 {
+                tokio::time::sleep(KEYCHAIN_RESTORE_RETRY_DELAY).await;
+            }
+            if !self.is_current(generation) {
+                return;
+            }
+            match cm.restore_cookies_from_keychain_detailed() {
+                CookieRestore::Restored => {
+                    restored = true;
+                    break;
+                }
+                CookieRestore::Empty => break,
+                CookieRestore::ReadFailed => {}
+            }
+        }
         if !self.is_current(generation) {
             return;
         }
@@ -311,12 +334,32 @@ impl AuthManager {
         }
         let has_tokens = self.state().oauth_tokens.is_some();
         self.update_state(if restored {
-            logged_in("cookie")
+            logged_in(COOKIE_METHOD)
         } else if has_tokens {
             logged_in("oauth")
         } else {
             AuthState::LoggedOut
         });
+    }
+
+    /// 서버가 쿠키 세션을 로그아웃으로 본다(재부팅 사이 세션 만료·다른 곳에서 로그아웃 등) —
+    /// `generation` 이 아직 현재이고 쿠키 로그인 상태일 때만 만료로 바꾼다. 쿠키를 더는 요청에 붙이지 않으며,
+    /// 저장된 쿠키는 지우지 않는다(다시 로그인하면 덮어쓴다). OAuth 세션은 쿠키 확인과 상관없어 건드리지 않는다.
+    /// 바꿨으면 `true`.
+    pub fn expire_cookie_session(&self, generation: u64) -> bool {
+        if !self.is_current(generation) {
+            return false;
+        }
+        let is_cookie_session = matches!(
+            &self.state().auth_state,
+            AuthState::LoggedIn { user_id } if user_id == COOKIE_METHOD
+        );
+        if !is_cookie_session {
+            return false;
+        }
+        tracing::warn!("서버가 쿠키 세션을 로그아웃으로 봅니다 — 로그인 만료로 바꿉니다");
+        self.update_state(AuthState::Expired);
+        true
     }
 
     /// 쿠키 로그인 완료 처리 (웹뷰에서 쿠키를 얻은 뒤 호출).
@@ -334,7 +377,7 @@ impl AuthManager {
         if !self.is_current(generation) {
             return;
         }
-        self.update_state(logged_in("cookie"));
+        self.update_state(logged_in(COOKIE_METHOD));
     }
 
     /// OAuth 로그인 완료 처리. callback state 검증은 호출자 몫(`csrf::validate`).
@@ -552,7 +595,7 @@ impl AuthManager {
     /// 갱신 최종 실패 뒤 상태 — NAVER 쿠키가 있으면 쿠키 로그인, 없으면 만료.
     fn state_after_refresh_failure(&self) -> AuthState {
         if self.inner.cookie_manager.has_cookies() {
-            logged_in("cookie")
+            logged_in(COOKIE_METHOD)
         } else {
             AuthState::Expired
         }
