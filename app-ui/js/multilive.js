@@ -667,6 +667,8 @@ export class MultiLivePage {
       case 'remove': if (sessionId) this.run(api.multiLiveRemove(sessionId)); break;
       case 'audio':
         if (!sessionId) break;
+        // 소리 나는 패인은 끄기, 볼륨 0 인 패인은 되돌려 켜기(PaneControls). 그 밖엔 이 패인을 듣는다.
+        if (this.panes.get(Number(pane.dataset.slot))?.controls?.toggleMute()) break;
         if (this.state.multiAudio) this.run(api.multiLiveAudio(sessionId, false));
         else this.run(api.multiLiveSelect(sessionId));
         break;

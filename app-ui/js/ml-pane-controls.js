@@ -6,7 +6,7 @@
 //   여러 소리 모드와 함께 써도 서로 덮어쓰지 않는다.
 // - 마우스를 움직이면 나타나고 재생 중 2.5초 가만히 있으면 커서와 함께 숨는다. 일시정지·메뉴 열림이면 계속 보인다.
 import { esc, toast } from './dom.js';
-import { qualityOptions, liveBadgeState, togglePipFor } from './viewer-controls.js';
+import { qualityOptions, liveBadgeState, togglePipFor, installVolumeReveal } from './viewer-controls.js';
 
 const IDLE_MS = 2500;
 
@@ -81,10 +81,13 @@ export class PaneControls {
 
     this.el.addEventListener('click', (e) => this.onClick(e));
     this.range.addEventListener('input', () => this.setGain(Number(this.range.value) / 100));
+    this.volumeReveal = installVolumeReveal(this.el.querySelector('.ml-vol'), this.range);
     this.syncRangeFill();
     this.bridge.onMessage((type, data) => this.onMessage(type, data));
-    // 플레이어 문서가 새로 뜨면 볼륨 배율을 다시 건다.
-    this.bridge.iframe.addEventListener('load', () => this.patchVolume());
+    // 플레이어 문서가 새로 뜨면 볼륨 배율을 다시 걸고, 영상 위 휠을 받는다.
+    this.bridge.iframe.addEventListener('load', () => { this.patchVolume(); this.hookWheel(); });
+    this.el.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
+    this.hookWheel();
 
     const wake = () => this.wake();
     this.el.addEventListener('mousemove', wake);
@@ -112,7 +115,7 @@ export class PaneControls {
   }
 
   hide() {
-    const hovering = Boolean(this.el.querySelector('.ml-pane-bar:hover, .ml-pane-top:hover, .ml-pane-menu:hover'));
+    const hovering = Boolean(this.el.querySelector('.ml-pane-bar:hover, .ml-pane-top:hover, .ml-pane-menu:hover')) || this.volumeReveal.isOpen();
     if (this.el.classList.contains('paused') || this.menuOpen || hovering) { this.wake(); return; }
     this.el.classList.remove('ctl-visible');
     this.el.classList.toggle('idle', this.el.matches(':hover'));
@@ -165,7 +168,7 @@ export class PaneControls {
       this.audioButton.innerHTML = icon;
       this.audioButton.dataset.icon = String(muted);
     }
-    this.audioButton.title = audible ? '소리 끄기' : '이 패인 소리 켜기';
+    this.audioButton.title = audible && this.gain > 0 ? '소리 끄기' : '이 패인 소리 켜기';
   }
 
   // ── 동작 ─────────────────────────────────
@@ -264,6 +267,45 @@ export class PaneControls {
       };
     }
     w.__cviewPaneGain.original(w.__cviewPaneGain.raw * this.gain);
+  }
+
+  /**
+   * 소리 버튼 — 소리 나는 패인이면 끄고(배율 0), 볼륨 0 이면 이전 값으로 되돌려 켠다. 처리했으면 true.
+   * 예전엔 하나만 듣기 모드에서 이 버튼이 "이 패인 선택"뿐이라, 이미 들리는 패인을 눌러도 아무 일이 없었다.
+   */
+  toggleMute() {
+    if (this.gain === 0) {
+      const g = this.lastGain > 0 ? this.lastGain : 1;
+      this.range.value = String(Math.round(g * 100));
+      this.setGain(g);
+      return true;
+    }
+    if (!this.audible) return false;
+    this.lastGain = this.gain;
+    this.range.value = '0';
+    this.setGain(0);
+    return true;
+  }
+
+  /** 패인(영상 위 포함) 휠 — 패인 볼륨 ±5. */
+  onWheel(e) {
+    if (e.target.closest && e.target.closest('.ml-pane-menu')) return;
+    e.preventDefault();
+    const next = Math.min(100, Math.max(0, Number(this.range.value) + (e.deltaY > 0 ? -5 : 5)));
+    if (String(next) === this.range.value) return;
+    this.range.value = String(next);
+    this.setGain(next / 100);
+    this.volumeReveal.peek();
+    this.wake();
+  }
+
+  hookWheel() {
+    try {
+      const doc = this.bridge.iframe.contentDocument;
+      if (!doc || doc.__cviewPaneWheel) return;
+      doc.__cviewPaneWheel = true;
+      doc.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
+    } catch { /* 준비 전 */ }
   }
 
   setGain(gain) {

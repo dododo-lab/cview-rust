@@ -29,6 +29,32 @@ export function qualityOptions(levels) {
 }
 
 /** 지연(초) → 라이브 배지 상태. 4초 넘게 뒤처지면 "뒤처짐". */
+/**
+ * 볼륨 슬라이더 펼침 — 시청 화면·멀티라이브 패인 공용. 예전엔 CSS :hover 만으로 펼쳐(너비 0 → 0.2초에 걸쳐 펼침)
+ * 아이콘에서 오른쪽으로 빨리 옮기거나 끌다가 조금만 벗어나도 다시 접혀 잡을 수 없었다(창이 키 창이 아니면
+ * :focus-within 도 듣지 않는다). 들어오면 열고(.open), 나가면 잠시 기다렸다 닫고, 끄는 동안은 닫지 않는다.
+ */
+export function installVolumeReveal(group, range) {
+  let timer = 0;
+  let dragging = false;
+  const open = () => { clearTimeout(timer); group.classList.add('open'); };
+  const close = (delay = 600) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => { if (!dragging && !group.matches(':hover')) group.classList.remove('open'); }, delay);
+  };
+  group.addEventListener('pointerenter', open);
+  group.addEventListener('pointerleave', () => close());
+  range.addEventListener('pointerdown', () => { dragging = true; open(); });
+  const end = () => { if (dragging) { dragging = false; close(); } };
+  window.addEventListener('pointerup', end);
+  window.addEventListener('pointercancel', end);
+  range.addEventListener('focus', open);
+  range.addEventListener('blur', () => close());
+  /** 휠·키보드로 바꿀 때 잠깐 펼쳐 값을 보여 준다. */
+  const peek = () => { open(); close(1200); };
+  return { open, close, peek, isOpen: () => group.classList.contains('open') };
+}
+
 export function liveBadgeState(latency) {
   if (!Number.isFinite(latency) || latency <= 0) return { behind: false, text: 'LIVE' };
   return { behind: latency > 8, text: latency > 8 ? `-${Math.round(latency)}초` : 'LIVE' };
@@ -132,6 +158,7 @@ export class ViewerControls {
     vol.className = 'vol-group';
     mute.before(vol);
     vol.append(mute, volume);
+    this.volumeReveal = installVolumeReveal(vol, volume);
     const syncVolumeFill = () => volume.style.setProperty('--fill', `${volume.value}%`);
     volume.addEventListener('input', syncVolumeFill);
     new MutationObserver(syncVolumeFill).observe(volume, { attributes: true, attributeFilter: ['value'] });
@@ -153,7 +180,7 @@ export class ViewerControls {
     const top = stage.querySelector('.stage-top');
     const menuOpen = () => !this.qualityMenu.hidden || Boolean(this.root.querySelector('.player-panel:not([hidden])'));
     const hide = () => {
-      if (stage.classList.contains('paused') || menuOpen() || bar.matches(':hover') || top?.matches(':hover')) { this.wake(); return; }
+      if (stage.classList.contains('paused') || menuOpen() || bar.matches(':hover') || top?.matches(':hover') || this.volumeReveal.isOpen()) { this.wake(); return; }
       stage.classList.remove('ctl-visible');
       stage.classList.add('idle');
     };
@@ -179,6 +206,8 @@ export class ViewerControls {
         doc.__cviewWake = true;
         doc.addEventListener('mousemove', this.wake);
         doc.addEventListener('mousedown', this.wake);
+        // 휠도 영상(iframe) 위에서 받는다 — 거품이 부모 문서로 오지 않아 영상 위에서는 볼륨이 바뀌지 않았다.
+        doc.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
         // 미디어 이벤트는 거품이 일지 않아 캡처로 받는다.
         const setBuffering = (on) => stage.classList.toggle('buffering', on);
         doc.addEventListener('waiting', () => setBuffering(true), true);
@@ -337,6 +366,8 @@ export class ViewerControls {
     range.dispatchEvent(new Event('input'));
     clearTimeout(this.wheelSave);
     this.wheelSave = setTimeout(() => range.dispatchEvent(new Event('change')), 400);
+    this.volumeReveal?.peek();
+    this.wake?.();
     this.flash(`볼륨 ${range.value}%`);
   }
 
@@ -374,6 +405,7 @@ export class ViewerControls {
       range.value = String(Math.min(100, Math.max(0, Number(range.value) + (e.key === 'ArrowUp' ? 5 : -5))));
       range.dispatchEvent(new Event('input'));
       range.dispatchEvent(new Event('change'));
+      this.volumeReveal?.peek();
       this.flash(`볼륨 ${range.value}%`);
     } else if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 'f') {
       e.preventDefault();
