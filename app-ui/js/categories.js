@@ -1,7 +1,7 @@
 // 카테고리 둘러보기 — 원본 CategoryBrowseView: 지금 방송 중인 라이브를 카테고리로 묶어 카드로 보이고,
 // 고르면 그 카테고리 라이브만 본다. 자주 보는 카테고리는 고정한다 (NAV-02).
 import { api } from './api.js';
-import { esc, safeUrl } from './dom.js';
+import { esc, safeUrl, imageSrc } from './dom.js';
 import { liveGrid, emptyState, loadingState, compactCount, skeletonGrid, errorState } from './cards.js';
 import { categoryGroups, arrangeLives } from './pages.js';
 
@@ -77,7 +77,7 @@ export class CategoriesPage {
     this.body.innerHTML = groups.length ? `<div class="category-grid">${groups.map((g) => {
       const thumb = safeUrl(g.thumb);
       return `<button class="category-card" data-category="${esc(g.name)}">
-        <span class="category-art">${thumb ? `<img src="${esc(thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>
+        <span class="category-art">${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>
         <span class="category-info"><strong class="ellipsis">${esc(g.name)}</strong><span>라이브 ${g.count} · ${esc(compactCount(g.viewers))}명</span></span>
         <span class="category-pin${pins.has(g.name) ? ' on' : ''}" data-pin="${esc(g.name)}" title="${pins.has(g.name) ? '고정 해제' : '위에 고정'}">★</span>
       </button>`;

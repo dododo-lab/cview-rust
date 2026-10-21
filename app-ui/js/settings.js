@@ -124,6 +124,7 @@ export const SCHEMA = [
     { d: 'appearance', k: 'maxMemoryMB', label: '메모리 목표(MB)', type: 'range', min: 256, max: 4096, step: 128 },
     { d: 'appearance', k: 'debugMode', label: '디버그 로그', help: '시작 단계·API 요청·CPU/메모리·프레임·채팅·플레이어 지표를 로그 파일에 남깁니다(쿠키·토큰은 가림). 끄면 기록하지 않습니다', type: 'toggle' },
     { type: 'action', action: 'open-logs', label: '로그 폴더', help: 'debug.jsonl — 10MB 마다 새 파일, 5개까지', button: '로그 폴더 열기' },
+    { type: 'action', action: 'clear-image-cache', label: '썸네일 캐시', help: '썸네일·아바타를 디스크에 두어 다시 열 때 바로 보입니다', button: '썸네일 캐시 비우기' },
   ]],
 ];
 
@@ -217,6 +218,16 @@ export class SettingsPage {
     this.body.innerHTML = `${tabs}<div class="settings-groups">${this.groupHtml()}</div>`;
     this.applySearch();
     this.refreshOAuth();
+    if (this.body.querySelector('[data-setting-action="clear-image-cache"]')) api.imageCacheStatus().then((st) => this.showImageCache(st)).catch(() => {});
+  }
+
+  /** "썸네일 캐시" 줄에 지금 크기를 적는다. */
+  showImageCache(st) {
+    const row = this.body.querySelector('[data-setting-action="clear-image-cache"]')?.closest('.setting');
+    const small = row && row.querySelector('.setting-label small');
+    if (!small || !st) return;
+    const mb = (b) => (b / 1048576).toFixed(b < 10485760 ? 1 : 0);
+    small.textContent = `지금 ${mb(st.bytes)}MB · ${st.entries.toLocaleString()}개 (상한 ${mb(st.capBytes)}MB, 넘으면 오래 안 쓴 것부터 지움)`;
   }
 
   /** 검색 중이면 모든 그룹, 아니면 선택 그룹. */
@@ -521,6 +532,10 @@ export class SettingsPage {
       return;
     }
     const settingAction = e.target.closest('[data-setting-action]');
+    if (settingAction && settingAction.dataset.settingAction === 'clear-image-cache') {
+      api.imageCacheClear().then((st) => { this.showImageCache(st); toast('썸네일 캐시를 비웠습니다'); }).catch((er) => toast(er.message || String(er)));
+      return;
+    }
     if (settingAction && settingAction.dataset.settingAction === 'open-logs') {
       api.perfLogStatus().then((s) => api.revealPath(s.file && s.enabled ? s.file : s.dir)).catch((er) => toast(`로그 폴더를 열 수 없습니다 — 디버그 로그를 한 번 켜 주세요 (${er.message || er})`));
       return;

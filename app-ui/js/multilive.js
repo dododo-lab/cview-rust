@@ -6,7 +6,7 @@
 // - 슬롯 명령(`multilive://command`)은 패인 iframe 이 생기기 전에 올 수 있어 슬롯별로 줄 세운다.
 // - 패인을 누르면 선택 — 오디오·채팅·고화질이 그 패인을 따라간다.
 import { api, listen, listenHere, Events } from './api.js';
-import { esc, safeUrl, toast } from './dom.js';
+import { esc, safeUrl, toast, imageSrc } from './dom.js';
 import { PlayerBridge } from './player.js';
 import { ChatPanel } from './chat.js';
 import { StreamAlerts } from './donations.js';
@@ -350,7 +350,7 @@ export class MultiLivePage {
     if (viewers) viewers.textContent = s.viewerCountText ? `${s.viewerCountText}명` : '';
     const avatar = safeUrl(s.profileImageUrl);
     el.querySelector('.ml-pane-avatar').innerHTML = avatar
-      ? `<img loading="lazy" decoding="async" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '';
+      ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '';
     el.querySelector('.ml-pane-cap').textContent = s.maxHeightCap > 0 ? `≤${s.maxHeightCap}p` : '';
     const kind = s.state && s.state.kind;
     const text = kind === 'error' ? (s.state.message || '재생 오류') : (STATE_TEXT[kind] ?? '');
@@ -747,7 +747,7 @@ export class MultiLivePage {
       const isAdded = added.has(l.channelId);
       return `${head}
         <button class="ml-pick" data-ml="pick" data-channel-id="${esc(l.channelId)}" ${isAdded ? 'disabled' : ''}>
-          <span class="ml-pick-thumb">${thumb ? `<img src="${esc(thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>
+          <span class="ml-pick-thumb">${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>
           <span class="ml-pick-text">
             <span class="ml-pick-name ellipsis">${esc(l.channelName)}${isAdded ? ' · 추가됨' : ''}</span>
             <span class="ml-pick-title ellipsis">${esc(l.liveTitle || '')}</span>

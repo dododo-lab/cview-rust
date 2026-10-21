@@ -1,7 +1,7 @@
 // 라이브(단독 시청) 메뉴 — 재생 중이면 시청 화면을, 아니면 이어 볼 채널을 보여 준다.
 // 시청 화면 자체는 viewer.js 가 그리고, 이 페이지는 "재생 중인 방송이 없을 때" 화면이다.
 import { api } from './api.js';
-import { esc, safeUrl } from './dom.js';
+import { esc, safeUrl, imageSrc } from './dom.js';
 import { liveGrid, emptyState, loadingState, recentChannels } from './cards.js';
 
 export const liveIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Zm7 3v6l5-3-5-3Z"/></svg>';
@@ -45,7 +45,7 @@ export class LivePage {
         const live = liveIds.get(r.channelId);
         const avatar = safeUrl(r.channelImageUrl);
         return `<button class="recent-item${live ? ' is-live' : ''}" data-channel-id="${esc(r.channelId)}" data-channel-name="${esc(r.channelName)}" data-channel-image="${esc(avatar)}">
-          ${avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}
+          ${avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}
           <span class="recent-text"><span class="ellipsis">${esc(r.channelName || r.channelId)}</span>
           <span class="recent-meta ellipsis">${live ? `<b>LIVE</b> ${esc(live.viewerCountText)}명` : '오프라인일 수 있음'}</span></span>
         </button>`;

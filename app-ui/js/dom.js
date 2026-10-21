@@ -16,6 +16,46 @@ export function safeUrl(value) {
   return /^https?:\/\//i.test(s) ? s : '';
 }
 
+// ── 화면 이미지 ──────────────────────────────
+// 썸네일·아바타는 Rust 의 디스크·메모리 캐시(cvimg: 프로토콜)를 거치고, CDN 에는 칸에 맞는 크기만 요청한다.
+// - live: 라이브 썸네일 image_720(1280×720, ~150KB) → image_405(720×405, ~60KB). 카드 칸은 약 330×185.
+// - hero: 홈 큰 슬라이드 — 720 그대로.
+// - avatar / avatar-lg: 네이버 이미지 원본(최대 1344² PNG) → ?type=f120_120_na(~24KB) / f240_240_na.
+// - static: 카테고리 포스터·다시보기·이모티콘 등 — 크기는 그대로, 캐시만.
+const IMAGE_HOSTS = /(^|\.)(pstatic\.net|akamaized\.net|naver\.net|naver\.com)$/i;
+const CVIMG_BASE = typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent)
+  ? 'http://cvimg.localhost/'
+  : 'cvimg://localhost/';
+const HAS_TAURI = typeof window !== 'undefined' && Boolean(window.__TAURI__);
+
+function sizedForBox(url, kind) {
+  if (kind === 'live') {
+    return url.replace(/\/image_(\d+)\.jpg(?=$|\?)/, (m, n) => (Number(n) > 405 ? '/image_405.jpg' : m));
+  }
+  if (kind === 'avatar' || kind === 'avatar-lg') {
+    try {
+      const u = new URL(url);
+      if (/phinf\.pstatic\.net$/i.test(u.host) && !u.searchParams.has('type')) {
+        u.searchParams.set('type', kind === 'avatar' ? 'f120_120_na' : 'f240_240_na');
+        return u.toString();
+      }
+    } catch { /* 그대로 */ }
+  }
+  return url;
+}
+
+/** `<img src>` 에 넣을 주소 — 칸에 맞는 크기로 바꾸고, 앱 안이면 캐시(cvimg:)를 거친다. */
+export function imageSrc(value, kind = 'static') {
+  const url = safeUrl(value);
+  if (!url) return '';
+  const sized = sizedForBox(url, kind);
+  if (!HAS_TAURI || !sized.startsWith('https://')) return sized;
+  let host = '';
+  try { host = new URL(sized).host; } catch { return sized; }
+  if (!IMAGE_HOSTS.test(host)) return sized;
+  return `${CVIMG_BASE}${encodeURIComponent(`${kind}/${sized}`)}`;
+}
+
 export function $(selector, root = document) {
   return root.querySelector(selector);
 }

@@ -3,7 +3,7 @@
 // 다시보기는 WebView 기본 HLS(<video src=m3u8>)로 재생한다 — CDN CORS 를 피하고 macOS 기본 컨트롤·PiP 를
 // 쓴다. 클립은 원본처럼 치지직 임베드 페이지가 주 경로다(대부분 ABR_HLS 라 인키 재생이 막힌다).
 import { api } from './api.js';
-import { esc, safeUrl, toast } from './dom.js';
+import { esc, safeUrl, toast, imageSrc } from './dom.js';
 import { emptyState, loadingState, compactCount, errorState } from './cards.js';
 import { formatDuration, relativeDate, clipCard } from './channel.js';
 import { startDownload } from './downloads.js';
@@ -222,7 +222,7 @@ export function continueCard(item) {
   return `
     <article class="card media-card" tabindex="0" data-vod-no="${esc(item.videoNo)}" title="${esc(item.title)}">
       <div class="thumb">
-        ${thumb ? `<img src="${esc(thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
+        ${thumb ? `<img src="${esc(imageSrc(thumb, 'static'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
         <span class="badge-duration">${esc(formatDuration(item.duration))}</span>
         ${pct ? `<span class="progress-bar"><i style="width:${pct}%"></i></span>` : ''}
       </div>

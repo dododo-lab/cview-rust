@@ -1,5 +1,5 @@
 // 라이브 카드 격자 / 채널 행 / 빈 상태.
-import { esc, safeUrl } from './dom.js';
+import { esc, safeUrl, imageSrc } from './dom.js';
 
 /** 라이브 카드 한 장 (LiveCardDto). */
 export function liveCard(live) {
@@ -10,7 +10,7 @@ export function liveCard(live) {
   return `
     <article class="card" tabindex="0" data-channel-id="${esc(live.channelId)}" data-channel-name="${esc(live.channelName)}" data-channel-image="${esc(avatar)}" title="${esc(live.liveTitle)}">
       <div class="thumb">
-        ${thumb ? `<img src="${esc(thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
+        ${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
         ${live.isLive ? '<span class="badge-live">LIVE</span>' : ''}
         ${live.adult ? '<span class="badge-adult">19</span>' : ''}
         <span class="badge-viewers"><i class="dot"></i>${esc(live.viewerCountText)}명</span>
@@ -18,7 +18,7 @@ export function liveCard(live) {
         ${uptime ? `<span class="badge-uptime">${esc(uptime)}</span>` : ''}
       </div>
       <div class="card-body">
-        <span class="card-avatar" data-open-channel title="채널 정보">${avatar ? `<img class="avatar" src="${esc(avatar)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<div class="avatar"></div>'}</span>
+        <span class="card-avatar" data-open-channel title="채널 정보">${avatar ? `<img class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<div class="avatar"></div>'}</span>
         <div class="card-text">
           <div class="card-title">${esc(live.liveTitle || '제목 없음')}</div>
           <div class="card-meta ellipsis">${esc(live.channelName)}${category}</div>
@@ -36,7 +36,7 @@ export function channelRow(channel) {
   const avatar = safeUrl(channel.channelImageUrl);
   return `
     <div class="channel-row card" tabindex="0" data-channel-id="${esc(channel.channelId)}" data-channel-name="${esc(channel.channelName)}" data-channel-image="${esc(avatar)}" data-open-live="${channel.openLive ? '1' : ''}">
-      ${avatar ? `<img class="avatar" src="${esc(avatar)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<div class="avatar"></div>'}
+      ${avatar ? `<img class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<div class="avatar"></div>'}
       <div class="card-text">
         <div class="ellipsis"><strong>${esc(channel.channelName)}</strong>${channel.verified ? '<span class="verified">✔</span>' : ''}${channel.openLive ? '<span class="live-dot">LIVE</span>' : ''}</div>
         <div class="card-meta">팔로워 ${esc(channel.followerCountText)}명</div>

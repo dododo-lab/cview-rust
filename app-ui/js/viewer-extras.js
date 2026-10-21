@@ -2,7 +2,7 @@
 // PLY-12 채팅 표시 모드(사이드·오버레이·숨김), PLY-14 헤더 채널 레일(다른 방송 바로 전환),
 // PLY-03 라이브 되감기(←/→ 10초, ⇧ 60초 — 재생 목록이 허용하는 범위 안), PLY-16 후원 알림 위치 끌어 맞추기.
 import { api } from './api.js';
-import { esc, safeUrl, toast } from './dom.js';
+import { esc, safeUrl, toast, imageSrc } from './dom.js';
 import { chatPrefs, onChatPrefs, updateChatPrefs } from './chat-prefs.js';
 
 const MODES = ['side', 'overlay', 'hidden'];
@@ -80,7 +80,7 @@ export class ViewerExtras {
     const others = lives.filter((l) => l.channelId !== currentId).slice(0, 10);
     this.rail.innerHTML = others.map((l) => {
       const avatar = safeUrl(l.channelImageUrl);
-      return `<button class="rail-item" data-rail-channel="${esc(l.channelId)}" title="${esc(l.channelName)} · ${esc(l.liveTitle || '')}">${avatar ? `<img class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar">${esc((l.channelName || '?').slice(0, 1))}</span>`}</button>`;
+      return `<button class="rail-item" data-rail-channel="${esc(l.channelId)}" title="${esc(l.channelName)} · ${esc(l.liveTitle || '')}">${avatar ? `<img class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar">${esc((l.channelName || '?').slice(0, 1))}</span>`}</button>`;
     }).join('') + '<button class="rail-more" hidden></button>';
     this.fitRail();
   }

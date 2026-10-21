@@ -2,7 +2,7 @@
 // 나머지 메뉴(홈·검색·멀티채팅·보관함·통계·설정)는 앱이 이미 가진 데이터로 화면에 맞는 요약을 보여 준다.
 // 라이브(시청)·멀티라이브에서는 숨긴다. 접기 상태는 기억하고, 좁은 창에서는 자동으로 숨긴다(CSS).
 import { api } from './api.js';
-import { esc, safeUrl } from './dom.js';
+import { esc, safeUrl, imageSrc } from './dom.js';
 import { compactCount } from './cards.js';
 import { categoryGroups } from './pages.js';
 
@@ -95,7 +95,7 @@ function liveRows(lives, meta) {
   if (!lives.length) return '';
   return `<div class="ip-lives">${lives.map((l) => {
     const a = safeUrl(l.channelImageUrl);
-    return `<button class="ip-live" data-ip-play="${esc(l.channelId)}" title="${esc(l.liveTitle || '')}">${a ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(a)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}<span class="ip-live-text"><b class="ellipsis">${esc(l.channelName)}</b><small class="ellipsis">${esc(meta(l))}</small></span></button>`;
+    return `<button class="ip-live" data-ip-play="${esc(l.channelId)}" title="${esc(l.liveTitle || '')}">${a ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(a, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}<span class="ip-live-text"><b class="ellipsis">${esc(l.channelName)}</b><small class="ellipsis">${esc(meta(l))}</small></span></button>`;
   }).join('')}</div>`;
 }
 function columns(values, labels) {

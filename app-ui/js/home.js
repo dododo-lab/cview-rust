@@ -2,7 +2,7 @@
 // Swift `HomeView_v3` 의 "지금 볼 라이브를 먼저" 원칙을 따르되, 지금 Rust 명령으로 받을 수 있는
 // 데이터(팔로잉·인기 라이브)와 로컬 최근 시청 기록만으로 그린다.
 import { api } from './api.js';
-import { esc, safeUrl, icons } from './dom.js';
+import { esc, safeUrl, icons, imageSrc } from './dom.js';
 import { liveCard, emptyState, liveGrid, recentChannels, uptimeText, compactCount } from './cards.js';
 import { clipCard } from './channel.js';
 import { continueCard } from './media.js';
@@ -28,7 +28,7 @@ const byViewers = (a, b) => (b.viewerCount || 0) - (a.viewerCount || 0);
 function avatarImg(url, cls = 'avatar') {
   const src = safeUrl(url);
   return src
-    ? `<img class="${cls}" src="${esc(src)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
+    ? `<img class="${cls}" src="${esc(imageSrc(src, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer">`
     : `<div class="${cls}"></div>`;
 }
 
@@ -76,7 +76,7 @@ function heroSlide(live, source) {
   return `
     <article class="hero-main card" tabindex="0" ${channelData(live)}>
       <div class="hero-media">
-        ${thumb ? `<img loading="lazy" decoding="async" src="${esc(thumb)}" alt="" referrerpolicy="no-referrer">` : ''}
+        ${thumb ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(thumb, 'hero'))}" alt="" referrerpolicy="no-referrer">` : ''}
       </div>
       <div class="hero-shade"></div>
       <div class="hero-info">
@@ -102,7 +102,7 @@ function heroQueue(lives, active) {
     const thumb = safeUrl(l.thumbnailUrl);
     return `
       <button class="queue-item${i === active ? ' active' : ''}" data-hero-index="${i}" title="${esc(l.liveTitle)}">
-        <span class="queue-thumb">${thumb ? `<img src="${esc(thumb)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}<span class="queue-progress"></span></span>
+        <span class="queue-thumb">${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}<span class="queue-progress"></span></span>
         <span class="queue-text">
           <span class="queue-title">${esc(l.liveTitle || '제목 없음')}</span>
           <span class="queue-meta ellipsis">${esc(l.channelName)} · ${esc(l.viewerCountText)}명</span>

@@ -2,7 +2,7 @@
 // VOD-04 인기 클립(기간·정렬), VOD-01 팔로우 채널 다시보기·이어 보기·나중에 보기, NAV-08 허브,
 // NAV-09 즐겨찾기·최근 시청(DB, 지우기), PLY-17 북마크 목록·삭제.
 import { api } from './api.js';
-import { esc, safeUrl, toast } from './dom.js';
+import { esc, safeUrl, toast, imageSrc } from './dom.js';
 import { emptyState, loadingState, errorState } from './cards.js';
 import { vodCard, clipCard, relativeDate, formatDuration } from './channel.js';
 import { continueCard } from './media.js';
@@ -27,7 +27,7 @@ function channelRowSaved(c) {
   const avatar = safeUrl(c.channelImageUrl);
   return `
     <button class="recent-item" data-open-channel-id="${esc(c.channelId)}">
-      ${avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}
+      ${avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}
       <span class="recent-text"><span class="ellipsis">${c.isFavorite ? '★ ' : ''}${esc(c.channelName || c.channelId)}</span>
       <span class="recent-meta ellipsis">${c.lastWatched ? `${esc(relativeDate(new Date(c.lastWatched).toISOString()))} 시청` : '즐겨찾기'}</span></span>
     </button>`;
@@ -37,7 +37,7 @@ function bookmarkRow(b) {
   const thumb = safeUrl(b.thumbnailUrl);
   return `
     <div class="bookmark-row" data-bookmark-id="${esc(b.id)}">
-      <span class="bookmark-thumb">${thumb ? `<img loading="lazy" decoding="async" src="${esc(thumb)}" alt="" referrerpolicy="no-referrer">` : ''}</span>
+      <span class="bookmark-thumb">${thumb ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(thumb, 'live'))}" alt="" referrerpolicy="no-referrer">` : ''}</span>
       <span class="bookmark-text">
         <strong class="ellipsis">${esc(b.liveTitle || '제목 없음')}</strong>
         <span class="ellipsis">${esc(b.channelName)}${b.categoryName ? ` · ${esc(b.categoryName)}` : ''} · 방송 ${esc(formatDuration(b.liveUptime))} 지점 · ${esc(relativeDate(new Date(b.capturedAt).toISOString()))}</span>

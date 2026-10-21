@@ -4,7 +4,7 @@
 // CHT-11 자동 스크롤·"새 메시지" 버튼·읽음 구분선(⌘J), CHT-12 지우기(⇧⌘K)·재연결, CHT-14 표시 옵션,
 // CHT-16 후원 필터, CHT-20 입력 상태 배너.
 import { api, listen, Events } from './api.js';
-import { esc, safeUrl, toast } from './dom.js';
+import { esc, safeUrl, toast, imageSrc } from './dom.js';
 import { DonationRanking, eventCardHtml, eventClasses, EVENT_ICONS } from './donations.js';
 import { installChatExtras } from './chat-extras.js';
 import { nickColorClass } from './nick-color.js';
@@ -31,7 +31,7 @@ export function renderContent(content, emojis, showEmoji = true) {
       const m = /^\{:([^{}:]+):\}$/.exec(part);
       const url = m && safeUrl(map[m[1]]);
       if (!url) return esc(part);
-      return showEmoji ? `<img decoding="async" class="emoji" src="${esc(url)}" alt="${esc(m[1])}" referrerpolicy="no-referrer">` : `<span class="emoji-text">:${esc(m[1])}:</span>`;
+      return showEmoji ? `<img decoding="async" class="emoji" src="${esc(imageSrc(url, 'static'))}" alt="${esc(m[1])}" referrerpolicy="no-referrer">` : `<span class="emoji-text">:${esc(m[1])}:</span>`;
     })
     .join('');
 }
@@ -54,7 +54,7 @@ function lineHtml(m, prefs) {
   const badges = (m.badges || [])
     .map((u) => safeUrl(u))
     .filter(Boolean)
-    .map((u) => `<img decoding="async" class="badge" src="${esc(u)}" alt="" referrerpolicy="no-referrer">`)
+    .map((u) => `<img decoding="async" class="badge" src="${esc(imageSrc(u, 'static'))}" alt="" referrerpolicy="no-referrer">`)
     .join('');
   const style = m.titleColor && /^#[0-9a-f]{3,8}$/i.test(m.titleColor) ? ` style="color:${m.titleColor}"` : '';
   if (m.kind === 'system') {
@@ -730,13 +730,13 @@ export class ChatPanel {
     tabs.hidden = Boolean(q);
     tabs.innerHTML = packs.map((p, i) => {
       const icon = safeUrl(p.emoticonPackImageUrl);
-      return `<button type="button" class="emoji-tab${i === this.pickerPack ? ' active' : ''}" data-pack="${i}" title="${esc(p.emoticonPackName)}">${icon ? `<img src="${esc(icon)}" alt="" referrerpolicy="no-referrer">` : esc(p.emoticonPackName.slice(0, 2))}</button>`;
+      return `<button type="button" class="emoji-tab${i === this.pickerPack ? ' active' : ''}" data-pack="${i}" title="${esc(p.emoticonPackName)}">${icon ? `<img src="${esc(imageSrc(icon, 'static'))}" alt="" referrerpolicy="no-referrer">` : esc(p.emoticonPackName.slice(0, 2))}</button>`;
     }).join('');
     const items = q
       ? this.allEmoticons().filter((e) => e.id.toLowerCase().includes(q) || String(e.name).toLowerCase().includes(q)).slice(0, 120)
       : (packs[this.pickerPack].emoticons || []).map((e) => ({ id: e.emoticonId, name: e.emoticonName || e.emoticonId, url: e.imageUrl }));
     grid.innerHTML = items.length
-      ? items.map((e) => `<button type="button" class="emoji-cell" data-emoji="${esc(e.id)}" title="${esc(e.name)}"><img src="${esc(safeUrl(e.url))}" alt="${esc(e.name)}" loading="lazy" referrerpolicy="no-referrer"></button>`).join('')
+      ? items.map((e) => `<button type="button" class="emoji-cell" data-emoji="${esc(e.id)}" title="${esc(e.name)}"><img src="${esc(imageSrc(e.url, 'static'))}" alt="${esc(e.name)}" loading="lazy" referrerpolicy="no-referrer"></button>`).join('')
       : '<div class="tray-empty">찾는 이모티콘이 없습니다</div>';
   }
 
@@ -772,7 +772,7 @@ export class ChatPanel {
     let items = [];
     if (tok.kind === ':') {
       items = this.allEmoticons().filter((e) => e.id.toLowerCase().startsWith(q) || String(e.name).toLowerCase().includes(q)).slice(0, 8)
-        .map((e) => ({ value: `{:${e.id}:}`, html: `<img src="${esc(safeUrl(e.url))}" alt="" referrerpolicy="no-referrer"><span>${esc(e.name)}</span>` }));
+        .map((e) => ({ value: `{:${e.id}:}`, html: `<img src="${esc(imageSrc(e.url, 'static'))}" alt="" referrerpolicy="no-referrer"><span>${esc(e.name)}</span>` }));
     } else {
       items = [...this.recentNicks.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n)
         .filter((n) => n.toLowerCase().includes(q)).slice(0, 8)

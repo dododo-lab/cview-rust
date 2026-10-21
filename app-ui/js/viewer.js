@@ -1,6 +1,6 @@
 // 라이브 시청 화면 — 플레이어 영역 + 채팅 패널.
 import { api, listen, Events } from './api.js';
-import { esc, safeUrl, toast, icons } from './dom.js';
+import { esc, safeUrl, toast, icons, imageSrc } from './dom.js';
 import { PlayerBridge } from './player.js';
 import { ChatPanel } from './chat.js';
 import { StreamAlerts } from './donations.js';
@@ -117,7 +117,7 @@ export class Viewer {
         .filter(Boolean).map(esc).join(' · ')
       : '';
     this.header.querySelector('.viewer-avatar').innerHTML = avatar
-      ? `<img class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '<div class="avatar"></div>';
+      ? `<img class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<div class="avatar"></div>';
     this.header.querySelector('.title').textContent = title || '';
     this.header.querySelector('.meta').innerHTML = meta;
   }

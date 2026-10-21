@@ -2,7 +2,7 @@
 // AppState+StoreRecovery / LocalDataHygiene(데이터 관리 탭).
 // DAT-04 통계 화면, DSN-05 차트·랭킹 바, DAT-06 저장소 상태·정리·백업.
 import { api } from './api.js';
-import { esc, safeUrl, toast } from './dom.js';
+import { esc, safeUrl, toast, imageSrc } from './dom.js';
 import { emptyState, loadingState, errorState } from './cards.js';
 import { relativeDate } from './channel.js';
 
@@ -159,7 +159,7 @@ export class StatsPage {
     this.body.innerHTML = `<div class="history-list">${d.recent.map((r) => {
       const thumb = safeUrl(r.thumbnailUrl);
       return `<button class="history-row" data-open-channel-id="${esc(r.channelId)}">
-        <span class="bookmark-thumb">${thumb ? `<img src="${esc(thumb)}" alt="" referrerpolicy="no-referrer">` : ''}</span>
+        <span class="bookmark-thumb">${thumb ? `<img src="${esc(imageSrc(thumb, 'static'))}" alt="" referrerpolicy="no-referrer">` : ''}</span>
         <span class="bookmark-text"><strong class="ellipsis">${esc(r.channelName || r.channelId)}${r.active ? ' <span class="live-dot-text">시청 중</span>' : ''}</strong>
         <span class="ellipsis">${r.categoryName ? `${esc(r.categoryName)} · ` : ''}${esc(relativeDate(r.startedAt))} · ${esc(durationText(r.seconds))}</span></span></button>`;
     }).join('')}</div>`;

@@ -1,6 +1,6 @@
 // 왼쪽 사이드바 — 브랜드/접기, 빠른 검색, 메뉴, 방송 중인 팔로잉, 계정 카드.
 // 접힘 상태는 로컬에 기억하고, 좁은 창(<1100px)에서는 사용자가 펼치지 않은 한 아이콘 레일로 접는다.
-import { esc, safeUrl, icons } from './dom.js';
+import { esc, safeUrl, icons, imageSrc } from './dom.js';
 
 const COLLAPSE_KEY = 'cview.sidebarCollapsed';
 const NARROW = window.matchMedia('(max-width: 1100px)');
@@ -19,7 +19,7 @@ function storedCollapsed() {
 function avatar(url, cls = 'avatar') {
   const src = safeUrl(url);
   return src
-    ? `<img class="${cls}" src="${esc(src)}" alt="" referrerpolicy="no-referrer">`
+    ? `<img class="${cls}" src="${esc(imageSrc(src, 'avatar'))}" alt="" referrerpolicy="no-referrer">`
     : `<div class="${cls}"></div>`;
 }
 

@@ -4,7 +4,7 @@
 // - 주간 후원 랭킹: 채팅 패널 위 칩 줄(`chat_donation_ranking`).
 // - 스트림 알림: 시청 화면 위에 새 후원·구독을 잠깐 띄운다(설정에서 끌 수 있음, 기본 켬).
 import { invoke } from './api.js';
-import { esc, safeUrl } from './dom.js';
+import { esc, safeUrl, imageSrc } from './dom.js';
 
 const ALERT_KEY = 'cview.streamAlerts';
 const ALERT_MS = 6500;
@@ -163,7 +163,7 @@ export class DonationRanking {
         const avatar = safeUrl(r.profileImageUrl);
         return `<span class="rank-chip ${r.rank === 1 ? 'top1' : ''}" title="${esc(r.nickname)} · ${esc(formatCheese(r.amount))}">
           <span class="rank-no">${esc(r.rank)}</span>
-          ${avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(avatar)}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}
+          ${avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}
           <span class="rank-name">${esc(r.nickname)}</span>
           <span class="rank-amount">${esc((r.amount || 0).toLocaleString('ko-KR'))}</span>
         </span>`;
