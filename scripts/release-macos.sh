@@ -165,25 +165,29 @@ if (( dist_build )); then
   fi
   echo "── 공증(프로파일 $CVIEW_NOTARIZE_PROFILE)"
   # notarytool 은 결과가 Invalid 여도 0 으로 끝나므로 상태를 직접 확인한다.
-  # notarytool 이 기다리는 중 스스로 죽는 일이 있다(2026-10-21 SIGBUS — 문자열 포맷 중 스택 가드, 애플 도구 쪽).
-  # 시그널로 끝났으면(종료 코드 > 128) 다시 낸다. 앞 제출은 서버에서 그냥 끝난다.
-  result=""
+  # notarytool --wait 는 기다리는 중 스스로 죽는다(2026-10-21 SIGBUS — 문자열 포맷 중 스택 가드, 애플 도구 쪽; 0.1.8 은 3번 모두).
+  # 그래서 올리기만 하고(--no-wait, 바로 끝남) 상태는 짧은 info 호출로 15초마다 묻는다 — 한 번 죽어도 다음 물음이 이어간다.
+  sub_id=""
   for attempt in 1 2 3; do
-    if result=$(xcrun notarytool submit "$out" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --wait --no-progress --output-format json); then
-      break
-    else
-      code=$?
-      if (( code <= 128 || attempt == 3 )); then
-        echo "✗ notarytool 실패(종료 코드 $code)"
-        exit 1
-      fi
-      echo "⚠︎ notarytool 이 시그널 $((code - 128)) 로 끝났습니다($attempt/3) — 다시 제출합니다"
-      sleep 5
+    if submitted=$(xcrun notarytool submit "$out" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --no-wait --no-progress --output-format json); then
+      sub_id=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("id",""))' "$submitted" 2>/dev/null || true)
+      [[ -n "$sub_id" ]] && break
+    fi
+    echo "⚠︎ 공증 제출 실패($attempt/3) — 다시 냅니다"
+    sleep 5
+  done
+  [[ -n "$sub_id" ]] || { echo "✗ 공증 제출을 하지 못했습니다"; exit 1; }
+  echo "   제출 $sub_id — 결과를 기다립니다"
+  result=""
+  sub_status="In Progress"
+  for poll in $(seq 1 120); do
+    sleep 15
+    if result=$(xcrun notarytool info "$sub_id" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --output-format json 2>/dev/null); then
+      sub_status=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("status",""))' "$result" 2>/dev/null || echo "")
+      [[ "$sub_status" == "In Progress" || -z "$sub_status" ]] || break
     fi
   done
   echo "$result"
-  sub_status=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("status",""))' "$result")
-  sub_id=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("id",""))' "$result")
   if [[ "$sub_status" != "Accepted" ]]; then
     echo "✗ 공증 결과: $sub_status — 로그:"
     xcrun notarytool log "$sub_id" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" || true
