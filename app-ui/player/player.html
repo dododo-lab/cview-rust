@@ -4017,7 +4017,44 @@ const UPSCALE_SHARPNESS = 0.55;
 
 function _clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
-function _composeVideoFilter() {
+// ─── [선명한 화면 2026-10-22] 치지직 웹 플레이어(pzp-filter-unsharpmask)와 같은 SVG 언샤프 마스크 ───
+//   흐린 사본(feGaussianBlur σ=세기, 기본 1)을 빼 경계를 얻고(원본 − 흐림) 원본에 한 번 더한다(k2=1·k3=1).
+//   CSS filter 의 url() 로 걸어 웹킷이 그리기 단계에서 처리한다 — 프레임마다 JS·캔버스 작업이 없다.
+//   예전 "선명한 화면"(setSharpPixelScaling)은 확대 때 픽셀을 그대로 두는 것이라 이름을 "픽셀 그대로 확대"로 바꿨다.
+let _sharpen = 0; // 0 = 끔, 그 밖 = 세기(가우시안 σ)
+const SHARPEN_FILTER_ID = 'cview-unsharp';
+
+function _ensureSharpenSvg(sigma) {
+    let svg = document.getElementById(SHARPEN_FILTER_ID + '-svg');
+    if (!svg) {
+        const NS = 'http://www.w3.org/2000/svg';
+        svg = document.createElementNS(NS, 'svg');
+        svg.id = SHARPEN_FILTER_ID + '-svg';
+        svg.setAttribute('width', '0');
+        svg.setAttribute('height', '0');
+        svg.setAttribute('aria-hidden', 'true');
+        svg.style.position = 'absolute';
+        svg.innerHTML = '<defs><filter id="' + SHARPEN_FILTER_ID + '" color-interpolation-filters="sRGB">'
+            + '<feGaussianBlur in="SourceGraphic" stdDeviation="1" result="blur"/>'
+            + '<feComposite in="SourceGraphic" in2="blur" operator="arithmetic" k1="0" k2="1" k3="-1" k4="0" result="edge"/>'
+            + '<feComposite in="edge" in2="SourceGraphic" operator="arithmetic" k1="0" k2="1" k3="1" k4="0"/>'
+            + '</filter></defs>';
+        document.body.appendChild(svg);
+    }
+    const blur = svg.querySelector('feGaussianBlur');
+    if (blur && blur.getAttribute('stdDeviation') !== String(sigma)) blur.setAttribute('stdDeviation', String(sigma));
+}
+
+/** 선명한 화면 켜고 끄기. strength 는 흐림 반경(기본 1 — 치지직과 같다). */
+function setSharpen(on, strength) {
+    const next = on ? (Number.isFinite(strength) && strength > 0 ? Math.min(3, strength) : 1) : 0;
+    if (next) _ensureSharpenSvg(next);
+    _sharpen = next;
+    _applyComposedFilter();
+    postToSwift('sharpen', { on: !!next, strength: next });
+}
+
+function _composeColorFilter() {
     const a = _pictureEnhance.auto ? _autoGain : { b: 1, c: 1, s: 1 };
     const m = _manualAdjust;
     const b = a.b * (m ? m.b : 1), c = a.c * (m ? m.c : 1), s = a.s * (m ? m.s : 1);
@@ -4029,6 +4066,12 @@ function _composeVideoFilter() {
         'saturate(' + s.toFixed(3) + ')',
         'hue-rotate(' + h.toFixed(1) + 'deg)'
     ].join(' ');
+}
+
+function _composeVideoFilter() {
+    const color = _composeColorFilter();
+    // 선명화가 먼저(원본 화소에서 경계를 찾고), 색 보정은 그 위에.
+    return _sharpen ? ('url(#' + SHARPEN_FILTER_ID + ')' + (color ? ' ' + color : '')) : color;
 }
 
 function _applyComposedFilter() {
@@ -5414,6 +5457,7 @@ function collectMetrics() {
         videoHeight: video.videoHeight || 0,
         videoFilterApplied: !!video.style.filter && video.style.filter !== 'none',
         sharpPixelScaling: !!_sharpPixelScaling,
+        sharpen: _sharpen,
         pictureAutoEnhance: !!_pictureEnhance.auto,
         pictureUpscaleActive: !!(_upscaler && _upscaler.active),
         bandwidthEstimateBps: bandwidthEstimateBps,
