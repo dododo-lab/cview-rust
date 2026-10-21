@@ -167,12 +167,22 @@ if (( dist_build )); then
   # notarytool 은 결과가 Invalid 여도 0 으로 끝나므로 상태를 직접 확인한다.
   # notarytool --wait 는 기다리는 중 스스로 죽는다(2026-10-21 SIGBUS — 문자열 포맷 중 스택 가드, 애플 도구 쪽; 0.1.8 은 3번 모두).
   # 그래서 올리기만 하고(--no-wait, 바로 끝남) 상태는 짧은 info 호출로 15초마다 묻는다 — 한 번 죽어도 다음 물음이 이어간다.
+  # submit 도 올린 뒤 ID 를 찍기 전에 죽을 때가 있다(2026-10-21 0.1.10 — 애플에는 들어감). 그러면 history 에서
+  # 이 파일 이름으로 이번 실행 뒤에 들어간 제출을 찾아 이어 간다(다시 내면 같은 DMG 가 두 번 올라간다).
   sub_id=""
+  submit_since=$(date -u +%Y-%m-%dT%H:%M:%S)
   for attempt in 1 2 3; do
     if submitted=$(xcrun notarytool submit "$out" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --no-wait --no-progress --output-format json); then
       sub_id=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("id",""))' "$submitted" 2>/dev/null || true)
       [[ -n "$sub_id" ]] && break
     fi
+    sleep 5
+    sub_id=$(xcrun notarytool history --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --output-format json 2>/dev/null | python3 -c '
+import json, sys
+name, since = sys.argv[1], sys.argv[2]
+subs = [s for s in json.load(sys.stdin).get("history", []) if s.get("name") == name and s.get("createdDate", "")[:19] >= since]
+print(max(subs, key=lambda s: s["createdDate"])["id"] if subs else "")' "$(basename "$out")" "$submit_since" 2>/dev/null || true)
+    if [[ -n "$sub_id" ]]; then echo "   submit 은 죽었지만 제출은 들어갔습니다 — history 에서 찾음"; break; fi
     echo "⚠︎ 공증 제출 실패($attempt/3) — 다시 냅니다"
     sleep 5
   done
