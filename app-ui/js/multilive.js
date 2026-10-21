@@ -6,6 +6,7 @@
 // - 슬롯 명령(`multilive://command`)은 패인 iframe 이 생기기 전에 올 수 있어 슬롯별로 줄 세운다.
 // - 패인을 누르면 선택 — 오디오·채팅·고화질이 그 패인을 따라간다.
 import { api, listen, listenHere, Events } from './api.js';
+import { setPicture, setSharpenDefault } from './picture.js';
 import { esc, safeUrl, toast, imageSrc } from './dom.js';
 import { PlayerBridge } from './player.js';
 import { ChatPanel } from './chat.js';
@@ -266,7 +267,10 @@ export class MultiLivePage {
       if (type === 'playStarted') bridge.call('setMuted', false);
     });
     pane = { el, bridge, sessionId: null };
-    pane.controls = new PaneControls(pane, { makeAudible: () => this.makeAudible(pane) });
+    pane.controls = new PaneControls(pane, {
+      makeAudible: () => this.makeAudible(pane),
+      applySharpenAll: (on) => this.applySharpenAll(on),
+    });
     this.panes.set(slot, pane);
     const queued = this.pending.get(slot);
     if (queued) {
@@ -337,6 +341,7 @@ export class MultiLivePage {
         pane.el.style.setProperty('--ml-hue', String(pane.hue));
       }
       pane.sessionId = s.id;
+      pane.controls?.setChannel(s.channelId);
       this.renderPane(pane, s, order.indexOf(s.id), s.id === state.selectedId);
     }
     this.applyFocusGrid(focus, order);
@@ -561,6 +566,17 @@ export class MultiLivePage {
     pane.zeroSince = now;
     toast(`${s.channelName || '패인'} 영상이 시작되지 않아 다시 연결합니다`, 2200);
     this.run(api.multiLiveRetry(s.id));
+  }
+
+  /** "모든 패인에 적용" — 지금 패인들의 선명한 화면을 같게 하고, 처음 보는 채널의 기본값도 그렇게 둔다. */
+  applySharpenAll(on) {
+    setSharpenDefault(on);
+    for (const pane of this.panes.values()) {
+      if (!pane.sessionId || !pane.controls?.channelId) continue;
+      setPicture(pane.controls.channelId, { sharpen: Boolean(on) });
+      pane.controls.applyPicture();
+    }
+    toast(on ? '모든 패인을 선명한 화면으로' : '모든 패인의 선명한 화면을 껐습니다', 1500);
   }
 
   /** 패인 볼륨을 올리면 그 패인 소리를 켠다(여러 소리 모드면 더하고, 아니면 선택). */

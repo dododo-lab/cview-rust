@@ -5,6 +5,7 @@
 import { api } from './api.js';
 import { esc, toast } from './dom.js';
 import { kbd } from './platform.js';
+import { applyPicture, pictureFor, setPicture } from './picture.js';
 
 const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
 // macOS WKWebView 는 MSE 영상의 오디오를 Web Audio 그래프로 넘기지 않는다(소스 노드 출력이 0 — 실측).
@@ -73,6 +74,8 @@ export class PlayerPanel {
       saturation: p.videoSaturation, hue: p.videoHue, gamma: p.videoGamma, sharpPixel: Boolean(p.sharpPixelScaling),
     });
     this.player.call('setPictureEnhancement', { auto: Boolean(p.autoPictureEnhancement), upscale: Boolean(p.videoUpscaling) });
+    // 선명한 화면은 채널마다(멀티라이브 패인과 같은 기억) — 색 보정은 위의 전역 보정이 맡는다.
+    applyPicture(this.player, pictureFor(this.viewer.channelId), { adjust: false });
     this.player.call('setForcedAspectRatio', p.aspectRatio === 'fill');
     if (p.equalizerPreset && EQ_SUPPORTED) this.player.call('setEqualizerEnabled', true, p.equalizerBands || [], p.equalizerPreAmp || 0);
     if (this.rate !== 1) this.player.call('setRate', this.rate);
@@ -104,7 +107,8 @@ export class PlayerPanel {
         ${ADJUST.map(([k, label, min, max, step, def]) => `
           <label class="pp-row slider"><span>${label}</span><input type="range" min="${min}" max="${max}" step="${step}" value="${esc(p[k] ?? def)}" data-adjust="${k}" ${p.videoAdjustEnabled ? '' : 'disabled'}><output>${esc(p[k] ?? def)}</output></label>`).join('')}
         <button class="link-btn" data-pp-reset="video">보정 초기화</button>
-        <label class="pp-row"><span>선명한 화면</span><span class="toggle"><input type="checkbox" data-pp="sharpPixelScaling" ${p.sharpPixelScaling ? 'checked' : ''}><span></span></span></label>
+        <label class="pp-row" title="치지직과 같은 언샤프 마스크로 윤곽을 또렷하게 합니다 — 이 채널에 기억합니다"><span>선명한 화면</span><span class="toggle"><input type="checkbox" data-pp="sharpen" ${pictureFor(this.viewer.channelId).sharpen ? 'checked' : ''}><span></span></span></label>
+        <label class="pp-row" title="확대할 때 픽셀을 부드럽게 하지 않습니다"><span>픽셀 그대로 확대</span><span class="toggle"><input type="checkbox" data-pp="sharpPixelScaling" ${p.sharpPixelScaling ? 'checked' : ''}><span></span></span></label>
         <label class="pp-row"><span>자동 화질 보정</span><span class="toggle"><input type="checkbox" data-pp="autoPictureEnhancement" ${p.autoPictureEnhancement ? 'checked' : ''}><span></span></span></label>
         <label class="pp-row"><span>업스케일</span><span class="toggle"><input type="checkbox" data-pp="videoUpscaling" ${p.videoUpscaling ? 'checked' : ''}><span></span></span></label>`;
     } else if (this.tab === 'eq') {
@@ -208,6 +212,11 @@ export class PlayerPanel {
         this.player.call('setEqualizerEnabled', false);
       }
       this.render();
+      return;
+    }
+    if (key === 'sharpen') {
+      setPicture(this.viewer.channelId, { sharpen: t.checked });
+      applyPicture(this.player, pictureFor(this.viewer.channelId), { adjust: false });
       return;
     }
     if (key === 'aspect') {

@@ -7,6 +7,7 @@
 // - 마우스를 움직이면 나타나고 재생 중 2.5초 가만히 있으면 커서와 함께 숨는다. 일시정지·메뉴 열림이면 계속 보인다.
 import { esc, toast } from './dom.js';
 import { qualityOptions, liveBadgeState, togglePipFor, installVolumeReveal } from './viewer-controls.js';
+import { ADJUST_RANGES, applyPicture, pictureFor, resetAdjust, setPicture } from './picture.js';
 
 const IDLE_MS = 2500;
 
@@ -80,6 +81,7 @@ export class PaneControls {
     this.audioButton = this.el.querySelector('.ml-vol [data-ml="audio"]');
 
     this.el.addEventListener('click', (e) => this.onClick(e));
+    this.gearMenu.addEventListener('input', (e) => this.onAdjustInput(e));
     this.range.addEventListener('input', () => this.setGain(Number(this.range.value) / 100));
     this.volumeReveal = installVolumeReveal(this.el.querySelector('.ml-vol'), this.range);
     this.syncRangeFill();
@@ -139,6 +141,7 @@ export class PaneControls {
       this.el.classList.toggle('buffering', data.state === 'stalled');
     } else if (type === 'playStarted' || type === 'ready') {
       this.patchVolume();
+      this.applyPicture();
     }
   }
 
@@ -177,7 +180,8 @@ export class PaneControls {
     const menuItem = e.target.closest('.ml-pane-menu [data-ml], .ml-pane-menu [data-mp]');
     const action = e.target.closest('[data-mp]');
     if (!e.target.closest('.ml-pane-menu') && !e.target.closest('[data-mp="gear"], [data-mp="more"]')) this.closeMenus();
-    if (menuItem) setTimeout(() => this.closeMenus(), 0);
+    // 화면 보정(선명한 화면·밝기 등)은 여러 번 만지므로 메뉴를 닫지 않는다.
+    if (menuItem && !e.target.closest('[data-keep-open]')) setTimeout(() => this.closeMenus(), 0);
     if (!action) return;
     e.stopPropagation();
     switch (action.dataset.mp) {
@@ -188,6 +192,9 @@ export class PaneControls {
       case 'pip': togglePipFor(this.video); break;
       case 'fullscreen': this.toggleFullscreen(); break;
       case 'level': this.chooseLevel(Number(action.dataset.level)); break;
+      case 'sharpen': this.setSharpen(!pictureFor(this.channelId).sharpen); break;
+      case 'sharpen-all': this.hooks.applySharpenAll?.(pictureFor(this.channelId).sharpen); break;
+      case 'adjust-reset': resetAdjust(this.channelId); this.applyPicture(); this.renderGear(); break;
       default: break;
     }
   }
@@ -234,7 +241,53 @@ export class PaneControls {
       ${items.map((o) => `<button class="ml-menu-item ml-level${o.index === this.manualIndex ? ' active' : ''}" role="menuitemradio" data-mp="level" data-level="${o.index}"><span>${esc(o.label)}</span></button>`).join('')}
       <div class="ml-menu-sep"></div>
       <div class="ml-menu-head">지연 <span>${lat}</span></div>
-      <button class="ml-menu-item" data-mp="live"><span>라이브로 이동 (따라잡기)</span></button>`;
+      <button class="ml-menu-item" data-mp="live"><span>라이브로 이동 (따라잡기)</span></button>
+      ${this.pictureMenuHtml()}`;
+  }
+
+  // ── 화면 보정(선명한 화면·밝기·대비·채도) — 채널마다 기억(picture.js) ──
+
+  pictureMenuHtml() {
+    if (!this.channelId) return '';
+    const p = pictureFor(this.channelId);
+    const sliders = ADJUST_RANGES.map(([key, label, min, max, step]) => `
+      <label class="ml-adjust-row" data-keep-open><span>${label}</span>
+        <input type="range" data-adj="${key}" min="${min}" max="${max}" step="${step}" value="${p[key]}" aria-label="${label}">
+        <output>${Math.round(p[key] * 100)}%</output></label>`).join('');
+    return `
+      <div class="ml-menu-sep"></div>
+      <div class="ml-menu-head">화면</div>
+      <button class="ml-menu-item ml-check" role="menuitemcheckbox" aria-checked="${p.sharpen}" data-mp="sharpen" data-keep-open title="치지직과 같은 언샤프 마스크로 윤곽을 또렷하게 합니다"><span>선명한 화면</span><span class="ml-switch${p.sharpen ? ' on' : ''}"></span></button>
+      <button class="ml-menu-item" data-mp="sharpen-all"><span>모든 패인에 ${p.sharpen ? '선명하게' : '선명하게 끄기'}</span></button>
+      ${sliders}
+      <button class="ml-menu-item" data-mp="adjust-reset" data-keep-open><span>보정 기본값</span></button>`;
+  }
+
+  /** 이 패인에 지금 채널을 알린다 — 바뀌면 그 채널의 화면 보정을 건다. */
+  setChannel(channelId) {
+    if (this.channelId === channelId) return;
+    this.channelId = channelId || null;
+    this.applyPicture();
+  }
+
+  applyPicture() {
+    if (this.channelId) applyPicture(this.bridge, pictureFor(this.channelId));
+  }
+
+  setSharpen(on) {
+    setPicture(this.channelId, { sharpen: Boolean(on) });
+    this.applyPicture();
+    if (!this.gearMenu.hidden) this.renderGear();
+  }
+
+  onAdjustInput(e) {
+    const input = e.target.closest('[data-adj]');
+    if (!input || !this.channelId) return;
+    const value = Number(input.value);
+    setPicture(this.channelId, { [input.dataset.adj]: value });
+    const out = input.parentElement.querySelector('output');
+    if (out) out.textContent = `${Math.round(value * 100)}%`;
+    this.applyPicture();
   }
 
   chooseLevel(index) {

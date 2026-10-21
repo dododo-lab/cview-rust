@@ -51,7 +51,7 @@ export const SCHEMA = [
     { d: 'player', k: 'experimentalMatchWebV2', label: '웹 지연 맞춤 v2(실험)', type: 'toggle' },
   ]],
   ['watch', '화면 · 비디오 · 스크린샷', [
-    { d: 'player', k: 'sharpPixelScaling', label: '선명한 화면', help: '확대할 때 픽셀을 부드럽게 하지 않습니다', type: 'toggle' },
+    { d: 'player', k: 'sharpPixelScaling', label: '픽셀 그대로 확대', help: '확대할 때 픽셀을 부드럽게 하지 않습니다(선명한 화면은 영상 ⚙ 메뉴에서 채널마다)', type: 'toggle' },
     { d: 'player', k: 'autoPictureEnhancement', label: '자동 화질 보정', type: 'toggle' },
     { d: 'player', k: 'videoUpscaling', label: '업스케일', type: 'toggle' },
     { d: 'player', k: 'videoAdjustEnabled', label: '비디오 보정 사용', help: '시청 화면의 ⚙ 패널에서 밝기·대비 등을 조절합니다', type: 'toggle' },
