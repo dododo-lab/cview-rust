@@ -562,8 +562,14 @@ mod tests {
 
     #[test]
     fn release_app_keeps_its_keychain_service() {
-        assert_eq!(keychain_service_name("app.cview.rust"), KEYCHAIN_SERVICE_NAME);
-        assert_ne!(keychain_service_name("app.cview.rust.test"), KEYCHAIN_SERVICE_NAME);
+        assert_eq!(
+            keychain_service_name("app.cview.rust"),
+            KEYCHAIN_SERVICE_NAME
+        );
+        assert_ne!(
+            keychain_service_name("app.cview.rust.test"),
+            KEYCHAIN_SERVICE_NAME
+        );
     }
 
     #[test]
