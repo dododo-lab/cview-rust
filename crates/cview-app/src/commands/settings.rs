@@ -407,3 +407,43 @@ pub fn perf_log_status() -> PerfLogStatusDto {
         dir: crate::perf_log::log_dir().map(|p| p.to_string_lossy().into_owned()),
     }
 }
+
+/// 썸네일 캐시 상태 — 설정 "썸네일 캐시" 줄.
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageCacheStatusDto {
+    pub entries: u64,
+    pub bytes: u64,
+    pub cap_bytes: u64,
+}
+
+fn image_service(
+    app: &tauri::AppHandle,
+) -> Option<std::sync::Arc<crate::image_service::ImageService>> {
+    tauri::Manager::try_state::<std::sync::Arc<crate::image_service::ImageService>>(app)
+        .map(|s| s.inner().clone())
+}
+
+fn image_cache_dto(images: Option<&crate::image_service::ImageService>) -> ImageCacheStatusDto {
+    let s = images.map(|i| i.stats());
+    ImageCacheStatusDto {
+        entries: s.map_or(0, |s| s.entries),
+        bytes: s.map_or(0, |s| s.bytes),
+        cap_bytes: s.map_or(0, |s| s.cap_bytes),
+    }
+}
+
+#[tauri::command]
+pub fn image_cache_status(app: tauri::AppHandle) -> ImageCacheStatusDto {
+    image_cache_dto(image_service(&app).as_deref())
+}
+
+/// "썸네일 캐시 비우기".
+#[tauri::command]
+pub fn image_cache_clear(app: tauri::AppHandle) -> ImageCacheStatusDto {
+    let images = image_service(&app);
+    if let Some(i) = &images {
+        i.clear();
+    }
+    image_cache_dto(images.as_deref())
+}

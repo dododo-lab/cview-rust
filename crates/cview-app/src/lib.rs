@@ -10,6 +10,7 @@ pub mod commands;
 pub mod dock_icon;
 pub mod dto;
 pub mod engine;
+pub mod image_service;
 pub mod login;
 pub mod menu;
 pub mod multi_live;
@@ -159,6 +160,16 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .menu(menu::build)
         .on_menu_event(|handle, event| menu::forward(handle, event.id().as_ref()))
+        // 썸네일·아바타 — `cvimg://localhost/<종류>%2F<URL>`(Windows `http://cvimg.localhost/...`), 디스크·메모리 캐시.
+        .register_asynchronous_uri_scheme_protocol("cvimg", |ctx, request, responder| {
+            let service = ctx
+                .app_handle()
+                .try_state::<Arc<image_service::ImageService>>()
+                .map(|s| s.inner().clone());
+            tauri::async_runtime::spawn(async move {
+                responder.respond(image_service::respond(service, request).await);
+            });
+        })
         .setup(|app| {
             let handle = app.handle().clone();
             let data_dir = app.path().app_data_dir()?;
@@ -221,6 +232,9 @@ pub fn run() {
                         }
                     }
                 });
+            }
+            if let Some(images) = image_service::open_service(&data_dir) {
+                app.manage(images);
             }
             app.manage(commands::download::Downloads::new(&data_dir));
             app.manage(services);
@@ -343,6 +357,8 @@ pub fn run() {
             commands::settings::settings_update,
             commands::settings::perf_log,
             commands::settings::perf_log_status,
+            commands::settings::image_cache_status,
+            commands::settings::image_cache_clear,
         ])
         .build(tauri::generate_context!())
         .expect("Tauri 앱을 만들지 못했습니다");
