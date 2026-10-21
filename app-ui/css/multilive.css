@@ -1,11 +1,12 @@
 /* 멀티라이브 — 패인 그리드 + 선택 패인 채팅 (원본 MultiLiveView). */
 
-.page-multilive { display: flex; flex-direction: column; overflow: hidden; padding: var(--sp-lg) var(--sp-xl) var(--sp-lg); }
+/* 바깥 여백은 좁게 — 영상·채팅이 창을 더 쓰게(사용자 요청 2026-10-21). */
+.page-multilive { display: flex; flex-direction: column; overflow: hidden; padding: var(--sp-sm) var(--sp-sm) var(--sp-sm); }
 .page-multilive[hidden] { display: none; }
 .ml-header { flex: none; gap: var(--sp-sm); }
 .ml-header .btn svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
 
-.ml-body { flex: 1; min-height: 0; display: flex; gap: 0; margin-top: var(--sp-md); position: relative; }
+.ml-body { flex: 1; min-height: 0; display: flex; gap: 0; margin-top: var(--sp-sm); position: relative; }
 .ml-body .ml-stage { margin-right: 4px; }
 .ml-chat { border-radius: var(--radius-lg); border: 1px solid var(--border-subtle); overflow: hidden; }
 
