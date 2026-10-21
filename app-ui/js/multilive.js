@@ -42,6 +42,18 @@ export function paneOrder(sessions, mainId, layout) {
   return [mainId, ...ids.filter((id) => id !== mainId)];
 }
 
+/** 패인 테두리 색 — 세션마다 무작위 색조, 이미 쓰는 색조와는 되도록 멀리. 순수 함수(rand 주입). */
+export function pickTintHue(used, rand = Math.random) {
+  let best = Math.floor(rand() * 360);
+  let bestGap = -1;
+  for (let i = 0; i < 12; i++) {
+    const h = Math.floor(rand() * 360);
+    const gap = used.length ? Math.min(...used.map((u) => Math.min(Math.abs(h - u), 360 - Math.abs(h - u)))) : 360;
+    if (gap > bestGap) { best = h; bestGap = gap; }
+  }
+  return best;
+}
+
 export class MultiLivePage {
   constructor(content, { isLoggedIn }) {
     this.isLoggedIn = isLoggedIn;
@@ -319,6 +331,11 @@ export class MultiLivePage {
       if (s.slot == null) continue;
       live.add(s.slot);
       const pane = this.ensurePane(s.slot);
+      if (pane.sessionId !== s.id) {
+        const used = [...this.panes.values()].filter((p) => p !== pane && p.sessionId && p.hue != null).map((p) => p.hue);
+        pane.hue = pickTintHue(used);
+        pane.el.style.setProperty('--ml-tint', `hsl(${pane.hue} 75% 62%)`);
+      }
       pane.sessionId = s.id;
       this.renderPane(pane, s, order.indexOf(s.id), s.id === state.selectedId);
     }
@@ -334,6 +351,11 @@ export class MultiLivePage {
       }
     }
     this.syncChat(sessions.find((s) => s.id === state.selectedId) || null);
+    // 채팅 테두리는 채팅을 보여 주는(선택) 패인의 색을 따른다.
+    const shown = [...this.panes.values()].find((p) => p.sessionId && p.sessionId === state.selectedId);
+    const chatEl = this.root.querySelector('.ml-chat');
+    chatEl.classList.toggle('tinted', Boolean(shown));
+    if (shown) chatEl.style.setProperty('--ml-tint', `hsl(${shown.hue} 75% 62%)`);
   }
 
   renderPane(pane, s, index, selected) {
