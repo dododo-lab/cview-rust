@@ -19,6 +19,7 @@
 pub mod db;
 pub mod download_history;
 pub mod error;
+pub mod image_cache;
 pub mod json;
 pub mod models;
 pub mod revision;
