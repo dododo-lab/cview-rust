@@ -218,7 +218,9 @@ export class MultiLivePage {
       const ml = (await api.settingsGet()).multiLive || {};
       this.root.querySelector('.ml-body').classList.toggle('chat-overlay', Boolean(ml.chatOverlayInGrid));
       this.root.style.setProperty('--ml-chat-opacity', String(ml.chatOverlayOpacity ?? 0.5));
-      this.root.style.setProperty('--ml-chat-font', `${ml.chatOverlayFontSize ?? 12}px`);
+      const font = Number(ml.chatOverlayFontSize) || 12;
+      this.root.style.setProperty('--ml-chat-font', `${font}px`);
+      this.root.style.setProperty('--ml-chat-scale', String(font / 14));
     } catch { /* 앱 밖 */ }
     this.reportStageSize();
   }
