@@ -25,15 +25,18 @@ use crate::state::AppServices;
 pub struct PageDto<T> {
     pub items: Vec<T>,
     pub total_count: Option<i64>,
-    /// 요청한 크기만큼 왔으면 다음 페이지가 있을 수 있다.
+    /// 다음 페이지가 있다 — 전체 개수를 알면 `시작 위치 + 받은 개수 < 전체`, 모르면 요청한 크기만큼 왔는지로 추정.
     pub has_more: bool,
 }
 
 impl<T> PageDto<T> {
-    pub fn new(items: Vec<T>, total_count: Option<i64>, requested: i64) -> Self {
+    /// `start` 는 이 페이지 앞에 있는 항목 수(offset, 또는 page × size).
+    pub fn new(items: Vec<T>, total_count: Option<i64>, start: i64, requested: i64) -> Self {
+        let received = items.len() as i64;
         let has_more = match total_count {
-            Some(total) => (items.len() as i64) >= requested && total > items.len() as i64,
-            None => (items.len() as i64) >= requested,
+            // 빈 페이지면 total 이 남아 있어도 멈춘다(오래된 total 로 빈 요청을 되풀이하지 않게).
+            Some(total) => received > 0 && start.saturating_add(received) < total,
+            None => received >= requested,
         };
         Self {
             items,
@@ -41,6 +44,11 @@ impl<T> PageDto<T> {
             has_more,
         }
     }
+}
+
+/// 0부터 세는 페이지 번호의 시작 위치.
+fn page_start(page: i64, size: i64) -> i64 {
+    page.saturating_mul(size)
 }
 
 /// 채널 상세 — 채널 정보 + 내 즐겨찾기·메모.
@@ -98,11 +106,17 @@ pub async fn channel_vods(
     size: Option<i64>,
 ) -> CmdResult<PageDto<VodInfo>> {
     let size = size.unwrap_or(24).clamp(1, 50);
+    let page = page.unwrap_or(0).max(0);
     let res = services
         .api
-        .vod_list(&channel_id, page.unwrap_or(0).max(0), size, false)
+        .vod_list(&channel_id, page, size, false)
         .await?;
-    Ok(PageDto::new(res.data, res.total_count, size))
+    Ok(PageDto::new(
+        res.data,
+        res.total_count,
+        page_start(page, size),
+        size,
+    ))
 }
 
 #[tauri::command]
@@ -113,11 +127,14 @@ pub async fn channel_clips(
     size: Option<i64>,
 ) -> CmdResult<PageDto<ClipInfo>> {
     let size = size.unwrap_or(24).clamp(1, 50);
-    let res = services
-        .api
-        .clip_list(&channel_id, page.unwrap_or(0).max(0), size)
-        .await?;
-    Ok(PageDto::new(res.data, res.total_count, size))
+    let page = page.unwrap_or(0).max(0);
+    let res = services.api.clip_list(&channel_id, page, size).await?;
+    Ok(PageDto::new(
+        res.data,
+        res.total_count,
+        page_start(page, size),
+        size,
+    ))
 }
 
 /// 인기 클립 — `filter`: `WITHIN_1_DAY` / `WITHIN_7_DAYS` / `WITHIN_30_DAYS`,
@@ -146,11 +163,12 @@ pub async fn search_videos(
     size: Option<i64>,
 ) -> CmdResult<PageDto<VodInfo>> {
     let size = size.unwrap_or(24).clamp(1, 50);
+    let offset = offset.unwrap_or(0).max(0);
     let res = services
         .api
-        .search_videos(keyword.trim(), offset.unwrap_or(0).max(0), size)
+        .search_videos(keyword.trim(), offset, size)
         .await?;
-    Ok(PageDto::new(res.data, res.total_count, size))
+    Ok(PageDto::new(res.data, res.total_count, offset, size))
 }
 
 /// 클립 재생 정보 — 상세 + 재생 URL(있으면).
@@ -724,10 +742,30 @@ mod tests {
 
     #[test]
     fn page_has_more_follows_total_or_size() {
-        assert!(PageDto::new(vec![1, 2], Some(10), 2).has_more);
-        assert!(!PageDto::new(vec![1, 2], Some(2), 2).has_more);
-        assert!(!PageDto::new(vec![1], None, 2).has_more);
-        assert!(PageDto::new(vec![1, 2], None, 2).has_more);
+        let full = |n: usize| vec![0; n];
+        // 0개
+        assert!(!PageDto::new(full(0), Some(0), 0, 24).has_more);
+        assert!(!PageDto::new(full(0), None, 0, 24).has_more);
+        // 한 페이지로 끝
+        assert!(!PageDto::new(full(10), Some(10), 0, 24).has_more);
+        assert!(!PageDto::new(full(24), Some(24), 0, 24).has_more);
+        // 정확히 2페이지(48개) — 첫 페이지는 더 있고, 꽉 찬 마지막 페이지는 끝
+        assert!(PageDto::new(full(24), Some(48), page_start(0, 24), 24).has_more);
+        assert!(!PageDto::new(full(24), Some(48), page_start(1, 24), 24).has_more);
+        // 마지막 일부 페이지(50개 → 24, 24, 2)
+        assert!(PageDto::new(full(24), Some(50), page_start(1, 24), 24).has_more);
+        assert!(!PageDto::new(full(2), Some(50), page_start(2, 24), 24).has_more);
+        // offset 기반(검색)
+        assert!(PageDto::new(full(24), Some(30), 0, 24).has_more);
+        assert!(!PageDto::new(full(6), Some(30), 24, 24).has_more);
+        // total 이 남아 있어도 빈 페이지면 멈춘다
+        assert!(!PageDto::new(full(0), Some(100), 48, 24).has_more);
+        // total 없는 응답 — 요청한 크기만큼 왔는지로 추정
+        assert!(PageDto::new(full(24), None, 24, 24).has_more);
+        assert!(!PageDto::new(full(5), None, 24, 24).has_more);
+        // 큰 페이지 번호도 넘치지 않는다
+        assert_eq!(page_start(i64::MAX, 50), i64::MAX);
+        assert!(!PageDto::new(full(1), Some(10), page_start(i64::MAX, 50), 50).has_more);
     }
 
     #[test]
