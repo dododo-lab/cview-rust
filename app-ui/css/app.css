@@ -507,6 +507,11 @@ select.select {
 }
 .player-overlay[hidden] { display: none; }
 .player-overlay.error { color: var(--error); background: rgba(0, 0, 0, 0.6); }
+.player-overlay.ended, .ml-pane-state.ended { background: rgba(0, 0, 0, 0.72); color: rgba(255, 255, 255, 0.82); }
+/* 방송 종료 그림 — 오버레이가 ended 일 때만. 패인이 작아지면 같이 줄어든다. */
+.stream-ended-art { display: none; width: clamp(48px, 24%, 132px); color: rgba(255, 255, 255, 0.7); }
+.stream-ended-art svg { display: block; width: 100%; height: auto; }
+.ended > .stream-ended-art { display: block; }
 .player-controls {
   display: flex; align-items: center; gap: var(--sp-sm); padding: var(--sp-xs) var(--sp-md);
   background: var(--surface-base); border-top: 1px solid var(--border-subtle);
