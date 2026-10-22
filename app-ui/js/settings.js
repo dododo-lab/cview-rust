@@ -8,7 +8,7 @@ import { ACTIONS, FIXED, currentBindings, bindingLabel, bindingFromEvent, saveBi
 import { esc, toast } from './dom.js';
 import { emptyState, errorState } from './cards.js';
 import { THEMES, THEME_LABELS, currentTheme, setTheme } from './theme.js';
-import { streamAlertsEnabled, setStreamAlertsEnabled } from './donations.js';
+import { streamAlertsEnabled, setStreamAlertsEnabled, ALERT_HOME } from './donations.js';
 import { chatPrefs, updateChatPrefs, blockedLabel, loadChatPrefs } from './chat-prefs.js';
 import { DESIGN_STYLES, BACKGROUNDS, READING_WIDTHS } from './chat-extras.js';
 import { kbd } from './platform.js';
@@ -61,6 +61,7 @@ export const SCHEMA = [
     { d: 'player', k: 'streamAlertAnchorX', label: '알림 가로 위치', type: 'range', min: 0.1, max: 0.9, step: 0.05, pct: true },
     { d: 'player', k: 'streamAlertAnchorY', label: '알림 세로 위치', type: 'range', min: 0.02, max: 0.9, step: 0.02, pct: true },
     { d: 'player', k: 'streamAlertScale', label: '알림 크기', type: 'range', min: 0.6, max: 1.6, step: 0.1 },
+    { type: 'action', action: 'reset-alert-pos', label: '알림 위치 초기화', help: '영상 위 알림은 끌어서 옮길 수 있어요(알림을 더블클릭해도 기본 위치로 돌아갑니다)', button: '기본 위치로' },
   ]],
   ['multi', '멀티라이브', [
     { d: 'multiLive', k: 'maxConcurrentSessions', label: '최대 동시 세션', help: '원본과 같이 4~20개 (많을수록 CPU·대역폭을 더 씁니다)', type: 'range', min: 4, max: 20, step: 1 },
@@ -534,6 +535,15 @@ export class SettingsPage {
     const settingAction = e.target.closest('[data-setting-action]');
     if (settingAction && settingAction.dataset.settingAction === 'clear-image-cache') {
       api.imageCacheClear().then((st) => { this.showImageCache(st); toast('썸네일 캐시를 비웠습니다'); }).catch((er) => toast(er.message || String(er)));
+      return;
+    }
+    if (settingAction && settingAction.dataset.settingAction === 'reset-alert-pos') {
+      try {
+        this.settings = await api.settingsUpdate('player', { streamAlertAnchorX: ALERT_HOME.x, streamAlertAnchorY: ALERT_HOME.y });
+        window.dispatchEvent(new CustomEvent('cview:settings-changed', { detail: { domain: 'player', settings: this.settings } }));
+        toast('알림을 기본 위치로 되돌렸습니다', 1500);
+        this.render();
+      } catch (er) { toast(er.message); }
       return;
     }
     if (settingAction && settingAction.dataset.settingAction === 'open-logs') {
