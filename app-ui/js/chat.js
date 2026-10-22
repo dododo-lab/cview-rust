@@ -278,13 +278,9 @@ export class ChatPanel {
     PANELS.delete(this);
   }
 
+  // 글자 크기·줄 간격·시간·배지 표시는 applyChatSkin(chat-extras)이 디자인과 함께 입힌다(멀티채팅 통합 목록과 공유).
   applyPrefs() {
     const p = chatPrefs();
-    this.root.style.setProperty('--chat-font', `${Math.min(24, Math.max(10, Number(p.fontSize) || 14))}px`);
-    this.root.style.setProperty('--chat-gap', `${Math.min(12, Math.max(0, Number(p.lineSpacing) || 0))}px`);
-    this.root.classList.toggle('hide-time', !p.showTimestamp);
-    this.root.classList.toggle('hide-badge', !p.showBadge);
-    this.root.classList.toggle('no-role-color', !p.highlightRoles);
     this.maxLines = Math.min(2000, Math.max(50, Number(p.maxVisibleMessages) || 300));
   }
 
