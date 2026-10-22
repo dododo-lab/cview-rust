@@ -173,6 +173,8 @@
   --text-primary: #f4f5f7; --text-secondary: #d0d3d9; --text-tertiary: #a4a8b0; color: var(--text-primary); border-color: rgba(255, 255, 255, 0.12);
 }
 .ml-body.chat-overlay .ml-chat .chat-line { font-size: var(--ml-chat-font, 12px); }
+/* 오버레이 글자 크기 설정에 맞춰 닉네임·시간·이모티콘·이벤트 카드도 같은 배율로 */
+.ml-body.chat-overlay .ml-chat .chat-list { --chat-scale: var(--ml-chat-scale, 0.857); }
 .ml-body.chat-overlay .ml-stage { margin-right: 0; }
 .preset-list { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow-y: auto; }
 .preset-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--surface-base); border: 1px solid var(--border-subtle); }
