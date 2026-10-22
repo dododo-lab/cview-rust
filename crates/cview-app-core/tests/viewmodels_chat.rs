@@ -912,6 +912,37 @@ async fn same_channel_reconnect_keeps_history_other_channel_clears() {
 }
 
 #[tokio::test]
+async fn late_finishing_older_connect_request_does_not_override_newer_channel() {
+    let engines = Arc::new(Mutex::new(vec![]));
+    let vm = ChatViewModel::with_deps(fake_deps(engines.clone()));
+    // A·B 순으로 요청했는데(토큰 받는 중) B 가 먼저 끝나 연결하고, A 가 늦게 끝났다.
+    let a = vm.begin_connect_request();
+    let b = vm.begin_connect_request();
+    assert!(!vm.is_current_connect_request(a));
+    vm.connect_if_current(b, ConnectRequest::new("chat-b", "t"))
+        .await;
+    vm.connect_if_current(a, ConnectRequest::new("chat-a", "t"))
+        .await;
+    assert_eq!(
+        engines.lock().unwrap().len(),
+        1,
+        "늦은 A 는 엔진을 만들지 않는다"
+    );
+    assert_eq!(
+        vm.lock().active_chat_channel_id().as_deref(),
+        Some("chat-b")
+    );
+
+    // 요청 뒤에 끊었으면(다른 패인에 채팅 정보 없음) 늦게 온 연결도 하지 않는다.
+    let c = vm.begin_connect_request();
+    vm.disconnect().await;
+    vm.connect_if_current(c, ConnectRequest::new("chat-c", "t"))
+        .await;
+    assert_eq!(engines.lock().unwrap().len(), 1);
+    assert!(*engines.lock().unwrap()[0].disconnected.lock().unwrap());
+}
+
+#[tokio::test]
 async fn send_appends_local_echo_and_suppresses_server_echo() {
     let engines = Arc::new(Mutex::new(vec![]));
     let vm = ChatViewModel::with_deps(fake_deps(engines.clone()));

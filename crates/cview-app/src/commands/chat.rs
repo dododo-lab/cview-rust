@@ -48,10 +48,27 @@ pub async fn chat_connect(
         chat.disconnect().await;
         return Err(CommandError("채팅 채널 정보가 없습니다".into()));
     }
+    // 다른 채널로 바꾸면 이전 연결은 바로 끊는다 — 토큰을 받는 동안 이전 채널 메시지가 새 채널 채팅창
+    // (화면은 이미 비우고 새 채널로 바꿨다)에 섞여 들어오지 않게. 같은 채널 재연결은 기록을 지키려 그대로 둔다.
+    let switching =
+        chat.lock().active_chat_channel_id().as_deref() != Some(chat_channel_id.as_str());
+    if switching {
+        chat.disconnect().await;
+    }
+    // 토큰·사용자 정보를 받는 동안 다른 채널 요청이 올 수 있다(멀티라이브 패인 전환, 지난 구성 다시 열기).
+    // 받기 전에 순번을 잡아 두고 마지막 요청만 연결한다 — 먼저 보낸 요청이 늦게 끝나 새 채널을 덮지 않게.
+    let ticket = chat.begin_connect_request();
+    let superseded = || ChatConnectedDto {
+        chat_channel_id: chat_channel_id.clone(),
+        can_send: false,
+    };
 
     let token = match services.api.chat_access_token(&chat_channel_id).await {
         Ok(t) => t,
         Err(e) => {
+            if !chat.is_current_connect_request(ticket) {
+                return Ok(superseded());
+            }
             chat.disconnect().await;
             return Err(e.into());
         }
@@ -65,6 +82,11 @@ pub async fn chat_connect(
     } else {
         (None, None)
     };
+
+    if !chat.is_current_connect_request(ticket) {
+        tracing::debug!("채팅 연결 요청 {chat_channel_id} — 더 새 요청이 있어 건너뜀");
+        return Ok(superseded());
+    }
 
     {
         let mut s = chat.lock();
@@ -85,7 +107,7 @@ pub async fn chat_connect(
     };
     // 연결 실패는 엔진의 재연결 루프가 맡는다 — 상태는 이벤트로 온다.
     let vm = chat.clone();
-    tauri::async_runtime::spawn(async move { vm.connect(request).await });
+    tauri::async_runtime::spawn(async move { vm.connect_if_current(ticket, request).await });
 
     Ok(ChatConnectedDto {
         chat_channel_id,
