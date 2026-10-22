@@ -15,12 +15,18 @@ import { PaneControls, paneControlsHtml, PANE_ICON } from './ml-pane-controls.js
 import { installChatSplitter } from './splitter.js';
 import { FOCUS_DIRECTIONS, FOCUS_RATIO, focusGrid, ratioFromPointer, clampFocusRatio } from './focus-layout.js';
 import { kbd } from './platform.js';
+import { uptimeText } from './cards.js';
 
 export const multiLiveIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5Zm9 9a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2v-5ZM14 3h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM5 12h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2Z" opacity=".9"/></svg>';
 
 const ICON_CLOSE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
 const ICON_SOUND = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4V9Z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 const ICON_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+
+const STAT_ICON = {
+  viewers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>',
+  uptime: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+};
 
 const DIRECTION_ICONS = {
   left: '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4" width="11" height="16" rx="2"/><rect x="16" y="4" width="5" height="7" rx="1.5" opacity=".55"/><rect x="16" y="13" width="5" height="7" rx="1.5" opacity=".55"/></svg>',
@@ -178,6 +184,14 @@ export class MultiLivePage {
         this.watchFirstFrame(p, s, now);
       }
     }, 700);
+    // 방송 경과 시간은 분 단위라 30초마다 칩만 다시 그린다.
+    setInterval(() => {
+      if (this.root.hidden || document.hidden) return;
+      for (const p of this.panes.values()) {
+        const s = p.sessionId && (this.state.sessions || []).find((x) => x.id === p.sessionId);
+        if (s) this.renderPaneStats(p.el, s);
+      }
+    }, 30000);
     // 멀티라이브 채팅은 자기 세션(`ml`)을 쓴다 — 라이브 화면과 기본 세션을 나눠 쓰면 라이브를 열거나 닫을 때
     // (단독 보기로 넘어가며 viewer.close 가 끊기, 다른 채널 시청이 기본 세션을 가져가기) 이 채팅이 끊긴 채 남았다.
     this.chat = new ChatPanel(this.root.querySelector('.ml-chat'), { isLoggedIn, session: 'ml', mentionNotify: true, onHighlight: (m) => this.alerts.push(m) });
@@ -251,8 +265,9 @@ export class MultiLivePage {
         <button class="ml-pane-btn ml-drag" draggable="true" title="끌어서 자리 바꾸기" aria-label="끌어서 자리 바꾸기"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>
         <div class="ml-pane-avatar" data-ml="info" title="채널 정보"></div>
         <div class="ml-pane-text">
-          <div class="ml-pane-line"><span class="ml-pane-name ellipsis"></span><span class="ml-pane-viewers"></span></div>
           <div class="ml-pane-title ellipsis"></div>
+          <div class="ml-pane-line"><span class="ml-pane-name ellipsis"></span></div>
+          <div class="ml-pane-stats"></div>
         </div>
         <div class="grow"></div>
         <button class="ml-pane-btn ml-sec ml-watch-btn" data-ml="watch" title="라이브로 크게 보기 — 다시 연결 없이 라이브 메뉴로" aria-label="라이브로 크게 보기">${PANE_ICON.live}</button>
@@ -383,8 +398,7 @@ export class MultiLivePage {
     pane.controls.sync(s.isAudible);
     el.querySelector('.ml-pane-name').textContent = s.channelName || s.channelId;
     el.querySelector('.ml-pane-title').textContent = s.liveTitle || '';
-    const viewers = el.querySelector('.ml-pane-viewers');
-    if (viewers) viewers.textContent = s.viewerCountText ? `${s.viewerCountText}명` : '';
+    this.renderPaneStats(el, s);
     const avatar = safeUrl(s.profileImageUrl);
     el.querySelector('.ml-pane-avatar').innerHTML = avatar
       ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '';
@@ -397,6 +411,23 @@ export class MultiLivePage {
     overlay.classList.toggle('ended', kind === 'offline');
     overlay.querySelector('.spinner').hidden = kind !== 'loading';
     overlay.querySelector('span').textContent = text;
+  }
+
+  /** 패인 위 지표 칩 — 라이브 화면 상단과 같은 모양(LIVE·시청자·경과·누적). 좁은 패인은 CSS 가 뒤에서부터 접는다. */
+  renderPaneStats(el, s) {
+    const stats = el.querySelector('.ml-pane-stats');
+    const kind = s.state && s.state.kind;
+    if (kind === 'offline') {
+      stats.innerHTML = '<span class="stat off">오프라인</span>';
+      return;
+    }
+    const uptime = uptimeText(s.openDate);
+    stats.innerHTML = [
+      '<span class="stat live">LIVE</span>',
+      s.viewerCountText ? `<span class="stat" title="현재 시청자">${STAT_ICON.viewers}${esc(s.viewerCountText)}명</span>` : '',
+      uptime ? `<span class="stat stat-uptime" title="방송 경과 시간">${STAT_ICON.uptime}${esc(uptime)}</span>` : '',
+      s.accumulateCount > 0 ? `<span class="stat stat-acc" title="누적 시청자">누적 ${esc(s.accumulateCountText)}명</span>` : '',
+    ].filter(Boolean).join('');
   }
 
   /** 포커스 레이아웃 — 방향·비율에 맞춰 grid 템플릿과 패인 위치, 구분선 위치를 정한다. */

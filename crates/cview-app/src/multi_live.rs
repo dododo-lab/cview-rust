@@ -858,6 +858,9 @@ impl MultiLiveShell {
                     live_title: snap.live_title,
                     profile_image_url: snap.profile_image_url,
                     viewer_count_text: snap.formatted_viewer_count,
+                    accumulate_count: snap.accumulate_count,
+                    accumulate_count_text: snap.formatted_accumulate_count,
+                    open_date: snap.open_date.map(|d| d.to_rfc3339()),
                     is_muted: snap.is_muted,
                     is_audible: audible,
                     is_audio_only: snap.is_audio_only,
@@ -962,6 +965,11 @@ pub struct MultiLivePaneDto {
     pub live_title: String,
     pub profile_image_url: Option<String>,
     pub viewer_count_text: String,
+    /// 누적 시청자 수 — 아직 모르면 0.
+    pub accumulate_count: i64,
+    pub accumulate_count_text: String,
+    /// 방송 시작 시각(RFC 3339) — 경과 시간 표시용.
+    pub open_date: Option<String>,
     pub is_muted: bool,
     pub is_audible: bool,
     pub is_audio_only: bool,
