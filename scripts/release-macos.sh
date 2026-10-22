@@ -9,9 +9,10 @@
 #     APPLE_API_ISSUER · APPLE_API_KEY · APPLE_API_KEY_PATH   (App Store Connect API 키, 권장)
 #     APPLE_ID · APPLE_PASSWORD(앱 암호) · APPLE_TEAM_ID
 #
-# 사용: scripts/release-macos.sh [--dmg [--minor|--major]]
+# 사용: scripts/release-macos.sh [--dmg [--minor|--major] | --resume]
 #   --dmg 없이: 로컬 서명 빌드만(버전 그대로).
 #   --dmg     : 배포 빌드 — 버전과 빌드 번호를 **항상** 올린다(아래 "배포 빌드 순서").
+#   --resume  : 공증 대기 시간이 넘어 멈춘 배포 빌드를 이어 간다(아래 4a). 다시 빌드·제출하지 않는다.
 #   공증: CVIEW_NOTARIZE_PROFILE=cview-notarize scripts/release-macos.sh --dmg  (notarytool 프로파일이 있을 때)
 #
 # 버전의 기준은 하나다: crates/cview-app/tauri.conf.json
@@ -24,6 +25,10 @@
 #   3) 버전 patch+1(--minor/--major 면 그 자리 +1, 아래 자리 0)·빌드 번호 +1.
 #   4) 빌드 → DMG 서명 → 공증(Accepted 확인) → 스테이플 → 확인.
 #      여기서 하나라도 실패하면 올린 파일을 git 으로 되돌리고 끝낸다(trap).
+#   4a) 단, 공증이 CVIEW_NOTARIZE_WAIT_MIN(분, 기본 120) 안에 끝나지 않으면(애플 대기열 지연) 실패로 보지 않는다:
+#       올린 버전·서명한 DMG 를 그대로 두고 제출 ID 를 dist/.notarize-pending 에 적은 뒤 종료 코드 3 으로 멈춘다.
+#       나중에 --resume 으로 같은 제출의 결과를 다시 기다려 이어 간다(스테이플 → Windows → 커밋·태그·푸시).
+#       --resume 에서는 공증이 거부(Invalid 등)될 때만 올린 번호를 되돌린다 — 다른 실패는 고친 뒤 다시 --resume.
 #   4b) 같은 버전의 Windows 설치 파일(NSIS, x64)을 이 Mac 에서 교차 빌드한다(x86_64-pc-windows-gnu · mingw-w64 · makensis).
 #       → dist/CView_X.Y.Z_x64-setup.exe. 코드 서명 인증서가 없어 서명되지 않는다(SmartScreen 경고).
 #       도구가 없으면(rustup target add x86_64-pc-windows-gnu · brew install mingw-w64 nsis) 실패로 보고 되돌린다.
@@ -37,11 +42,14 @@ export LANG="${LANG:-en_US.UTF-8}" LC_ALL="${LC_ALL:-en_US.UTF-8}"
 [[ "$LANG" == "C" || -z "$LANG" ]] && export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
 CONF=crates/cview-app/tauri.conf.json
+PENDING=dist/.notarize-pending
 dist_build=0
+resume=0
 part=patch
 for arg in "$@"; do
   case "$arg" in
     --dmg) dist_build=1 ;;
+    --resume) resume=1 ;;
     --minor) part=minor ;;
     --major) part=major ;;
     *) echo "알 수 없는 옵션: $arg"; exit 2 ;;
@@ -67,7 +75,101 @@ revert_bump() {
   fi
 }
 
+# 공증 결과를 기다린다 — notarytool --wait 는 기다리는 중 스스로 죽는다(2026-10-21 SIGBUS — 문자열 포맷 중 스택 가드, 애플 도구 쪽).
+# 그래서 짧은 info 호출로 15초마다 묻는다 — 한 번 죽어도 다음 물음이 이어간다.
+# 애플 대기열이 밀리면 몇 시간씩 "In Progress" 로 남는다(2026-10-22 0.1.12 — 두 제출 모두 1시간 넘게; 예전엔 30분에 포기하고
+# 번호를 되돌려 서명 DMG 만 남았다). 기다리는 건 CVIEW_NOTARIZE_WAIT_MIN 분까지 — 넘으면 sub_status 가 "In Progress" 인 채로 돌아온다.
+wait_notarization() {
+  local deadline=$(( SECONDS + ${CVIEW_NOTARIZE_WAIT_MIN:-120} * 60 )) result=""
+  sub_status=""
+  while (( SECONDS < deadline )); do
+    if result=$(xcrun notarytool info "$sub_id" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --output-format json 2>/dev/null); then
+      sub_status=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("status",""))' "$result" 2>/dev/null || echo "")
+      [[ "$sub_status" == "In Progress" || -z "$sub_status" ]] || break
+    fi
+    sleep 15
+  done
+  echo "$result"
+  [[ -n "$sub_status" ]] || sub_status="In Progress"
+}
+
+# 제출 뒤 단계: 결과 대기 → 스테이플·확인 → Windows → 커밋·태그·푸시. 배포 빌드와 --resume 이 함께 쓴다.
+finish_release() {
+  echo "   제출 $sub_id — 결과를 기다립니다(최대 ${CVIEW_NOTARIZE_WAIT_MIN:-120}분)"
+  wait_notarization
+  if [[ "$sub_status" == "In Progress" ]]; then
+    printf 'version=%s\nbuild=%s\nsub_id=%s\nout=%s\n' "$version" "$build" "$sub_id" "$out" > "$PENDING"
+    bumped=0
+    trap - EXIT INT TERM
+    echo "⏸ 애플 공증이 ${CVIEW_NOTARIZE_WAIT_MIN:-120}분 안에 끝나지 않았습니다(애플 대기열) — 실패가 아니라 대기입니다."
+    echo "   올린 버전(v$version, 빌드 $build)과 서명한 DMG 를 그대로 두고 멈춥니다: $PENDING"
+    echo "   다시 내지 말고(같은 대기열 뒤에 다시 선다) 나중에 이어 가세요:"
+    echo "   CVIEW_NOTARIZE_PROFILE=$CVIEW_NOTARIZE_PROFILE scripts/release-macos.sh --resume"
+    exit 3
+  fi
+  if [[ "$sub_status" != "Accepted" ]]; then
+    echo "✗ 공증 결과: $sub_status — 로그:"
+    xcrun notarytool log "$sub_id" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" || true
+    rm -f "$PENDING"
+    bumped=1
+    revert_bump
+    exit 1
+  fi
+  xcrun stapler staple "$out"
+  xcrun stapler validate "$out"
+  spctl -a -vv -t install "$out"
+  shasum -a 256 "$out"
+  stat -f "   %z bytes" "$out"
+  if [[ -z "${CVIEW_SKIP_WINDOWS:-}" ]]; then
+    echo "── Windows 설치 파일(x64, 교차 빌드)"
+    win_out="dist/CView_${version}_x64-setup.exe"
+    rm -f target/x86_64-pc-windows-gnu/release/bundle/nsis/*.exe(N) "$win_out"
+    (cd crates/cview-app && cargo tauri build --target x86_64-pc-windows-gnu --bundles nsis)
+    win_exe=$(ls -t target/x86_64-pc-windows-gnu/release/bundle/nsis/*.exe(N) | head -1)
+    [[ -n "$win_exe" ]] || { echo "✗ Windows 설치 파일을 찾지 못했습니다"; exit 1; }
+    cp "$win_exe" "$win_out"
+    shasum -a 256 "$win_out"
+    stat -f "   %z bytes" "$win_out"
+  fi
+  echo "── 커밋·태그 v$version (빌드 $build)"
+  git add $BUMPED_FILES
+  git commit -q -m "release: v$version (build $build)" -m "공증 제출 $sub_id — Accepted. dist/CView_${version}_arm64.dmg"
+  git tag -a "v$version" -m "CView v$version (build $build)"
+  bumped=0
+  trap - EXIT INT TERM
+  rm -f "$PENDING"
+  if git remote get-url origin >/dev/null 2>&1; then
+    git push -q origin HEAD
+    git push -q origin "v$version"
+    echo "   푸시: $(git rev-parse --short HEAD) + 태그 v$version"
+  fi
+}
+
+if (( resume )); then
+  [[ -f "$PENDING" ]] || { echo "✗ 이어 갈 공증이 없습니다: $PENDING"; exit 1; }
+  [[ -n "${CVIEW_NOTARIZE_PROFILE:-}" ]] || { echo "✗ CVIEW_NOTARIZE_PROFILE 이 필요합니다"; exit 1; }
+  version="" build="" sub_id="" out=""
+  while IFS='=' read -r k v; do
+    case "$k" in
+      version) version=$v ;; build) build=$v ;; sub_id) sub_id=$v ;; out) out=$v ;;
+    esac
+  done < "$PENDING"
+  [[ -n "$version" && -n "$build" && -n "$sub_id" && -f "$out" ]] || { echo "✗ $PENDING 내용이 맞지 않습니다:"; cat "$PENDING"; exit 1; }
+  conf_version=$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["version"])' "$CONF")
+  [[ "$conf_version" == "$version" ]] || { echo "✗ 작업 트리 버전($conf_version)이 공증 중인 버전($version)과 다릅니다"; exit 1; }
+  other=$(git status --porcelain | grep -vxE '.. (crates/cview-app/tauri\.conf\.json|Cargo\.toml|Cargo\.lock)' || true)
+  [[ -z "$other" ]] || { echo "✗ 올린 버전 파일 말고도 바뀐 파일이 있습니다 — 커밋에 섞이지 않게 먼저 정리하세요:"; echo "$other"; exit 1; }
+  echo "── 공증 이어 가기 v$version (빌드 $build)"
+  finish_release
+  echo "완료: $out"
+  exit 0
+fi
+
 if (( dist_build )); then
+  if [[ -f "$PENDING" ]]; then
+    echo "✗ 공증을 기다리는 배포 빌드가 있습니다($(grep '^version=' "$PENDING")) — --resume 으로 이어 가세요."
+    echo "   버리려면: git checkout -- ${BUMPED_FILES[*]} && rm $PENDING"; exit 1
+  fi
   if [[ -n "$(git status --porcelain)" ]]; then
     echo "✗ 작업 트리가 깨끗하지 않습니다 — 배포 빌드는 커밋된 코드로만 만듭니다."; git status --short; exit 1
   fi
@@ -187,48 +289,6 @@ print(max(subs, key=lambda s: s["createdDate"])["id"] if subs else "")' "$(basen
     sleep 5
   done
   [[ -n "$sub_id" ]] || { echo "✗ 공증 제출을 하지 못했습니다"; exit 1; }
-  echo "   제출 $sub_id — 결과를 기다립니다"
-  result=""
-  sub_status="In Progress"
-  for poll in $(seq 1 120); do
-    sleep 15
-    if result=$(xcrun notarytool info "$sub_id" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --output-format json 2>/dev/null); then
-      sub_status=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("status",""))' "$result" 2>/dev/null || echo "")
-      [[ "$sub_status" == "In Progress" || -z "$sub_status" ]] || break
-    fi
-  done
-  echo "$result"
-  if [[ "$sub_status" != "Accepted" ]]; then
-    echo "✗ 공증 결과: $sub_status — 로그:"
-    xcrun notarytool log "$sub_id" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" || true
-    exit 1
-  fi
-  xcrun stapler staple "$out"
-  xcrun stapler validate "$out"
-  spctl -a -vv -t install "$out"
-  shasum -a 256 "$out"
-  stat -f "   %z bytes" "$out"
-  if [[ -z "${CVIEW_SKIP_WINDOWS:-}" ]]; then
-    echo "── Windows 설치 파일(x64, 교차 빌드)"
-    win_out="dist/CView_${version}_x64-setup.exe"
-    rm -f target/x86_64-pc-windows-gnu/release/bundle/nsis/*.exe(N) "$win_out"
-    (cd crates/cview-app && cargo tauri build --target x86_64-pc-windows-gnu --bundles nsis)
-    win_exe=$(ls -t target/x86_64-pc-windows-gnu/release/bundle/nsis/*.exe(N) | head -1)
-    [[ -n "$win_exe" ]] || { echo "✗ Windows 설치 파일을 찾지 못했습니다"; exit 1; }
-    cp "$win_exe" "$win_out"
-    shasum -a 256 "$win_out"
-    stat -f "   %z bytes" "$win_out"
-  fi
-  echo "── 커밋·태그 v$version (빌드 $build)"
-  git add $BUMPED_FILES
-  git commit -q -m "release: v$version (build $build)" -m "공증 제출 $sub_id — Accepted. dist/CView_${version}_arm64.dmg"
-  git tag -a "v$version" -m "CView v$version (build $build)"
-  bumped=0
-  trap - EXIT INT TERM
-  if git remote get-url origin >/dev/null 2>&1; then
-    git push -q origin HEAD
-    git push -q origin "v$version"
-    echo "   푸시: $(git rev-parse --short HEAD) + 태그 v$version"
-  fi
+  finish_release
 fi
 echo "완료: $app"
