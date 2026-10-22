@@ -4,8 +4,9 @@ Swift 6 macOS 앱(원본 저장소 `dododo-lab/cview-v2` 의 `Sources/`)을 Rust
 
 ## 데스크톱 앱 실행 (Tauri 2)
 
+저장소 루트(이 `README.md` 가 있는 폴더)가 Cargo 워크스페이스다. 루트에서 실행한다.
+
 ```sh
-cd rust
 cargo run -p cview-app
 ```
 
@@ -23,9 +24,13 @@ Linux 에서는 `webkit2gtk-4.1`, `libsoup-3.0` 개발 패키지가 필요하다
 
 ## 검사
 
+저장소 루트에서:
+
 ```sh
-cd rust
-cargo fmt --all
+cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+for f in app-ui/js/*.js; do node --check "$f"; done
 ```
+
+macOS 배포는 `scripts/release-macos.sh` 가 위 검사·버전 올리기·서명·공증까지 한 번에 한다(버전 파일·태그·원격을 바꾼다).

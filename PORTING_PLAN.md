@@ -48,6 +48,13 @@ UI 를 Tauri 로 잡은 이유: 라이브 재생 엔진이 이미 WebView 안의
 
 ## 진행 현황 (2026-10, `rust-final` 브랜치)
 
+> **이식 시점(2026-10-20) 기록이다.** 아래 "남은 일"·테스트 수는 그 뒤 바뀌었다. 2026-10-23(v0.1.14) 트리 기준으로
+> 그사이 생긴 것: 채널 상세·VOD·클립 화면(`app-ui/js/channel.js`, `commands/content.rs`), 멀티라이브 화면
+> (`app-ui/js/multilive.js`, `commands/multi_live.rs`), 미디어 다운로더(`commands/download.rs`, `app-ui/js/downloads.js`),
+> 녹화(`commands/recording.rs`), 파일 저장·토스트, 공증까지 하는 배포 스크립트(`scripts/release-macos.sh`).
+> 인증서 피닝은 아직 미이식이다(`crates/cview-networking/src/transport.rs` 의 `TODO(cert-pinning)`).
+> 테스트 수는 1,770 → 1,840(2026-10-23 전체 실행). 나머지 항목은 현재 코드로 다시 확인해야 한다.
+
 ### 단계별 상태
 
 | 단계 | 상태 | 비고 |
