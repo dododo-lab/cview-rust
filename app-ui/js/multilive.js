@@ -16,6 +16,7 @@ import { installChatSplitter } from './splitter.js';
 import { FOCUS_DIRECTIONS, FOCUS_RATIO, focusGrid, ratioFromPointer, clampFocusRatio } from './focus-layout.js';
 import { kbd } from './platform.js';
 import { uptimeText } from './cards.js';
+import { MultiLiveAddDrawer } from './ml-add-drawer.js';
 
 export const multiLiveIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5Zm9 9a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2v-5ZM14 3h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM5 12h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2Z" opacity=".9"/></svg>';
 
@@ -127,16 +128,6 @@ export class MultiLivePage {
             <button class="btn primary" type="submit">채팅</button>
           </form>
         </aside>
-      </div>
-      <div class="ml-picker" hidden>
-        <div class="ml-picker-panel" role="dialog" aria-label="채널 추가">
-          <header class="ml-picker-head">
-            <strong>채널 추가</strong>
-            <input type="search" class="ml-picker-filter" placeholder="채널·제목으로 찾기" autocomplete="off" spellcheck="false">
-            <button class="icon-btn" data-ml="picker-close" title="닫기">${ICON_CLOSE}</button>
-          </header>
-          <div class="ml-picker-list"></div>
-        </div>
       </div>`;
     content.append(this.root);
 
@@ -144,9 +135,6 @@ export class MultiLivePage {
     this.empty = this.root.querySelector('.ml-empty');
     this.focusAdd = this.root.querySelector('.ml-focus-add');
     this.count = this.root.querySelector('.ml-count');
-    this.picker = this.root.querySelector('.ml-picker');
-    this.pickerList = this.root.querySelector('.ml-picker-list');
-    this.pickerFilter = this.root.querySelector('.ml-picker-filter');
     this.focusControls = this.root.querySelector('.ml-focus-controls');
     this.ratioInput = this.root.querySelector('.ml-ratio input');
     this.ratioOutput = this.root.querySelector('.ml-ratio output');
@@ -200,7 +188,11 @@ export class MultiLivePage {
     this.panes = new Map(); // slot → { el, bridge, sessionId }
     this.pending = new Map(); // slot → [script]
     this.chatKey = null;
-    this.pickerItems = [];
+    this.addBar = new MultiLiveAddDrawer(this.root.querySelector('.ml-body'), {
+      isLoggedIn,
+      getState: () => this.state,
+      onAdd: (channelId) => this.run(api.multiLiveAdd(channelId)),
+    });
 
     listenHere(Events.multiLiveCommand, (p) => p && this.dispatch(p.slot, p.script));
     listen(Events.multiLiveState, (s) => this.render(s));
@@ -218,7 +210,6 @@ export class MultiLivePage {
     moreMenu.addEventListener('click', () => closeMore());
     document.addEventListener('pointerdown', (e) => { if (!moreMenu.hidden && !e.target.closest('.ml-more')) closeMore(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !moreMenu.hidden) closeMore(); });
-    this.pickerFilter.addEventListener('input', () => this.renderPicker());
     new ResizeObserver(() => this.reportStageSize()).observe(this.stage);
   }
 
@@ -386,6 +377,7 @@ export class MultiLivePage {
     if (shown) chatEl.style.setProperty('--ml-hue', String(shown.hue));
     // 후원 알림은 그 채팅의 패인(포커스·한 채널 크게면 메인) 위에 — 패인이 없으면 무대 전체.
     this.alerts.attach(shown ? shown.el : this.stage);
+    this.addBar.sync();
   }
 
   renderPane(pane, s, index, selected) {
@@ -737,15 +729,11 @@ export class MultiLivePage {
       return;
     }
     const action = e.target.closest('[data-ml]');
-    if (!action) {
-      if (e.target === this.picker) this.closePicker();
-      return;
-    }
+    if (!action) return;
     const pane = action.closest('.ml-pane');
     const sessionId = pane && this.panes.get(Number(pane.dataset.slot))?.sessionId;
     switch (action.dataset.ml) {
-      case 'add': this.openPicker(); break;
-      case 'picker-close': this.closePicker(); break;
+      case 'add': this.addBar.toggle(); break;
       case 'stop-all': this.run(api.multiLiveStopAll()); break;
       case 'select': if (sessionId && sessionId !== this.state.selectedId) this.run(api.multiLiveSelect(sessionId)); break;
       case 'remove': if (sessionId) this.run(api.multiLiveRemove(sessionId)); break;
@@ -770,7 +758,6 @@ export class MultiLivePage {
         if (s) window.dispatchEvent(new CustomEvent('cview:open-channel', { detail: { channelId: s.channelId } }));
         break;
       }
-      case 'pick': this.closePicker(); await this.add(action.dataset.channelId); break;
       default: break;
     }
   }
@@ -788,62 +775,6 @@ export class MultiLivePage {
     if (!channelId) return;
     toast('멀티라이브에 추가하는 중…', 1500);
     await this.run(api.multiLiveAdd(channelId));
-  }
-
-  async openPicker() {
-    this.picker.hidden = false;
-    this.pickerFilter.value = '';
-    this.pickerList.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
-    this.pickerFilter.focus();
-    const [following, popular] = await Promise.allSettled([
-      this.isLoggedIn() ? api.followingLives(false) : Promise.resolve([]),
-      api.popularLives(40, false),
-    ]);
-    const seen = new Set();
-    const items = [];
-    const push = (list, group) => {
-      for (const l of list || []) {
-        if (!l.isLive || seen.has(l.channelId)) continue;
-        seen.add(l.channelId);
-        items.push({ ...l, group });
-      }
-    };
-    if (following.status === 'fulfilled') push(following.value, '팔로잉');
-    if (popular.status === 'fulfilled') push(popular.value, '인기');
-    this.pickerItems = items;
-    this.renderPicker();
-  }
-
-  renderPicker() {
-    const q = this.pickerFilter.value.trim().toLowerCase();
-    const added = new Set((this.state.sessions || []).map((s) => s.channelId));
-    const items = this.pickerItems.filter((l) => !q
-      || (l.channelName || '').toLowerCase().includes(q)
-      || (l.liveTitle || '').toLowerCase().includes(q));
-    if (!items.length) {
-      this.pickerList.innerHTML = '<div class="empty"><strong>추가할 수 있는 방송이 없습니다</strong></div>';
-      return;
-    }
-    let group = null;
-    this.pickerList.innerHTML = items.map((l) => {
-      const head = l.group !== group ? `<div class="ml-picker-group">${esc(l.group)}</div>` : '';
-      group = l.group;
-      const thumb = safeUrl(l.thumbnailUrl);
-      const isAdded = added.has(l.channelId);
-      return `${head}
-        <button class="ml-pick" data-ml="pick" data-channel-id="${esc(l.channelId)}" ${isAdded ? 'disabled' : ''}>
-          <span class="ml-pick-thumb">${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>
-          <span class="ml-pick-text">
-            <span class="ml-pick-name ellipsis">${esc(l.channelName)}${isAdded ? ' · 추가됨' : ''}</span>
-            <span class="ml-pick-title ellipsis">${esc(l.liveTitle || '')}</span>
-          </span>
-          <span class="ml-pick-viewers">${esc(l.viewerCountText)}명</span>
-        </button>`;
-    }).join('');
-  }
-
-  closePicker() {
-    this.picker.hidden = true;
   }
 }
 
