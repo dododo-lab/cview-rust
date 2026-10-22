@@ -62,9 +62,35 @@ impl ChatViewModel {
         })
     }
 
+    /// 연결 요청 순번을 잡는다. 셸은 토큰·사용자 정보를 받아 오는 동안(`await`) 다른 요청이 끼어들 수 있어,
+    /// 받기 전에 순번을 잡고 [`Self::connect_if_current`] 로 넘긴다 — 늦게 끝난 이전 요청이 새 채널을 덮지 않게.
+    /// 순번을 올리는 것만으로 진행 중인 이전 `connect` 는 다음 확인 지점에서 물러난다.
+    pub fn begin_connect_request(&self) -> u64 {
+        let mut s = self.lock();
+        s.connection_request_generation = s.connection_request_generation.wrapping_add(1);
+        s.connection_request_generation
+    }
+
+    /// `ticket` 이 아직 마지막 연결·해제 요청인가.
+    pub fn is_current_connect_request(&self, ticket: u64) -> bool {
+        self.lock().connection_request_generation == ticket
+    }
+
+    /// [`Self::begin_connect_request`] 로 잡은 순번이 아직 마지막일 때만 연결한다(확인과 시작이 한 잠금 안).
+    pub async fn connect_if_current(&self, ticket: u64, req: ConnectRequest) {
+        self.connect_inner(req, Some(ticket)).await;
+    }
+
     pub async fn connect(&self, req: ConnectRequest) {
+        self.connect_inner(req, None).await;
+    }
+
+    async fn connect_inner(&self, req: ConnectRequest, ticket: Option<u64>) {
         let (request_generation, session_generation, old_engine) = {
             let mut s = self.lock();
+            if ticket.is_some_and(|t| s.connection_request_generation != t) {
+                return;
+            }
             s.connection_request_generation = s.connection_request_generation.wrapping_add(1);
             s.chat_session_generation = s.chat_session_generation.wrapping_add(1);
             s.message_filter_generation = s.message_filter_generation.wrapping_add(1);
