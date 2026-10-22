@@ -8,6 +8,7 @@ import { installChatSplitter } from './splitter.js';
 import { ViewerControls } from './viewer-controls.js';
 import { PlayerPanel } from './player-panel.js';
 import { ViewerExtras } from './viewer-extras.js';
+import { uptimeText, compactCount } from './cards.js';
 
 const PHASE_TEXT = {
   idle: '',
@@ -114,16 +115,52 @@ export class Viewer {
   }
 
   renderHeader(live) {
+    this.live = live;
+    this.followerCount = null;
     const avatar = safeUrl(live && live.channelImageUrl);
-    const title = live ? live.liveTitle : '';
-    const meta = live
-      ? [live.channelName, live.categoryName, live.isLive ? `${live.viewerCountText}명 시청 중` : '오프라인']
-        .filter(Boolean).map(esc).join(' · ')
-      : '';
     this.header.querySelector('.viewer-avatar').innerHTML = avatar
       ? `<img class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<div class="avatar"></div>';
-    this.header.querySelector('.title').textContent = title || '';
-    this.header.querySelector('.meta').innerHTML = meta;
+    this.header.classList.toggle('is-live', Boolean(live && live.isLive));
+    this.header.querySelector('.title').textContent = live ? live.liveTitle || '' : '';
+    this.renderMeta();
+    clearInterval(this.uptimeTimer);
+    // 방송 경과 시간은 분 단위라 30초마다 다시 그리면 충분하다.
+    if (live && live.isLive && live.openDate) this.uptimeTimer = setInterval(() => this.renderMeta(), 30000);
+  }
+
+  /** 제목 아래 두 줄 — 채널(인증·팔로워·카테고리)과 방송 지표 칩(LIVE·시청자·경과·누적). */
+  renderMeta() {
+    const live = this.live;
+    const meta = this.header.querySelector('.meta');
+    if (!live) {
+      meta.innerHTML = '';
+      return;
+    }
+    const channel = [
+      `<b class="ch-name">${esc(live.channelName || '')}</b>${live.verified ? '<span class="verified" title="인증된 채널">✔</span>' : ''}`,
+      this.followerCount != null ? `팔로워 ${esc(compactCount(this.followerCount))}명` : '',
+      live.categoryName ? esc(live.categoryName) : '',
+    ].filter(Boolean).join('<i class="sep">·</i>');
+    const uptime = live.isLive ? uptimeText(live.openDate) : '';
+    const stats = live.isLive
+      ? [
+        '<span class="stat live">LIVE</span>',
+        `<span class="stat" title="현재 시청자"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>${esc(live.viewerCountText)}명</span>`,
+        uptime ? `<span class="stat" title="방송 경과 시간"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>${esc(uptime)}</span>` : '',
+        live.accumulateCount > 0 ? `<span class="stat" title="누적 시청자">누적 ${esc(live.accumulateCountText)}명</span>` : '',
+      ].filter(Boolean).join('')
+      : '<span class="stat off">오프라인</span>';
+    meta.innerHTML = `<div class="meta-channel ellipsis">${channel}</div><div class="meta-stats">${stats}</div>`;
+  }
+
+  /** 팔로워 수는 라이브 상세에 없어 채널 정보로 따로 채운다 — 늦게 와도 같은 채널일 때만. */
+  async loadFollowers(channelId, token) {
+    try {
+      const info = await api.channelInfo(channelId);
+      if (token !== this.startToken || !this.live) return;
+      this.followerCount = info.followerCount;
+      this.renderMeta();
+    } catch { /* 팔로워 없이도 헤더는 충분하다 */ }
   }
 
   async open(channelId, settings) {
@@ -142,6 +179,7 @@ export class Viewer {
       const started = await api.playerStart(channelId);
       if (token !== this.startToken) return;
       this.renderHeader(started.live);
+      this.loadFollowers(channelId, token);
       this.extras.loadRail(channelId);
       if (started.audioOnly) this.status.textContent = '오디오 전용 방송';
       this.chat.connect(started.live.chatChannelId, started.live.channelId);
@@ -152,6 +190,7 @@ export class Viewer {
         const live = await api.liveDetail(channelId, true);
         if (token !== this.startToken) return;
         this.renderHeader(live);
+        this.loadFollowers(channelId, token);
         if (live.chatChannelId) this.chat.connect(live.chatChannelId, live.channelId);
         this.showOverlay(live.isLive ? e.message : PHASE_TEXT.offline, live.isLive);
       } catch {
@@ -168,6 +207,7 @@ export class Viewer {
     const token = ++this.startToken;
     this.root.hidden = true;
     this.channelId = null;
+    clearInterval(this.uptimeTimer);
     this.alerts.clear();
     this.showOverlay('');
     await Promise.allSettled([api.playerStop(), this.chat.disconnect()]);

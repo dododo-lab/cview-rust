@@ -1992,15 +1992,31 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 #viewer .player-stage, #viewer .player-stage iframe { background: #000; }
 .player-stage > .stage-top {
   position: absolute; left: 0; right: 0; top: 0; z-index: 5; display: flex; align-items: center; gap: 12px;
-  padding: 12px 14px 40px; color: #fff; overflow: hidden;
-  background: linear-gradient(to top, transparent, rgba(0, 0, 0, 0.35) 55%, rgba(0, 0, 0, 0.7));
+  padding: 14px 16px 48px; color: #fff; overflow: hidden;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0.55) 45%, rgba(0, 0, 0, 0.2) 75%, transparent);
   opacity: 0; transform: translateY(-6px); transition: opacity 0.22s ease, transform 0.22s ease; pointer-events: none;
 }
 .player-stage.ctl-visible > .stage-top, .player-stage.paused > .stage-top { opacity: 1; transform: none; pointer-events: auto; }
-.stage-top .viewer-avatar .avatar { width: 36px; height: 36px; box-shadow: 0 0 0 2px #00ffa3; }
-.stage-top .viewer-title { min-width: 140px; flex: 1 1 140px; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
-.stage-top .viewer-title .title { font-weight: 700; font-size: 15px; color: #fff; }
-.stage-top .viewer-title .meta { color: rgba(255, 255, 255, 0.78); font-size: 12px; }
+/* 상단 정보 — 어떤 영상 위에서도 읽히게: 짙은 그라데이션 + 글자 그림자 + 지표는 반투명 칩. */
+.stage-top { align-items: flex-start; }
+.stage-top .viewer-avatar { flex: none; }
+.stage-top .viewer-avatar .avatar { width: 44px; height: 44px; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35); }
+.stage-top.is-live .viewer-avatar .avatar { box-shadow: 0 0 0 2px #00ffa3, 0 2px 8px rgba(0, 0, 0, 0.5); }
+.stage-top .viewer-title { min-width: 140px; flex: 1 1 140px; display: flex; flex-direction: column; gap: 4px; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85), 0 0 1px rgba(0, 0, 0, 0.9); }
+.stage-top .viewer-title .title { font-weight: 700; font-size: 16px; line-height: 1.3; letter-spacing: -0.01em; color: #fff; }
+.stage-top .viewer-title .meta { display: flex; flex-direction: column; gap: 6px; min-width: 0; color: rgba(255, 255, 255, 0.88); font-size: 12.5px; }
+.stage-top .meta-channel { line-height: 1.3; }
+.stage-top .meta-channel .ch-name { color: #fff; font-weight: 700; }
+.stage-top .meta-channel .verified { color: #00ffa3; font-size: 11px; }
+.stage-top .meta-channel .sep { margin: 0 6px; font-style: normal; color: rgba(255, 255, 255, 0.5); }
+.stage-top .meta-stats { display: flex; flex-wrap: wrap; gap: 6px; text-shadow: none; }
+.stage-top .meta-stats:empty { display: none; }
+.stage-top .stat { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 6px;
+  background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  color: #fff; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stage-top .stat svg { width: 13px; height: 13px; opacity: 0.85; }
+.stage-top .stat.live { background: #e5262b; font-weight: 800; letter-spacing: 0.04em; }
+.stage-top .stat.off { color: rgba(255, 255, 255, 0.75); }
 .stage-top .icon-btn { flex: none; width: 36px; height: 36px; border-radius: 8px; color: rgba(255, 255, 255, 0.92); background: none; }
 .stage-top .icon-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
 .stage-top .icon-btn.active { color: #00ffa3; }

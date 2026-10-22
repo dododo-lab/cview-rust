@@ -14,6 +14,7 @@ fn popular_live() -> LiveInfo {
         "liveTitle": "저녁 방송",
         "status": "OPEN",
         "concurrentUserCount": 15234,
+        "accumulateCount": 48210,
         "liveCategoryValue": "League of Legends",
         "chatChannelId": "N1abc",
         "liveImageUrl": "https://livecloud-thumb.akamaized.net/x/{type}/image.jpg",
@@ -102,12 +103,17 @@ fn live_detail_falls_back_to_requested_channel() {
     assert_eq!(detail.chat_channel_id.as_deref(), Some("N1abc"));
     assert_eq!(detail.status, "OPEN");
     assert_eq!(detail.tags, vec!["롤".to_string()]);
+    assert!(detail.verified);
+    assert_eq!(detail.accumulate_count, 48210);
+    assert_eq!(detail.accumulate_count_text, format_viewer_count(48210));
 
     let bare =
         live_info(json!({"liveId": 2, "liveTitle": "t", "status": "CLOSE", "chatChannelId": ""}));
     let detail = LiveDetailDto::from_live_info(&bare, "req");
     assert_eq!(detail.channel_id, "req");
     assert!(!detail.is_live);
+    assert!(!detail.verified);
+    assert_eq!(detail.accumulate_count, 0);
     assert_eq!(detail.chat_channel_id, None);
 }
 

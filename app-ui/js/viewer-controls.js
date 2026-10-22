@@ -327,7 +327,7 @@ export class ViewerControls {
       toast('스크린샷을 찍지 못했습니다 — 영상이 아직 준비되지 않았습니다');
       return;
     }
-    const name = (this.root.querySelector('.viewer-title .meta')?.textContent || 'CView').split('·')[0].trim();
+    const name = this.viewer.live?.channelName || 'CView';
     try {
       const path = await api.saveFile('screenshot', `${name}_${stamp()}.png`, data.base64, null);
       this.flash('스크린샷 저장됨');
