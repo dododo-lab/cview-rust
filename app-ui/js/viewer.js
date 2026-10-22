@@ -1,6 +1,6 @@
 // 라이브 시청 화면 — 플레이어 영역 + 채팅 패널.
 import { api, listen, Events } from './api.js';
-import { esc, safeUrl, toast, icons, imageSrc } from './dom.js';
+import { esc, safeUrl, toast, icons, imageSrc, streamEndedArt } from './dom.js';
 import { PlayerBridge } from './player.js';
 import { ChatPanel } from './chat.js';
 import { StreamAlerts } from './donations.js';
@@ -19,6 +19,7 @@ const PHASE_TEXT = {
   buffering: '버퍼링 중…',
   reconnecting: '재연결 중…',
   streamEnded: '방송이 종료되었습니다',
+  offline: '현재 방송 중인 라이브가 없습니다',
   error: '재생 오류',
 };
 
@@ -31,6 +32,7 @@ export class Viewer {
     this.header = root.querySelector('.stage-top');
     this.overlay = root.querySelector('.player-overlay');
     this.overlayText = this.overlay.querySelector('span');
+    this.overlay.querySelector('.spinner').insertAdjacentHTML('afterend', streamEndedArt);
     this.status = root.querySelector('.player-status');
     this.volume = root.querySelector('#volume');
     this.muteButton = root.querySelector('#mute');
@@ -104,8 +106,10 @@ export class Viewer {
       return;
     }
     this.overlay.hidden = false;
+    const ended = text === PHASE_TEXT.streamEnded || text === PHASE_TEXT.offline;
     this.overlay.classList.toggle('error', isError);
-    this.overlay.querySelector('.spinner').hidden = isError || text === PHASE_TEXT.streamEnded;
+    this.overlay.classList.toggle('ended', ended);
+    this.overlay.querySelector('.spinner').hidden = isError || ended;
     this.overlayText.textContent = text;
   }
 
@@ -149,7 +153,7 @@ export class Viewer {
         if (token !== this.startToken) return;
         this.renderHeader(live);
         if (live.chatChannelId) this.chat.connect(live.chatChannelId, live.channelId);
-        this.showOverlay(live.isLive ? e.message : '현재 방송 중인 라이브가 없습니다', live.isLive);
+        this.showOverlay(live.isLive ? e.message : PHASE_TEXT.offline, live.isLive);
       } catch {
         this.showOverlay(e.message, true);
       }

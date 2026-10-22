@@ -103,6 +103,18 @@ export function toast(message, ms = 2600, action = null) {
   }, action ? Math.max(ms, 5000) : ms);
 }
 
+/**
+ * 방송 종료 그림 — 꺼진 화면에 달·Zz. 라이브 시청 화면과 멀티라이브 패인의 상태 오버레이에 넣고,
+ * 오버레이에 `ended` 클래스가 있을 때만 보인다. 색은 currentColor — CSS(.stream-ended-art)가 정한다.
+ */
+export const streamEndedArt = `<div class="stream-ended-art" aria-hidden="true"><svg viewBox="0 0 120 96" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="10" y="10" width="100" height="64" rx="9" fill="currentColor" fill-opacity=".08"/>
+  <path d="M46 86h28M60 74v12"/>
+  <path d="M66 30a13 13 0 1 0 12 18 10 10 0 0 1-12-18Z" fill="currentColor" fill-opacity=".85" stroke="none"/>
+  <path d="M36 32h8l-8 9h8M80 24h5l-5 6h5" stroke-width="2.4" opacity=".7"/>
+  <circle cx="99" cy="20" r="3" fill="currentColor" fill-opacity=".35" stroke="none"/>
+</svg></div>`;
+
 export const icons = {
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 10.5 12 4l8.5 6.5"/><path d="M5.5 9v10a1 1 0 0 0 1 1H10v-5.5h4V20h3.5a1 1 0 0 0 1-1V9"/></svg>',
   following: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7-4.3-7-9.6A4 4 0 0 1 12 8a4 4 0 0 1 7 2.4C19 15.7 12 20 12 20Z"/></svg>',

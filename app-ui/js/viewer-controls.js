@@ -114,7 +114,7 @@ export class ViewerControls {
     // 오버레이 표시·문구가 바뀔 때만 버튼을 맞춘다(버튼 자체는 감시하지 않는다 — 자기 변경으로 다시 깨지 않게).
     const label = overlay.querySelector('span');
     const sync = () => {
-      const ended = /종료/.test(label.textContent);
+      const ended = overlay.classList.contains('ended') || /종료/.test(label.textContent);
       const shown = !overlay.hidden && (overlay.classList.contains('error') || ended);
       if (this.retry.hidden !== !shown) this.retry.hidden = !shown;
       const text = ended ? '다시 확인' : '다시 시도';
