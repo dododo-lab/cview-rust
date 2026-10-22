@@ -936,7 +936,12 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
   animation: alert-in 0.4s var(--ease-out) both;
 }
 .stream-alert.ev-tier-3 { box-shadow: 0 14px 40px color-mix(in srgb, var(--ev) 35%, rgba(0, 0, 0, 0.45)); }
-.stream-alert.leaving { animation: alert-out 0.35s ease both; }
+.stream-alert.leaving { animation: alert-out 0.35s ease both; pointer-events: none; }
+/* 알림을 끌어 옮긴다(donations.js) — 카드만 잡히고 빈 곳은 아래 영상으로 그대로 간다. */
+/* 너비는 내용대로 — 오른쪽 끝에 두어도 남은 폭에 눌려 좁아지지 않는다. */
+.stream-alerts { width: max-content; }
+.stream-alerts .stream-alert { pointer-events: auto; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.stream-alerts.dragging .stream-alert { cursor: grabbing; }
 .stream-alert-icon { width: 40px; height: 40px; flex: none; border-radius: 12px; display: grid; place-items: center; background: var(--ev); color: #111; box-shadow: 0 6px 16px color-mix(in srgb, var(--ev) 40%, transparent); }
 .stream-alert-icon svg { width: 20px; height: 20px; }
 .stream-alert-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; line-height: 1.35; }
@@ -1375,8 +1380,7 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 }
 .viewer.chat-mode-overlay .chat .chat-header, .viewer.chat-mode-overlay .chat .chat-input { background: transparent; border-color: rgba(255, 255, 255, 0.1); }
 .viewer.chat-mode-overlay .chat .chat-input input { background: rgba(0, 0, 0, 0.35); color: #fff; }
-.alert-position-layer { position: absolute; inset: 0; z-index: 8; cursor: crosshair; background: rgba(0, 0, 0, 0.25); }
-.alert-ghost { position: absolute; transform: translate(-50%, 0) scale(var(--alert-scale, 1)); transform-origin: top center; pointer-events: none; animation: none; border-style: dashed; }
+.alert-ghost { border-style: dashed; }
 
 /* ══ 채팅 부가 (chat-extras.js · chat-only.js) ═════════════════ */
 .chat-events { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 6px var(--sp-md); border-bottom: 1px solid var(--border-subtle); }
