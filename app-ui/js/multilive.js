@@ -91,6 +91,7 @@ export class MultiLivePage {
             <div class="ml-more-menu" role="menu" hidden>
               <button class="ml-menu-item" role="menuitem" data-ml="presets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h12v16l-6-4-6 4z"/></svg>프리셋 저장·불러오기</button>
               <button class="ml-menu-item" role="menuitem" data-ml="retry-all"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5a8 8 0 1 0-2.4 5.9"/><path d="M20 4.5v7h-7"/></svg>모두 다시 연결</button>
+              <button class="ml-menu-item" role="menuitem" data-ml="alert-pos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>후원 알림 위치 조정</button>
               <div class="ml-menu-sep"></div>
               <button class="ml-menu-item danger" role="menuitem" data-ml="stop-all"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>모두 닫기</button>
             </div>
@@ -303,6 +304,7 @@ export class MultiLivePage {
     }
     this.root.querySelector('[data-ml="stop-all"]').hidden = n === 0;
     this.root.querySelector('[data-ml="retry-all"]').hidden = n === 0;
+    this.root.querySelector('[data-ml="alert-pos"]').hidden = n === 0;
     const ma = this.root.querySelector('[data-ml="multi-audio"]');
     ma.classList.toggle('active', Boolean(state.multiAudio));
     ma.setAttribute('aria-pressed', String(Boolean(state.multiAudio)));
@@ -365,6 +367,8 @@ export class MultiLivePage {
     const chatEl = this.root.querySelector('.ml-chat');
     chatEl.classList.toggle('tinted', Boolean(shown));
     if (shown) chatEl.style.setProperty('--ml-hue', String(shown.hue));
+    // 후원 알림은 그 채팅의 패인(포커스·한 채널 크게면 메인) 위에 — 패인이 없으면 무대 전체.
+    this.alerts.attach(shown ? shown.el : this.stage);
   }
 
   renderPane(pane, s, index, selected) {
@@ -726,6 +730,7 @@ export class MultiLivePage {
       case 'presets': this.showPresets(); break;
       case 'restore': this.restoreSessions(this.savedSessionIds()); break;
       case 'retry': if (sessionId) { toast('다시 연결합니다', 1200); this.run(api.multiLiveRetry(sessionId)); } break;
+      case 'alert-pos': this.alerts.preview(); break;
       case 'retry-all': toast('모든 패인을 다시 연결합니다', 1500); this.run(api.multiLiveRetry(null)); break;
       case 'info': {
         const s = (this.state.sessions || []).find((x) => x.id === sessionId);
