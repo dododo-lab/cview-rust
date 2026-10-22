@@ -235,6 +235,9 @@
    좁은 패인은 덜 쓰는 버튼(.ml-sec)을 ⋯ 메뉴로 접는다(컨테이너 쿼리). */
 .ml-pane { container-type: inline-size; background: #000; }
 .ml-pane iframe { background: #000; }
+/* 후원 알림은 채팅을 보여 주는 패인 위에 — 패인 위·아래 바(z 3)가 나오면 그쪽 클릭이 먼저다. */
+.ml-pane > .stream-alerts { z-index: 2; }
+.ml-pane > .stream-alerts .stream-alert { max-width: min(520px, 92cqw); }
 .ml-pane-top, .ml-pane-bar { position: absolute; left: 0; right: 0; z-index: 3; display: flex; align-items: center; color: #fff;
   opacity: 0; pointer-events: none; transition: opacity 0.22s ease, transform 0.22s ease; }
 .ml-pane-top { top: 0; transform: translateY(-4px); gap: 6px; padding: 8px 8px 26px; background: linear-gradient(rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0.3) 60%, transparent); }
