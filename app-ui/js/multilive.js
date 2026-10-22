@@ -7,7 +7,7 @@
 // - 패인을 누르면 선택 — 오디오·채팅·고화질이 그 패인을 따라간다.
 import { api, listen, listenHere, Events } from './api.js';
 import { setPicture, setSharpenDefault } from './picture.js';
-import { esc, safeUrl, toast, imageSrc } from './dom.js';
+import { esc, safeUrl, toast, imageSrc, streamEndedArt } from './dom.js';
 import { PlayerBridge } from './player.js';
 import { ChatPanel } from './chat.js';
 import { StreamAlerts } from './donations.js';
@@ -177,7 +177,9 @@ export class MultiLivePage {
         this.watchFirstFrame(p, s, now);
       }
     }, 700);
-    this.chat = new ChatPanel(this.root.querySelector('.ml-chat'), { isLoggedIn, onHighlight: (m) => this.alerts.push(m) });
+    // 멀티라이브 채팅은 자기 세션(`ml`)을 쓴다 — 라이브 화면과 기본 세션을 나눠 쓰면 라이브를 열거나 닫을 때
+    // (단독 보기로 넘어가며 viewer.close 가 끊기, 다른 채널 시청이 기본 세션을 가져가기) 이 채팅이 끊긴 채 남았다.
+    this.chat = new ChatPanel(this.root.querySelector('.ml-chat'), { isLoggedIn, session: 'ml', mentionNotify: true, onHighlight: (m) => this.alerts.push(m) });
 
     this.state = { sessions: [], selectedId: null, canAdd: true, maxSessions: 4, layout: 'grid' };
     this.panes = new Map(); // slot → { el, bridge, sessionId }
@@ -241,7 +243,7 @@ export class MultiLivePage {
     el.innerHTML = `
       <iframe src="player/player.html" title="멀티라이브 플레이어 ${slot}" allow="autoplay; fullscreen"></iframe>
       <div class="ml-pane-hit" data-ml="select"></div>
-      <div class="ml-pane-state"><div class="spinner"></div><span></span></div>
+      <div class="ml-pane-state"><div class="spinner"></div>${streamEndedArt}<span></span></div>
       <div class="ml-pane-top">
         <button class="ml-pane-btn ml-drag" draggable="true" title="끌어서 자리 바꾸기" aria-label="끌어서 자리 바꾸기"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>
         <div class="ml-pane-avatar" data-ml="info" title="채널 정보"></div>
@@ -386,6 +388,7 @@ export class MultiLivePage {
     const overlay = el.querySelector('.ml-pane-state');
     overlay.hidden = !text;
     overlay.classList.toggle('error', kind === 'error');
+    overlay.classList.toggle('ended', kind === 'offline');
     overlay.querySelector('.spinner').hidden = kind !== 'loading';
     overlay.querySelector('span').textContent = text;
   }

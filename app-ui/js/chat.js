@@ -109,7 +109,7 @@ const PANELS = new Set();
 export function refreshChatAuth() {
   for (const p of PANELS) {
     p.updateInput();
-    const live = p.chatChannelId && (p.session || p.active);
+    const live = p.chatChannelId && p.active;
     if (live && p.authAtConnect !== p.isLoggedIn()) p.connect(p.chatChannelId, p.channelId);
   }
 }
@@ -117,13 +117,15 @@ export function refreshChatAuth() {
 export class ChatPanel {
   /**
    * @param {HTMLElement} root `.chat` 패널
-   * @param {{ isLoggedIn: () => boolean, onHighlight?: (message) => void, onLogin?: () => void }} options
+   * @param {{ isLoggedIn: () => boolean, onHighlight?: (message) => void, onLogin?: () => void, mentionNotify?: boolean }} options
    *   onHighlight — 실시간(최근 기록 제외)으로 들어온 후원·구독 메시지(스트림 알림용)
+   *   mentionNotify — 멘션 시스템 알림을 이 패널에서 띄우는가(기본: 기본 세션 패널만)
    */
-  constructor(root, { isLoggedIn, onHighlight = null, onLogin = null, session = null }) {
+  constructor(root, { isLoggedIn, onHighlight = null, onLogin = null, session = null, mentionNotify = !session }) {
     this.root = root;
-    // 세션 키 — null 이면 기본 세션(chat://event), 있으면 추가 세션(chat://session-event, 멀티채팅).
+    // 세션 키 — null 이면 기본 세션(chat://event), 있으면 추가 세션(chat://session-event, 멀티채팅·멀티라이브).
     this.session = session;
+    this.mentionNotify = mentionNotify;
     this.onHighlight = onHighlight;
     this.onLogin = onLogin;
     this.ranking = new DonationRanking(root);
@@ -394,8 +396,8 @@ export class ChatPanel {
       }
       if (prefs.highlightMentions && mentionsMe(m)) {
         this.mentions.push(m);
-        // 멘션 알림 (SYS-05) — 앱이 뒤에 있을 때만, 메인 채팅 패널 한 곳에서만.
-        if (prefs.mentionNotify !== false && !document.hasFocus() && this.active && !this.session) {
+        // 멘션 알림 (SYS-05) — 앱이 뒤에 있을 때만, 라이브·멀티라이브 채팅에서만(멀티채팅 패널 여럿은 빼고).
+        if (prefs.mentionNotify !== false && !document.hasFocus() && this.active && this.mentionNotify) {
           api.notifySend(`@${m.nickname} 님이 불렀어요`, String(m.content || '').slice(0, 140)).catch(() => {});
         }
       }
