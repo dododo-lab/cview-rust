@@ -4,8 +4,11 @@
 .page-multilive { display: flex; flex-direction: column; overflow: hidden; padding: var(--sp-sm) var(--sp-sm) var(--sp-sm); }
 .page-multilive[hidden] { display: none; }
 .ml-header { flex: none; gap: var(--sp-sm); }
-/* 머리줄 아래 여백은 빼고 .ml-body 의 8px 만 — 영상 위 간격을 좌우(페이지 여백 8px)와 같게(사용자 요청 2026-10-22). */
-.page-multilive .ml-header { margin-bottom: 0; }
+/* 머리줄 — 공통 .page-header 는 넓은 페이지 여백(24·32px)을 음수 margin 으로 되돌리는데, 여기 여백은 8px 라
+   위 패딩 16px 가 화면 밖으로 잘려 내용이 위로 붙었다. 페이지 여백만큼만 되돌리고 위아래 8px 로 가운데에 둔다.
+   아래 여백은 빼고 .ml-body 의 8px 만 — 영상 위 간격을 좌우(8px)와 같게(사용자 요청 2026-10-22).
+   이 페이지는 스크롤하지 않으니 sticky 는 끈다(top 0 sticky 면 머리줄이 8px 내려와 영상에 붙는다). */
+.page-multilive .ml-header { position: relative; top: auto; margin: calc(-1 * var(--sp-sm)) calc(-1 * var(--sp-sm)) 0; padding: var(--sp-sm); }
 .ml-header .btn svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
 
 .ml-body { flex: 1; min-height: 0; display: flex; gap: 0; margin-top: var(--sp-sm); position: relative; }
