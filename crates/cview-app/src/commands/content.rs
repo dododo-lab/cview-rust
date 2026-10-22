@@ -515,20 +515,37 @@ pub fn sanitize_file_name(name: &str) -> String {
     }
 }
 
-/// 같은 이름이 있으면 ` (2)` 를 붙인다.
-pub(crate) fn unique_path(dir: &Path, file_name: &str) -> PathBuf {
-    let candidate = dir.join(file_name);
-    if !candidate.exists() {
-        return candidate;
-    }
+/// 같은 이름 뒤에 붙여 볼 번호의 끝(` (2)` … ` (999)`).
+const UNIQUE_NAME_LIMIT: u32 = 1000;
+
+/// 같은 이름이 없을 때까지 ` (2)` 를 붙여 가며 **새 파일을 원자적으로 만든다**(`create_new`).
+/// 있는지 확인하고 나서 쓰는 방식과 달리 동시에 저장해도 같은 이름을 고르지 않고, 번호를 다 써도
+/// 기존 파일로 돌아가 덮어쓰지 않고 `AlreadyExists` 오류로 끝난다.
+pub(crate) fn create_unique_file(
+    dir: &Path,
+    file_name: &str,
+) -> std::io::Result<(PathBuf, std::fs::File)> {
     let (stem, ext) = match file_name.rsplit_once('.') {
         Some((s, e)) => (s.to_string(), format!(".{e}")),
         None => (file_name.to_string(), String::new()),
     };
-    (2..1000)
-        .map(|n| dir.join(format!("{stem} ({n}){ext}")))
-        .find(|p| !p.exists())
-        .unwrap_or(candidate)
+    let candidates = std::iter::once(dir.join(file_name))
+        .chain((2..UNIQUE_NAME_LIMIT).map(|n| dir.join(format!("{stem} ({n}){ext}"))));
+    for path in candidates {
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(file) => return Ok((path, file)),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "같은 이름의 파일이 너무 많습니다",
+    ))
 }
 
 /// 파일 저장 — `data` 는 base64(바이너리) 또는 `text`(문자열) 중 하나. 저장한 경로를 돌려준다.
@@ -560,8 +577,14 @@ pub async fn save_file(
     let dir = configured.unwrap_or_else(|| default_save_dir(&home, &kind));
     std::fs::create_dir_all(&dir)
         .map_err(|e| CommandError(format!("폴더를 만들 수 없습니다: {e}")))?;
-    let path = unique_path(&dir, &sanitize_file_name(&file_name));
-    std::fs::write(&path, bytes).map_err(|e| CommandError(format!("저장하지 못했습니다: {e}")))?;
+    let (path, mut file) = create_unique_file(&dir, &sanitize_file_name(&file_name))
+        .map_err(|e| CommandError(format!("저장하지 못했습니다: {e}")))?;
+    if let Err(e) = std::io::Write::write_all(&mut file, &bytes) {
+        drop(file);
+        // 방금 새로 만든 파일이라 지워도 다른 내용을 잃지 않는다.
+        let _ = std::fs::remove_file(&path);
+        return Err(CommandError(format!("저장하지 못했습니다: {e}")));
+    }
     Ok(path.to_string_lossy().into_owned())
 }
 
@@ -723,12 +746,74 @@ mod tests {
             home.join("Pictures/CView")
         );
         assert_eq!(default_save_dir(home, "chat"), home.join("Downloads/CView"));
-        let dir = std::env::temp_dir().join(format!("cview-save-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let dir = dir.path();
         std::fs::write(dir.join("a.txt"), "x").unwrap();
-        assert_eq!(unique_path(&dir, "a.txt"), dir.join("a (2).txt"));
-        assert_eq!(unique_path(&dir, "b.txt"), dir.join("b.txt"));
-        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(
+            create_unique_file(dir, "a.txt").unwrap().0,
+            dir.join("a (2).txt")
+        );
+        assert_eq!(
+            create_unique_file(dir, "a.txt").unwrap().0,
+            dir.join("a (3).txt")
+        );
+        assert_eq!(
+            create_unique_file(dir, "b.txt").unwrap().0,
+            dir.join("b.txt")
+        );
+        assert_eq!(
+            create_unique_file(dir, "noext").unwrap().0,
+            dir.join("noext")
+        );
+        assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "x");
         assert_eq!(shellexpand_home("~/Pics", home), "/Users/x/Pics");
+    }
+
+    #[test]
+    fn exhausted_names_fail_without_touching_existing_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let dir = dir.path();
+        std::fs::write(dir.join("a.txt"), "원본").unwrap();
+        for n in 2..UNIQUE_NAME_LIMIT {
+            std::fs::write(dir.join(format!("a ({n}).txt")), format!("{n}")).unwrap();
+        }
+        let err = create_unique_file(dir, "a.txt").unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "원본");
+        assert_eq!(
+            std::fs::read_to_string(dir.join("a (999).txt")).unwrap(),
+            "999"
+        );
+        assert_eq!(std::fs::read_dir(dir).unwrap().count(), 999);
+    }
+
+    #[test]
+    fn concurrent_saves_get_distinct_new_files() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "원본").unwrap();
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(16));
+        let handles: Vec<_> = (0..16)
+            .map(|i| {
+                let dir = dir.path().to_path_buf();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    let (path, mut file) = create_unique_file(&dir, "a.txt").unwrap();
+                    std::io::Write::write_all(&mut file, format!("{i}").as_bytes()).unwrap();
+                    (path, i)
+                })
+            })
+            .collect();
+        let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        let paths: std::collections::HashSet<_> = results.iter().map(|(p, _)| p.clone()).collect();
+        assert_eq!(paths.len(), 16);
+        assert!(!paths.contains(&dir.path().join("a.txt")));
+        for (path, i) in &results {
+            assert_eq!(std::fs::read_to_string(path).unwrap(), format!("{i}"));
+        }
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("a.txt")).unwrap(),
+            "원본"
+        );
     }
 }
