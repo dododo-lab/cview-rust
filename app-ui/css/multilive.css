@@ -4,6 +4,8 @@
 .page-multilive { display: flex; flex-direction: column; overflow: hidden; padding: var(--sp-sm) var(--sp-sm) var(--sp-sm); }
 .page-multilive[hidden] { display: none; }
 .ml-header { flex: none; gap: var(--sp-sm); }
+/* 머리줄 아래 여백은 빼고 .ml-body 의 8px 만 — 영상 위 간격을 좌우(페이지 여백 8px)와 같게(사용자 요청 2026-10-22). */
+.page-multilive .ml-header { margin-bottom: 0; }
 .ml-header .btn svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
 
 .ml-body { flex: 1; min-height: 0; display: flex; gap: 0; margin-top: var(--sp-sm); position: relative; }
@@ -21,6 +23,20 @@
 .ml-stage.ml-n4 { grid-template: 1fr 1fr / 1fr 1fr; }
 /* 포커스 — 메인 위치·비율은 focus-layout.js 가 grid 템플릿과 패인 위치로 정한다. */
 .ml-stage.ml-focus { grid-auto-rows: auto; }
+
+/* 포커스 서브 줄 끝의 채널 추가 칸 — 서브 패인보다 좁은 트랙(focus-layout.js FOCUS_ADD_TRACK) */
+.ml-focus-add {
+  min-width: 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  border: 1px dashed var(--border); border-radius: 10px; background: color-mix(in srgb, var(--surface-elevated) 55%, transparent);
+  color: var(--text-secondary); font: inherit; font-size: var(--fs-footnote); font-weight: 600; cursor: pointer; overflow: hidden;
+  transition: background .15s var(--ease-out), color .15s var(--ease-out), border-color .15s var(--ease-out);
+}
+.ml-focus-add[hidden], .ml-stage.ml-single .ml-focus-add { display: none; }
+.ml-focus-add svg { width: 18px; height: 18px; padding: 9px; box-sizing: content-box; flex: none; border-radius: 50%; background: var(--hover); transition: background .15s var(--ease-out), color .15s var(--ease-out); }
+.ml-focus-add span { white-space: nowrap; }
+.ml-focus-add:hover { color: var(--primary-text); border-color: color-mix(in srgb, var(--primary) 55%, transparent); background: var(--primary-dim); }
+.ml-focus-add:hover svg { background: var(--primary); color: var(--on-primary); }
+.ml-focus-add:focus-visible { box-shadow: var(--focus-ring); }
 
 /* 메인 크기 구분선 */
 .ml-divider { position: absolute; z-index: 4; border-radius: 4px; touch-action: none; }
