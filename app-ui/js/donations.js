@@ -3,12 +3,15 @@
 // - 채팅 줄: 후원은 종류(채팅·영상·미션)와 치즈 금액, 금액 구간별 강조. 구독은 개월 수와 티어.
 // - 주간 후원 랭킹: 채팅 패널 위 칩 줄(`chat_donation_ranking`).
 // - 스트림 알림: 시청 화면 위에 새 후원·구독을 잠깐 띄운다(설정에서 끌 수 있음, 기본 켬).
-import { invoke } from './api.js';
-import { esc, safeUrl, imageSrc } from './dom.js';
+//   떠 있는 알림을 끌면 그 자리로 옮기고(영상 크기 대비 비율로 저장), 더블클릭하면 기본 위치로 돌린다.
+import { api, invoke } from './api.js';
+import { esc, safeUrl, imageSrc, toast } from './dom.js';
 
 const ALERT_KEY = 'cview.streamAlerts';
 const ALERT_MS = 6500;
 const ALERT_MAX = 3;
+/** 기본 위치 — 설정 기본값(streamAlertAnchorX/Y)과 같다. */
+export const ALERT_HOME = { x: 0.5, y: 0.08 };
 
 export const ICON_CHEESE = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 15.5 12.6 4a1 1 0 0 1 1.4-.1l6.6 6.1c.3.2.4.5.4.8v6.7a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5v-2Zm6 1.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm6.5-3a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"/></svg>';
 export const ICON_STAR = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></svg>';
@@ -177,12 +180,48 @@ export class DonationRanking {
   }
 }
 
-/** 플레이어 위 후원·구독 알림. */
+/**
+ * 끌어 놓은 알림 위치 — 알림 묶음이 영상 틀 안에 다 들어가게 자른 비율(x 는 가운데, y 는 위 가장자리).
+ * 설정이 받는 범위(x 0.05~0.95, y 0~0.95)도 지킨다. 순수 함수.
+ */
+export function clampAlertAnchor(x, y, boxW, boxH, frameW, frameH) {
+  const half = frameW > 0 ? Math.min(0.5, boxW / 2 / frameW) : 0;
+  const maxY = frameH > 0 ? Math.max(0, 1 - boxH / frameH) : 0.95;
+  const round = (v) => Math.round(v * 1000) / 1000;
+  return {
+    x: round(Math.min(0.95, 1 - half, Math.max(0.05, half, x))),
+    y: round(Math.min(0.95, maxY, Math.max(0, y))),
+  };
+}
+
+/** 플레이어 위 후원·구독 알림. 알림을 끌어 위치를 바꾼다(모든 시청 화면이 같은 설정을 쓴다). */
 export class StreamAlerts {
   constructor(stage) {
     this.el = document.createElement('div');
     this.el.className = 'stream-alerts';
     stage.append(this.el);
+    this.drag = null;
+    this.el.addEventListener('pointerdown', (e) => this.onDown(e));
+    this.el.addEventListener('pointermove', (e) => this.onMove(e));
+    this.el.addEventListener('pointerup', (e) => this.onUp(e));
+    this.el.addEventListener('pointercancel', () => this.cancelDrag());
+    this.el.addEventListener('lostpointercapture', () => this.cancelDrag());
+    // 알림 위 클릭·더블클릭은 아래 영상(재생 토글·전체 화면·패인 크게 보기)으로 보내지 않는다.
+    // 묶음 자체는 pointer-events 가 없어 여기 오는 건 카드에서 난 것뿐이다.
+    for (const type of ['click', 'mousedown']) this.el.addEventListener(type, (e) => e.stopPropagation());
+    this.el.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      this.save(ALERT_HOME.x, ALERT_HOME.y, '알림을 기본 위치로 되돌렸습니다');
+    });
+    this.onKey = (e) => { if (e.key === 'Escape') this.endPreview(); };
+  }
+
+  /** 알림을 붙일 영상 틀을 바꾼다(멀티라이브: 채팅을 보여 주는 패인). 같은 틀이면 그대로. */
+  attach(frame) {
+    if (frame && this.el.parentElement !== frame) {
+      this.cancelDrag();
+      frame.append(this.el);
+    }
   }
 
   push(m) {
@@ -191,6 +230,7 @@ export class StreamAlerts {
     if (!e) return;
     const item = document.createElement('div');
     item.className = `stream-alert ev-${e.tone} ev-tier-${e.tier}`;
+    item.title = '끌어서 옮기기 · 더블클릭하면 기본 위치';
     item.innerHTML = `
       <span class="stream-alert-icon">${EVENT_ICONS[e.icon] || ''}</span>
       <span class="stream-alert-text">
@@ -199,15 +239,130 @@ export class StreamAlerts {
         ${e.extra ? `<span class="stream-alert-msg">${esc(e.extra)}</span>` : ''}
         ${m.content ? `<span class="stream-alert-msg">${esc(m.content)}</span>` : ''}
       </span>`;
+    this.show(item, ALERT_MS);
+  }
+
+  /** 위치 맞추기용 견본 알림 — 끌어 놓거나 Esc 를 누르면(또는 잠시 그대로 두면) 사라진다. */
+  preview() {
+    this.endPreview();
+    const item = document.createElement('div');
+    item.className = 'stream-alert ev-donation ev-tier-1 alert-ghost';
+    item.innerHTML = `
+      <span class="stream-alert-icon">${EVENT_ICONS.heart}</span>
+      <span class="stream-alert-text">
+        <span class="stream-alert-kicker">후원 알림 위치</span>
+        <span class="stream-alert-title"><span class="stream-alert-nick">끌어서 옮기세요</span></span>
+        <span class="stream-alert-msg">놓으면 저장 · 더블클릭은 기본 위치 · Esc 닫기</span>
+      </span>`;
+    this.ghost = item;
+    document.addEventListener('keydown', this.onKey);
+    this.show(item, 15000);
+  }
+
+  endPreview() {
+    if (!this.ghost) return;
+    this.ghost.remove();
+    this.ghost = null;
+    document.removeEventListener('keydown', this.onKey);
+  }
+
+  show(item, ms) {
     this.el.append(item);
-    while (this.el.children.length > ALERT_MAX) this.el.firstElementChild.remove();
-    setTimeout(() => {
+    while (this.el.children.length > ALERT_MAX) {
+      const old = this.el.firstElementChild;
+      if (this.drag && this.drag.card === old) this.cancelDrag(); // 떼어 낸 카드는 놓기 이벤트를 못 받는다
+      old.remove();
+    }
+    // 끄는 중이거나 마우스를 올려 둔 알림은 놓을 때까지 남겨 둔다.
+    const leave = () => {
+      if (!item.isConnected) return;
+      if (this.drag || item.matches(':hover')) { setTimeout(leave, 800); return; }
       item.classList.add('leaving');
-      setTimeout(() => item.remove(), 400);
-    }, ALERT_MS);
+      setTimeout(() => { item.remove(); if (item === this.ghost) this.endPreview(); }, 400);
+    };
+    setTimeout(leave, ms);
+  }
+
+  /** 지금 묶음 위치(비율) — 화면에 그려진 자리에서 읽는다(설정값·창 크기와 무관하게 정확). */
+  anchorNow() {
+    const frame = this.el.parentElement.getBoundingClientRect();
+    const box = this.el.getBoundingClientRect();
+    return {
+      frame, box,
+      x: (box.left + box.width / 2 - frame.left) / frame.width,
+      y: (box.top - frame.top) / frame.height,
+    };
+  }
+
+  onDown(e) {
+    const card = e.target.closest('.stream-alert');
+    if (e.button !== 0 || !card) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const { frame, box, x, y } = this.anchorNow();
+    if (!frame.width || !frame.height) return;
+    this.drag = { id: e.pointerId, card, sx: e.clientX, sy: e.clientY, x, y, frame, box, moved: false };
+    // 카드에 잡는다 — 묶음에 잡으면 click·dblclick 대상이 묶음이 되어 카드 판정이 어긋난다.
+    card.setPointerCapture(e.pointerId);
+    this.el.classList.add('dragging');
+  }
+
+  onMove(e) {
+    const d = this.drag;
+    if (!d || e.pointerId !== d.id) return;
+    const dx = e.clientX - d.sx;
+    const dy = e.clientY - d.sy;
+    if (!d.moved && Math.hypot(dx, dy) < 4) return;
+    d.moved = true;
+    const p = clampAlertAnchor(d.x + dx / d.frame.width, d.y + dy / d.frame.height, d.box.width, d.box.height, d.frame.width, d.frame.height);
+    d.at = p;
+    this.el.style.setProperty('--alert-x', String(p.x));
+    this.el.style.setProperty('--alert-y', String(p.y));
+  }
+
+  onUp(e) {
+    const d = this.drag;
+    if (!d || e.pointerId !== d.id) return;
+    this.drag = null;
+    this.el.classList.remove('dragging');
+    if (e.target.hasPointerCapture?.(e.pointerId)) e.target.releasePointerCapture(e.pointerId);
+    if (d.moved && d.at) {
+      this.endPreview();
+      this.save(d.at.x, d.at.y, '알림 위치를 저장했습니다');
+    }
+  }
+
+  cancelDrag() {
+    if (!this.drag) return;
+    const moved = this.drag.moved;
+    this.drag = null;
+    this.el.classList.remove('dragging');
+    if (moved) this.resetInline();
+  }
+
+  resetInline() {
+    this.el.style.removeProperty('--alert-x');
+    this.el.style.removeProperty('--alert-y');
+  }
+
+  /** 위치 저장 — 설정(player.streamAlertAnchorX/Y)에 남기고 모든 화면에 알린다. */
+  async save(x, y, message) {
+    this.el.style.setProperty('--alert-x', String(x));
+    this.el.style.setProperty('--alert-y', String(y));
+    try {
+      const settings = await api.settingsUpdate('player', { streamAlertAnchorX: x, streamAlertAnchorY: y });
+      window.dispatchEvent(new CustomEvent('cview:settings-changed', { detail: { domain: 'player', settings } }));
+      toast(message, 1500);
+    } catch (er) {
+      toast(er.message || String(er));
+    }
+    // 루트 CSS 변수(prefs-effects)가 새 값을 가지므로 임시 값은 걷는다(실패하면 원래 자리로).
+    this.resetInline();
   }
 
   clear() {
+    this.cancelDrag();
+    this.endPreview();
     this.el.innerHTML = '';
   }
 }

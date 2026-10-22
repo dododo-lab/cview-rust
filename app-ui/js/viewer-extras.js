@@ -2,7 +2,7 @@
 // PLY-12 채팅 표시 모드(사이드·오버레이·숨김), PLY-14 헤더 채널 레일(다른 방송 바로 전환),
 // PLY-03 라이브 되감기(←/→ 10초, ⇧ 60초 — 재생 목록이 허용하는 범위 안), PLY-16 후원 알림 위치 끌어 맞추기.
 import { api } from './api.js';
-import { esc, safeUrl, toast, imageSrc } from './dom.js';
+import { esc, safeUrl, imageSrc } from './dom.js';
 import { chatPrefs, onChatPrefs, updateChatPrefs } from './chat-prefs.js';
 
 const MODES = ['side', 'overlay', 'hidden'];
@@ -137,41 +137,8 @@ export class ViewerExtras {
 
   // ── 후원 알림 위치 조정 (PLY-16) ────────────
 
+  /** 견본 알림을 띄운다 — 끌어 놓으면 그 자리가 저장된다(실제 알림도 바로 끌 수 있다). */
   startAlertPositioning() {
-    const stage = this.viewer.root.querySelector('.player-stage');
-    const ghost = document.createElement('div');
-    ghost.className = 'stream-alert alert-ghost';
-    ghost.innerHTML = '<span class="stream-alert-icon">✥</span><span class="stream-alert-text"><span class="stream-alert-title">끌어서 알림 위치를 정하세요</span><span class="stream-alert-msg">놓으면 저장됩니다 · Esc 취소</span></span>';
-    const layer = document.createElement('div');
-    layer.className = 'alert-position-layer';
-    layer.append(ghost);
-    stage.append(layer);
-    const rect = () => stage.getBoundingClientRect();
-    const place = (fx, fy) => {
-      ghost.style.left = `${fx * 100}%`;
-      ghost.style.top = `${fy * 100}%`;
-    };
-    const cs = getComputedStyle(document.documentElement);
-    place(Number(cs.getPropertyValue('--alert-x')) || 0.5, Number(cs.getPropertyValue('--alert-y')) || 0.08);
-    let dragging = false;
-    const finish = async (save, fx, fy) => {
-      layer.remove();
-      document.removeEventListener('keydown', esc_);
-      if (!save) return;
-      try {
-        const s = await api.settingsUpdate('player', { streamAlertAnchorX: fx, streamAlertAnchorY: fy });
-        window.dispatchEvent(new CustomEvent('cview:settings-changed', { detail: { settings: s } }));
-        toast('알림 위치를 저장했습니다', 1500);
-      } catch (er) { toast(er.message); }
-    };
-    const frac = (ev) => {
-      const r = rect();
-      return [Math.min(0.95, Math.max(0.05, (ev.clientX - r.left) / r.width)), Math.min(0.9, Math.max(0, (ev.clientY - r.top) / r.height))];
-    };
-    layer.addEventListener('pointerdown', (ev) => { dragging = true; layer.setPointerCapture(ev.pointerId); place(...frac(ev)); });
-    layer.addEventListener('pointermove', (ev) => { if (dragging) place(...frac(ev)); });
-    layer.addEventListener('pointerup', (ev) => { dragging = false; finish(true, ...frac(ev)); });
-    const esc_ = (ev) => { if (ev.key === 'Escape') finish(false); };
-    document.addEventListener('keydown', esc_);
+    this.viewer.alerts.preview();
   }
 }
