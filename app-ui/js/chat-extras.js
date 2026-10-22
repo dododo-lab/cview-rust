@@ -21,10 +21,18 @@ export const DESIGN_STYLES = [
 /** 읽기 폭 — 원본 ChatReadingWidthMenu. */
 export const READING_WIDTHS = [['full', '전체', null], ['wide', '넓게', 720], ['normal', '보통', 560], ['narrow', '좁게', 420]];
 
-/** 채팅 화면(패널·통합 목록)에 디자인 스타일·읽기 폭을 입힌다. */
+/** 채팅 화면(패널·통합 목록)에 디자인 스타일·읽기 폭·표시 설정(글자 크기·줄 간격·시간·배지·역할 색)을 입힌다.
+ *  글자 크기는 --chat-font 와 배율 --chat-scale(기본 14px = 1)로 — 디자인마다 닉네임·아바타·이모티콘 크기가 따라 커진다. */
 export function applyChatSkin(el, p = chatPrefs()) {
   const style = DESIGN_STYLES.some(([v]) => v === p.designStyle) ? p.designStyle : 'unified';
+  const font = Math.min(24, Math.max(10, Number(p.fontSize) || 14));
   el.classList.add('chat-skin');
+  el.style.setProperty('--chat-font', `${font}px`);
+  el.style.setProperty('--chat-scale', String(font / 14));
+  el.style.setProperty('--chat-gap', `${Math.min(12, Math.max(0, Number(p.lineSpacing) || 0))}px`);
+  el.classList.toggle('hide-time', !p.showTimestamp);
+  el.classList.toggle('hide-badge', !p.showBadge);
+  el.classList.toggle('no-role-color', !p.highlightRoles);
   el.classList.toggle('no-nick-colors', p.nicknameColors === false);
   for (const [v] of DESIGN_STYLES) el.classList.toggle(`style-${v}`, v === style);
   const w = READING_WIDTHS.find(([v]) => v === p.readingWidth);
