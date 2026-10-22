@@ -106,6 +106,7 @@ export class MultiLivePage {
             <button class="btn primary lg" data-ml="add">${ICON_PLUS}<span>채널 추가</span></button>
             <button class="btn lg ml-restore" data-ml="restore" hidden>지난 구성 다시 열기</button>
           </div>
+          <button class="ml-focus-add" data-ml="add" hidden title="채널 추가" aria-label="채널 추가">${ICON_PLUS}<span>채널 추가</span></button>
         </div>
         <aside class="chat ml-chat">
           <header class="chat-header">
@@ -134,6 +135,7 @@ export class MultiLivePage {
 
     this.stage = this.root.querySelector('.ml-stage');
     this.empty = this.root.querySelector('.ml-empty');
+    this.focusAdd = this.root.querySelector('.ml-focus-add');
     this.count = this.root.querySelector('.ml-count');
     this.picker = this.root.querySelector('.ml-picker');
     this.pickerList = this.root.querySelector('.ml-picker-list');
@@ -395,12 +397,14 @@ export class MultiLivePage {
       this.stage.style.gridTemplateColumns = '';
       this.stage.style.gridTemplateRows = '';
       for (const p of panes) { p.el.style.gridRow = ''; p.el.style.gridColumn = ''; }
+      this.focusAdd.hidden = true;
       this.divider.hidden = true;
       return;
     }
     const st = this.state;
     const ratio = this.localRatio ?? st.focusRatio;
-    const grid = focusGrid(order.length, st.focusDirection, ratio);
+    // 더 넣을 수 있으면 서브 줄 끝에 채널 추가 칸 — 가득 차면 칸을 빼 서브 패인이 줄을 다 쓴다.
+    const grid = focusGrid(order.length, st.focusDirection, ratio, Boolean(st.canAdd));
     this.stage.style.gridTemplateColumns = grid.columns;
     this.stage.style.gridTemplateRows = grid.rows;
     for (const p of panes) {
@@ -409,6 +413,8 @@ export class MultiLivePage {
       p.el.style.gridRow = area.row;
       p.el.style.gridColumn = area.column;
     }
+    this.focusAdd.hidden = !grid.add;
+    if (grid.add) { this.focusAdd.style.gridRow = grid.add.row; this.focusAdd.style.gridColumn = grid.add.column; }
     const r = clampFocusRatio(ratio);
     const d = this.divider;
     d.hidden = false;
