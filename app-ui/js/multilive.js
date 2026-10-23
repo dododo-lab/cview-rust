@@ -7,7 +7,7 @@
 // - 패인을 누르면 선택 — 오디오·채팅·고화질이 그 패인을 따라간다.
 import { api, listen, listenHere, Events } from './api.js';
 import { setPicture, setSharpenDefault } from './picture.js';
-import { esc, safeUrl, toast, imageSrc, streamEndedArt } from './dom.js';
+import { esc, safeUrl, toast, imageSrc, streamEndedArt, dismiss } from './dom.js';
 import { PlayerBridge } from './player.js';
 import { ChatPanel } from './chat.js';
 import { StreamAlerts } from './donations.js';
@@ -662,7 +662,7 @@ export class MultiLivePage {
       ${ids.length ? `<div class="word-form"><input type="text" maxlength="30" placeholder="지금 구성(${ids.length}개 채널) 이름"><button class="btn primary">저장</button></div>` : ''}
       <div class="sheet-actions"><button type="button" class="btn" data-preset-close>닫기</button></div></form>`;
     document.body.append(scrim);
-    const close = () => scrim.remove();
+    const close = () => dismiss(scrim);
     scrim.addEventListener('click', async (e) => {
       if (e.target === scrim || e.target.closest('[data-preset-close]')) { close(); return; }
       const row = e.target.closest('[data-preset-id]');

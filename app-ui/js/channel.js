@@ -1,7 +1,7 @@
 // 채널 상세 — 원본 ChannelInfoView / ChannelInfoHeaderView / ChannelVODClipTab / ChannelMemoSheet.
 // NAV-01 헤더·방송 중 배지·정보/다시보기/클립 탭, VOD-05 채널 VOD·클립 탭, DAT-01 메모, DAT-02 즐겨찾기.
 import { api } from './api.js';
-import { esc, safeUrl, toast, channelTone, imageSrc } from './dom.js';
+import { esc, safeUrl, toast, channelTone, imageSrc, dismiss } from './dom.js';
 import { emptyState, loadingState, compactCount, errorState } from './cards.js';
 
 const ICON_STAR = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></svg>';
@@ -273,7 +273,7 @@ export class ChannelPage {
     document.body.append(dialog);
     const area = dialog.querySelector('textarea');
     area.focus();
-    const close = () => dialog.remove();
+    const close = () => dismiss(dialog);
     dialog.addEventListener('click', (e) => { if (e.target === dialog || e.target.closest('[data-sheet="cancel"]')) close(); });
     dialog.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
     dialog.querySelector('form').addEventListener('submit', async (e) => {
