@@ -6,10 +6,11 @@ import { esc, safeUrl, icons, imageSrc } from './dom.js';
 import { liveCard, emptyState, liveGrid, recentChannels, uptimeText, compactCount } from './cards.js';
 import { clipCard } from './channel.js';
 import { continueCard } from './media.js';
+import { motionReduced } from './motion.js';
 
 const HERO_SIZE = 5;
 // 자동 넘김 — 대기열 진행 막대(CSS `queue-progress`, 7초)가 끝나면 다음 장으로. 호버 중엔 CSS 가 멈춘다.
-const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+// 모션 줄이기(시스템·설정 "절약")면 넘기지 않는다 — 절약은 애니메이션 시간을 0 으로 만들어 끝 이벤트가 곧바로 온다.
 const POPULAR_SIZE = 48;
 const POPULAR_GRID = 24;
 const CHIP_LIMIT = 8;
@@ -198,7 +199,7 @@ export class HomePage {
     });
     this.body.addEventListener('click', (e) => this.onClick(e));
     this.body.addEventListener('animationend', (e) => {
-      if (e.animationName !== 'queue-progress' || this.root.hidden || reducedMotion.matches) return;
+      if (e.animationName !== 'queue-progress' || this.root.hidden || motionReduced()) return;
       this.setHero(this.heroIndex + 1);
     });
   }
@@ -333,7 +334,7 @@ export class HomePage {
     const shelfBtn = e.target.closest('[data-shelf]');
     if (shelfBtn) {
       const shelf = shelfBtn.closest('.home-section').querySelector('.shelf');
-      shelf.scrollBy({ left: Number(shelfBtn.dataset.shelf) * shelf.clientWidth * 0.9, behavior: 'smooth' });
+      shelf.scrollBy({ left: Number(shelfBtn.dataset.shelf) * shelf.clientWidth * 0.9, behavior: motionReduced() ? 'auto' : 'smooth' });
       return;
     }
     const vod = e.target.closest('[data-vod-no]');

@@ -865,7 +865,7 @@ select.select {
   .home-search { max-width: 220px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0s !important; transition-duration: 0.01ms !important; transition-delay: 0s !important; }
 }
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -1470,7 +1470,7 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 /* ══ 설정 효과 (prefs-effects.js) ═════════════════════════════ */
 .stream-alerts { left: calc(var(--alert-x, 0.5) * 100%); top: calc(var(--alert-y, 0.08) * 100%); transform: translateX(-50%) scale(var(--alert-scale, 1)); transform-origin: top center; }
 /* 모션 — 절약은 애니메이션을 끄고, 풍부는 화면 전환에 페이드를 준다 (DSN-02) */
-:root[data-motion="reduced"] *, :root[data-motion="reduced"] *::before, :root[data-motion="reduced"] *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+:root[data-motion="reduced"] *, :root[data-motion="reduced"] *::before, :root[data-motion="reduced"] *::after { animation-duration: 0.01ms !important; animation-delay: 0s !important; transition-duration: 0.01ms !important; transition-delay: 0s !important; }
 :root[data-motion="rich"] .page:not([hidden]) { animation: page-in 0.28s var(--ease-out) both; }
 @keyframes page-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 /* 콤팩트 (DSN-03) */

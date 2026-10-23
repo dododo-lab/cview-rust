@@ -1,4 +1,5 @@
 // 작은 DOM 도우미.
+import { motionReduced } from './motion.js';
 
 /**
  * 시트·팝업 닫기 — leaving 을 달아 나가는 애니메이션(motion.css)이 끝나면 지운다.
@@ -6,9 +7,7 @@
  */
 export function dismiss(el, ms = 200) {
   if (!el || !el.isConnected || el.classList.contains('leaving')) return;
-  const reduced = document.documentElement.dataset.motion === 'reduced'
-    || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  if (reduced) { el.remove(); return; }
+  if (motionReduced()) { el.remove(); return; }
   el.classList.add('leaving');
   const done = () => el.remove();
   el.addEventListener('animationend', (e) => { if (e.target === el) done(); }, { once: true });
@@ -108,14 +107,11 @@ export function toast(message, ms = 2600, action = null) {
   if (action) {
     const b = el.querySelector('.toast-action');
     b.textContent = action.label;
-    b.addEventListener('click', () => { el.classList.add('leaving'); setTimeout(() => el.remove(), 200); action.run(); });
+    b.addEventListener('click', () => { dismiss(el); action.run(); });
   }
   stack.append(el);
   while (stack.children.length > 4) stack.firstElementChild.remove();
-  setTimeout(() => {
-    el.classList.add('leaving');
-    setTimeout(() => el.remove(), 250);
-  }, action ? Math.max(ms, 5000) : ms);
+  setTimeout(() => dismiss(el), action ? Math.max(ms, 5000) : ms);
 }
 
 /**
