@@ -4,6 +4,7 @@ import { esc, safeUrl, icons, imageSrc } from './dom.js';
 
 const COLLAPSE_KEY = 'cview.sidebarCollapsed';
 const NARROW = window.matchMedia('(max-width: 1100px)');
+const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
 const LIVE_LIMIT = 7;
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
@@ -114,7 +115,50 @@ export class Sidebar {
       document.documentElement.classList.remove('sidebar-animating');
       window.dispatchEvent(new Event('cview:sidebar-settled'));
     }, 520);
+    if (this.playingInContent()) this.slideOver();
+    else this.applyCollapsed();
+  }
+
+  /** 본문에 보이는 영상(라이브 플레이어·멀티라이브 패인 iframe, 클립 등)이 있나. */
+  playingInContent() {
+    if (REDUCED_MOTION.matches || document.documentElement.dataset.motion === 'reduced') return false;
+    const content = document.querySelector('.content');
+    return Boolean(content) && [...content.querySelectorAll('iframe, video')].some((el) => el.offsetParent !== null);
+  }
+
+  /**
+   * 영상 시청 중 접기·펼치기 — 사이드바가 본문 위로 미끄러진다.
+   * 보통은 사이드바 너비가 바뀌는 매 프레임 본문(플레이어 iframe·영상)을 다시 배치해 끊겼다.
+   * 여기서는 너비와 오른쪽 음수 여백을 같은 곡선으로 함께 움직여 레이아웃상 차지하는 폭(너비 + 여백)을 고정한다.
+   * 그래서 본문 크기는 접을 땐 시작에 한 번(왼쪽은 아직 사이드바 밑), 펼칠 땐 끝에 한 번만 바뀐다.
+   */
+  slideOver() {
+    const el = this.root;
+    const app = el.parentElement;
+    const running = this.slide;
+    const w0 = el.getBoundingClientRect().width;
+    const m0 = running ? parseFloat(getComputedStyle(el).marginRight) || 0 : 0;
+    if (running) running.cancel();
+    // 목표 너비 — 전환 없이 한 번 재고 시작 상태로 되돌린다.
+    el.style.transitionProperty = 'padding'; // 패딩은 그대로 부드럽게, 너비만 전환 없이
     this.applyCollapsed();
+    const w1 = el.getBoundingClientRect().width;
+    el.style.transitionProperty = '';
+    const collapsing = w1 < w0;
+    // 접기: 차지하는 폭을 곧바로 w1 로(본문은 한 번 넓어지고 왼쪽은 사이드바 밑) → 여백 0 으로 풀며 드러낸다.
+    // 펼치기: 지금 차지하는 폭을 그대로 두고 사이드바만 본문 위로 넓어진 뒤, 끝에 여백을 0 으로(본문은 그때 한 번 좁아진다).
+    const from = { width: `${w0}px`, marginRight: `${collapsing ? w1 - w0 : m0}px` };
+    const to = { width: `${w1}px`, marginRight: `${collapsing ? 0 : w0 + m0 - w1}px` };
+    const css = getComputedStyle(el);
+    const dur = (parseFloat(css.getPropertyValue('--sb-dur')) || 0.34) * 1000;
+    app.classList.add('sb-overlay');
+    const anim = el.animate([from, to], { duration: dur, easing: css.getPropertyValue('--sb-ease').trim() || 'ease-out' });
+    this.slide = anim;
+    anim.finished.then(() => {
+      if (this.slide !== anim) return;
+      this.slide = null;
+      app.classList.remove('sb-overlay');
+    }, () => {});
   }
 
   renderNav() {

@@ -396,6 +396,10 @@ a { color: var(--primary); }
 .sidebar.sb-anim :is(.nav-label, .side-live-name, .side-live-cat, .account-name) { text-overflow: clip; }
 .sidebar.sb-anim .side-quick { overflow: hidden; }
 @keyframes sb-reveal { 0%, 35% { opacity: 0; } 100% { opacity: 1; } }
+/* 영상 시청 중 전환(sidebar.js slideOver) — 너비는 WAAPI 가 맡고, 사이드바가 본문 위로 지나가도록 쌓임 순서를 둔다.
+   본문은 이 동안만 자기 쌓임 맥락에 가둬(z-index 40 끌기 띠 등) 사이드바 밑에 있게 한다. */
+.app.sb-overlay .sidebar { position: relative; z-index: 1; transition-property: padding; }
+.app.sb-overlay .content { z-index: 0; }
 
 /* 접힌 상태 툴팁 — sidebar.js 가 위치를 잡는다 */
 .side-tip {
