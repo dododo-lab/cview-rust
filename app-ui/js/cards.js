@@ -147,6 +147,9 @@ export function bindCardOpen(root, onOpen) {
   };
   root.addEventListener('click', (e) => open(e.target));
   root.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') open(e.target);
+    // 카드(.card[tabindex])는 a11y.js 가, 버튼·링크는 브라우저가 Enter 를 click 으로 바꾼다 — 여기서 또 열면
+    // 채널이 두 번 열리고(재생 시작 두 번), 카드 안 + 버튼의 Enter 가 라이브로도 넘어간다.
+    if (e.key !== 'Enter' || e.target.closest('button, a[href], .card[tabindex]')) return;
+    open(e.target);
   });
 }

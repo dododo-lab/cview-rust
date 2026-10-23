@@ -676,7 +676,7 @@ export class ChatPanel {
       if (b.dataset.p === 'block') this.block(uid, nick);
       close();
     });
-    scrim.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+    scrim.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
   }
 
   // ── 이모티콘 (CHT-01) · 자동완성 (CHT-02) ───
@@ -809,6 +809,7 @@ export class ChatPanel {
       e.preventDefault();
       this.applyAutocomplete(this.acItems[this.acIndex].value);
     } else if (e.key === 'Escape') {
+      e.preventDefault();
       this.autocomplete.hidden = true;
     }
   }
@@ -846,5 +847,5 @@ export function showMenu(x, y, items, onPick) {
     close();
     onPick(item.dataset.ctx);
   });
-  menu.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  menu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
 }

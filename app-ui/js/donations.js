@@ -243,7 +243,7 @@ export class StreamAlerts {
       e.stopPropagation();
       this.save(ALERT_HOME.x, ALERT_HOME.y, '알림을 기본 위치로 되돌렸습니다');
     });
-    this.onKey = (e) => { if (e.key === 'Escape') this.endPreview(); };
+    this.onKey = (e) => { if (e.key === 'Escape') { e.preventDefault(); this.endPreview(); } };
   }
 
   /** 알림을 붙일 영상 틀을 바꾼다(멀티라이브: 채팅을 보여 주는 패인). 같은 틀이면 그대로. */
@@ -285,7 +285,7 @@ export class StreamAlerts {
         <span class="stream-alert-msg">놓으면 저장 · 더블클릭은 기본 위치 · Esc 닫기</span>
       </span>`;
     this.ghost = item;
-    document.addEventListener('keydown', this.onKey);
+    document.addEventListener('keydown', this.onKey, true); // 잡는 단계 — 시청 화면의 Esc(닫기)보다 먼저
     this.show(item, 15000);
   }
 
@@ -293,7 +293,7 @@ export class StreamAlerts {
     if (!this.ghost) return;
     this.ghost.remove();
     this.ghost = null;
-    document.removeEventListener('keydown', this.onKey);
+    document.removeEventListener('keydown', this.onKey, true);
   }
 
   show(item, ms) {

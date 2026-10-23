@@ -426,6 +426,21 @@ const SHORTCUTS = [
   ['채팅', [['⇧⌘K', '채팅 지우기'], ['⌘J', '자동 스크롤'], [':이름', '이모티콘 자동완성'], ['@닉네임', '멘션 자동완성'], ['우클릭', '메시지 메뉴'], ['더블클릭', '프로필']]],
 ];
 
+// Esc 는 맨 위의 것 하나만 닫는다 — 메뉴·시트·입력란이 먼저 받고, 아무것도 없을 때만 시청 화면을 닫는다.
+const ESC_POPUPS = '.quality-menu:not([hidden]), .player-panel:not([hidden]), .emoji-picker:not([hidden]), .chat-tray:not([hidden]), .chat-autocomplete:not([hidden])';
+const ESC_LAYERS = '.sheet-scrim, .palette-scrim:not([hidden])';
+function escapeTaken(e) {
+  if (e.defaultPrevented) return true;
+  const popups = document.querySelectorAll(ESC_POPUPS);
+  if (popups.length) { for (const p of popups) p.hidden = true; return true; }
+  const layer = document.querySelector('.ctx-menu, .design-menu');
+  if (layer) { layer.remove(); return true; } // 초점을 받지 않는 메뉴 — 제 Esc 처리가 불리지 않는다
+  if (document.querySelector(ESC_LAYERS)) return true;
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) { t.blur(); return true; }
+  return false;
+}
+
 function showSheet(html, cls = '') {
   document.querySelector('.sheet-scrim.app-sheet')?.remove();
   const scrim = document.createElement('div');
@@ -435,7 +450,7 @@ function showSheet(html, cls = '') {
   scrim.querySelector('.sheet').focus();
   const close = () => dismiss(scrim);
   scrim.addEventListener('click', (e) => { if (e.target === scrim || e.target.closest('[data-close]')) close(); });
-  scrim.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  scrim.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
   return scrim;
 }
 
@@ -612,7 +627,7 @@ async function main() {
     if (action.dataset.action === 'logout' && !action.closest('[data-page="settings"]')) logout();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && viewer.isOpen && !document.fullscreenElement) viewer.close();
+    if (e.key === 'Escape' && viewer.isOpen && !document.fullscreenElement && !escapeTaken(e)) viewer.close();
     const typing = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA');
     if ((e.metaKey && e.key === '[') || (e.altKey && e.key === 'ArrowLeft' && !typing)) {
       e.preventDefault();
