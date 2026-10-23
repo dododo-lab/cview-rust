@@ -239,7 +239,8 @@
 .ml-count:empty { display: none; }
 .ml-count { flex: none; font-size: var(--fs-micro); font-weight: 600; color: var(--text-secondary); padding: 2px 8px; border-radius: 999px; background: var(--hover); font-variant-numeric: tabular-nums; }
 .ml-toolbar { display: flex; align-items: center; gap: 6px; min-width: 0; flex: none; }
-.ml-toolbar .ml-focus-controls { gap: 6px; }
+/* 레이아웃·포커스 배치·여러 소리는 "⋯" 메뉴로 옮겼다 — 머리줄에는 ⋯·채널 추가만. 오른쪽 끝에서 조금 띄운다(사용자 요청 2026-10-23). */
+.page-multilive .ml-toolbar { margin-right: 10px; }
 .ml-tb-sep { width: 1px; height: 18px; background: var(--border-subtle); margin: 0 4px; flex: none; }
 .ml-toolbar .segmented { height: 30px; padding: 2px; border-radius: 9px; align-items: stretch; }
 .ml-toolbar .segmented .seg { height: auto; padding: 0 11px; border-radius: 7px; font-size: var(--fs-footnote); display: inline-flex; align-items: center; justify-content: center; }
@@ -269,15 +270,27 @@
 .ml-menu-item.danger svg { color: var(--error); }
 .ml-menu-item.danger:hover { background: color-mix(in srgb, var(--error) 12%, transparent); }
 .ml-menu-sep { height: 1px; margin: 4px 6px; background: var(--border-subtle); }
+/* 메뉴 안 설정 묶음 — 레이아웃 / 포커스 배치 / 소리 */
+.ml-more-menu { min-width: 236px; }
+.ml-menu-label { padding: 6px 10px 4px; font-size: var(--fs-micro, 11px); font-weight: 700; color: var(--text-tertiary); }
+.ml-menu-section { display: flex; flex-direction: column; gap: 6px; padding: 0 6px 6px; }
+.ml-menu-section .ml-menu-label { padding-left: 4px; padding-right: 4px; }
+.ml-focus-controls.ml-menu-section { display: flex; }
+.ml-focus-controls.ml-menu-section[hidden] { display: none; }
+.ml-more-menu .segmented { display: flex; width: 100%; }
+.ml-more-menu .segmented .seg { flex: 1; }
+.ml-more-menu .ml-ratio { width: 100%; box-sizing: border-box; }
+.ml-more-menu .ml-ratio input { flex: 1; width: auto; min-width: 0; }
+.ml-more-menu .ml-menu-item.active { color: var(--primary-text); }
+.ml-more-menu .ml-menu-item.active svg { color: var(--primary-text); }
+.ml-more-menu .ml-menu-item.active::after { content: "✓"; margin-left: auto; font-weight: 800; }
 /* 좁은 창 — 글자를 줄이고 덜 중요한 것부터 접는다 */
 @media (max-width: 1180px) { .ml-toolbar .ml-add span { display: none; } .ml-toolbar .ml-add { width: 30px; padding: 0; justify-content: center; } }
-@media (max-width: 1040px) { .ml-toolbar .ml-ratio output { display: none; } .ml-toolbar .ml-ratio input { width: 64px; } }
-@media (max-width: 940px) { .ml-toolbar .segmented .seg:not(.icon) { padding: 0 8px; } .ml-count { display: none; } }
+@media (max-width: 940px) { .ml-count { display: none; } }
 /* 메인 크기 슬라이더 — 시스템 기본 큰 손잡이 대신 얇은 트랙·작은 손잡이 */
 .ml-toolbar .ml-ratio input[type="range"] { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--primary) var(--fill, 50%), var(--border) var(--fill, 50%)); outline: none; }
 .ml-toolbar .ml-ratio input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--surface-base); border: 1.5px solid var(--primary); box-shadow: var(--shadow-sm); cursor: pointer; }
 .ml-toolbar .ml-ratio input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: var(--focus-ring); }
-@media (max-width: 900px) { .ml-toolbar .ml-ratio { display: none; } }
 
 /* ══ 치지직 플레이어식 패인 오버레이 — 늘 어두운 그라데이션·흰 선 아이콘·빨간 LIVE ══
    위: 끌기·채널·제목·채팅/정보/다시 연결·⋯·닫기. 아래: 재생·소리(올리면 볼륨)·LIVE·화질/지연·PiP·크게·전체 화면.

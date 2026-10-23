@@ -88,26 +88,31 @@ export class MultiLivePage {
         <div class="ml-watch-picker" role="group" aria-label="라이브로 볼 채널" hidden></div>
         <div class="grow"></div>
         <div class="ml-toolbar">
-          <div class="ml-focus-controls" hidden>
-            <div class="segmented ml-tb-seg" role="group" aria-label="포커스 방향">
-              ${FOCUS_DIRECTIONS.map((d) => `<button class="seg icon" data-direction="${d.id}" title="메인 위치: ${d.label}" aria-label="메인 위치 ${d.label}">${DIRECTION_ICONS[d.id]}</button>`).join('')}
-            </div>
-            <label class="ml-ratio" title="메인 패인 크기">
-              <input type="range" min="${FOCUS_RATIO.min * 100}" max="${FOCUS_RATIO.max * 100}" step="1" aria-label="메인 패인 크기">
-              <output></output>
-            </label>
-            <span class="ml-tb-sep" aria-hidden="true"></span>
-          </div>
-          <div class="segmented ml-tb-seg" role="group" aria-label="레이아웃">
-            <button class="seg" data-layout="grid" title="${kbd('균등 분할 (⌃⌘1)')}">그리드</button>
-            <button class="seg" data-layout="focus" title="${kbd('포커스 — 한 방송을 크게 (⌃⌘2)')}">포커스</button>
-            <button class="seg" data-layout="custom" title="${kbd('사용자 배치 — 경계를 끌어 크기 조절 (⌃⌘3)')}">사용자</button>
-          </div>
-          <span class="ml-tb-sep" aria-hidden="true"></span>
-          <button class="ml-tb-icon ml-multiaudio" data-ml="multi-audio" title="여러 소리 — 선택하지 않은 패인 소리도 함께 듣기" aria-label="여러 소리" aria-pressed="false">${ICON_SOUND}</button>
           <div class="ml-more">
             <button class="ml-tb-icon" data-ml-more title="더 보기" aria-label="더 보기" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg></button>
             <div class="ml-more-menu" role="menu" hidden>
+              <div class="ml-menu-section">
+                <div class="ml-menu-label">레이아웃</div>
+                <div class="segmented ml-tb-seg" role="group" aria-label="레이아웃">
+                  <button class="seg" data-layout="grid" title="${kbd('균등 분할 (⌃⌘1)')}">그리드</button>
+                  <button class="seg" data-layout="focus" title="${kbd('포커스 — 한 방송을 크게 (⌃⌘2)')}">포커스</button>
+                  <button class="seg" data-layout="custom" title="${kbd('사용자 배치 — 경계를 끌어 크기 조절 (⌃⌘3)')}">사용자</button>
+                </div>
+              </div>
+              <div class="ml-menu-section ml-focus-controls" hidden>
+                <div class="ml-menu-label">포커스 배치</div>
+                <div class="segmented ml-tb-seg" role="group" aria-label="포커스 방향">
+                  ${FOCUS_DIRECTIONS.map((d) => `<button class="seg icon" data-direction="${d.id}" title="메인 위치: ${d.label}" aria-label="메인 위치 ${d.label}">${DIRECTION_ICONS[d.id]}</button>`).join('')}
+                </div>
+                <label class="ml-ratio" title="메인 패인 크기">
+                  <input type="range" min="${FOCUS_RATIO.min * 100}" max="${FOCUS_RATIO.max * 100}" step="1" aria-label="메인 패인 크기">
+                  <output></output>
+                </label>
+              </div>
+              <div class="ml-menu-sep"></div>
+              <div class="ml-menu-label">소리</div>
+              <button class="ml-menu-item ml-multiaudio" role="menuitemcheckbox" data-ml="multi-audio" title="선택하지 않은 패인 소리도 함께 듣기" aria-checked="false">${ICON_SOUND}여러 소리</button>
+              <div class="ml-menu-sep"></div>
               <button class="ml-menu-item" role="menuitem" data-ml="presets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h12v16l-6-4-6 4z"/></svg>프리셋 저장·불러오기</button>
               <button class="ml-menu-item" role="menuitem" data-ml="retry-all"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5a8 8 0 1 0-2.4 5.9"/><path d="M20 4.5v7h-7"/></svg>모두 다시 연결</button>
               <button class="ml-menu-item" role="menuitem" data-ml="alert-pos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>후원 알림 위치 조정</button>
@@ -226,7 +231,7 @@ export class MultiLivePage {
     listen(Events.multiLiveState, (s) => this.render(s));
 
     this.root.addEventListener('click', (e) => this.onClick(e));
-    // "⋯" 더 보기 메뉴 — 프리셋·모두 다시 연결·모두 닫기
+    // "⋯" 더 보기 메뉴 — 레이아웃·포커스 배치·여러 소리(설정은 메뉴를 연 채로 바꾼다)와 프리셋·모두 다시 연결·모두 닫기
     const moreBtn = this.root.querySelector('[data-ml-more]');
     const moreMenu = this.root.querySelector('.ml-more-menu');
     const closeMore = () => { moreMenu.hidden = true; moreBtn.setAttribute('aria-expanded', 'false'); };
@@ -235,7 +240,7 @@ export class MultiLivePage {
       moreMenu.hidden = !moreMenu.hidden;
       moreBtn.setAttribute('aria-expanded', String(!moreMenu.hidden));
     });
-    moreMenu.addEventListener('click', () => closeMore());
+    moreMenu.addEventListener('click', (e) => { if (e.target.closest('.ml-menu-item:not(.ml-multiaudio)')) closeMore(); });
     document.addEventListener('pointerdown', (e) => { if (!moreMenu.hidden && !e.target.closest('.ml-more')) closeMore(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !moreMenu.hidden) closeMore(); });
     new ResizeObserver(() => this.reportStageSize()).observe(this.stage);
@@ -350,7 +355,7 @@ export class MultiLivePage {
     this.root.querySelector('[data-ml="alert-pos"]').hidden = n === 0;
     const ma = this.root.querySelector('[data-ml="multi-audio"]');
     ma.classList.toggle('active', Boolean(state.multiAudio));
-    ma.setAttribute('aria-pressed', String(Boolean(state.multiAudio)));
+    ma.setAttribute('aria-checked', String(Boolean(state.multiAudio)));
     // 지난 구성 기억(MUL-15) — 세션이 있으면 저장, 비면 다시 열기 버튼
     const savedIds = this.savedSessionIds();
     if (n > 0) this.saveSessionIds(sessions.map((x) => x.channelId));
