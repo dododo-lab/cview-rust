@@ -1,6 +1,8 @@
 // 후원·구독 표시 — 원본 ChatEventCard / ChatDonationRankingHeader / StreamAlertItem.
 //
 // - 채팅 줄: 후원은 종류(채팅·영상·미션)와 치즈 금액, 금액 구간별 강조. 구독은 개월 수와 티어.
+// - 색 단계(ev-lv-1~6): 치지직 초록에서 시작해 금액(구독은 개월 수, 선물은 인원)이 클수록
+//   청록 → 파랑 → 보라 → 핑크·주황 → 금빛 무지개로 올라간다. 채팅 카드·칩·영상 위 알림이 같은 단계를 쓴다.
 // - 주간 후원 랭킹: 채팅 패널 위 칩 줄(`chat_donation_ranking`).
 // - 스트림 알림: 시청 화면 위에 새 후원·구독을 잠깐 띄운다(설정에서 끌 수 있음, 기본 켬).
 //   떠 있는 알림을 끌면 그 자리로 옮기고(영상 크기 대비 비율로 저장), 더블클릭하면 기본 위치로 돌린다.
@@ -46,6 +48,31 @@ export function donationTier(amount) {
   return 1;
 }
 
+/** 색 단계 경계(치즈) — 1천 미만 1(치지직 초록), 1천 2, 5천 3, 1만 4, 5만 5, 10만 이상 6. */
+export const DONATION_LEVELS = [1000, 5000, 10000, 50000, 100000];
+
+/** 경계 목록으로 1부터 시작하는 단계를 고른다. 순수 함수. */
+function levelOf(value, steps) {
+  let lv = 1;
+  for (const s of steps) if (value >= s) lv += 1;
+  return lv;
+}
+
+/** 후원 색 단계 1~6. */
+export function donationLevel(amount) {
+  return levelOf(Number(amount) || 0, DONATION_LEVELS);
+}
+
+/** 구독 색 단계 — 1·2개월 1, 3개월 2, 6개월 3, 1년 4, 2년 5, 3년 이상 6. */
+export function subscriptionLevel(months) {
+  return levelOf(Number(months) || 0, [3, 6, 12, 24, 36]);
+}
+
+/** 구독 선물 색 단계 — 1명 1, 2명 2, 5명 3, 10명 4, 20명 5, 50명 이상 6. */
+export function giftLevel(count) {
+  return levelOf(Number(count) || 0, [2, 5, 10, 20, 50]);
+}
+
 export function donationKindLabel(type) {
   return KIND_LABEL[String(type || '').toLowerCase()] || '후원';
 }
@@ -65,18 +92,21 @@ export function isGiftEvent(m) {
 
 /**
  * 이벤트 표시 정보 — 원본 ChatEventCard(tone·symbol·title·value·detail) 규칙. 일반 줄이면 `null`. 순수 함수.
- * @returns {{tone:string, tier:number, icon:string, title:string, value:string, detail:string, extra:string}|null}
+ * `level` 은 색 단계(1~6), `tier` 는 제목·아이콘을 고르는 원본 강조 구간(1~3).
+ * @returns {{tone:string, tier:number, level:number, icon:string, title:string, value:string, detail:string, extra:string}|null}
  */
 export function eventMeta(m) {
   if (m.kind === 'donation') {
     const amount = m.donationAmount || 0;
     const tier = donationTier(amount);
     const type = String(m.donationType || 'chat').toLowerCase();
-    const tierLabel = ['', '후원', '큰 후원', '대형 후원'][tier];
+    const level = donationLevel(amount);
+    const tierLabel = level >= 6 ? '초대형 후원' : ['', '후원', '큰 후원', '대형 후원'][tier];
     const typed = type === 'video' || type === 'mission' || type === 'party';
     return {
       tone: type === 'video' ? 'video' : type === 'mission' ? 'mission' : 'donation',
       tier,
+      level,
       icon: type === 'video' ? 'play' : type === 'mission' ? 'flag' : type === 'party' ? 'party' : ['', 'heart', 'flame', 'crown'][tier],
       title: typed ? donationKindLabel(type) : tierLabel,
       value: formatCheese(amount) || '후원 메시지',
@@ -89,12 +119,12 @@ export function eventMeta(m) {
     if (isGiftEvent(m)) {
       const n = m.giftCount > 0 ? m.giftCount : 0;
       return {
-        tone: 'gift', tier: n >= 10 ? 3 : n >= 5 ? 2 : 1, icon: 'gift', title: '구독 선물',
+        tone: 'gift', tier: n >= 10 ? 3 : n >= 5 ? 2 : 1, level: giftLevel(n), icon: 'gift', title: '구독 선물',
         value: n ? `${n}명에게` : '구독 선물', detail: m.subscriptionTier || '', extra: '',
       };
     }
     return {
-      tone: 'subscription', tier: months >= 12 ? 3 : months >= 6 ? 2 : 1, icon: months >= 12 ? 'crown' : 'star', title: '구독',
+      tone: 'subscription', tier: months >= 12 ? 3 : months >= 6 ? 2 : 1, level: subscriptionLevel(months), icon: months >= 12 ? 'crown' : 'star', title: '구독',
       value: months ? `${months}개월` : '구독 알림',
       detail: [m.subscriptionTier, subscriptionMilestone(months)].filter(Boolean).join(' · '),
       extra: '',
@@ -121,10 +151,10 @@ export function eventCardHtml(m, { time = '', badges = '', nick = '', content = 
   </div>`;
 }
 
-/** 줄 클래스(`ev ev-<tone> ev-tier-N` + 호환용 donation/subscription). */
+/** 줄 클래스(`ev ev-<tone> ev-tier-N ev-lv-N` + 호환용 donation/subscription). */
 export function eventClasses(m) {
   const e = eventMeta(m);
-  return e ? ['ev', `ev-${e.tone}`, `ev-tier-${e.tier}`, m.kind] : [];
+  return e ? ['ev', `ev-${e.tone}`, `ev-tier-${e.tier}`, `ev-lv-${e.level}`, m.kind] : [];
 }
 
 export function streamAlertsEnabled() {
@@ -229,7 +259,7 @@ export class StreamAlerts {
     const e = eventMeta(m);
     if (!e) return;
     const item = document.createElement('div');
-    item.className = `stream-alert ev-${e.tone} ev-tier-${e.tier}`;
+    item.className = `stream-alert ev-${e.tone} ev-tier-${e.tier} ev-lv-${e.level}`;
     item.title = '끌어서 옮기기 · 더블클릭하면 기본 위치';
     item.innerHTML = `
       <span class="stream-alert-icon">${EVENT_ICONS[e.icon] || ''}</span>
@@ -246,7 +276,7 @@ export class StreamAlerts {
   preview() {
     this.endPreview();
     const item = document.createElement('div');
-    item.className = 'stream-alert ev-donation ev-tier-1 alert-ghost';
+    item.className = 'stream-alert ev-donation ev-tier-1 ev-lv-1 alert-ghost';
     item.innerHTML = `
       <span class="stream-alert-icon">${EVENT_ICONS.heart}</span>
       <span class="stream-alert-text">

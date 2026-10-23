@@ -1014,14 +1014,7 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .ev-anon { font-size: var(--fs-micro); color: var(--text-tertiary); padding: 0 5px; border-radius: 4px; border: 1px solid var(--border); }
 .ev-extra { font-size: var(--fs-footnote); color: var(--text-secondary); padding: 5px 8px; border-radius: 8px; background: color-mix(in srgb, var(--ev) 10%, transparent); }
 .ev-body { font-size: var(--fs-caption); line-height: 1.5; color: var(--text-primary); word-break: break-word; }
-.ev-tier-2 .ev-card { border-color: color-mix(in srgb, var(--ev) 40%, transparent); box-shadow: 0 6px 18px color-mix(in srgb, var(--ev) 14%, transparent); }
-.ev-tier-3 .ev-card {
-  border-color: color-mix(in srgb, var(--ev) 60%, transparent);
-  background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--ev) 22%, transparent), transparent 60%), color-mix(in srgb, var(--ev) 10%, var(--surface-base));
-  box-shadow: 0 10px 26px color-mix(in srgb, var(--ev) 20%, transparent);
-}
-.ev-tier-3 .ev-icon { color: var(--surface-base); background: var(--ev); }
-.ev-tier-3 .ev-value { font-size: var(--fs-subhead); }
+/* 금액 단계별 강조(ev-lv-N)는 아래 「후원 색 단계」 묶음 */
 /* 공지 */
 .chat-line.notice-line { display: flex; gap: 10px; align-items: flex-start; margin: 6px 0; padding: 9px 12px; border-radius: 14px; background: var(--surface-elevated); border: 1px solid var(--border-subtle); }
 .notice-line .notice-icon { flex: none; width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; color: var(--primary-text); background: var(--primary-dim); }
@@ -1076,7 +1069,6 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
   animation: alert-in 0.4s var(--ease-out) both;
 }
-.stream-alert.ev-tier-3 { box-shadow: 0 14px 40px color-mix(in srgb, var(--ev) 35%, rgba(0, 0, 0, 0.45)); }
 .stream-alert.leaving { animation: alert-out 0.35s ease both; pointer-events: none; }
 /* 알림을 끌어 옮긴다(donations.js) — 카드만 잡히고 빈 곳은 아래 영상으로 그대로 간다. */
 /* 너비는 내용대로 — 오른쪽 끝에 두어도 남은 폭에 눌려 좁아지지 않는다. */
@@ -1967,6 +1959,128 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 :is(.chat-line, .stream-alert, .event-chip).ev-mission { --ev: var(--accent-orange); }
 :is(.chat-line, .stream-alert, .event-chip).ev-subscription { --ev: var(--subscription); }
 :is(.chat-line, .stream-alert, .event-chip).ev-gift { --ev: var(--accent-cyan); }
+
+/* ══ 후원 색 단계 — 치지직 초록에서 시작해 금액이 클수록 더 화려하게(donations.js donationLevel) ══
+   1 <1천 치지직 초록 · 2 1천~ 청록 · 3 5천~ 파랑 · 4 1만~ 보라(그라데이션) · 5 5만~ 핑크·주황(빛 테두리)
+   · 6 10만~ 금빛 무지개(움직이는 테두리·반짝임). 구독(개월)·선물(인원)도 같은 단계를 쓴다.
+   --ev 는 글자·틴트색(테마별), --ev2 는 그라데이션 끝색. 영상 위(알림·오버레이 채팅)는 늘 어두운 면이라 밝은 --don-hi 를 쓴다. */
+:root {
+  --don-hi-1: #00ffa3; --don-hi-1b: #00e5c3;
+  --don-hi-2: #00e0d0; --don-hi-2b: #22b8ff;
+  --don-hi-3: #4d9bff; --don-hi-3b: #7a7dff;
+  --don-hi-4: #b07bff; --don-hi-4b: #6b8cff;
+  --don-hi-5: #ff5fa8; --don-hi-5b: #ff9a3d;
+  --don-hi-6: #ffd34d; --don-hi-6b: #ff6fb5;
+  --don-holo: linear-gradient(110deg, #ffd34d, #ff8a5c 18%, #ff5fa8 34%, #b07bff 52%, #4fc3ff 70%, #00ffa3 86%, #ffd34d);
+  --don-1: var(--don-hi-1); --don-1b: var(--don-hi-1b);
+  --don-2: var(--don-hi-2); --don-2b: var(--don-hi-2b);
+  --don-3: var(--don-hi-3); --don-3b: var(--don-hi-3b);
+  --don-4: var(--don-hi-4); --don-4b: var(--don-hi-4b);
+  --don-5: var(--don-hi-5); --don-5b: var(--don-hi-5b);
+  --don-6: var(--don-hi-6); --don-6b: var(--don-hi-6b);
+}
+:root[data-theme="light"] {
+  --don-1: #007a52; --don-1b: #00a383;
+  --don-2: #00808a; --don-2b: #0077c8;
+  --don-3: #1f5fd6; --don-3b: #4a4fd8;
+  --don-4: #7a3fe0; --don-4b: #3f5fe0;
+  --don-5: #d42f7d; --don-5b: #dc6410;
+  --don-6: #a8700a; --don-6b: #d42f7d;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] {
+    --don-1: #007a52; --don-1b: #00a383;
+    --don-2: #00808a; --don-2b: #0077c8;
+    --don-3: #1f5fd6; --don-3b: #4a4fd8;
+    --don-4: #7a3fe0; --don-4b: #3f5fe0;
+    --don-5: #d42f7d; --don-5b: #dc6410;
+    --don-6: #a8700a; --don-6b: #d42f7d;
+  }
+}
+/* 단계 색 — 종류별 톤(위)보다 뒤에 둬서 단계가 이긴다. 종류는 아이콘·제목으로 구분된다. */
+:is(.chat-line, .stream-alert, .event-chip).ev-lv-1 { --ev: var(--don-1); --ev2: var(--don-1b); }
+:is(.chat-line, .stream-alert, .event-chip).ev-lv-2 { --ev: var(--don-2); --ev2: var(--don-2b); }
+:is(.chat-line, .stream-alert, .event-chip).ev-lv-3 { --ev: var(--don-3); --ev2: var(--don-3b); }
+:is(.chat-line, .stream-alert, .event-chip).ev-lv-4 { --ev: var(--don-4); --ev2: var(--don-4b); }
+:is(.chat-line, .stream-alert, .event-chip).ev-lv-5 { --ev: var(--don-5); --ev2: var(--don-5b); }
+:is(.chat-line, .stream-alert, .event-chip).ev-lv-6 { --ev: var(--don-6); --ev2: var(--don-6b); }
+:is(.stream-alerts, .chat-mode-overlay, .ml-body.chat-overlay) .ev-lv-1 { --ev: var(--don-hi-1); --ev2: var(--don-hi-1b); }
+:is(.stream-alerts, .chat-mode-overlay, .ml-body.chat-overlay) .ev-lv-2 { --ev: var(--don-hi-2); --ev2: var(--don-hi-2b); }
+:is(.stream-alerts, .chat-mode-overlay, .ml-body.chat-overlay) .ev-lv-3 { --ev: var(--don-hi-3); --ev2: var(--don-hi-3b); }
+:is(.stream-alerts, .chat-mode-overlay, .ml-body.chat-overlay) .ev-lv-4 { --ev: var(--don-hi-4); --ev2: var(--don-hi-4b); }
+:is(.stream-alerts, .chat-mode-overlay, .ml-body.chat-overlay) .ev-lv-5 { --ev: var(--don-hi-5); --ev2: var(--don-hi-5b); }
+:is(.stream-alerts, .chat-mode-overlay, .ml-body.chat-overlay) .ev-lv-6 { --ev: var(--don-hi-6); --ev2: var(--don-hi-6b); }
+
+/* 채팅 카드 — 2단계부터 왼쪽 막대·아이콘이 그라데이션으로 채워진다. */
+.chat-line:is(.ev-lv-2, .ev-lv-3, .ev-lv-4, .ev-lv-5, .ev-lv-6) .ev-card::before { background: linear-gradient(180deg, var(--ev), var(--ev2)); opacity: 1; }
+.chat-line:is(.ev-lv-2, .ev-lv-3, .ev-lv-4, .ev-lv-5, .ev-lv-6) .ev-icon { color: #fff; background: linear-gradient(135deg, var(--ev), var(--ev2)); }
+.chat-line.ev-lv-1 .ev-icon { color: var(--on-primary); background: var(--don-hi-1); }
+.chat-line.ev-lv-3 .ev-card { border-color: color-mix(in srgb, var(--ev) 34%, transparent); }
+.chat-line.ev-lv-4 .ev-card {
+  border-color: color-mix(in srgb, var(--ev) 45%, transparent);
+  background-image: radial-gradient(120% 160% at 0% 0%, color-mix(in srgb, var(--ev) 16%, transparent), transparent 62%);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--ev) 16%, transparent);
+}
+/* 5·6단계 — 그라데이션 빛 테두리(마스크 고리), 금액은 그라데이션 글자. */
+.chat-line:is(.ev-lv-5, .ev-lv-6) .ev-card {
+  border-color: transparent;
+  background-image: radial-gradient(120% 160% at 0% 0%, color-mix(in srgb, var(--ev) 22%, transparent), transparent 60%),
+    radial-gradient(90% 120% at 100% 100%, color-mix(in srgb, var(--ev2) 16%, transparent), transparent 60%);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ev) 22%, transparent), 0 0 18px color-mix(in srgb, var(--ev2) 14%, transparent);
+}
+:is(.chat-line.ev-lv-5 .ev-card, .chat-line.ev-lv-6 .ev-card, .stream-alert.ev-lv-4, .stream-alert.ev-lv-5, .stream-alert.ev-lv-6)::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px; pointer-events: none;
+  background: linear-gradient(135deg, var(--ev), var(--ev2));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+.chat-line:is(.ev-lv-5, .ev-lv-6) .ev-value {
+  font-size: var(--fs-subhead);
+  background: linear-gradient(90deg, var(--ev), var(--ev2)); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+/* 6단계 — 금빛 무지개 고리가 몇 바퀴 흐르고 멈춘다(채팅이 길어도 계속 그리지 않게). */
+.chat-line.ev-lv-6 .ev-card::before { background: var(--don-holo); }
+.chat-line.ev-lv-6 .ev-icon { background: var(--don-holo); background-size: 200% 100%; color: #1a1205; }
+.chat-line.ev-lv-6 .ev-card::after { padding: 2px; background: var(--don-holo); background-size: 300% 100%; animation: don-holo 3.2s linear 3; }
+.chat-line.ev-lv-6 .ev-value { background: var(--don-holo); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; animation: don-holo 3.2s linear 3; }
+:root[data-theme="light"] .chat-line.ev-lv-6 .ev-value { background-image: linear-gradient(90deg, var(--don-6), var(--don-5), var(--don-4)); background-size: 100% 100%; animation: none; }
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] .chat-line.ev-lv-6 .ev-value { background-image: linear-gradient(90deg, var(--don-6), var(--don-5), var(--don-4)); background-size: 100% 100%; animation: none; }
+}
+:root.compact .chat-line:is(.ev-lv-5, .ev-lv-6) .ev-value { font-size: var(--fs-caption); }
+
+/* 이벤트 칩 — 높은 단계는 아이콘 원이 그라데이션 */
+.event-chip:is(.ev-lv-2, .ev-lv-3, .ev-lv-4, .ev-lv-5) .event-chip-icon { color: #fff; background: linear-gradient(135deg, var(--ev), var(--ev2)); }
+.event-chip.ev-lv-6 .event-chip-icon { color: #1a1205; background: var(--don-holo); }
+
+/* 영상 위 알림 — 2단계부터 아이콘이 그라데이션, 4단계부터 빛 테두리, 5단계부터 글로우, 6단계는 무지개 고리 + 반짝임. */
+.stream-alert:is(.ev-lv-2, .ev-lv-3, .ev-lv-4, .ev-lv-5) .stream-alert-icon { background: linear-gradient(135deg, var(--ev), var(--ev2)); }
+.stream-alert:is(.ev-lv-3, .ev-lv-4, .ev-lv-5) .stream-alert-icon { color: #fff; }
+.stream-alert:is(.ev-lv-4, .ev-lv-5, .ev-lv-6) {
+  border-color: transparent;
+  background: radial-gradient(120% 180% at 0% 0%, color-mix(in srgb, var(--ev) 34%, transparent), transparent 58%),
+    radial-gradient(100% 160% at 100% 100%, color-mix(in srgb, var(--ev2) 26%, transparent), transparent 60%), rgba(14, 15, 18, 0.86);
+}
+.stream-alert:is(.ev-lv-5, .ev-lv-6) { box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45), 0 0 28px color-mix(in srgb, var(--ev) 38%, transparent), 0 0 56px color-mix(in srgb, var(--ev2) 22%, transparent); }
+.stream-alert:is(.ev-lv-5, .ev-lv-6) .stream-alert-title b { background: linear-gradient(90deg, var(--ev), var(--ev2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.stream-alert.ev-lv-6 .stream-alert-icon { background: var(--don-holo); background-size: 200% 100%; color: #1a1205; animation: don-holo 2.4s linear infinite; }
+.stream-alert.ev-lv-6::after { padding: 2px; background: var(--don-holo); background-size: 300% 100%; animation: don-holo 2.4s linear infinite; }
+.stream-alert.ev-lv-6 .stream-alert-title b { background: var(--don-holo); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; animation: don-holo 2.4s linear infinite; }
+.stream-alert.ev-lv-6::before {
+  content: ""; position: absolute; inset: -40% auto -40% -30%; width: 34%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.28), transparent); transform: skewX(-18deg);
+  animation: don-shine 2.6s var(--ease-out) .3s infinite;
+}
+@keyframes don-holo { from { background-position: 0% 50%; } to { background-position: 300% 50%; } }
+@keyframes don-shine { 0% { left: -40%; } 55%, 100% { left: 130%; } }
+/* 모션 절약·시스템 모션 줄이기 — 흐름·반짝임은 끄고 정지 그라데이션만 */
+:root[data-motion="reduced"] .chat-line.ev-lv-6 .ev-card::after, :root[data-motion="reduced"] .stream-alert.ev-lv-6::after,
+:root[data-motion="reduced"] :is(.chat-line.ev-lv-6 .ev-value, .stream-alert.ev-lv-6 .stream-alert-icon, .stream-alert.ev-lv-6 .stream-alert-title b) { animation: none !important; }
+:root[data-motion="reduced"] .stream-alert.ev-lv-6::before { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .chat-line.ev-lv-6 .ev-card::after, .chat-line.ev-lv-6 .ev-value, .stream-alert.ev-lv-6::after, .stream-alert.ev-lv-6 .stream-alert-icon, .stream-alert.ev-lv-6 .stream-alert-title b { animation: none !important; }
+  .stream-alert.ev-lv-6::before { display: none; }
+}
 /* 카드·말풍선 스타일은 줄 배경 대신 말풍선 테두리로 멘션·강조를 보인다 */
 .chat-skin:is(.style-unified,.style-hybrid,.style-kakao,.style-imessage) .chat-line.msg:is(.mention, .highlighted) { background: none; box-shadow: none; padding-left: 0; border-radius: 0; }
 
