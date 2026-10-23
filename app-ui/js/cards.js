@@ -133,6 +133,8 @@ export function rememberChannel({ channelId, channelName = '', channelImage = ''
 /** 클릭/엔터로 채널을 연다. */
 export function bindCardOpen(root, onOpen) {
   const open = (el) => {
+    // 채널 추가 사이드바는 줄(열기)과 +(추가)를 스스로 나눠 처리한다 — 여기서 또 열면 + 도 라이브로 넘어간다.
+    if (el.closest('.ml-addbar')) return;
     const card = el.closest('[data-channel-id]');
     if (card && el.closest('[data-open-channel]')) {
       window.dispatchEvent(new CustomEvent('cview:open-channel', { detail: { channelId: card.dataset.channelId } }));
