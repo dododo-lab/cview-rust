@@ -29,6 +29,9 @@ pub struct ChatConnectedDto {
 }
 
 /// 채팅 연결. 기존 연결은 뷰모델이 끊는다.
+///
+/// `op` — 프런트엔드가 세션마다 붙이는 요청 순번(`ChatOpGate`). 더 새 연결·해제 요청이 먼저 돌았으면
+/// 아무것도 하지 않고 물러난다(응답은 읽기 전용 성공 — 호출부는 자기 순번으로 이미 무시한다).
 #[tauri::command]
 pub async fn chat_connect(
     window: tauri::Window,
@@ -36,37 +39,61 @@ pub async fn chat_connect(
     chat_channel_id: String,
     channel_id: Option<String>,
     session: Option<String>,
+    op: Option<u64>,
 ) -> CmdResult<ChatConnectedDto> {
-    if let Some(key) = session
-        .as_deref()
-        .filter(|k| !k.is_empty() && *k != crate::state::MAIN_CHAT_SESSION)
-    {
-        services.note_chat_session_window(key, window.label());
-    }
-    let chat = services.chat_vm(session.as_deref());
-    if chat_channel_id.trim().is_empty() {
-        chat.disconnect().await;
-        return Err(CommandError("채팅 채널 정보가 없습니다".into()));
-    }
-    // 다른 채널로 바꾸면 이전 연결은 바로 끊는다 — 토큰을 받는 동안 이전 채널 메시지가 새 채널 채팅창
-    // (화면은 이미 비우고 새 채널로 바꿨다)에 섞여 들어오지 않게. 같은 채널 재연결은 기록을 지키려 그대로 둔다.
-    let switching =
-        chat.lock().active_chat_channel_id().as_deref() != Some(chat_channel_id.as_str());
-    if switching {
-        chat.disconnect().await;
-    }
-    // 토큰·사용자 정보를 받는 동안 다른 채널 요청이 올 수 있다(멀티라이브 패인 전환, 지난 구성 다시 열기).
-    // 받기 전에 순번을 잡아 두고 마지막 요청만 연결한다 — 먼저 보낸 요청이 늦게 끝나 새 채널을 덮지 않게.
-    let ticket = chat.begin_connect_request();
+    let key = crate::state::chat_session_key(session.as_deref()).to_string();
     let superseded = || ChatConnectedDto {
         chat_channel_id: chat_channel_id.clone(),
         can_send: false,
+    };
+    if chat_channel_id.trim().is_empty() {
+        let detached = services
+            .chat_ops
+            .run_if_latest(&key, op, || services.chat_vm(session.as_deref()).detach());
+        if let Some(d) = detached {
+            d.await;
+        }
+        return Err(CommandError("채팅 채널 정보가 없습니다".into()));
+    }
+    // 순번 확인·세션 뷰모델 고르기·이전 연결 떼기·연결 순번 잡기를 한 잠금 안에서 — 동시에 도는 다른 연결·해제
+    // 요청과 보낸 순서대로 한 줄로 선다(`ChatOpGate`).
+    let prologue = services.chat_ops.run_if_latest(&key, op, || {
+        if let Some(k) = session
+            .as_deref()
+            .filter(|k| !k.is_empty() && *k != crate::state::MAIN_CHAT_SESSION)
+        {
+            services.note_chat_session_window(k, window.label());
+        }
+        let chat = services.chat_vm(session.as_deref());
+        // 다른 채널로 바꾸면 이전 연결은 바로 끊는다 — 토큰을 받는 동안 이전 채널 메시지가 새 채널 채팅창
+        // (화면은 이미 비우고 새 채널로 바꿨다)에 섞여 들어오지 않게. 같은 채널 재연결은 기록을 지키려 그대로 둔다.
+        let switching =
+            chat.lock().active_chat_channel_id().as_deref() != Some(chat_channel_id.as_str());
+        let detached = switching.then(|| chat.detach());
+        // 토큰·사용자 정보를 받는 동안 다른 채널 요청이 올 수 있다(멀티라이브 패인 전환, 지난 구성 다시 열기).
+        // 받기 전에 순번을 잡아 두고 마지막 요청만 연결한다 — 먼저 보낸 요청이 늦게 끝나 새 채널을 덮지 않게.
+        let ticket = chat.begin_connect_request();
+        (chat, ticket, detached)
+    });
+    let Some((chat, ticket, detached)) = prologue else {
+        tracing::debug!("채팅 연결 요청 {chat_channel_id} ({key}) — 더 새 요청이 먼저 와 건너뜀");
+        return Ok(superseded());
+    };
+    if let Some(d) = detached {
+        d.await;
+    }
+    // 기다리는 동안 더 새 요청이 왔거나, 해제가 이 세션 뷰모델을 표에서 지웠으면 물러난다 — 지워진 뷰모델에
+    // 연결하면 다음 해제로도 끊기지 않는 고아 연결이 된다.
+    let still_current = |services: &AppServices| {
+        chat.is_current_connect_request(ticket)
+            && services.chat_ops.is_latest(&key, op)
+            && services.is_live_chat_vm(session.as_deref(), &chat)
     };
 
     let token = match services.api.chat_access_token(&chat_channel_id).await {
         Ok(t) => t,
         Err(e) => {
-            if !chat.is_current_connect_request(ticket) {
+            if !still_current(&services) {
                 return Ok(superseded());
             }
             chat.disconnect().await;
@@ -83,7 +110,7 @@ pub async fn chat_connect(
         (None, None)
     };
 
-    if !chat.is_current_connect_request(ticket) {
+    if !still_current(&services) {
         tracing::debug!("채팅 연결 요청 {chat_channel_id} — 더 새 요청이 있어 건너뜀");
         return Ok(superseded());
     }
@@ -119,13 +146,19 @@ pub async fn chat_connect(
 pub async fn chat_disconnect(
     services: State<'_, AppServices>,
     session: Option<String>,
+    op: Option<u64>,
 ) -> CmdResult<()> {
-    match session
-        .as_deref()
-        .filter(|k| *k != crate::state::MAIN_CHAT_SESSION)
-    {
-        Some(key) => services.drop_chat_session(key).await,
-        None => services.chat.disconnect().await,
+    // 늦게 돈 해제가 그 뒤에 보낸 연결을 끊지 않게 — 순번 확인과 떼어 내기를 한 잠금 안에서(`ChatOpGate`).
+    let key = crate::state::chat_session_key(session.as_deref());
+    let detached = services.chat_ops.run_if_latest(key, op, || {
+        if key == crate::state::MAIN_CHAT_SESSION {
+            futures_util::future::Either::Left(services.chat.detach())
+        } else {
+            futures_util::future::Either::Right(services.detach_chat_session(key))
+        }
+    });
+    if let Some(d) = detached {
+        d.await;
     }
     Ok(())
 }

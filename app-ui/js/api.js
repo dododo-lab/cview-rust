@@ -18,6 +18,15 @@ export async function invoke(command, args = {}) {
   }
 }
 
+// 채팅 연결·해제 요청 순번 — Tauri 비동기 명령은 보낸 순서대로 돈다는 보장이 없어, 패인을 바꾸며 보낸
+// 해제→연결이 뒤집혀 돌면 방금 연 채팅이 끊겼다. 요청마다 늘어나는 순번을 붙이면 Rust 가 늦게 온 오래된 요청을 버린다.
+// 시각 기반이라 창이 여럿이거나 창을 다시 불러와도 나중 요청이 더 크다.
+let chatOp = 0;
+function nextChatOp() {
+  chatOp = Math.max(chatOp + 1, Date.now() * 1000);
+  return chatOp;
+}
+
 /** 이벤트 구독. 해제 함수를 돌려준다. (Tauri 2 의 전역 listen 은 다른 창으로 보낸 emit_to 도 받는다.) */
 export async function listen(event, handler) {
   if (!isTauri) return () => {};
@@ -123,8 +132,8 @@ export const api = {
   openExternal: (url) => invoke('open_external', { url }),
 
   chatEmoticons: (channelId) => invoke('chat_emoticons', { channelId }),
-  chatConnect: (chatChannelId, channelId, session = null) => invoke('chat_connect', { chatChannelId, channelId, session }),
-  chatDisconnect: (session = null) => invoke('chat_disconnect', { session }),
+  chatConnect: (chatChannelId, channelId, session = null) => invoke('chat_connect', { chatChannelId, channelId, session, op: nextChatOp() }),
+  chatDisconnect: (session = null) => invoke('chat_disconnect', { session, op: nextChatOp() }),
   chatSend: (text, session = null) => invoke('chat_send', { text, session }),
 
   appInfo: () => invoke('app_info'),

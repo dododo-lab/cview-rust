@@ -128,13 +128,13 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 
 /* ── 누름 피드백 — 눌린 동안 살짝 들어간다(손을 떼면 스프링으로 돌아온다) ── */
 :is(.icon-btn, .seg, .chip, .ml-tb-icon, .chat-hbtn, .link-btn, .toast-action, .live-chip, .quality-btn, .ml-pane-btn, .ml-pane-close,
-    .back-btn, .chat-jump, .chat-reopen, .ip-reopen, .account-action, .theme-toggle, .sidebar-toggle, .emoji-cell, .emoji-tab, .rail-item, .category-pin) {
+    .back-btn, .chat-jump, .chat-reopen, .ip-reopen, .account-action, .sidebar-toggle, .emoji-cell, .emoji-tab, .rail-item, .category-pin) {
   transition-property: background, color, border-color, box-shadow, opacity, scale;
   transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), .32s;
   transition-timing-function: var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-spring);
 }
 :is(.icon-btn, .seg, .chip, .ml-tb-icon, .chat-hbtn, .toast-action, .live-chip, .quality-btn, .ml-pane-btn, .ml-pane-close,
-    .back-btn, .chat-jump, .chat-reopen, .account-action, .theme-toggle, .sidebar-toggle, .emoji-cell, .emoji-tab, .category-pin):active:not(:disabled) {
+    .back-btn, .chat-jump, .chat-reopen, .account-action, .sidebar-toggle, .emoji-cell, .emoji-tab, .category-pin):active:not(:disabled) {
   scale: .93; transition-duration: var(--dur-1);
 }
 .link-btn:active:not(:disabled) { scale: .97; transition-duration: var(--dur-1); }
@@ -182,7 +182,7 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 .nav-item .nav-icon { transition: color var(--dur-2) var(--ease-out), scale .3s var(--ease-spring); }
 .nav-item:hover .nav-icon { scale: 1.06; }
 .side-tip:not([hidden]) { animation: mo-fade var(--dur-1) var(--ease-out) both; }
-.sidebar { transition: width .28s var(--ease-emph), padding .28s var(--ease-emph); }
+/* 사이드바 너비 전환은 app.css(.sidebar 의 --sb-dur·--sb-ease)가 안쪽 위치 전환과 함께 맡는다 */
 
 /* ── 세그먼트·칩·토글 ── */
 .segmented .seg.active { animation: mo-pop .22s var(--ease-out) both; }
@@ -199,6 +199,8 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 
 /* ── 떠 있는 메뉴·팝오버 — 붙은 쪽에서 살짝 커지며 ── */
 :is(.ml-more-menu, .notify-pop, .design-menu, .chat-tray):not([hidden]) { animation: mo-pop-down var(--dur-2) var(--ease-out) both; transform-origin: top right; }
+.account-pop[data-side="top"] { animation: mo-pop-up var(--dur-2) var(--ease-out) both; transform-origin: var(--tail) 100%; }
+.account-pop[data-side="right"] { animation: mo-pop var(--dur-2) var(--ease-out) both; transform-origin: 0 var(--tail); }
 .ctx-menu { animation: mo-pop-down var(--dur-2) var(--ease-out) both; transform-origin: top left; }
 :is(.quality-menu, .emoji-picker, .chat-autocomplete):not([hidden]) { animation: mo-pop-up var(--dur-2) var(--ease-out) both; transform-origin: bottom center; }
 .quality-menu:not([hidden]) { transform-origin: bottom right; }
@@ -240,7 +242,7 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 .player-osd:not([hidden]):not(.fade) { animation: mo-pop .22s var(--ease-spring) both; }
 
 /* ── 멀티라이브 ── */
-.ml-pane:not([hidden]) { animation: mo-pop .34s var(--ease-emph) both; }
+/* 패인 나타남·사라짐·자리 이동은 ml-motion.js(FLIP, transform·opacity 만)가 맡는다. */
 .ml-pane { transition: outline-color var(--dur-2) var(--ease-out), box-shadow var(--dur-3) var(--ease-out); }
 .ml-pane.selected { box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 18%, transparent); }
 .ml-pane.drop-target { scale: .985; transition: scale var(--dur-2) var(--ease-out); }
@@ -288,7 +290,13 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 ::-webkit-scrollbar-thumb:hover { background-color: var(--surface-overlay); }
 @supports (animation-timeline: scroll()) {
   /* 그림자는 칠하지 않고 미리 그린 층의 투명도만 바꾼다(스크롤 중 다시 그리기 없음). */
-  .page:not(.page-multilive, .page-multichat, .page-chatonly) > .page-header { border-bottom-color: transparent; }
+  /* 맨 위에선 배경도 비워 본문 위쪽 빛 번짐이 머리줄까지 이어지게 — 내용이 밑으로 들어가면 유리 배경이 차오른다.
+     스크롤할 게 없으면(타임라인 비활성) 애니메이션이 안 걸리니 기본값을 투명으로 둔다. */
+  .page:not(.page-multilive, .page-multichat, .page-chatonly) > .page-header {
+    border-bottom-color: transparent; background-color: transparent;
+    animation: mo-header-glass linear both; animation-timeline: scroll(nearest block); animation-range: 0 48px;
+  }
+  @keyframes mo-header-glass { from { background-color: transparent; } to { background-color: var(--glass); } }
   .page:not(.page-multilive, .page-multichat, .page-chatonly) > .page-header::after {
     content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 12px; pointer-events: none;
     border-top: 1px solid var(--border-subtle); background: linear-gradient(rgba(0, 0, 0, .14), transparent);

@@ -42,6 +42,9 @@ pub struct LiveInfo {
     pub default_thumbnail_image_url: Option<Url>,
     #[serde(with = "chzzk_date_opt", skip_serializing_if = "Option::is_none")]
     pub open_date: Option<DateTime<Utc>>,
+    /// 방송이 끝난 시각 — 종료된 채널의 live-detail 이 마지막 방송을 돌려줄 때 있다.
+    #[serde(with = "chzzk_date_opt", skip_serializing_if = "Option::is_none")]
+    pub close_date: Option<DateTime<Utc>>,
     pub adult: bool,
     pub tags: Vec<String>,
     /// 스트리머가 현재 라이브에서 타임머신을 허용했는지 여부.
@@ -88,6 +91,7 @@ impl LiveInfo {
             live_image_url: None,
             default_thumbnail_image_url: None,
             open_date: None,
+            close_date: None,
             adult: false,
             tags: Vec::new(),
             time_machine_active: false,
@@ -187,6 +191,7 @@ impl<'de> Deserialize<'de> for LiveInfo {
             live_image_url,
             default_thumbnail_image_url: o.url("defaultThumbnailImageUrl"),
             open_date: o.date("openDate"),
+            close_date: o.date("closeDate"),
             adult: o.get("adult").unwrap_or(false),
             tags: o.get("tags").unwrap_or_default(),
             time_machine_active: o.get("timeMachineActive").unwrap_or(false),

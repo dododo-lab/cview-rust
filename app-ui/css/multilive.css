@@ -191,8 +191,16 @@
 .ml-stage.ml-single .ml-pane:not(.ml-single-target) { display: none; }
 .ml-stage.ml-single .ml-pane.ml-single-target { grid-column: 1 / -1 !important; grid-row: 1 / -1 !important; }
 .ml-stage.ml-single { grid-template: 1fr / 1fr !important; }
-.ml-pane.dragging { opacity: 0.5; }
 .ml-pane.drop-target { outline-color: var(--accent-blue) !important; }
+/* 끌기(ml-motion.js) — 든 패인은 포인터를 따라 떠 있고, 놓을 곳 위에서는 무엇이 될지(메인으로·자리 바꾸기)를 띄운다. */
+.ml-stage.ml-dragging, .ml-stage.ml-dragging * { user-select: none; cursor: grabbing !important; }
+.ml-stage.ml-dragging iframe { pointer-events: none; }
+.ml-pane.ml-lifted { z-index: 5; opacity: .92; box-shadow: 0 18px 48px rgba(0, 0, 0, .45); transition: box-shadow .2s var(--ease-out, ease-out); will-change: transform; }
+.ml-drop-hint { display: none; }
+.ml-pane.ml-lifted.has-drop .ml-drop-hint {
+  display: block; position: absolute; left: 50%; top: 50%; translate: -50% -50%; z-index: 6; pointer-events: none;
+  padding: 7px 14px; border-radius: 999px; background: rgba(0, 0, 0, .72); color: #fff; font-size: var(--fs-footnote, 13px); font-weight: 700; white-space: nowrap;
+}
 .ml-drag { cursor: grab; }
 .ml-restore[hidden] { display: none; }
 .ml-body.chat-overlay .chat-splitter, .ml-body.chat-overlay .chat-reopen { display: none !important; }
@@ -218,6 +226,7 @@
 /* ══ 상단 바(툴바) — 한 줄 그룹, 높이 30px 통일, 옅은 구분선 ══ */
 .ml-header { flex-wrap: nowrap; min-width: 0; }
 .ml-header .page-title { white-space: nowrap; }
+.ml-count:empty { display: none; }
 .ml-count { flex: none; font-size: var(--fs-micro); font-weight: 600; color: var(--text-secondary); padding: 2px 8px; border-radius: 999px; background: var(--hover); font-variant-numeric: tabular-nums; }
 .ml-toolbar { display: flex; align-items: center; gap: 6px; min-width: 0; flex: none; }
 .ml-toolbar .ml-focus-controls { gap: 6px; }
@@ -301,7 +310,9 @@
 .ml-pane-stats { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; max-height: 20px; overflow: hidden; text-shadow: none; }
 .ml-pane-stats:empty { display: none; }
 .ml-pane-stats .stat { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border-radius: 5px;
-  background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  /* 흐림(backdrop-filter) 없이 조금 더 진한 바탕 — 재생 중인 영상 위의 흐림은 영상 프레임마다 다시 계산돼
+     패인 수만큼 GPU·합성 부하가 늘었다(멀티라이브 최적화 2026-10-23). */
+  background: rgba(0, 0, 0, 0.58);
   color: #fff; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ml-pane-stats .stat svg { width: 12px; height: 12px; opacity: 0.85; }
 .ml-pane-stats .stat.live { background: #e5262b; font-weight: 800; letter-spacing: 0.04em; }
@@ -381,9 +392,18 @@
 /* 라이브 메뉴 단독 보기(원본 시청 모드) — 같은 패인을 무대 하나로, 배치 도구는 숨긴다 */
 .page-multilive.as-watch .ml-toolbar, .page-multilive.as-watch .ml-count { display: none; }
 .page-multilive.as-watch .ml-watch-btn, .page-multilive.as-watch [data-ml="single"] { display: none !important; }
-.ml-watch-back { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 9px; font-size: var(--fs-footnote); font-weight: 600; }
-.ml-watch-back[hidden] { display: none; }
-.ml-watch-back svg { width: 14px; height: 14px; }
+/* 라이브 단독 무대 — 멀티라이브의 다른 채널로 바꿔 보기 */
+.ml-watch-picker { display: flex; gap: 6px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.ml-watch-picker[hidden] { display: none; }
+.ml-watch-chip {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; max-width: 160px; height: 28px; padding: 0 10px 0 4px;
+  border-radius: 14px; border: 1px solid var(--border-subtle); background: var(--surface-elevated);
+  color: var(--text-secondary); font-size: var(--fs-footnote); font-weight: 500;
+}
+.ml-watch-chip:hover { color: var(--text-primary); background: var(--surface-overlay); }
+.ml-watch-chip.active { color: var(--text-primary); border-color: var(--primary); font-weight: 600; }
+.ml-watch-chip img, .ml-watch-dot { width: 20px; height: 20px; border-radius: 50%; flex: none; object-fit: cover; }
+.ml-watch-dot { background: var(--surface-overlay); }
 
 /* 패인 볼륨 슬라이더 키보드 초점 */
 .ml-vol .ml-vol-range:focus-visible { width: 64px; opacity: 1; margin: 0 8px 0 2px; outline: 2px solid #00ffa3; outline-offset: 3px; border-radius: 2px; }
@@ -410,3 +430,43 @@
 .ml-adjust-row { display: grid; grid-template-columns: 34px 1fr 38px; align-items: center; gap: 6px; padding: 3px 9px; color: #fff; font-size: 11px; }
 .ml-adjust-row input[type="range"] { width: 100%; accent-color: #00ffa3; }
 .ml-adjust-row output { text-align: right; font-variant-numeric: tabular-nums; opacity: 0.8; }
+
+/* 멀티채팅(ml-multichat.js) — 통합·그리드·포커스 보기. 줄·칸 색은 그 패인 테두리와 같은 색조(--lh). */
+.ml-chat .chat-list[hidden], .ml-mc-grid[hidden] { display: none !important; }
+.ml-chat { --mc-l: 70%; --mc-s: 85%; }
+:root[data-theme="light"] .ml-chat { --mc-l: 42%; --mc-s: 70%; }
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] .ml-chat { --mc-l: 42%; --mc-s: 70%; }
+}
+.ml-chat .merged-line, .ml-mc-cell { --mc-color: hsl(var(--lh, 0) var(--mc-s) var(--mc-l)); }
+.ml-mc-view { position: relative; flex: none; }
+.ml-mc-menu { min-width: 210px; }
+.ml-mc-menu .ml-menu-item.active { color: var(--primary-text); background: var(--primary-dim); font-weight: 700; }
+.ml-merge-btn.active { color: var(--primary-text); background: var(--primary-dim); }
+
+/* 그리드 — 패인마다 칸. 패널이 넓으면 여러 열, 좁으면 위아래로 고르게. 포커스 — 선택 칸이 위에 크게(3:1). */
+.ml-mc-grid {
+  flex: 1; min-height: 0; display: grid; gap: 6px; padding: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); grid-auto-rows: minmax(0, 1fr);
+}
+.ml-mc-grid.focus { grid-template-columns: minmax(0, 1fr); }
+.ml-mc-cell {
+  min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--mc-color) 45%, transparent);
+  background: color-mix(in srgb, var(--mc-color) 4%, transparent);
+  transition: border-color .2s var(--ease-out, ease-out);
+}
+.ml-mc-cell.selected { border-color: color-mix(in srgb, var(--mc-color) 85%, transparent); }
+.ml-mc-cell-head {
+  flex: none; display: flex; align-items: center; gap: 7px; padding: 6px 9px; min-width: 0; border: 0; cursor: pointer;
+  background: color-mix(in srgb, var(--mc-color) 12%, transparent); color: var(--text-primary);
+  font: inherit; font-size: var(--fs-footnote); font-weight: 700; text-align: left;
+}
+.ml-mc-cell-head:hover { background: color-mix(in srgb, var(--mc-color) 20%, transparent); }
+.ml-mc-cell-head i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--mc-color); }
+.ml-mc-cell-head span { flex: 1; min-width: 0; }
+.ml-mc-cell-send { display: none; flex: none; font-size: var(--fs-micro); font-weight: 700; color: var(--mc-color); }
+.ml-mc-cell.selected .ml-mc-cell-send { display: inline; }
+.ml-mc-cell .chat-list { flex: 1; min-height: 0; }
+.ml-mc-cell .merged-line { box-shadow: none; padding-left: 0 !important; }
+.ml-mc-grid.focus .ml-mc-cell:not(.main) .chat-line { font-size: .92em; }

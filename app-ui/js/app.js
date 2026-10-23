@@ -8,10 +8,12 @@ import { SettingsPage } from './settings.js';
 import { Viewer } from './viewer.js';
 import { HomePage } from './home.js';
 import { Sidebar } from './sidebar.js';
-import { setTheme, syncTheme, resolvedTheme, onThemeChange } from './theme.js';
+import { setTheme, syncTheme, resolvedTheme } from './theme.js';
 import { loadChatPrefs, setMyNickname } from './chat-prefs.js';
 import { MultiLivePage, multiLiveIcon, bindMultiLiveAddButtons } from './multilive.js';
 import { LivePage, liveIcon } from './live.js';
+import { LIVE_MODES, liveModeSwitch, bindLiveModeSwitch } from './live-mode.js';
+import { decoratePageHeader } from './page-header.js';
 import { ChannelPage } from './channel.js';
 import { MediaPage } from './media.js';
 import { LibraryPage, libraryIcon } from './library.js';
@@ -31,14 +33,15 @@ import { installPerfCollector } from './perf-collector.js';
 import { showMenu, refreshChatAuth } from './chat.js';
 import { kbd } from './platform.js';
 
-// 사이드바 — Swift `AppRouter.SidebarItem` 라벨.
+// 사이드바 — Swift `AppRouter.SidebarItem` 라벨. `sidebar: false` 는 사이드바에 없고 다른 메뉴 속에서 여는 화면
+// (멀티라이브는 라이브 메뉴의 한 보기 — 머리줄 전환 버튼으로 오간다). ⌘K 팔레트에는 그대로 나온다.
 const ROUTES = [
   { id: 'home', title: '홈', icon: icons.home },
   { id: 'following', title: '팔로잉', icon: icons.following },
   { id: 'popular', title: '인기', icon: icons.popular },
   { id: 'categories', title: '카테고리', icon: categoryIcon },
   { id: 'live', title: '라이브', icon: liveIcon },
-  { id: 'multilive', title: '멀티라이브', icon: multiLiveIcon },
+  { id: 'multilive', title: '멀티라이브', icon: multiLiveIcon, sidebar: false },
   { id: 'multichat', title: '멀티채팅', icon: multiChatIcon },
   { id: 'library', title: '보관함', icon: libraryIcon },
   { id: 'stats', title: '통계', icon: statsIcon },
@@ -58,32 +61,8 @@ let viewer = null;
 let sidebar = null;
 let insights = null;
 
-const ICON_SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
-const ICON_MOON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 14.4A8.5 8.5 0 0 1 9.6 3.5a8.5 8.5 0 1 0 10.9 10.9Z"/></svg>';
-
 function renderNav() {
-  sidebar = new Sidebar(document.querySelector('.sidebar'), { routes: ROUTES, onNavigate: navigate });
-  installThemeToggle();
-}
-
-/** 사이드바 위쪽 테마 빠른 전환 — 지금 보이는 테마의 반대로 바꾼다. */
-function installThemeToggle() {
-  const button = document.createElement('button');
-  button.className = 'icon-btn theme-toggle';
-  const render = () => {
-    const dark = resolvedTheme() === 'dark';
-    button.innerHTML = dark ? ICON_SUN : ICON_MOON;
-    const label = dark ? '라이트 테마로' : '다크 테마로';
-    button.title = label;
-    button.setAttribute('aria-label', label);
-    button.dataset.tip = label;
-  };
-  button.addEventListener('click', () => setTheme(resolvedTheme() === 'dark' ? 'light' : 'dark'));
-  onThemeChange(render);
-  render();
-  const toggle = document.querySelector('.sidebar .sidebar-toggle');
-  if (toggle) toggle.before(button);
-  else document.querySelector('.sidebar .brand-row').append(button);
+  sidebar = new Sidebar(document.querySelector('.sidebar'), { routes: ROUTES, onNavigate: (route) => navigate(route === 'live' ? lastLiveMode : route) });
 }
 
 // 사이드바 "방송 중" 목록 — Rust FollowingStore 가 60초 안의 결과를 재사용하므로 주기 호출이 가볍다.
@@ -151,10 +130,30 @@ async function exitWatch() {
   try { pages.multilive.render(await api.multiLiveWatch(null)); } catch { /* 앱 밖 */ }
   syncLiveIndicators();
 }
-/** 사이드바 — 라이브는 재생 중 점, 멀티라이브는 패인 수. */
+/** 사이드바 라이브 메뉴 — 단독 재생 중이면 점, 멀티라이브 패인이 있으면 그 수. */
 function syncLiveIndicators() {
   sidebar.setPlaying('live', Boolean(viewer && viewer.isPlaying) || isWatching());
-  sidebar.setBadge('multilive', (pages.multilive && (pages.multilive.state.sessions || []).length) || 0);
+  sidebar.setBadge('live', (pages.multilive && (pages.multilive.state.sessions || []).length) || 0);
+}
+
+// 사이드바 라이브 메뉴를 누르면 마지막으로 본 보기(라이브·멀티라이브)로 간다.
+let lastLiveMode = 'live';
+
+/**
+ * 머리줄 [라이브 | 멀티라이브] 전환.
+ * 멀티라이브 → 라이브: 포커스 레이아웃이면 메인 패인, 아니면 선택한 패인의 채널을 같은 세션 그대로(다시 연결 없이)
+ * 라이브 무대에 올린다. 나머지 채널은 라이브 머리줄의 채널 고르기로 바꿔 본다.
+ * 멀티라이브가 비어 있으면 예전처럼 라이브 화면(재생 중인 방송·이어 볼 채널)으로 간다.
+ */
+function switchLiveMode(mode) {
+  if (mode === 'live' && current === 'multilive' && !isWatching()) {
+    const st = pages.multilive.state;
+    const sessions = (st.sessions || []).filter((x) => x.slot != null);
+    const mainId = (st.layout === 'focus' && st.focusMainId) || st.selectedId;
+    const pick = sessions.find((x) => x.id === mainId) || sessions[0];
+    if (pick) { enterWatch(pick.id); return; }
+  }
+  navigate(mode);
 }
 
 // 내비게이션 스택 — 원본 AppRouter. 화면마다 파라미터(채널 ID 등)를 가진다.
@@ -170,7 +169,8 @@ async function navigate(route, params = {}, { push = true } = {}) {
   }
   current = route;
   currentParams = params;
-  sidebar.setActive(route);
+  if (LIVE_MODES.includes(route)) lastLiveMode = route;
+  sidebar.setActive(LIVE_MODES.includes(route) ? 'live' : route);
   const watching = isWatching();
   if (insights) insights.show(route === 'live' && viewer && (viewer.isPlaying || watching) ? 'live' : route);
   if (!AUX) saveWorkspace(route, params, viewer && viewer.isPlaying ? viewer.channelId : null);
@@ -201,7 +201,7 @@ async function navigate(route, params = {}, { push = true } = {}) {
     if (watching) await exitWatch();
     setMultiLiveParked(false);
     setAudioOwner('multilive');
-    pages.multilive.chatKey = null;
+    pages.multilive.reviveChatIfDropped();
   }
   // 파라미터는 받겠다고 표시한 화면(채널 상세 등)에만 넘긴다 — 목록 화면의 show(refresh) 와 겹치지 않게.
   if (pages[route].acceptsParams) pages[route].show(params);
@@ -568,6 +568,15 @@ async function main() {
   if (!AUX) insights = new InsightPanel(content, { isLoggedIn });
   bindMultiLiveAddButtons(addToMultiLive);
   installViewerMultiLiveButton();
+  if (!AUX) {
+    document.querySelector('.viewer-header .page-title').insertAdjacentHTML('afterend', liveModeSwitch('live'));
+    bindLiveModeSwitch(switchLiveMode);
+  }
+  // 화면 머리줄 — 메뉴 아이콘 칩 + 제목 위·설명 아래(page-header.js). 멀티라이브(스스로 꾸민다)·시청 화면은 한 줄.
+  for (const r of ROUTES) {
+    if (pages[r.id] && r.id !== 'multilive') decoratePageHeader(pages[r.id].root.querySelector(':scope > .page-header'), r.icon);
+  }
+  decoratePageHeader(document.querySelector('.viewer-header'), liveIcon, { compact: true });
   installBackgroundSaver();
   installPerfCollector();
 

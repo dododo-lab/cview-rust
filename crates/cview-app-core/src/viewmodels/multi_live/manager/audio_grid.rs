@@ -119,6 +119,11 @@ impl ManagerState {
                 } else {
                     self.set_focus_main_session_id(Some(new_main));
                 }
+                // 큰 화면이 바뀌면 선택(채팅·소리·고화질)도 그 패인을 따라간다 — 영상만 메인이 되고
+                // 채팅은 이전 채널에 남던 문제.
+                if self.selected_session_id != Some(new_main) {
+                    self.select_session(new_main, false);
+                }
             }
             tile_drop::Outcome::Move { from, to_offset } => {
                 tile_drop::apply_move(&mut self.sessions, from, to_offset);
@@ -147,8 +152,12 @@ impl ManagerState {
             ));
         }
         if mode == MultiLiveGridLayoutMode::Focus && self.focus_main_session_id.is_none() {
-            let first = self.sessions.first().map(|s| s.id());
-            self.set_focus_main_session_id(first);
+            // 포커스로 들어갈 때 메인은 지금 선택(채팅이 따라가는) 패인 — 없으면 첫 패인.
+            let main = self
+                .selected_session_id
+                .filter(|id| self.contains(*id))
+                .or_else(|| self.sessions.first().map(|s| s.id()));
+            self.set_focus_main_session_id(main);
         }
         self.set_grid_layout_mode(mode);
         self.save_state();
