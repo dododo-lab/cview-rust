@@ -39,7 +39,7 @@ export function paneControlsHtml() {
           <button class="ml-pane-btn" data-ml="audio" title="이 패인 소리 켜기" aria-label="소리">${I.muted}</button>
           <input type="range" class="ml-vol-range" min="0" max="100" value="100" aria-label="패인 볼륨">
         </div>
-        <button class="ml-live-pill" data-mp="live" title="라이브로 이동">LIVE</button>
+        <button class="ml-live-pill at-edge" data-mp="live" title="라이브로 이동">LIVE</button>
         <span class="ml-pane-cap"></span>
         <div class="grow"></div>
         <button class="ml-pane-btn" data-mp="gear" title="화질·지연" aria-label="화질·지연" aria-haspopup="menu" aria-expanded="false">${I.gear}</button>
@@ -174,6 +174,8 @@ export class PaneControls {
     // 700ms 마다 패인 수만큼 돈다 — 같은 값을 다시 쓰면(텍스트 노드 교체·title) 매번 스타일·레이아웃이 무효화된다.
     if (this.liveButton.textContent !== badge.text) this.liveButton.textContent = badge.text;
     this.liveButton.classList.toggle('behind', badge.behind || !playing);
+    // 라이브 끝이면 숨긴다 — "LIVE" 는 위쪽 방송 정보 칩이 이미 보여 준다. 늦어지면 "-N초"(누르면 따라잡기)로 나타난다.
+    this.liveButton.classList.toggle('at-edge', !badge.behind);
     const muted = !audible || this.gain === 0;
     const icon = muted ? PANE_ICON.muted : PANE_ICON.sound;
     if (this.audioButton.dataset.icon !== String(muted)) {

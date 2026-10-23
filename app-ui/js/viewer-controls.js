@@ -83,7 +83,7 @@ export class ViewerControls {
     const mute = root.querySelector('#mute');
     mute.insertAdjacentHTML('beforebegin', `
       <button class="icon-btn" id="ctl-play" title="일시정지 (Space)" aria-label="일시정지">${ICON.pause}</button>
-      <button class="live-chip" id="ctl-live" title="라이브로 이동">LIVE</button>`);
+      <button class="live-chip at-edge" id="ctl-live" title="라이브로 이동">LIVE</button>`);
     // 오른쪽: 화질 · 스크린샷 · 북마크 · 전체 화면(영상+채팅)
     const reload = root.querySelector('#reload');
     reload.insertAdjacentHTML('beforebegin', `
@@ -267,6 +267,8 @@ export class ViewerControls {
     const badge = liveBadgeState(this.latency);
     this.liveButton.textContent = badge.text;
     this.liveButton.classList.toggle('behind', badge.behind || paused);
+    // 라이브 끝이면 숨긴다 — "LIVE" 는 위쪽 방송 정보 칩이 이미 보여 준다. 늦어지면 "-N초"(누르면 따라잡기)로 나타난다.
+    this.liveButton.classList.toggle('at-edge', !badge.behind);
     const auto = this.manualIndex < 0;
     const height = (v && v.videoHeight) || this.currentHeight;
     this.qualityButton.textContent = height ? `${auto ? '자동 · ' : ''}${height}p` : '자동';

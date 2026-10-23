@@ -374,6 +374,7 @@
 .ml-live-pill { flex: none; height: 18px; margin: 0 6px 0 4px; padding: 0 6px; border: 0; border-radius: 4px; display: inline-flex; align-items: center; font-size: 10px; font-weight: 800; letter-spacing: 0.06em; color: #fff; background: #ff2b2b; cursor: pointer; font-variant-numeric: tabular-nums; }
 .ml-live-pill.behind { background: rgba(255, 255, 255, 0.2); }
 .ml-live-pill.behind:hover { background: #ff2b2b; }
+.ml-live-pill.at-edge { display: none; } /* LIVE 는 위쪽 정보 칩에만 — 늦어졌을 때만 따라잡기 버튼으로 */
 .ml-pane-cap { font-size: 10px; font-weight: 700; color: #fff; background: rgba(255, 255, 255, 0.18); border-radius: 4px; padding: 1px 6px; }
 .ml-pane-cap:empty { display: none; }
 /* 가운데 재생(일시정지일 때) · 버퍼링 */
