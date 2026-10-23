@@ -199,6 +199,7 @@ export class MultiLiveMergedChat {
     if (!this.on || !p || !p.event || p.event.type !== 'messages' || typeof p.session !== 'string' || !p.session.startsWith('mlx:')) return;
     const c = this.conns.get(p.session.slice(4));
     if (!c || c.key !== p.session) return;
+    if (p.event.chatChannelId && p.event.chatChannelId !== c.chatChannelId) return; // 바꾸기 전 채널의 늦은 메시지
     const style = `--lh:${Number(c.hue) || 0}`;
     const tagged = mergedLinesHtml(p.event.messages, { name: c.name, style });
     if (!tagged) return;

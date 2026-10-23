@@ -518,21 +518,32 @@ impl MultiLivePlayer for PanePlayer {
 // MARK: - 채팅
 
 /// 패인 채팅 — 채팅 채널 ID 만 기억한다.
+///
+/// 매니저는 다른 메뉴로 나가 2.5초가 지나면 패인 채팅을 끊고(`SuspendChat` → `disconnect`) 돌아오면
+/// `reconnect` 로 되살린다. 예전에는 끊을 때 채널 ID 를 지우고 `reconnect` 는 아무것도 하지 않아, 라이브 시청
+/// 화면에 잠깐 다녀오면 상태 DTO 의 `chatChannelId` 가 영영 비어 멀티라이브 채팅(선택 패인·멀티채팅)이 끊긴 채
+/// 남았다. 이제 채널 ID 는 남기고 연결 여부만 내린다 — 실제 소켓은 프런트엔드 채팅 패널이 가진다.
 #[derive(Default)]
 pub struct PaneChat {
     chat_channel_id: Mutex<Option<String>>,
+    suspended: AtomicBool,
 }
 
 impl PaneChat {
     pub fn chat_channel_id(&self) -> Option<String> {
         lock(&self.chat_channel_id).clone()
     }
+
+    fn set_chat_channel_id(&self, chat_channel_id: &str) {
+        *lock(&self.chat_channel_id) = Some(chat_channel_id.to_string());
+        self.suspended.store(false, Ordering::SeqCst);
+    }
 }
 
 #[async_trait]
 impl MultiLiveChat for PaneChat {
     fn connection_state(&self) -> ChatConnectionKind {
-        if lock(&self.chat_channel_id).is_some() {
+        if lock(&self.chat_channel_id).is_some() && !self.suspended.load(Ordering::SeqCst) {
             ChatConnectionKind::Other
         } else {
             ChatConnectionKind::Disconnected
@@ -552,9 +563,13 @@ impl MultiLiveChat for PaneChat {
     }
     fn restore_owner_presentation(&self, _background: bool) {}
     async fn disconnect(&self) {
-        *lock(&self.chat_channel_id) = None;
+        self.suspended.store(true, Ordering::SeqCst);
     }
-    async fn reconnect(&self) {}
+    async fn reconnect(&self) {
+        if lock(&self.chat_channel_id).is_some() {
+            self.suspended.store(false, Ordering::SeqCst);
+        }
+    }
 }
 
 // MARK: - 팩토리·백엔드·설정
@@ -687,7 +702,7 @@ impl MultiLiveSessionBackend for ShellBackend {
         _channel_name: &str,
     ) -> Result<(), String> {
         if let Some(pane) = self.registry.chat_of(&chat) {
-            *lock(&pane.chat_channel_id) = Some(chat_channel_id.to_string());
+            pane.set_chat_channel_id(chat_channel_id);
         }
         Ok(())
     }
@@ -1134,5 +1149,38 @@ mod tests {
             launch_plan_error(&PlaybackPlanError::NoHlsUrl),
             LaunchPlanError::NoHlsUrl
         );
+    }
+
+    /// 메뉴를 떠나 채팅이 정지됐다 돌아와도 채널 ID 가 남아 프런트엔드가 같은 채팅을 다시 붙인다.
+    #[tokio::test]
+    async fn pane_chat_keeps_channel_across_menu_suspend() {
+        let chat = PaneChat::default();
+        assert_eq!(chat.connection_state(), ChatConnectionKind::Disconnected);
+        chat.reconnect().await;
+        assert_eq!(
+            chat.connection_state(),
+            ChatConnectionKind::Disconnected,
+            "연결한 적이 없으면 되살릴 채널도 없다"
+        );
+        chat.set_chat_channel_id("chat-a");
+        assert_eq!(chat.connection_state(), ChatConnectionKind::Other);
+
+        chat.disconnect().await; // SuspendChat
+        assert_eq!(chat.connection_state(), ChatConnectionKind::Disconnected);
+        assert_eq!(
+            chat.chat_channel_id().as_deref(),
+            Some("chat-a"),
+            "정지 중에도 상태 DTO 의 chatChannelId 는 비지 않는다"
+        );
+        assert!(chat.has_last_connection_config());
+
+        chat.reconnect().await; // Restore
+        assert_eq!(chat.connection_state(), ChatConnectionKind::Other);
+        assert_eq!(chat.chat_channel_id().as_deref(), Some("chat-a"));
+
+        chat.disconnect().await; // retry: 끊고 새 채널로 다시 연결
+        chat.set_chat_channel_id("chat-b");
+        assert_eq!(chat.connection_state(), ChatConnectionKind::Other);
+        assert_eq!(chat.chat_channel_id().as_deref(), Some("chat-b"));
     }
 }

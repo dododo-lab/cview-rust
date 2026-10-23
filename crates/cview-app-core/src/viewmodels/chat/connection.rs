@@ -147,6 +147,13 @@ impl ChatViewModel {
     }
 
     pub async fn disconnect(&self) {
+        self.detach().await;
+    }
+
+    /// 해제의 동기 부분 — 세대를 올리고 엔진·작업을 지금 떼어 낸다. 돌려준 future 는 떼어 낸 엔진의 소켓만 닫는다.
+    /// 셸이 여러 요청의 순서를 한 잠금 안에서 정할 때 쓴다(잠금을 쥔 채 `await` 하지 않게). 진행 중인 `connect` 는
+    /// 세대가 바뀌어 다음 확인 지점에서 물러난다.
+    pub fn detach(&self) -> impl std::future::Future<Output = ()> + Send + 'static {
         let old = {
             let mut s = self.lock();
             s.connection_request_generation = s.connection_request_generation.wrapping_add(1);
@@ -155,8 +162,10 @@ impl ChatViewModel {
             s.moderation_state_generation = s.moderation_state_generation.wrapping_add(1);
             s.disconnect_for_connection_change()
         };
-        if let Some(e) = old {
-            e.disconnect().await;
+        async move {
+            if let Some(e) = old {
+                e.disconnect().await;
+            }
         }
     }
 

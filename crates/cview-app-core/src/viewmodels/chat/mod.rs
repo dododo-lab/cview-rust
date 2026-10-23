@@ -766,6 +766,11 @@ impl ChatViewModel {
         Self::with_deps(ChatDeps::default())
     }
 
+    /// 같은 뷰모델(복제본 포함)인가 — 셸이 세션 표에서 빠진 뷰모델에 늦게 연결하지 않게 확인한다.
+    pub fn same_as(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.shared, &other.shared)
+    }
+
     pub fn with_deps(deps: ChatDeps) -> Self {
         let shared = Arc::new_cyclic(|weak: &Weak<ChatShared>| ChatShared {
             obs: Observed::new(ChatState::new(weak.clone(), deps)),
