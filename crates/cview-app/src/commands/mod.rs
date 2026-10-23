@@ -25,9 +25,9 @@ pub mod events {
     pub const AUTH_CHANGED: &str = "auth://changed";
     /// 로그인 창 실패/취소 — `{ message }`.
     pub const AUTH_LOGIN_FAILED: &str = "auth://login-failed";
-    /// 채팅 이벤트 — `ChatEventDto`.
+    /// 채팅 이벤트 — `TaggedChatEvent`(`ChatEventDto` + `chatChannelId`).
     pub const CHAT_EVENT: &str = "chat://event";
-    /// 추가 채팅 세션 이벤트 — `{ session, event: ChatEventDto }`.
+    /// 추가 채팅 세션 이벤트 — `{ session, event: TaggedChatEvent }`.
     pub const CHAT_SESSION_EVENT: &str = "chat://session-event";
     /// 플레이어 페이지에서 실행할 스크립트 — `{ script }` (Swift `evaluateJavaScript` 대응).
     pub const PLAYER_COMMAND: &str = "player://command";
