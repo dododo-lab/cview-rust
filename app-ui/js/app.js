@@ -225,7 +225,7 @@ async function navigate(route, params = {}, { push = true } = {}) {
     if (watching) await exitWatch();
     setMultiLiveParked(false);
     setAudioOwner('multilive');
-    pages.multilive.chatKey = null;
+    pages.multilive.reviveChatIfDropped();
   }
   // 파라미터는 받겠다고 표시한 화면(채널 상세 등)에만 넘긴다 — 목록 화면의 show(refresh) 와 겹치지 않게.
   if (pages[route].acceptsParams) pages[route].show(params);
