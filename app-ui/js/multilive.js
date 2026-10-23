@@ -72,7 +72,7 @@ export class MultiLivePage {
    * @param {{ isLoggedIn: () => boolean, onAddChannel?: (channelId: string, opts?: { quiet?: boolean }) => Promise<void>,
    *   onOpenChannel?: (channelId: string) => void }} opts
    *   onAddChannel — 채널 추가 사이드바의 + (카드 + 와 같은 길: 선택·포커스 메인·시청 화면 넘겨받기),
-   *   onOpenChannel — 사이드바 줄(썸네일·이름)을 누르면 라이브 화면에서 단독으로.
+   *   onOpenChannel — 사이드바 줄(썸네일·이름)을 누르면 라이브 단독 보기로.
    */
   constructor(content, { isLoggedIn, onAddChannel = null, onOpenChannel = null }) {
     this.isLoggedIn = isLoggedIn;
@@ -222,7 +222,11 @@ export class MultiLivePage {
       isLoggedIn,
       getState: () => this.state,
       // + — 추가하고 그 패인을 선택한다. 포커스 배치면 메인으로 올라가 소리·채팅이 따라간다.
-      onAdd: (channelId) => (onAddChannel ? onAddChannel(channelId, { quiet: true }) : this.addAndSelect(channelId)),
+      // 라이브 단독 보기 중이면 보던 채널은 그대로 두고 멀티라이브에만 넣는다(머리줄 채널 고르기에 생긴다).
+      onAdd: (channelId) => {
+        if (this.watchSlot != null) return this.add(channelId, { quiet: true });
+        return onAddChannel ? onAddChannel(channelId, { quiet: true }) : this.addAndSelect(channelId);
+      },
       onOpen: onOpenChannel,
       addLabel: '멀티라이브에 추가',
     });

@@ -421,8 +421,8 @@
 .ml-stage.ml-focus .ml-pane.ml-first .ml-pane-btn svg { width: 20px; height: 20px; }
 .ml-stage.ml-focus .ml-pane.ml-first .ml-pane-bar { padding: 36px 12px 8px; }
 
-/* 라이브 메뉴 단독 보기(원본 시청 모드) — 같은 패인을 무대 하나로, 배치 도구는 숨긴다 */
-.page-multilive.as-watch .ml-toolbar, .page-multilive.as-watch .ml-count { display: none; }
+/* 라이브 메뉴 단독 보기(원본 시청 모드) — 같은 패인을 무대 하나로, 배치 도구는 숨기고 채널 추가만 남긴다 */
+.page-multilive.as-watch .ml-more, .page-multilive.as-watch .ml-count { display: none; }
 .page-multilive.as-watch .ml-watch-btn, .page-multilive.as-watch [data-ml="single"] { display: none !important; }
 /* 라이브 단독 무대 — 멀티라이브의 다른 채널로 바꿔 보기 */
 .ml-watch-picker { display: flex; gap: 6px; min-width: 0; overflow-x: auto; scrollbar-width: none; }

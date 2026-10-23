@@ -284,6 +284,22 @@ async function openChannel(channelId) {
 }
 
 /**
+ * 채널 추가 사이드바의 줄(썸네일·이름) — 멀티라이브 패인으로 넣어 같은 화면의 라이브 단독 보기로 올린다.
+ * openChannel 은 멀티라이브에 없는 채널을 예전 시청 화면으로 열어 머리줄·채팅 배치가 통째로 바뀌었다.
+ * 자리가 없을 때만 예전 시청 화면으로 연다.
+ */
+async function watchFromDrawer(channelId) {
+  let s = multiLiveSessionFor(channelId);
+  if (!s) {
+    if (!pages.multilive.state.canAdd) { await openChannel(channelId); return; }
+    await pages.multilive.add(channelId, { quiet: true });
+    s = multiLiveSessionFor(channelId);
+    if (!s) return; // 추가 실패 — run 이 이미 알렸다
+  }
+  await enterWatch(s.id);
+}
+
+/**
  * 카드·시청 화면·채널 추가 사이드바의 "멀티라이브에 추가" — 멀티라이브 화면으로 옮겨 패인을 띄우고 선택한다.
  * 선택은 포커스 메인으로 올리므로 마지막 배치(포커스면 그 메인 자리)로 재생되고, 소리·채팅이 이 채널로 따라온다.
  * quiet — 사이드바처럼 줄에 진행 표시가 따로 있으면 '추가하는 중' 안내를 띄우지 않는다.
@@ -559,7 +575,7 @@ async function main() {
     onLogin: login,
     onLogout: logout,
   });
-  pages.multilive = new MultiLivePage(content, { isLoggedIn, onAddChannel: addToMultiLive, onOpenChannel: openChannel });
+  pages.multilive = new MultiLivePage(content, { isLoggedIn, onAddChannel: addToMultiLive, onOpenChannel: watchFromDrawer });
   pages.live = new LivePage(content, { isLoggedIn });
   pages.categories = new CategoriesPage(content);
   pages.multichat = new MultiChatPage(content, { isLoggedIn, onPlay: openChannel });
