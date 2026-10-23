@@ -117,7 +117,7 @@ export class PaneControls {
   }
 
   hide() {
-    const hovering = Boolean(this.el.querySelector('.ml-pane-bar:hover, .ml-pane-top:hover, .ml-pane-menu:hover')) || this.volumeReveal.isOpen();
+    const hovering = Boolean(this.el.querySelector('.ml-pane-bar:hover, .ml-pane-top:hover, .ml-pane-menu:hover, :is(button, input, select):focus-visible')) || this.volumeReveal.isOpen();
     if (this.el.classList.contains('paused') || this.menuOpen || hovering) { this.wake(); return; }
     this.el.classList.remove('ctl-visible');
     this.el.classList.toggle('idle', this.el.matches(':hover'));

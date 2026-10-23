@@ -3,7 +3,7 @@
 // PLY-01 화질 선택, PLY-02 재생/일시정지·라이브 복귀·지연 배지, PLY-09 스크린샷, PLY-11 전체 화면 2종,
 // PLY-13 오류 오버레이 재시도, PLY-15 휠 볼륨·% 표시, PLY-17 북마크, 시청 화면 단축키.
 import { api } from './api.js';
-import { esc, toast } from './dom.js';
+import { esc, toast, keyBelongsToTarget } from './dom.js';
 import { matchPlainAction } from './shortcuts.js';
 import { kbd } from './platform.js';
 
@@ -135,7 +135,11 @@ export class ViewerControls {
     root.querySelector('#ctl-bookmark').addEventListener('click', () => this.bookmark());
     root.querySelector('#ctl-fullscreen-chat').addEventListener('click', () => this.fullscreen(true));
     this.stage.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
-    this.stage.addEventListener('dblclick', () => this.fullscreen(false));
+    // 영상 자리만 — 컨트롤·패널·메뉴를 빠르게 두 번 눌러도 전체 화면이 되지 않게(멀티라이브 패인과 같게).
+    this.stage.addEventListener('dblclick', (e) => {
+      if (e.target.closest('.player-controls, .chzzk-bar, .player-panel, .stage-top, .quality-menu, .overlay-retry, button')) return;
+      this.fullscreen(false);
+    });
 
     viewer.player.onMessage((type, data) => this.onMessage(type, data));
     document.addEventListener('keydown', (e) => this.onKey(e));
@@ -180,7 +184,9 @@ export class ViewerControls {
     const top = stage.querySelector('.stage-top');
     const menuOpen = () => !this.qualityMenu.hidden || Boolean(this.root.querySelector('.player-panel:not([hidden])'));
     const hide = () => {
-      if (stage.classList.contains('paused') || menuOpen() || bar.matches(':hover') || top?.matches(':hover') || this.volumeReveal.isOpen()) { this.wake(); return; }
+      // 키보드 초점이 막대 안에 있으면 숨기지 않는다(마우스 클릭으로 생긴 초점은 :focus-visible 이 아니라 숨는다).
+      const keyFocus = stage.querySelector(':is(button, input, select):focus-visible');
+      if (stage.classList.contains('paused') || menuOpen() || bar.matches(':hover') || top?.matches(':hover') || keyFocus || this.volumeReveal.isOpen()) { this.wake(); return; }
       stage.classList.remove('ctl-visible');
       stage.classList.add('idle');
     };
@@ -382,9 +388,7 @@ export class ViewerControls {
   }
 
   onKey(e) {
-    if (this.root.hidden || !this.viewer.isPlaying) return;
-    const t = e.target;
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    if (this.root.hidden || !this.viewer.isPlaying || keyBelongsToTarget(e)) return;
     const mod = e.metaKey || e.ctrlKey;
     const range = this.root.querySelector('#volume');
     // 사용자 단축키(맨 글자) — 수식 키 바인딩은 메뉴가 받는다 (SET-12).

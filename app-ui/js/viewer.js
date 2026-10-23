@@ -173,6 +173,8 @@ export class Viewer {
     this.status.textContent = '';
     if (settings && typeof settings.volumeLevel === 'number') {
       this.volume.value = String(Math.round(settings.volumeLevel * 100));
+      // 채움 색(--fill)도 — 속성이 아니라 값을 바꿔 viewer-controls 의 감시자가 모른다(input 을 쏘면 음소거가 풀린다)
+      this.volume.style.setProperty('--fill', `${this.volume.value}%`);
     }
     this.startMuted = settings ? Boolean(settings.startMuted) : false;
     try {
