@@ -259,6 +259,10 @@ export class ChatPanel {
     });
     const onDocKey = (e) => {
       if (!this.active || !this.root.offsetParent) return;
+      // 보이는 패널이 여럿이면(멀티채팅 격자) 한 패널만 받는다 — 초점이 든 패널, 없으면 첫 패널.
+      // 패널마다 받으면 ⌘J 가 공유 설정을 N 번 뒤집어(짝수면 그대로) 알림만 N 개 떴다.
+      const shown = [...PANELS].filter((p) => p.active && p.root.offsetParent);
+      if ((shown.find((p) => p.root.contains(document.activeElement)) || shown[0]) !== this) return;
       if (e.metaKey && e.shiftKey && e.key.toLowerCase() === 'k') { e.preventDefault(); this.clear(true); }
       if (e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'j') {
         e.preventDefault();
@@ -332,6 +336,8 @@ export class ChatPanel {
     this.connected = false;
     this.canSend = false;
     this.ranking.clear();
+    // 후원 읽어 주기(TTS) 대기열은 전역이다 — 연결된 채팅이 하나도 없으면 남은 것을 멈춘다(화면을 떠나도 계속 읽었다)
+    if (window.speechSynthesis && ![...PANELS].some((p) => p.connected)) speechSynthesis.cancel();
     try { await api.chatDisconnect(this.session); } catch { /* 무시 */ }
     if (seq !== this.connSeq) return;
     this.setState('disconnected');

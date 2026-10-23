@@ -278,6 +278,6 @@ export function installChatExtras(panel) {
     for (const [v] of BACKGROUNDS) root.classList.toggle(`bg-${v}`, v === mode);
     root.style.setProperty('--chat-bg-strength', String(Math.min(1, Math.max(0, Number(bg.strength ?? 0.5)))));
   };
-  onChatPrefs(applyLook);
+  panel.cleanups.push(onChatPrefs(applyLook)); // 패널을 버리면 구독도 — 닫힌 멀티채팅 패널이 DOM 째 남았다
   applyLook();
 }
