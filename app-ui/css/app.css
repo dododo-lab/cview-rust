@@ -2069,7 +2069,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .stage-top .meta-stats { display: flex; flex-wrap: wrap; gap: 6px; text-shadow: none; }
 .stage-top .meta-stats:empty { display: none; }
 .stage-top .stat { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 6px;
-  background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  /* 흐림(backdrop-filter) 없이 조금 더 진한 바탕 — 재생 중인 영상 위의 흐림은 영상 프레임마다 다시 계산돼
+     패인 수만큼 GPU·합성 부하가 늘었다(멀티라이브 최적화 2026-10-23). */
+  background: rgba(0, 0, 0, 0.58);
   color: #fff; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stage-top .stat svg { width: 13px; height: 13px; opacity: 0.85; }
 .stage-top .stat.live { background: #e5262b; font-weight: 800; letter-spacing: 0.04em; }

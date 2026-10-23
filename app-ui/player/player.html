@@ -4122,27 +4122,73 @@ function _sampleAutoEnhance() {
         canvas.width = 32; canvas.height = 18;
         const ctx = canvas.getContext && canvas.getContext('2d', { willReadFrequently: true });
         if (!ctx) { _autoUnreadable = true; return; }
-        _autoProbe = { canvas: canvas, ctx: ctx };
+        _autoProbe = { canvas: canvas, ctx: ctx, busy: false, bitmap: typeof createImageBitmap === 'function' };
     }
-    let data;
+    if (_autoProbe.busy) return;
+    // [멀티라이브 최적화 2026-10-23] 하드웨어 디코드 프레임을 2D 캔버스에 바로 그리면(drawImage(video))
+    //   원본 해상도(1080p) 프레임을 GPU→CPU 로 **메인 스레드에서 동기** 복사한 뒤 줄인다. 패인 4개면
+    //   2초마다 그 복사가 네 번 — 패인이 많을수록 사이드바·오버레이 애니메이션이 그 순간마다 끊겼다.
+    //   createImageBitmap 에 32×18 축소를 맡기면 복사·축소가 비동기로 끝나고, 메인 스레드는 작은
+    //   비트맵만 읽는다. 지원하지 않거나 실패하면 예전 동기 경로로 돌아간다.
+    const owner = video;
+    const finish = function(data) {
+        const target = autoEnhanceTarget(data);
+        if (!target) return;
+        const k = AUTO_ENHANCE_SMOOTHING;
+        const next = {
+            b: _autoGain.b + (target.b - _autoGain.b) * k,
+            c: _autoGain.c + (target.c - _autoGain.c) * k,
+            s: _autoGain.s + (target.s - _autoGain.s) * k
+        };
+        // 눈에 띄지 않는 변화(합 0.01 미만)로 필터를 다시 걸면 영상 레이어 합성만 다시 한다 — 건너뛴다.
+        const moved = Math.abs(next.b - _autoGain.b) + Math.abs(next.c - _autoGain.c) + Math.abs(next.s - _autoGain.s);
+        _autoGain = next;
+        if (moved >= 0.01) _applyComposedFilter();
+    };
+    const readSync = function() {
+        let data;
+        try {
+            _autoProbe.ctx.drawImage(video, 0, 0, 32, 18);
+            data = _autoProbe.ctx.getImageData(0, 0, 32, 18).data;
+        } catch (e) {
+            // 교차 출처 프레임(캔버스 오염)이면 읽을 수 없다 — 이 세션에서는 자동 보정을 쉰다.
+            _autoUnreadable = true;
+            postToSwift('pictureEnhance', { auto: false, error: 'FRAME_UNREADABLE' });
+            return;
+        }
+        finish(data);
+    };
+    if (!_autoProbe.bitmap) { readSync(); return; }
+    _autoProbe.busy = true;
+    let pending;
     try {
-        _autoProbe.ctx.drawImage(video, 0, 0, 32, 18);
-        data = _autoProbe.ctx.getImageData(0, 0, 32, 18).data;
+        pending = createImageBitmap(video, { resizeWidth: 32, resizeHeight: 18, resizeQuality: 'low' });
     } catch (e) {
-        // 교차 출처 프레임(캔버스 오염)이면 읽을 수 없다 — 이 세션에서는 자동 보정을 쉰다.
-        _autoUnreadable = true;
-        postToSwift('pictureEnhance', { auto: false, error: 'FRAME_UNREADABLE' });
+        _autoProbe.busy = false;
+        _autoProbe.bitmap = false;
+        readSync();
         return;
     }
-    const target = autoEnhanceTarget(data);
-    if (!target) return;
-    const k = AUTO_ENHANCE_SMOOTHING;
-    _autoGain = {
-        b: _autoGain.b + (target.b - _autoGain.b) * k,
-        c: _autoGain.c + (target.c - _autoGain.c) * k,
-        s: _autoGain.s + (target.s - _autoGain.s) * k
-    };
-    _applyComposedFilter();
+    pending.then(function(bitmap) {
+        _autoProbe.busy = false;
+        if (owner !== video || !_pictureEnhance.auto) { bitmap.close && bitmap.close(); return; }
+        let data;
+        try {
+            _autoProbe.ctx.drawImage(bitmap, 0, 0, 32, 18);
+            data = _autoProbe.ctx.getImageData(0, 0, 32, 18).data;
+        } catch (e) {
+            _autoUnreadable = true;
+            postToSwift('pictureEnhance', { auto: false, error: 'FRAME_UNREADABLE' });
+            return;
+        } finally {
+            bitmap.close && bitmap.close();
+        }
+        finish(data);
+    }, function() {
+        // 축소 옵션을 모르는 엔진 등 — 다음 틱부터 동기 경로.
+        _autoProbe.busy = false;
+        _autoProbe.bitmap = false;
+    });
 }
 
 // <video> 의 object-fit: contain 사각형(CSS px).

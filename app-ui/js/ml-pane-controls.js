@@ -163,7 +163,8 @@ export class PaneControls {
       this.playButton.title = playing ? '일시정지' : '재생';
     }
     const badge = liveBadgeState(this.latency);
-    this.liveButton.textContent = badge.text;
+    // 700ms 마다 패인 수만큼 돈다 — 같은 값을 다시 쓰면(텍스트 노드 교체·title) 매번 스타일·레이아웃이 무효화된다.
+    if (this.liveButton.textContent !== badge.text) this.liveButton.textContent = badge.text;
     this.liveButton.classList.toggle('behind', badge.behind || !playing);
     const muted = !audible || this.gain === 0;
     const icon = muted ? PANE_ICON.muted : PANE_ICON.sound;
@@ -171,7 +172,8 @@ export class PaneControls {
       this.audioButton.innerHTML = icon;
       this.audioButton.dataset.icon = String(muted);
     }
-    this.audioButton.title = audible && this.gain > 0 ? '소리 끄기' : '이 패인 소리 켜기';
+    const audioTitle = audible && this.gain > 0 ? '소리 끄기' : '이 패인 소리 켜기';
+    if (this.audioButton.title !== audioTitle) this.audioButton.title = audioTitle;
   }
 
   // ── 동작 ─────────────────────────────────
