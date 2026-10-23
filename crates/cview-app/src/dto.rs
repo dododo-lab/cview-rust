@@ -160,6 +160,8 @@ pub struct LiveDetailDto {
     pub chat_channel_id: Option<String>,
     pub thumbnail_url: Option<String>,
     pub open_date: Option<String>,
+    /// 종료된 방송이면 끝난 시각(마지막 방송).
+    pub close_date: Option<String>,
     pub adult: bool,
     pub tags: Vec<String>,
 }
@@ -188,6 +190,7 @@ impl LiveDetailDto {
             chat_channel_id: info.chat_channel_id.clone().filter(|s| !s.is_empty()),
             thumbnail_url: url_string(info.resolved_live_image_url()),
             open_date: rfc3339(info.open_date),
+            close_date: rfc3339(info.close_date),
             adult: info.adult,
             tags: info.tags.clone(),
         }

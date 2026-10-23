@@ -1302,6 +1302,16 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .dense-title { color: var(--text-secondary); font-size: var(--fs-caption); }
 .dense-viewers { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-footnote); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .dense-viewers.off { color: var(--text-tertiary); }
+/* 팔로잉 — 라이브 간결 보기의 경과 시간, 전체 채널의 인증·알림·팔로워·팔로우 기간·마지막 방송(following-info.js) */
+.dense-row.live-dense, .dense-row.follow-row { grid-template-columns: auto minmax(160px, 260px) 1fr auto auto; }
+.dense-uptime, .follow-meta { font-size: var(--fs-footnote); color: var(--text-tertiary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.follow-meta { display: inline-flex; align-items: center; gap: 10px; }
+.follow-meta > span:empty { display: none; }
+.dense-title.fx-last { color: var(--text-tertiary); }
+.fx-verified { width: 14px; height: 14px; margin-left: 4px; vertical-align: -2px; color: var(--primary); --fx-check: var(--on-primary, #fff); }
+.fx-bell { width: 13px; height: 13px; margin-left: 4px; vertical-align: -2px; color: var(--warning); }
+.follow-find { width: 180px; padding: 6px 10px; }
+@media (max-width: 900px) { .dense-row.follow-row { grid-template-columns: auto minmax(140px, 1fr) auto; } .follow-row .dense-title, .follow-row .follow-meta { display: none; } }
 .search-tabs { margin-bottom: var(--sp-lg); }
 .recent-chip { display: inline-flex; align-items: center; gap: 2px; padding: 3px 4px 3px 12px; }
 .recent-chip .link-btn { padding: 0; color: var(--text-primary); }

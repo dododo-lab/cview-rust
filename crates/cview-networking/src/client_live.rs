@@ -398,6 +398,7 @@ impl ChzzkApiClient {
                 let Some(channel) = item.channel else {
                     continue;
                 };
+                let follow = channel.follow_state();
                 let Some(channel_id) = channel.channel_id else {
                     continue;
                 };
@@ -406,6 +407,8 @@ impl ChzzkApiClient {
                 }
                 rows.push(FollowingRow {
                     channel_id,
+                    verified: channel.verified_mark.unwrap_or(false),
+                    follow,
                     channel_name: channel.channel_name.unwrap_or_else(|| "Unknown".into()),
                     channel_image_url: channel.channel_image_url,
                     is_live: item.streamer.map(|s| s.is_actually_live()).unwrap_or(false),
