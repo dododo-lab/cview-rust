@@ -334,6 +334,8 @@ export class MultiLiveAddDrawer {
     }
     const act = e.target.closest('[data-add]');
     if (!act) return;
+    // 바깥(페이지의 카드 열기)으로 올리지 않는다 — 아래에서 목록을 다시 그리면 누른 줄이 떨어져 엉뚱하게 열린다.
+    e.stopPropagation();
     switch (act.dataset.add) {
       case 'close': this.close(); break;
       case 'refresh': this.load(true); break;

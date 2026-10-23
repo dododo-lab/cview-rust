@@ -134,7 +134,8 @@ export function rememberChannel({ channelId, channelName = '', channelImage = ''
 export function bindCardOpen(root, onOpen) {
   const open = (el) => {
     // 채널 추가 사이드바는 줄(열기)과 +(추가)를 스스로 나눠 처리한다 — 여기서 또 열면 + 도 라이브로 넘어간다.
-    if (el.closest('.ml-addbar')) return;
+    // 사이드바는 + 를 누르는 즉시 목록을 다시 그려 누른 버튼이 문서에서 떨어진다 — 그래서 붙어 있는지도 본다.
+    if (!root.contains(el) || el.closest('.ml-addbar')) return;
     const card = el.closest('[data-channel-id]');
     if (card && el.closest('[data-open-channel]')) {
       window.dispatchEvent(new CustomEvent('cview:open-channel', { detail: { channelId: card.dataset.channelId } }));
