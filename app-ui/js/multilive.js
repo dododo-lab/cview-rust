@@ -723,6 +723,15 @@ export class MultiLivePage {
     i.style.setProperty('--fill', `${Math.max(0, Math.min(100, pct))}%`);
   }
 
+  /**
+   * 멀티라이브로 돌아올 때 — 채팅이 끊긴 채(실패·끊김)라면 다음 렌더에서 다시 붙인다. 연결돼 있으면 그대로 둔다.
+   * (예전엔 돌아올 때마다 무조건 다시 연결해 채팅이 비워지고 잠깐 끊겼다. `ml` 세션은 라이브 화면과 따로라
+   * 라이브를 열고 닫아도 끊기지 않는다.)
+   */
+  reviveChatIfDropped() {
+    if (this.chat.stateName === 'disconnected' || this.chat.stateName === 'failed') this.chatKey = null;
+  }
+
   /** 채팅은 선택 패인의 채널을 따라간다. */
   syncChat(session) {
     const key = session && session.chatChannelId ? `${session.id}:${session.chatChannelId}` : null;
