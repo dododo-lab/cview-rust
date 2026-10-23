@@ -228,7 +228,7 @@ a { color: var(--primary); }
   --sb-rail: 59px; /* 접힌 레일의 안쪽 폭(88 − 패딩 14 ×2 − 테두리 1) — 레일 가운데 = 이 값의 절반 */
   transition: width var(--sb-dur) var(--sb-ease), padding var(--sb-dur) var(--sb-ease);
 }
-/* 로고 줄 — 버튼(테마·접기)은 절대 위치라 펼침(오른쪽 끝 가로)↔접힘(로고 아래 세로)을 미끄러지듯 오간다 */
+/* 로고 줄 — 접기 버튼은 절대 위치라 펼침(오른쪽 끝 가로)↔접힘(로고 아래 세로)을 미끄러지듯 오간다 */
 .brand-row {
   position: relative; flex: none; display: flex; align-items: flex-start; height: 36px; margin-bottom: 10px; padding-left: 6px;
   transition: height var(--sb-dur) var(--sb-ease), padding var(--sb-dur) var(--sb-ease), margin var(--sb-dur) var(--sb-ease);
@@ -239,7 +239,6 @@ a { color: var(--primary); }
     box-shadow 0.16s var(--ease-out), scale 0.32s var(--ease-spring, ease-out);
 }
 .sidebar::-webkit-scrollbar { display: none; }
-.brand-row > .theme-toggle { left: calc(100% - 64px); }
 .brand-row > .sidebar-toggle { left: calc(100% - 30px); }
 .brand { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; margin-top: 4px; font-weight: 800; font-size: 17px; letter-spacing: -0.3px; transition: margin var(--sb-dur) var(--sb-ease); }
 .brand-mark {
@@ -375,11 +374,10 @@ a { color: var(--primary); }
 .sidebar.collapsed :is(.brand-name, .nav-item .nav-label, .quick-search .nav-label, .quick-search kbd, .side-live-text, .side-live-viewers) {
   opacity: 0; translate: -6px 0; transition: opacity 0.12s ease, translate 0.2s ease-in;
 }
-.sidebar.collapsed .brand-row { height: 118px; padding-left: calc(var(--sb-rail) / 2 - 19px); } /* 로고 38 + 버튼 30 ×2 + 간격 10 ×2 */
+.sidebar.collapsed .brand-row { height: 78px; padding-left: calc(var(--sb-rail) / 2 - 19px); } /* 로고 38 + 간격 10 + 접기 버튼 30 */
 .sidebar.collapsed .brand { margin-top: 0; }
 .sidebar.collapsed .brand-row > .icon-btn { left: calc(var(--sb-rail) / 2 - 15px); }
-.sidebar.collapsed .brand-row > .theme-toggle { top: 48px; }
-.sidebar.collapsed .brand-row > .sidebar-toggle { top: 88px; }
+.sidebar.collapsed .brand-row > .sidebar-toggle { top: 48px; }
 .sidebar.collapsed .account-name,
 .sidebar.collapsed .account-chevron,
 .sidebar.collapsed .side-empty,
@@ -951,8 +949,6 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .toast { background: var(--surface-popover); color: var(--text-primary); }
 
 /* 사이드바 테마 전환 버튼 */
-.theme-toggle { width: 30px; height: 30px; flex: none; color: var(--text-tertiary); }
-.theme-toggle svg { width: 17px; height: 17px; }
 
 /* 라이트 테마 — 서버가 준 닉네임 색은 어두운 배경용이라 조금 어둡게 */
 :root[data-theme="light"] .chat-line .nick[style] { filter: brightness(0.72) saturate(1.15); }

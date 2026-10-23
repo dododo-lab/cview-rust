@@ -128,13 +128,13 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 
 /* ── 누름 피드백 — 눌린 동안 살짝 들어간다(손을 떼면 스프링으로 돌아온다) ── */
 :is(.icon-btn, .seg, .chip, .ml-tb-icon, .chat-hbtn, .link-btn, .toast-action, .live-chip, .quality-btn, .ml-pane-btn, .ml-pane-close,
-    .back-btn, .chat-jump, .chat-reopen, .ip-reopen, .account-action, .theme-toggle, .sidebar-toggle, .emoji-cell, .emoji-tab, .rail-item, .category-pin) {
+    .back-btn, .chat-jump, .chat-reopen, .ip-reopen, .account-action, .sidebar-toggle, .emoji-cell, .emoji-tab, .rail-item, .category-pin) {
   transition-property: background, color, border-color, box-shadow, opacity, scale;
   transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), .32s;
   transition-timing-function: var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-spring);
 }
 :is(.icon-btn, .seg, .chip, .ml-tb-icon, .chat-hbtn, .toast-action, .live-chip, .quality-btn, .ml-pane-btn, .ml-pane-close,
-    .back-btn, .chat-jump, .chat-reopen, .account-action, .theme-toggle, .sidebar-toggle, .emoji-cell, .emoji-tab, .category-pin):active:not(:disabled) {
+    .back-btn, .chat-jump, .chat-reopen, .account-action, .sidebar-toggle, .emoji-cell, .emoji-tab, .category-pin):active:not(:disabled) {
   scale: .93; transition-duration: var(--dur-1);
 }
 .link-btn:active:not(:disabled) { scale: .97; transition-duration: var(--dur-1); }
