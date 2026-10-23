@@ -101,6 +101,12 @@ export class Sidebar {
     try {
       localStorage.setItem(COLLAPSE_KEY, this.collapsed ? '0' : '1');
     } catch { /* 저장 불가 — 이번 세션만 */ }
+    // 전환 동안만 .sb-anim — 배치가 바뀌는 칸을 잠깐 숨겼다 페이드인한다(app.css "접힌 사이드바").
+    clearTimeout(this.animTimer);
+    this.root.classList.remove('sb-anim');
+    void this.root.offsetWidth; // 연타해도 페이드인 애니메이션을 처음부터 다시
+    this.root.classList.add('sb-anim');
+    this.animTimer = setTimeout(() => this.root.classList.remove('sb-anim'), 450);
     this.applyCollapsed();
   }
 
