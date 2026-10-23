@@ -3,7 +3,7 @@
 // SET-02~06 플레이어·지연·되감기·스크린샷·비디오, SET-07 채팅, SET-08 일반, SET-09 외관,
 // SET-10 성능, SET-11 네트워크(프리셋), SET-13 채널 알림, SET-15 동기화, SET-16 도메인, SET-17 백업·복원·초기화,
 // MUL-16 멀티라이브 설정.
-import { api } from './api.js';
+import { api, listen, Events } from './api.js';
 import { ACTIONS, FIXED, currentBindings, bindingLabel, bindingFromEvent, saveBinding, conflictOf } from './shortcuts.js';
 import { esc, toast } from './dom.js';
 import { emptyState, errorState } from './cards.js';
@@ -133,7 +133,17 @@ const GROUPS = [
   ['overview', '개요'], ['watch', '시청'], ['chat', '채팅'], ['multi', '멀티라이브'],
   ['general', '일반'], ['link', '연동'], ['advanced', '고급'],
 ];
-const NETWORK_PRESETS = [['balanced', '밸런스'], ['stability', '안정 우선'], ['lowLatency', '저지연 우선'], ['performance', '고성능']];
+const NETWORK_PRESETS = [['auto', '자동'], ['balanced', '밸런스'], ['stability', '안정 우선'], ['lowLatency', '저지연 우선'], ['performance', '고성능']];
+
+/** 프리셋 줄 설명 — 자동이면 지금 고른 프리셋을 적는다. */
+function netPresetHelp(settings) {
+  if (settings.networkPreset === 'auto') {
+    const now = NETWORK_PRESETS.find(([v]) => v === settings.networkAutoChoice)?.[1];
+    return `자동 — 지금 ${now || '밸런스'}. 멀티라이브 2개 이상이면 고성능, 재생 오류가 나면 잠시 안정 우선으로 바꿉니다`;
+  }
+  if (settings.networkPreset === 'custom') return '직접 조정한 값 — 프리셋을 고르면 요청 한도·시간 제한·재연결 값을 함께 바꿉니다';
+  return '요청 한도·시간 제한·재연결 값을 함께 바꿉니다';
+}
 
 const CHAT_TOGGLES = [
   ['showTimestamp', '시간 표시', '메시지 옆에 받은 시각을 보여 줍니다'],
@@ -197,6 +207,12 @@ export class SettingsPage {
     });
     this.body.addEventListener('submit', (e) => this.onSubmit(e));
     this.body.addEventListener('click', (e) => this.onClick(e));
+    // 자동 프리셋이 값을 바꾸면 네트워크 값만 다시 읽어 프리셋 줄이 보일 때 다시 그린다.
+    listen(Events.networkPresetChanged, async () => {
+      if (!this.settings) return;
+      try { this.settings = await api.settingsGet(); } catch { return; }
+      if (this.body.querySelector('[data-net-preset]')) this.render();
+    });
   }
 
   async show() {
@@ -242,8 +258,8 @@ export class SettingsPage {
       sections.push(`<section class="settings-group" data-g="${g}"><h3>${esc(title)}${adv ? `<button class="link-btn adv-toggle" data-adv>${this.showAdvanced ? '고급 숨기기' : '고급 보기'}</button>` : ''}</h3>
         ${items.map((i) => itemHtml(i, this.settings)).join('')}</section>`);
       if (g === 'advanced' && title === '네트워크') {
-        sections.push(`<section class="settings-group" data-g="advanced"><h3>네트워크 프리셋</h3><div class="setting" data-search="네트워크 프리셋 밸런스 안정 저지연 고성능"><span class="setting-label">한 번에 맞추기<small>요청 한도·시간 제한·재연결 값을 함께 바꿉니다</small></span>
-          <div class="segmented">${NETWORK_PRESETS.map(([v, l]) => `<button class="seg" data-net-preset="${v}">${l}</button>`).join('')}</div></div></section>`);
+        sections.push(`<section class="settings-group" data-g="advanced"><h3>네트워크 프리셋</h3><div class="setting" data-search="네트워크 프리셋 자동 밸런스 안정 저지연 고성능"><span class="setting-label">한 번에 맞추기<small>${esc(netPresetHelp(this.settings))}</small></span>
+          <div class="segmented" role="radiogroup" aria-label="네트워크 프리셋">${NETWORK_PRESETS.map(([v, l]) => { const on = v === this.settings.networkPreset; return `<button class="seg ${on ? 'active' : ''}" data-net-preset="${v}" role="radio" aria-checked="${on}">${l}</button>`; }).join('')}</div></div></section>`);
       }
     }
     if (want('chat')) sections.push(this.chatHtml());
