@@ -255,8 +255,17 @@
 .ml-tb-icon:active { background: var(--active); }
 .ml-tb-icon.active { color: var(--primary-text); background: var(--primary-dim); border-color: color-mix(in srgb, var(--primary) 45%, transparent); }
 .ml-tb-icon[aria-expanded="true"] { background: var(--active); color: var(--text-primary); }
-.ml-toolbar .ml-add { height: 30px; padding: 0 12px; border-radius: 9px; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-size: var(--fs-footnote); font-weight: 600; margin-left: 2px; }
-.ml-toolbar .ml-add svg { margin: 0; }
+.ml-toolbar .ml-add { height: 30px; padding: 0 12px 0 10px; border-radius: 9px; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-size: var(--fs-footnote); font-weight: 600; margin-left: 2px; }
+.ml-toolbar .ml-add svg { margin: 0; width: 14px; height: 14px; transition: transform .25s var(--ease-out); }
+/* 채널 추가 — ⋯ 버튼과 같은 30px·9px 모양. 공통 .btn:hover 의 회색 배경과 큰 글로우가 섞여 탁해 보였다(사용자 요청 2026-10-23):
+   늘 브랜드색 위에서 밝기만 바꾸고, 그림자는 얇게. 사이드바가 열려 있으면 옅은 브랜드색 칩으로 바뀌고 + 가 × 로 돈다. */
+.page-multilive .ml-toolbar .ml-add:not(:disabled) { background: var(--primary); color: var(--on-primary); border: 1px solid transparent; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 2px rgba(0, 0, 0, 0.18); filter: none; }
+.page-multilive .ml-toolbar .ml-add:not(:disabled):hover { background: color-mix(in srgb, var(--primary) 88%, #fff); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 2px 8px var(--primary-glow); }
+.page-multilive .ml-toolbar .ml-add:not(:disabled):active { background: color-mix(in srgb, var(--primary) 88%, #000); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2); transform: scale(.97); filter: none; }
+.page-multilive .ml-toolbar .ml-add[aria-expanded="true"]:not(:disabled) { background: var(--primary-dim); color: var(--primary-text); border-color: color-mix(in srgb, var(--primary) 45%, transparent); box-shadow: none; }
+.page-multilive .ml-toolbar .ml-add[aria-expanded="true"]:not(:disabled):hover { background: color-mix(in srgb, var(--primary) 22%, transparent); }
+.page-multilive .ml-toolbar .ml-add[aria-expanded="true"] svg { transform: rotate(45deg); }
+.page-multilive .ml-toolbar .ml-add:focus-visible { box-shadow: var(--focus-ring); }
 .ml-toolbar .ml-add:disabled { opacity: 1; background: var(--surface-elevated); color: var(--text-tertiary); border-color: var(--border-subtle); box-shadow: none; cursor: not-allowed; }
 /* 더 보기 메뉴 */
 .ml-more { position: relative; flex: none; }

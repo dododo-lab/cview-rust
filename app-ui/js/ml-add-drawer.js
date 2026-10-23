@@ -208,6 +208,7 @@ export class MultiLiveAddDrawer {
     this.el.style.setProperty('--ml-addbar-w', `${Math.max(320, Math.round(w)) || 360}px`);
     this.el.classList.add('open');
     this.el.setAttribute('aria-hidden', 'false');
+    this.markToggles(true);
     this.el.inert = false;
     this.filter.value = '';
     this.sync();
@@ -221,6 +222,12 @@ export class MultiLiveAddDrawer {
     this.el.classList.remove('open');
     this.el.setAttribute('aria-hidden', 'true');
     this.el.inert = true;
+    this.markToggles(false);
+  }
+
+  /** 여는 버튼에 열림 상태를 단다 — 머리줄 채널 추가가 열린 동안 눌린 모양(×)으로 보인다. */
+  markToggles(on) {
+    for (const b of document.querySelectorAll(this.toggleSelector)) b.setAttribute('aria-expanded', String(on));
   }
 
   /** 멀티라이브 상태가 바뀌면 — 추가됨 표시·남은 자리·꽉 참 안내. */
