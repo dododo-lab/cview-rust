@@ -106,16 +106,20 @@ export class Sidebar {
     // 전환 동안 본문 너비가 매 프레임 바뀌므로, 무거운 크기 맞춤(시청 화면 채널 레일 등)은 끝난 뒤 한 번만 하도록
     // <html>.sidebar-animating 을 걸고 끝나면 'cview:sidebar-settled' 를 보낸다.
     clearTimeout(this.animTimer);
+    this.finishSlide();
+    const heavy = this.playingInContent();
     this.root.classList.remove('sb-anim');
-    void this.root.offsetWidth; // 연타해도 페이드인 애니메이션을 처음부터 다시
-    this.root.classList.add('sb-anim');
+    if (!heavy) {
+      void this.root.offsetWidth; // 연타해도 페이드인 애니메이션을 처음부터 다시
+      this.root.classList.add('sb-anim');
+    }
     document.documentElement.classList.add('sidebar-animating');
     this.animTimer = setTimeout(() => {
       this.root.classList.remove('sb-anim');
       document.documentElement.classList.remove('sidebar-animating');
       window.dispatchEvent(new Event('cview:sidebar-settled'));
     }, 520);
-    if (this.playingInContent()) this.slideOver();
+    if (heavy) this.slideOver();
     else this.applyCollapsed();
   }
 
@@ -127,38 +131,70 @@ export class Sidebar {
   }
 
   /**
-   * 영상 시청 중 접기·펼치기 — 사이드바가 본문 위로 미끄러진다.
-   * 보통은 사이드바 너비가 바뀌는 매 프레임 본문(플레이어 iframe·영상)을 다시 배치해 끊겼다.
-   * 여기서는 너비와 오른쪽 음수 여백을 같은 곡선으로 함께 움직여 레이아웃상 차지하는 폭(너비 + 여백)을 고정한다.
-   * 그래서 본문 크기는 접을 땐 시작에 한 번(왼쪽은 아직 사이드바 밑), 펼칠 땐 끝에 한 번만 바뀐다.
+   * 영상 시청 중 접기·펼치기 — 합성(GPU)만 쓰는 전환.
+   * 영상(특히 멀티라이브 여러 패인)이 재생 중이면 메인 스레드가 바빠, 너비·패딩처럼 레이아웃을 바꾸는 전환은
+   * 프레임마다 밀려 뚝뚝 끊긴다. 그래서 여기서는 실제 사이드바를 곧바로 최종 배치로 바꾸고,
+   * 움직임은 transform·opacity 만으로 만든다(WebKit 은 이것을 메인 스레드 없이 돌린다).
+   * - 접기: 펼친 모습의 복제본이 왼쪽으로 밀려나며 사라지고, 그 밑에서 아이콘 레일이 나타난다.
+   *   본문은 시작에 한 번만 넓어진다(왼쪽은 아직 복제본 밑).
+   * - 펼치기: 펼친 사이드바가 본문 위로 왼쪽에서 밀려 들어오고 레일 복제본은 사라진다.
+   *   그동안 오른쪽 음수 여백으로 차지하는 폭을 유지했다가, 끝에 한 번만 본문이 좁아진다.
    */
   slideOver() {
     const el = this.root;
     const app = el.parentElement;
-    const running = this.slide;
-    const w0 = el.getBoundingClientRect().width;
-    const m0 = running ? parseFloat(getComputedStyle(el).marginRight) || 0 : 0;
-    if (running) running.cancel();
-    // 목표 너비 — 전환 없이 한 번 재고 시작 상태로 되돌린다.
-    el.style.transitionProperty = 'padding'; // 패딩은 그대로 부드럽게, 너비만 전환 없이
+    const r0 = el.getBoundingClientRect();
+    const ghost = el.cloneNode(true);
+    ghost.removeAttribute('id');
+    for (const n of ghost.querySelectorAll('[id]')) n.removeAttribute('id');
+    ghost.classList.remove('sb-anim');
+    ghost.classList.add('sb-instant', 'sb-ghost');
+    ghost.setAttribute('aria-hidden', 'true');
+    ghost.inert = true;
+    Object.assign(ghost.style, { left: `${r0.left}px`, top: `${r0.top}px`, width: `${r0.width}px`, height: `${r0.height}px` });
+    const scrollTop = el.scrollTop;
+
+    el.classList.add('sb-instant');
     this.applyCollapsed();
     const w1 = el.getBoundingClientRect().width;
-    el.style.transitionProperty = '';
-    const collapsing = w1 < w0;
-    // 접기: 차지하는 폭을 곧바로 w1 로(본문은 한 번 넓어지고 왼쪽은 사이드바 밑) → 여백 0 으로 풀며 드러낸다.
-    // 펼치기: 지금 차지하는 폭을 그대로 두고 사이드바만 본문 위로 넓어진 뒤, 끝에 여백을 0 으로(본문은 그때 한 번 좁아진다).
-    const from = { width: `${w0}px`, marginRight: `${collapsing ? w1 - w0 : m0}px` };
-    const to = { width: `${w1}px`, marginRight: `${collapsing ? 0 : w0 + m0 - w1}px` };
-    const css = getComputedStyle(el);
-    const dur = (parseFloat(css.getPropertyValue('--sb-dur')) || 0.34) * 1000;
+    const collapsing = w1 < r0.width;
+    const shift = Math.abs(r0.width - w1);
     app.classList.add('sb-overlay');
-    const anim = el.animate([from, to], { duration: dur, easing: css.getPropertyValue('--sb-ease').trim() || 'ease-out' });
-    this.slide = anim;
-    anim.finished.then(() => {
-      if (this.slide !== anim) return;
-      this.slide = null;
-      app.classList.remove('sb-overlay');
+    if (!collapsing) el.style.marginRight = `${-shift}px`; // 펼치는 동안 본문 폭 유지
+    document.body.append(ghost);
+    ghost.scrollTop = scrollTop;
+
+    const css = getComputedStyle(el);
+    const timing = {
+      duration: (parseFloat(css.getPropertyValue('--sb-dur')) || 0.34) * 1000,
+      easing: css.getPropertyValue('--sb-ease').trim() || 'ease-out',
+    };
+    const anims = collapsing
+      ? [
+        // 두 겹이 겹쳐 보이는 시간을 줄이려고 복제본은 70% 지점까지 사라지고, 레일은 30% 부터 나타난다.
+        ghost.animate([{ transform: 'translateX(0)', opacity: 1 }, { opacity: 0, offset: 0.7 }, { transform: `translateX(${-shift}px)`, opacity: 0 }], timing),
+        el.animate([{ opacity: 0 }, { opacity: 0, offset: 0.3 }, { opacity: 1 }], { ...timing, easing: 'ease-out' }),
+      ]
+      : [
+        el.animate([{ transform: `translateX(${-shift}px)` }, { transform: 'translateX(0)' }], timing),
+        ghost.animate([{ opacity: 1 }, { opacity: 0 }], { duration: timing.duration * 0.35, easing: 'ease-out', fill: 'forwards' }),
+      ];
+    this.slide = { ghost, anims };
+    Promise.all(anims.map((a) => a.finished)).then(() => {
+      if (this.slide && this.slide.ghost === ghost) this.finishSlide();
     }, () => {});
+  }
+
+  /** 진행 중인 영상용 전환을 끝 상태로 정리한다(연타·완료 공용). */
+  finishSlide() {
+    const slide = this.slide;
+    if (!slide) return;
+    this.slide = null;
+    for (const a of slide.anims) a.cancel();
+    slide.ghost.remove();
+    this.root.style.marginRight = '';
+    this.root.classList.remove('sb-instant');
+    this.root.parentElement.classList.remove('sb-overlay');
   }
 
   renderNav() {

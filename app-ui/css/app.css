@@ -396,10 +396,13 @@ a { color: var(--primary); }
 .sidebar.sb-anim :is(.nav-label, .side-live-name, .side-live-cat, .account-name) { text-overflow: clip; }
 .sidebar.sb-anim .side-quick { overflow: hidden; }
 @keyframes sb-reveal { 0%, 35% { opacity: 0; } 100% { opacity: 1; } }
-/* 영상 시청 중 전환(sidebar.js slideOver) — 너비는 WAAPI 가 맡고, 사이드바가 본문 위로 지나가도록 쌓임 순서를 둔다.
-   본문은 이 동안만 자기 쌓임 맥락에 가둬(z-index 40 끌기 띠 등) 사이드바 밑에 있게 한다. */
-.app.sb-overlay .sidebar { position: relative; z-index: 1; transition-property: padding; }
+/* 영상 시청 중 전환(sidebar.js slideOver) — 레이아웃 전환 없이 transform·opacity 만(합성) 쓴다.
+   실제 사이드바는 곧바로 최종 배치(.sb-instant), 움직임은 사이드바와 그 복제본(.sb-ghost)의 이동·투명도로.
+   본문은 이 동안만 자기 쌓임 맥락에 가둬(z-index 40 끌기 띠 등) 사이드바·복제본 밑에 있게 한다. */
+.sidebar.sb-instant, .sidebar.sb-instant *, .sidebar.sb-instant *::before, .sidebar.sb-instant *::after { transition: none !important; }
+.app.sb-overlay .sidebar { position: relative; z-index: 1; will-change: transform, opacity; }
 .app.sb-overlay .content { z-index: 0; }
+.sidebar.sb-ghost { position: fixed; z-index: 2; margin: 0; pointer-events: none; will-change: transform, opacity; }
 
 /* 접힌 상태 툴팁 — sidebar.js 가 위치를 잡는다 */
 .side-tip {
