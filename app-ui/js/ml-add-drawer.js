@@ -209,8 +209,10 @@ export class MultiLiveAddDrawer {
     this.el.classList.add('open');
     this.el.setAttribute('aria-hidden', 'false');
     this.markToggles(true);
-    // 닫을 때 초점을 돌려줄 곳 — 보통 머리줄 채널 추가 버튼
-    if (!this.el.contains(document.activeElement)) this.returnFocus = document.activeElement;
+    // 닫을 때 초점을 돌려줄 곳 — 키보드로 연 여는 버튼. 마우스로 누르면 WebKit 은 버튼에 초점을 주지 않아
+    // activeElement 가 엉뚱한 곳(패인·body)이므로 그때는 close() 가 보이는 여는 버튼을 고른다.
+    const prev = document.activeElement;
+    this.returnFocus = prev?.closest?.(this.toggleSelector) || null;
     this.el.inert = false;
     this.filter.value = '';
     this.sync();
@@ -228,7 +230,8 @@ export class MultiLiveAddDrawer {
     this.markToggles(false);
     // 안에 초점이 있었으면(inert 가 body 로 떨어뜨린다) 연 버튼으로 돌려준다
     if (hadFocus) {
-      const back = this.returnFocus?.isConnected && this.returnFocus.offsetParent ? this.returnFocus : document.querySelector(this.toggleSelector);
+      const shown = (b) => b?.isConnected && b.offsetParent && !b.disabled;
+      const back = shown(this.returnFocus) ? this.returnFocus : [...document.querySelectorAll(this.toggleSelector)].find(shown);
       back?.focus({ preventScroll: true });
     }
     this.returnFocus = null;
