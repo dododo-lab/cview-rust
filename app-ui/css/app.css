@@ -2029,6 +2029,16 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
   background: rgba(0, 0, 0, 0.3); color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
 .stage-top .rail-more:hover { border-color: #fff; background: rgba(255, 255, 255, 0.12); }
 
+/* ══ 사이드바 브랜드 — 신호등과 띄우고, 로고는 크게·글자는 작게(앱 아이덴티티는 로고가 맡는다) ══ */
+.titlebar-strip { height: 46px; }                 /* 신호등(y 22, 높이 약 14) 아래로 10px 남짓 숨 쉴 자리 */
+:root.is-fullscreen .titlebar-strip { height: 14px; }
+.brand-row { height: 44px; margin-bottom: 12px; padding-left: 4px; }
+.brand { gap: 9px; font-size: 15px; font-weight: 700; letter-spacing: -0.2px; }
+.brand-mark { width: 36px; height: 36px; border-radius: 10px; }
+.brand-name { color: var(--text-primary); opacity: .92; }
+.sidebar.collapsed .brand-row { margin-bottom: 8px; }
+.sidebar.collapsed .brand-mark { width: 38px; height: 38px; }
+
 /* ══ Windows — 시스템 제목 막대가 있으므로 신호등 자리·끌기 띠를 걷는다 ══ */
 :root[data-platform="windows"] .titlebar-strip { height: 0; margin-top: 0; }
 :root[data-platform="windows"] .content-drag { display: none; }
