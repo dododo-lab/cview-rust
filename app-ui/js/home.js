@@ -3,7 +3,7 @@
 // 데이터(팔로잉·인기 라이브)와 로컬 최근 시청 기록만으로 그린다.
 import { api } from './api.js';
 import { esc, safeUrl, icons, imageSrc } from './dom.js';
-import { liveCard, emptyState, liveGrid, recentChannels, uptimeText, compactCount } from './cards.js';
+import { liveCard, emptyState, errorState, friendlyError, liveGrid, recentChannels, uptimeText, compactCount } from './cards.js';
 import { clipCard } from './channel.js';
 import { continueCard } from './media.js';
 import { motionReduced } from './motion.js';
@@ -251,7 +251,8 @@ export class HomePage {
     let html = '<div class="home">';
     if (!loggedIn) html += loginBanner();
     else if (followingRes.status === 'rejected') {
-      html += `<div class="home-notice">팔로잉 라이브를 불러오지 못했습니다 · ${esc(followingRes.reason && followingRes.reason.message)}</div>`;
+      // 원문 대신 쉬운 안내 + 다시 시도(app.js 가 홈을 다시 불러온다) — 다른 화면의 실패와 같게
+      html += `<div class="home-notice" role="alert">팔로잉 라이브를 불러오지 못했습니다 · ${esc(friendlyError(followingRes.reason))} <button class="link-btn" data-retry>다시 시도</button></div>`;
     } else if (following.length) {
       html += followingStrip(following);
     }
@@ -286,7 +287,7 @@ export class HomePage {
           <div class="popular-grid">${discover.length ? popularGrid(discover, this.category) : emptyState('추천할 라이브 채널이 없습니다')}</div>
         </section>`;
     } else {
-      html += emptyState('인기 라이브를 불러오지 못했습니다', popularRes.reason && popularRes.reason.message);
+      html += errorState('인기 라이브를 불러오지 못했습니다', popularRes.reason);
     }
     html += '<section class="home-section" data-rail="clips" hidden></section>';
     html += '</div>';

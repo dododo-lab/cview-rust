@@ -179,8 +179,9 @@ export class ChannelPage {
       box.querySelector('.load-more')?.remove();
       if (page.hasMore) box.insertAdjacentHTML('beforeend', '<button class="btn load-more" data-ch="more">더 보기</button>');
     } catch (e) {
+      if (seq !== this.seq || this.tab !== kind) return; // 그사이 다른 탭 — 그 탭을 오류로 덮지 않는다
       if (!append) box.innerHTML = errorState('불러오지 못했습니다', e);
-      else toast(e.message);
+      else { this.pages[kind] -= 1; toast(e.message); } // 다음 "더 보기"가 같은 쪽을 다시 받게
     }
   }
 
@@ -223,8 +224,12 @@ export class ChannelPage {
       case 'memo': this.editMemo(); break;
       case 'notify': this.editNotify(action); break;
       case 'more':
+        // 받는 동안 두 번 눌러 쪽이 건너뛰거나 순서가 섞이지 않게
+        if (action.disabled) break;
+        action.disabled = true;
         this.pages[this.tab] += 1;
-        this.renderTab(true);
+        await this.renderTab(true);
+        if (action.isConnected) action.disabled = false;
         break;
       default: break;
     }

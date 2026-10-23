@@ -6,7 +6,7 @@
 import { api, listen, Events } from './api.js';
 import { ACTIONS, FIXED, currentBindings, bindingLabel, bindingFromEvent, saveBinding, conflictOf } from './shortcuts.js';
 import { esc, toast } from './dom.js';
-import { emptyState, errorState } from './cards.js';
+import { emptyState, errorState, loadingState } from './cards.js';
 import { THEMES, THEME_LABELS, currentTheme, setTheme } from './theme.js';
 import { streamAlertsEnabled, setStreamAlertsEnabled, ALERT_HOME } from './donations.js';
 import { chatPrefs, updateChatPrefs, blockedLabel, loadChatPrefs } from './chat-prefs.js';
@@ -199,7 +199,7 @@ export class SettingsPage {
     this.showAdvanced = false;
     this.body.addEventListener('change', (e) => this.onChange(e.target));
     this.body.addEventListener('input', (e) => {
-      if (e.target.matches('.settings-search')) { this.query = e.target.value.trim().toLowerCase(); this.applySearch(); }
+      if (e.target.matches('.settings-search')) this.onSearch(e.target);
       if (e.target.type === 'range') {
         const out = e.target.parentElement.querySelector('output');
         if (out) out.textContent = e.target.dataset.pct ? `${Math.round(Number(e.target.value) * 100)}%` : e.target.value;
@@ -216,8 +216,9 @@ export class SettingsPage {
   }
 
   async show() {
-    await loadChatPrefs();
+    if (!this.settings) this.body.innerHTML = loadingState();
     try {
+      await loadChatPrefs();
       this.settings = await api.settingsGet();
     } catch (e) {
       this.body.innerHTML = errorState('설정을 불러오지 못했습니다', e);
@@ -366,6 +367,22 @@ export class SettingsPage {
     </section>`;
   }
 
+  /**
+   * 검색어 — 비어 있다가 생기거나 그 반대면 그룹 구성이 바뀐다(검색 중엔 모든 탭의 설정을 그린다).
+   * applySearch 만 부르면 지금 탭 안에서만 찾았다. 다시 그린 뒤 입력란 초점·커서를 되돌린다.
+   */
+  onSearch(input) {
+    const was = Boolean(this.query);
+    this.query = input.value.trim().toLowerCase();
+    if (was === Boolean(this.query)) { this.applySearch(); return; }
+    const caret = input.selectionStart;
+    this.render();
+    const again = this.body.querySelector('.settings-search');
+    again.value = input.value;
+    again.focus();
+    again.setSelectionRange(caret, caret);
+  }
+
   applySearch() {
     const q = this.query;
     for (const row of this.body.querySelectorAll('.setting')) {
@@ -434,10 +451,14 @@ export class SettingsPage {
 
   /** 다음 키 조합을 받아 바인딩으로 저장한다. Esc 취소. */
   captureBinding(btn) {
+    // 받는 중에 다시 누르면 취소 — 한 번에 하나만 받는다.
+    if (this.cancelCapture) { this.cancelCapture(); return; }
     const action = btn.dataset.bind;
     btn.textContent = '키를 누르세요…';
     btn.classList.add('primary');
     const onKey = async (e) => {
+      // 화면을 떠났으면 그만 받는다 — 다음 키(검색란 입력 등)를 삼켜 바인딩으로 저장하던 문제.
+      if (this.root.hidden || !btn.isConnected) { done(); return; }
       e.preventDefault();
       e.stopPropagation();
       if (e.key === 'Escape') { done(); this.render(); return; }
@@ -449,8 +470,16 @@ export class SettingsPage {
       try { await saveBinding(action, b); } catch (er) { toast(er.message); }
       this.render();
     };
-    const done = () => document.removeEventListener('keydown', onKey, true);
+    // 다른 곳을 누르면 취소(이 버튼을 다시 누르는 것은 위의 토글이 처리한다).
+    const onDown = (e) => { if (!btn.contains(e.target)) { done(); this.render(); } };
+    const done = () => {
+      document.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('pointerdown', onDown, true);
+      this.cancelCapture = null;
+    };
+    this.cancelCapture = () => { done(); this.render(); };
     document.addEventListener('keydown', onKey, true);
+    document.addEventListener('pointerdown', onDown, true);
   }
 
   async refreshOAuth() {

@@ -64,7 +64,7 @@ export function friendlyError(err) {
  */
 export function errorState(title, err, extra = '') {
   const raw = String((err && err.message) || err || '');
-  return `<div class="empty error"><div class="empty-logo" aria-hidden="true"></div><strong>${esc(title)}</strong>`
+  return `<div class="empty error" role="alert"><div class="empty-logo" aria-hidden="true"></div><strong>${esc(title)}</strong>`
     + `<span>${esc(friendlyError(err))}</span>`
     + `<div class="error-actions"><button class="btn" data-retry>다시 시도</button>${extra}</div>`
     + (raw ? `<details class="error-detail"><summary>자세히</summary><code>${esc(raw)}</code></details>` : '')
@@ -73,12 +73,12 @@ export function errorState(title, err, extra = '') {
 
 /** 로딩 — 로고 로더(motion.css) + 문구. */
 export function loadingState(caption = '불러오는 중…') {
-  return `<div class="empty loading"><div class="spinner" aria-hidden="true"></div><span class="loading-caption">${esc(caption)}</span></div>`;
+  return `<div class="empty loading" role="status"><div class="spinner" aria-hidden="true"></div><span class="loading-caption">${esc(caption)}</span></div>`;
 }
 
 /** 카드 격자 스켈레톤 — 원본 SkeletonViews (SYS-14). */
 export function skeletonGrid(n = 8) {
-  return `<div class="loading-row"><div class="spinner" aria-hidden="true"></div><span>불러오는 중…</span></div><div class="grid">${Array.from({ length: n }, () => '<div class="sk-card"><div class="sk thumb-sk"></div><div class="sk line"></div><div class="sk line short"></div></div>').join('')}</div>`;
+  return `<div class="loading-row" role="status"><div class="spinner" aria-hidden="true"></div><span>불러오는 중…</span></div><div class="grid" aria-hidden="true">${Array.from({ length: n }, () => '<div class="sk-card"><div class="sk thumb-sk"></div><div class="sk line"></div><div class="sk line short"></div></div>').join('')}</div>`;
 }
 
 /** 갱신 시각 캡션 — 원본 FreshnessCaption. */

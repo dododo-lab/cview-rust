@@ -317,14 +317,14 @@ export class SearchPage {
 
   async run(keyword) {
     const q = keyword.trim();
+    const seq = ++this.seq; // 비운 검색도 순번을 올린다 — 늦게 온 이전 결과가 최근 검색 화면을 덮지 않게
     if (!q) { this.renderIdle(); return; }
     saveRecentSearch(q);
-    const seq = ++this.seq;
     this.body.innerHTML = loadingState();
     const [main, vods] = await Promise.allSettled([api.search(q), api.searchVideos(q, 0, 24)]);
     if (seq !== this.seq) return;
     if (main.status === 'rejected' && vods.status === 'rejected') {
-      this.body.innerHTML = emptyState('검색하지 못했습니다', main.reason.message);
+      this.body.innerHTML = errorState('검색하지 못했습니다', main.reason);
       return;
     }
     this.query = q;
@@ -350,6 +350,6 @@ export class SearchPage {
       sec('channels', '채널', channels, (c) => `<div class="channel-list">${c.map(channelRow).join('')}</div>`, 6),
       sec('videos', '다시보기', videos, (v) => `<div class="grid">${v.map(vodCard).join('')}</div>`, 8),
     ].join('');
-    this.body.innerHTML = tabBar + (html || emptyState('검색 결과가 없습니다', `"${esc(this.query)}"`));
+    this.body.innerHTML = tabBar + (html || emptyState('검색 결과가 없습니다', `"${this.query}"`));
   }
 }

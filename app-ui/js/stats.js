@@ -205,14 +205,17 @@ export class StatsPage {
     if (ch) { this.onOpenChannel(ch.dataset.openChannelId); return; }
     const b = e.target.closest('[data-stats]');
     if (!b) return;
+    // 기다리는 동안 다른 탭으로 갔으면 결과는 알림으로만 — 데이터 화면을 그 탭 위에 그리지 않는다
+    const seq = this.seq;
+    const paint = (h) => { if (seq === this.seq && this.tab === 'data') this.renderData(h); };
     try {
       if (b.dataset.stats === 'cleanup') {
         b.disabled = true;
-        this.renderData(await api.dataCleanup(b.dataset.kind));
+        paint(await api.dataCleanup(b.dataset.kind));
         toast('정리했습니다', 1500);
       } else if (b.dataset.stats === 'backup') {
         b.disabled = true;
-        this.renderData(await api.dataBackupNow());
+        paint(await api.dataBackupNow());
         toast('백업했습니다', 1500);
       } else if (b.dataset.stats === 'reveal') {
         await api.revealPath(b.dataset.path);
