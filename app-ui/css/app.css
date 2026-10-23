@@ -2096,7 +2096,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 :root[data-window].is-fullscreen .page, :root[data-window].is-fullscreen .viewer { top: 0; }
 /* 테두리 없는 검색 칸(감싸는 필드가 테두리·초점을 그린다) — 기본 입력 모양을 걷는다 */
 .search-field input, .palette-input input { padding: 0; border-radius: 0; }
-.search-field input:focus, .palette-input input:focus { box-shadow: none; }
+/* 전역 input:focus-visible 외곽선(DSN-06)이 위 outline: none 보다 뒤에 와서 안쪽 네모 테두리가 겹쳐 그려졌다 —
+   초점 표시는 감싸는 필드의 링 하나로 충분하므로 안쪽 입력의 외곽선을 걷는다 */
+.search-field input:focus, .palette-input input:focus,
+.search-field input:focus-visible, .palette-input input:focus-visible { outline: none; box-shadow: none; }
 .search-field:focus-within { border-color: var(--primary); box-shadow: var(--focus-ring); }
 
 /* ══ 닉네임 색 — 원본 ChatNicknamePalette(역할색과 겹치지 않는 9색, 다크·라이트 각 4.5:1 이상) ══ */
