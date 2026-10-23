@@ -27,6 +27,30 @@ export function keyBelongsToTarget(e) {
   return Boolean(t.closest('.sheet-scrim, .palette-scrim, .player-panel, .emoji-picker, .ctx-menu'));
 }
 
+/**
+ * hidden 으로 여닫는 떠 있는 것(팔레트·메뉴·플레이어 패널)의 나가는 모션.
+ * 상태는 바로 숨기고(열림 판단·토글이 hidden 을 그대로 본다), 같은 자리에 겉모습만 복제해 흐려지며 사라지게 한다.
+ * 복제는 원본 바로 뒤에 둔다 — 그사이 다시 열면 CSS(`:not([hidden]) + .exit-ghost`)가 복제를 감춘다.
+ */
+export function hideWithExit(el, ms = 160) {
+  if (!el || el.hidden) return;
+  el.hidden = true;
+  if (motionReduced() || !el.parentNode || !el.getClientRects) return;
+  const next = el.nextElementSibling;
+  if (next && next.classList.contains('exit-ghost')) next.remove();
+  const ghost = el.cloneNode(true);
+  ghost.hidden = false;
+  ghost.removeAttribute('id');
+  for (const n of ghost.querySelectorAll('[id]')) n.removeAttribute('id');
+  ghost.setAttribute('aria-hidden', 'true');
+  ghost.inert = true;
+  ghost.classList.add('exit-ghost');
+  el.after(ghost);
+  const done = () => ghost.remove();
+  ghost.addEventListener('animationend', (e) => { if (e.target === ghost) done(); }, { once: true });
+  setTimeout(done, ms + 80);
+}
+
 /** HTML 이스케이프. */
 export function esc(value) {
   return String(value ?? '')

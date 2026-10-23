@@ -211,6 +211,15 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 .ml-pane-menu:not([hidden]) { animation: mo-pop var(--dur-2) var(--ease-out) both; transform-origin: top right; }
 .ml-gear-menu:not([hidden]) { transform-origin: bottom right; }
 .player-panel:not([hidden]) { animation: mo-pop-up var(--dur-3) var(--ease-emph) both; transform-origin: bottom right; }
+/* 닫힐 때 — dom.js hideWithExit 가 겉모습만 복제해 둔다: 붙은 쪽으로 살짝 줄며 흐려진다(들어올 때보다 짧게).
+   복제 안의 들어오는 애니메이션은 끄고, 그사이 원본을 다시 열면 복제는 감춘다. */
+.exit-ghost { pointer-events: none !important; }
+.exit-ghost, .exit-ghost * { animation: none !important; }
+.exit-ghost.exit-ghost { animation: mo-menu-out var(--dur-1) var(--ease-in) both !important; }
+.palette-scrim.exit-ghost { animation-name: mo-fade-out !important; animation-duration: var(--dur-2) !important; }
+.palette-scrim.exit-ghost > .palette { animation: mo-menu-out var(--dur-2) var(--ease-in) both !important; }
+:not([hidden]) + .exit-ghost { display: none !important; }
+@keyframes mo-menu-out { to { opacity: 0; scale: .97; } }
 /* 메뉴 항목 — 체크·활성 표시가 톡 */
 .quality-item.active::after, .design-item.on .design-check { animation: mo-pop .28s var(--ease-spring) both; }
 

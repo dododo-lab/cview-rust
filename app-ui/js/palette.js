@@ -1,7 +1,7 @@
 // 커맨드 팔레트(⌘K) — 원본 CommandPaletteView / CViewActionRegistry: 화면 이동·동작·채널을 한 곳에서
 // 찾아 실행한다. 일치가 없으면 "검색" 으로 넘긴다 (NAV-12).
 import { api } from './api.js';
-import { esc, safeUrl, imageSrc } from './dom.js';
+import { esc, safeUrl, imageSrc, hideWithExit } from './dom.js';
 
 /** 간단한 일치 점수(높을수록 앞) — 앞부분 일치 > 단어 시작 > 포함. 순수 함수. */
 export function matchScore(text, query) {
@@ -73,7 +73,7 @@ export class CommandPalette {
   }
 
   close() {
-    this.el.hidden = true;
+    hideWithExit(this.el);
   }
 
   render() {

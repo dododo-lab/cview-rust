@@ -5,7 +5,7 @@
 // - 들리는 패인은 Rust 가 setVolume(0/1) 로 정한다. 패인 볼륨은 그 위에 곱하는 배율이라
 //   여러 소리 모드와 함께 써도 서로 덮어쓰지 않는다.
 // - 마우스를 움직이면 나타나고 재생 중 2.5초 가만히 있으면 커서와 함께 숨는다. 일시정지·메뉴 열림이면 계속 보인다.
-import { esc, toast } from './dom.js';
+import { esc, toast, hideWithExit } from './dom.js';
 import { qualityOptions, liveBadgeState, togglePipFor, installVolumeReveal } from './viewer-controls.js';
 import { ADJUST_RANGES, applyPicture, pictureFor, resetAdjust, setPicture } from './picture.js';
 
@@ -131,8 +131,8 @@ export class PaneControls {
   }
 
   closeMenus() {
-    this.gearMenu.hidden = true;
-    this.moreMenu.hidden = true;
+    hideWithExit(this.gearMenu);
+    hideWithExit(this.moreMenu);
     for (const b of this.el.querySelectorAll('[data-mp="gear"], [data-mp="more"]')) b.setAttribute('aria-expanded', 'false');
   }
 

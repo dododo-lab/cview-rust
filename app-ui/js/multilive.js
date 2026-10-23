@@ -7,7 +7,7 @@
 // - 패인을 누르면 선택 — 오디오·채팅·고화질이 그 패인을 따라간다.
 import { api, listen, listenHere, Events } from './api.js';
 import { setPicture, setSharpenDefault } from './picture.js';
-import { esc, safeUrl, toast, imageSrc, streamEndedArt, dismiss } from './dom.js';
+import { esc, safeUrl, toast, imageSrc, streamEndedArt, dismiss, hideWithExit } from './dom.js';
 import { PlayerBridge } from './player.js';
 import { ChatPanel } from './chat.js';
 import { StreamAlerts } from './donations.js';
@@ -238,7 +238,7 @@ export class MultiLivePage {
     // "⋯" 더 보기 메뉴 — 레이아웃·포커스 배치·여러 소리(설정은 메뉴를 연 채로 바꾼다)와 프리셋·모두 다시 연결·모두 닫기
     const moreBtn = this.root.querySelector('[data-ml-more]');
     const moreMenu = this.root.querySelector('.ml-more-menu');
-    const closeMore = () => { moreMenu.hidden = true; moreBtn.setAttribute('aria-expanded', 'false'); };
+    const closeMore = () => { hideWithExit(moreMenu); moreBtn.setAttribute('aria-expanded', 'false'); };
     moreBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       moreMenu.hidden = !moreMenu.hidden;

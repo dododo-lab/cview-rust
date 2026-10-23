@@ -427,8 +427,8 @@ const SHORTCUTS = [
 ];
 
 // Esc 는 맨 위의 것 하나만 닫는다 — 메뉴·시트·입력란이 먼저 받고, 아무것도 없을 때만 시청 화면을 닫는다.
-const ESC_POPUPS = '.quality-menu:not([hidden]), .player-panel:not([hidden]), .emoji-picker:not([hidden]), .chat-tray:not([hidden]), .chat-autocomplete:not([hidden])';
-const ESC_LAYERS = '.sheet-scrim, .palette-scrim:not([hidden])';
+const ESC_POPUPS = ':is(.quality-menu, .player-panel, .emoji-picker, .chat-tray, .chat-autocomplete):not([hidden], .exit-ghost)';
+const ESC_LAYERS = '.sheet-scrim:not(.leaving), .palette-scrim:not([hidden], .exit-ghost)';
 function escapeTaken(e) {
   if (e.defaultPrevented) return true;
   const popups = document.querySelectorAll(ESC_POPUPS);

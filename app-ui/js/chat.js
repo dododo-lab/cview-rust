@@ -4,7 +4,7 @@
 // CHT-11 자동 스크롤·"새 메시지" 버튼·읽음 구분선(⌘J), CHT-12 지우기(⇧⌘K)·재연결, CHT-14 표시 옵션,
 // CHT-16 후원 필터, CHT-20 입력 상태 배너.
 import { api, listen, Events } from './api.js';
-import { esc, safeUrl, toast, imageSrc, dismiss } from './dom.js';
+import { esc, safeUrl, toast, imageSrc, dismiss, hideWithExit } from './dom.js';
 import { DonationRanking, eventCardHtml, eventClasses, EVENT_ICONS } from './donations.js';
 import { installChatExtras } from './chat-extras.js';
 import { nickColorClass } from './nick-color.js';
@@ -234,7 +234,7 @@ export class ChatPanel {
     this.picker.addEventListener('click', (e) => this.onPickerClick(e));
     this.picker.addEventListener('input', () => this.renderPicker());
     const onDocClick = (e) => {
-      if (!this.picker.contains(e.target) && e.target !== this.emojiButton) this.picker.hidden = true;
+      if (!this.picker.contains(e.target) && e.target !== this.emojiButton) hideWithExit(this.picker);
       if (!this.tray.contains(e.target) && !e.target.closest('.mention-btn')) this.tray.hidden = true;
     };
     document.addEventListener('click', onDocClick);
@@ -715,7 +715,7 @@ export class ChatPanel {
   }
 
   togglePicker() {
-    if (!this.picker.hidden) { this.picker.hidden = true; return; }
+    if (!this.picker.hidden) { hideWithExit(this.picker); return; }
     this.pickerPack = this.pickerPack || 0;
     this.picker.innerHTML = `
       <input type="search" class="emoji-search" placeholder="이모티콘 검색" autocomplete="off">

@@ -3,7 +3,7 @@
 // PLY-01 화질 선택, PLY-02 재생/일시정지·라이브 복귀·지연 배지, PLY-09 스크린샷, PLY-11 전체 화면 2종,
 // PLY-13 오류 오버레이 재시도, PLY-15 휠 볼륨·% 표시, PLY-17 북마크, 시청 화면 단축키.
 import { api } from './api.js';
-import { esc, toast, keyBelongsToTarget } from './dom.js';
+import { esc, toast, keyBelongsToTarget, hideWithExit } from './dom.js';
 import { matchPlainAction } from './shortcuts.js';
 import { kbd } from './platform.js';
 
@@ -130,7 +130,7 @@ export class ViewerControls {
       const item = e.target.closest('[data-level]');
       if (item) this.chooseLevel(Number(item.dataset.level));
     });
-    document.addEventListener('click', () => { this.qualityMenu.hidden = true; });
+    document.addEventListener('click', () => hideWithExit(this.qualityMenu));
     root.querySelector('#ctl-shot').addEventListener('click', () => this.screenshot());
     root.querySelector('#ctl-bookmark').addEventListener('click', () => this.bookmark());
     root.querySelector('#ctl-fullscreen-chat').addEventListener('click', () => this.fullscreen(true));
@@ -289,7 +289,7 @@ export class ViewerControls {
 
   toggleQualityMenu() {
     if (!this.qualityMenu.hidden) {
-      this.qualityMenu.hidden = true;
+      hideWithExit(this.qualityMenu);
       return;
     }
     this.viewer.player.call('getLevels');
@@ -306,7 +306,7 @@ export class ViewerControls {
   }
 
   chooseLevel(index) {
-    this.qualityMenu.hidden = true;
+    hideWithExit(this.qualityMenu);
     const run = (s) => this.viewer.player.run(s);
     if (index < 0) {
       // 자동 — 상한을 -1 로 지우지 않고 앱 화질 상한·백그라운드 절약 상한을 다시 적용한다.

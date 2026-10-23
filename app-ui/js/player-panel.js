@@ -3,7 +3,7 @@
 // PLY-07 비디오 보정(밝기·대비·채도·색조·감마)·선명한 화면·자동 보정·업스케일, PLY-08 화면 비율 강제,
 // PLY-10 녹화 시작·중지(MediaRecorder 조각 → Rust 파일). 값은 플레이어 설정에 저장하고 새 재생마다 다시 건다.
 import { api } from './api.js';
-import { esc, toast } from './dom.js';
+import { esc, toast, hideWithExit } from './dom.js';
 import { kbd } from './platform.js';
 import { applyPicture, pictureFor, setPicture } from './picture.js';
 
@@ -52,7 +52,7 @@ export class PlayerPanel {
     this.el.addEventListener('input', (e) => this.onInput(e));
     this.el.addEventListener('change', (e) => this.onChange(e));
     document.addEventListener('mousedown', (e) => {
-      if (!this.el.hidden && !this.el.contains(e.target) && !e.target.closest('#ctl-panel')) this.el.hidden = true;
+      if (!this.el.hidden && !this.el.contains(e.target) && !e.target.closest('#ctl-panel')) hideWithExit(this.el);
     });
     document.addEventListener('keydown', (e) => {
       if (e.metaKey && e.altKey && e.key.toLowerCase() === 'r' && viewer.isPlaying) { e.preventDefault(); this.toggleRecording(); }
@@ -88,7 +88,7 @@ export class PlayerPanel {
   }
 
   toggle() {
-    if (!this.el.hidden) { this.el.hidden = true; return; }
+    if (!this.el.hidden) { hideWithExit(this.el); return; }
     this.loadSettings().then(() => { this.render(); this.el.hidden = false; });
   }
 
