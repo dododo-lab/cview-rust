@@ -346,6 +346,19 @@ a { color: var(--primary); }
 .account-action { width: 30px; height: 30px; flex: none; }
 .account-action svg { width: 17px; height: 17px; }
 .account-login { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+/* 로그인한 계정 — 아바타·이름이 계정 메뉴(말풍선) 버튼 */
+.account-trigger {
+  display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; margin: -4px; padding: 4px;
+  border: 0; border-radius: 10px; background: none; color: inherit; text-align: left; cursor: pointer;
+  transition: background var(--dur-2, 0.16s) var(--ease-out);
+}
+.account-trigger:hover, .account.menu-open .account-trigger { background: var(--surface-elevated); }
+.account-trigger:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.account-trigger .account-avatar { display: block; }
+.account-trigger .account-avatar .avatar { display: block; }
+.account-chevron { flex: none; display: grid; place-items: center; width: 18px; height: 18px; margin-right: 2px; color: var(--text-tertiary); rotate: -90deg; transition: rotate var(--dur-2, 0.16s) var(--ease-out); }
+.account-chevron svg { width: 14px; height: 14px; }
+.account.menu-open .account-chevron { rotate: 90deg; }
 .login-icon { display: none; }
 .login-icon svg { width: 16px; height: 16px; display: block; }
 
@@ -368,6 +381,7 @@ a { color: var(--primary); }
 .sidebar.collapsed .brand-row > .theme-toggle { top: 48px; }
 .sidebar.collapsed .brand-row > .sidebar-toggle { top: 88px; }
 .sidebar.collapsed .account-name,
+.sidebar.collapsed .account-chevron,
 .sidebar.collapsed .side-empty,
 .sidebar.collapsed :is(.side-more, .account-login, .side-quick-btn) .nav-label { display: none; }
 .sidebar.collapsed .quick-search { padding: 0 0 0 calc(var(--sb-rail) / 2 - 9px); } /* 테두리 1 + 아이콘 16 의 가운데 */
@@ -388,6 +402,8 @@ a { color: var(--primary); }
 .sidebar.collapsed .side-live-avatar { width: 36px; height: 36px; }
 .sidebar.collapsed .side-more { justify-content: center; padding: 0; }
 .sidebar.collapsed .account { flex-direction: column; padding: 8px 0; gap: 8px; background: transparent; border-color: transparent; }
+.sidebar.collapsed .account-trigger { flex: none; margin: 0; padding: 4px; border-radius: 50%; }
+.sidebar.collapsed .account.menu-open .account-trigger, .sidebar.collapsed .account-trigger:hover { background: var(--surface-elevated); }
 .sidebar.collapsed .account-login { padding: 0; width: 34px; height: 34px; justify-content: center; border-radius: 10px; }
 .sidebar.collapsed .login-icon { display: block; }
 /* 전환 중 — 배치가 바뀌는 칸은 잠깐 숨겼다 나타나고, 줄임표(…)가 깜박이지 않게 그냥 자른다 */
@@ -403,6 +419,38 @@ a { color: var(--primary); }
 .app.sb-overlay .sidebar { position: relative; z-index: 1; will-change: transform, opacity; }
 .app.sb-overlay .content { z-index: 0; }
 .sidebar.sb-ghost { position: fixed; z-index: 2; margin: 0; pointer-events: none; will-change: transform, opacity; }
+
+/* 계정 말풍선 메뉴 — sidebar.js 가 위치(left/top)와 꼬리 위치(--tail)를 잡는다.
+   data-side="top": 계정 카드 위, 꼬리는 아래 / data-side="right": 접힌 레일 오른쪽, 꼬리는 왼쪽 */
+.account-pop {
+  position: fixed; z-index: 120; width: 248px; padding: 6px; border-radius: 16px;
+  background: var(--surface-popover); border: 1px solid var(--border-subtle); box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column; --tail: 24px;
+}
+.account-pop::after {
+  content: ''; position: absolute; width: 12px; height: 12px; background: var(--surface-popover);
+  border: 1px solid var(--border-subtle); border-top: 0; border-left: 0; border-bottom-right-radius: 3px;
+}
+.account-pop[data-side="top"]::after { left: calc(var(--tail) - 6px); bottom: -7px; rotate: 45deg; }
+.account-pop[data-side="right"]::after { top: calc(var(--tail) - 6px); left: -7px; rotate: 135deg; }
+.ap-head { display: flex; align-items: center; gap: 10px; padding: 8px 8px 10px; }
+.ap-head .avatar { width: 40px; height: 40px; flex: none; }
+.ap-who { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ap-who b { font-size: var(--fs-body, 14px); font-weight: 700; }
+.ap-who small { color: var(--text-tertiary); font-size: var(--fs-footnote); }
+.ap-sep { height: 1px; background: color-mix(in srgb, var(--text-primary) 10%, transparent); margin: 4px 6px; flex: none; }
+.ap-item {
+  display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border: 0; border-radius: 9px;
+  background: transparent; color: var(--text-primary); font-size: var(--fs-caption); text-align: left; cursor: pointer;
+}
+.ap-item:hover, .ap-item:focus-visible { background: var(--surface-elevated); outline: none; }
+.ap-icon { display: grid; place-items: center; width: 18px; height: 18px; color: var(--text-secondary); flex: none; }
+.ap-icon svg { width: 17px; height: 17px; }
+.ap-item.danger, .ap-item.danger .ap-icon { color: var(--error); }
+.ap-item.danger:hover, .ap-item.danger:focus-visible { background: var(--error); color: #fff; }
+.ap-item.danger:hover .ap-icon, .ap-item.danger:focus-visible .ap-icon { color: #fff; }
+.ap-theme { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px 6px 10px; font-size: var(--fs-caption); }
+.ap-theme .segmented .seg { padding: 3px 9px; font-size: var(--fs-footnote); }
 
 /* 접힌 상태 툴팁 — sidebar.js 가 위치를 잡는다 */
 .side-tip {
