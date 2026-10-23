@@ -39,7 +39,11 @@ export class ViewerExtras {
       else if (e.target.closest('.rail-more')) window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: 'following' } }));
     });
     // 좁으면 들어가는 만큼만 보이고 나머지는 "+N" 으로 접는다.
-    new ResizeObserver(() => this.fitRail()).observe(this.rail.parentElement);
+    // 사이드바 접기·펼치기 동안엔 매 프레임 재지 않고(레일 항목을 다 펼쳐 재느라 프레임마다 레이아웃을 두 번 했다) 끝난 뒤 한 번.
+    new ResizeObserver(() => {
+      if (!document.documentElement.classList.contains('sidebar-animating')) this.fitRail();
+    }).observe(this.rail.parentElement);
+    window.addEventListener('cview:sidebar-settled', () => this.fitRail());
 
     document.addEventListener('keydown', (e) => this.onKey(e));
   }

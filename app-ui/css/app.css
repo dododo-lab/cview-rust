@@ -222,8 +222,9 @@ a { color: var(--primary); }
   overflow: hidden auto;
   scrollbar-width: none;
   /* 접기·펼치기 — 너비와 안쪽 위치(패딩·높이)를 같은 곡선으로 함께 움직인다. 아래 "접힌 사이드바" 참고. */
-  --sb-dur: 0.28s;
-  --sb-ease: var(--ease-emph, cubic-bezier(0.2, 0, 0, 1)); /* motion.css 의 강조 곡선과 같게 */
+  /* 스르륵 — 처음부터 확 튀어 나가지 않고 부드럽게 출발해 길게 감속하는 곡선(--ease-emph 는 첫 80ms 에 대부분 움직여 툭 끊겨 보였다) */
+  --sb-dur: 0.34s;
+  --sb-ease: cubic-bezier(0.32, 0.72, 0, 1);
   --sb-rail: 59px; /* 접힌 레일의 안쪽 폭(88 − 패딩 14 ×2 − 테두리 1) — 레일 가운데 = 이 값의 절반 */
   transition: width var(--sb-dur) var(--sb-ease), padding var(--sb-dur) var(--sb-ease);
 }
@@ -352,14 +353,14 @@ a { color: var(--primary); }
    부드러운 전환 규칙: 레일 배치로 바뀌는 순간에도 위치가 튀지 않게,
    - 가운데 맞춤은 justify-content 가 아니라 "레일 폭(--sb-rail)의 절반 − 아이콘 반" 왼쪽 패딩으로 한다.
      고정 px 이라 아이콘이 왼쪽 자리에서 레일 가운데로 곧게 미끄러진다(너비 비례 50% 를 쓰면 중간에 오른쪽으로 튀었다 돌아온다).
-   - 라벨은 display:none 대신 투명도로 사라지고 나타난다(접을 땐 빨리, 펼칠 땐 자리가 생긴 뒤 조금 늦게).
+   - 라벨은 display:none 대신 투명도로 사라지고 나타나며 6px 옆으로 함께 미끄러진다(접을 땐 빨리, 펼칠 땐 자리가 생긴 뒤 조금 늦게).
    - 배치가 통째로 바뀌는 칸(배지·계정·빠른 동작 등)은 전환 중(.sb-anim)에 잠깐 숨겼다가 페이드인한다. */
 .sidebar.collapsed { width: 88px; padding-left: 14px; padding-right: 14px; } /* 신호등(약 x 12–78px)이 접힌 사이드바 안에 여유 있게 들어가도록 */
 .brand-name, .nav-item .nav-label, .quick-search .nav-label, .quick-search kbd, .side-live-text, .side-live-viewers {
-  transition: opacity 0.18s ease 0.07s;
+  transition: opacity 0.24s ease 0.08s, translate var(--sb-dur) var(--sb-ease);
 }
 .sidebar.collapsed :is(.brand-name, .nav-item .nav-label, .quick-search .nav-label, .quick-search kbd, .side-live-text, .side-live-viewers) {
-  opacity: 0; transition: opacity 0.1s ease;
+  opacity: 0; translate: -6px 0; transition: opacity 0.12s ease, translate 0.2s ease-in;
 }
 .sidebar.collapsed .brand-row { height: 118px; padding-left: calc(var(--sb-rail) / 2 - 19px); } /* 로고 38 + 버튼 30 ×2 + 간격 10 ×2 */
 .sidebar.collapsed .brand { margin-top: 0; }
@@ -382,7 +383,7 @@ a { color: var(--primary); }
   border: 2px solid var(--sidebar);
 }
 .sidebar.collapsed .nav-section { padding: 10px 0 5px; font-size: 0; color: transparent; }
-.sidebar.collapsed .nav-section::after { opacity: 1; transition: opacity 0.18s ease 0.08s; }
+.sidebar.collapsed .nav-section::after { opacity: 1; transition: opacity 0.22s ease 0.1s; }
 .sidebar.collapsed .side-live { padding: 4px 0 4px calc(var(--sb-rail) / 2 - 18px); }
 .sidebar.collapsed .side-live-avatar { width: 36px; height: 36px; }
 .sidebar.collapsed .side-more { justify-content: center; padding: 0; }
@@ -391,10 +392,10 @@ a { color: var(--primary); }
 .sidebar.collapsed .login-icon { display: block; }
 /* 전환 중 — 배치가 바뀌는 칸은 잠깐 숨겼다 나타나고, 줄임표(…)가 깜박이지 않게 그냥 자른다 */
 .sidebar.sb-anim :is(.nav-badge, .side-more, .side-widget, .side-quick-btn, .account, .side-empty),
-.sidebar.sb-anim.collapsed .nav-item.playing::after { animation: sb-reveal calc(var(--sb-dur) + 0.08s) ease both; }
+.sidebar.sb-anim.collapsed .nav-item.playing::after { animation: sb-reveal calc(var(--sb-dur) + 0.1s) ease-out both; }
 .sidebar.sb-anim :is(.nav-label, .side-live-name, .side-live-cat, .account-name) { text-overflow: clip; }
 .sidebar.sb-anim .side-quick { overflow: hidden; }
-@keyframes sb-reveal { 0%, 45% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes sb-reveal { 0%, 35% { opacity: 0; } 100% { opacity: 1; } }
 
 /* 접힌 상태 툴팁 — sidebar.js 가 위치를 잡는다 */
 .side-tip {

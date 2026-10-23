@@ -102,11 +102,18 @@ export class Sidebar {
       localStorage.setItem(COLLAPSE_KEY, this.collapsed ? '0' : '1');
     } catch { /* 저장 불가 — 이번 세션만 */ }
     // 전환 동안만 .sb-anim — 배치가 바뀌는 칸을 잠깐 숨겼다 페이드인한다(app.css "접힌 사이드바").
+    // 전환 동안 본문 너비가 매 프레임 바뀌므로, 무거운 크기 맞춤(시청 화면 채널 레일 등)은 끝난 뒤 한 번만 하도록
+    // <html>.sidebar-animating 을 걸고 끝나면 'cview:sidebar-settled' 를 보낸다.
     clearTimeout(this.animTimer);
     this.root.classList.remove('sb-anim');
     void this.root.offsetWidth; // 연타해도 페이드인 애니메이션을 처음부터 다시
     this.root.classList.add('sb-anim');
-    this.animTimer = setTimeout(() => this.root.classList.remove('sb-anim'), 450);
+    document.documentElement.classList.add('sidebar-animating');
+    this.animTimer = setTimeout(() => {
+      this.root.classList.remove('sb-anim');
+      document.documentElement.classList.remove('sidebar-animating');
+      window.dispatchEvent(new Event('cview:sidebar-settled'));
+    }, 520);
     this.applyCollapsed();
   }
 
