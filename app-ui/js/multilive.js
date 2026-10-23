@@ -184,8 +184,12 @@ export class MultiLivePage {
     // 멀티라이브 채팅은 자기 세션(`ml`)을 쓴다 — 라이브 화면과 기본 세션을 나눠 쓰면 라이브를 열거나 닫을 때
     // (단독 보기로 넘어가며 viewer.close 가 끊기, 다른 채널 시청이 기본 세션을 가져가기) 이 채팅이 끊긴 채 남았다.
     this.chat = new ChatPanel(this.root.querySelector('.ml-chat'), { isLoggedIn, session: 'ml', mentionNotify: true, onHighlight: (m) => this.alerts.push(m) });
-    // 멀티채팅 — 모든 패인 채팅을 한 타임라인으로(보내기는 선택 패인으로).
-    this.mergedChat = new MultiLiveMergedChat(this.root.querySelector('.ml-chat'), { getState: () => this.state, getPanes: () => this.panes });
+    // 멀티채팅 — 모든 패인 채팅을 통합·그리드·포커스로(보내기는 선택 패인으로).
+    this.mergedChat = new MultiLiveMergedChat(this.root.querySelector('.ml-chat'), {
+      getState: () => this.state,
+      getPanes: () => this.panes,
+      onSelect: (id) => { if (id !== this.state.selectedId) this.run(api.multiLiveSelect(id)); },
+    });
 
     this.state = { sessions: [], selectedId: null, canAdd: true, maxSessions: 4, layout: 'grid' };
     this.panes = new Map(); // slot → { el, bridge, sessionId }

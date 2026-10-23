@@ -32,7 +32,7 @@ export function lineMatches(text, query) {
 /** 통합(머지) 채팅 줄 — 채널 태그를 붙인 한 타임라인. 채팅 설정(차단·금지어·후원 필터·이모티콘)을 따른다.
  *  멀티라이브 멀티채팅도 쓴다. `style` 은 줄의 색 변수(--mc-color 등). */
 export function mergedLinesHtml(messages, { name, style }) {
-  const tag = `<span class="mc-tag">${esc(name)}</span>`;
+  const tag = name ? `<span class="mc-tag">${esc(name)}</span>` : '';
   const prefs = chatPrefs();
   return (messages || []).filter((m) => m.kind !== 'system' && passesFilters(m, prefs)).map((m) => {
     const ev = eventClasses(m);
