@@ -290,7 +290,13 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 ::-webkit-scrollbar-thumb:hover { background-color: var(--surface-overlay); }
 @supports (animation-timeline: scroll()) {
   /* 그림자는 칠하지 않고 미리 그린 층의 투명도만 바꾼다(스크롤 중 다시 그리기 없음). */
-  .page:not(.page-multilive, .page-multichat, .page-chatonly) > .page-header { border-bottom-color: transparent; }
+  /* 맨 위에선 배경도 비워 본문 위쪽 빛 번짐이 머리줄까지 이어지게 — 내용이 밑으로 들어가면 유리 배경이 차오른다.
+     스크롤할 게 없으면(타임라인 비활성) 애니메이션이 안 걸리니 기본값을 투명으로 둔다. */
+  .page:not(.page-multilive, .page-multichat, .page-chatonly) > .page-header {
+    border-bottom-color: transparent; background-color: transparent;
+    animation: mo-header-glass linear both; animation-timeline: scroll(nearest block); animation-range: 0 48px;
+  }
+  @keyframes mo-header-glass { from { background-color: transparent; } to { background-color: var(--glass); } }
   .page:not(.page-multilive, .page-multichat, .page-chatonly) > .page-header::after {
     content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 12px; pointer-events: none;
     border-top: 1px solid var(--border-subtle); background: linear-gradient(rgba(0, 0, 0, .14), transparent);

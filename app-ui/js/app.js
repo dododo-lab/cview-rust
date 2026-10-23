@@ -13,6 +13,7 @@ import { loadChatPrefs, setMyNickname } from './chat-prefs.js';
 import { MultiLivePage, multiLiveIcon, bindMultiLiveAddButtons } from './multilive.js';
 import { LivePage, liveIcon } from './live.js';
 import { LIVE_MODES, liveModeSwitch, bindLiveModeSwitch } from './live-mode.js';
+import { decoratePageHeader } from './page-header.js';
 import { ChannelPage } from './channel.js';
 import { MediaPage } from './media.js';
 import { LibraryPage, libraryIcon } from './library.js';
@@ -595,6 +596,11 @@ async function main() {
     document.querySelector('.viewer-header .page-title').insertAdjacentHTML('afterend', liveModeSwitch('live'));
     bindLiveModeSwitch(switchLiveMode);
   }
+  // 화면 머리줄 — 메뉴 아이콘 칩 + 제목 위·설명 아래(page-header.js). 멀티라이브(스스로 꾸민다)·시청 화면은 한 줄.
+  for (const r of ROUTES) {
+    if (pages[r.id] && r.id !== 'multilive') decoratePageHeader(pages[r.id].root.querySelector(':scope > .page-header'), r.icon);
+  }
+  decoratePageHeader(document.querySelector('.viewer-header'), liveIcon, { compact: true });
   installBackgroundSaver();
   installPerfCollector();
 

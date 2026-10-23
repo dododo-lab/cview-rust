@@ -20,7 +20,8 @@ import { MultiLiveAddDrawer } from './ml-add-drawer.js';
 import { snapshotPanes, playLayoutMotion, playExit, cancelExit, bindPaneDrag, releaseDragged, motionEnabled } from './ml-motion.js';
 import { MultiLiveMergedChat } from './ml-multichat.js';
 
-import { multiLiveIcon, liveModeSwitch, setLiveModeActive } from './live-mode.js';
+import { liveIcon, multiLiveIcon, liveModeSwitch, setLiveModeActive } from './live-mode.js';
+import { decoratePageHeader, setPageHeaderIcon } from './page-header.js';
 
 export { multiLiveIcon };
 
@@ -135,6 +136,9 @@ export class MultiLivePage {
         </aside>
       </div>`;
     content.append(this.root);
+    // 툴바가 빽빽한 화면이라 머리줄은 한 줄(수 알약은 줄 안에). 아이콘은 보기(라이브·멀티라이브)를 따른다.
+    decoratePageHeader(this.root.querySelector('.ml-header'), multiLiveIcon, { compact: true });
+    setPageHeaderIcon(this.root.querySelector('.ml-header'), 'multilive', multiLiveIcon);
 
     this.stage = this.root.querySelector('.ml-stage');
     this.empty = this.root.querySelector('.ml-empty');
@@ -352,6 +356,7 @@ export class MultiLivePage {
     // 단독 무대일 땐 라이브, 아니면 멀티라이브 — 머리줄 제목과 전환 버튼이 지금 보기를 따른다.
     const mode = this.watchSlot != null ? 'live' : 'multilive';
     this.root.querySelector('.ml-header .page-title').textContent = mode === 'live' ? '라이브' : '멀티라이브';
+    setPageHeaderIcon(this.root.querySelector('.ml-header'), mode, mode === 'live' ? liveIcon : multiLiveIcon);
     setLiveModeActive(this.root.querySelector('.ml-header'), mode);
     this.renderWatchPicker(sessions, watched);
     const single = this.watchSlot ?? this.single;

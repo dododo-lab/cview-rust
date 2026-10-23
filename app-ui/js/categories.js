@@ -4,6 +4,7 @@ import { api } from './api.js';
 import { esc, safeUrl, imageSrc } from './dom.js';
 import { liveGrid, emptyState, loadingState, compactCount, skeletonGrid, errorState } from './cards.js';
 import { categoryGroups, arrangeLives } from './pages.js';
+import { refreshIcon } from './page-header.js';
 
 export const categoryIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="8" height="8" rx="2.5"/><rect x="13" y="3" width="8" height="8" rx="2.5" opacity=".6"/><rect x="3" y="13" width="8" height="8" rx="2.5" opacity=".6"/><rect x="13" y="13" width="8" height="8" rx="2.5"/></svg>';
 const PIN_KEY = 'cview.pinnedCategories';
@@ -24,7 +25,7 @@ export class CategoriesPage {
         <h1 class="page-title">카테고리</h1>
         <span class="page-subtitle cat-sub">지금 방송 중인 카테고리</span>
         <div class="grow"></div>
-        <button class="btn" data-action="refresh">새로고침</button>
+        <button class="icon-btn round" data-action="refresh" title="새로고침" aria-label="새로고침">${refreshIcon}</button>
       </header>
       <div class="page-body"></div>`;
     content.append(this.root);

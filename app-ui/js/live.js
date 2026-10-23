@@ -4,6 +4,7 @@ import { api } from './api.js';
 import { esc, safeUrl, imageSrc } from './dom.js';
 import { liveGrid, emptyState, loadingState, recentChannels } from './cards.js';
 import { liveIcon, liveModeSwitch } from './live-mode.js';
+import { refreshIcon } from './page-header.js';
 
 export { liveIcon };
 
@@ -20,7 +21,7 @@ export class LivePage {
         ${liveModeSwitch('live')}
         <span class="page-subtitle">재생 중인 방송이 없습니다 — 이어 볼 채널을 고르세요</span>
         <div class="grow"></div>
-        <button class="btn" data-action="refresh">새로고침</button>
+        <button class="icon-btn round" data-action="refresh" title="새로고침" aria-label="새로고침">${refreshIcon}</button>
       </header>
       <div class="page-body"></div>`;
     content.append(this.root);
