@@ -139,13 +139,13 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 }
 .link-btn:active:not(:disabled) { scale: .97; transition-duration: var(--dur-1); }
 /* 넓은 줄·카드는 덜 들어가게 */
-:is(.nav-item, .side-live, .queue-item, .recent-item, .strip-item, .ml-addrow, .palette-item, .ctx-item, .quality-item, .ml-menu-item,
+:is(.nav-item, .side-live, .queue-item, .recent-item, .strip-item, .ml-addrow, .ml-addrow-open, .palette-item, .ctx-item, .quality-item, .ml-menu-item,
     .design-item, .dense-row, .channel-row, .bookmark-row, .side-widget, .ml-focus-add, .ac-item, .tray-item) {
   transition-property: background, color, border-color, box-shadow, opacity, scale;
   transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), .3s;
   transition-timing-function: var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-spring);
 }
-:is(.nav-item, .side-live, .queue-item, .recent-item, .ml-addrow, .palette-item, .quality-item, .ml-menu-item, .design-item,
+:is(.nav-item, .side-live, .queue-item, .recent-item, .ml-addrow-open, .palette-item, .quality-item, .ml-menu-item, .design-item,
     .dense-row, .channel-row, .bookmark-row, .side-widget, .ac-item):active:not(:disabled) { scale: .985; transition-duration: var(--dur-1); }
 .btn { transition-property: background, color, border-color, box-shadow, filter, transform; transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), .3s; transition-timing-function: var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-spring); }
 .btn:active:not(:disabled) { transform: scale(.965); transition-duration: var(--dur-1); }
@@ -248,7 +248,7 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 .ml-pane.drop-target { scale: .985; transition: scale var(--dur-2) var(--ease-out); }
 .ml-empty { animation: mo-rise var(--dur-4) var(--ease-emph) both; }
 .ml-addrow-act { transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out), scale .3s var(--ease-spring); }
-.ml-addrow:hover:not(:disabled) .ml-addrow-act { scale: 1.08; }
+.ml-addrow-act:hover:not(:disabled) { scale: 1.08; }
 
 /* ── 풍부(rich) — 카드 격자가 앞에서부터 차례로(처음 12장만, 나머지는 같이) ── */
 :root[data-motion="rich"] :is(.grid, .shelf, .category-grid) > * { animation: mo-rise .36s var(--ease-emph) both; }
@@ -266,9 +266,9 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 
 /* ── 모션 줄이기 — 위에서 더한 누름 크기·호버 이동도 없앤다(전역 규칙은 시간만 0 으로 만든다) ── */
 @media (prefers-reduced-motion: reduce) {
-  :active:not(:disabled), .recent-item:hover, .channel-row:hover, .bookmark-row:hover, .nav-item:hover .nav-icon, .ml-addrow:hover .ml-addrow-act { scale: none !important; translate: none !important; }
+  :active:not(:disabled), .recent-item:hover, .channel-row:hover, .bookmark-row:hover, .nav-item:hover .nav-icon, .ml-addrow-act:hover { scale: none !important; translate: none !important; }
 }
-:root[data-motion="reduced"] :is(:active, .recent-item:hover, .channel-row:hover, .bookmark-row:hover, .nav-item:hover .nav-icon, .ml-addrow:hover .ml-addrow-act) { scale: none !important; translate: none !important; }
+:root[data-motion="reduced"] :is(:active, .recent-item:hover, .channel-row:hover, .bookmark-row:hover, .nav-item:hover .nav-icon, .ml-addrow-act:hover) { scale: none !important; translate: none !important; }
 
 /* ── 썸네일 호버 — 아래쪽이 살짝 어두워지며 재생 표시(배지 글자가 더 잘 읽힌다) ── */
 .card .thumb::after {

@@ -147,14 +147,20 @@
 .ml-addbar-list { flex: 1; min-height: 0; overflow-y: auto; padding: 6px; outline: 0; }
 .ml-addbar-list .empty { padding: 40px 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; color: var(--text-secondary); }
 .ml-addbar-foot { flex: none; padding: 6px 14px 8px; border-top: 1px solid var(--border-subtle); font-size: var(--fs-micro); color: var(--text-tertiary); }
-.ml-addrow {
-  width: 100%; display: flex; align-items: center; gap: 10px; padding: 6px; border: 0; border-radius: 10px;
+/* 한 줄 = [열기(썸네일·이름) | +]. 열기는 라이브로 보기, + 는 추가. */
+.ml-addrow { display: flex; align-items: center; gap: 4px; padding-right: 6px; border-radius: 10px; }
+.ml-addrow:hover, .ml-addrow:focus-within { background: var(--surface-elevated); }
+.ml-addrow-open {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 6px; border: 0; border-radius: 10px;
   background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
-.ml-addrow:hover:not(:disabled), .ml-addrow:focus-visible { background: var(--surface-elevated); outline: 0; }
-.ml-addrow:disabled { cursor: default; }
-.ml-addrow:disabled:not(.added):not(.busy) { opacity: 0.5; }
+.ml-addrow-open:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.ml-addrow-open:disabled { cursor: default; }
+.ml-addrow.full:not(.added):not(.busy) .ml-addrow-act { opacity: 0.5; }
+.ml-addrow:not(.added):not(.busy) .ml-addrow-open:disabled { opacity: 0.5; }
 .ml-addrow.added .ml-addrow-thumb, .ml-addrow.added .ml-addrow-text { opacity: 0.5; }
+.ml-addrow.added .ml-addrow-open:hover:not(:disabled) :is(.ml-addrow-thumb, .ml-addrow-text) { opacity: 0.85; }
+.ml-addrow-open:hover:not(:disabled) .ml-addrow-name .ellipsis { text-decoration: underline; text-underline-offset: 2px; }
 .ml-addrow-thumb { position: relative; width: 104px; aspect-ratio: 16 / 9; flex: none; border-radius: 7px; overflow: hidden; background: var(--surface-overlay); }
 .ml-addrow-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ml-addrow-viewers { position: absolute; left: 4px; bottom: 4px; padding: 1px 5px; border-radius: 5px; background: rgba(0, 0, 0, 0.72); color: #fff; font-size: 10px; font-variant-numeric: tabular-nums; }
@@ -164,10 +170,14 @@
 .ml-addrow-tag { flex: none; font-size: 10px; font-weight: 600; padding: 0 5px; border-radius: 5px; color: var(--primary); background: color-mix(in srgb, var(--primary) 14%, transparent); }
 .ml-addrow-title { color: var(--text-secondary); font-size: var(--fs-footnote); }
 .ml-addrow-meta { color: var(--text-tertiary); font-size: var(--fs-micro); }
-.ml-addrow-act { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; color: var(--text-tertiary); }
+.ml-addrow-act {
+  flex: none; width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%;
+  background: var(--surface-overlay); color: var(--text-secondary); cursor: pointer;
+}
 .ml-addrow-act svg { width: 14px; height: 14px; }
 .ml-addrow-act .spinner { --s: 16px; }
-.ml-addrow:hover:not(:disabled) .ml-addrow-act, .ml-addrow:focus-visible .ml-addrow-act { background: var(--primary); color: var(--on-primary); }
+.ml-addrow-act:hover:not(:disabled), .ml-addrow-act:focus-visible { background: var(--primary); color: var(--on-primary); outline: 0; }
+.ml-addrow-act:disabled { cursor: default; background: transparent; }
 .ml-addrow.added .ml-addrow-act { color: var(--primary); }
 
 /* 카드의 "멀티라이브에 추가" */

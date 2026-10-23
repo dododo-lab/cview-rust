@@ -1,7 +1,8 @@
 // 멀티라이브·멀티채팅 채널 추가 — 오른쪽 채팅 위로 미끄러져 나오는 사이드바.
 //
 // - 화면 가운데를 가리던 모달 대신, 채팅 자리를 잠시 덮는다 — 무대(패인)는 그대로 보인다.
-// - 고른 채널은 바로 추가하고 사이드바는 열어 둔다 — 여러 채널을 이어서 넣을 수 있다.
+// - 줄 오른쪽 + 를 누르면 바로 추가하고 사이드바는 열어 둔다 — 여러 채널을 이어서 넣을 수 있다.
+// - 썸네일·채널 이름(줄의 나머지)을 누르면 onOpen — 그 채널을 라이브 화면에서 단독으로 본다.
 // - 정렬(시청자·방송 시간·이름)과 출처(전체·팔로잉·인기)는 기억한다. 새로고침은 캐시를 건너뛴다.
 import { api } from './api.js';
 import { esc, safeUrl, toast, imageSrc } from './dom.js';
@@ -88,16 +89,19 @@ export class MultiLiveAddDrawer {
   /**
    * @param {HTMLElement} host `.ml-body` — 채팅과 같은 컨테이너
    * @param {{ isLoggedIn: () => boolean, getState: () => any, onAdd: (channelId: string) => Promise<void>,
-   *   toggleSelector?: string, unit?: string }} opts
-   *   toggleSelector — 여는 버튼(바깥 클릭으로 치지 않는다), unit — 꽉 참 안내에 쓰는 이름(패인·채널)
+   *   onOpen?: (channelId: string) => void, addLabel?: string, toggleSelector?: string, unit?: string }} opts
+   *   onOpen — 줄(썸네일·이름)을 누를 때. 없으면 줄을 눌러도 추가한다.
+   *   addLabel — + 버튼 풍선말, toggleSelector — 여는 버튼(바깥 클릭으로 치지 않는다), unit — 꽉 참 안내에 쓰는 이름(패인·채널)
    */
-  constructor(host, { isLoggedIn, getState, onAdd, toggleSelector = '[data-ml="add"]', unit = '패인' }) {
+  constructor(host, { isLoggedIn, getState, onAdd, onOpen = null, addLabel = '추가', toggleSelector = '[data-ml="add"]', unit = '패인' }) {
     this.host = host;
     this.toggleSelector = toggleSelector;
     this.unit = unit;
     this.isLoggedIn = isLoggedIn;
     this.getState = getState;
     this.onAdd = onAdd;
+    this.onOpen = onOpen;
+    this.addLabel = addLabel;
     this.items = [];
     this.loadedAt = 0;
     this.loading = false;
@@ -151,20 +155,29 @@ export class MultiLiveAddDrawer {
     this.filter.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        this.list.querySelector('.ml-addrow:not(:disabled)')?.click();
+        // 찾기 칸의 Enter 는 예전처럼 맨 위 방송을 추가한다(+).
+        this.list.querySelector('.ml-addrow-act:not(:disabled)')?.click();
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        this.list.querySelector('.ml-addrow:not(:disabled)')?.focus();
+        this.list.querySelector('.ml-addrow-open:not(:disabled)')?.focus();
       }
     });
+    // 위·아래는 줄 사이, 오른쪽·왼쪽은 같은 줄의 열기 ↔ + 사이.
     this.list.addEventListener('keydown', (e) => {
+      const row = document.activeElement?.closest?.('.ml-addrow');
+      if (!row || !this.list.contains(row)) return;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        const to = row.querySelector(e.key === 'ArrowRight' ? '.ml-addrow-act:not(:disabled)' : '.ml-addrow-open:not(:disabled)');
+        if (to && to !== document.activeElement) { e.preventDefault(); to.focus(); }
+        return;
+      }
       if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-      const rows = [...this.list.querySelectorAll('.ml-addrow:not(:disabled)')];
-      const i = rows.indexOf(document.activeElement);
-      if (i < 0) return;
+      const rows = [...this.list.querySelectorAll('.ml-addrow')];
+      const i = rows.indexOf(row);
       e.preventDefault();
-      if (e.key === 'ArrowUp' && i === 0) this.filter.focus();
-      else rows[Math.min(rows.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1))]?.focus();
+      if (e.key === 'ArrowUp' && i === 0) { this.filter.focus(); return; }
+      const next = rows[Math.min(rows.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1))];
+      next?.querySelector('.ml-addrow-open:not(:disabled)')?.focus();
     });
     this.sortSelect.addEventListener('change', () => { this.sort = this.sortSelect.value; this.persist(); this.renderList(); });
     this.el.addEventListener('keydown', (e) => {
@@ -286,9 +299,14 @@ export class MultiLiveAddDrawer {
       const uptime = uptimeText(l.openDate);
       const tag = l.following ? '<span class="ml-addrow-tag">팔로잉</span>' : '';
       const meta = [l.categoryName, uptime].filter(Boolean).map(esc).join(' · ');
+      const id = esc(l.channelId);
+      const name = esc(l.channelName || '');
+      const actTitle = isAdded ? '이미 추가했어요' : busy ? '추가하는 중…' : canAdd ? this.addLabel : '자리가 없어요';
+      // 열기 영역과 + 를 따로 둔다(버튼 안에 버튼은 못 넣는다). onOpen 이 없으면 열기 영역도 추가한다.
       return `
-        <button class="ml-addrow${isAdded ? ' added' : ''}${busy ? ' busy' : ''}" data-add="pick" data-channel-id="${esc(l.channelId)}"
-          ${isAdded || busy || !canAdd ? 'disabled' : ''} title="${esc(l.liveTitle || l.channelName || '')}">
+        <div class="ml-addrow${isAdded ? ' added' : ''}${busy ? ' busy' : ''}${!canAdd ? ' full' : ''}" data-channel-id="${id}">
+          <button class="ml-addrow-open" data-add="${this.onOpen ? 'open' : 'pick'}" data-channel-id="${id}"
+            ${!this.onOpen && (isAdded || busy || !canAdd) ? 'disabled' : ''} title="${esc(this.onOpen ? `${l.channelName || ''} — 라이브로 보기` : (l.liveTitle || l.channelName || ''))}">
           <span class="ml-addrow-thumb">${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
             <span class="ml-addrow-viewers">${esc(l.viewerCountText ?? String(l.viewerCount ?? ''))}명</span></span>
           <span class="ml-addrow-text">
@@ -296,8 +314,10 @@ export class MultiLiveAddDrawer {
             <span class="ml-addrow-title ellipsis">${esc(l.liveTitle || '')}</span>
             ${meta ? `<span class="ml-addrow-meta ellipsis">${meta}</span>` : ''}
           </span>
-          <span class="ml-addrow-act" aria-hidden="true">${busy ? '<span class="spinner"></span>' : isAdded ? ICON_CHECK : ICON_PLUS}</span>
-        </button>`;
+          </button>
+          <button class="ml-addrow-act" data-add="pick" data-channel-id="${id}" ${isAdded || busy || !canAdd ? 'disabled' : ''}
+            title="${esc(actTitle)}" aria-label="${name} ${esc(actTitle)}">${busy ? '<span class="spinner"></span>' : isAdded ? ICON_CHECK : ICON_PLUS}</button>
+        </div>`;
     }).join('');
     this.list.scrollTop = scroll;
     this.renderStatus();
@@ -317,6 +337,13 @@ export class MultiLiveAddDrawer {
     switch (act.dataset.add) {
       case 'close': this.close(); break;
       case 'refresh': this.load(true); break;
+      case 'open': {
+        const id = act.dataset.channelId;
+        if (!id || !this.onOpen) break;
+        this.close();
+        this.onOpen(id);
+        break;
+      }
       case 'pick': {
         const id = act.dataset.channelId;
         if (!id || this.adding.has(id)) break;

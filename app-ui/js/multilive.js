@@ -68,7 +68,13 @@ export function pickTintHue(used, rand = Math.random) {
 }
 
 export class MultiLivePage {
-  constructor(content, { isLoggedIn }) {
+  /**
+   * @param {{ isLoggedIn: () => boolean, onAddChannel?: (channelId: string, opts?: { quiet?: boolean }) => Promise<void>,
+   *   onOpenChannel?: (channelId: string) => void }} opts
+   *   onAddChannel — 채널 추가 사이드바의 + (카드 + 와 같은 길: 선택·포커스 메인·시청 화면 넘겨받기),
+   *   onOpenChannel — 사이드바 줄(썸네일·이름)을 누르면 라이브 화면에서 단독으로.
+   */
+  constructor(content, { isLoggedIn, onAddChannel = null, onOpenChannel = null }) {
     this.isLoggedIn = isLoggedIn;
     this.root = document.createElement('section');
     this.root.className = 'page page-multilive';
@@ -210,7 +216,10 @@ export class MultiLivePage {
     this.addBar = new MultiLiveAddDrawer(this.root.querySelector('.ml-body'), {
       isLoggedIn,
       getState: () => this.state,
-      onAdd: (channelId) => this.run(api.multiLiveAdd(channelId)),
+      // + — 추가하고 그 패인을 선택한다. 포커스 배치면 메인으로 올라가 소리·채팅이 따라간다.
+      onAdd: (channelId) => (onAddChannel ? onAddChannel(channelId, { quiet: true }) : this.addAndSelect(channelId)),
+      onOpen: onOpenChannel,
+      addLabel: '멀티라이브에 추가',
     });
 
     listenHere(Events.multiLiveCommand, (p) => p && this.dispatch(p.slot, p.script));
@@ -829,10 +838,17 @@ export class MultiLivePage {
   }
 
   /** 채널 추가 — 카드·시청 화면의 "멀티라이브에 추가" 도 이걸 부른다. */
-  async add(channelId) {
+  async add(channelId, { quiet = false } = {}) {
     if (!channelId) return;
-    toast('멀티라이브에 추가하는 중…', 1500);
+    if (!quiet) toast('멀티라이브에 추가하는 중…', 1500);
     await this.run(api.multiLiveAdd(channelId));
+  }
+
+  /** 추가하고 선택 — 포커스 배치면 메인 패인이 된다(select 가 메인으로 올린다). */
+  async addAndSelect(channelId) {
+    await this.add(channelId, { quiet: true });
+    const s = (this.state.sessions || []).find((x) => x.channelId === channelId);
+    if (s && s.id !== this.state.selectedId) await this.run(api.multiLiveSelect(s.id));
   }
 }
 

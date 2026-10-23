@@ -283,8 +283,12 @@ async function openChannel(channelId) {
   await navigate('live');
 }
 
-/** 카드·시청 화면의 "멀티라이브에 추가" — 멀티라이브 화면으로 옮겨 패인을 띄운다. */
-async function addToMultiLive(channelId) {
+/**
+ * 카드·시청 화면·채널 추가 사이드바의 "멀티라이브에 추가" — 멀티라이브 화면으로 옮겨 패인을 띄우고 선택한다.
+ * 선택은 포커스 메인으로 올리므로 마지막 배치(포커스면 그 메인 자리)로 재생되고, 소리·채팅이 이 채널로 따라온다.
+ * quiet — 사이드바처럼 줄에 진행 표시가 따로 있으면 '추가하는 중' 안내를 띄우지 않는다.
+ */
+async function addToMultiLive(channelId, { quiet = false } = {}) {
   // 라이브 시청 화면의 채널이면 넘겨준다 — 시청 화면을 닫고(같은 채널 두 번 재생 없음) 볼륨을 이어받아 선택 패인으로.
   const handoff = viewer.isPlaying && viewer.channelId === channelId;
   const muted = handoff && viewer.player.isMuted();
@@ -295,7 +299,7 @@ async function addToMultiLive(channelId) {
     await viewer.close({ silent: true });
   }
   if (current !== 'multilive') await navigate('multilive');
-  await pages.multilive.add(channelId);
+  await pages.multilive.add(channelId, { quiet });
   const s = multiLiveSessionFor(channelId);
   if (!s) return;
   if (s.id !== pages.multilive.state.selectedId) await pages.multilive.run(api.multiLiveSelect(s.id));
@@ -555,10 +559,10 @@ async function main() {
     onLogin: login,
     onLogout: logout,
   });
-  pages.multilive = new MultiLivePage(content, { isLoggedIn });
+  pages.multilive = new MultiLivePage(content, { isLoggedIn, onAddChannel: addToMultiLive, onOpenChannel: openChannel });
   pages.live = new LivePage(content, { isLoggedIn });
   pages.categories = new CategoriesPage(content);
-  pages.multichat = new MultiChatPage(content, { isLoggedIn });
+  pages.multichat = new MultiChatPage(content, { isLoggedIn, onPlay: openChannel });
   pages.chat = new ChatOnlyPage(content, { isLoggedIn, onBack: goBack, onPlay: openChannel, session: AUX === 'chat' ? `win-${Date.now()}` : null, standalone: AUX === 'chat' });
   pages.library = new LibraryPage(content, { isLoggedIn, onOpenChannel: openChannelPage });
   pages.stats = new StatsPage(content, { onOpenChannel: openChannelPage });
