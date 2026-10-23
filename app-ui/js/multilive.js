@@ -303,7 +303,7 @@ export class MultiLivePage {
         <button class="ml-pane-btn ml-sec" data-ml="select" title="이 패인 채팅 보기" aria-label="이 패인 채팅 보기">${PANE_ICON.chat}</button>
         <button class="ml-pane-btn ml-sec" data-ml="info" title="채널 정보" aria-label="채널 정보">${PANE_ICON.info}</button>
         <button class="ml-pane-btn ml-sec" data-ml="retry" title="다시 연결" aria-label="다시 연결">${PANE_ICON.retry}</button>
-        <button class="ml-pane-btn" data-mp="more" title="더 보기" aria-label="더 보기" aria-haspopup="menu">${PANE_ICON.more}</button>
+        <button class="ml-pane-btn" data-mp="more" title="더 보기" aria-label="더 보기" aria-haspopup="menu" aria-expanded="false">${PANE_ICON.more}</button>
         <button class="ml-pane-close" data-ml="remove" title="닫기">${ICON_CLOSE}</button>
       </div>
       <span class="ml-pane-sound" title="소리 나는 패인">${ICON_SOUND}</span>${paneControlsHtml()}`;
@@ -704,7 +704,10 @@ export class MultiLivePage {
       ${ids.length ? `<div class="word-form"><input type="text" maxlength="30" placeholder="지금 구성(${ids.length}개 채널) 이름"><button class="btn primary">저장</button></div>` : ''}
       <div class="sheet-actions"><button type="button" class="btn" data-preset-close>닫기</button></div></form>`;
     document.body.append(scrim);
-    const close = () => dismiss(scrim);
+    const opener = document.activeElement;
+    const close = () => { dismiss(scrim); if (opener?.isConnected) opener.focus({ preventScroll: true }); };
+    (scrim.querySelector('.word-form input') || scrim.querySelector('[data-preset-close]')).focus();
+    scrim.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
     scrim.addEventListener('click', async (e) => {
       if (e.target === scrim || e.target.closest('[data-preset-close]')) { close(); return; }
       const row = e.target.closest('[data-preset-id]');

@@ -209,6 +209,8 @@ export class MultiLiveAddDrawer {
     this.el.classList.add('open');
     this.el.setAttribute('aria-hidden', 'false');
     this.markToggles(true);
+    // 닫을 때 초점을 돌려줄 곳 — 보통 머리줄 채널 추가 버튼
+    if (!this.el.contains(document.activeElement)) this.returnFocus = document.activeElement;
     this.el.inert = false;
     this.filter.value = '';
     this.sync();
@@ -219,10 +221,17 @@ export class MultiLiveAddDrawer {
 
   close() {
     if (!this.isOpen) return;
+    const hadFocus = this.el.contains(document.activeElement);
     this.el.classList.remove('open');
     this.el.setAttribute('aria-hidden', 'true');
     this.el.inert = true;
     this.markToggles(false);
+    // 안에 초점이 있었으면(inert 가 body 로 떨어뜨린다) 연 버튼으로 돌려준다
+    if (hadFocus) {
+      const back = this.returnFocus?.isConnected && this.returnFocus.offsetParent ? this.returnFocus : document.querySelector(this.toggleSelector);
+      back?.focus({ preventScroll: true });
+    }
+    this.returnFocus = null;
   }
 
   /** 여는 버튼에 열림 상태를 단다 — 머리줄 채널 추가가 열린 동안 눌린 모양(×)으로 보인다. */
@@ -247,7 +256,7 @@ export class MultiLiveAddDrawer {
     this.failed = '';
     this.refreshBtn.classList.add('spinning');
     this.refreshBtn.disabled = true;
-    if (!this.items.length) this.list.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
+    if (!this.items.length) { this.list.innerHTML = '<div class="empty"><div class="spinner"></div></div>'; this.listHtml = ''; }
     this.renderStatus();
     const [following, popular] = await Promise.allSettled([
       this.isLoggedIn() ? api.followingLives(refresh) : Promise.resolve([]),
@@ -267,6 +276,26 @@ export class MultiLiveAddDrawer {
     this.renderList();
   }
 
+  /**
+   * 목록을 바꿔 끼운다 — 멀티라이브 상태가 올 때마다 불리므로 같으면 그대로 두고(썸네일·초점 유지),
+   * 바뀌면 키보드 초점을 같은 채널의 같은 자리(열기·+)로 되돌린다. + 가 막 비활성이 됐으면 그 줄의 열기로.
+   */
+  paintList(html) {
+    if (html === this.listHtml && this.list.querySelector('.ml-addrow')) return;
+    const active = document.activeElement;
+    const focused = active && this.list.contains(active) ? active.closest('[data-channel-id]') && active : null;
+    const id = focused?.dataset.channelId;
+    const wasAct = focused?.classList.contains('ml-addrow-act');
+    const scroll = this.list.scrollTop;
+    this.list.innerHTML = html;
+    this.listHtml = html;
+    this.list.scrollTop = scroll;
+    if (!id) return;
+    const row = [...this.list.querySelectorAll('.ml-addrow')].find((r) => r.dataset.channelId === id);
+    const to = row && ((wasAct && row.querySelector('.ml-addrow-act:not(:disabled)')) || row.querySelector('.ml-addrow-open:not(:disabled)'));
+    (to || this.filter).focus({ preventScroll: true });
+  }
+
   renderSource() {
     for (const b of this.el.querySelectorAll('[data-source]')) {
       const on = b.dataset.source === this.source;
@@ -278,6 +307,8 @@ export class MultiLiveAddDrawer {
   renderStatus() {
     if (this.loading) { this.status.textContent = '불러오는 중…'; return; }
     if (this.failed && !this.items.length) { this.status.textContent = this.failed; return; }
+    // 목록은 있는데 다시 받기가 실패했으면 — 낡은 목록이라는 것을 알린다(새로 고침 버튼으로 다시).
+    if (this.failed) { this.status.textContent = `갱신하지 못했습니다 · ${relTime(this.loadedAt)} 목록`; return; }
     const shown = this.list.querySelectorAll('.ml-addrow').length;
     this.status.textContent = this.loadedAt ? `방송 ${shown}개 · ${relTime(this.loadedAt)} 갱신` : '';
   }
@@ -295,11 +326,11 @@ export class MultiLiveAddDrawer {
           ? '<strong>로그인하면 팔로잉 방송을 볼 수 있어요</strong>'
           : `<strong>${this.filter.value.trim() ? '찾는 방송이 없습니다' : '추가할 수 있는 방송이 없습니다'}</strong>`;
       this.list.innerHTML = `<div class="empty">${why}</div>`;
+      this.listHtml = '';
       this.renderStatus();
       return;
     }
-    const scroll = this.list.scrollTop;
-    this.list.innerHTML = items.map((l) => {
+    const html = items.map((l) => {
       const thumb = safeUrl(l.thumbnailUrl);
       const isAdded = added.has(l.channelId);
       const busy = this.adding.has(l.channelId);
@@ -326,7 +357,7 @@ export class MultiLiveAddDrawer {
             title="${esc(actTitle)}" aria-label="${name} ${esc(actTitle)}">${busy ? '<span class="spinner"></span>' : isAdded ? ICON_CHECK : ICON_PLUS}</button>
         </div>`;
     }).join('');
-    this.list.scrollTop = scroll;
+    this.paintList(html);
     this.renderStatus();
   }
 
