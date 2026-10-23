@@ -350,6 +350,7 @@ export class ChatPanel {
     const [label, cls] = STATE_LABEL[name] || [name, ''];
     this.state.textContent = name === 'reconnecting' && detail ? `${label} (${detail})` : label;
     this.state.className = `chat-state ${cls}`;
+    this.stateName = name;
     this.connected = name === 'connected';
     this.updateInput();
   }
@@ -468,6 +469,8 @@ export class ChatPanel {
 
   onEvent(ev) {
     if (!ev || !this.active) return;
+    // 채널을 바꾼 뒤 늦게 도착한 이전 채널 이벤트(메시지·끊김 상태)는 버린다.
+    if (ev.chatChannelId && this.chatChannelId && ev.chatChannelId !== this.chatChannelId) return;
     switch (ev.type) {
       case 'state':
         this.setState(ev.state, ev.detail);

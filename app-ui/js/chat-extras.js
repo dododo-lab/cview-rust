@@ -112,7 +112,7 @@ export function installChatExtras(panel) {
     rail.innerHTML = events.slice(0, 12).map((m) => {
       const e = eventMeta(m);
       if (!e) return '';
-      return `<span class="event-chip ev-${e.tone} ev-tier-${e.tier}" title="${esc(`${e.title} · ${m.content || ''}`)}"><span class="event-chip-icon">${EVENT_ICONS[e.icon] || ''}</span><b>${esc(m.nickname || '익명')}</b><span class="event-chip-value">${esc(e.value)}</span></span>`;
+      return `<span class="event-chip ev-${e.tone} ev-tier-${e.tier} ev-lv-${e.level}" title="${esc(`${e.title} · ${m.content || ''}`)}"><span class="event-chip-icon">${EVENT_ICONS[e.icon] || ''}</span><b>${esc(m.nickname || '익명')}</b><span class="event-chip-value">${esc(e.value)}</span></span>`;
     }).join('');
   };
 

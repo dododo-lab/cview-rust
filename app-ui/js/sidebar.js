@@ -202,8 +202,8 @@ export class Sidebar {
   }
 
   renderNav() {
-    // 검색은 위쪽 빠른 검색 버튼이 맡는다(같은 메뉴를 두 번 두지 않는다).
-    this.nav.innerHTML = this.routes.filter((r) => r.id !== 'search').map((r) => {
+    // 검색은 위쪽 빠른 검색 버튼이 맡는다(같은 메뉴를 두 번 두지 않는다). `sidebar: false` 는 다른 메뉴 속 화면.
+    this.nav.innerHTML = this.routes.filter((r) => r.id !== 'search' && r.sidebar !== false).map((r) => {
       const count = r.id === 'following' ? this.liveCount : (this.badges && this.badges.get(r.id));
       const badge = count ? `<span class="nav-badge">${count > 99 ? '99+' : count}</span>` : '';
       return `

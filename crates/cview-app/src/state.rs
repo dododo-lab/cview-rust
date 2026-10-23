@@ -34,7 +34,7 @@ use cview_player::hlsjs::HlsJsStreamingProfile;
 use futures_util::FutureExt;
 use tauri::async_runtime::JoinHandle;
 
-use crate::dto::{ChatEventDto, PlayerEventDto};
+use crate::dto::{ChatEventDto, PlayerEventDto, TaggedChatEvent};
 use crate::engine::{CommandSink, WebViewHlsEngine};
 
 /// 스토어 파일 이름 (Swift `CView_v2.store`).
@@ -53,9 +53,9 @@ pub struct ShellSinks {
     /// `player://event`.
     pub player_event: Arc<dyn Fn(PlayerEventDto) + Send + Sync>,
     /// `chat://event`.
-    pub chat_event: Arc<dyn Fn(ChatEventDto) + Send + Sync>,
+    pub chat_event: Arc<dyn Fn(TaggedChatEvent) + Send + Sync>,
     /// `chat://session-event` — 추가 채팅 세션(멀티채팅) `{ session, event }`.
-    pub chat_session_event: Arc<dyn Fn(String, ChatEventDto) + Send + Sync>,
+    pub chat_session_event: Arc<dyn Fn(String, TaggedChatEvent) + Send + Sync>,
 }
 
 impl ShellSinks {
@@ -72,9 +72,11 @@ impl ShellSinks {
 
 /// 채팅 엔진 어댑터 — 뷰모델이 이벤트를 꺼낼 때 같은 이벤트를 `chat://event` 로도 흘린다.
 /// 엔진 이벤트 큐는 소비자가 하나뿐이라 뷰모델과 셸이 따로 구독할 수 없다.
+/// 이벤트에는 이 엔진의 채팅 채널 ID 를 붙인다 — 채널을 바꾼 뒤 늦게 온 이전 채널 이벤트를 프런트엔드가 버린다.
 struct TappedChatEngine {
     inner: LiveChatEngine,
-    sink: Arc<dyn Fn(ChatEventDto) + Send + Sync>,
+    chat_channel_id: String,
+    sink: Arc<dyn Fn(TaggedChatEvent) + Send + Sync>,
 }
 
 #[async_trait]
@@ -100,7 +102,10 @@ impl ChatEngineHandle for TappedChatEngine {
     async fn next_event(&self) -> Option<ChatEngineEvent> {
         let event = self.inner.next_event().await;
         if let Some(e) = &event {
-            (self.sink)(ChatEventDto::from_engine(e));
+            (self.sink)(TaggedChatEvent {
+                event: ChatEventDto::from_engine(e),
+                chat_channel_id: self.chat_channel_id.clone(),
+            });
         }
         event
     }
@@ -108,7 +113,7 @@ impl ChatEngineHandle for TappedChatEngine {
 
 fn chat_engine_factory(
     cookies: Arc<CookieManager>,
-    sink: Arc<dyn Fn(ChatEventDto) + Send + Sync>,
+    sink: Arc<dyn Fn(TaggedChatEvent) + Send + Sync>,
 ) -> ChatEngineFactory {
     Arc::new(move |config: ChatEngineConfiguration| {
         let cookies = cookies.clone();
@@ -123,8 +128,10 @@ fn chat_engine_factory(
                 })
                 .collect()
         });
+        let chat_channel_id = config.chat_channel_id.clone();
         Arc::new(TappedChatEngine {
             inner: LiveChatEngine::new(config.cookie_provider(Some(provider))),
+            chat_channel_id,
             sink: sink.clone(),
         }) as Arc<dyn ChatEngineHandle>
     })
@@ -132,6 +139,53 @@ fn chat_engine_factory(
 
 /// 기본 채팅 세션 키.
 pub const MAIN_CHAT_SESSION: &str = "main";
+
+/// 명령 인자의 세션 키를 정규화한다 — 없거나 빈 값은 기본 세션.
+pub fn chat_session_key(session: Option<&str>) -> &str {
+    session
+        .filter(|k| !k.is_empty())
+        .unwrap_or(MAIN_CHAT_SESSION)
+}
+
+/// 세션별 채팅 연결·해제 요청 순번 — 프런트엔드가 마지막으로 보낸 요청이 이긴다.
+///
+/// Tauri 비동기 명령은 런타임 작업으로 따로 돌아 보낸 순서대로 실행된다는 보장이 없다. 패인 전환처럼
+/// `chat_disconnect` 바로 뒤에 `chat_connect` 를 보내면 해제가 늦게 돌아 방금 연 연결을 끊거나, 해제가
+/// 세션 뷰모델을 표에서 지운 뒤 연결이 지워진 뷰모델에 붙어(표에 없는 고아 연결) 다음 해제로도 끊기지 않고
+/// 이전 채널 메시지를 같은 세션 키로 계속 흘렸다. 프런트엔드가 요청마다 단조 증가 순번(`op`)을 붙이고,
+/// 셸은 이미 본 순번보다 오래된 요청을 버린다. 순번 없는 호출(`None`)은 예전처럼 늘 받는다.
+#[derive(Default)]
+pub struct ChatOpGate {
+    last: Mutex<std::collections::HashMap<String, u64>>,
+}
+
+impl ChatOpGate {
+    /// `op` 가 이 세션의 최신 요청이면 순번을 기록하고 `f` 를 잠금 안에서 돌린다. 더 새(같은) 순번을 이미
+    /// 받았으면 `None`. 연결·해제의 동기 부분(세대 올리기·순번 잡기·세션 표 고치기)을 여기서 하면 여러 작업
+    /// 스레드에서 동시에 돌아도 요청이 보낸 순서대로 한 줄로 선다. `f` 안에서 이 게이트를 다시 부르지 않는다.
+    pub fn run_if_latest<R>(
+        &self,
+        session: &str,
+        op: Option<u64>,
+        f: impl FnOnce() -> R,
+    ) -> Option<R> {
+        let mut last = self.last.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(op) = op {
+            if last.get(session).is_some_and(|&seen| seen >= op) {
+                return None;
+            }
+            last.insert(session.to_string(), op);
+        }
+        Some(f())
+    }
+
+    /// 받아들인 뒤 기다리는 동안(토큰 받기) 더 새 요청이 오지 않았는가.
+    pub fn is_latest(&self, session: &str, op: Option<u64>) -> bool {
+        let Some(op) = op else { return true };
+        let last = self.last.lock().unwrap_or_else(|e| e.into_inner());
+        last.get(session).is_none_or(|&seen| seen == op)
+    }
+}
 
 /// 앱 전역 서비스.
 pub struct AppServices {
@@ -157,6 +211,8 @@ pub struct AppServices {
     pub chat_sessions: Mutex<std::collections::HashMap<String, ChatViewModel>>,
     /// 추가 채팅 세션 → 그 세션을 연 창 라벨. 보조 창이 OS 닫기로 사라져도 세션을 정리하려고.
     pub chat_session_windows: Mutex<std::collections::HashMap<String, String>>,
+    /// 세션별 채팅 연결·해제 요청 순번.
+    pub chat_ops: ChatOpGate,
     /// 라이브 재생.
     pub player: PlayerViewModel,
     /// 플레이어 페이지 엔진(앱 수명 동안 하나, 뷰모델에 주입돼 있다).
@@ -291,6 +347,7 @@ impl AppServices {
             chat,
             chat_sessions: Mutex::new(std::collections::HashMap::new()),
             chat_session_windows: Mutex::new(std::collections::HashMap::new()),
+            chat_ops: ChatOpGate::default(),
             player,
             engine,
             player_channel: tokio::sync::Mutex::new(None),
@@ -356,7 +413,7 @@ impl AppServices {
         }
         let emit = self.sinks.chat_session_event.clone();
         let session_key = key.to_string();
-        let sink: Arc<dyn Fn(ChatEventDto) + Send + Sync> =
+        let sink: Arc<dyn Fn(TaggedChatEvent) + Send + Sync> =
             Arc::new(move |dto| emit(session_key.clone(), dto));
         let vm = ChatViewModel::with_deps(ChatDeps {
             engine_factory: chat_engine_factory(self.cookies.clone(), sink),
@@ -366,8 +423,30 @@ impl AppServices {
         vm
     }
 
+    /// `vm` 이 아직 이 세션 키의 뷰모델인가. 기다리는 동안 `drop_chat_session` 이 지웠다면 `false` —
+    /// 그대로 연결하면 표에 없는 고아 연결이 된다.
+    pub fn is_live_chat_vm(&self, session: Option<&str>, vm: &ChatViewModel) -> bool {
+        let key = chat_session_key(session);
+        if key == MAIN_CHAT_SESSION {
+            return vm.same_as(&self.chat);
+        }
+        self.chat_sessions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(key)
+            .is_some_and(|v| v.same_as(vm))
+    }
+
     /// 추가 채팅 세션을 끊고 지운다.
     pub async fn drop_chat_session(&self, session: &str) {
+        self.detach_chat_session(session).await;
+    }
+
+    /// [`Self::drop_chat_session`] 의 동기 부분 — 표에서 지우고 엔진을 떼어 낸다. 돌려준 future 가 소켓을 닫는다.
+    pub fn detach_chat_session(
+        &self,
+        session: &str,
+    ) -> impl std::future::Future<Output = ()> + Send + 'static {
         self.chat_session_windows
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -377,8 +456,11 @@ impl AppServices {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .remove(session);
-        if let Some(vm) = vm {
-            vm.disconnect().await;
+        let detached = vm.map(|vm| vm.detach());
+        async move {
+            if let Some(d) = detached {
+                d.await;
+            }
         }
     }
 
@@ -558,6 +640,62 @@ mod tests {
             .filter_map(|e| e.ok())
             .any(|e| e.file_name().to_string_lossy().contains(".corrupt-"));
         assert!(moved, "손상 파일은 지우지 않고 옆으로 옮긴다");
+    }
+
+    #[test]
+    fn chat_op_gate_last_request_wins() {
+        let gate = ChatOpGate::default();
+        let ran = |gate: &ChatOpGate, key: &str, op| gate.run_if_latest(key, op, || ()).is_some();
+        // 해제(1) 뒤 연결(2)을 보냈는데 연결이 먼저 돌았다 — 늦게 온 해제는 버린다.
+        assert!(ran(&gate, "ml", Some(2)));
+        assert!(
+            !ran(&gate, "ml", Some(1)),
+            "오래된 해제가 새 연결을 끊지 않는다"
+        );
+        assert!(gate.is_latest("ml", Some(2)));
+        // 토큰을 받는 동안 더 새 요청이 오면 먼저 받은 연결은 물러난다.
+        assert!(ran(&gate, "ml", Some(3)));
+        assert!(!gate.is_latest("ml", Some(2)));
+        assert!(!ran(&gate, "ml", Some(3)), "같은 순번은 한 번만");
+        // 세션 키마다 따로 센다.
+        assert!(ran(&gate, "mlx:a", Some(1)));
+        assert!(ran(&gate, MAIN_CHAT_SESSION, Some(1)));
+        // 순번 없는 호출은 늘 받는다(예전 호출부).
+        assert!(ran(&gate, "ml", None));
+        assert!(gate.is_latest("ml", None));
+    }
+
+    /// 여러 작업 스레드에서 순번이 뒤섞여 들어와도 잠금 안 구간은 받아들인 순번이 늘어나는 순서로만 돈다.
+    #[test]
+    fn chat_op_gate_serializes_admitted_sections() {
+        let gate = Arc::new(ChatOpGate::default());
+        let order = Arc::new(Mutex::new(Vec::new()));
+        let threads: Vec<_> = (1..=64u64)
+            .rev()
+            .map(|op| {
+                let (gate, order) = (gate.clone(), order.clone());
+                std::thread::spawn(move || {
+                    gate.run_if_latest("ml", Some(op), || order.lock().unwrap().push(op));
+                })
+            })
+            .collect();
+        for t in threads {
+            t.join().unwrap();
+        }
+        let order = order.lock().unwrap();
+        assert!(!order.is_empty());
+        assert!(
+            order.windows(2).all(|w| w[0] < w[1]),
+            "받아들인 요청은 순번 순: {order:?}"
+        );
+        assert!(gate.is_latest("ml", Some(*order.last().unwrap())));
+    }
+
+    #[test]
+    fn chat_session_key_defaults_to_main() {
+        assert_eq!(chat_session_key(None), MAIN_CHAT_SESSION);
+        assert_eq!(chat_session_key(Some("")), MAIN_CHAT_SESSION);
+        assert_eq!(chat_session_key(Some("ml")), "ml");
     }
 
     #[test]
