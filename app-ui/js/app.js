@@ -12,6 +12,7 @@ import { setTheme, syncTheme, resolvedTheme, onThemeChange } from './theme.js';
 import { loadChatPrefs, setMyNickname } from './chat-prefs.js';
 import { MultiLivePage, multiLiveIcon, bindMultiLiveAddButtons } from './multilive.js';
 import { LivePage, liveIcon } from './live.js';
+import { LIVE_MODES, liveModeSwitch, bindLiveModeSwitch } from './live-mode.js';
 import { ChannelPage } from './channel.js';
 import { MediaPage } from './media.js';
 import { LibraryPage, libraryIcon } from './library.js';
@@ -31,14 +32,15 @@ import { installPerfCollector } from './perf-collector.js';
 import { showMenu, refreshChatAuth } from './chat.js';
 import { kbd } from './platform.js';
 
-// 사이드바 — Swift `AppRouter.SidebarItem` 라벨.
+// 사이드바 — Swift `AppRouter.SidebarItem` 라벨. `sidebar: false` 는 사이드바에 없고 다른 메뉴 속에서 여는 화면
+// (멀티라이브는 라이브 메뉴의 한 보기 — 머리줄 전환 버튼으로 오간다). ⌘K 팔레트에는 그대로 나온다.
 const ROUTES = [
   { id: 'home', title: '홈', icon: icons.home },
   { id: 'following', title: '팔로잉', icon: icons.following },
   { id: 'popular', title: '인기', icon: icons.popular },
   { id: 'categories', title: '카테고리', icon: categoryIcon },
   { id: 'live', title: '라이브', icon: liveIcon },
-  { id: 'multilive', title: '멀티라이브', icon: multiLiveIcon },
+  { id: 'multilive', title: '멀티라이브', icon: multiLiveIcon, sidebar: false },
   { id: 'multichat', title: '멀티채팅', icon: multiChatIcon },
   { id: 'library', title: '보관함', icon: libraryIcon },
   { id: 'stats', title: '통계', icon: statsIcon },
@@ -62,7 +64,7 @@ const ICON_SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 const ICON_MOON = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 14.4A8.5 8.5 0 0 1 9.6 3.5a8.5 8.5 0 1 0 10.9 10.9Z"/></svg>';
 
 function renderNav() {
-  sidebar = new Sidebar(document.querySelector('.sidebar'), { routes: ROUTES, onNavigate: navigate });
+  sidebar = new Sidebar(document.querySelector('.sidebar'), { routes: ROUTES, onNavigate: (route) => navigate(route === 'live' ? lastLiveMode : route) });
   installThemeToggle();
 }
 
@@ -151,11 +153,14 @@ async function exitWatch() {
   try { pages.multilive.render(await api.multiLiveWatch(null)); } catch { /* 앱 밖 */ }
   syncLiveIndicators();
 }
-/** 사이드바 — 라이브는 재생 중 점, 멀티라이브는 패인 수. */
+/** 사이드바 라이브 메뉴 — 단독 재생 중이면 점, 멀티라이브 패인이 있으면 그 수. */
 function syncLiveIndicators() {
   sidebar.setPlaying('live', Boolean(viewer && viewer.isPlaying) || isWatching());
-  sidebar.setBadge('multilive', (pages.multilive && (pages.multilive.state.sessions || []).length) || 0);
+  sidebar.setBadge('live', (pages.multilive && (pages.multilive.state.sessions || []).length) || 0);
 }
+
+// 사이드바 라이브 메뉴를 누르면 마지막으로 본 보기(라이브·멀티라이브)로 간다.
+let lastLiveMode = 'live';
 
 // 내비게이션 스택 — 원본 AppRouter. 화면마다 파라미터(채널 ID 등)를 가진다.
 const backStack = [];
@@ -170,7 +175,8 @@ async function navigate(route, params = {}, { push = true } = {}) {
   }
   current = route;
   currentParams = params;
-  sidebar.setActive(route);
+  if (LIVE_MODES.includes(route)) lastLiveMode = route;
+  sidebar.setActive(LIVE_MODES.includes(route) ? 'live' : route);
   const watching = isWatching();
   if (insights) insights.show(route === 'live' && viewer && (viewer.isPlaying || watching) ? 'live' : route);
   if (!AUX) saveWorkspace(route, params, viewer && viewer.isPlaying ? viewer.channelId : null);
@@ -568,6 +574,10 @@ async function main() {
   if (!AUX) insights = new InsightPanel(content, { isLoggedIn });
   bindMultiLiveAddButtons(addToMultiLive);
   installViewerMultiLiveButton();
+  if (!AUX) {
+    document.querySelector('.viewer-header .page-title').insertAdjacentHTML('afterend', liveModeSwitch('live'));
+    bindLiveModeSwitch(navigate);
+  }
   installBackgroundSaver();
   installPerfCollector();
 

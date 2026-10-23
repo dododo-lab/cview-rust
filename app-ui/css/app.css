@@ -936,6 +936,11 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .segmented .seg:hover { color: var(--text-primary); }
 .segmented .seg.active { background: var(--surface-base); color: var(--text-primary); font-weight: 600; box-shadow: var(--shadow-sm); }
 
+/* 라이브 메뉴 보기 전환(라이브 · 멀티라이브) — 제목 바로 옆, 머리줄이 좁아도 줄지 않는다 */
+.live-mode-seg { flex: none; padding: 2px; }
+.segmented.live-mode-seg .seg.icon { width: 30px; height: 24px; padding: 0; justify-content: center; }
+.segmented.live-mode-seg .seg.icon svg { width: 14px; height: 14px; }
+
 /* 시청 화면 */
 .player-controls { background: var(--surface-base); padding: 6px var(--sp-md); }
 .chat { background: var(--surface-base); }

@@ -3,8 +3,9 @@
 import { api } from './api.js';
 import { esc, safeUrl, imageSrc } from './dom.js';
 import { liveGrid, emptyState, loadingState, recentChannels } from './cards.js';
+import { liveIcon, liveModeSwitch } from './live-mode.js';
 
-export const liveIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Zm7 3v6l5-3-5-3Z"/></svg>';
+export { liveIcon };
 
 export class LivePage {
   constructor(content, { isLoggedIn }) {
@@ -16,6 +17,7 @@ export class LivePage {
     this.root.innerHTML = `
       <header class="page-header" data-tauri-drag-region>
         <h1 class="page-title">라이브</h1>
+        ${liveModeSwitch('live')}
         <span class="page-subtitle">재생 중인 방송이 없습니다 — 이어 볼 채널을 고르세요</span>
         <div class="grow"></div>
         <button class="btn" data-action="refresh">새로고침</button>
