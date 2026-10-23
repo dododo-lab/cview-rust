@@ -942,6 +942,37 @@ async fn late_finishing_older_connect_request_does_not_override_newer_channel() 
     assert!(*engines.lock().unwrap()[0].disconnected.lock().unwrap());
 }
 
+/// 셸은 여러 요청의 순서를 한 잠금 안에서 정하려고 해제의 동기 부분(`detach`)만 먼저 한다 — `await` 전에
+/// 엔진이 떨어지고 세대가 올라, 그 사이 끝나는 이전 연결 요청은 물러나야 한다.
+#[tokio::test]
+async fn detach_takes_effect_before_awaiting_engine_close() {
+    let engines = Arc::new(Mutex::new(vec![]));
+    let vm = ChatViewModel::with_deps(fake_deps(engines.clone()));
+    vm.connect(ConnectRequest::new("chat-a", "t")).await;
+    let pending = vm.begin_connect_request(); // B 로 바꾸는 중(토큰 받는 중)
+    let close = vm.detach(); // 그 뒤 패인에 채팅이 없어 끊었다
+    assert!(
+        vm.lock().chat_engine.is_none(),
+        "엔진은 기다리기 전에 떨어진다"
+    );
+    assert!(!vm.is_current_connect_request(pending));
+    assert!(
+        !*engines.lock().unwrap()[0].disconnected.lock().unwrap(),
+        "소켓 닫기는 돌려준 future 가 한다"
+    );
+    close.await;
+    assert!(*engines.lock().unwrap()[0].disconnected.lock().unwrap());
+    vm.connect_if_current(pending, ConnectRequest::new("chat-b", "t"))
+        .await;
+    assert_eq!(
+        engines.lock().unwrap().len(),
+        1,
+        "끊은 뒤 늦게 끝난 연결은 엔진을 만들지 않는다"
+    );
+    assert!(vm.same_as(&vm.clone()));
+    assert!(!vm.same_as(&ChatViewModel::with_deps(fake_deps(engines))));
+}
+
 #[tokio::test]
 async fn send_appends_local_echo_and_suppresses_server_echo() {
     let engines = Arc::new(Mutex::new(vec![]));

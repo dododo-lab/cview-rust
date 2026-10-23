@@ -9,7 +9,7 @@ export const LIVE_MODES = ['live', 'multilive'];
 
 /** 머리줄 전환 버튼 — `active` 는 'live' | 'multilive'. 누르면 `bindLiveModeSwitch` 가 그 화면으로 보낸다. */
 export function liveModeSwitch(active) {
-  const seg = (mode, icon, label, tip) => `<button class="seg icon${mode === active ? ' active' : ''}" data-live-mode="${mode}" title="${tip}" aria-label="${label}" aria-pressed="${mode === active}">${icon}</button>`;
+  const seg = (mode, icon, label, tip) => `<button class="seg${mode === active ? ' active' : ''}" data-live-mode="${mode}" title="${tip}" aria-label="${label}" aria-pressed="${mode === active}">${icon}<span>${label}</span></button>`;
   return `<div class="segmented live-mode-seg" role="group" aria-label="라이브 보기">
     ${seg('live', liveIcon, '라이브', '라이브 — 한 방송 보기')}${seg('multilive', multiLiveIcon, '멀티라이브', '멀티라이브 — 여러 방송 함께 보기')}
   </div>`;

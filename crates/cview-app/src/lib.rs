@@ -121,7 +121,7 @@ fn shell_sinks<R: Runtime>(app: &AppHandle<R>) -> ShellSinks {
             let _ = player_app.emit(events::PLAYER_EVENT, dto);
         }),
         chat_event: Arc::new(move |dto| {
-            match &dto {
+            match &dto.event {
                 crate::dto::ChatEventDto::Messages { messages, .. } => {
                     perf_log::count_chat_batch(messages.len());
                 }
@@ -136,7 +136,7 @@ fn shell_sinks<R: Runtime>(app: &AppHandle<R>) -> ShellSinks {
             let _ = chat_app.emit(events::CHAT_EVENT, dto);
         }),
         chat_session_event: Arc::new(move |session, event| {
-            if let crate::dto::ChatEventDto::Messages { messages, .. } = &event {
+            if let crate::dto::ChatEventDto::Messages { messages, .. } = &event.event {
                 perf_log::count_chat_batch(messages.len());
             }
             let _ = session_app.emit(

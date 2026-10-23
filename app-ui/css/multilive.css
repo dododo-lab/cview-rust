@@ -226,6 +226,7 @@
 /* ══ 상단 바(툴바) — 한 줄 그룹, 높이 30px 통일, 옅은 구분선 ══ */
 .ml-header { flex-wrap: nowrap; min-width: 0; }
 .ml-header .page-title { white-space: nowrap; }
+.ml-count:empty { display: none; }
 .ml-count { flex: none; font-size: var(--fs-micro); font-weight: 600; color: var(--text-secondary); padding: 2px 8px; border-radius: 999px; background: var(--hover); font-variant-numeric: tabular-nums; }
 .ml-toolbar { display: flex; align-items: center; gap: 6px; min-width: 0; flex: none; }
 .ml-toolbar .ml-focus-controls { gap: 6px; }
