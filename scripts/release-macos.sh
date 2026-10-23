@@ -37,6 +37,10 @@ export LANG="${LANG:-en_US.UTF-8}" LC_ALL="${LC_ALL:-en_US.UTF-8}"
 [[ "$LANG" == "C" || -z "$LANG" ]] && export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
 CONF=crates/cview-app/tauri.conf.json
+# 빌드 산출물 폴더는 cargo 에게 묻는다 — .cargo/config.toml 의 build.target-dir · CARGO_TARGET_DIR 을 따른다(기본 ./target).
+TARGET=$(cargo metadata --format-version 1 --no-deps | python3 -c 'import json,sys;print(json.load(sys.stdin)["target_directory"])')
+[[ -d "${TARGET:h}" ]] || { echo "✗ 빌드 폴더의 상위 경로가 없습니다(외장 볼륨이 붙어 있나요?): $TARGET"; exit 1; }
+echo "빌드 폴더: $TARGET"
 dist_build=0
 part=patch
 for arg in "$@"; do
@@ -110,7 +114,7 @@ PY
 )
   echo "   → v$version (빌드 $build)"
   # 예전 DMG 를 다시 쓰지 않게 지운다.
-  rm -f target/release/bundle/dmg/*.dmg(N) dist/CView_${version}_arm64.dmg(N)
+  rm -f "$TARGET"/release/bundle/dmg/*.dmg(N) dist/CView_${version}_arm64.dmg(N)
 fi
 
 (cd crates/cview-app && cargo tauri build --bundles app)
@@ -127,7 +131,7 @@ for img in plistlib.loads(sys.stdin.buffer.read()).get("images", []):
         if ents: print(min(ents, key=len))'); do
       hdiutil detach "$dev" -force >/dev/null 2>&1 || true
     done
-    rm -f target/release/bundle/macos/rw.*.dmg(N)
+    rm -f "$TARGET"/release/bundle/macos/rw.*.dmg(N)
     # CI=true → tauri 가 bundle_dmg.sh 에 --skip-jenkins 를 넘긴다: Finder 를 열어 아이콘을 배치하는 AppleScript 를 건너뛰어
     # 만드는 동안 화면에 창이 뜨지 않는다(사용자 요청 2026-10-21). 임시 이미지는 원래 -noautoopen -nobrowse 로 붙는다.
     # 대신 창 크기·아이콘 위치 같은 꾸밈은 없다 — Applications 바로가기(끌어다 설치)는 그대로 들어간다.
@@ -138,7 +142,7 @@ for img in plistlib.loads(sys.stdin.buffer.read()).get("images", []):
   (( dmg_ok )) || { echo "✗ DMG 를 만들지 못했습니다"; exit 1; }
 fi
 
-app="target/release/bundle/macos/CView.app"
+app="$TARGET/release/bundle/macos/CView.app"
 [[ -d "$app" ]] || { echo "번들을 찾지 못했습니다: $app"; exit 1; }
 echo "── 산출물"
 ls -la "$app/Contents/MacOS"
@@ -153,7 +157,7 @@ spctl -a -vvv -t exec "$app" || echo "(공증 전이면 거부될 수 있습니�
 xcrun stapler validate "$app" || true
 
 if (( dist_build )); then
-  dmg=$(ls -t target/release/bundle/dmg/*.dmg(N) 2>/dev/null | head -1 || true)
+  dmg=$(ls -t "$TARGET"/release/bundle/dmg/*.dmg(N) 2>/dev/null | head -1 || true)
   [[ -n "$dmg" ]] || { echo "✗ DMG 를 찾지 못했습니다"; exit 1; }
   out="dist/CView_${version}_arm64.dmg"
   echo "── DMG 서명·복사 → $out"
@@ -211,9 +215,9 @@ print(max(subs, key=lambda s: s["createdDate"])["id"] if subs else "")' "$(basen
   if [[ -z "${CVIEW_SKIP_WINDOWS:-}" ]]; then
     echo "── Windows 설치 파일(x64, 교차 빌드)"
     win_out="dist/CView_${version}_x64-setup.exe"
-    rm -f target/x86_64-pc-windows-gnu/release/bundle/nsis/*.exe(N) "$win_out"
+    rm -f "$TARGET"/x86_64-pc-windows-gnu/release/bundle/nsis/*.exe(N) "$win_out"
     (cd crates/cview-app && cargo tauri build --target x86_64-pc-windows-gnu --bundles nsis)
-    win_exe=$(ls -t target/x86_64-pc-windows-gnu/release/bundle/nsis/*.exe(N) | head -1)
+    win_exe=$(ls -t "$TARGET"/x86_64-pc-windows-gnu/release/bundle/nsis/*.exe(N) | head -1)
     [[ -n "$win_exe" ]] || { echo "✗ Windows 설치 파일을 찾지 못했습니다"; exit 1; }
     cp "$win_exe" "$win_out"
     shasum -a 256 "$win_out"
