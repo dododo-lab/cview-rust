@@ -182,7 +182,7 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 .nav-item .nav-icon { transition: color var(--dur-2) var(--ease-out), scale .3s var(--ease-spring); }
 .nav-item:hover .nav-icon { scale: 1.06; }
 .side-tip:not([hidden]) { animation: mo-fade var(--dur-1) var(--ease-out) both; }
-.sidebar { transition: width .28s var(--ease-emph), padding .28s var(--ease-emph); }
+/* 사이드바 너비 전환은 app.css(.sidebar 의 --sb-dur·--sb-ease)가 안쪽 위치 전환과 함께 맡는다 */
 
 /* ── 세그먼트·칩·토글 ── */
 .segmented .seg.active { animation: mo-pop .22s var(--ease-out) both; }
