@@ -47,7 +47,7 @@ function jobRow(j) {
     <span class="dl-kind">${j.kind === 'clip' ? '클립' : 'VOD'}</span>
     <span class="dl-text"><strong class="ellipsis">${esc(j.title)}</strong>
       <span class="ellipsis">${j.channelName ? `${esc(j.channelName)} · ` : ''}${esc(STATE_LABEL[j.state] || j.state)}${active && j.state === 'downloading' ? ` · ${pct}% · ${esc(bytesText(j.bytes))}` : ''}${j.error ? ` · ${esc(j.error)}` : ''}</span>
-      ${active ? `<span class="dl-track"><span class="dl-fill${j.state === 'preparing' || j.state === 'queued' ? ' indeterminate' : ''}" style="width:${pct}%"></span></span>` : ''}</span>
+      ${active ? `<span class="dl-track"><span class="dl-fill${j.state === 'preparing' || j.state === 'queued' ? ' indeterminate' : ''}" style="--p:${pct / 100}"></span></span>` : ''}</span>
     ${active ? '<button class="btn ghost" data-dl="cancel">취소</button>' : ''}
     ${j.state === 'failed' || j.state === 'cancelled' ? `<button class="btn" data-dl="retry" data-kind="${esc(j.kind)}" data-target="${esc(j.target)}" data-title="${esc(j.title)}">다시 시도</button>` : ''}
     ${j.state === 'completed' && j.filePath ? `<button class="btn" data-dl="reveal" data-path="${esc(j.filePath)}">Finder에서 보기</button>` : ''}

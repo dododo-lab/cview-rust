@@ -237,6 +237,10 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 .chat-jump:not([hidden]) { animation: mo-pop-up .3s var(--ease-spring) both; }
 .chat-reopen:not([hidden]), .ip-reopen:not([hidden]) { animation: mo-fade var(--dur-3) var(--ease-out) both; }
 .mention-count:not([hidden]) { animation: mo-pop .3s var(--ease-spring) both; }
+.chat-jump:hover { filter: brightness(1.06); box-shadow: 0 6px 18px var(--primary-glow); }
+.chat-reopen:hover { background: var(--surface-popover); border-color: var(--border); }
+.toast-action:hover { background: color-mix(in srgb, var(--primary) 26%, transparent); }
+.ac-item:hover:not(.active) { background: var(--hover); }
 .chat-state { transition: color var(--dur-3) var(--ease-out); }
 
 /* ── 패널·오버레이 ── */

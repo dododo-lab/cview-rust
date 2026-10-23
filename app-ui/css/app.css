@@ -550,10 +550,7 @@ a { color: var(--primary); }
   padding: 64px var(--sp-lg); color: var(--text-tertiary); text-align: center;
 }
 .empty strong { color: var(--text-secondary); font-size: var(--fs-subhead); }
-.spinner {
-  width: 22px; height: 22px; border-radius: 50%;
-  border: 2px solid var(--border); border-top-color: var(--primary); animation: spin 0.8s linear infinite;
-}
+/* 로더(.spinner)는 motion.css 의 로고 로더. spin 은 새로고침 아이콘 회전에 쓴다. */
 @keyframes spin { to { transform: rotate(360deg); } }
 .skeleton { background: var(--surface-elevated); border-radius: var(--radius-md); aspect-ratio: 16 / 9; }
 
@@ -585,11 +582,11 @@ a { color: var(--primary); }
 .toggle { position: relative; width: 38px; height: 22px; flex: none; }
 .toggle input { opacity: 0; width: 0; height: 0; }
 .toggle span {
-  position: absolute; inset: 0; border-radius: 11px; background: var(--surface-popover); transition: 0.2s;
+  position: absolute; inset: 0; border-radius: 11px; background: var(--surface-popover);
 }
 .toggle span::after {
   content: ""; position: absolute; width: 18px; height: 18px; left: 2px; top: 2px; border-radius: 50%;
-  background: #fff; transition: 0.2s;
+  background: #fff;
 }
 .toggle input:checked + span { background: var(--primary); }
 .toggle input:checked + span::after { transform: translateX(16px); }
@@ -845,8 +842,7 @@ select.select {
 /* 스켈레톤 */
 .sk {
   border-radius: var(--radius-md);
-  background: linear-gradient(90deg, var(--surface-base) 0%, var(--surface-elevated) 50%, var(--surface-base) 100%);
-  background-size: 200% 100%; animation: shimmer 1.4s ease-in-out infinite;
+  /* 색·맥박은 motion.css(sk-pulse) */
 }
 .hero-sk { min-height: 360px; border-radius: 18px; }
 .queue-sk { height: 62px; border-radius: 12px; }
@@ -855,7 +851,6 @@ select.select {
 .thumb-sk { aspect-ratio: 16 / 9; }
 .sk.line { height: 12px; width: 80%; border-radius: 6px; }
 .sk.line.short { width: 50%; }
-@keyframes shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 
 @media (max-width: 1100px) {
   .hero { grid-template-columns: 1fr; }
@@ -1432,12 +1427,8 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
   position: static; transform: none; pointer-events: auto; display: flex; align-items: center; gap: 12px;
   background: var(--surface-popover); color: var(--text-primary); padding: 9px 14px; border-radius: 12px;
   border: 1px solid var(--border-subtle); box-shadow: var(--shadow-lg); font-size: var(--fs-caption); max-width: min(560px, 90vw);
-  animation: toast-in 0.22s var(--ease-out) both;
 }
-.toast-stack .toast.leaving { animation: toast-out 0.22s ease both; }
 .toast-action { border: 0; background: var(--primary-dim); color: var(--primary-text); font-weight: 700; padding: 4px 10px; border-radius: 8px; }
-@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-@keyframes toast-out { to { opacity: 0; transform: translateY(6px); } }
 .offline-banner {
   position: absolute; top: 0; left: 0; right: 0; z-index: 40; padding: 8px 16px; text-align: center; font-size: var(--fs-caption);
   font-weight: 600; color: #fff; background: var(--warning);
@@ -1471,8 +1462,6 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .stream-alerts { left: calc(var(--alert-x, 0.5) * 100%); top: calc(var(--alert-y, 0.08) * 100%); transform: translateX(-50%) scale(var(--alert-scale, 1)); transform-origin: top center; }
 /* 모션 — 절약은 애니메이션을 끄고, 풍부는 화면 전환에 페이드를 준다 (DSN-02) */
 :root[data-motion="reduced"] *, :root[data-motion="reduced"] *::before, :root[data-motion="reduced"] *::after { animation-duration: 0.01ms !important; animation-delay: 0s !important; transition-duration: 0.01ms !important; transition-delay: 0s !important; }
-:root[data-motion="rich"] .page:not([hidden]) { animation: page-in 0.28s var(--ease-out) both; }
-@keyframes page-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 /* 콤팩트 (DSN-03) */
 :root.compact { --sp-lg: 12px; --sp-xl: 18px; --sp-xxl: 24px; --fs-body: 13px; --fs-title: 22px; }
 :root.compact .grid { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
@@ -1756,9 +1745,10 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .dl-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; font-size: var(--fs-footnote); }
 .dl-text > span { color: var(--text-tertiary); }
 .dl-track { display: block; height: 5px; border-radius: 3px; background: var(--hover); overflow: hidden; margin-top: 3px; }
-.dl-fill { display: block; height: 100%; background: var(--primary); border-radius: 3px; transition: width .3s var(--ease-out); }
-.dl-fill.indeterminate { width: 30% !important; animation: dl-indet 1.2s ease-in-out infinite; }
-@keyframes dl-indet { from { transform: translateX(-100%); } to { transform: translateX(340%); } }
+/* 진행은 width 대신 scaleX(--p, 0~1) — 받는 동안 매번 다시 배치하지 않는다 */
+.dl-fill { display: block; width: 100%; height: 100%; background: var(--primary); border-radius: 3px; transform: scaleX(var(--p, 0)); transform-origin: left center; transition: transform .3s var(--ease-out); }
+.dl-fill.indeterminate { width: 30%; transform: none; animation: dl-indet 1.2s ease-in-out infinite; }
+@keyframes dl-indet { from { translate: -100% 0; } to { translate: 340% 0; } }
 
 /* ── 팔로잉 인사이트·검색 디스커버리·사이드바 빠른 동작 (NAV-05·07·13) ───────── */
 .insight-rail { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 14px; margin-bottom: 12px; border-radius: var(--radius-lg); background: var(--surface-elevated); border: 1px solid var(--border-subtle); }
@@ -2196,8 +2186,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .ip-skeleton { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .ip-skeleton span { height: 56px; border-radius: 12px; }
 .ip-skeleton i { grid-column: 1 / -1; height: 110px; border-radius: 14px; }
-.ip-skeleton span, .ip-skeleton i { background: linear-gradient(90deg, var(--hover), var(--active), var(--hover)); background-size: 200% 100%; animation: ip-shimmer 1.4s ease-in-out infinite; }
-@keyframes ip-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
 /* 좁은 창에서는 내용이 눌리지 않게 숨긴다 */
 @media (max-width: 1240px) {
   .insight-panel, .ip-reopen { display: none !important; }
