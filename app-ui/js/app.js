@@ -162,6 +162,23 @@ function syncLiveIndicators() {
 // 사이드바 라이브 메뉴를 누르면 마지막으로 본 보기(라이브·멀티라이브)로 간다.
 let lastLiveMode = 'live';
 
+/**
+ * 머리줄 [라이브 | 멀티라이브] 전환.
+ * 멀티라이브 → 라이브: 포커스 레이아웃이면 메인 패인, 아니면 선택한 패인의 채널을 같은 세션 그대로(다시 연결 없이)
+ * 라이브 무대에 올린다. 나머지 채널은 라이브 머리줄의 채널 고르기로 바꿔 본다.
+ * 멀티라이브가 비어 있으면 예전처럼 라이브 화면(재생 중인 방송·이어 볼 채널)으로 간다.
+ */
+function switchLiveMode(mode) {
+  if (mode === 'live' && current === 'multilive' && !isWatching()) {
+    const st = pages.multilive.state;
+    const sessions = (st.sessions || []).filter((x) => x.slot != null);
+    const mainId = (st.layout === 'focus' && st.focusMainId) || st.selectedId;
+    const pick = sessions.find((x) => x.id === mainId) || sessions[0];
+    if (pick) { enterWatch(pick.id); return; }
+  }
+  navigate(mode);
+}
+
 // 내비게이션 스택 — 원본 AppRouter. 화면마다 파라미터(채널 ID 등)를 가진다.
 const backStack = [];
 let currentParams = {};
@@ -576,7 +593,7 @@ async function main() {
   installViewerMultiLiveButton();
   if (!AUX) {
     document.querySelector('.viewer-header .page-title').insertAdjacentHTML('afterend', liveModeSwitch('live'));
-    bindLiveModeSwitch(navigate);
+    bindLiveModeSwitch(switchLiveMode);
   }
   installBackgroundSaver();
   installPerfCollector();

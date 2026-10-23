@@ -391,6 +391,18 @@
 /* 라이브 메뉴 단독 보기(원본 시청 모드) — 같은 패인을 무대 하나로, 배치 도구는 숨긴다 */
 .page-multilive.as-watch .ml-toolbar, .page-multilive.as-watch .ml-count { display: none; }
 .page-multilive.as-watch .ml-watch-btn, .page-multilive.as-watch [data-ml="single"] { display: none !important; }
+/* 라이브 단독 무대 — 멀티라이브의 다른 채널로 바꿔 보기 */
+.ml-watch-picker { display: flex; gap: 6px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.ml-watch-picker[hidden] { display: none; }
+.ml-watch-chip {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; max-width: 160px; height: 28px; padding: 0 10px 0 4px;
+  border-radius: 14px; border: 1px solid var(--border-subtle); background: var(--surface-elevated);
+  color: var(--text-secondary); font-size: var(--fs-footnote); font-weight: 500;
+}
+.ml-watch-chip:hover { color: var(--text-primary); background: var(--surface-overlay); }
+.ml-watch-chip.active { color: var(--text-primary); border-color: var(--primary); font-weight: 600; }
+.ml-watch-chip img, .ml-watch-dot { width: 20px; height: 20px; border-radius: 50%; flex: none; object-fit: cover; }
+.ml-watch-dot { background: var(--surface-overlay); }
 
 /* 패인 볼륨 슬라이더 키보드 초점 */
 .ml-vol .ml-vol-range:focus-visible { width: 64px; opacity: 1; margin: 0 8px 0 2px; outline: 2px solid #00ffa3; outline-offset: 3px; border-radius: 2px; }

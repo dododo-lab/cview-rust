@@ -78,6 +78,7 @@ export class MultiLivePage {
         <h1 class="page-title">멀티라이브</h1>
         ${liveModeSwitch('multilive')}
         <span class="page-subtitle ml-count"></span>
+        <div class="ml-watch-picker" role="group" aria-label="라이브로 볼 채널" hidden></div>
         <div class="grow"></div>
         <div class="ml-toolbar">
           <div class="ml-focus-controls" hidden>
@@ -139,6 +140,7 @@ export class MultiLivePage {
     this.empty = this.root.querySelector('.ml-empty');
     this.focusAdd = this.root.querySelector('.ml-focus-add');
     this.count = this.root.querySelector('.ml-count');
+    this.watchPicker = this.root.querySelector('.ml-watch-picker');
     this.focusControls = this.root.querySelector('.ml-focus-controls');
     this.ratioInput = this.root.querySelector('.ml-ratio input');
     this.ratioOutput = this.root.querySelector('.ml-ratio output');
@@ -351,6 +353,7 @@ export class MultiLivePage {
     const mode = this.watchSlot != null ? 'live' : 'multilive';
     this.root.querySelector('.ml-header .page-title').textContent = mode === 'live' ? '라이브' : '멀티라이브';
     setLiveModeActive(this.root.querySelector('.ml-header'), mode);
+    this.renderWatchPicker(sessions, watched);
     const single = this.watchSlot ?? this.single;
 
     const focus = state.layout === 'focus' && n > 1;
@@ -738,6 +741,25 @@ export class MultiLivePage {
 
   // ── 동작 ───────────────────────────────────
 
+  /**
+   * 라이브 단독 무대일 때 머리줄의 채널 고르기 — 멀티라이브의 다른 채널을 다시 연결 없이 라이브로 바꿔 본다.
+   * 채널이 하나뿐이거나 멀티라이브 보기면 숨긴다.
+   */
+  renderWatchPicker(sessions, watched) {
+    const list = watched ? sessions.filter((x) => x.slot != null) : [];
+    this.watchPicker.hidden = list.length < 2;
+    if (this.watchPicker.hidden) { this.watchPicker.innerHTML = ''; return; }
+    this.watchPicker.innerHTML = list.map((x) => {
+      const on = x.id === watched.id;
+      const avatar = safeUrl(x.profileImageUrl);
+      const name = x.channelName || x.channelId;
+      return `<button class="ml-watch-chip${on ? ' active' : ''}" data-ml="watch" data-session-id="${esc(x.id)}" aria-pressed="${on}" title="${esc(on ? `${name} — 지금 보는 채널` : `${name} 라이브로 보기`)}">
+        ${avatar ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="ml-watch-dot"></span>'}
+        <span class="ellipsis">${esc(name)}</span>
+      </button>`;
+    }).join('');
+  }
+
   async onClick(e) {
     const layout = e.target.closest('[data-layout]');
     if (layout) {
@@ -763,7 +785,12 @@ export class MultiLivePage {
         else this.run(api.multiLiveSelect(sessionId));
         break;
       case 'single': if (pane && this.watchSlot == null) this.toggleSingle(Number(pane.dataset.slot)); break;
-      case 'watch': if (sessionId) window.dispatchEvent(new CustomEvent('cview:ml-watch', { detail: { sessionId } })); break;
+      case 'watch': {
+        // 패인의 '라이브로 크게 보기' 또는 라이브 머리줄의 채널 고르기(data-session-id).
+        const id = action.dataset.sessionId || sessionId;
+        if (id && !(this.watchSlot != null && id === this.state.watchId)) window.dispatchEvent(new CustomEvent('cview:ml-watch', { detail: { sessionId: id } }));
+        break;
+      }
       case 'multi-audio': this.run(api.multiLiveAudio(null, true)); break;
       case 'presets': this.showPresets(); break;
       case 'restore': this.restoreSessions(this.savedSessionIds()); break;
