@@ -4,7 +4,7 @@
 // CHT-11 자동 스크롤·"새 메시지" 버튼·읽음 구분선(⌘J), CHT-12 지우기(⇧⌘K)·재연결, CHT-14 표시 옵션,
 // CHT-16 후원 필터, CHT-20 입력 상태 배너.
 import { api, listen, Events } from './api.js';
-import { esc, safeUrl, toast, imageSrc } from './dom.js';
+import { esc, safeUrl, toast, imageSrc, dismiss } from './dom.js';
 import { DonationRanking, eventCardHtml, eventClasses, EVENT_ICONS } from './donations.js';
 import { installChatExtras } from './chat-extras.js';
 import { nickColorClass } from './nick-color.js';
@@ -350,6 +350,7 @@ export class ChatPanel {
     const [label, cls] = STATE_LABEL[name] || [name, ''];
     this.state.textContent = name === 'reconnecting' && detail ? `${label} (${detail})` : label;
     this.state.className = `chat-state ${cls}`;
+    this.stateName = name;
     this.connected = name === 'connected';
     this.updateInput();
   }
@@ -468,6 +469,8 @@ export class ChatPanel {
 
   onEvent(ev) {
     if (!ev || !this.active) return;
+    // 채널을 바꾼 뒤 늦게 도착한 이전 채널 이벤트(메시지·끊김 상태)는 버린다.
+    if (ev.chatChannelId && this.chatChannelId && ev.chatChannelId !== this.chatChannelId) return;
     switch (ev.type) {
       case 'state':
         this.setState(ev.state, ev.detail);
@@ -662,7 +665,7 @@ export class ChatPanel {
       </div>`;
     document.body.append(scrim);
     scrim.querySelector('.sheet').focus();
-    const close = () => scrim.remove();
+    const close = () => dismiss(scrim);
     scrim.addEventListener('click', (e) => {
       if (e.target === scrim) { close(); return; }
       const b = e.target.closest('[data-p]');

@@ -255,3 +255,25 @@ fn donation_type_and_subscription_tier() {
     let dto = ChatMessageDto::from_message(&sub, false);
     assert_eq!(dto.subscription_tier.as_deref(), Some("티어 2"));
 }
+
+#[test]
+fn tagged_chat_event_carries_chat_channel_id() {
+    let ev = TaggedChatEvent {
+        event: ChatEventDto::from_engine(&ChatEngineEvent::StateChanged(
+            ChatConnectionState::Reconnecting { attempt: 2 },
+        )),
+        chat_channel_id: "chat-a".into(),
+    };
+    assert_eq!(
+        serde_json::to_value(&ev).unwrap(),
+        json!({"type": "state", "state": "reconnecting", "detail": "2", "chatChannelId": "chat-a"})
+    );
+    let ev = TaggedChatEvent {
+        event: ChatEventDto::Connected,
+        chat_channel_id: "chat-b".into(),
+    };
+    assert_eq!(
+        serde_json::to_value(&ev).unwrap(),
+        json!({"type": "connected", "chatChannelId": "chat-b"})
+    );
+}

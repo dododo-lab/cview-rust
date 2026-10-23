@@ -7,7 +7,7 @@
 // - 패인을 누르면 선택 — 오디오·채팅·고화질이 그 패인을 따라간다.
 import { api, listen, listenHere, Events } from './api.js';
 import { setPicture, setSharpenDefault } from './picture.js';
-import { esc, safeUrl, toast, imageSrc, streamEndedArt } from './dom.js';
+import { esc, safeUrl, toast, imageSrc, streamEndedArt, dismiss } from './dom.js';
 import { PlayerBridge } from './player.js';
 import { ChatPanel } from './chat.js';
 import { StreamAlerts } from './donations.js';
@@ -16,8 +16,14 @@ import { installChatSplitter } from './splitter.js';
 import { FOCUS_DIRECTIONS, FOCUS_RATIO, focusGrid, ratioFromPointer, clampFocusRatio } from './focus-layout.js';
 import { kbd } from './platform.js';
 import { uptimeText } from './cards.js';
+import { MultiLiveAddDrawer } from './ml-add-drawer.js';
+import { snapshotPanes, playLayoutMotion, playExit, cancelExit, bindPaneDrag, releaseDragged, motionEnabled } from './ml-motion.js';
+import { MultiLiveMergedChat } from './ml-multichat.js';
 
-export const multiLiveIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5Zm9 9a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2v-5ZM14 3h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2ZM5 12h5a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2Z" opacity=".9"/></svg>';
+import { liveIcon, multiLiveIcon, liveModeSwitch, setLiveModeActive } from './live-mode.js';
+import { decoratePageHeader, setPageHeaderIcon } from './page-header.js';
+
+export { multiLiveIcon };
 
 const ICON_CLOSE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
 const ICON_SOUND = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4V9Z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
@@ -71,9 +77,10 @@ export class MultiLivePage {
     this.root.innerHTML = `
       <header class="page-header ml-header" data-tauri-drag-region>
         <h1 class="page-title">멀티라이브</h1>
+        ${liveModeSwitch('multilive')}
         <span class="page-subtitle ml-count"></span>
+        <div class="ml-watch-picker" role="group" aria-label="라이브로 볼 채널" hidden></div>
         <div class="grow"></div>
-        <button class="btn ml-watch-back" data-ml="watch-exit" hidden title="이 채널을 멀티라이브 배치로 돌려보내기">${multiLiveIcon}<span>멀티라이브로</span></button>
         <div class="ml-toolbar">
           <div class="ml-focus-controls" hidden>
             <div class="segmented ml-tb-seg" role="group" aria-label="포커스 방향">
@@ -127,26 +134,17 @@ export class MultiLivePage {
             <button class="btn primary" type="submit">채팅</button>
           </form>
         </aside>
-      </div>
-      <div class="ml-picker" hidden>
-        <div class="ml-picker-panel" role="dialog" aria-label="채널 추가">
-          <header class="ml-picker-head">
-            <strong>채널 추가</strong>
-            <input type="search" class="ml-picker-filter" placeholder="채널·제목으로 찾기" autocomplete="off" spellcheck="false">
-            <button class="icon-btn" data-ml="picker-close" title="닫기">${ICON_CLOSE}</button>
-          </header>
-          <div class="ml-picker-list"></div>
-        </div>
       </div>`;
     content.append(this.root);
+    // 툴바가 빽빽한 화면이라 머리줄은 한 줄(수 알약은 줄 안에). 아이콘은 보기(라이브·멀티라이브)를 따른다.
+    decoratePageHeader(this.root.querySelector('.ml-header'), multiLiveIcon, { compact: true });
+    setPageHeaderIcon(this.root.querySelector('.ml-header'), 'multilive', multiLiveIcon);
 
     this.stage = this.root.querySelector('.ml-stage');
     this.empty = this.root.querySelector('.ml-empty');
     this.focusAdd = this.root.querySelector('.ml-focus-add');
     this.count = this.root.querySelector('.ml-count');
-    this.picker = this.root.querySelector('.ml-picker');
-    this.pickerList = this.root.querySelector('.ml-picker-list');
-    this.pickerFilter = this.root.querySelector('.ml-picker-filter');
+    this.watchPicker = this.root.querySelector('.ml-watch-picker');
     this.focusControls = this.root.querySelector('.ml-focus-controls');
     this.ratioInput = this.root.querySelector('.ml-ratio input');
     this.ratioOutput = this.root.querySelector('.ml-ratio output');
@@ -161,7 +159,6 @@ export class MultiLivePage {
     this.alerts = new StreamAlerts(this.stage);
     this.single = null; // 한 채널 크게(MUL-11) — 슬롯
     this.gridDividers = this.buildGridDividers();
-    this.bindDrag();
     this.stage.addEventListener('dblclick', (e) => {
       const pane = e.target.closest('.ml-pane');
       if (pane && this.watchSlot == null && !e.target.closest('.ml-pane-bar, .ml-pane-top, .ml-pane-menu')) this.toggleSingle(Number(pane.dataset.slot));
@@ -195,12 +192,26 @@ export class MultiLivePage {
     // 멀티라이브 채팅은 자기 세션(`ml`)을 쓴다 — 라이브 화면과 기본 세션을 나눠 쓰면 라이브를 열거나 닫을 때
     // (단독 보기로 넘어가며 viewer.close 가 끊기, 다른 채널 시청이 기본 세션을 가져가기) 이 채팅이 끊긴 채 남았다.
     this.chat = new ChatPanel(this.root.querySelector('.ml-chat'), { isLoggedIn, session: 'ml', mentionNotify: true, onHighlight: (m) => this.alerts.push(m) });
+    // 멀티채팅 — 모든 패인 채팅을 통합·그리드·포커스로(보내기는 선택 패인으로).
+    this.mergedChat = new MultiLiveMergedChat(this.root.querySelector('.ml-chat'), {
+      getState: () => this.state,
+      getPanes: () => this.panes,
+      onSelect: (id) => { if (id !== this.state.selectedId) this.run(api.multiLiveSelect(id)); },
+    });
 
     this.state = { sessions: [], selectedId: null, canAdd: true, maxSessions: 4, layout: 'grid' };
     this.panes = new Map(); // slot → { el, bridge, sessionId }
+    this.motionSig = null; // 마지막으로 그린 배치(패인 구성·순서·레이아웃) — 바뀌면 FLIP 으로 움직인다
+    this.dragRelease = null; // 방금 끌어 놓은 패인
+    // 끌어서 자리 바꾸기·메인 바꾸기(MUL-07) — 포인터로 직접 끈다(ml-motion.js).
+    bindPaneDrag(this, (dragged, target) => this.run(api.multiLiveReorder(dragged, target)));
     this.pending = new Map(); // slot → [script]
     this.chatKey = null;
-    this.pickerItems = [];
+    this.addBar = new MultiLiveAddDrawer(this.root.querySelector('.ml-body'), {
+      isLoggedIn,
+      getState: () => this.state,
+      onAdd: (channelId) => this.run(api.multiLiveAdd(channelId)),
+    });
 
     listenHere(Events.multiLiveCommand, (p) => p && this.dispatch(p.slot, p.script));
     listen(Events.multiLiveState, (s) => this.render(s));
@@ -218,7 +229,6 @@ export class MultiLivePage {
     moreMenu.addEventListener('click', () => closeMore());
     document.addEventListener('pointerdown', (e) => { if (!moreMenu.hidden && !e.target.closest('.ml-more')) closeMore(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !moreMenu.hidden) closeMore(); });
-    this.pickerFilter.addEventListener('input', () => this.renderPicker());
     new ResizeObserver(() => this.reportStageSize()).observe(this.stage);
   }
 
@@ -261,8 +271,9 @@ export class MultiLivePage {
       <iframe src="player/player.html" title="멀티라이브 플레이어 ${slot}" allow="autoplay; fullscreen"></iframe>
       <div class="ml-pane-hit" data-ml="select"></div>
       <div class="ml-pane-state"><div class="spinner"></div>${streamEndedArt}<span></span></div>
+      <div class="ml-drop-hint" aria-hidden="true"></div>
       <div class="ml-pane-top">
-        <button class="ml-pane-btn ml-drag" draggable="true" title="끌어서 자리 바꾸기" aria-label="끌어서 자리 바꾸기"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>
+        <button class="ml-pane-btn ml-drag" title="끌어서 자리 바꾸기 — 메인 패인에 놓으면 메인이 됩니다" aria-label="끌어서 자리 바꾸기"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>
         <div class="ml-pane-avatar" data-ml="info" title="채널 정보"></div>
         <div class="ml-pane-text">
           <div class="ml-pane-title ellipsis"></div>
@@ -308,6 +319,12 @@ export class MultiLivePage {
     if (!state) return;
     // 늦게 도착한 낡은 상태는 무시한다 — 그대로 그리면 방금 재사용된 슬롯을 '닫힌 패인'으로 보고 멈춘다.
     if (this.state && typeof state.rev === 'number' && typeof this.state.rev === 'number' && state.rev < this.state.rev) return;
+    // 배치가 바뀌면(추가·제거·순서·레이아웃·메인) 바꾸기 전 자리를 재 둔다 — 끝에서 새 자리로 미끄러진다.
+    const sig = this.motionSignature(state);
+    const visible = !this.root.hidden && !document.hidden && motionEnabled();
+    const before = visible && (this.dragRelease || (this.motionSig != null && sig !== this.motionSig)) ? snapshotPanes(this.panes) : null;
+    this.motionSig = sig;
+    if (this.dragRelease) { releaseDragged(this.dragRelease); this.dragRelease = null; }
     this.state = state;
     const sessions = state.sessions || [];
     const n = sessions.length;
@@ -336,8 +353,12 @@ export class MultiLivePage {
     const watched = state.watchId ? sessions.find((x) => x.id === state.watchId) : null;
     this.watchSlot = watched && watched.slot != null ? watched.slot : null;
     this.root.classList.toggle('as-watch', this.watchSlot != null);
-    this.root.querySelector('.ml-header .page-title').textContent = this.watchSlot != null ? '라이브' : '멀티라이브';
-    this.root.querySelector('.ml-watch-back').hidden = this.watchSlot == null;
+    // 단독 무대일 땐 라이브, 아니면 멀티라이브 — 머리줄 제목과 전환 버튼이 지금 보기를 따른다.
+    const mode = this.watchSlot != null ? 'live' : 'multilive';
+    this.root.querySelector('.ml-header .page-title').textContent = mode === 'live' ? '라이브' : '멀티라이브';
+    setPageHeaderIcon(this.root.querySelector('.ml-header'), mode, mode === 'live' ? liveIcon : multiLiveIcon);
+    setLiveModeActive(this.root.querySelector('.ml-header'), mode);
+    this.renderWatchPicker(sessions, watched);
     const single = this.watchSlot ?? this.single;
 
     const focus = state.layout === 'focus' && n > 1;
@@ -358,6 +379,7 @@ export class MultiLivePage {
       if (s.slot == null) continue;
       live.add(s.slot);
       const pane = this.ensurePane(s.slot);
+      cancelExit(pane); // 사라지는 중에 같은 슬롯이 다시 쓰이면 되돌린다
       if (pane.sessionId !== s.id) {
         const used = [...this.panes.values()].filter((p) => p !== pane && p.sessionId && p.hue != null).map((p) => p.hue);
         pane.hue = pickTintHue(used);
@@ -371,13 +393,25 @@ export class MultiLivePage {
     this.applyCustomGrid(state.layout === 'custom' && n > 1 && n <= 4 && single == null, n);
     for (const [slot, pane] of this.panes) pane.el.classList.toggle('ml-single-target', single === slot);
     for (const [slot, pane] of this.panes) {
-      if (!live.has(slot)) {
-        // 닫힌 패인 — 숨기기만 하면 iframe 이 MediaSource 버퍼를 계속 쥔다(모두 닫은 뒤 RSS 3GB대).
-        if (pane.sessionId || !pane.el.hidden) pane.bridge.run('try { stop(); video.removeAttribute("src"); video.load(); } catch (e) {}');
+      if (live.has(slot) || pane.exiting) continue;
+      // 닫힌 패인 — 숨기기만 하면 iframe 이 MediaSource 버퍼를 계속 쥔다(모두 닫은 뒤 RSS 3GB대).
+      const release = () => {
+        pane.bridge.run('try { stop(); video.removeAttribute("src"); video.load(); } catch (e) {}');
         pane.el.hidden = true;
-        pane.sessionId = null;
+      };
+      const rect = before && !pane.el.hidden ? before.get(slot) : null;
+      const had = pane.sessionId || !pane.el.hidden;
+      pane.sessionId = null;
+      if (!had) { pane.el.hidden = true; continue; }
+      if (rect) {
+        // 마지막 자리에서 줄어들며 사라진 뒤 멈춘다 — 그동안 소리는 바로 끈다.
+        pane.bridge.run('try { video.muted = true; } catch (e) {}');
+        playExit(pane, this.stage, rect, release);
+      } else {
+        release();
       }
     }
+    if (before) playLayoutMotion(this.panes, before);
     this.syncChat(sessions.find((s) => s.id === state.selectedId) || null);
     // 채팅 테두리는 채팅을 보여 주는(선택) 패인의 색을 따른다.
     const shown = [...this.panes.values()].find((p) => p.sessionId && p.sessionId === state.selectedId);
@@ -386,6 +420,16 @@ export class MultiLivePage {
     if (shown) chatEl.style.setProperty('--ml-hue', String(shown.hue));
     // 후원 알림은 그 채팅의 패인(포커스·한 채널 크게면 메인) 위에 — 패인이 없으면 무대 전체.
     this.alerts.attach(shown ? shown.el : this.stage);
+    this.addBar.sync();
+    this.mergedChat.sync();
+  }
+
+  /** 패인 배치의 지문 — 이게 바뀔 때만 움직임을 준다(시청자 수 같은 잦은 상태 갱신은 그대로). */
+  motionSignature(state) {
+    const sessions = state.sessions || [];
+    const order = paneOrder(sessions, state.focusMainId || state.selectedId, state.layout);
+    const slotOf = new Map(sessions.map((x) => [x.id, x.slot]));
+    return [state.layout, state.focusDirection, state.watchId || '', this.single ?? '', Boolean(state.canAdd), order.map((id) => slotOf.get(id)).join(',')].join('|');
   }
 
   renderPane(pane, s, index, selected) {
@@ -564,34 +608,6 @@ export class MultiLivePage {
     h.style.top = `calc(${(vr * 100).toFixed(2)}% - 4px)`;
   }
 
-  // ── 끌어서 자리 바꾸기 (MUL-07) ───────────────
-  bindDrag() {
-    this.stage.addEventListener('dragstart', (e) => {
-      const pane = e.target.closest('.ml-pane');
-      if (!pane) return;
-      this.dragId = this.panes.get(Number(pane.dataset.slot))?.sessionId;
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', this.dragId || '');
-      pane.classList.add('dragging');
-    });
-    this.stage.addEventListener('dragend', () => { for (const p of this.stage.querySelectorAll('.dragging, .drop-target')) p.classList.remove('dragging', 'drop-target'); });
-    this.stage.addEventListener('dragover', (e) => {
-      const pane = e.target.closest('.ml-pane');
-      if (!pane || !this.dragId) return;
-      e.preventDefault();
-      for (const p of this.stage.querySelectorAll('.drop-target')) if (p !== pane) p.classList.remove('drop-target');
-      pane.classList.add('drop-target');
-    });
-    this.stage.addEventListener('drop', (e) => {
-      const pane = e.target.closest('.ml-pane');
-      e.preventDefault();
-      const target = pane && this.panes.get(Number(pane.dataset.slot))?.sessionId;
-      const dragged = this.dragId;
-      this.dragId = null;
-      if (target && dragged && target !== dragged) this.run(api.multiLiveReorder(dragged, target));
-    });
-  }
-
   /**
    * 첫 프레임 감시 — 상태는 '재생 중'인데 영상 데이터가 20초 넘게 하나도 없으면 그 패인만 다시 연결한다(최대 2번).
    * 일부러 로딩을 멈춘 패인(디코드 예산·시청 모드)과 화면에 안 보이는 패인은 보지 않는다.
@@ -670,7 +686,7 @@ export class MultiLivePage {
       ${ids.length ? `<div class="word-form"><input type="text" maxlength="30" placeholder="지금 구성(${ids.length}개 채널) 이름"><button class="btn primary">저장</button></div>` : ''}
       <div class="sheet-actions"><button type="button" class="btn" data-preset-close>닫기</button></div></form>`;
     document.body.append(scrim);
-    const close = () => scrim.remove();
+    const close = () => dismiss(scrim);
     scrim.addEventListener('click', async (e) => {
       if (e.target === scrim || e.target.closest('[data-preset-close]')) { close(); return; }
       const row = e.target.closest('[data-preset-id]');
@@ -707,6 +723,15 @@ export class MultiLivePage {
     i.style.setProperty('--fill', `${Math.max(0, Math.min(100, pct))}%`);
   }
 
+  /**
+   * 멀티라이브로 돌아올 때 — 채팅이 끊긴 채(실패·끊김)라면 다음 렌더에서 다시 붙인다. 연결돼 있으면 그대로 둔다.
+   * (예전엔 돌아올 때마다 무조건 다시 연결해 채팅이 비워지고 잠깐 끊겼다. `ml` 세션은 라이브 화면과 따로라
+   * 라이브를 열고 닫아도 끊기지 않는다.)
+   */
+  reviveChatIfDropped() {
+    if (this.chat.stateName === 'disconnected' || this.chat.stateName === 'failed') this.chatKey = null;
+  }
+
   /** 채팅은 선택 패인의 채널을 따라간다. */
   syncChat(session) {
     const key = session && session.chatChannelId ? `${session.id}:${session.chatChannelId}` : null;
@@ -730,6 +755,25 @@ export class MultiLivePage {
 
   // ── 동작 ───────────────────────────────────
 
+  /**
+   * 라이브 단독 무대일 때 머리줄의 채널 고르기 — 멀티라이브의 다른 채널을 다시 연결 없이 라이브로 바꿔 본다.
+   * 채널이 하나뿐이거나 멀티라이브 보기면 숨긴다.
+   */
+  renderWatchPicker(sessions, watched) {
+    const list = watched ? sessions.filter((x) => x.slot != null) : [];
+    this.watchPicker.hidden = list.length < 2;
+    if (this.watchPicker.hidden) { this.watchPicker.innerHTML = ''; return; }
+    this.watchPicker.innerHTML = list.map((x) => {
+      const on = x.id === watched.id;
+      const avatar = safeUrl(x.profileImageUrl);
+      const name = x.channelName || x.channelId;
+      return `<button class="ml-watch-chip${on ? ' active' : ''}" data-ml="watch" data-session-id="${esc(x.id)}" aria-pressed="${on}" title="${esc(on ? `${name} — 지금 보는 채널` : `${name} 라이브로 보기`)}">
+        ${avatar ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="ml-watch-dot"></span>'}
+        <span class="ellipsis">${esc(name)}</span>
+      </button>`;
+    }).join('');
+  }
+
   async onClick(e) {
     const layout = e.target.closest('[data-layout]');
     if (layout) {
@@ -737,15 +781,13 @@ export class MultiLivePage {
       return;
     }
     const action = e.target.closest('[data-ml]');
-    if (!action) {
-      if (e.target === this.picker) this.closePicker();
-      return;
-    }
+    if (!action) return;
+    // 패인을 끌어 놓은 직후의 click 은 선택이 아니다.
+    if (action.dataset.ml === 'select' && this.suppressClickUntil && performance.now() < this.suppressClickUntil) return;
     const pane = action.closest('.ml-pane');
     const sessionId = pane && this.panes.get(Number(pane.dataset.slot))?.sessionId;
     switch (action.dataset.ml) {
-      case 'add': this.openPicker(); break;
-      case 'picker-close': this.closePicker(); break;
+      case 'add': this.addBar.toggle(); break;
       case 'stop-all': this.run(api.multiLiveStopAll()); break;
       case 'select': if (sessionId && sessionId !== this.state.selectedId) this.run(api.multiLiveSelect(sessionId)); break;
       case 'remove': if (sessionId) this.run(api.multiLiveRemove(sessionId)); break;
@@ -757,8 +799,12 @@ export class MultiLivePage {
         else this.run(api.multiLiveSelect(sessionId));
         break;
       case 'single': if (pane && this.watchSlot == null) this.toggleSingle(Number(pane.dataset.slot)); break;
-      case 'watch': if (sessionId) window.dispatchEvent(new CustomEvent('cview:ml-watch', { detail: { sessionId } })); break;
-      case 'watch-exit': window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: 'multilive' } })); break;
+      case 'watch': {
+        // 패인의 '라이브로 크게 보기' 또는 라이브 머리줄의 채널 고르기(data-session-id).
+        const id = action.dataset.sessionId || sessionId;
+        if (id && !(this.watchSlot != null && id === this.state.watchId)) window.dispatchEvent(new CustomEvent('cview:ml-watch', { detail: { sessionId: id } }));
+        break;
+      }
       case 'multi-audio': this.run(api.multiLiveAudio(null, true)); break;
       case 'presets': this.showPresets(); break;
       case 'restore': this.restoreSessions(this.savedSessionIds()); break;
@@ -770,7 +816,6 @@ export class MultiLivePage {
         if (s) window.dispatchEvent(new CustomEvent('cview:open-channel', { detail: { channelId: s.channelId } }));
         break;
       }
-      case 'pick': this.closePicker(); await this.add(action.dataset.channelId); break;
       default: break;
     }
   }
@@ -788,62 +833,6 @@ export class MultiLivePage {
     if (!channelId) return;
     toast('멀티라이브에 추가하는 중…', 1500);
     await this.run(api.multiLiveAdd(channelId));
-  }
-
-  async openPicker() {
-    this.picker.hidden = false;
-    this.pickerFilter.value = '';
-    this.pickerList.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
-    this.pickerFilter.focus();
-    const [following, popular] = await Promise.allSettled([
-      this.isLoggedIn() ? api.followingLives(false) : Promise.resolve([]),
-      api.popularLives(40, false),
-    ]);
-    const seen = new Set();
-    const items = [];
-    const push = (list, group) => {
-      for (const l of list || []) {
-        if (!l.isLive || seen.has(l.channelId)) continue;
-        seen.add(l.channelId);
-        items.push({ ...l, group });
-      }
-    };
-    if (following.status === 'fulfilled') push(following.value, '팔로잉');
-    if (popular.status === 'fulfilled') push(popular.value, '인기');
-    this.pickerItems = items;
-    this.renderPicker();
-  }
-
-  renderPicker() {
-    const q = this.pickerFilter.value.trim().toLowerCase();
-    const added = new Set((this.state.sessions || []).map((s) => s.channelId));
-    const items = this.pickerItems.filter((l) => !q
-      || (l.channelName || '').toLowerCase().includes(q)
-      || (l.liveTitle || '').toLowerCase().includes(q));
-    if (!items.length) {
-      this.pickerList.innerHTML = '<div class="empty"><strong>추가할 수 있는 방송이 없습니다</strong></div>';
-      return;
-    }
-    let group = null;
-    this.pickerList.innerHTML = items.map((l) => {
-      const head = l.group !== group ? `<div class="ml-picker-group">${esc(l.group)}</div>` : '';
-      group = l.group;
-      const thumb = safeUrl(l.thumbnailUrl);
-      const isAdded = added.has(l.channelId);
-      return `${head}
-        <button class="ml-pick" data-ml="pick" data-channel-id="${esc(l.channelId)}" ${isAdded ? 'disabled' : ''}>
-          <span class="ml-pick-thumb">${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>
-          <span class="ml-pick-text">
-            <span class="ml-pick-name ellipsis">${esc(l.channelName)}${isAdded ? ' · 추가됨' : ''}</span>
-            <span class="ml-pick-title ellipsis">${esc(l.liveTitle || '')}</span>
-          </span>
-          <span class="ml-pick-viewers">${esc(l.viewerCountText)}명</span>
-        </button>`;
-    }).join('');
-  }
-
-  closePicker() {
-    this.picker.hidden = true;
   }
 }
 

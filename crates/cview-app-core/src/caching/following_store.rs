@@ -809,6 +809,8 @@ mod tests {
             channel_image_url: None,
             is_live: live,
             list_live_info: None,
+            verified: false,
+            follow: Default::default(),
         }
     }
 

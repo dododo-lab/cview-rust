@@ -404,6 +404,10 @@ pub struct FollowingRow {
     /// 목록 응답의 라이브 여부(`FollowingStreamer::is_actually_live`).
     pub is_live: bool,
     pub list_live_info: Option<FollowingListLiveInfo>,
+    /// 인증 배지(`channel.verifiedMark`).
+    pub verified: bool,
+    /// 팔로우 날짜·라이브 알림(`channel.personalData.following`) — 응답에 없으면 비어 있다.
+    pub follow: FollowState,
 }
 
 impl FollowingRow {
@@ -477,6 +481,36 @@ pub struct FollowingChannelData {
     pub channel_image_url: Option<String>,
     #[serde(default)]
     pub verified_mark: Option<bool>,
+    /// 로그인 사용자 기준 값(`personalData.following` — 팔로우 날짜·라이브 알림). 형식이 어긋나도
+    /// 채널 항목을 버리지 않게 원시 JSON 으로 받아 [`Self::follow_state`] 가 꺼낸다.
+    #[serde(default)]
+    pub personal_data: Option<serde_json::Value>,
+}
+
+/// 팔로우 상태 — `personalData.following`.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct FollowState {
+    /// `followDate` 원문(`2024-02-19 23:28:11`, KST).
+    pub follow_date: Option<String>,
+    /// 라이브 알림을 켰는가.
+    pub notification: Option<bool>,
+}
+
+impl FollowingChannelData {
+    pub fn follow_state(&self) -> FollowState {
+        let f = self.personal_data.as_ref().and_then(|p| p.get("following"));
+        FollowState {
+            follow_date: f
+                .and_then(|f| f.get("followDate"))
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(String::from),
+            notification: f
+                .and_then(|f| f.get("notification"))
+                .and_then(|v| v.as_bool()),
+        }
+    }
 }
 
 /// 사용자 상태 정보 (`/service/v1/users/me`).
@@ -608,6 +642,8 @@ mod tests {
                 concurrent_user_count: Some(7),
                 live_category_value: None,
             }),
+            verified: false,
+            follow: FollowState::default(),
         };
         let item = row.list_channel_item();
         assert_eq!(item.live_title, "t");
@@ -617,6 +653,23 @@ mod tests {
             ..row
         };
         assert_eq!(offline.list_channel_item().live_title, "");
+    }
+
+    #[test]
+    fn following_channel_follow_state() {
+        let c: FollowingChannelData = serde_json::from_str(
+            r#"{"channelId":"a","verifiedMark":true,"personalData":{"following":{"following":true,"notification":true,"followDate":"2024-02-19 23:28:11"},"privateUserBlock":false}}"#,
+        )
+        .unwrap();
+        let f = c.follow_state();
+        assert_eq!(f.follow_date.as_deref(), Some("2024-02-19 23:28:11"));
+        assert_eq!(f.notification, Some(true));
+        // 형식이 어긋나거나 없으면 빈 값 — 채널 항목은 그대로 남는다.
+        let odd: FollowingChannelData =
+            serde_json::from_str(r#"{"channelId":"b","personalData":{"following":"x"}}"#).unwrap();
+        assert_eq!(odd.follow_state(), FollowState::default());
+        let none: FollowingChannelData = serde_json::from_str(r#"{"channelId":"c"}"#).unwrap();
+        assert_eq!(none.follow_state(), FollowState::default());
     }
 
     #[test]

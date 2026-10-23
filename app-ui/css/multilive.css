@@ -113,33 +113,62 @@
 .ml-pane-state.error { color: var(--error); }
 
 /* 채널 추가 */
-.ml-picker { position: absolute; inset: 0; z-index: 40; background: var(--scrim); display: grid; place-items: center; backdrop-filter: blur(4px); }
-.ml-picker[hidden] { display: none; }
-.ml-picker-panel {
-  width: min(560px, 92%); max-height: 78%; display: flex; flex-direction: column; overflow: hidden;
-  background: var(--surface-popover); border: 1px solid var(--border); border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+/* 채널 추가 사이드바(멀티라이브·멀티채팅) — 오른쪽 채팅 자리 위로 미끄러져 나온다(ml-add-drawer.js). 무대는 가리지 않는다. */
+.ml-addbar {
+  position: absolute; top: 0; right: 0; bottom: 0; z-index: 30; width: min(var(--ml-addbar-w, 360px), 100%);
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface-popover); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+  transform: translateX(calc(100% + 16px)); opacity: 0; visibility: hidden; pointer-events: none;
+  transition: transform .28s cubic-bezier(.2, .8, .2, 1), opacity .2s ease, visibility 0s linear .28s;
 }
-.ml-picker-head { display: flex; align-items: center; gap: var(--sp-sm); padding: var(--sp-md); border-bottom: 1px solid var(--border-subtle); }
-.ml-picker-head strong { flex: none; }
-.ml-picker-filter {
-  flex: 1; min-width: 0; background: var(--surface-base); color: var(--text-primary); border: 1px solid var(--border-subtle);
-  border-radius: 8px; padding: 6px 10px; font: inherit; font-size: var(--fs-caption);
+.ml-addbar.open { transform: none; opacity: 1; visibility: visible; pointer-events: auto; transition: transform .28s cubic-bezier(.2, .8, .2, 1), opacity .2s ease, visibility 0s; }
+@media (prefers-reduced-motion: reduce) { .ml-addbar, .ml-addbar.open { transition: none; } }
+:root[data-motion="reduced"] .ml-addbar { transition: none; }
+.ml-addbar-head { flex: none; display: flex; align-items: center; gap: 6px; padding: 10px 8px 6px 14px; }
+.ml-addbar-head strong { font-size: var(--fs-body, 14px); }
+.ml-addbar-count { font-size: var(--fs-micro); color: var(--text-tertiary); font-variant-numeric: tabular-nums; padding: 2px 7px; border-radius: 999px; background: var(--surface-elevated); }
+.ml-addbar-refresh.spinning svg { animation: spin .8s linear infinite; }
+.ml-addbar-refresh:disabled { cursor: default; }
+.ml-addbar-tools { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 4px 12px 10px; border-bottom: 1px solid var(--border-subtle); }
+.ml-addbar-search {
+  display: flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: 9px;
+  background: var(--surface-base); border: 1px solid var(--border-subtle); color: var(--text-tertiary);
 }
-.ml-picker-list { overflow-y: auto; padding: var(--sp-sm); }
-.ml-picker-group { font-size: var(--fs-micro); color: var(--text-tertiary); padding: var(--sp-sm) var(--sp-sm) 4px; font-weight: 600; }
-.ml-pick {
-  width: 100%; display: flex; align-items: center; gap: var(--sp-sm); padding: 6px; border: 0; border-radius: 8px;
+.ml-addbar-search:focus-within { border-color: var(--accent-blue, var(--primary)); }
+.ml-addbar-search svg { width: 14px; height: 14px; flex: none; }
+.ml-addbar-search input:focus, .ml-addbar-search input:focus-visible { outline: none; box-shadow: none; }
+.ml-addbar-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: var(--fs-caption); padding: 7px 0; }
+.ml-addbar-row { display: flex; align-items: center; gap: 8px; }
+.ml-addbar-source { flex: 1; min-width: 0; }
+.ml-addbar-source .seg { flex: 1; padding-left: 6px; padding-right: 6px; }
+.ml-addbar-sort { flex: none; font-size: var(--fs-footnote); max-width: 132px; }
+.ml-addbar-notice { flex: none; margin: 8px 12px 0; padding: 8px 10px; border-radius: 8px; font-size: var(--fs-footnote); color: var(--text-secondary); background: var(--surface-elevated); }
+.ml-addbar-notice[hidden] { display: none; }
+.ml-addbar-list { flex: 1; min-height: 0; overflow-y: auto; padding: 6px; outline: 0; }
+.ml-addbar-list .empty { padding: 40px 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; color: var(--text-secondary); }
+.ml-addbar-foot { flex: none; padding: 6px 14px 8px; border-top: 1px solid var(--border-subtle); font-size: var(--fs-micro); color: var(--text-tertiary); }
+.ml-addrow {
+  width: 100%; display: flex; align-items: center; gap: 10px; padding: 6px; border: 0; border-radius: 10px;
   background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
-.ml-pick:hover { background: var(--surface-elevated); }
-.ml-pick:disabled { opacity: 0.45; cursor: default; }
-.ml-pick-thumb { width: 96px; aspect-ratio: 16 / 9; flex: none; border-radius: 6px; overflow: hidden; background: var(--surface-overlay); }
-.ml-pick-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.ml-pick-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.ml-pick-name { font-weight: 600; font-size: var(--fs-caption); }
-.ml-pick-title { color: var(--text-secondary); font-size: var(--fs-footnote); }
-.ml-pick-viewers { flex: none; color: var(--text-tertiary); font-size: var(--fs-micro); }
+.ml-addrow:hover:not(:disabled), .ml-addrow:focus-visible { background: var(--surface-elevated); outline: 0; }
+.ml-addrow:disabled { cursor: default; }
+.ml-addrow:disabled:not(.added):not(.busy) { opacity: 0.5; }
+.ml-addrow.added .ml-addrow-thumb, .ml-addrow.added .ml-addrow-text { opacity: 0.5; }
+.ml-addrow-thumb { position: relative; width: 104px; aspect-ratio: 16 / 9; flex: none; border-radius: 7px; overflow: hidden; background: var(--surface-overlay); }
+.ml-addrow-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ml-addrow-viewers { position: absolute; left: 4px; bottom: 4px; padding: 1px 5px; border-radius: 5px; background: rgba(0, 0, 0, 0.72); color: #fff; font-size: 10px; font-variant-numeric: tabular-nums; }
+.ml-addrow-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ml-addrow-name { display: flex; align-items: center; gap: 5px; min-width: 0; font-weight: 600; font-size: var(--fs-caption); }
+.ml-addrow-name .ellipsis { min-width: 0; }
+.ml-addrow-tag { flex: none; font-size: 10px; font-weight: 600; padding: 0 5px; border-radius: 5px; color: var(--primary); background: color-mix(in srgb, var(--primary) 14%, transparent); }
+.ml-addrow-title { color: var(--text-secondary); font-size: var(--fs-footnote); }
+.ml-addrow-meta { color: var(--text-tertiary); font-size: var(--fs-micro); }
+.ml-addrow-act { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; color: var(--text-tertiary); }
+.ml-addrow-act svg { width: 14px; height: 14px; }
+.ml-addrow-act .spinner { --s: 16px; }
+.ml-addrow:hover:not(:disabled) .ml-addrow-act, .ml-addrow:focus-visible .ml-addrow-act { background: var(--primary); color: var(--on-primary); }
+.ml-addrow.added .ml-addrow-act { color: var(--primary); }
 
 /* 카드의 "멀티라이브에 추가" */
 .card-ml-add {
@@ -162,8 +191,16 @@
 .ml-stage.ml-single .ml-pane:not(.ml-single-target) { display: none; }
 .ml-stage.ml-single .ml-pane.ml-single-target { grid-column: 1 / -1 !important; grid-row: 1 / -1 !important; }
 .ml-stage.ml-single { grid-template: 1fr / 1fr !important; }
-.ml-pane.dragging { opacity: 0.5; }
 .ml-pane.drop-target { outline-color: var(--accent-blue) !important; }
+/* 끌기(ml-motion.js) — 든 패인은 포인터를 따라 떠 있고, 놓을 곳 위에서는 무엇이 될지(메인으로·자리 바꾸기)를 띄운다. */
+.ml-stage.ml-dragging, .ml-stage.ml-dragging * { user-select: none; cursor: grabbing !important; }
+.ml-stage.ml-dragging iframe { pointer-events: none; }
+.ml-pane.ml-lifted { z-index: 5; opacity: .92; box-shadow: 0 18px 48px rgba(0, 0, 0, .45); transition: box-shadow .2s var(--ease-out, ease-out); will-change: transform; }
+.ml-drop-hint { display: none; }
+.ml-pane.ml-lifted.has-drop .ml-drop-hint {
+  display: block; position: absolute; left: 50%; top: 50%; translate: -50% -50%; z-index: 6; pointer-events: none;
+  padding: 7px 14px; border-radius: 999px; background: rgba(0, 0, 0, .72); color: #fff; font-size: var(--fs-footnote, 13px); font-weight: 700; white-space: nowrap;
+}
 .ml-drag { cursor: grab; }
 .ml-restore[hidden] { display: none; }
 .ml-body.chat-overlay .chat-splitter, .ml-body.chat-overlay .chat-reopen { display: none !important; }
@@ -189,6 +226,7 @@
 /* ══ 상단 바(툴바) — 한 줄 그룹, 높이 30px 통일, 옅은 구분선 ══ */
 .ml-header { flex-wrap: nowrap; min-width: 0; }
 .ml-header .page-title { white-space: nowrap; }
+.ml-count:empty { display: none; }
 .ml-count { flex: none; font-size: var(--fs-micro); font-weight: 600; color: var(--text-secondary); padding: 2px 8px; border-radius: 999px; background: var(--hover); font-variant-numeric: tabular-nums; }
 .ml-toolbar { display: flex; align-items: center; gap: 6px; min-width: 0; flex: none; }
 .ml-toolbar .ml-focus-controls { gap: 6px; }
@@ -272,7 +310,9 @@
 .ml-pane-stats { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; max-height: 20px; overflow: hidden; text-shadow: none; }
 .ml-pane-stats:empty { display: none; }
 .ml-pane-stats .stat { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border-radius: 5px;
-  background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  /* 흐림(backdrop-filter) 없이 조금 더 진한 바탕 — 재생 중인 영상 위의 흐림은 영상 프레임마다 다시 계산돼
+     패인 수만큼 GPU·합성 부하가 늘었다(멀티라이브 최적화 2026-10-23). */
+  background: rgba(0, 0, 0, 0.58);
   color: #fff; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ml-pane-stats .stat svg { width: 12px; height: 12px; opacity: 0.85; }
 .ml-pane-stats .stat.live { background: #e5262b; font-weight: 800; letter-spacing: 0.04em; }
@@ -352,9 +392,18 @@
 /* 라이브 메뉴 단독 보기(원본 시청 모드) — 같은 패인을 무대 하나로, 배치 도구는 숨긴다 */
 .page-multilive.as-watch .ml-toolbar, .page-multilive.as-watch .ml-count { display: none; }
 .page-multilive.as-watch .ml-watch-btn, .page-multilive.as-watch [data-ml="single"] { display: none !important; }
-.ml-watch-back { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 9px; font-size: var(--fs-footnote); font-weight: 600; }
-.ml-watch-back[hidden] { display: none; }
-.ml-watch-back svg { width: 14px; height: 14px; }
+/* 라이브 단독 무대 — 멀티라이브의 다른 채널로 바꿔 보기 */
+.ml-watch-picker { display: flex; gap: 6px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.ml-watch-picker[hidden] { display: none; }
+.ml-watch-chip {
+  flex: none; display: inline-flex; align-items: center; gap: 6px; max-width: 160px; height: 28px; padding: 0 10px 0 4px;
+  border-radius: 14px; border: 1px solid var(--border-subtle); background: var(--surface-elevated);
+  color: var(--text-secondary); font-size: var(--fs-footnote); font-weight: 500;
+}
+.ml-watch-chip:hover { color: var(--text-primary); background: var(--surface-overlay); }
+.ml-watch-chip.active { color: var(--text-primary); border-color: var(--primary); font-weight: 600; }
+.ml-watch-chip img, .ml-watch-dot { width: 20px; height: 20px; border-radius: 50%; flex: none; object-fit: cover; }
+.ml-watch-dot { background: var(--surface-overlay); }
 
 /* 패인 볼륨 슬라이더 키보드 초점 */
 .ml-vol .ml-vol-range:focus-visible { width: 64px; opacity: 1; margin: 0 8px 0 2px; outline: 2px solid #00ffa3; outline-offset: 3px; border-radius: 2px; }
@@ -381,3 +430,43 @@
 .ml-adjust-row { display: grid; grid-template-columns: 34px 1fr 38px; align-items: center; gap: 6px; padding: 3px 9px; color: #fff; font-size: 11px; }
 .ml-adjust-row input[type="range"] { width: 100%; accent-color: #00ffa3; }
 .ml-adjust-row output { text-align: right; font-variant-numeric: tabular-nums; opacity: 0.8; }
+
+/* 멀티채팅(ml-multichat.js) — 통합·그리드·포커스 보기. 줄·칸 색은 그 패인 테두리와 같은 색조(--lh). */
+.ml-chat .chat-list[hidden], .ml-mc-grid[hidden] { display: none !important; }
+.ml-chat { --mc-l: 70%; --mc-s: 85%; }
+:root[data-theme="light"] .ml-chat { --mc-l: 42%; --mc-s: 70%; }
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] .ml-chat { --mc-l: 42%; --mc-s: 70%; }
+}
+.ml-chat .merged-line, .ml-mc-cell { --mc-color: hsl(var(--lh, 0) var(--mc-s) var(--mc-l)); }
+.ml-mc-view { position: relative; flex: none; }
+.ml-mc-menu { min-width: 210px; }
+.ml-mc-menu .ml-menu-item.active { color: var(--primary-text); background: var(--primary-dim); font-weight: 700; }
+.ml-merge-btn.active { color: var(--primary-text); background: var(--primary-dim); }
+
+/* 그리드 — 패인마다 칸. 패널이 넓으면 여러 열, 좁으면 위아래로 고르게. 포커스 — 선택 칸이 위에 크게(3:1). */
+.ml-mc-grid {
+  flex: 1; min-height: 0; display: grid; gap: 6px; padding: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); grid-auto-rows: minmax(0, 1fr);
+}
+.ml-mc-grid.focus { grid-template-columns: minmax(0, 1fr); }
+.ml-mc-cell {
+  min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: var(--radius-md);
+  border: 1px solid color-mix(in srgb, var(--mc-color) 45%, transparent);
+  background: color-mix(in srgb, var(--mc-color) 4%, transparent);
+  transition: border-color .2s var(--ease-out, ease-out);
+}
+.ml-mc-cell.selected { border-color: color-mix(in srgb, var(--mc-color) 85%, transparent); }
+.ml-mc-cell-head {
+  flex: none; display: flex; align-items: center; gap: 7px; padding: 6px 9px; min-width: 0; border: 0; cursor: pointer;
+  background: color-mix(in srgb, var(--mc-color) 12%, transparent); color: var(--text-primary);
+  font: inherit; font-size: var(--fs-footnote); font-weight: 700; text-align: left;
+}
+.ml-mc-cell-head:hover { background: color-mix(in srgb, var(--mc-color) 20%, transparent); }
+.ml-mc-cell-head i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--mc-color); }
+.ml-mc-cell-head span { flex: 1; min-width: 0; }
+.ml-mc-cell-send { display: none; flex: none; font-size: var(--fs-micro); font-weight: 700; color: var(--mc-color); }
+.ml-mc-cell.selected .ml-mc-cell-send { display: inline; }
+.ml-mc-cell .chat-list { flex: 1; min-height: 0; }
+.ml-mc-cell .merged-line { box-shadow: none; padding-left: 0 !important; }
+.ml-mc-grid.focus .ml-mc-cell:not(.main) .chat-line { font-size: .92em; }

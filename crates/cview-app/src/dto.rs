@@ -160,6 +160,8 @@ pub struct LiveDetailDto {
     pub chat_channel_id: Option<String>,
     pub thumbnail_url: Option<String>,
     pub open_date: Option<String>,
+    /// 종료된 방송이면 끝난 시각(마지막 방송).
+    pub close_date: Option<String>,
     pub adult: bool,
     pub tags: Vec<String>,
 }
@@ -188,6 +190,7 @@ impl LiveDetailDto {
             chat_channel_id: info.chat_channel_id.clone().filter(|s| !s.is_empty()),
             thumbnail_url: url_string(info.resolved_live_image_url()),
             open_date: rfc3339(info.open_date),
+            close_date: rfc3339(info.close_date),
             adult: info.adult,
             tags: info.tags.clone(),
         }
@@ -381,7 +384,19 @@ fn messages(list: &[ChatMessage]) -> Vec<ChatMessageDto> {
         .collect()
 }
 
-/// `chat://event` 페이로드.
+/// 채팅 이벤트 + 그 이벤트를 낸 연결의 채팅 채널 ID(`chat://event`, `chat://session-event` 의 `event`).
+///
+/// 채널을 바꾸는 순간 이전 연결이 이미 보낸 이벤트가 IPC 를 타고 늦게 도착해 새 채널 채팅창에 섞이거나,
+/// 이전 연결의 '끊김' 상태가 새 연결 상태를 덮을 수 있었다. 프런트엔드는 지금 채널이 아닌 이벤트를 버린다.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaggedChatEvent {
+    #[serde(flatten)]
+    pub event: ChatEventDto,
+    pub chat_channel_id: String,
+}
+
+/// 채팅 이벤트 본문.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum ChatEventDto {

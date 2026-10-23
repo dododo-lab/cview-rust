@@ -1,7 +1,8 @@
 // 사이드바 화면들 — 팔로잉 / 인기 / 검색 / 설정. 홈은 home.js.
 import { api } from './api.js';
 import { esc, safeUrl, imageSrc } from './dom.js';
-import { liveGrid, channelRow, emptyState, loadingState, compactCount, skeletonGrid, freshnessText, errorState } from './cards.js';
+import { liveGrid, channelRow, emptyState, loadingState, compactCount, skeletonGrid, freshnessText, errorState, uptimeText } from './cards.js';
+import { FOLLOW_SORTS, FOLLOW_FILTERS, arrangeFollowed, followedInsights, followBadges, followAgeText, parseFollowDate, FollowExtras } from './following-info.js';
 import { vodCard } from './channel.js';
 
 const loginAction = '<button class="btn primary" data-action="login">로그인</button>';
@@ -93,6 +94,10 @@ export class FollowingPage {
     this.dense = false;
     this.lives = [];
     this.channels = [];
+    this.allSort = 'live';
+    this.allFilter = 'all';
+    this.allQuery = '';
+    this.extras = new FollowExtras();
     this.seq = 0;
     root.querySelector('[data-action="refresh"]')?.addEventListener('click', () => this.show(true));
     this.body.addEventListener('click', (e) => {
@@ -103,6 +108,10 @@ export class FollowingPage {
       const c = e.target.closest('[data-cat]');
       if (c) { this.category = c.dataset.cat; this.render(); return; }
       if (e.target.closest('[data-dense]')) { this.dense = !this.dense; this.render(); return; }
+      const as = e.target.closest('[data-fsort]');
+      if (as) { this.allSort = as.dataset.fsort; this.render(); return; }
+      const af = e.target.closest('[data-ffilter]');
+      if (af) { this.allFilter = af.dataset.ffilter; this.render(); return; }
       if (e.target.closest('[data-queue-multi]')) {
         const ids = arrangeLives(this.lives, { sort: this.sort, category: this.category }).slice(0, 4).map((l) => l.channelId);
         if (ids.length) window.dispatchEvent(new CustomEvent('cview:multi-queue', { detail: { channelIds: ids } }));
@@ -110,6 +119,12 @@ export class FollowingPage {
       }
       const ch = e.target.closest('[data-open-channel-id]');
       if (ch) window.dispatchEvent(new CustomEvent('cview:open-channel', { detail: { channelId: ch.dataset.openChannelId } }));
+    });
+    // 전체 채널 이름 찾기 — 목록만 다시 그린다(입력창은 그대로 두어 커서를 잃지 않게).
+    this.body.addEventListener('input', (e) => {
+      if (!e.target.matches('[data-fquery]')) return;
+      this.allQuery = e.target.value;
+      this.renderAllList();
     });
   }
 
@@ -146,14 +161,29 @@ export class FollowingPage {
         </div>${body}`;
       return;
     }
-    const sorted = [...this.channels].sort((a, b) => {
-      if (this.sort === 'name') return a.channelName.localeCompare(b.channelName, 'ko');
-      return (b.isLive - a.isLive) || ((b.viewerCount || 0) - (a.viewerCount || 0)) || a.channelName.localeCompare(b.channelName, 'ko');
-    });
-    const sortSeg = `<div class="segmented"><button class="seg${this.sort !== 'name' ? ' active' : ''}" data-sort="viewers">방송 중 먼저</button><button class="seg${this.sort === 'name' ? ' active' : ''}" data-sort="name">이름순</button></div>`;
+    const n = (id) => (id === 'all' ? this.channels.length
+      : id === 'live' ? this.channels.filter((c) => c.isLive).length
+        : id === 'offline' ? this.channels.filter((c) => !c.isLive).length
+          : this.channels.filter((c) => c.notification === true).length);
+    const hasNotify = this.channels.some((c) => typeof c.notification === 'boolean');
+    const hasDates = this.channels.some((c) => c.followDate);
+    const sortSeg = `<div class="segmented">${FOLLOW_SORTS.filter((o) => hasDates || (o.id !== 'newest' && o.id !== 'oldest')).map((o) => `<button class="seg${this.allSort === o.id ? ' active' : ''}" data-fsort="${o.id}">${o.label}</button>`).join('')}</div>`;
+    const chips = `<div class="chips">${FOLLOW_FILTERS.filter((f) => hasNotify || f.id !== 'notify').map((f) => `<button class="chip${this.allFilter === f.id ? ' active' : ''}" data-ffilter="${f.id}">${f.label} <span class="chip-count">${n(f.id)}</span></button>`).join('')}</div>`;
     this.body.innerHTML = `
-      <div class="list-toolbar">${tabs}${sortSeg}<span class="page-subtitle">팔로우 ${this.channels.length}개 · 방송 중 ${this.channels.filter((c) => c.isLive).length}개</span></div>
-      ${sorted.length ? `<div class="dense-list">${sorted.map(followedRow).join('')}</div>` : emptyState('팔로우한 채널이 없습니다')}`;
+      ${followedInsights(this.channels)}
+      <div class="list-toolbar">${tabs}${sortSeg}<input type="search" class="follow-find" data-fquery placeholder="채널 이름 찾기" value="${esc(this.allQuery)}" aria-label="팔로우한 채널 이름 찾기">${chips}</div>
+      <div class="follow-all"></div>`;
+    this.renderAllList();
+  }
+
+  renderAllList() {
+    const box = this.body.querySelector('.follow-all');
+    if (!box) return;
+    const list = arrangeFollowed(this.channels, { sort: this.allSort, filter: this.allFilter, query: this.allQuery });
+    box.innerHTML = list.length
+      ? `<div class="dense-list">${list.map((c) => followedRow(c)).join('')}</div>`
+      : emptyState(this.channels.length ? '조건에 맞는 채널이 없습니다' : '팔로우한 채널이 없습니다');
+    this.extras.attach(box);
   }
 }
 
@@ -163,12 +193,15 @@ export function followingInsights(lives, shown, now = Date.now()) {
   const viewers = lives.reduce((a, l) => a + (l.viewerCount || 0), 0);
   const top = categoryGroups(lives)[0];
   const fresh = lives.filter((l) => l.openDate && now - Date.parse(l.openDate) < 30 * 60 * 1000).length;
+  const longest = lives.filter((l) => Number.isFinite(Date.parse(l.openDate || ''))).sort((a, b) => Date.parse(a.openDate) - Date.parse(b.openDate))[0];
   const item = (label, value) => `<div class="insight"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`;
   return `<div class="insight-rail">
     ${item('방송 중', `${lives.length}개`)}
     ${item('총 시청자', compactCount(viewers))}
     ${top ? item('가장 많은 카테고리', `${top.name} · ${top.count}`) : ''}
+    ${item('평균 시청자', compactCount(Math.round(viewers / lives.length)))}
     ${item('30분 안에 시작', `${fresh}개`)}
+    ${longest ? item('가장 오래 방송 중', `${longest.channelName} · ${uptimeText(longest.openDate, now)}`) : ''}
     <div class="grow"></div>
     ${shown.length > 1 ? `<button class="btn primary" data-queue-multi title="지금 목록의 위 4개 채널을 멀티라이브로 엽니다">이 목록 멀티라이브로 (${Math.min(4, shown.length)})</button>` : ''}
   </div>`;
@@ -176,20 +209,24 @@ export function followingInsights(lives, shown, now = Date.now()) {
 
 function denseRow(l) {
   const avatar = safeUrl(l.channelImageUrl);
-  return `<div class="dense-row card" tabindex="0" data-channel-id="${esc(l.channelId)}" data-channel-name="${esc(l.channelName)}" data-channel-image="${esc(avatar)}">
+  return `<div class="dense-row live-dense card" tabindex="0" data-channel-id="${esc(l.channelId)}" data-channel-name="${esc(l.channelName)}" data-channel-image="${esc(avatar)}">
     <span class="card-avatar" data-open-channel>${avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}</span>
     <span class="dense-name ellipsis"><b>${esc(l.channelName)}</b> <span>${esc(l.categoryName || '')}</span></span>
     <span class="dense-title ellipsis">${esc(l.liveTitle || '')}</span>
+    ${l.openDate ? `<span class="dense-uptime" title="방송 경과 시간">${esc(uptimeText(l.openDate))}</span>` : '<span></span>'}
     <span class="dense-viewers"><i class="dot"></i>${esc(l.viewerCountText)}</span>
   </div>`;
 }
 
 function followedRow(c) {
   const avatar = safeUrl(c.channelImageUrl);
-  return `<div class="dense-row${c.isLive ? ' card' : ''}" tabindex="0" ${c.isLive ? `data-channel-id="${esc(c.channelId)}"` : `data-open-channel-id="${esc(c.channelId)}"`}>
+  const followed = parseFollowDate(c.followDate);
+  const since = followAgeText(followed);
+  return `<div class="dense-row follow-row${c.isLive ? ' card' : ''}" tabindex="0" data-fid="${esc(c.channelId)}" data-live="${c.isLive ? 1 : 0}" ${c.isLive ? `data-channel-id="${esc(c.channelId)}"` : `data-open-channel-id="${esc(c.channelId)}"`}>
     <span class="card-avatar" ${c.isLive ? 'data-open-channel' : ''}>${avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}</span>
-    <span class="dense-name ellipsis"><b>${esc(c.channelName)}</b> <span>${c.isLive ? esc(c.categoryName || '방송 중') : '오프라인'}</span></span>
-    <span class="dense-title ellipsis">${esc(c.liveTitle || '')}</span>
+    <span class="dense-name ellipsis"><b>${esc(c.channelName)}</b>${followBadges(c)} <span>${c.isLive ? esc(c.categoryName || '방송 중') : '오프라인'}</span></span>
+    <span class="dense-title ellipsis${c.isLive ? '' : ' fx-last'}">${esc(c.liveTitle || '')}</span>
+    <span class="follow-meta"><span class="fx-followers"></span>${since ? `<span class="fx-since" title="팔로우한 날 ${esc(new Date(followed).toLocaleDateString('ko-KR'))}">${esc(since)}</span>` : ''}</span>
     ${c.isLive ? `<span class="dense-viewers"><i class="dot"></i>${esc(compactCount(c.viewerCount || 0))}</span>` : '<span class="dense-viewers off">채널 보기</span>'}
   </div>`;
 }

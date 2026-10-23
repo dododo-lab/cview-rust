@@ -717,7 +717,17 @@ fn drop_onto_focus_main_promotes() {
         vec![s[2].session.id(), s[1].session.id(), s[0].session.id()]
     );
     assert_eq!(double_tap, None);
-    assert_eq!(st.selected_session_id(), Some(s[0].session.id()));
+    // 메인이 된 패인으로 선택(채팅·소리)도 옮겨 간다.
+    assert_eq!(st.selected_session_id(), Some(s[2].session.id()));
+}
+
+#[test]
+fn focus_entry_uses_selected_pane_as_main() {
+    let (m, s) = drop_setup(MultiLiveGridLayoutMode::Preset);
+    let mut st = m.lock();
+    st.set_selected_session_id(Some(s[1].session.id()));
+    st.apply_grid_layout_mode(MultiLiveGridLayoutMode::Focus);
+    assert_eq!(st.focus_main_session_id(), Some(s[1].session.id()));
 }
 
 #[test]
@@ -728,6 +738,7 @@ fn drag_main_onto_secondary_and_empty_main_fallback() {
     let mut dt = None;
     st.drop_tile(s[0].session.id(), s[1].session.id(), &mut dt);
     assert_eq!(st.focus_main_session_id(), Some(s[1].session.id()));
+    assert_eq!(st.selected_session_id(), Some(s[1].session.id()));
     let order: Vec<_> = st.sessions().iter().map(|x| x.id()).collect();
     assert_eq!(
         order,

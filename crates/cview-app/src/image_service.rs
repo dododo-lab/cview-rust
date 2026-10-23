@@ -6,6 +6,7 @@
 //!   라이브 썸네일은 CDN 이 `max-age=5`·ETag 없음이라, 예전엔 다시 실행할 때마다 전부 새로 받았다.
 //! - 같은 URL 을 동시에 부르면 한 번만 받고, 동시에 받는 수는 16개로 묶는다. 디스크 쓰기는 응답 뒤에 따로 한다.
 //! - 쿠키·인증 헤더 없이, 허용한 이미지 호스트(https)만 받는다 — 열린 프록시가 되지 않게.
+//!   리다이렉트도 hop 마다 같은 정책을 거친다([`redirect_policy`]).
 //! - 오프라인이면 캐시된 것을 내주고, 없으면 실패(화면은 빈칸).
 
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -23,6 +24,8 @@ const HOT_CAP_BYTES: usize = 48 * 1024 * 1024;
 /// 동시에 받는 수 — 이미지 CDN 은 HTTP/1.1 이라 연결 수가 곧 병렬도다(6 이면 첫 실행이 웹뷰 직접 받기보다 느렸다).
 const MAX_CONCURRENT_FETCHES: usize = 16;
 const FETCH_TIMEOUT: Duration = Duration::from_secs(15);
+/// 따라갈 리다이렉트 수 상한.
+const MAX_IMAGE_REDIRECTS: usize = 5;
 
 /// 받을 수 있는 이미지 호스트(접미사). 치지직·네이버 이미지 CDN 뿐이다.
 const ALLOWED_HOST_SUFFIXES: [&str; 4] =
@@ -136,12 +139,15 @@ fn system_now_ms() -> i64 {
         .unwrap_or(0)
 }
 
-/// 허용한 https 이미지 URL 인지.
+/// 허용한 https 이미지 URL 인지 — https, 기본 포트, 사용자 정보 없음, 허용 호스트.
 pub fn is_allowed_image_url(url: &str) -> bool {
     let Ok(u) = Url::parse(url) else {
         return false;
     };
-    if u.scheme() != "https" {
+    if u.scheme() != "https" || u.port().is_some() {
+        return false;
+    }
+    if !u.username().is_empty() || u.password().is_some() {
         return false;
     }
     let Some(host) = u.host_str() else {
@@ -151,6 +157,51 @@ pub fn is_allowed_image_url(url: &str) -> bool {
     ALLOWED_HOST_SUFFIXES
         .iter()
         .any(|s| host.ends_with(s) || host == s.trim_start_matches('.'))
+}
+
+/// 리다이렉트 한 hop 의 판단.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RedirectDecision {
+    Follow,
+    /// 허용하지 않는 목적지(다른 호스트·http·다른 포트 등).
+    Forbidden,
+    /// 이미 지나온 URL 로 돌아간다.
+    Loop,
+    TooMany,
+}
+
+/// 순수 함수 — `previous` 는 지금까지 요청한 URL(처음 URL 포함).
+fn redirect_decision(
+    next: &Url,
+    previous: &[Url],
+    allowed: impl Fn(&Url) -> bool,
+) -> RedirectDecision {
+    if previous.len() > MAX_IMAGE_REDIRECTS {
+        RedirectDecision::TooMany
+    } else if !allowed(next) {
+        RedirectDecision::Forbidden
+    } else if previous.contains(next) {
+        RedirectDecision::Loop
+    } else {
+        RedirectDecision::Follow
+    }
+}
+
+fn redirect_policy_with(allowed: fn(&Url) -> bool) -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(move |attempt| {
+        match redirect_decision(attempt.url(), attempt.previous(), allowed) {
+            RedirectDecision::Follow => attempt.follow(),
+            RedirectDecision::Forbidden => attempt.error("허용하지 않는 이미지 리다이렉트 목적지"),
+            RedirectDecision::Loop => attempt.error("이미지 리다이렉트 순환"),
+            RedirectDecision::TooMany => attempt.error("이미지 리다이렉트가 너무 많습니다"),
+        }
+    })
+}
+
+/// 이미지 연결의 리다이렉트 정책 — 처음 URL 과 같은 [`is_allowed_image_url`] 을 hop 마다 적용한다.
+/// (reqwest 기본값은 목적지를 가리지 않고 10번까지 따라간다.)
+pub fn redirect_policy() -> reqwest::redirect::Policy {
+    redirect_policy_with(|u| is_allowed_image_url(u.as_str()))
 }
 
 /// `cvimg:` 요청 경로(`/<종류>%2F<원본 URL>` 또는 이미 풀린 `/<종류>/<원본 URL>`)를 나눈다.
@@ -395,6 +446,7 @@ pub fn open_service(data_dir: &std::path::Path) -> Option<Arc<ImageService>> {
         .timeout(FETCH_TIMEOUT)
         .pool_max_idle_per_host(MAX_CONCURRENT_FETCHES)
         .tcp_nodelay(true)
+        .redirect(redirect_policy())
         .build();
     let transport = match client {
         Ok(c) => {
@@ -540,6 +592,117 @@ mod tests {
         assert!(!is_allowed_image_url("https://example.com/a.png"));
         assert!(!is_allowed_image_url("https://pstatic.net.evil.com/a.png"));
         assert!(!is_allowed_image_url("file:///etc/passwd"));
+        assert!(!is_allowed_image_url("https://a.pstatic.net:8443/a.png"));
+        assert!(!is_allowed_image_url("https://u:p@a.pstatic.net/a.png"));
+        assert!(is_allowed_image_url("https://a.pstatic.net:443/a.png"));
+    }
+
+    #[test]
+    fn redirect_hops_follow_the_same_policy() {
+        let allowed = |u: &Url| is_allowed_image_url(u.as_str());
+        let start = Url::parse("https://nng-phinf.pstatic.net/a.png").unwrap();
+        let hop = |s: &str| Url::parse(s).unwrap();
+        let prev = std::slice::from_ref(&start);
+        assert_eq!(
+            redirect_decision(&hop("https://b.akamaized.net/a.png"), prev, allowed),
+            RedirectDecision::Follow
+        );
+        // 허용 → 비허용 호스트, HTTPS → HTTP, 다른 포트
+        for bad in [
+            "https://example.com/a.png",
+            "http://nng-phinf.pstatic.net/a.png",
+            "https://nng-phinf.pstatic.net:8443/a.png",
+            "http://127.0.0.1/a.png",
+        ] {
+            assert_eq!(
+                redirect_decision(&hop(bad), prev, allowed),
+                RedirectDecision::Forbidden,
+                "{bad}"
+            );
+        }
+        // 순환
+        let second = hop("https://b.akamaized.net/a.png");
+        assert_eq!(
+            redirect_decision(&start, &[start.clone(), second], allowed),
+            RedirectDecision::Loop
+        );
+        // 상한
+        let chain: Vec<Url> = (0..=MAX_IMAGE_REDIRECTS)
+            .map(|i| hop(&format!("https://a.pstatic.net/{i}.png")))
+            .collect();
+        assert_eq!(
+            redirect_decision(&hop("https://a.pstatic.net/last.png"), &chain, allowed),
+            RedirectDecision::TooMany
+        );
+    }
+
+    /// 로컬 통제 서버 — `/img/*` 만 허용 목적지로 보고, 경로마다 정한 응답을 낸다. 받은 경로를 기록한다.
+    async fn redirect_server() -> (u16, Arc<Mutex<Vec<String>>>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let hits = Arc::new(Mutex::new(Vec::new()));
+        let log = hits.clone();
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut sock, _)) = listener.accept().await else {
+                    return;
+                };
+                let log = log.clone();
+                tokio::spawn(async move {
+                    let mut buf = vec![0u8; 4096];
+                    let n = sock.read(&mut buf).await.unwrap_or(0);
+                    let head = String::from_utf8_lossy(&buf[..n]).to_string();
+                    let path = head.split_whitespace().nth(1).unwrap_or("").to_string();
+                    log.lock().unwrap().push(path.clone());
+                    let base = format!("http://127.0.0.1:{port}");
+                    let resp = match path.as_str() {
+                        "/img/start" => redirect_to(&format!("{base}/img/final")),
+                        "/img/out" => redirect_to(&format!("{base}/evil")),
+                        "/img/loop" => redirect_to(&format!("{base}/img/loop")),
+                        _ => "HTTP/1.1 200 OK\r\nContent-Type: image/png\r\nContent-Length: 3\r\nConnection: close\r\n\r\npng".to_string(),
+                    };
+                    let _ = sock.write_all(resp.as_bytes()).await;
+                });
+            }
+        });
+        (port, hits)
+    }
+
+    fn redirect_to(location: &str) -> String {
+        format!("HTTP/1.1 302 Found\r\nLocation: {location}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+    }
+
+    #[tokio::test]
+    async fn client_checks_every_redirect_hop_against_a_local_server() {
+        let (port, hits) = redirect_server().await;
+        let client = reqwest::Client::builder()
+            .redirect(redirect_policy_with(|u| u.path().starts_with("/img/")))
+            .build()
+            .unwrap();
+        let base = format!("http://127.0.0.1:{port}");
+        // 허용 → 허용: 따라간다
+        let ok = client
+            .get(format!("{base}/img/start"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(ok.status(), 200);
+        assert_eq!(ok.url().path(), "/img/final");
+        // 허용 → 비허용: 목적지에 접속하지 않는다
+        let out = client.get(format!("{base}/img/out")).send().await;
+        assert!(out.unwrap_err().is_redirect());
+        // 순환: 멈춘다
+        let looped = client.get(format!("{base}/img/loop")).send().await;
+        assert!(looped.unwrap_err().is_redirect());
+        let hits = hits.lock().unwrap().clone();
+        assert!(
+            !hits.iter().any(|p| p == "/evil"),
+            "비허용 목적지 요청: {hits:?}"
+        );
+        assert_eq!(hits.iter().filter(|p| *p == "/img/loop").count(), 1);
     }
 
     #[test]

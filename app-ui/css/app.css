@@ -218,12 +218,31 @@ a { color: var(--primary); }
   background: var(--sidebar);
   border-right: 1px solid var(--border-subtle);
   padding: 14px 12px 12px;
-  overflow: hidden;
-  transition: width 0.22s cubic-bezier(0.3, 0.7, 0.3, 1), padding 0.22s ease;
+  /* 가로는 자르고(접히는 동안 라벨), 세로는 낮은 창에서 칸을 찌그러뜨리는 대신 스크롤로 넘긴다 */
+  overflow: hidden auto;
+  scrollbar-width: none;
+  /* 접기·펼치기 — 너비와 안쪽 위치(패딩·높이)를 같은 곡선으로 함께 움직인다. 아래 "접힌 사이드바" 참고. */
+  /* 스르륵 — 처음부터 확 튀어 나가지 않고 부드럽게 출발해 길게 감속하는 곡선(--ease-emph 는 첫 80ms 에 대부분 움직여 툭 끊겨 보였다) */
+  --sb-dur: 0.34s;
+  --sb-ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --sb-rail: 59px; /* 접힌 레일의 안쪽 폭(88 − 패딩 14 ×2 − 테두리 1) — 레일 가운데 = 이 값의 절반 */
+  transition: width var(--sb-dur) var(--sb-ease), padding var(--sb-dur) var(--sb-ease);
 }
-.brand-row { display: flex; align-items: center; gap: 4px; height: 36px; margin-bottom: 10px; padding-left: 6px; }
-.brand { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 17px; letter-spacing: -0.3px; }
+/* 로고 줄 — 접기 버튼은 절대 위치라 펼침(오른쪽 끝 가로)↔접힘(로고 아래 세로)을 미끄러지듯 오간다 */
+.brand-row {
+  position: relative; flex: none; display: flex; align-items: flex-start; height: 36px; margin-bottom: 10px; padding-left: 6px;
+  transition: height var(--sb-dur) var(--sb-ease), padding var(--sb-dur) var(--sb-ease), margin var(--sb-dur) var(--sb-ease);
+}
+.brand-row > .icon-btn {
+  position: absolute; top: 7px; /* (줄 높이 44 − 30) / 2 — 아래 "사이드바 브랜드" */
+  transition: left var(--sb-dur) var(--sb-ease), top var(--sb-dur) var(--sb-ease), background 0.16s var(--ease-out), color 0.16s var(--ease-out),
+    box-shadow 0.16s var(--ease-out), scale 0.32s var(--ease-spring, ease-out);
+}
+.sidebar::-webkit-scrollbar { display: none; }
+.brand-row > .sidebar-toggle { left: calc(100% - 30px); }
+.brand { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; margin-top: 4px; font-weight: 800; font-size: 17px; letter-spacing: -0.3px; transition: margin var(--sb-dur) var(--sb-ease); }
 .brand-mark {
+  transition: width var(--sb-dur) var(--sb-ease), height var(--sb-dur) var(--sb-ease);
   width: 26px; height: 26px; border-radius: 8px; flex: none; display: grid; place-items: center; color: var(--on-primary);
   background: var(--brand-gradient);
   box-shadow: 0 4px 14px var(--primary-glow);
@@ -233,10 +252,10 @@ a { color: var(--primary); }
 .sidebar-toggle svg { width: 18px; height: 18px; }
 
 .quick-search {
-  display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; margin-bottom: 10px;
+  flex: none; display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; margin-bottom: 10px;
   border-radius: 10px; border: 1px solid var(--border-subtle); background: var(--surface-base);
-  color: var(--text-tertiary); font-size: var(--fs-caption); text-align: left; white-space: nowrap;
-  transition: border-color 0.15s ease, color 0.15s ease;
+  color: var(--text-tertiary); font-size: var(--fs-caption); text-align: left; white-space: nowrap; overflow: hidden;
+  transition: border-color 0.15s ease, color 0.15s ease, padding var(--sb-dur) var(--sb-ease);
 }
 .quick-search:hover { border-color: var(--border); color: var(--text-secondary); }
 .quick-search.active { border-color: var(--primary-ring); color: var(--text-primary); }
@@ -249,8 +268,14 @@ a { color: var(--primary); }
 }
 
 .nav-section {
-  font-size: 11px; color: var(--text-tertiary); font-weight: 600; white-space: nowrap;
+  position: relative; font-size: 11px; color: var(--text-tertiary); font-weight: 600; white-space: nowrap;
   padding: 14px 10px 6px; letter-spacing: 0.2px;
+  transition: padding var(--sb-dur) var(--sb-ease), font-size var(--sb-dur) var(--sb-ease), color 0.12s ease;
+}
+/* 접힌 레일의 구역 구분선 — 펼친 상태에선 투명 */
+.nav-section::after {
+  content: ""; position: absolute; left: 10px; right: 10px; bottom: 4px; height: 1px; background: var(--border-subtle);
+  opacity: 0; transition: opacity 0.12s ease;
 }
 .nav-item {
   position: relative; display: flex; align-items: center; gap: 12px; width: 100%; height: 38px;
@@ -280,13 +305,15 @@ a { color: var(--primary); }
 .sidebar-live::-webkit-scrollbar { display: none; }
 .sidebar-live[hidden] { display: none; }
 .side-live {
-  display: flex; align-items: center; gap: 10px; width: 100%; padding: 5px 8px 5px 6px; border-radius: 10px;
-  border: 0; background: transparent; text-align: left; white-space: nowrap;
+  flex: none; display: flex; align-items: center; gap: 10px; width: 100%; padding: 5px 8px 5px 6px; border-radius: 10px;
+  border: 0; background: transparent; text-align: left; white-space: nowrap; overflow: hidden;
+  transition: padding var(--sb-dur) var(--sb-ease);
 }
 .side-live:hover { background: var(--hover); }
 .side-live-avatar {
   position: relative; flex: none; width: 30px; height: 30px; border-radius: 50%; padding: 2px;
   background: conic-gradient(from 210deg, var(--primary), var(--accent-cyan), var(--primary));
+  transition: width var(--sb-dur) var(--sb-ease), height var(--sb-dur) var(--sb-ease);
 }
 .side-live-avatar .avatar { width: 100%; height: 100%; border: 2px solid var(--sidebar); }
 .side-live-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
@@ -318,34 +345,110 @@ a { color: var(--primary); }
 .account-action { width: 30px; height: 30px; flex: none; }
 .account-action svg { width: 17px; height: 17px; }
 .account-login { display: inline-flex; align-items: center; gap: 6px; flex: none; }
+/* 로그인한 계정 — 아바타·이름이 계정 메뉴(말풍선) 버튼 */
+.account-trigger {
+  display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; margin: -4px; padding: 4px;
+  border: 0; border-radius: 10px; background: none; color: inherit; text-align: left; cursor: pointer;
+  transition: background var(--dur-2, 0.16s) var(--ease-out);
+}
+.account-trigger:hover, .account.menu-open .account-trigger { background: var(--surface-elevated); }
+.account-trigger:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.account-trigger .account-avatar { display: block; }
+.account-trigger .account-avatar .avatar { display: block; }
+.account-chevron { flex: none; display: grid; place-items: center; width: 18px; height: 18px; margin-right: 2px; color: var(--text-tertiary); rotate: -90deg; transition: rotate var(--dur-2, 0.16s) var(--ease-out); }
+.account-chevron svg { width: 14px; height: 14px; }
+.account.menu-open .account-chevron { rotate: 90deg; }
 .login-icon { display: none; }
 .login-icon svg { width: 16px; height: 16px; display: block; }
 
-/* 접힌 사이드바(아이콘 레일) */
+/* 접힌 사이드바(아이콘 레일)
+   부드러운 전환 규칙: 레일 배치로 바뀌는 순간에도 위치가 튀지 않게,
+   - 가운데 맞춤은 justify-content 가 아니라 "레일 폭(--sb-rail)의 절반 − 아이콘 반" 왼쪽 패딩으로 한다.
+     고정 px 이라 아이콘이 왼쪽 자리에서 레일 가운데로 곧게 미끄러진다(너비 비례 50% 를 쓰면 중간에 오른쪽으로 튀었다 돌아온다).
+   - 라벨은 display:none 대신 투명도로 사라지고 나타나며 6px 옆으로 함께 미끄러진다(접을 땐 빨리, 펼칠 땐 자리가 생긴 뒤 조금 늦게).
+   - 배치가 통째로 바뀌는 칸(배지·계정·빠른 동작 등)은 전환 중(.sb-anim)에 잠깐 숨겼다가 페이드인한다. */
 .sidebar.collapsed { width: 88px; padding-left: 14px; padding-right: 14px; } /* 신호등(약 x 12–78px)이 접힌 사이드바 안에 여유 있게 들어가도록 */
-.sidebar.collapsed .brand-row { flex-direction: column; height: auto; gap: 10px; padding-left: 0; }
-.sidebar.collapsed .brand { justify-content: center; }
-.sidebar.collapsed .brand-name,
-.sidebar.collapsed .nav-label,
-.sidebar.collapsed .quick-search kbd,
-.sidebar.collapsed .side-live-text,
-.sidebar.collapsed .side-live-viewers,
+.brand-name, .nav-item .nav-label, .quick-search .nav-label, .quick-search kbd, .side-live-text, .side-live-viewers {
+  transition: opacity 0.24s ease 0.08s, translate var(--sb-dur) var(--sb-ease);
+}
+.sidebar.collapsed :is(.brand-name, .nav-item .nav-label, .quick-search .nav-label, .quick-search kbd, .side-live-text, .side-live-viewers) {
+  opacity: 0; translate: -6px 0; transition: opacity 0.12s ease, translate 0.2s ease-in;
+}
+.sidebar.collapsed .brand-row { height: 78px; padding-left: calc(var(--sb-rail) / 2 - 19px); } /* 로고 38 + 간격 10 + 접기 버튼 30 */
+.sidebar.collapsed .brand { margin-top: 0; }
+.sidebar.collapsed .brand-row > .icon-btn { left: calc(var(--sb-rail) / 2 - 15px); }
+.sidebar.collapsed .brand-row > .sidebar-toggle { top: 48px; }
 .sidebar.collapsed .account-name,
-.sidebar.collapsed .side-empty { display: none; }
-.sidebar.collapsed .quick-search { justify-content: center; padding: 0; }
-.sidebar.collapsed .nav-item { justify-content: center; padding: 0; }
+.sidebar.collapsed .account-chevron,
+.sidebar.collapsed .side-empty,
+.sidebar.collapsed :is(.side-more, .account-login, .side-quick-btn) .nav-label { display: none; }
+.sidebar.collapsed .quick-search { padding: 0 0 0 calc(var(--sb-rail) / 2 - 9px); } /* 테두리 1 + 아이콘 16 의 가운데 */
+/* motion.css 의 줄 전환(배경·색·누름 scale)에 패딩을 더한다 — 선택자를 한 단계 구체적으로 해야 덮이지 않는다 */
+.sidebar :is(.nav-item, .side-live) {
+  transition-property: background, color, border-color, box-shadow, opacity, scale, padding;
+  transition-duration: var(--dur-2, 0.16s), var(--dur-2, 0.16s), var(--dur-2, 0.16s), var(--dur-2, 0.16s), var(--dur-2, 0.16s), 0.3s, var(--sb-dur);
+  transition-timing-function: var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-spring, ease-out), var(--sb-ease);
+}
+.sidebar.collapsed .nav-item { padding: 0 0 0 calc(var(--sb-rail) / 2 - 10px); }
 .sidebar.collapsed .nav-badge {
   position: absolute; top: 3px; right: 3px; min-width: 16px; height: 16px; padding: 0 4px; font-size: 10px;
   border: 2px solid var(--sidebar);
 }
-.sidebar.collapsed .nav-section { padding: 10px 0 4px; text-align: center; font-size: 0; }
-.sidebar.collapsed .nav-section::after { content: ""; display: block; height: 1px; margin: 0 10px; background: var(--border-subtle); }
-.sidebar.collapsed .side-live { justify-content: center; padding: 4px 0; }
+.sidebar.collapsed .nav-section { padding: 10px 0 5px; font-size: 0; color: transparent; }
+.sidebar.collapsed .nav-section::after { opacity: 1; transition: opacity 0.22s ease 0.1s; }
+.sidebar.collapsed .side-live { padding: 4px 0 4px calc(var(--sb-rail) / 2 - 18px); }
 .sidebar.collapsed .side-live-avatar { width: 36px; height: 36px; }
 .sidebar.collapsed .side-more { justify-content: center; padding: 0; }
 .sidebar.collapsed .account { flex-direction: column; padding: 8px 0; gap: 8px; background: transparent; border-color: transparent; }
+.sidebar.collapsed .account-trigger { flex: none; margin: 0; padding: 4px; border-radius: 50%; }
+.sidebar.collapsed .account.menu-open .account-trigger, .sidebar.collapsed .account-trigger:hover { background: var(--surface-elevated); }
 .sidebar.collapsed .account-login { padding: 0; width: 34px; height: 34px; justify-content: center; border-radius: 10px; }
 .sidebar.collapsed .login-icon { display: block; }
+/* 전환 중 — 배치가 바뀌는 칸은 잠깐 숨겼다 나타나고, 줄임표(…)가 깜박이지 않게 그냥 자른다 */
+.sidebar.sb-anim :is(.nav-badge, .side-more, .side-widget, .side-quick-btn, .account, .side-empty),
+.sidebar.sb-anim.collapsed .nav-item.playing::after { animation: sb-reveal calc(var(--sb-dur) + 0.1s) ease-out both; }
+.sidebar.sb-anim :is(.nav-label, .side-live-name, .side-live-cat, .account-name) { text-overflow: clip; }
+.sidebar.sb-anim .side-quick { overflow: hidden; }
+@keyframes sb-reveal { 0%, 35% { opacity: 0; } 100% { opacity: 1; } }
+/* 영상 시청 중 전환(sidebar.js slideOver) — 레이아웃 전환 없이 transform·opacity 만(합성) 쓴다.
+   실제 사이드바는 곧바로 최종 배치(.sb-instant), 움직임은 사이드바와 그 복제본(.sb-ghost)의 이동·투명도로.
+   본문은 이 동안만 자기 쌓임 맥락에 가둬(z-index 40 끌기 띠 등) 사이드바·복제본 밑에 있게 한다. */
+.sidebar.sb-instant, .sidebar.sb-instant *, .sidebar.sb-instant *::before, .sidebar.sb-instant *::after { transition: none !important; }
+.app.sb-overlay .sidebar { position: relative; z-index: 1; will-change: transform, opacity; }
+.app.sb-overlay .content { z-index: 0; }
+.sidebar.sb-ghost { position: fixed; z-index: 2; margin: 0; pointer-events: none; will-change: transform, opacity; }
+
+/* 계정 말풍선 메뉴 — sidebar.js 가 위치(left/top)와 꼬리 위치(--tail)를 잡는다.
+   data-side="top": 계정 카드 위, 꼬리는 아래 / data-side="right": 접힌 레일 오른쪽, 꼬리는 왼쪽 */
+.account-pop {
+  position: fixed; z-index: 120; width: 248px; padding: 6px; border-radius: 16px;
+  background: var(--surface-popover); border: 1px solid var(--border-subtle); box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column; --tail: 24px;
+}
+.account-pop::after {
+  content: ''; position: absolute; width: 12px; height: 12px; background: var(--surface-popover);
+  border: 1px solid var(--border-subtle); border-top: 0; border-left: 0; border-bottom-right-radius: 3px;
+}
+.account-pop[data-side="top"]::after { left: calc(var(--tail) - 6px); bottom: -7px; rotate: 45deg; }
+.account-pop[data-side="right"]::after { top: calc(var(--tail) - 6px); left: -7px; rotate: 135deg; }
+.ap-head { display: flex; align-items: center; gap: 10px; padding: 8px 8px 10px; }
+.ap-head .avatar { width: 40px; height: 40px; flex: none; }
+.ap-who { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ap-who b { font-size: var(--fs-body, 14px); font-weight: 700; }
+.ap-who small { color: var(--text-tertiary); font-size: var(--fs-footnote); }
+.ap-sep { height: 1px; background: color-mix(in srgb, var(--text-primary) 10%, transparent); margin: 4px 6px; flex: none; }
+.ap-item {
+  display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border: 0; border-radius: 9px;
+  background: transparent; color: var(--text-primary); font-size: var(--fs-caption); text-align: left; cursor: pointer;
+}
+.ap-item:hover, .ap-item:focus-visible { background: var(--surface-elevated); outline: none; }
+.ap-icon { display: grid; place-items: center; width: 18px; height: 18px; color: var(--text-secondary); flex: none; }
+.ap-icon svg { width: 17px; height: 17px; }
+.ap-item.danger, .ap-item.danger .ap-icon { color: var(--error); }
+.ap-item.danger:hover, .ap-item.danger:focus-visible { background: var(--error); color: #fff; }
+.ap-item.danger:hover .ap-icon, .ap-item.danger:focus-visible .ap-icon { color: #fff; }
+.ap-theme { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 6px 6px 10px; font-size: var(--fs-caption); }
+.ap-theme .segmented .seg { padding: 3px 9px; font-size: var(--fs-footnote); }
 
 /* 접힌 상태 툴팁 — sidebar.js 가 위치를 잡는다 */
 .side-tip {
@@ -801,6 +904,27 @@ html, body {
 }
 .page-title { letter-spacing: -0.5px; font-weight: 800; }
 
+/* 머리줄 꾸밈(page-header.js) — [메뉴 아이콘 칩] [제목 위 · 설명 아래]. 홈 인사말 머리처럼 2단으로 쌓는다. */
+.page-header.ph:not(.ph-compact) { gap: 14px; padding-top: 20px; padding-bottom: 16px; }
+.ph-icon {
+  flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; color: var(--primary-text);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--primary) 24%, transparent), color-mix(in srgb, var(--primary) 7%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 26%, transparent), 0 6px 16px -8px var(--primary-glow);
+}
+.ph-icon svg { width: 21px; height: 21px; }
+.ph-text { flex: 0 1 auto; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
+.ph .page-title { font-size: 24px; line-height: 1.15; letter-spacing: -0.6px; white-space: nowrap; }
+/* 제목 칩이 자리를 차지해도 오른쪽 버튼·전환은 글자가 꺾이지 않게(좁으면 검색칸이 먼저 준다) */
+.ph > :is(.btn, .segmented, .icon-btn) { flex: none; white-space: nowrap; }
+.ph > .mc-search { flex: 0 1 200px; min-width: 96px; }
+.ph-text .page-subtitle { font-size: var(--fs-footnote); line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 한 줄 머리(멀티라이브·시청 화면) — 영상 쪽 화면이라 작게, 전환 버튼과 높이를 맞춘다. */
+.ph.ph-compact { gap: 10px; }
+.ph-compact .ph-icon { width: 30px; height: 30px; border-radius: 9px; }
+.ph-compact .ph-icon svg { width: 16px; height: 16px; }
+.ph-compact .page-title { font-size: 20px; letter-spacing: -0.5px; }
+.viewer-header.ph-compact { padding-top: 12px; padding-bottom: 12px; }
+
 .thumb { border-radius: var(--radius-lg); }
 .card { border-radius: var(--radius-lg); }
 .channel-row { border-radius: var(--radius-lg); transition: background 0.16s var(--ease-out), border-color 0.16s var(--ease-out); }
@@ -831,6 +955,21 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .segmented .seg:hover { color: var(--text-primary); }
 .segmented .seg.active { background: var(--surface-base); color: var(--text-primary); font-weight: 600; box-shadow: var(--shadow-sm); }
 
+/* 라이브 메뉴 보기 전환(라이브 · 멀티라이브) — 제목 옆 알약. 아이콘+글자, 고른 쪽은 떠 있는 판에 브랜드색 아이콘.
+   머리줄이 좁아도 줄지 않는다. */
+.segmented.live-mode-seg { flex: none; height: 32px; padding: 3px; gap: 2px; border-radius: 10px; align-items: stretch; margin-left: 2px; }
+.segmented.live-mode-seg .seg {
+  padding: 0 12px 0 10px; gap: 6px; border-radius: 7px; font-size: var(--fs-footnote); font-weight: 600; color: var(--text-tertiary);
+  transition: background .16s var(--ease-out), color .16s var(--ease-out), box-shadow .16s var(--ease-out);
+}
+.segmented.live-mode-seg .seg svg { width: 14px; height: 14px; flex: none; }
+.segmented.live-mode-seg .seg:hover:not(.active) { color: var(--text-primary); background: var(--hover); }
+.segmented.live-mode-seg .seg.active { color: var(--text-primary); background: var(--surface-popover); box-shadow: var(--shadow-sm), inset 0 0 0 1px var(--border); }
+.segmented.live-mode-seg .seg.active svg { color: var(--primary-text); }
+.ph-compact .segmented.live-mode-seg { height: 30px; }
+/* 좁은 창의 한 줄 머리(멀티라이브 툴바와 나란히)에서는 아이콘만 */
+@media (max-width: 940px) { .ph-compact .segmented.live-mode-seg .seg { padding: 0 9px; } .ph-compact .segmented.live-mode-seg .seg span { display: none; } }
+
 /* 시청 화면 */
 .player-controls { background: var(--surface-base); padding: 6px var(--sp-md); }
 .chat { background: var(--surface-base); }
@@ -841,8 +980,6 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .toast { background: var(--surface-popover); color: var(--text-primary); }
 
 /* 사이드바 테마 전환 버튼 */
-.theme-toggle { width: 30px; height: 30px; flex: none; color: var(--text-tertiary); }
-.theme-toggle svg { width: 17px; height: 17px; }
 
 /* 라이트 테마 — 서버가 준 닉네임 색은 어두운 배경용이라 조금 어둡게 */
 :root[data-theme="light"] .chat-line .nick[style] { filter: brightness(0.72) saturate(1.15); }
@@ -873,14 +1010,7 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .ev-anon { font-size: var(--fs-micro); color: var(--text-tertiary); padding: 0 5px; border-radius: 4px; border: 1px solid var(--border); }
 .ev-extra { font-size: var(--fs-footnote); color: var(--text-secondary); padding: 5px 8px; border-radius: 8px; background: color-mix(in srgb, var(--ev) 10%, transparent); }
 .ev-body { font-size: var(--fs-caption); line-height: 1.5; color: var(--text-primary); word-break: break-word; }
-.ev-tier-2 .ev-card { border-color: color-mix(in srgb, var(--ev) 40%, transparent); box-shadow: 0 6px 18px color-mix(in srgb, var(--ev) 14%, transparent); }
-.ev-tier-3 .ev-card {
-  border-color: color-mix(in srgb, var(--ev) 60%, transparent);
-  background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--ev) 22%, transparent), transparent 60%), color-mix(in srgb, var(--ev) 10%, var(--surface-base));
-  box-shadow: 0 10px 26px color-mix(in srgb, var(--ev) 20%, transparent);
-}
-.ev-tier-3 .ev-icon { color: var(--surface-base); background: var(--ev); }
-.ev-tier-3 .ev-value { font-size: var(--fs-subhead); }
+/* 금액 단계별 강조(ev-lv-N)는 아래 「후원 색 단계」 묶음 */
 /* 공지 */
 .chat-line.notice-line { display: flex; gap: 10px; align-items: flex-start; margin: 6px 0; padding: 9px 12px; border-radius: 14px; background: var(--surface-elevated); border: 1px solid var(--border-subtle); }
 .notice-line .notice-icon { flex: none; width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; color: var(--primary-text); background: var(--primary-dim); }
@@ -935,7 +1065,6 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
   animation: alert-in 0.4s var(--ease-out) both;
 }
-.stream-alert.ev-tier-3 { box-shadow: 0 14px 40px color-mix(in srgb, var(--ev) 35%, rgba(0, 0, 0, 0.45)); }
 .stream-alert.leaving { animation: alert-out 0.35s ease both; pointer-events: none; }
 /* 알림을 끌어 옮긴다(donations.js) — 카드만 잡히고 빈 곳은 아래 영상으로 그대로 간다. */
 /* 너비는 내용대로 — 오른쪽 끝에 두어도 남은 폭에 눌려 좁아지지 않는다. */
@@ -1245,6 +1374,16 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .dense-title { color: var(--text-secondary); font-size: var(--fs-caption); }
 .dense-viewers { display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-footnote); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .dense-viewers.off { color: var(--text-tertiary); }
+/* 팔로잉 — 라이브 간결 보기의 경과 시간, 전체 채널의 인증·알림·팔로워·팔로우 기간·마지막 방송(following-info.js) */
+.dense-row.live-dense, .dense-row.follow-row { grid-template-columns: auto minmax(160px, 260px) 1fr auto auto; }
+.dense-uptime, .follow-meta { font-size: var(--fs-footnote); color: var(--text-tertiary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.follow-meta { display: inline-flex; align-items: center; gap: 10px; }
+.follow-meta > span:empty { display: none; }
+.dense-title.fx-last { color: var(--text-tertiary); }
+.fx-verified { width: 14px; height: 14px; margin-left: 4px; vertical-align: -2px; color: var(--primary); --fx-check: var(--on-primary, #fff); }
+.fx-bell { width: 13px; height: 13px; margin-left: 4px; vertical-align: -2px; color: var(--warning); }
+.follow-find { width: 180px; padding: 6px 10px; }
+@media (max-width: 900px) { .dense-row.follow-row { grid-template-columns: auto minmax(140px, 1fr) auto; } .follow-row .dense-title, .follow-row .follow-meta { display: none; } }
 .search-tabs { margin-bottom: var(--sp-lg); }
 .recent-chip { display: inline-flex; align-items: center; gap: 2px; padding: 3px 4px 3px 12px; }
 .recent-chip .link-btn { padding: 0; color: var(--text-primary); }
@@ -1642,7 +1781,7 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .side-widget-label { flex: 1; text-align: left; color: var(--text-tertiary); }
 .side-widget-value { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--text-primary); }
 .side-widget[data-streak]:not([data-streak=""])::after { content: attr(data-streak); font-size: var(--fs-micro); font-weight: 600; color: var(--accent-orange); }
-.side-quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.side-quick { flex: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; height: 50px; transition: height var(--sb-dur) var(--sb-ease); }
 .side-quick-btn { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; height: 50px; border-radius: var(--radius-md); background: var(--surface-base); border: 1px solid var(--border-subtle); color: var(--text-secondary); transition: background .15s var(--ease-out), color .15s var(--ease-out), border-color .15s var(--ease-out), transform .12s var(--ease-out); }
 .side-quick-btn svg { width: 17px; height: 17px; }
 .side-quick-btn:hover { background: var(--hover); border-color: var(--border); color: var(--text-primary); }
@@ -1652,7 +1791,7 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .sidebar.collapsed .side-widget-icon, .sidebar.collapsed .side-widget-label { display: none; }
 .sidebar.collapsed .side-widget-value { font-size: 10px; }
 .sidebar.collapsed .side-widget::after { display: none; }
-.sidebar.collapsed .side-quick { grid-template-columns: 1fr; }
+.sidebar.collapsed .side-quick { grid-template-columns: 1fr; height: 120px; } /* 36 ×3 + 6 ×2 — 높이를 옮겨 아래 목록이 미끄러져 내려가게 */
 .sidebar.collapsed .side-quick-btn { height: 36px; }
 .notify-pop { position: fixed; z-index: 60; width: 280px; display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: var(--radius-lg); background: var(--surface-popover); border: 1px solid var(--border); box-shadow: var(--shadow-lg); }
 .notify-pop .setting { padding: 6px 0; }
@@ -1816,6 +1955,128 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 :is(.chat-line, .stream-alert, .event-chip).ev-mission { --ev: var(--accent-orange); }
 :is(.chat-line, .stream-alert, .event-chip).ev-subscription { --ev: var(--subscription); }
 :is(.chat-line, .stream-alert, .event-chip).ev-gift { --ev: var(--accent-cyan); }
+
+/* ══ 후원 색 단계 — 치지직 초록에서 시작해 금액이 클수록 더 화려하게(donations.js donationLevel) ══
+   1 <1천 치지직 초록 · 2 1천~ 청록 · 3 5천~ 파랑 · 4 1만~ 보라(그라데이션) · 5 5만~ 핑크·주황(빛 테두리)
+   · 6 10만~ 금빛 무지개(움직이는 테두리·반짝임). 구독(개월)·선물(인원)도 같은 단계를 쓴다.
+   --ev 는 글자·틴트색(테마별), --ev2 는 그라데이션 끝색. 영상 위(알림·오버레이 채팅)는 늘 어두운 면이라 밝은 --don-hi 를 쓴다. */
+:root {
+  --don-hi-1: #00ffa3; --don-hi-1b: #00e5c3;
+  --don-hi-2: #00e0d0; --don-hi-2b: #22b8ff;
+  --don-hi-3: #4d9bff; --don-hi-3b: #7a7dff;
+  --don-hi-4: #b07bff; --don-hi-4b: #6b8cff;
+  --don-hi-5: #ff5fa8; --don-hi-5b: #ff9a3d;
+  --don-hi-6: #ffd34d; --don-hi-6b: #ff6fb5;
+  --don-holo: linear-gradient(110deg, #ffd34d, #ff8a5c 18%, #ff5fa8 34%, #b07bff 52%, #4fc3ff 70%, #00ffa3 86%, #ffd34d);
+  --don-1: var(--don-hi-1); --don-1b: var(--don-hi-1b);
+  --don-2: var(--don-hi-2); --don-2b: var(--don-hi-2b);
+  --don-3: var(--don-hi-3); --don-3b: var(--don-hi-3b);
+  --don-4: var(--don-hi-4); --don-4b: var(--don-hi-4b);
+  --don-5: var(--don-hi-5); --don-5b: var(--don-hi-5b);
+  --don-6: var(--don-hi-6); --don-6b: var(--don-hi-6b);
+}
+:root[data-theme="light"] {
+  --don-1: #007a52; --don-1b: #00a383;
+  --don-2: #00808a; --don-2b: #0077c8;
+  --don-3: #1f5fd6; --don-3b: #4a4fd8;
+  --don-4: #7a3fe0; --don-4b: #3f5fe0;
+  --don-5: #d42f7d; --don-5b: #dc6410;
+  --don-6: #a8700a; --don-6b: #d42f7d;
+}
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] {
+    --don-1: #007a52; --don-1b: #00a383;
+    --don-2: #00808a; --don-2b: #0077c8;
+    --don-3: #1f5fd6; --don-3b: #4a4fd8;
+    --don-4: #7a3fe0; --don-4b: #3f5fe0;
+    --don-5: #d42f7d; --don-5b: #dc6410;
+    --don-6: #a8700a; --don-6b: #d42f7d;
+  }
+}
+/* 단계 색 — 종류별 톤(위)보다 뒤에 둬서 단계가 이긴다. 종류는 아이콘·제목으로 구분된다. */
+:is(.chat-line, .stream-alert, .event-chip).ev-lv-1 { --ev: var(--don-1); --ev2: var(--don-1b); }
+:is(.chat-line, .stream-alert, .event-chip).ev-lv-2 { --ev: var(--don-2); --ev2: var(--don-2b); }
+:is(.chat-line, .stream-alert, .event-chip).ev-lv-3 { --ev: var(--don-3); --ev2: var(--don-3b); }
+:is(.chat-line, .stream-alert, .event-chip).ev-lv-4 { --ev: var(--don-4); --ev2: var(--don-4b); }
+:is(.chat-line, .stream-alert, .event-chip).ev-lv-5 { --ev: var(--don-5); --ev2: var(--don-5b); }
+:is(.chat-line, .stream-alert, .event-chip).ev-lv-6 { --ev: var(--don-6); --ev2: var(--don-6b); }
+:is(.stream-alerts, .chat-mode-overlay, .ml-body.chat-overlay) .ev-lv-1 { --ev: var(--don-hi-1); --ev2: var(--don-hi-1b); }
+:is(.stream-alerts, .chat-mode-overlay, .ml-body.chat-overlay) .ev-lv-2 { --ev: var(--don-hi-2); --ev2: var(--don-hi-2b); }
+:is(.stream-alerts, .chat-mode-overlay, .ml-body.chat-overlay) .ev-lv-3 { --ev: var(--don-hi-3); --ev2: var(--don-hi-3b); }
+:is(.stream-alerts, .chat-mode-overlay, .ml-body.chat-overlay) .ev-lv-4 { --ev: var(--don-hi-4); --ev2: var(--don-hi-4b); }
+:is(.stream-alerts, .chat-mode-overlay, .ml-body.chat-overlay) .ev-lv-5 { --ev: var(--don-hi-5); --ev2: var(--don-hi-5b); }
+:is(.stream-alerts, .chat-mode-overlay, .ml-body.chat-overlay) .ev-lv-6 { --ev: var(--don-hi-6); --ev2: var(--don-hi-6b); }
+
+/* 채팅 카드 — 2단계부터 왼쪽 막대·아이콘이 그라데이션으로 채워진다. */
+.chat-line:is(.ev-lv-2, .ev-lv-3, .ev-lv-4, .ev-lv-5, .ev-lv-6) .ev-card::before { background: linear-gradient(180deg, var(--ev), var(--ev2)); opacity: 1; }
+.chat-line:is(.ev-lv-2, .ev-lv-3, .ev-lv-4, .ev-lv-5, .ev-lv-6) .ev-icon { color: #fff; background: linear-gradient(135deg, var(--ev), var(--ev2)); }
+.chat-line.ev-lv-1 .ev-icon { color: var(--on-primary); background: var(--don-hi-1); }
+.chat-line.ev-lv-3 .ev-card { border-color: color-mix(in srgb, var(--ev) 34%, transparent); }
+.chat-line.ev-lv-4 .ev-card {
+  border-color: color-mix(in srgb, var(--ev) 45%, transparent);
+  background-image: radial-gradient(120% 160% at 0% 0%, color-mix(in srgb, var(--ev) 16%, transparent), transparent 62%);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--ev) 16%, transparent);
+}
+/* 5·6단계 — 그라데이션 빛 테두리(마스크 고리), 금액은 그라데이션 글자. */
+.chat-line:is(.ev-lv-5, .ev-lv-6) .ev-card {
+  border-color: transparent;
+  background-image: radial-gradient(120% 160% at 0% 0%, color-mix(in srgb, var(--ev) 22%, transparent), transparent 60%),
+    radial-gradient(90% 120% at 100% 100%, color-mix(in srgb, var(--ev2) 16%, transparent), transparent 60%);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--ev) 22%, transparent), 0 0 18px color-mix(in srgb, var(--ev2) 14%, transparent);
+}
+:is(.chat-line.ev-lv-5 .ev-card, .chat-line.ev-lv-6 .ev-card, .stream-alert.ev-lv-4, .stream-alert.ev-lv-5, .stream-alert.ev-lv-6)::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1.5px; pointer-events: none;
+  background: linear-gradient(135deg, var(--ev), var(--ev2));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+.chat-line:is(.ev-lv-5, .ev-lv-6) .ev-value {
+  font-size: var(--fs-subhead);
+  background: linear-gradient(90deg, var(--ev), var(--ev2)); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+/* 6단계 — 금빛 무지개 고리가 몇 바퀴 흐르고 멈춘다(채팅이 길어도 계속 그리지 않게). */
+.chat-line.ev-lv-6 .ev-card::before { background: var(--don-holo); }
+.chat-line.ev-lv-6 .ev-icon { background: var(--don-holo); background-size: 200% 100%; color: #1a1205; }
+.chat-line.ev-lv-6 .ev-card::after { padding: 2px; background: var(--don-holo); background-size: 300% 100%; animation: don-holo 3.2s linear 3; }
+.chat-line.ev-lv-6 .ev-value { background: var(--don-holo); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; animation: don-holo 3.2s linear 3; }
+:root[data-theme="light"] .chat-line.ev-lv-6 .ev-value { background-image: linear-gradient(90deg, var(--don-6), var(--don-5), var(--don-4)); background-size: 100% 100%; animation: none; }
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] .chat-line.ev-lv-6 .ev-value { background-image: linear-gradient(90deg, var(--don-6), var(--don-5), var(--don-4)); background-size: 100% 100%; animation: none; }
+}
+:root.compact .chat-line:is(.ev-lv-5, .ev-lv-6) .ev-value { font-size: var(--fs-caption); }
+
+/* 이벤트 칩 — 높은 단계는 아이콘 원이 그라데이션 */
+.event-chip:is(.ev-lv-2, .ev-lv-3, .ev-lv-4, .ev-lv-5) .event-chip-icon { color: #fff; background: linear-gradient(135deg, var(--ev), var(--ev2)); }
+.event-chip.ev-lv-6 .event-chip-icon { color: #1a1205; background: var(--don-holo); }
+
+/* 영상 위 알림 — 2단계부터 아이콘이 그라데이션, 4단계부터 빛 테두리, 5단계부터 글로우, 6단계는 무지개 고리 + 반짝임. */
+.stream-alert:is(.ev-lv-2, .ev-lv-3, .ev-lv-4, .ev-lv-5) .stream-alert-icon { background: linear-gradient(135deg, var(--ev), var(--ev2)); }
+.stream-alert:is(.ev-lv-3, .ev-lv-4, .ev-lv-5) .stream-alert-icon { color: #fff; }
+.stream-alert:is(.ev-lv-4, .ev-lv-5, .ev-lv-6) {
+  border-color: transparent;
+  background: radial-gradient(120% 180% at 0% 0%, color-mix(in srgb, var(--ev) 34%, transparent), transparent 58%),
+    radial-gradient(100% 160% at 100% 100%, color-mix(in srgb, var(--ev2) 26%, transparent), transparent 60%), rgba(14, 15, 18, 0.86);
+}
+.stream-alert:is(.ev-lv-5, .ev-lv-6) { box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45), 0 0 28px color-mix(in srgb, var(--ev) 38%, transparent), 0 0 56px color-mix(in srgb, var(--ev2) 22%, transparent); }
+.stream-alert:is(.ev-lv-5, .ev-lv-6) .stream-alert-title b { background: linear-gradient(90deg, var(--ev), var(--ev2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.stream-alert.ev-lv-6 .stream-alert-icon { background: var(--don-holo); background-size: 200% 100%; color: #1a1205; animation: don-holo 2.4s linear infinite; }
+.stream-alert.ev-lv-6::after { padding: 2px; background: var(--don-holo); background-size: 300% 100%; animation: don-holo 2.4s linear infinite; }
+.stream-alert.ev-lv-6 .stream-alert-title b { background: var(--don-holo); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; animation: don-holo 2.4s linear infinite; }
+.stream-alert.ev-lv-6::before {
+  content: ""; position: absolute; inset: -40% auto -40% -30%; width: 34%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.28), transparent); transform: skewX(-18deg);
+  animation: don-shine 2.6s var(--ease-out) .3s infinite;
+}
+@keyframes don-holo { from { background-position: 0% 50%; } to { background-position: 300% 50%; } }
+@keyframes don-shine { 0% { left: -40%; } 55%, 100% { left: 130%; } }
+/* 모션 절약·시스템 모션 줄이기 — 흐름·반짝임은 끄고 정지 그라데이션만 */
+:root[data-motion="reduced"] .chat-line.ev-lv-6 .ev-card::after, :root[data-motion="reduced"] .stream-alert.ev-lv-6::after,
+:root[data-motion="reduced"] :is(.chat-line.ev-lv-6 .ev-value, .stream-alert.ev-lv-6 .stream-alert-icon, .stream-alert.ev-lv-6 .stream-alert-title b) { animation: none !important; }
+:root[data-motion="reduced"] .stream-alert.ev-lv-6::before { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .chat-line.ev-lv-6 .ev-card::after, .chat-line.ev-lv-6 .ev-value, .stream-alert.ev-lv-6::after, .stream-alert.ev-lv-6 .stream-alert-icon, .stream-alert.ev-lv-6 .stream-alert-title b { animation: none !important; }
+  .stream-alert.ev-lv-6::before { display: none; }
+}
 /* 카드·말풍선 스타일은 줄 배경 대신 말풍선 테두리로 멘션·강조를 보인다 */
 .chat-skin:is(.style-unified,.style-hybrid,.style-kakao,.style-imessage) .chat-line.msg:is(.mention, .highlighted) { background: none; box-shadow: none; padding-left: 0; border-radius: 0; }
 
@@ -1831,7 +2092,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 :root[data-window].is-fullscreen .page, :root[data-window].is-fullscreen .viewer { top: 0; }
 /* 테두리 없는 검색 칸(감싸는 필드가 테두리·초점을 그린다) — 기본 입력 모양을 걷는다 */
 .search-field input, .palette-input input { padding: 0; border-radius: 0; }
-.search-field input:focus, .palette-input input:focus { box-shadow: none; }
+/* 전역 input:focus-visible 외곽선(DSN-06)이 위 outline: none 보다 뒤에 와서 안쪽 네모 테두리가 겹쳐 그려졌다 —
+   초점 표시는 감싸는 필드의 링 하나로 충분하므로 안쪽 입력의 외곽선을 걷는다 */
+.search-field input:focus, .palette-input input:focus,
+.search-field input:focus-visible, .palette-input input:focus-visible { outline: none; box-shadow: none; }
 .search-field:focus-within { border-color: var(--primary); box-shadow: var(--focus-ring); }
 
 /* ══ 닉네임 색 — 원본 ChatNicknamePalette(역할색과 겹치지 않는 9색, 다크·라이트 각 4.5:1 이상) ══ */
@@ -2012,7 +2276,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .stage-top .meta-stats { display: flex; flex-wrap: wrap; gap: 6px; text-shadow: none; }
 .stage-top .meta-stats:empty { display: none; }
 .stage-top .stat { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 6px;
-  background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  /* 흐림(backdrop-filter) 없이 조금 더 진한 바탕 — 재생 중인 영상 위의 흐림은 영상 프레임마다 다시 계산돼
+     패인 수만큼 GPU·합성 부하가 늘었다(멀티라이브 최적화 2026-10-23). */
+  background: rgba(0, 0, 0, 0.58);
   color: #fff; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stage-top .stat svg { width: 13px; height: 13px; opacity: 0.85; }
 .stage-top .stat.live { background: #e5262b; font-weight: 800; letter-spacing: 0.04em; }
@@ -2029,10 +2295,21 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
   background: rgba(0, 0, 0, 0.3); color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
 .stage-top .rail-more:hover { border-color: #fff; background: rgba(255, 255, 255, 0.12); }
 
+/* ══ 사이드바 브랜드 — 신호등과 띄우고, 로고는 크게·글자는 작게(앱 아이덴티티는 로고가 맡는다) ══ */
+.titlebar-strip { height: 46px; }                 /* 신호등(y 22, 높이 약 14) 아래로 10px 남짓 숨 쉴 자리 */
+:root.is-fullscreen .titlebar-strip { height: 14px; }
+.brand-row { height: 44px; margin-bottom: 12px; padding-left: 4px; }
+.brand { gap: 9px; font-size: 15px; font-weight: 700; letter-spacing: -0.2px; }
+.brand-mark { width: 36px; height: 36px; border-radius: 10px; }
+.brand-name { color: var(--text-primary); opacity: .92; }
+.sidebar.collapsed .brand-row { margin-bottom: 8px; }
+.sidebar.collapsed .brand-mark { width: 38px; height: 38px; }
+
 /* ══ Windows — 시스템 제목 막대가 있으므로 신호등 자리·끌기 띠를 걷는다 ══ */
 :root[data-platform="windows"] .titlebar-strip { height: 0; margin-top: 0; }
 :root[data-platform="windows"] .content-drag { display: none; }
 :root[data-platform="windows"][data-window] .page, :root[data-platform="windows"][data-window] .viewer { top: 0; }
+:root[data-platform="windows"] .sidebar { --sb-rail: 51px; } /* 72 − 10 ×2 − 1 */
 :root[data-platform="windows"] .sidebar.collapsed { width: 72px; padding-left: 10px; padding-right: 10px; } /* 신호등이 없으니 접힌 레일을 좁게 */
 
 /* 실패 화면 — 쉬운 안내 + 다시 시도 + 원문 접기 */

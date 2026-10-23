@@ -97,3 +97,211 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 .loading-row { display: flex; align-items: center; gap: 10px; margin: 0 0 var(--sp-md); color: var(--text-tertiary); font-size: var(--fs-footnote); }
 .loading-row .spinner { --s: 26px; }
 .loading-caption { font-size: var(--fs-footnote); }
+
+/* ══ 모션·상호작용 다듬기 (2026-10-23) ═══════════════════════════════
+   - 시간·곡선은 토큰으로만 쓴다. 들어올 때는 감속(out), 튀는 곳만 살짝 스프링, 나갈 때는 짧게.
+   - 위치를 transform 으로 잡는 요소가 많아(툴팁·점프 버튼·OSD 등) 키프레임은 개별 속성(translate·scale)만 움직인다
+     — transform 과 합쳐져 위치를 덮어쓰지 않는다.
+   - 성능 규칙 그대로: opacity·translate·scale 만. 채팅 줄처럼 초당 수십 개 생기는 것에는 걸지 않는다.
+   - 절약(data-motion=reduced)·시스템 모션 줄이기는 app.css 의 전역 규칙이 시간을 0 으로 만든다(끝 상태로 바로). */
+:root {
+  --dur-1: .12s;   /* 누름·작은 색 변화 */
+  --dur-2: .18s;   /* 호버·메뉴 */
+  --dur-3: .26s;   /* 시트·패널 */
+  --dur-4: .4s;    /* 큰 등장 */
+  --ease-in-out: cubic-bezier(.65, 0, .35, 1);
+  --ease-in: cubic-bezier(.4, 0, 1, 1);
+  --ease-spring: cubic-bezier(.34, 1.4, .64, 1);
+  --ease-emph: cubic-bezier(.2, 0, 0, 1);
+}
+
+/* ── 공통 키프레임 ── */
+@keyframes mo-pop-down { from { opacity: 0; translate: 0 -4px; scale: .97; } to { opacity: 1; translate: 0 0; scale: 1; } }
+@keyframes mo-pop-up { from { opacity: 0; translate: 0 4px; scale: .97; } to { opacity: 1; translate: 0 0; scale: 1; } }
+@keyframes mo-pop { from { opacity: 0; scale: .94; } to { opacity: 1; scale: 1; } }
+@keyframes mo-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mo-fade-out { to { opacity: 0; } }
+@keyframes mo-rise { from { opacity: 0; translate: 0 10px; scale: .98; } to { opacity: 1; translate: 0 0; scale: 1; } }
+@keyframes mo-sink { to { opacity: 0; translate: 0 6px; scale: .985; } }
+@keyframes mo-slide-left { from { opacity: 0; translate: 16px 0; } to { opacity: 1; translate: 0 0; } }
+@keyframes mo-grow-y { from { scale: 1 0; opacity: 0; } to { scale: 1 1; opacity: 1; } }
+
+/* ── 누름 피드백 — 눌린 동안 살짝 들어간다(손을 떼면 스프링으로 돌아온다) ── */
+:is(.icon-btn, .seg, .chip, .ml-tb-icon, .chat-hbtn, .link-btn, .toast-action, .live-chip, .quality-btn, .ml-pane-btn, .ml-pane-close,
+    .back-btn, .chat-jump, .chat-reopen, .ip-reopen, .account-action, .sidebar-toggle, .emoji-cell, .emoji-tab, .rail-item, .category-pin) {
+  transition-property: background, color, border-color, box-shadow, opacity, scale;
+  transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), .32s;
+  transition-timing-function: var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-spring);
+}
+:is(.icon-btn, .seg, .chip, .ml-tb-icon, .chat-hbtn, .toast-action, .live-chip, .quality-btn, .ml-pane-btn, .ml-pane-close,
+    .back-btn, .chat-jump, .chat-reopen, .account-action, .sidebar-toggle, .emoji-cell, .emoji-tab, .category-pin):active:not(:disabled) {
+  scale: .93; transition-duration: var(--dur-1);
+}
+.link-btn:active:not(:disabled) { scale: .97; transition-duration: var(--dur-1); }
+/* 넓은 줄·카드는 덜 들어가게 */
+:is(.nav-item, .side-live, .queue-item, .recent-item, .strip-item, .ml-addrow, .palette-item, .ctx-item, .quality-item, .ml-menu-item,
+    .design-item, .dense-row, .channel-row, .bookmark-row, .side-widget, .ml-focus-add, .ac-item, .tray-item) {
+  transition-property: background, color, border-color, box-shadow, opacity, scale;
+  transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), .3s;
+  transition-timing-function: var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-spring);
+}
+:is(.nav-item, .side-live, .queue-item, .recent-item, .ml-addrow, .palette-item, .quality-item, .ml-menu-item, .design-item,
+    .dense-row, .channel-row, .bookmark-row, .side-widget, .ac-item):active:not(:disabled) { scale: .985; transition-duration: var(--dur-1); }
+.btn { transition-property: background, color, border-color, box-shadow, filter, transform; transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), .3s; transition-timing-function: var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-spring); }
+.btn:active:not(:disabled) { transform: scale(.965); transition-duration: var(--dur-1); }
+.btn.primary:hover:not(:disabled) { box-shadow: 0 8px 22px var(--primary-glow); }
+.btn.primary:active:not(:disabled) { box-shadow: 0 3px 10px var(--primary-glow); filter: brightness(.97); }
+
+/* ── 카드 — 올라오는 속도는 감속, 그림자는 같이 번진다 ── */
+.card { transition: transform var(--dur-3) var(--ease-out); }
+.card:active { transform: translateY(-1px) scale(.99); transition-duration: var(--dur-1); }
+.thumb { transition: box-shadow var(--dur-3) var(--ease-out); }
+.thumb img { transition: transform .5s var(--ease-out), opacity .3s ease; }
+.card:hover .thumb img { transform: scale(1.04); }
+.category-card { transition: transform var(--dur-3) var(--ease-out), box-shadow var(--dur-3) var(--ease-out), border-color var(--dur-2) var(--ease-out); }
+.category-card:hover { border-color: var(--border); }
+.category-art img { transition: transform .5s var(--ease-out); }
+.category-card:hover .category-art img { transform: scale(1.04); }
+.category-card:active { transform: translateY(-1px) scale(.99); transition-duration: var(--dur-1); }
+.recent-item:hover, .channel-row:hover, .bookmark-row:hover { translate: 0 -1px; }
+.recent-item, .channel-row, .bookmark-row { transition-property: background, color, border-color, box-shadow, scale, translate; transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), .3s, var(--dur-3); }
+.bookmark-row { transition-timing-function: var(--ease-out); }
+.strip-ring { transition: transform .32s var(--ease-spring), box-shadow var(--dur-2) var(--ease-out); }
+.strip-item:active .strip-ring { transform: scale(.96); transition-duration: var(--dur-1); }
+.rail-item { transition: transform .3s var(--ease-spring); }
+
+/* ── 썸네일 — 받아지면 부드럽게(motion.js 가 is-loaded 를 단다. 캐시에 있던 것은 그리기 전에, 실패해도 단다).
+   아바타는 목록이 자주 다시 그려져(사이드바·채팅) 깜박일 수 있어 걸지 않는다. ── */
+:is(.thumb, .queue-thumb, .hero-media, .ml-addrow-thumb, .bookmark-thumb, .category-art, .ml-pick-thumb) img:not(.is-loaded) { opacity: 0; }
+:is(.queue-thumb, .hero-media, .ml-addrow-thumb, .bookmark-thumb, .ml-pick-thumb) img { transition: opacity .3s ease; }
+.category-art img { transition: transform .5s var(--ease-out), opacity .3s ease; }
+.hero-media img { transition: transform 6s ease, opacity .45s ease; }
+
+/* ── 사이드바 ── */
+.nav-item.active::before { animation: mo-grow-y .32s var(--ease-spring) both; transform-origin: center; }
+.nav-item .nav-icon { transition: color var(--dur-2) var(--ease-out), scale .3s var(--ease-spring); }
+.nav-item:hover .nav-icon { scale: 1.06; }
+.side-tip:not([hidden]) { animation: mo-fade var(--dur-1) var(--ease-out) both; }
+/* 사이드바 너비 전환은 app.css(.sidebar 의 --sb-dur·--sb-ease)가 안쪽 위치 전환과 함께 맡는다 */
+
+/* ── 세그먼트·칩·토글 ── */
+.segmented .seg.active { animation: mo-pop .22s var(--ease-out) both; }
+.chip.active { transition-duration: var(--dur-2); }
+.toggle span { transition: background var(--dur-3) var(--ease-out), box-shadow var(--dur-3) var(--ease-out); }
+.toggle span::after { transition: transform .32s var(--ease-spring), width var(--dur-2) var(--ease-out); }
+.toggle:active span::after { width: 22px; }
+.toggle input:checked + span::after { transform: translateX(16px); }
+.toggle:active input:checked + span::after { transform: translateX(12px); }
+
+/* ── 입력 — 초점 링이 번지듯 ── */
+:where(input, textarea, select, .search-field, .ml-addbar-search) { transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), background var(--dur-2) var(--ease-out); }
+::selection { background: color-mix(in srgb, var(--primary) 32%, transparent); }
+
+/* ── 떠 있는 메뉴·팝오버 — 붙은 쪽에서 살짝 커지며 ── */
+:is(.ml-more-menu, .notify-pop, .design-menu, .chat-tray):not([hidden]) { animation: mo-pop-down var(--dur-2) var(--ease-out) both; transform-origin: top right; }
+.account-pop[data-side="top"] { animation: mo-pop-up var(--dur-2) var(--ease-out) both; transform-origin: var(--tail) 100%; }
+.account-pop[data-side="right"] { animation: mo-pop var(--dur-2) var(--ease-out) both; transform-origin: 0 var(--tail); }
+.ctx-menu { animation: mo-pop-down var(--dur-2) var(--ease-out) both; transform-origin: top left; }
+:is(.quality-menu, .emoji-picker, .chat-autocomplete):not([hidden]) { animation: mo-pop-up var(--dur-2) var(--ease-out) both; transform-origin: bottom center; }
+.quality-menu:not([hidden]) { transform-origin: bottom right; }
+.ml-pane-menu:not([hidden]) { animation: mo-pop var(--dur-2) var(--ease-out) both; transform-origin: top right; }
+.ml-gear-menu:not([hidden]) { transform-origin: bottom right; }
+.player-panel:not([hidden]) { animation: mo-pop-up var(--dur-3) var(--ease-emph) both; transform-origin: bottom right; }
+/* 메뉴 항목 — 체크·활성 표시가 톡 */
+.quality-item.active::after, .design-item.on .design-check { animation: mo-pop .28s var(--ease-spring) both; }
+
+/* ── 시트·팔레트 — 뒤가 흐려지며 카드가 떠오른다. 닫을 때는 dom.js dismiss() 가 leaving 을 단다 ── */
+.sheet-scrim { animation: mo-fade var(--dur-3) var(--ease-out) both; }
+.sheet-scrim > .sheet, .sheet-scrim > form.sheet { animation: mo-rise .32s var(--ease-emph) both; }
+.sheet-scrim.leaving { animation: mo-fade-out var(--dur-2) var(--ease-in) both; pointer-events: none; }
+.sheet-scrim.leaving > .sheet { animation: mo-sink var(--dur-2) var(--ease-in) both; }
+.palette-scrim:not([hidden]) { animation: mo-fade var(--dur-2) var(--ease-out) both; }
+.palette-scrim:not([hidden]) > .palette { animation: mo-pop-down .24s var(--ease-emph) both; transform-origin: top center; }
+.palette-item { transition: background var(--dur-1) var(--ease-out); }
+.palette-item.active { box-shadow: inset 2px 0 0 var(--primary); }
+
+/* ── 토스트 — 아래에서 스프링으로 ── */
+.toast-stack .toast { animation: mo-toast-in .38s var(--ease-spring) both; }
+.toast-stack .toast.leaving { animation: mo-toast-out var(--dur-2) var(--ease-in) both; }
+@keyframes mo-toast-in { from { opacity: 0; translate: 0 14px; scale: .96; } to { opacity: 1; translate: 0 0; scale: 1; } }
+@keyframes mo-toast-out { to { opacity: 0; translate: 0 6px; scale: .98; } }
+
+/* ── 채팅 — 사람이 보는 것(이벤트 카드·멘션·고정·점프)만 움직인다 ── */
+.chat-line.ev .ev-card { animation: mo-pop-up .3s var(--ease-out) both; transform-origin: left center; }
+.chat-line.mention, .chat-line.notice-line { animation: mo-fade .3s ease both; }
+.chat-pin:not([hidden]), .chat-notice:not([hidden]), .chat-input-banner:not([hidden]) { animation: mo-pop-down var(--dur-3) var(--ease-out) both; transform-origin: top center; }
+.chat-jump:not([hidden]) { animation: mo-pop-up .3s var(--ease-spring) both; }
+.chat-reopen:not([hidden]), .ip-reopen:not([hidden]) { animation: mo-fade var(--dur-3) var(--ease-out) both; }
+.mention-count:not([hidden]) { animation: mo-pop .3s var(--ease-spring) both; }
+.chat-state { transition: color var(--dur-3) var(--ease-out); }
+
+/* ── 패널·오버레이 ── */
+.insight-panel:not([hidden]) { animation: mo-slide-left var(--dur-3) var(--ease-emph) both; }
+.player-overlay:not([hidden]) { animation: mo-fade var(--dur-3) var(--ease-out) both; }
+.offline-banner:not([hidden]) { animation: mo-pop-down var(--dur-3) var(--ease-out) both; }
+.player-osd:not([hidden]):not(.fade) { animation: mo-pop .22s var(--ease-spring) both; }
+
+/* ── 멀티라이브 ── */
+/* 패인 나타남·사라짐·자리 이동은 ml-motion.js(FLIP, transform·opacity 만)가 맡는다. */
+.ml-pane { transition: outline-color var(--dur-2) var(--ease-out), box-shadow var(--dur-3) var(--ease-out); }
+.ml-pane.selected { box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 18%, transparent); }
+.ml-pane.drop-target { scale: .985; transition: scale var(--dur-2) var(--ease-out); }
+.ml-empty { animation: mo-rise var(--dur-4) var(--ease-emph) both; }
+.ml-addrow-act { transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out), scale .3s var(--ease-spring); }
+.ml-addrow:hover:not(:disabled) .ml-addrow-act { scale: 1.08; }
+
+/* ── 풍부(rich) — 카드 격자가 앞에서부터 차례로(처음 12장만, 나머지는 같이) ── */
+:root[data-motion="rich"] :is(.grid, .shelf, .category-grid) > * { animation: mo-rise .36s var(--ease-emph) both; }
+:root[data-motion="rich"] :is(.grid, .shelf, .category-grid) > :nth-child(2) { animation-delay: 30ms; }
+:root[data-motion="rich"] :is(.grid, .shelf, .category-grid) > :nth-child(3) { animation-delay: 60ms; }
+:root[data-motion="rich"] :is(.grid, .shelf, .category-grid) > :nth-child(4) { animation-delay: 90ms; }
+:root[data-motion="rich"] :is(.grid, .shelf, .category-grid) > :nth-child(5) { animation-delay: 120ms; }
+:root[data-motion="rich"] :is(.grid, .shelf, .category-grid) > :nth-child(6) { animation-delay: 150ms; }
+:root[data-motion="rich"] :is(.grid, .shelf, .category-grid) > :nth-child(7) { animation-delay: 170ms; }
+:root[data-motion="rich"] :is(.grid, .shelf, .category-grid) > :nth-child(8) { animation-delay: 190ms; }
+:root[data-motion="rich"] :is(.grid, .shelf, .category-grid) > :nth-child(9) { animation-delay: 210ms; }
+:root[data-motion="rich"] :is(.grid, .shelf, .category-grid) > :nth-child(10) { animation-delay: 225ms; }
+:root[data-motion="rich"] :is(.grid, .shelf, .category-grid) > :nth-child(11) { animation-delay: 240ms; }
+:root[data-motion="rich"] :is(.grid, .shelf, .category-grid) > :nth-child(n+12) { animation-delay: 250ms; }
+
+/* ── 모션 줄이기 — 위에서 더한 누름 크기·호버 이동도 없앤다(전역 규칙은 시간만 0 으로 만든다) ── */
+@media (prefers-reduced-motion: reduce) {
+  :active:not(:disabled), .recent-item:hover, .channel-row:hover, .bookmark-row:hover, .nav-item:hover .nav-icon, .ml-addrow:hover .ml-addrow-act { scale: none !important; translate: none !important; }
+}
+:root[data-motion="reduced"] :is(:active, .recent-item:hover, .channel-row:hover, .bookmark-row:hover, .nav-item:hover .nav-icon, .ml-addrow:hover .ml-addrow-act) { scale: none !important; translate: none !important; }
+
+/* ── 썸네일 호버 — 아래쪽이 살짝 어두워지며 재생 표시(배지 글자가 더 잘 읽힌다) ── */
+.card .thumb::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, .28) 0 22px, transparent 23px), linear-gradient(transparent 45%, rgba(0, 0, 0, .38));
+  transition: opacity var(--dur-3) var(--ease-out);
+}
+.card .thumb::before {
+  content: ""; position: absolute; left: 50%; top: 50%; z-index: 1; width: 18px; height: 18px; pointer-events: none;
+  translate: -40% -50%; scale: .7; opacity: 0;
+  background: #fff; clip-path: polygon(0 0, 100% 50%, 0 100%);
+  transition: opacity var(--dur-3) var(--ease-out), scale .34s var(--ease-spring);
+}
+.card:hover .thumb::after, .card:focus-visible .thumb::after { opacity: 1; }
+.card:hover .thumb::before, .card:focus-visible .thumb::before { opacity: .95; scale: 1; }
+.thumb > :is(.badge-live, .badge-viewers, .badge-uptime, .badge-adult, .badge-duration, .card-ml-add, .progress-bar) { z-index: 2; }
+
+/* ── 스크롤 — 머리줄은 내용이 밑으로 지나갈 때만 선·그림자가 생긴다(스크롤 연동을 아는 엔진에서만) ── */
+::-webkit-scrollbar-thumb:hover { background-color: var(--surface-overlay); }
+@supports (animation-timeline: scroll()) {
+  /* 그림자는 칠하지 않고 미리 그린 층의 투명도만 바꾼다(스크롤 중 다시 그리기 없음). */
+  /* 맨 위에선 배경도 비워 본문 위쪽 빛 번짐이 머리줄까지 이어지게 — 내용이 밑으로 들어가면 유리 배경이 차오른다.
+     스크롤할 게 없으면(타임라인 비활성) 애니메이션이 안 걸리니 기본값을 투명으로 둔다. */
+  .page:not(.page-multilive, .page-multichat, .page-chatonly) > .page-header {
+    border-bottom-color: transparent; background-color: transparent;
+    animation: mo-header-glass linear both; animation-timeline: scroll(nearest block); animation-range: 0 48px;
+  }
+  @keyframes mo-header-glass { from { background-color: transparent; } to { background-color: var(--glass); } }
+  .page:not(.page-multilive, .page-multichat, .page-chatonly) > .page-header::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 12px; pointer-events: none;
+    border-top: 1px solid var(--border-subtle); background: linear-gradient(rgba(0, 0, 0, .14), transparent);
+    opacity: 0; animation: mo-header-lift linear both; animation-timeline: scroll(nearest block); animation-range: 0 48px;
+    translate: 0 100%;
+  }
+  @keyframes mo-header-lift { to { opacity: 1; } }
+}

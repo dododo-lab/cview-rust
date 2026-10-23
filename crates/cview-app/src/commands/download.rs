@@ -21,7 +21,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 use url::Url;
 
-use super::content::{sanitize_file_name, unique_path};
+use super::content::{create_unique_file, sanitize_file_name};
 use super::{CmdResult, CommandError};
 use crate::state::AppServices;
 
@@ -342,7 +342,12 @@ async fn run_job(
         Some(c) => format!("{c}_{title}_{target}.{ext}"),
         None => format!("{title}_{target}.{ext}"),
     });
-    let output = unique_path(folder, &name);
+    // 최종 이름을 빈 파일로 먼저 예약한다 — 동시에 받는 같은 이름 작업이나 기존 파일을 `.part` → 이름
+    // 바꾸기로 덮어쓰지 않게. 받기에 실패하면 예약한 빈 파일을 지운다.
+    std::fs::create_dir_all(folder).map_err(|e| DownloadError::WriteFailed(e.to_string()))?;
+    let (output, reserved) =
+        create_unique_file(folder, &name).map_err(|e| DownloadError::WriteFailed(e.to_string()))?;
+    drop(reserved);
     let last_emit = Arc::new(Mutex::new(Instant::now()));
     let handle = app.clone();
     let job_id = id.to_string();
@@ -360,11 +365,17 @@ async fn run_job(
         }
     });
     let downloader = VideoDownloader::new(cancel);
-    match &progressive {
-        Some(url) => downloader.download_file(url, &output, progress).await?,
-        None => downloader.download_hls(&hls, &output, progress).await?,
+    let result = match &progressive {
+        Some(url) => downloader.download_file(url, &output, progress).await,
+        None => downloader.download_hls(&hls, &output, progress).await,
     };
-    Ok(output)
+    match result {
+        Ok(_) => Ok(output),
+        Err(e) => {
+            let _ = std::fs::remove_file(&output);
+            Err(e)
+        }
+    }
 }
 
 #[tauri::command]

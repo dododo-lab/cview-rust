@@ -25,15 +25,18 @@ use crate::state::AppServices;
 pub struct PageDto<T> {
     pub items: Vec<T>,
     pub total_count: Option<i64>,
-    /// 요청한 크기만큼 왔으면 다음 페이지가 있을 수 있다.
+    /// 다음 페이지가 있다 — 전체 개수를 알면 `시작 위치 + 받은 개수 < 전체`, 모르면 요청한 크기만큼 왔는지로 추정.
     pub has_more: bool,
 }
 
 impl<T> PageDto<T> {
-    pub fn new(items: Vec<T>, total_count: Option<i64>, requested: i64) -> Self {
+    /// `start` 는 이 페이지 앞에 있는 항목 수(offset, 또는 page × size).
+    pub fn new(items: Vec<T>, total_count: Option<i64>, start: i64, requested: i64) -> Self {
+        let received = items.len() as i64;
         let has_more = match total_count {
-            Some(total) => (items.len() as i64) >= requested && total > items.len() as i64,
-            None => (items.len() as i64) >= requested,
+            // 빈 페이지면 total 이 남아 있어도 멈춘다(오래된 total 로 빈 요청을 되풀이하지 않게).
+            Some(total) => received > 0 && start.saturating_add(received) < total,
+            None => received >= requested,
         };
         Self {
             items,
@@ -41,6 +44,11 @@ impl<T> PageDto<T> {
             has_more,
         }
     }
+}
+
+/// 0부터 세는 페이지 번호의 시작 위치.
+fn page_start(page: i64, size: i64) -> i64 {
+    page.saturating_mul(size)
 }
 
 /// 채널 상세 — 채널 정보 + 내 즐겨찾기·메모.
@@ -98,11 +106,17 @@ pub async fn channel_vods(
     size: Option<i64>,
 ) -> CmdResult<PageDto<VodInfo>> {
     let size = size.unwrap_or(24).clamp(1, 50);
+    let page = page.unwrap_or(0).max(0);
     let res = services
         .api
-        .vod_list(&channel_id, page.unwrap_or(0).max(0), size, false)
+        .vod_list(&channel_id, page, size, false)
         .await?;
-    Ok(PageDto::new(res.data, res.total_count, size))
+    Ok(PageDto::new(
+        res.data,
+        res.total_count,
+        page_start(page, size),
+        size,
+    ))
 }
 
 #[tauri::command]
@@ -113,11 +127,14 @@ pub async fn channel_clips(
     size: Option<i64>,
 ) -> CmdResult<PageDto<ClipInfo>> {
     let size = size.unwrap_or(24).clamp(1, 50);
-    let res = services
-        .api
-        .clip_list(&channel_id, page.unwrap_or(0).max(0), size)
-        .await?;
-    Ok(PageDto::new(res.data, res.total_count, size))
+    let page = page.unwrap_or(0).max(0);
+    let res = services.api.clip_list(&channel_id, page, size).await?;
+    Ok(PageDto::new(
+        res.data,
+        res.total_count,
+        page_start(page, size),
+        size,
+    ))
 }
 
 /// 인기 클립 — `filter`: `WITHIN_1_DAY` / `WITHIN_7_DAYS` / `WITHIN_30_DAYS`,
@@ -146,11 +163,12 @@ pub async fn search_videos(
     size: Option<i64>,
 ) -> CmdResult<PageDto<VodInfo>> {
     let size = size.unwrap_or(24).clamp(1, 50);
+    let offset = offset.unwrap_or(0).max(0);
     let res = services
         .api
-        .search_videos(keyword.trim(), offset.unwrap_or(0).max(0), size)
+        .search_videos(keyword.trim(), offset, size)
         .await?;
-    Ok(PageDto::new(res.data, res.total_count, size))
+    Ok(PageDto::new(res.data, res.total_count, offset, size))
 }
 
 /// 클립 재생 정보 — 상세 + 재생 URL(있으면).
@@ -225,6 +243,11 @@ pub struct FollowedChannelDto {
     pub live_title: Option<String>,
     pub viewer_count: Option<i64>,
     pub category_name: Option<String>,
+    pub verified: bool,
+    /// 팔로우한 날짜 원문(`2024-02-19 23:28:11`, KST) — 응답에 없으면 None.
+    pub follow_date: Option<String>,
+    /// 라이브 알림을 켰는가 — 응답에 없으면 None.
+    pub notification: Option<bool>,
 }
 
 /// 팔로우한 채널 전체 — 원본 FollowingChannelSidebar/DenseRow 의 바탕.
@@ -253,6 +276,9 @@ pub async fn following_channels_all(
                 live_title: live.and_then(|l| l.live_title.clone()),
                 viewer_count: live.and_then(|l| l.concurrent_user_count),
                 category_name: live.and_then(|l| l.live_category_value.clone()),
+                verified: r.verified,
+                follow_date: r.follow.follow_date.clone(),
+                notification: r.follow.notification,
             }
         })
         .collect())
@@ -515,20 +541,37 @@ pub fn sanitize_file_name(name: &str) -> String {
     }
 }
 
-/// 같은 이름이 있으면 ` (2)` 를 붙인다.
-pub(crate) fn unique_path(dir: &Path, file_name: &str) -> PathBuf {
-    let candidate = dir.join(file_name);
-    if !candidate.exists() {
-        return candidate;
-    }
+/// 같은 이름 뒤에 붙여 볼 번호의 끝(` (2)` … ` (999)`).
+const UNIQUE_NAME_LIMIT: u32 = 1000;
+
+/// 같은 이름이 없을 때까지 ` (2)` 를 붙여 가며 **새 파일을 원자적으로 만든다**(`create_new`).
+/// 있는지 확인하고 나서 쓰는 방식과 달리 동시에 저장해도 같은 이름을 고르지 않고, 번호를 다 써도
+/// 기존 파일로 돌아가 덮어쓰지 않고 `AlreadyExists` 오류로 끝난다.
+pub(crate) fn create_unique_file(
+    dir: &Path,
+    file_name: &str,
+) -> std::io::Result<(PathBuf, std::fs::File)> {
     let (stem, ext) = match file_name.rsplit_once('.') {
         Some((s, e)) => (s.to_string(), format!(".{e}")),
         None => (file_name.to_string(), String::new()),
     };
-    (2..1000)
-        .map(|n| dir.join(format!("{stem} ({n}){ext}")))
-        .find(|p| !p.exists())
-        .unwrap_or(candidate)
+    let candidates = std::iter::once(dir.join(file_name))
+        .chain((2..UNIQUE_NAME_LIMIT).map(|n| dir.join(format!("{stem} ({n}){ext}"))));
+    for path in candidates {
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(file) => return Ok((path, file)),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "같은 이름의 파일이 너무 많습니다",
+    ))
 }
 
 /// 파일 저장 — `data` 는 base64(바이너리) 또는 `text`(문자열) 중 하나. 저장한 경로를 돌려준다.
@@ -560,8 +603,14 @@ pub async fn save_file(
     let dir = configured.unwrap_or_else(|| default_save_dir(&home, &kind));
     std::fs::create_dir_all(&dir)
         .map_err(|e| CommandError(format!("폴더를 만들 수 없습니다: {e}")))?;
-    let path = unique_path(&dir, &sanitize_file_name(&file_name));
-    std::fs::write(&path, bytes).map_err(|e| CommandError(format!("저장하지 못했습니다: {e}")))?;
+    let (path, mut file) = create_unique_file(&dir, &sanitize_file_name(&file_name))
+        .map_err(|e| CommandError(format!("저장하지 못했습니다: {e}")))?;
+    if let Err(e) = std::io::Write::write_all(&mut file, &bytes) {
+        drop(file);
+        // 방금 새로 만든 파일이라 지워도 다른 내용을 잃지 않는다.
+        let _ = std::fs::remove_file(&path);
+        return Err(CommandError(format!("저장하지 못했습니다: {e}")));
+    }
     Ok(path.to_string_lossy().into_owned())
 }
 
@@ -701,10 +750,30 @@ mod tests {
 
     #[test]
     fn page_has_more_follows_total_or_size() {
-        assert!(PageDto::new(vec![1, 2], Some(10), 2).has_more);
-        assert!(!PageDto::new(vec![1, 2], Some(2), 2).has_more);
-        assert!(!PageDto::new(vec![1], None, 2).has_more);
-        assert!(PageDto::new(vec![1, 2], None, 2).has_more);
+        let full = |n: usize| vec![0; n];
+        // 0개
+        assert!(!PageDto::new(full(0), Some(0), 0, 24).has_more);
+        assert!(!PageDto::new(full(0), None, 0, 24).has_more);
+        // 한 페이지로 끝
+        assert!(!PageDto::new(full(10), Some(10), 0, 24).has_more);
+        assert!(!PageDto::new(full(24), Some(24), 0, 24).has_more);
+        // 정확히 2페이지(48개) — 첫 페이지는 더 있고, 꽉 찬 마지막 페이지는 끝
+        assert!(PageDto::new(full(24), Some(48), page_start(0, 24), 24).has_more);
+        assert!(!PageDto::new(full(24), Some(48), page_start(1, 24), 24).has_more);
+        // 마지막 일부 페이지(50개 → 24, 24, 2)
+        assert!(PageDto::new(full(24), Some(50), page_start(1, 24), 24).has_more);
+        assert!(!PageDto::new(full(2), Some(50), page_start(2, 24), 24).has_more);
+        // offset 기반(검색)
+        assert!(PageDto::new(full(24), Some(30), 0, 24).has_more);
+        assert!(!PageDto::new(full(6), Some(30), 24, 24).has_more);
+        // total 이 남아 있어도 빈 페이지면 멈춘다
+        assert!(!PageDto::new(full(0), Some(100), 48, 24).has_more);
+        // total 없는 응답 — 요청한 크기만큼 왔는지로 추정
+        assert!(PageDto::new(full(24), None, 24, 24).has_more);
+        assert!(!PageDto::new(full(5), None, 24, 24).has_more);
+        // 큰 페이지 번호도 넘치지 않는다
+        assert_eq!(page_start(i64::MAX, 50), i64::MAX);
+        assert!(!PageDto::new(full(1), Some(10), page_start(i64::MAX, 50), 50).has_more);
     }
 
     #[test]
@@ -723,12 +792,74 @@ mod tests {
             home.join("Pictures/CView")
         );
         assert_eq!(default_save_dir(home, "chat"), home.join("Downloads/CView"));
-        let dir = std::env::temp_dir().join(format!("cview-save-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let dir = dir.path();
         std::fs::write(dir.join("a.txt"), "x").unwrap();
-        assert_eq!(unique_path(&dir, "a.txt"), dir.join("a (2).txt"));
-        assert_eq!(unique_path(&dir, "b.txt"), dir.join("b.txt"));
-        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(
+            create_unique_file(dir, "a.txt").unwrap().0,
+            dir.join("a (2).txt")
+        );
+        assert_eq!(
+            create_unique_file(dir, "a.txt").unwrap().0,
+            dir.join("a (3).txt")
+        );
+        assert_eq!(
+            create_unique_file(dir, "b.txt").unwrap().0,
+            dir.join("b.txt")
+        );
+        assert_eq!(
+            create_unique_file(dir, "noext").unwrap().0,
+            dir.join("noext")
+        );
+        assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "x");
         assert_eq!(shellexpand_home("~/Pics", home), "/Users/x/Pics");
+    }
+
+    #[test]
+    fn exhausted_names_fail_without_touching_existing_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let dir = dir.path();
+        std::fs::write(dir.join("a.txt"), "원본").unwrap();
+        for n in 2..UNIQUE_NAME_LIMIT {
+            std::fs::write(dir.join(format!("a ({n}).txt")), format!("{n}")).unwrap();
+        }
+        let err = create_unique_file(dir, "a.txt").unwrap_err();
+        assert_eq!(err.kind(), std::io::ErrorKind::AlreadyExists);
+        assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "원본");
+        assert_eq!(
+            std::fs::read_to_string(dir.join("a (999).txt")).unwrap(),
+            "999"
+        );
+        assert_eq!(std::fs::read_dir(dir).unwrap().count(), 999);
+    }
+
+    #[test]
+    fn concurrent_saves_get_distinct_new_files() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.txt"), "원본").unwrap();
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(16));
+        let handles: Vec<_> = (0..16)
+            .map(|i| {
+                let dir = dir.path().to_path_buf();
+                let barrier = barrier.clone();
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    let (path, mut file) = create_unique_file(&dir, "a.txt").unwrap();
+                    std::io::Write::write_all(&mut file, format!("{i}").as_bytes()).unwrap();
+                    (path, i)
+                })
+            })
+            .collect();
+        let results: Vec<_> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        let paths: std::collections::HashSet<_> = results.iter().map(|(p, _)| p.clone()).collect();
+        assert_eq!(paths.len(), 16);
+        assert!(!paths.contains(&dir.path().join("a.txt")));
+        for (path, i) in &results {
+            assert_eq!(std::fs::read_to_string(path).unwrap(), format!("{i}"));
+        }
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("a.txt")).unwrap(),
+            "원본"
+        );
     }
 }

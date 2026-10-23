@@ -10,6 +10,7 @@ import { applyChatSkin } from './chat-extras.js';
 import { nickColorClass } from './nick-color.js';
 import { chatPrefs, onChatPrefs, passesFilters } from './chat-prefs.js';
 import { kbd } from './platform.js';
+import { MultiLiveAddDrawer } from './ml-add-drawer.js';
 
 export const multiChatIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H8l-4 3V5Z"/><path d="M18 8h1a2 2 0 0 1 2 2v10l-3.5-2.6H11a2 2 0 0 1-2-2V15h5a4 4 0 0 0 4-4V8Z" opacity=".6"/></svg>';
 const COLORS = ['#00c77f', '#5ba3ff', '#ff8a3d', '#c77dff', '#ff5d8f', '#2ec4b6', '#f4c430', '#8d99ae'];
@@ -26,6 +27,23 @@ const chatMarkup = `
 /** 검색어가 줄에 있는가(대소문자 무시). 순수 함수. */
 export function lineMatches(text, query) {
   return !query || String(text || '').toLowerCase().includes(String(query).toLowerCase());
+}
+
+/** 통합(머지) 채팅 줄 — 채널 태그를 붙인 한 타임라인. 채팅 설정(차단·금지어·후원 필터·이모티콘)을 따른다.
+ *  멀티라이브 멀티채팅도 쓴다. `style` 은 줄의 색 변수(--mc-color 등). */
+export function mergedLinesHtml(messages, { name, style }) {
+  const tag = name ? `<span class="mc-tag">${esc(name)}</span>` : '';
+  const prefs = chatPrefs();
+  return (messages || []).filter((m) => m.kind !== 'system' && passesFilters(m, prefs)).map((m) => {
+    const ev = eventClasses(m);
+    const nick = `<span class="nick${['streamer', 'manager', 'channelManager'].includes(m.role) ? ` ${m.role}` : ''}${nickColorClass(m.nickname, m.role)}">${esc(m.nickname || '익명')}</span>`;
+    if (ev.length) {
+      const body = m.content && m.content.trim() ? renderContent(m.content, m.emojis, prefs.emoticonEnabled) : '';
+      return `<div class="chat-line merged-line ${ev.join(' ')}" style="${style}">${eventCardHtml(m, { tag, nick, content: body })}</div>`;
+    }
+    return `
+      <div class="chat-line merged-line" style="${style}">${tag}${nick}<span class="text">${renderContent(m.content, m.emojis, prefs.emoticonEnabled)}</span></div>`;
+  }).join('');
 }
 
 export class MultiChatPage {
@@ -53,8 +71,7 @@ export class MultiChatPage {
           <div class="chat-list mc-merged-list"></div>
           <form class="chat-input mc-merged-input"><select class="select mc-target"></select><input type="text" maxlength="100" placeholder="선택한 채널로 보내기" autocomplete="off"><button class="btn primary">보내기</button></form>
         </div>
-      </div>
-      <div class="ml-picker mc-picker" hidden><div class="ml-picker-panel"><header class="ml-picker-head"><strong>채널 추가</strong><input type="search" class="ml-picker-filter" placeholder="채널·제목으로 찾기"><button class="icon-btn" data-mc="picker-close" title="닫기" aria-label="닫기">✕</button></header><div class="ml-picker-list"></div></div></div>`;
+      </div>`;
     content.append(this.root);
     this.panesBox = this.root.querySelector('.mc-panes');
     this.overview = this.root.querySelector('.mc-overview');
@@ -65,17 +82,24 @@ export class MultiChatPage {
     onChatPrefs(skin);
     skin();
     this.target = this.root.querySelector('.mc-target');
-    this.picker = this.root.querySelector('.mc-picker');
     this.search = this.root.querySelector('.mc-search');
     this.channels = []; // { channelId, name, image, color, chatChannelId, panel, el, rate: [] }
     this.active = null;
     this.layout = 'tabs';
     this.loaded = false;
-    this.pickItems = [];
+    this.addBar = new MultiLiveAddDrawer(this.root.querySelector('.mc-body'), {
+      isLoggedIn,
+      getState: () => {
+        const n = this.channels.length + (this.pendingAdds?.size || 0);
+        return { sessions: this.channels, maxSessions: MAX_CHANNELS, canAdd: n < MAX_CHANNELS };
+      },
+      onAdd: (channelId) => this.add(channelId),
+      toggleSelector: '[data-mc="add"]',
+      unit: '채널',
+    });
 
     this.root.addEventListener('click', (e) => this.onClick(e));
     this.search.addEventListener('input', () => this.applySearch());
-    this.picker.querySelector('.ml-picker-filter').addEventListener('input', () => this.renderPicker());
     this.root.querySelector('.mc-merged-input').addEventListener('submit', (e) => { e.preventDefault(); this.sendMerged(); });
     listen('chat://session-event', (p) => this.onSessionEvent(p));
     document.addEventListener('keydown', (e) => {
@@ -169,6 +193,7 @@ export class MultiChatPage {
   }
 
   render() {
+    this.addBar.sync();
     const n = this.channels.length;
     this.root.querySelector('.mc-count').textContent = `${n} / ${MAX_CHANNELS}`;
     this.root.querySelector('.mc-empty').hidden = n > 0;
@@ -201,18 +226,7 @@ export class MultiChatPage {
     if (!p || !p.event || p.event.type !== 'messages' || this.root.hidden || this.layout !== 'merged') return;
     const c = this.channels.find((x) => x.session === p.session);
     if (!c) return;
-    const tag = `<span class="mc-tag">${esc(c.name)}</span>`;
-    // 통합 목록도 패널과 같은 채팅 설정(차단·금지어·후원 필터·이모티콘 표시)을 따른다.
-    const prefs = chatPrefs();
-    const html = (p.event.messages || []).filter((m) => m.kind !== 'system' && passesFilters(m, prefs)).map((m) => {
-      const ev = eventClasses(m);
-      if (ev.length) {
-        const body = m.content && m.content.trim() ? renderContent(m.content, m.emojis, prefs.emoticonEnabled) : '';
-        return `<div class="chat-line merged-line ${ev.join(' ')}" style="--mc-color:${c.color}">${eventCardHtml(m, { tag, nick: `<span class="nick${['streamer', 'manager', 'channelManager'].includes(m.role) ? ` ${m.role}` : ''}${nickColorClass(m.nickname, m.role)}">${esc(m.nickname || '익명')}</span>`, content: body })}</div>`;
-      }
-      return `
-      <div class="chat-line merged-line" style="--mc-color:${c.color}">${tag}<span class="nick${['streamer', 'manager', 'channelManager'].includes(m.role) ? ` ${m.role}` : ''}${nickColorClass(m.nickname, m.role)}">${esc(m.nickname || '익명')}</span><span class="text">${renderContent(m.content, m.emojis, prefs.emoticonEnabled)}</span></div>`;
-    }).join('');
+    const html = mergedLinesHtml(p.event.messages, { name: c.name, style: `--mc-color:${c.color}` });
     if (!html) return;
     const atBottom = this.mergedList.scrollHeight - this.mergedList.scrollTop - this.mergedList.clientHeight < 40;
     const before = this.mergedList.lastElementChild;
@@ -253,35 +267,6 @@ export class MultiChatPage {
     this.search.title = q ? `일치 ${hits}개` : '메시지 검색';
   }
 
-  // ── 채널 추가 ──
-  async openPicker() {
-    this.picker.hidden = false;
-    const list = this.picker.querySelector('.ml-picker-list');
-    list.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
-    const [f, p] = await Promise.allSettled([this.isLoggedIn() ? api.followingLives(false) : Promise.resolve([]), api.popularLives(40, false)]);
-    const seen = new Set();
-    this.pickItems = [];
-    for (const [res, group] of [[f, '팔로잉'], [p, '인기']]) {
-      for (const l of res.status === 'fulfilled' ? res.value : []) {
-        if (seen.has(l.channelId)) continue;
-        seen.add(l.channelId);
-        this.pickItems.push({ ...l, group });
-      }
-    }
-    this.renderPicker();
-  }
-
-  renderPicker() {
-    const q = this.picker.querySelector('.ml-picker-filter').value.trim().toLowerCase();
-    const added = new Set(this.channels.map((c) => c.channelId));
-    const items = this.pickItems.filter((l) => !q || l.channelName.toLowerCase().includes(q) || (l.liveTitle || '').toLowerCase().includes(q));
-    this.picker.querySelector('.ml-picker-list').innerHTML = items.map((l) => `
-      <button class="ml-pick" data-mc-pick="${esc(l.channelId)}" ${added.has(l.channelId) ? 'disabled' : ''}>
-        <span class="ml-pick-thumb">${safeUrl(l.channelImageUrl) ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(l.channelImageUrl, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : ''}</span>
-        <span class="ml-pick-text"><span class="ml-pick-name ellipsis">${esc(l.channelName)} · ${esc(l.group)}</span><span class="ml-pick-title ellipsis">${esc(l.liveTitle || '')}</span></span>
-        <span class="ml-pick-viewers">${esc(l.viewerCountText)}명</span></button>`).join('') || '<div class="empty"><strong>추가할 채널이 없습니다</strong></div>';
-  }
-
   async onClick(e) {
     const rm = e.target.closest('[data-mc-remove]');
     if (rm) { e.stopPropagation(); this.remove(rm.dataset.mcRemove); return; }
@@ -289,12 +274,9 @@ export class MultiChatPage {
     if (f) { this.focus(f.dataset.mcFocus); return; }
     const l = e.target.closest('[data-mc-layout]');
     if (l) { this.layout = l.dataset.mcLayout; if (this.layout === 'merged') this.mergedList.innerHTML = '<div class="empty">새 메시지를 기다리는 중…</div>'; this.render(); this.persist(); return; }
-    const pick = e.target.closest('[data-mc-pick]');
-    if (pick) { this.picker.hidden = true; this.add(pick.dataset.mcPick); return; }
     const a = e.target.closest('[data-mc]');
-    if (!a) { if (e.target === this.picker) this.picker.hidden = true; return; }
-    if (a.dataset.mc === 'add') this.openPicker();
-    if (a.dataset.mc === 'picker-close') this.picker.hidden = true;
+    if (!a) return;
+    if (a.dataset.mc === 'add') this.addBar.toggle();
     if (a.dataset.mc === 'remove') this.remove(a.closest('.mc-pane').dataset.channelId);
     if (a.dataset.mc === 'close-all') for (const c of [...this.channels]) await this.remove(c.channelId);
   }
