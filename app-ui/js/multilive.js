@@ -548,14 +548,17 @@ export class MultiLivePage {
         this.ratioOutput.textContent = `${this.ratioInput.value}%`; this.syncRatioFill();
         this.render(this.state);
       };
+      // 놓기·취소 중 하나만 오므로 둘 다 떼어 낸다({ once } 만이면 남은 쪽이 다음 끌기에 한 번 더 저장한다).
       const up = () => {
         this.divider.removeEventListener('pointermove', move);
+        this.divider.removeEventListener('pointerup', up);
+        this.divider.removeEventListener('pointercancel', up);
         this.stage.classList.remove('resizing');
         this.commitRatio();
       };
       this.divider.addEventListener('pointermove', move);
-      this.divider.addEventListener('pointerup', up, { once: true });
-      this.divider.addEventListener('pointercancel', up, { once: true });
+      this.divider.addEventListener('pointerup', up);
+      this.divider.addEventListener('pointercancel', up);
     });
     this.divider.addEventListener('dblclick', () => {
       this.localRatio = 0.7;
@@ -593,15 +596,19 @@ export class MultiLivePage {
           this.localGrid = { ...(this.localGrid || { h: this.state.horizontalRatio, v: this.state.verticalRatio }), [axis]: Math.min(0.8, Math.max(0.2, frac)) };
           this.applyCustomGrid(true, (this.state.sessions || []).length);
         };
+        // 취소(pointercancel)도 — 없으면 resizing·끌기 리스너·localGrid 가 남아 실제 비율을 덮었다.
         const up = () => {
           d.removeEventListener('pointermove', move);
+          d.removeEventListener('pointerup', up);
+          d.removeEventListener('pointercancel', up);
           this.stage.classList.remove('resizing');
           const g = this.localGrid;
           this.localGrid = null;
           if (g) this.run(api.multiLiveSetRatios(g.h, g.v));
         };
         d.addEventListener('pointermove', move);
-        d.addEventListener('pointerup', up, { once: true });
+        d.addEventListener('pointerup', up);
+        d.addEventListener('pointercancel', up);
       });
       d.addEventListener('dblclick', () => this.run(api.multiLiveSetRatios(0.5, 0.5)));
     }
