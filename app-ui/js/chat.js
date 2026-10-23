@@ -50,7 +50,25 @@ function timeText(ms) {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-function lineHtml(m, prefs) {
+/** 이모티콘만 있는 메시지인가 — 말풍선 없이 크게 그린다(카카오톡의 이모티콘처럼). 순수 함수. */
+export function isEmoteOnly(content, emojis) {
+  const map = emojis || {};
+  let found = false;
+  const rest = String(content ?? '').replace(/\{:([^{}:]+):\}/g, (all, key) => { if (map[key]) { found = true; return ''; } return all; });
+  return found && !rest.trim();
+}
+
+/**
+ * 말풍선 묶음 열쇠 — 같은 사람이 같은 분에 보낸 일반 메시지는 한 묶음(카카오톡처럼 프로필·이름은 첫 줄에만,
+ * 시간은 마지막 줄에만). 시스템·공지·후원 같은 이벤트는 묶지 않는다(null). 순수 함수.
+ */
+export function groupKey(m) {
+  if (!m || m.kind === 'system' || m.kind === 'notice' || !m.userId || eventClasses(m).length) return null;
+  return `${m.userId}|${timeText(m.timestamp)}`;
+}
+
+/** @param {{ cont?: boolean, next?: boolean }} [grp] cont — 앞 줄과 같은 묶음, next — 다음 줄도 같은 묶음 */
+function lineHtml(m, prefs, grp = {}) {
   const badges = (m.badges || [])
     .map((u) => safeUrl(u))
     .filter(Boolean)
@@ -79,14 +97,18 @@ function lineHtml(m, prefs) {
   if (m.kind === 'notice') {
     return `<div class="${classes.join(' ')}" ${data}><span class="notice-icon">${EVENT_ICONS.megaphone}</span><div class="notice-body"><div class="notice-from">${nick}<span class="notice-tag">공지</span>${time}</div>${text}</div></div>`;
   }
-  // 공통 구조 — 아바타·머리(시간·배지·닉네임)·본문. 줄 형태 스타일은 CSS 가 한 줄로 이어 붙이고,
-  // 카드·말풍선 스타일(라운지·하이브리드·카카오·iMessage)은 같은 구조를 블록으로 배치한다.
+  // 말풍선 구조 — 아바타 · [머리(배지·닉네임) / 줄(말풍선 + 시간)]. 묶음의 이어진 줄은 CSS 가 아바타·머리를 감춘다.
   const me = getMyNickname();
   if (me && m.nickname === me) classes.push('own');
   classes.push('msg');
+  if (grp.cont) classes.push('cont');
+  if (grp.next) classes.push('has-next');
+  if (prefs.emoticonEnabled !== false && isEmoteOnly(m.content, m.emojis)) classes.push('emote-only');
   const initial = esc(Array.from(m.nickname || '•')[0] || '•');
   const mentionTag = classes.includes('mention') ? '<span class="msg-mention">나를 언급</span>' : '';
-  return `<div class="${classes.join(' ')}" ${data}><span class="chat-avatar" aria-hidden="true">${initial}</span><span class="msg-main"><span class="msg-head">${time}<span class="badges">${badges}</span>${nick}${mentionTag}</span>${text}</span></div>`;
+  // 아바타도 닉네임 해시색을 따른다(역할·내 메시지는 CSS 가 역할색으로).
+  const avatarTone = nickColorClass(m.nickname, m.role, isMe);
+  return `<div class="${classes.join(' ')}" ${data}><span class="chat-avatar${avatarTone}" aria-hidden="true">${initial}</span><span class="msg-main"><span class="msg-head"><span class="badges">${badges}</span>${nick}${mentionTag}</span><span class="msg-row">${text}${time}</span></span></div>`;
 }
 
 const STATE_LABEL = {
@@ -346,6 +368,7 @@ export class ChatPanel {
 
   clear(byUser = false) {
     this.pendingLines = [];
+    this.lastGroup = null;
     this.list.innerHTML = `<div class="empty">${byUser ? '채팅을 지웠습니다' : '메시지 대기 중…'}</div>`;
     if (!byUser) this.notice.hidden = true;
     this.unread = 0;
@@ -434,8 +457,14 @@ export class ChatPanel {
     const follow = prefs.autoScroll && this.atBottom;
     if (!follow && !this.list.querySelector('.read-divider') && this.list.children.length) {
       this.list.insertAdjacentHTML('beforeend', '<div class="read-divider"><span>여기까지 읽음</span></div>');
+      this.lastGroup = null; // 구분선 너머로는 묶지 않는다
     }
-    this.list.insertAdjacentHTML('beforeend', shown.map((m) => lineHtml(m, prefs)).join(''));
+    // 말풍선 묶음 — 앞 묶음이 이번에 이어지면 그 마지막 줄의 시간을 감춘다(has-next).
+    const keys = shown.map(groupKey);
+    const cont = keys.map((k, i) => Boolean(k) && k === (i ? keys[i - 1] : this.lastGroup));
+    if (cont[0]) this.list.lastElementChild?.classList.add('has-next');
+    this.lastGroup = keys[keys.length - 1];
+    this.list.insertAdjacentHTML('beforeend', shown.map((m, i) => lineHtml(m, prefs, { cont: cont[i], next: cont[i + 1] })).join(''));
     if (globalThis.__cviewPerf) globalThis.__cviewPerf.chatLines += shown.length;
     this.renderMentionCount();
     for (const fn of this.appendHooks) {
@@ -443,6 +472,8 @@ export class ChatPanel {
     }
     let extra = this.list.children.length - this.maxLines;
     while (extra-- > 0) this.list.firstElementChild.remove();
+    // 맨 위에 남은 줄이 묶음 중간이면 아바타·이름을 다시 보인다
+    this.list.firstElementChild?.classList.remove('cont');
     if (follow) this.list.scrollTop = this.list.scrollHeight;
     else { this.unread += shown.length; this.renderJump(); }
   }

@@ -221,7 +221,7 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 :not([hidden]) + .exit-ghost { display: none !important; }
 @keyframes mo-menu-out { to { opacity: 0; scale: .97; } }
 /* 메뉴 항목 — 체크·활성 표시가 톡 */
-.quality-item.active::after, .design-item.on .design-check { animation: mo-pop .28s var(--ease-spring) both; }
+.quality-item.active::after { animation: mo-pop .28s var(--ease-spring) both; }
 
 /* ── 시트·팔레트 — 뒤가 흐려지며 카드가 떠오른다. 닫을 때는 dom.js dismiss() 가 leaving 을 단다 ── */
 .sheet-scrim { animation: mo-fade var(--dur-3) var(--ease-out) both; }
