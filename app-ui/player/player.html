@@ -4050,8 +4050,9 @@ function setSharpen(on, strength) {
     const next = on ? (Number.isFinite(strength) && strength > 0 ? Math.min(3, strength) : 1) : 0;
     if (next) _ensureSharpenSvg(next);
     _sharpen = next;
+    _reconcileUpscaler();
     _applyComposedFilter();
-    postToSwift('sharpen', { on: !!next, strength: next });
+    postToSwift('sharpen', { on: !!next, strength: next, gpu: _gpuSharpenActive() });
 }
 
 function _composeColorFilter() {
@@ -4071,7 +4072,11 @@ function _composeColorFilter() {
 function _composeVideoFilter() {
     const color = _composeColorFilter();
     // 선명화가 먼저(원본 화소에서 경계를 찾고), 색 보정은 그 위에.
-    return _sharpen ? ('url(#' + SHARPEN_FILTER_ID + ')' + (color ? ' ' + color : '')) : color;
+    // [선명한 화면 GPU 2026-10-23] WebGL 캔버스가 선명화를 맡고 있으면 SVG 필터는 걸지 않는다(색 보정만).
+    //   SVG 참조 필터(url())는 WebKit 에서 GPU 합성으로 못 넘겨, 영상 프레임마다 화면 크기 래스터를
+    //   CPU 로 흐리고 빼서 다시 올렸다 — 1080p·60fps·패인 여러 개면 메인 스레드와 CPU 를 크게 먹었다.
+    if (_sharpen && !_gpuSharpenActive()) return 'url(#' + SHARPEN_FILTER_ID + ')' + (color ? ' ' + color : '');
+    return color;
 }
 
 function _applyComposedFilter() {
@@ -4212,6 +4217,17 @@ function _upscaleNeeded() {
     return rect.h * dpr >= video.videoHeight * UPSCALE_MIN_RATIO;
 }
 
+// 선명한 화면을 WebGL 로 그릴 수 있나 — 업스케일과 같은 캔버스·같은 프레임 콜백을 쓴다.
+let _sharpenGpuFailed = false;
+function _sharpenGpuWanted() {
+    if (!_sharpen || _sharpenGpuFailed || !video || !video.videoHeight) return false;
+    if (!video.requestVideoFrameCallback) return false;
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return false;
+    return !!_containRect();
+}
+function _gpuWanted() { return _upscaleNeeded() || _sharpenGpuWanted(); }
+function _gpuSharpenActive() { return !!(_sharpen && _upscaler && _upscaler.active && !_sharpenGpuFailed); }
+
 const _UPSCALE_VERTEX = '#version 300 es\n' +
     'in vec2 p; out vec2 uv;\n' +
     'void main(){ uv = p * 0.5 + 0.5; gl_Position = vec4(p, 0.0, 1.0); }';
@@ -4242,6 +4258,27 @@ const _UPSCALE_CAS = '#version 300 es\nprecision highp float;\n' +
     ' vec3 w = amp * (-1.0 / mix(8.0, 5.0, sharp));\n' +
     ' o = vec4(clamp(((b + d + f + h) * w + e) / (1.0 + 4.0 * w), 0.0, 1.0), 1.0);\n}';
 
+// 영상(행이 위에서부터) → 출력 크기 텍스처, 쌍선형. 확대가 필요 없을 때(같은 크기·축소) 선명화 앞 단계.
+const _GPU_COPY = '#version 300 es\nprecision highp float;\n' +
+    'in vec2 uv; out vec4 o; uniform sampler2D t;\n' +
+    'void main(){ o = vec4(texture(t, vec2(uv.x, 1.0 - uv.y)).rgb, 1.0); }';
+// 분리형 가우시안(한 방향) — σ 는 출력(장치) 픽셀 단위, 반경 최대 12.
+const _GPU_BLUR = '#version 300 es\nprecision highp float;\n' +
+    'in vec2 uv; out vec4 o; uniform sampler2D t; uniform vec2 dir; uniform float sigma; uniform int radius;\n' +
+    'void main(){\n' +
+    ' vec3 acc = vec3(0.0); float ws = 0.0; float k = -0.5 / (sigma * sigma);\n' +
+    ' for (int i = -12; i <= 12; i++) {\n' +
+    '  if (i < -radius || i > radius) continue;\n' +
+    '  float w = exp(float(i * i) * k); acc += texture(t, uv + dir * float(i)).rgb * w; ws += w;\n' +
+    ' }\n' +
+    ' o = vec4(acc / ws, 1.0);\n}';
+// 언샤프 마스크 합성 — SVG 판과 같은 식: edge = clamp(원본 − 흐림, 0, 1), 결과 = clamp(원본 + edge).
+//   (feComposite arithmetic 결과는 0..1 로 잘린다 — 그래서 경계는 밝아지는 쪽으로만 더해진다.)
+const _GPU_UNSHARP = '#version 300 es\nprecision highp float;\n' +
+    'in vec2 uv; out vec4 o; uniform sampler2D t; uniform sampler2D b;\n' +
+    'void main(){ vec3 s = texture(t, uv).rgb; vec3 e = clamp(s - texture(b, uv).rgb, 0.0, 1.0);\n' +
+    ' o = vec4(clamp(s + e, 0.0, 1.0), 1.0); }';
+
 function _compileUpscaleProgram(gl, fragment) {
     function shader(type, source) {
         const sh = gl.createShader(type);
@@ -4270,15 +4307,22 @@ function _createUpscaler() {
             canvas: canvas, gl: gl, active: false, frameId: 0,
             catmull: _compileUpscaleProgram(gl, _UPSCALE_CATMULL),
             cas: _compileUpscaleProgram(gl, _UPSCALE_CAS),
+            copy: _compileUpscaleProgram(gl, _GPU_COPY),
+            blur: _compileUpscaleProgram(gl, _GPU_BLUR),
+            unsharp: _compileUpscaleProgram(gl, _GPU_UNSHARP),
             source: gl.createTexture(), scaled: gl.createTexture(), fbo: gl.createFramebuffer(),
-            fboW: 0, fboH: 0
+            fboW: 0, fboH: 0, sourceMip: false,
+            // 선명화 단계 텍스처(출력 크기): CAS 결과 · 가로 흐림 · 세로 흐림
+            work: [gl.createTexture(), gl.createTexture(), gl.createTexture()],
+            workFbo: [gl.createFramebuffer(), gl.createFramebuffer(), gl.createFramebuffer()],
+            workW: 0, workH: 0
         };
         const quad = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, quad);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
         gl.enableVertexAttribArray(0);
         gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
-        for (const tex of [up.source, up.scaled]) {
+        for (const tex of [up.source, up.scaled].concat(up.work)) {
             gl.bindTexture(gl.TEXTURE_2D, tex);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -4288,7 +4332,9 @@ function _createUpscaler() {
         canvas.addEventListener('webglcontextlost', function(ev) {
             ev.preventDefault();
             _upscalerFailed = true;
+            _sharpenGpuFailed = true; // 선명한 화면은 SVG 필터로 돌아간다
             _deactivateUpscaler();
+            _applyComposedFilter();
             postToSwift('pictureEnhance', { upscale: false, error: 'WEBGL_CONTEXT_LOST' });
         });
         document.body.appendChild(canvas);
@@ -4297,6 +4343,22 @@ function _createUpscaler() {
         postToSwift('pictureEnhance', { upscale: false, error: 'WEBGL_SHADER', detail: String(e).slice(0, 120) });
         return null;
     }
+}
+
+function _gpuTarget(up, i, w, h) {
+    const gl = up.gl;
+    if (up.workW !== w || up.workH !== h) {
+        for (let j = 0; j < up.work.length; j++) {
+            gl.bindTexture(gl.TEXTURE_2D, up.work[j]);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, up.workFbo[j]);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, up.work[j], 0);
+        }
+        up.workW = w; up.workH = h;
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, up.workFbo[i]);
+    gl.viewport(0, 0, w, h);
+    return up.work[i];
 }
 
 function _drawUpscaledFrame() {
@@ -4313,10 +4375,20 @@ function _drawUpscaledFrame() {
     const k = (cw / Math.max(1, video.clientWidth));
     const vx = Math.round(rect.x * k), vw = Math.max(1, Math.round(rect.w * k));
     const vh = Math.max(1, Math.round(rect.h * k)), vy = ch - Math.round(rect.y * k) - vh;
+    const upscale = _upscaleNeeded();
+    const sharpen = _gpuSharpenActive();
     // 1) 영상 → 원본 텍스처
+    gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, up.source);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, video);
-    // 2) Catmull-Rom 확대 → 출력 크기 텍스처
+    // 작은 패인처럼 크게 줄여 그릴 때는 밉맵으로 계단(앨리어싱)을 막는다.
+    const mip = !upscale && vw < video.videoWidth * 0.75;
+    if (mip) gl.generateMipmap(gl.TEXTURE_2D);
+    if (up.sourceMip !== mip) {
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mip ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
+        up.sourceMip = mip;
+    }
+    // 2) 출력 크기 텍스처로 — 확대면 Catmull-Rom, 아니면 쌍선형(선명화만 켜진 경우)
     if (up.fboW !== vw || up.fboH !== vh) {
         gl.bindTexture(gl.TEXTURE_2D, up.scaled);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, vw, vh, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
@@ -4326,23 +4398,55 @@ function _drawUpscaledFrame() {
     }
     gl.bindFramebuffer(gl.FRAMEBUFFER, up.fbo);
     gl.viewport(0, 0, vw, vh);
-    gl.useProgram(up.catmull);
-    gl.activeTexture(gl.TEXTURE0);
+    const first = upscale ? up.catmull : up.copy;
+    gl.useProgram(first);
     gl.bindTexture(gl.TEXTURE_2D, up.source);
-    gl.uniform1i(gl.getUniformLocation(up.catmull, 't'), 0);
-    gl.uniform2f(gl.getUniformLocation(up.catmull, 'size'), video.videoWidth, video.videoHeight);
+    gl.uniform1i(gl.getUniformLocation(first, 't'), 0);
+    if (upscale) gl.uniform2f(gl.getUniformLocation(up.catmull, 'size'), video.videoWidth, video.videoHeight);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
-    // 3) CAS 선명화 → 화면(레터박스 안쪽만)
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, cw, ch);
-    gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.viewport(vx, vy, vw, vh);
-    gl.useProgram(up.cas);
-    gl.bindTexture(gl.TEXTURE_2D, up.scaled);
-    gl.uniform1i(gl.getUniformLocation(up.cas, 't'), 0);
-    gl.uniform2f(gl.getUniformLocation(up.cas, 'texel'), 1 / vw, 1 / vh);
-    gl.uniform1f(gl.getUniformLocation(up.cas, 'sharp'), UPSCALE_SHARPNESS);
+    const toScreen = function() {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, cw, ch);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.viewport(vx, vy, vw, vh);
+    };
+    // 3) 확대면 CAS 선명화 — 선명한 화면도 켜져 있으면 화면 대신 작업 텍스처로
+    let base = up.scaled;
+    if (upscale) {
+        if (sharpen) base = _gpuTarget(up, 0, vw, vh); else toScreen();
+        gl.useProgram(up.cas);
+        gl.bindTexture(gl.TEXTURE_2D, up.scaled);
+        gl.uniform1i(gl.getUniformLocation(up.cas, 't'), 0);
+        gl.uniform2f(gl.getUniformLocation(up.cas, 'texel'), 1 / vw, 1 / vh);
+        gl.uniform1f(gl.getUniformLocation(up.cas, 'sharp'), UPSCALE_SHARPNESS);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        if (!sharpen) return;
+    }
+    // 4) 선명한 화면 — 분리형 가우시안 두 번 + 언샤프 합성(SVG 판과 같은 식).
+    //    σ 는 CSS px 기준 세기를 출력 픽셀로 바꾼 값(SVG 필터도 요소의 CSS 좌표에서 흐린다).
+    const sigma = Math.max(0.3, _sharpen * k);
+    const radius = Math.min(12, Math.ceil(sigma * 3));
+    gl.useProgram(up.blur);
+    gl.uniform1i(gl.getUniformLocation(up.blur, 't'), 0);
+    gl.uniform1f(gl.getUniformLocation(up.blur, 'sigma'), sigma);
+    gl.uniform1i(gl.getUniformLocation(up.blur, 'radius'), radius);
+    const h1 = _gpuTarget(up, 1, vw, vh);
+    gl.bindTexture(gl.TEXTURE_2D, base);
+    gl.uniform2f(gl.getUniformLocation(up.blur, 'dir'), 1 / vw, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    const v2 = _gpuTarget(up, 2, vw, vh);
+    gl.bindTexture(gl.TEXTURE_2D, h1);
+    gl.uniform2f(gl.getUniformLocation(up.blur, 'dir'), 0, 1 / vh);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    toScreen();
+    gl.useProgram(up.unsharp);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, v2);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, base);
+    gl.uniform1i(gl.getUniformLocation(up.unsharp, 't'), 0);
+    gl.uniform1i(gl.getUniformLocation(up.unsharp, 'b'), 1);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 }
 
@@ -4354,7 +4458,9 @@ function _scheduleUpscaledFrame() {
         if (!up.active) return;
         try { _drawUpscaledFrame(); } catch (e) {
             _upscalerFailed = true;
+            _sharpenGpuFailed = true;
             _deactivateUpscaler();
+            _applyComposedFilter(); // 선명한 화면은 SVG 필터로
             postToSwift('pictureEnhance', { upscale: false, error: 'WEBGL_DRAW', detail: String(e).slice(0, 120) });
             return;
         }
@@ -4372,18 +4478,25 @@ function _deactivateUpscaler() {
 }
 
 function _reconcileUpscaler() {
-    if (!_upscaleNeeded()) { _deactivateUpscaler(); return; }
+    if (!_gpuWanted()) {
+        const wasSharpening = _gpuSharpenActive();
+        _deactivateUpscaler();
+        if (wasSharpening) _applyComposedFilter(); // 선명화가 켜져 있으면 SVG 필터로 넘긴다(가려진 창 등)
+        return;
+    }
     if (!_upscaler) {
         _upscaler = _createUpscaler();
         if (!_upscaler) {
             _upscalerFailed = true;
+            _sharpenGpuFailed = true;
+            _applyComposedFilter();
             postToSwift('pictureEnhance', { upscale: false, error: 'WEBGL_UNAVAILABLE' });
             return;
         }
     }
     if (_upscaler.active) return;
     _upscaler.active = true;
-    _upscaler.canvas.style.filter = _composeVideoFilter();
+    _applyComposedFilter(); // 영상·캔버스 모두 색 보정만(선명화는 캔버스가)
     _upscaler.canvas.style.display = '';
     try { _drawUpscaledFrame(); } catch (e) { /* 첫 프레임이 아직 없으면 다음 콜백에서 그린다 */ }
     _scheduleUpscaledFrame();
