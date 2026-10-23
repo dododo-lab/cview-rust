@@ -51,6 +51,30 @@ export function hideWithExit(el, ms = 160) {
   setTimeout(done, ms + 80);
 }
 
+const FOCUS_KEYS = ['data-route', 'data-channel-id', 'data-dl-id', 'data-dl'];
+
+/** 초점 든 요소를 다시 찾을 선택자 — 자신과 조상의 식별 data-* 로(없으면 null). */
+function focusPath(el, root) {
+  const parts = [];
+  for (let n = el; n && n !== root; n = n.parentElement) {
+    const k = FOCUS_KEYS.filter((x) => n.hasAttribute(x)).map((x) => `[${x}="${CSS.escape(n.getAttribute(x))}"]`).join('');
+    if (k) parts.unshift(k);
+  }
+  return parts.length ? parts.join(' ') : null;
+}
+
+/**
+ * 안을 innerHTML 로 다시 그리는 동안 키보드 초점을 지킨다 — 초점 든 버튼이 문서에서 떨어지면
+ * 같은 식별(data-route·data-channel-id·data-dl-id·data-dl)의 새 버튼에 다시 준다.
+ */
+export function keepFocus(root, paint) {
+  const a = document.activeElement;
+  const sel = a && a !== root && root.contains(a) ? focusPath(a, root) : null;
+  paint();
+  if (!sel || a.isConnected) return;
+  root.querySelector(sel)?.focus({ preventScroll: true });
+}
+
 /** HTML 이스케이프. */
 export function esc(value) {
   return String(value ?? '')

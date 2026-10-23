@@ -139,7 +139,9 @@ export class LibraryPage {
           box.className = 'dl-box';
           this.body.innerHTML = '';
           this.body.append(box);
-          this.unmountDownloads = await mountDownloads(box);
+          const unmount = await mountDownloads(box);
+          if (seq !== this.seq) { unmount(); return; } // 붙이는 사이 다른 탭으로 — 남은 구독을 바로 푼다
+          this.unmountDownloads = unmount;
           return;
         }
         case 'bookmarks': {

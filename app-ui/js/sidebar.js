@@ -1,6 +1,6 @@
 // 왼쪽 사이드바 — 브랜드/접기, 빠른 검색, 메뉴, 방송 중인 팔로잉, 계정 카드.
 // 접힘 상태는 로컬에 기억하고, 좁은 창(<1100px)에서는 사용자가 펼치지 않은 한 아이콘 레일로 접는다.
-import { esc, safeUrl, icons, imageSrc } from './dom.js';
+import { esc, safeUrl, icons, imageSrc, keepFocus } from './dom.js';
 import { setTheme, currentTheme, onThemeChange, THEMES, THEME_LABELS } from './theme.js';
 
 const COLLAPSE_KEY = 'cview.sidebarCollapsed';
@@ -244,6 +244,11 @@ export class Sidebar {
 
   /** 방송 중인 팔로잉. `null` 이면(비로그인·실패) 숨긴다. */
   setFollowing(lives) {
+    // 팔로잉 폴링(2분)마다 메뉴·방송 중 목록을 다시 그린다 — Tab 으로 고르던 항목의 초점을 지킨다
+    keepFocus(this.root, () => this.paintFollowing(lives));
+  }
+
+  paintFollowing(lives) {
     const active = this.nav.querySelector('.nav-item.active')?.dataset.route;
     this.liveCount = lives ? lives.length : null;
     this.renderNav();
