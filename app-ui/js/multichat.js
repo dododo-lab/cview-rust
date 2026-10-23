@@ -29,6 +29,23 @@ export function lineMatches(text, query) {
   return !query || String(text || '').toLowerCase().includes(String(query).toLowerCase());
 }
 
+/** 통합(머지) 채팅 줄 — 채널 태그를 붙인 한 타임라인. 채팅 설정(차단·금지어·후원 필터·이모티콘)을 따른다.
+ *  멀티라이브 멀티채팅도 쓴다. `style` 은 줄의 색 변수(--mc-color 등). */
+export function mergedLinesHtml(messages, { name, style }) {
+  const tag = `<span class="mc-tag">${esc(name)}</span>`;
+  const prefs = chatPrefs();
+  return (messages || []).filter((m) => m.kind !== 'system' && passesFilters(m, prefs)).map((m) => {
+    const ev = eventClasses(m);
+    const nick = `<span class="nick${['streamer', 'manager', 'channelManager'].includes(m.role) ? ` ${m.role}` : ''}${nickColorClass(m.nickname, m.role)}">${esc(m.nickname || '익명')}</span>`;
+    if (ev.length) {
+      const body = m.content && m.content.trim() ? renderContent(m.content, m.emojis, prefs.emoticonEnabled) : '';
+      return `<div class="chat-line merged-line ${ev.join(' ')}" style="${style}">${eventCardHtml(m, { tag, nick, content: body })}</div>`;
+    }
+    return `
+      <div class="chat-line merged-line" style="${style}">${tag}${nick}<span class="text">${renderContent(m.content, m.emojis, prefs.emoticonEnabled)}</span></div>`;
+  }).join('');
+}
+
 export class MultiChatPage {
   constructor(content, { isLoggedIn }) {
     this.isLoggedIn = isLoggedIn;
@@ -209,18 +226,7 @@ export class MultiChatPage {
     if (!p || !p.event || p.event.type !== 'messages' || this.root.hidden || this.layout !== 'merged') return;
     const c = this.channels.find((x) => x.session === p.session);
     if (!c) return;
-    const tag = `<span class="mc-tag">${esc(c.name)}</span>`;
-    // 통합 목록도 패널과 같은 채팅 설정(차단·금지어·후원 필터·이모티콘 표시)을 따른다.
-    const prefs = chatPrefs();
-    const html = (p.event.messages || []).filter((m) => m.kind !== 'system' && passesFilters(m, prefs)).map((m) => {
-      const ev = eventClasses(m);
-      if (ev.length) {
-        const body = m.content && m.content.trim() ? renderContent(m.content, m.emojis, prefs.emoticonEnabled) : '';
-        return `<div class="chat-line merged-line ${ev.join(' ')}" style="--mc-color:${c.color}">${eventCardHtml(m, { tag, nick: `<span class="nick${['streamer', 'manager', 'channelManager'].includes(m.role) ? ` ${m.role}` : ''}${nickColorClass(m.nickname, m.role)}">${esc(m.nickname || '익명')}</span>`, content: body })}</div>`;
-      }
-      return `
-      <div class="chat-line merged-line" style="--mc-color:${c.color}">${tag}<span class="nick${['streamer', 'manager', 'channelManager'].includes(m.role) ? ` ${m.role}` : ''}${nickColorClass(m.nickname, m.role)}">${esc(m.nickname || '익명')}</span><span class="text">${renderContent(m.content, m.emojis, prefs.emoticonEnabled)}</span></div>`;
-    }).join('');
+    const html = mergedLinesHtml(p.event.messages, { name: c.name, style: `--mc-color:${c.color}` });
     if (!html) return;
     const atBottom = this.mergedList.scrollHeight - this.mergedList.scrollTop - this.mergedList.clientHeight < 40;
     const before = this.mergedList.lastElementChild;

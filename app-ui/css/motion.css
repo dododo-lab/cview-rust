@@ -240,7 +240,7 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 .player-osd:not([hidden]):not(.fade) { animation: mo-pop .22s var(--ease-spring) both; }
 
 /* ── 멀티라이브 ── */
-.ml-pane:not([hidden]) { animation: mo-pop .34s var(--ease-emph) both; }
+/* 패인 나타남·사라짐·자리 이동은 ml-motion.js(FLIP, transform·opacity 만)가 맡는다. */
 .ml-pane { transition: outline-color var(--dur-2) var(--ease-out), box-shadow var(--dur-3) var(--ease-out); }
 .ml-pane.selected { box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 18%, transparent); }
 .ml-pane.drop-target { scale: .985; transition: scale var(--dur-2) var(--ease-out); }
