@@ -174,10 +174,10 @@ async fn install(app: &AppHandle) -> CmdResult<()> {
 
     #[cfg(target_os = "macos")]
     {
-        let (file, dir, version) = (file.clone(), dir.clone(), version.clone());
+        let (file, stage, version) = (file.clone(), dir.clone(), version.clone());
         let handle = app.clone();
         tauri::async_runtime::spawn_blocking(move || {
-            mac::install(&file, &dir, &version, &|| emit(&handle, "install", 0, 0))
+            mac::install(&file, &stage, &version, &|| emit(&handle, "install", 0, 0))
         })
         .await
         .map_err(|e| err(format!("업데이트 설치 작업이 중단됐습니다: {e}")))??;
