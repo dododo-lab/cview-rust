@@ -59,6 +59,10 @@ export class CommandPalette {
     const seq = this.openSeq = (this.openSeq || 0) + 1;
     if (this.el.hidden) this.returnFocus = document.activeElement;
     this.el.hidden = false;
+    // 열 때만 항목이 차례로 떠오른다(입력할 때마다 다시 그려도 되풀이하지 않게 잠깐만 단다)
+    this.el.classList.add('opening');
+    clearTimeout(this.openingTimer);
+    this.openingTimer = setTimeout(() => this.el.classList.remove('opening'), 500);
     this.input.value = '';
     this.input.focus();
     this.render();
@@ -112,7 +116,7 @@ export class CommandPalette {
       const head = it.group !== lastGroup ? `<div class="palette-group">${esc(it.group)}</div>` : '';
       lastGroup = it.group;
       const img = safeUrl(it.image);
-      return `${head}<div class="palette-item${i === this.index ? ' active' : ''}" role="option" id="palette-opt-${i}" aria-selected="${i === this.index}" data-i="${i}">
+      return `${head}<div class="palette-item${i === this.index ? ' active' : ''}" role="option" id="palette-opt-${i}" aria-selected="${i === this.index}" data-i="${i}" style="--i:${Math.min(i, 10)}">
         ${it.group === '채널' ? (img ? `<img class="avatar" src="${esc(imageSrc(img, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>') : ''}
         <span class="palette-label">${esc(it.label)}${it.live ? ' <b class="live-dot">LIVE</b>' : ''}</span>
         <span class="palette-hint ellipsis">${esc(it.hint || '')}</span></div>`;

@@ -163,7 +163,9 @@ export function toast(message, ms = 2600, action = null) {
   const el = document.createElement('div');
   el.className = 'toast';
   el.dataset.msg = message;
-  el.innerHTML = `<span class="toast-text"></span>${action ? '<button class="toast-action"></button>' : ''}`;
+  const life = action ? Math.max(ms, 5000) : ms;
+  // 되돌리기 같은 동작이 있는 알림은 남은 시간을 아래 줄이 줄어드는 것으로 보인다
+  el.innerHTML = `<span class="toast-text"></span>${action ? `<button class="toast-action"></button><i class="toast-timer" style="animation-duration:${life}ms"></i>` : ''}`;
   el.querySelector('.toast-text').textContent = message;
   if (action) {
     const b = el.querySelector('.toast-action');
@@ -172,7 +174,7 @@ export function toast(message, ms = 2600, action = null) {
   }
   stack.append(el);
   while (stack.children.length > 4) stack.firstElementChild.remove();
-  setTimeout(() => dismiss(el), action ? Math.max(ms, 5000) : ms);
+  setTimeout(() => dismiss(el), life);
 }
 
 /**

@@ -1,7 +1,7 @@
 // CView 메인 — 사이드바 라우팅, 인증 상태, 시청 화면 연결.
 import { api, listen, Events, isTauri } from './api.js';
 import { toast, icons, dismiss } from './dom.js';
-import { installImageFade } from './motion.js';
+import { installImageFade, installSegmentGlider, installMicroMotion } from './motion.js';
 import { bindCardOpen } from './cards.js';
 import { FollowingPage, PopularPage, SearchPage } from './pages.js';
 import { SettingsPage } from './settings.js';
@@ -601,6 +601,8 @@ function trackFullscreen() {
 
 async function main() {
   installImageFade(); // 첫 화면 그림보다 먼저 — 놓친 load 로 썸네일이 투명하게 남지 않게
+  installSegmentGlider(); // 모든 세그먼트의 고른 칸 판이 미끄러지게
+  installMicroMotion();
   trackFullscreen();
   splashStep('화면 준비', 0.2);
   renderNav();

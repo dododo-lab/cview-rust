@@ -217,12 +217,14 @@ export class Sidebar {
   /** 메뉴 옆 숫자(멀티라이브 패인 수 등). 0 이면 지운다. */
   setBadge(route, count) {
     if (!this.badges) this.badges = new Map();
-    if ((this.badges.get(route) || 0) === (count || 0)) return;
+    const before = this.badges.get(route) || 0;
+    if (before === (count || 0)) return;
     if (count) this.badges.set(route, count); else this.badges.delete(route);
     const item = this.nav.querySelector(`[data-route="${route}"]`);
     if (!item) return;
     item.querySelector('.nav-badge')?.remove();
-    if (count) item.insertAdjacentHTML('beforeend', `<span class="nav-badge">${count > 99 ? '99+' : count}</span>`);
+    // 늘어나면 톡 튄다(motion.css .nav-badge.bump)
+    if (count) item.insertAdjacentHTML('beforeend', `<span class="nav-badge${count > before ? ' bump' : ''}">${count > 99 ? '99+' : count}</span>`);
   }
 
   /** 메뉴 옆 "재생 중" 표시(라이브 메뉴). */
