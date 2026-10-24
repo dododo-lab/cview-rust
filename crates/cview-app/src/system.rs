@@ -17,7 +17,9 @@ use cview_app_core::caching::following_store::to_live_channel_item;
 use cview_app_core::navigation::deep_link::DeepLink;
 use cview_app_core::services::background_update::{BackgroundUpdateBaseline, BackgroundUpdateDiff};
 use cview_app_core::services::notification_service::{NoopNotifier, NotificationService};
-use cview_app_core::services::update_service::{compare_versions, GitHubRelease, UpdateService};
+use cview_app_core::services::update_service::{
+    compare_versions, GitHubAsset, GitHubRelease, UpdateService,
+};
 use cview_core::utils::following_poll::FollowingPollReason;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -217,6 +219,40 @@ pub struct UpdateCheckDto {
     pub url: Option<String>,
     pub notes: Option<String>,
     pub published_at: Option<String>,
+    /// 이 플랫폼용 설치 파일(macOS .dmg · Windows .exe/.msi) — 피드에 없으면 `None`.
+    pub download_url: Option<String>,
+    pub download_name: Option<String>,
+    pub download_size: Option<i64>,
+}
+
+/// 릴리스 자산 중 이 OS·아키텍처에 맞는 설치 파일. 아키텍처 표기가 맞는 것을 먼저 고른다. 순수 함수.
+fn platform_asset<'a>(assets: &'a [GitHubAsset], os: &str, arch: &str) -> Option<&'a GitHubAsset> {
+    let exts: &[&str] = match os {
+        "macos" => &[".dmg"],
+        "windows" => &[".exe", ".msi"],
+        _ => return None,
+    };
+    let arch_tags: &[&str] = match arch {
+        "aarch64" => &["arm64", "aarch64"],
+        "x86_64" => &["x64", "x86_64", "amd64"],
+        _ => &[],
+    };
+    let installers: Vec<&GitHubAsset> = exts
+        .iter()
+        .flat_map(|ext| {
+            assets
+                .iter()
+                .filter(move |a| a.name.to_lowercase().ends_with(ext))
+        })
+        .collect();
+    installers
+        .iter()
+        .find(|a| {
+            let n = a.name.to_lowercase();
+            arch_tags.iter().any(|t| n.contains(t))
+        })
+        .or_else(|| installers.first())
+        .copied()
 }
 
 fn validated_update_url(value: &str) -> Result<url::Url, CommandError> {
@@ -286,6 +322,9 @@ pub async fn update_check(app: AppHandle) -> CmdResult<UpdateCheckDto> {
             url: None,
             notes: None,
             published_at: None,
+            download_url: None,
+            download_name: None,
+            download_size: None,
         });
     }
     if !(200..300).contains(&status) {
@@ -299,6 +338,21 @@ pub async fn update_check(app: AppHandle) -> CmdResult<UpdateCheckDto> {
     if let Some(page) = release.html_url.as_ref() {
         validated_update_url(page.as_str())?;
     }
+    // 설치 파일 주소도 HTTPS 만 — 아니면 링크를 빼고 릴리스 페이지로 안내한다.
+    let asset = platform_asset(
+        &release.assets,
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+    )
+    .filter(|a| validated_update_url(a.browser_download_url.as_str()).is_ok());
+    let (download_url, download_name, download_size) = match asset {
+        Some(a) => (
+            Some(a.browser_download_url.to_string()),
+            Some(a.name.clone()),
+            Some(a.size),
+        ),
+        None => (None, None, None),
+    };
     Ok(UpdateCheckDto {
         newer: compare_versions(&latest, &current) == std::cmp::Ordering::Greater,
         current,
@@ -306,12 +360,48 @@ pub async fn update_check(app: AppHandle) -> CmdResult<UpdateCheckDto> {
         url: release.html_url.map(|u| u.to_string()),
         notes: release.body,
         published_at: release.published_at.map(|d| d.to_rfc3339()),
+        download_url,
+        download_name,
+        download_size,
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn asset(name: &str) -> GitHubAsset {
+        GitHubAsset {
+            name: name.into(),
+            size: 1,
+            browser_download_url: url::Url::parse(&format!("https://example.com/{name}")).unwrap(),
+        }
+    }
+
+    #[test]
+    fn platform_installer_selection() {
+        let assets = vec![
+            asset("CView_0.1.21_x64-setup.exe"),
+            asset("CView_0.1.21_x64.dmg"),
+            asset("CView_0.1.21_arm64.dmg"),
+            asset("notes.txt"),
+        ];
+        let name = |os, arch| platform_asset(&assets, os, arch).map(|a| a.name.as_str());
+        assert_eq!(name("macos", "aarch64"), Some("CView_0.1.21_arm64.dmg"));
+        assert_eq!(name("macos", "x86_64"), Some("CView_0.1.21_x64.dmg"));
+        assert_eq!(
+            name("windows", "x86_64"),
+            Some("CView_0.1.21_x64-setup.exe")
+        );
+        assert_eq!(name("linux", "x86_64"), None);
+        // 아키텍처 표기가 없으면 첫 설치 파일
+        let plain = vec![asset("CView.dmg")];
+        assert_eq!(
+            platform_asset(&plain, "macos", "aarch64").map(|a| a.name.as_str()),
+            Some("CView.dmg")
+        );
+        assert!(platform_asset(&[], "macos", "aarch64").is_none());
+    }
 
     #[test]
     fn update_endpoint_configuration() {

@@ -177,6 +177,8 @@ pub fn rebuild<R: Runtime>(app: &AppHandle<R>) {
 /// 메뉴를 만든다.
 pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let about = MenuItem::with_id(app, "about", "CView 정보", true, None::<&str>)?;
+    let check_update =
+        MenuItem::with_id(app, "check-update", "업데이트 확인…", true, None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", "설정…", true, Some("CmdOrCtrl+,"))?;
     let app_menu = Submenu::with_items(
         app,
@@ -184,6 +186,7 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         true,
         &[
             &about,
+            &check_update,
             &PredefinedMenuItem::separator(app)?,
             &settings,
             &PredefinedMenuItem::separator(app)?,
@@ -247,7 +250,7 @@ pub fn forward<R: Runtime>(app: &AppHandle<R>, id: &str) {
 }
 
 pub fn is_known(id: &str) -> bool {
-    matches!(id, "about" | "settings")
+    matches!(id, "about" | "check-update" | "settings")
         || [VIEW, PLAYBACK, CHAT, WINDOWS, HELP]
             .iter()
             .any(|list| list.iter().any(|(i, _, _)| *i == id))
@@ -268,6 +271,7 @@ mod tests {
             }
         }
         assert!(is_known("settings"));
+        assert!(is_known("check-update"));
         assert!(!is_known("rm -rf"));
     }
 }
