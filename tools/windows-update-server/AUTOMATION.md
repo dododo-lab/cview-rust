@@ -29,6 +29,14 @@ CVIEW_RELEASE_NOTES_FILE=/절대/경로/notes.txt scripts/release-macos.sh --dmg
 
 설명을 생략하면 이전 태그 이후 Git 변경 목록을 사용한다. Windows 설치 파일은 현재 미서명이며 SmartScreen 안내를 자동 추가한다. `--no-notarize`는 사용자가 명시적으로 공증 생략을 허용할 때만 사용한다. `CVIEW_SKIP_WINDOWS`는 배포에서 거부한다. 개발용 빌드에는 자동 게시를 적용하지 않는다.
 
+## 앱 안 자동 설치와 피드
+
+앱의 "업데이트 설치"는 `latest.json`의 이 OS 설치 파일(`.dmg`, `-setup.exe`)을 받아 피드의 `size`·`sha256`과 비교한 뒤 설치한다. `publish.py`가 자산마다 `sha256`을 적으므로 피드 형식 변경은 필요 없다. `sha256`이 없는 피드면 앱은 자동 설치 대신 다운로드 단추를 보인다.
+
+- macOS: DMG를 화면에 띄우지 않고 붙여 `CView.app`을 복사하고, Developer ID 팀 `MZ8NB937SB`·번들 `app.cview.rust` 서명(`codesign --test-requirement`), Apple 공증(`spctl`), 버전을 확인한 뒤 교체·재실행한다. `--no-notarize`로 만든 릴리스는 공증 검사에서 멈추므로 자동 설치되지 않는다.
+- Windows: NSIS 설치 파일을 `/P /R /UPDATE`로 실행한다(진행 창만 표시, 앱 종료·설치·재실행). 설치 파일 미서명이라 SHA-256만 확인한다.
+- 이 기능은 이를 포함한 버전부터 동작한다. 그 이전 버전 사용자는 한 번은 직접 설치해야 한다.
+
 ## 사전 점검과 전송 시험
 
 ```sh
