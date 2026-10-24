@@ -5,3 +5,4 @@ target/
 /crates/cview-app/gen/
 /ui-tests/node_modules/
 /ui-tests/results/
+/deploy/update-server/__pycache__/

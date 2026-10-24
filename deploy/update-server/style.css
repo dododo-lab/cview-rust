@@ -1,0 +1,7 @@
+:root { color-scheme: light dark; font: 16px/1.6 system-ui, sans-serif; }
+body { margin: 0; }
+main { max-width: 880px; margin: 48px auto; padding: 0 24px; }
+a { color: #006b4a; overflow-wrap: anywhere; }
+li { margin: 16px 0; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
+@media (prefers-color-scheme: dark) { a { color: #4ee8aa; } }

@@ -262,7 +262,7 @@ export class SettingsPage {
         </div>
       </section>
       <section class="settings-group" data-g="overview"><h3>앱</h3>
-        <div class="setting" data-search="업데이트 확인 버전"><span class="setting-label">업데이트 확인<small class="update-status">GitHub 최신 릴리스와 비교합니다</small></span><button class="btn" data-sys="update">확인</button></div>
+        <div class="setting" data-search="업데이트 확인 버전"><span class="setting-label">업데이트 확인<small class="update-status">업데이트 서버에서 최신 버전을 확인합니다</small></span><button class="btn" data-sys="update">확인</button></div>
         <div class="setting" data-search="알림 권한 시스템 알림"><span class="setting-label">시스템 알림 권한<small class="notify-status">방송 시작·멘션 알림에 필요합니다</small></span><span class="shortcut-edit"><button class="btn" data-sys="notify">권한 확인</button><button class="link-btn" data-sys="notify-settings">시스템 설정 열기</button></span></div>
         <div class="setting" data-search="딥 링크 cview url"><span class="setting-label">링크로 열기<small>cview://live?channelId=… · cview://search?q=… · cview://multilive</small></span></div>
       </section>`;

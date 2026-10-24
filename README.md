@@ -42,6 +42,10 @@ GUI 실행에는 X11/Wayland 디스플레이와 D-Bus 세션이 필요하다. �
 처음 개발 도구를 설치하는 Mac은 `xcode-select --install`을 먼저 실행한다.
 macOS DMG 릴리즈 빌드·서명·공증 명령과 필요한 환경은 [릴리즈 안내](RELEASE.md)에 정리했다.
 
+Windows Server에서 운영하는 자체 HTTPS 업데이트 서버는
+[IIS 설치·릴리스 게시 안내](deploy/update-server/README.md)를 참고한다.
+앱 빌드 시 `CVIEW_UPDATE_URL`로 해당 서버 주소를 지정할 수 있다.
+
 ## 검사
 
 ```sh

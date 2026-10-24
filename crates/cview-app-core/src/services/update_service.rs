@@ -131,6 +131,8 @@ pub fn compare_versions(lhs: &str, rhs: &str) -> Ordering {
 
 #[derive(Debug, Clone, PartialEq, thiserror::Error)]
 pub enum UpdateError {
+    #[error("업데이트 서버 주소는 인증 정보가 없는 HTTPS URL이어야 합니다.")]
+    InvalidEndpoint,
     #[error("서버 응답이 올바르지 않습니다.")]
     InvalidResponse,
     #[error("HTTP {0} 오류")]
@@ -272,6 +274,27 @@ impl UpdateService {
     pub const REPOSITORY: &'static str = "dododo-lab/cview-rust";
     /// 자동 설치 — 원본과 같이 꺼 둔다(릴리스 페이지를 연다).
     pub const IS_AUTO_INSTALL_ENABLED: bool = false;
+
+    /// A self-hosted feed uses the same release schema as GitHub Releases.
+    pub fn release_endpoint(configured: Option<&str>) -> Result<Url, UpdateError> {
+        let url = match configured {
+            Some(value) => Url::parse(value).map_err(|_| UpdateError::InvalidEndpoint)?,
+            None => Url::parse(&format!(
+                "https://api.github.com/repos/{}/releases/latest",
+                Self::REPOSITORY
+            ))
+            .expect("fixed release URL"),
+        };
+        if url.scheme() != "https"
+            || url.host_str().is_none()
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || url.fragment().is_some()
+        {
+            return Err(UpdateError::InvalidEndpoint);
+        }
+        Ok(url)
+    }
 
     pub fn new(
         transport: Arc<dyn HttpTransport>,
@@ -445,6 +468,34 @@ mod tests {
         assert!(r.is_newer_than("2.0.0", 64));
         assert!(!r.is_newer_than("2.0.0", 65));
         assert!(!release("2.0.0", "CView.zip").is_newer_than("2.0.0", 1));
+    }
+
+    #[test]
+    fn self_hosted_release_endpoint_requires_https() {
+        assert!(UpdateService::release_endpoint(None)
+            .unwrap()
+            .as_str()
+            .contains("api.github.com"));
+        assert_eq!(
+            UpdateService::release_endpoint(Some(
+                "https://updates.example.com/releases/latest.json"
+            ))
+            .unwrap()
+            .path(),
+            "/releases/latest.json"
+        );
+        for url in [
+            "http://updates.example.com/latest.json",
+            "https://user:password@updates.example.com/latest.json",
+            "https://updates.example.com/latest.json#fragment",
+            "file:///tmp/latest.json",
+            "",
+        ] {
+            assert_eq!(
+                UpdateService::release_endpoint(Some(url)),
+                Err(UpdateError::InvalidEndpoint)
+            );
+        }
     }
 
     #[test]

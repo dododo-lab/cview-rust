@@ -212,18 +212,24 @@ pub struct UpdateCheckDto {
     pub published_at: Option<String>,
 }
 
-/// GitHub 최신 릴리스 확인.
+/// Latest release from a configured HTTPS feed, or GitHub by default.
 #[tauri::command]
 pub async fn update_check(app: AppHandle) -> CmdResult<UpdateCheckDto> {
     let current = app.package_info().version.to_string();
-    let url = format!(
-        "https://api.github.com/repos/{}/releases/latest",
-        UpdateService::REPOSITORY
-    );
-    let resp = reqwest::Client::new()
+    let configured = std::env::var("CVIEW_UPDATE_URL").ok();
+    let mut url =
+        UpdateService::release_endpoint(configured.as_deref().or(option_env!("CVIEW_UPDATE_URL")))
+            .map_err(|e| CommandError(e.to_string()))?;
+    url.query_pairs_mut()
+        .append_pair("_ts", &chrono::Utc::now().timestamp_millis().to_string());
+    let resp = reqwest::Client::builder()
+        .https_only(true)
+        .build()
+        .map_err(|e| CommandError(format!("업데이트 연결을 준비하지 못했습니다: {e}")))?
         .get(url)
         .header("Accept", "application/vnd.github+json")
         .header("User-Agent", "CView-Rust")
+        .header("Cache-Control", "no-cache")
         .timeout(Duration::from_secs(15))
         .send()
         .await

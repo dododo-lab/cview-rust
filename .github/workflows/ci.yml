@@ -32,6 +32,8 @@ jobs:
         run: node --experimental-vm-modules scripts/check-ui.mjs
       - name: Test UI lifecycle behavior
         run: node --test app-ui/tests/*.test.mjs
+      - name: Test self-hosted update publication
+        run: python3 deploy/update-server/test_publish.py -v
       - name: Check design, contrast and keyboard behavior
         if: runner.os == 'Linux'
         working-directory: ui-tests
