@@ -54,6 +54,9 @@ pub struct GitHubAsset {
     pub name: String,
     pub size: i64,
     pub browser_download_url: Url,
+    /// 자체 업데이트 서버 피드가 붙이는 설치 파일 SHA-256(소문자 16진수). GitHub 응답에는 없다.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -419,6 +422,7 @@ mod tests {
                 name: asset.into(),
                 size: 1,
                 browser_download_url: Url::parse("https://example.com/a").unwrap(),
+                sha256: None,
             }],
         }
     }

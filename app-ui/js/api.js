@@ -143,6 +143,7 @@ export const api = {
   imageCacheStatus: () => invoke('image_cache_status'),
   imageCacheClear: () => invoke('image_cache_clear'),
   updateCheck: () => invoke('update_check'),
+  updateInstall: () => invoke('update_install'),
   windowOpen: (kind, params) => invoke('window_open', { kind, params: params || null }),
   windowCloseSelf: () => invoke('window_close_self'),
   oauthStatus: () => invoke('oauth_status'),

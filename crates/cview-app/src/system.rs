@@ -7,7 +7,7 @@
 //! - 딥 링크(SYS-06): `cview://…` 를 파싱해 `deeplink://open` 으로 보낸다. 프런트가 준비되기 전에 온 링크는
 //!   쌓아 두었다가 `deeplink_take_pending` 으로 건넨다.
 //! - 단일 인스턴스(SYS-07): 두 번째 실행은 기존 창을 앞으로 가져오고 인자 속 링크를 넘긴다.
-//! - 업데이트 확인(SYS-08): GitHub 최신 릴리스와 현재 버전을 비교한다(설치는 하지 않고 페이지를 연다).
+//! - 업데이트 확인(SYS-08): 업데이트 피드의 최신 릴리스와 현재 버전을 비교한다. 설치는 [`crate::updater`].
 
 use std::sync::Mutex;
 use std::time::Duration;
@@ -221,6 +221,8 @@ pub struct UpdateCheckDto {
     pub download_url: Option<String>,
     pub download_name: Option<String>,
     pub download_size: Option<i64>,
+    /// 앱 안에서 받아 검증·설치할 수 있는가(새 버전 · 지원 OS · 피드에 SHA-256 이 있다).
+    pub auto_install: bool,
 }
 
 /// 릴리스 자산 중 이 OS·아키텍처에 맞는 설치 파일. 아키텍처 표기가 맞는 것을 먼저 고른다. 순수 함수.
@@ -289,17 +291,21 @@ fn update_feed_url(
     )
 }
 
+/// 지금 설정된 업데이트 피드 주소(실행 시 환경 변수 → 빌드 시 값 → 기본 피드).
+pub(crate) fn current_feed_url() -> Result<url::Url, CommandError> {
+    let runtime_url = std::env::var("CVIEW_UPDATE_URL").ok();
+    update_feed_url(runtime_url.as_deref(), option_env!("CVIEW_UPDATE_URL"))
+}
+
 /// 설정된 HTTPS 서버의 최신 릴리스 확인.
 #[tauri::command]
 pub async fn update_check(app: AppHandle) -> CmdResult<UpdateCheckDto> {
     let current = app.package_info().version.to_string();
-    let runtime_url = std::env::var("CVIEW_UPDATE_URL").ok();
-    let url = update_feed_url(runtime_url.as_deref(), option_env!("CVIEW_UPDATE_URL"))?;
-    fetch_update(url, current).await
+    fetch_update(current_feed_url()?, current).await
 }
 
-/// 피드를 받아 현재 버전과 비교한다.
-async fn fetch_update(url: url::Url, current: String) -> CmdResult<UpdateCheckDto> {
+/// 피드를 받는다. 공개된 릴리스가 없으면(404) `None`.
+pub(crate) async fn fetch_release(url: url::Url) -> CmdResult<Option<GitHubRelease>> {
     let client = reqwest::Client::builder()
         .https_only(true)
         .build()
@@ -329,6 +335,34 @@ async fn fetch_update(url: url::Url, current: String) -> CmdResult<UpdateCheckDt
         ));
     }
     if status == 404 {
+        return Ok(None);
+    }
+    if !(200..300).contains(&status) {
+        return Err(CommandError(format!("업데이트 확인 실패 (HTTP {status})")));
+    }
+    let release: GitHubRelease = resp
+        .json()
+        .await
+        .map_err(|e| CommandError(format!("릴리스 정보를 읽지 못했습니다: {e}")))?;
+    if let Some(page) = release.html_url.as_ref() {
+        validated_update_url(page.as_str())?;
+    }
+    Ok(Some(release))
+}
+
+/// 이 플랫폼 설치 파일 — 주소가 HTTPS 가 아니면 없는 것으로 본다(링크를 빼고 릴리스 페이지로 안내).
+pub(crate) fn release_installer(release: &GitHubRelease) -> Option<&GitHubAsset> {
+    platform_asset(
+        &release.assets,
+        std::env::consts::OS,
+        std::env::consts::ARCH,
+    )
+    .filter(|a| validated_update_url(a.browser_download_url.as_str()).is_ok())
+}
+
+/// 피드를 받아 현재 버전과 비교한다.
+async fn fetch_update(url: url::Url, current: String) -> CmdResult<UpdateCheckDto> {
+    let Some(release) = fetch_release(url).await? else {
         return Ok(UpdateCheckDto {
             current,
             latest: None,
@@ -339,26 +373,14 @@ async fn fetch_update(url: url::Url, current: String) -> CmdResult<UpdateCheckDt
             download_url: None,
             download_name: None,
             download_size: None,
+            auto_install: false,
         });
-    }
-    if !(200..300).contains(&status) {
-        return Err(CommandError(format!("업데이트 확인 실패 (HTTP {status})")));
-    }
-    let release: GitHubRelease = resp
-        .json()
-        .await
-        .map_err(|e| CommandError(format!("릴리스 정보를 읽지 못했습니다: {e}")))?;
+    };
     let latest = release.version_string().to_string();
-    if let Some(page) = release.html_url.as_ref() {
-        validated_update_url(page.as_str())?;
-    }
-    // 설치 파일 주소도 HTTPS 만 — 아니면 링크를 빼고 릴리스 페이지로 안내한다.
-    let asset = platform_asset(
-        &release.assets,
-        std::env::consts::OS,
-        std::env::consts::ARCH,
-    )
-    .filter(|a| validated_update_url(a.browser_download_url.as_str()).is_ok());
+    let newer = compare_versions(&latest, &current) == std::cmp::Ordering::Greater;
+    let asset = release_installer(&release);
+    let auto_install =
+        newer && asset.is_some_and(|a| crate::updater::can_auto_install(a, std::env::consts::OS));
     let (download_url, download_name, download_size) = match asset {
         Some(a) => (
             Some(a.browser_download_url.to_string()),
@@ -368,7 +390,7 @@ async fn fetch_update(url: url::Url, current: String) -> CmdResult<UpdateCheckDt
         None => (None, None, None),
     };
     Ok(UpdateCheckDto {
-        newer: compare_versions(&latest, &current) == std::cmp::Ordering::Greater,
+        newer,
         current,
         latest: Some(latest),
         url: release.html_url.map(|u| u.to_string()),
@@ -377,6 +399,7 @@ async fn fetch_update(url: url::Url, current: String) -> CmdResult<UpdateCheckDt
         download_url,
         download_name,
         download_size,
+        auto_install,
     })
 }
 
@@ -389,6 +412,7 @@ mod tests {
             name: name.into(),
             size: 1,
             browser_download_url: url::Url::parse(&format!("https://example.com/{name}")).unwrap(),
+            sha256: None,
         }
     }
 
