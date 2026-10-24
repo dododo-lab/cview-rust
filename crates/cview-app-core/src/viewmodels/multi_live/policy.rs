@@ -321,6 +321,18 @@ pub mod focus_quality {
     }
 }
 
+/// 메인(선택) 패인의 목표 지연 여유(초) — 함께 재생하는 패인이 많으면 대역폭을 나눠 써 다음 조각이 늦게 온다.
+/// 실측(2026-10-20~24, 10초 표본): 메인 패인 멈춤은 10분당 패인 1~3개 1.7~6.6회, 4개 16회, 5~7개 29~36회였고,
+/// 메인 지연 3~4초 구간 14.7회 → 4~5초 6.0회로 1초 여유에 절반 아래로 줄었다(CPU 는 늘 150% 미만, CDN 첫 바이트
+/// 20~90ms — 대역폭 경쟁이 원인). 단독·3개 이하는 웹과 같은 3초 그대로 둔다.
+pub fn main_pane_latency_margin(session_count: usize) -> f64 {
+    match session_count {
+        0..=3 => 0.0,
+        4 | 5 => 1.0,
+        _ => 1.5,
+    }
+}
+
 /// `applyRateBudget` 배분 — 총 +12%, 선택 세션 60%(+7.2%), 나머지 균등.
 /// 세션이 2 미만이면 `None` (재정의 해제).
 pub fn rate_budget_plan(session_ids: &[Uuid], selected: Option<Uuid>) -> Option<Vec<(Uuid, f64)>> {

@@ -64,14 +64,20 @@ function playerStats() {
     } catch { /* 무시 */ }
     let latency = null;
     let level = null;
+    let target = null;
     try {
       latency = w.eval('typeof hls !== "undefined" && hls && hls.latency != null ? hls.latency : null');
       level = w.eval('typeof hls !== "undefined" && hls ? hls.currentLevel : null');
+      // 지금 겨누는 목표 지연 — 컨트롤러 주입값(백오프·메인 여유 포함), 없으면 hls.js 목표
+      target = w.eval('typeof _controllerTarget !== "undefined" && _controllerTarget > 0 ? _controllerTarget : (typeof hls !== "undefined" && hls ? hls.targetLatency : null)');
     } catch { /* 플레이어 준비 전 */ }
     const q = v.getVideoPlaybackQuality ? v.getVideoPlaybackQuality() : null;
     const pane = f.closest('.ml-pane');
+    const channel = (pane || f).dataset.channelId;
     out.push({
       where: f.id === 'player-frame' ? 'viewer' : pane ? `pane${pane.dataset.slot}` : 'other',
+      tag: channel ? String(channel).slice(0, 6) : null, // player.net 의 tag 와 같은 이름
+      target_s: round(target, 2),
       playing: !v.paused,
       height: v.videoHeight,
       level,

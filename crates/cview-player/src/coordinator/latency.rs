@@ -7,7 +7,8 @@ use futures_util::future::BoxFuture;
 
 use super::{
     same_engine, CoordinatedEngine, HlsEngineControl, Inner, LatencyInfo, LowLatencyActivation,
-    SharedEngine, StreamCoordinator, StreamEvent, SECONDARY_PANE_STABILITY_TARGET_SECONDS,
+    SharedEngine, StreamCoordinator, StreamEvent, MAX_TARGET_LATENCY_MARGIN_SECONDS,
+    SECONDARY_PANE_STABILITY_TARGET_SECONDS,
 };
 use crate::low_latency::latency_provider;
 use crate::low_latency::{LowLatencyBindings, LowLatencyConfiguration, LowLatencyController};
@@ -71,6 +72,42 @@ impl StreamCoordinator {
             return 0.0;
         }
         SECONDARY_PANE_STABILITY_TARGET_SECONDS
+    }
+
+    /// 목표 지연 여유(초) — 멀티라이브 메인 패인이 다른 패인과 대역폭을 나눠 쓸 때 기본 목표(웹과 같은 3초)에
+    /// 더한다. 밴드(목표~seek 문턱) 폭은 그대로 두고 함께 민다. 0 이면 기본 설정으로 되돌린다.
+    /// 늦추기 문턱(slow_down_threshold, 웹 프리셋 0.55초)도 여유×0.25 로 좁힌다 — 그대로 두면 지금 위치가
+    /// "목표 − 문턱" 안이라 컨트롤러가 아무것도 하지 않아 여유가 실제 전방 버퍼로 바뀌지 않는다(실측: 목표 4.0초에
+    /// 지연 3.6초가 2분 동안 그대로). 좁히면 0.97배속으로 몇 초 늦춰 목표 가까이로 물러난다.
+    /// 컨트롤러가 없거나(저지연 끔) v2 가 지연을 소유하면 아무것도 하지 않는다. 같은 값이면 PID 를 새로 만들지 않는다.
+    pub fn set_target_latency_margin(&self, margin: f64) {
+        let Some(controller) = &self.inner.low_latency else {
+            return;
+        };
+        if self.match_web_v2_engine_active() {
+            return;
+        }
+        let margin = if margin.is_finite() {
+            margin.clamp(0.0, MAX_TARGET_LATENCY_MARGIN_SECONDS)
+        } else {
+            0.0
+        };
+        let mut config = self.inner.config.low_latency_config;
+        config.target_latency += margin;
+        config.max_latency += margin;
+        if margin > 0.0 {
+            config.slow_down_threshold = config.slow_down_threshold.min(margin * 0.25);
+        }
+        if (controller.current_configuration().target_latency - config.target_latency).abs() < 0.01
+        {
+            return;
+        }
+        tracing::info!(
+            "LowLatency: 목표 지연 여유 {margin:.1}s — 기본 {:.1}s → {:.1}s",
+            self.inner.config.low_latency_config.target_latency,
+            config.target_latency
+        );
+        controller.update_configuration(config);
     }
 
     /// 새로 설치된 엔진이 비선택 패인이면 재생 시작 **전에** 안정성 목표를 심는다.

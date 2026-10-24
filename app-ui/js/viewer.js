@@ -166,6 +166,9 @@ export class Viewer {
   async open(channelId, settings) {
     const token = ++this.startToken;
     this.channelId = channelId;
+    // 성능 수집기가 player.net(채널 앞 6자)과 맞춘다
+    const frame = document.getElementById('player-frame');
+    if (frame) frame.dataset.channelId = channelId;
     if (settings) this.lastSettings = settings;
     this.root.hidden = false;
     this.renderHeader(null);

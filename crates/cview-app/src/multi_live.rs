@@ -460,6 +460,9 @@ impl MultiLivePlayer for PanePlayer {
     fn restore_surface_after_occlusion(&self) {}
     fn set_gpu_render_tier_hidden(&self, _keep_alive: bool) {}
     fn set_max_rate_override(&self, _rate: Option<f64>) {}
+    fn set_latency_margin(&self, seconds: f64) {
+        self.vm.set_latency_margin(seconds);
+    }
     fn configure_time_machine_access(&self, is_cheat_key_user: bool, available: bool) {
         self.vm
             .configure_time_machine_access(is_cheat_key_user, available);

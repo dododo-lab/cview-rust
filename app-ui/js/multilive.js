@@ -404,6 +404,7 @@ export class MultiLivePage {
         pane.el.style.setProperty('--ml-hue', String(pane.hue));
       }
       pane.sessionId = s.id;
+      pane.el.dataset.channelId = s.channelId; // 성능 수집기가 player.net(채널 앞 6자)과 맞춘다
       pane.controls?.setChannel(s.channelId);
       this.renderPane(pane, s, order.indexOf(s.id), s.id === state.selectedId);
     }
