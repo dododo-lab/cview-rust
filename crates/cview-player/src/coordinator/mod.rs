@@ -408,6 +408,7 @@ impl StreamCoordinator {
             last_network_interface: None,
         };
         let proxy = proxy.unwrap_or_else(|| LocalStreamProxy::new(access.cookies.clone()));
+        proxy.set_perf_tag(&config.channel_id.chars().take(6).collect::<String>());
         Self {
             inner: Arc::new(Inner {
                 requires_authenticated_proxy: access.requires_proxy,
