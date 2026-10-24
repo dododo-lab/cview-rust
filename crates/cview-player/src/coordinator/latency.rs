@@ -118,6 +118,15 @@ impl StreamCoordinator {
         }
         let token = hls.invalidate_latency_control_session();
         hls.set_controller_target_latency(target, token);
+        tracing::info!(
+            "LowLatency[{}]: 비선택 패인 안정성 목표 {target:.1}s 주입",
+            self.inner
+                .config
+                .channel_id
+                .chars()
+                .take(6)
+                .collect::<String>()
+        );
     }
 
     /// PID 소유 세대를 무효화하고 같은 토큰으로 1.0x 복원을 건다.

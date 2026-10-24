@@ -681,6 +681,13 @@ impl PlayerViewModel {
         }
     }
 
+    /// 멀티라이브 패인으로 쓴다 — 다음 재생 시작부터 저지연을 매니저가 관리(Managed: 선택 패인만 정밀 싱크,
+    /// 비선택은 안정성 목표 10.5초)하고, 화질은 역할 목표(매니저의 `set_multi_live_quality_target`)를 따르며,
+    /// 로컬 되감기 녹화는 기본으로 끈다. 단독 시청 플레이어는 그대로(false).
+    pub fn set_multi_live(&self, on: bool) {
+        self.state.lock().is_multi_live = on;
+    }
+
     /// 멀티라이브 메인 패인 목표 지연 여유(초). 같은 값이면 아무것도 하지 않는다.
     pub fn set_latency_margin(&self, seconds: f64) {
         let coordinator = {
