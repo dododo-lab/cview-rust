@@ -1054,8 +1054,8 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
   --ev: var(--donation);
   position: relative; overflow: hidden; display: flex; align-items: center; gap: 12px; max-width: min(520px, 80vw);
   padding: 12px 18px 12px 12px; border-radius: 18px; color: #fff;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--ev) 26%, rgba(14, 15, 18, 0.86)), rgba(14, 15, 18, 0.86) 60%);
-  backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  /* 흐림 없이 — 재생 중인 영상 위 흐림은 영상 프레임마다 다시 계산돼 GPU 를 늘 쓴다(GPU 최적화 2026-10-24) */
+  background: linear-gradient(135deg, color-mix(in srgb, var(--ev) 26%, rgba(14, 15, 18, 0.9)), rgba(14, 15, 18, 0.9) 60%);
   border: 1px solid color-mix(in srgb, var(--ev) 50%, transparent);
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
   animation: alert-in 0.4s var(--ease-out) both;
@@ -1139,8 +1139,8 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .quality-empty { padding: 8px 10px; font-size: var(--fs-footnote); color: var(--text-tertiary); }
 .player-osd {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 4; pointer-events: none;
-  padding: 10px 18px; border-radius: 14px; background: rgba(0, 0, 0, 0.62); color: #fff; font-weight: 700;
-  font-size: var(--fs-subhead); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  padding: 10px 18px; border-radius: 14px; background: rgba(0, 0, 0, 0.72); color: #fff; font-weight: 700;
+  font-size: var(--fs-subhead); /* 흐림 없이 — 재생 중인 영상 위 흐림은 영상 프레임마다 다시 계산돼 GPU 를 늘 쓴다(GPU 최적화 2026-10-24) */
 }
 .player-osd[hidden] { display: none; }
 .player-osd.fade { animation: osd-fade 1.3s ease forwards; }
@@ -1507,7 +1507,8 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .viewer.chat-mode-overlay .chat {
   position: absolute; right: 16px; top: 74px; bottom: 60px; z-index: 6; width: var(--overlay-w, 340px) !important;
   border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.12); overflow: hidden;
-  background: rgba(12, 13, 16, var(--overlay-bg, 0.5)); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  /* 흐림 없이 — 재생 중인 영상 위 흐림은 영상 프레임마다 다시 계산돼 GPU 를 늘 쓴다(GPU 최적화 2026-10-24) */
+  background: rgba(12, 13, 16, min(0.94, calc(var(--overlay-bg, 0.5) + 0.12)));
   --text-primary: #f4f5f7; --text-secondary: #d0d3d9; --text-tertiary: #a4a8b0; color: var(--text-primary);
 }
 .viewer.chat-mode-overlay .chat .chat-header, .viewer.chat-mode-overlay .chat .chat-input { background: transparent; border-color: rgba(255, 255, 255, 0.1); }
@@ -2183,7 +2184,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 /* 화질 — 글자 알약, 메뉴는 어두운 반투명 */
 .chzzk-bar .quality-btn { height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.28); background: rgba(0, 0, 0, 0.25); color: #fff; font-size: 12px; font-weight: 700; }
 .chzzk-bar .quality-btn:hover { border-color: #fff; background: rgba(255, 255, 255, 0.12); }
-.chzzk-bar .quality-menu { bottom: 40px; background: rgba(24, 25, 28, 0.88); border: 1px solid rgba(255, 255, 255, 0.12); backdrop-filter: blur(16px) saturate(1.4); -webkit-backdrop-filter: blur(16px) saturate(1.4); color: #fff; }
+.chzzk-bar .quality-menu { bottom: 40px; background: rgba(24, 25, 28, 0.94); border: 1px solid rgba(255, 255, 255, 0.12); color: #fff; } /* 흐림 없이 — 재생 중인 영상 위 흐림은 영상 프레임마다 다시 계산돼 GPU 를 늘 쓴다(GPU 최적화 2026-10-24) */
 .chzzk-bar .quality-item { color: #fff; }
 .chzzk-bar .quality-item.active { color: #00ffa3; }
 .chzzk-bar .quality-item.active::after { content: "✓"; color: #00ffa3; font-weight: 800; }

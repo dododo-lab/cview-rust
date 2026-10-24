@@ -1139,6 +1139,29 @@ fn rate_budget_splits_twelve_percent() {
 }
 
 #[test]
+fn auto_picture_enhancement_only_on_main_pane() {
+    let m = manager();
+    let p = panes(3, "pic");
+    let mut st = m.lock();
+    st.set_sessions(p.iter().map(|x| x.session.clone()).collect());
+    st.set_selected_session_id(Some(p[1].session.id()));
+    let ps = PlayerSettings {
+        auto_picture_enhancement: true,
+        video_upscaling: true,
+        ..PlayerSettings::default()
+    };
+    let on: Vec<(bool, bool)> = p
+        .iter()
+        .map(|x| st.picture_enhancement(x.session.id(), &ps))
+        .collect();
+    assert_eq!(
+        on,
+        vec![(false, false), (true, true), (false, false)],
+        "보조 패인은 자동 보정·업스케일 없이"
+    );
+}
+
+#[test]
 fn main_pane_gets_latency_margin_by_pane_count() {
     assert_eq!(policy::main_pane_latency_margin(1), 0.0);
     assert_eq!(policy::main_pane_latency_margin(3), 0.0);
