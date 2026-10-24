@@ -23,7 +23,7 @@
 | ID | 상태 | 항목 | 위치 | 고치는 법 |
 |---|---|---|---|---|
 | M-1 | ✅ ed6a580 (나나양 채널이 방송 중이 아니라 그 증상 재현은 미검증) | 멀티라이브 패인이 첫 프레임 없이 영원히 "재생 중"(나나양) — 낡은 상태 렌더가 재사용 슬롯을 멈추게 할 수 있음, 첫 프레임 감시 없음 | `multilive.js:323-328`, `crates/cview-app/src/multi_live.rs:235,478`, `session.rs:529` | 상태 순번(rev)으로 낡은 렌더 무시 + 첫 프레임 감시(일정 시간 안 나오면 다시 연결) |
-| M-2 | ⏭ 사용자 설정 전체(음소거로 시작·볼륨)를 패인에 넣으면 멀티 오디오 배분과 충돌 — 원본처럼 일부만 골라 적용하는 별도 작업 | 패인 플레이어가 사용자 플레이어 설정을 안 받음(`player_settings: None`), `is_multi_live` 미설정 | `multi_live.rs:503-508`, `viewmodels/player/mod.rs:268` | 설정 전달·멀티 표시 |
+| M-2 | ◐ `is_multi_live` 는 72d85c6 에서 켬(패인이 Automatic PID 로 돌아 비선택 안정성 목표·선택 전환·역할 화질이 안 걸리던 원인). 사용자 설정 전달은 여전히 ⏭ — 음소거로 시작·볼륨이 멀티 오디오 배분과 충돌, 일부만 골라 적용하는 별도 작업 | 패인 플레이어가 사용자 플레이어 설정을 안 받음(`player_settings: None`), `is_multi_live` 미설정 | `multi_live.rs:503-508`, `viewmodels/player/mod.rs:268` | 설정 전달·멀티 표시 |
 | W-1 | ✅ 5198a22 | Windows 에서 ⌃⌘ 조합·Ctrl+Tab 이 눌리지 않음(Ctrl→⌘ 바꿔 읽기 부작용) | `index.html:16-22`, `multichat.js:83`, `multilive.js:147`, `viewer-controls.js:376` | Ctrl+Tab 은 바꾸지 않고, ⌃⌘ 는 Windows 에서 Ctrl+Alt |
 | W-2 | ✅ 5198a22 | 단축키 안내가 Windows 에서도 ⌘ | `app.js:312,371-391`, `shortcuts.js:55` 외 10여 곳 | `kbd()` 헬퍼로 Windows 면 Ctrl+/Alt+/Shift+ |
 | A-1 | ✅ 9390361 | 전역 `:focus-visible { outline: none }` 이 초점 표시를 지움 | `css/app.css:778` | 삭제(뒤쪽 허용 목록이 그린다) |
