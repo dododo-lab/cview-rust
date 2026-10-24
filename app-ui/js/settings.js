@@ -12,6 +12,7 @@ import { streamAlertsEnabled, setStreamAlertsEnabled, ALERT_HOME } from './donat
 import { chatPrefs, updateChatPrefs, blockedLabel, loadChatPrefs } from './chat-prefs.js';
 import { BACKGROUNDS, READING_WIDTHS } from './chat-extras.js';
 import { kbd } from './platform.js';
+import { checkForUpdate, lastUpdateResult, updateSummary, downloadTarget, openDownload, currentVersionText } from './update-check.js';
 
 const opt = (pairs) => pairs.map(([value, label]) => ({ value, label }));
 
@@ -236,7 +237,22 @@ export class SettingsPage {
     this.body.innerHTML = `${tabs}<div class="settings-groups">${this.groupHtml()}</div>`;
     this.applySearch();
     this.refreshOAuth();
+    if (this.body.querySelector('.update-row')) this.showUpdate();
     if (this.body.querySelector('[data-setting-action="clear-image-cache"]')) api.imageCacheStatus().then((st) => this.showImageCache(st)).catch(() => {});
+  }
+
+  /** "업데이트 확인" 줄 — 현재 버전과 마지막 확인 결과, 새 버전이면 다운로드 단추. */
+  async showUpdate() {
+    const row = this.body.querySelector('.update-row');
+    if (!row) return;
+    const u = lastUpdateResult();
+    const status = row.querySelector('.update-status');
+    if (u) status.textContent = updateSummary(u);
+    row.querySelector('[data-sys="update-download"]').hidden = !(u && u.newer && downloadTarget(u));
+    row.querySelector('[data-sys="update-page"]').hidden = !(u && u.newer && u.url);
+    const version = await currentVersionText();
+    const v = row.isConnected && row.querySelector('.update-version');
+    if (v) v.textContent = `현재 버전 ${version || '-'}`;
   }
 
   /** "썸네일 캐시" 줄에 지금 크기를 적는다. */
@@ -295,7 +311,7 @@ export class SettingsPage {
         </div>
       </section>
       <section class="settings-group" data-g="overview"><h3>앱</h3>
-        <div class="setting" data-search="업데이트 확인 버전"><span class="setting-label">업데이트 확인<small class="update-status">GitHub 최신 릴리스와 비교합니다</small></span><button class="btn" data-sys="update">확인</button></div>
+        <div class="setting update-row" data-search="업데이트 확인 버전 다운로드 릴리스"><span class="setting-label">업데이트 확인<small class="update-version">현재 버전 확인 중…</small><small class="update-status">업데이트 서버의 최신 릴리스와 비교합니다</small></span><span class="shortcut-edit"><button class="link-btn" data-sys="update-page" hidden>릴리스 노트</button><button class="btn primary" data-sys="update-download" hidden>다운로드</button><button class="btn" data-sys="update">지금 확인</button></span></div>
         <div class="setting" data-search="알림 권한 시스템 알림"><span class="setting-label">시스템 알림 권한<small class="notify-status">방송 시작·멘션 알림에 필요합니다</small></span><span class="shortcut-edit"><button class="btn" data-sys="notify">권한 확인</button><button class="link-btn" data-sys="notify-settings">시스템 설정 열기</button></span></div>
         <div class="setting" data-search="딥 링크 cview url"><span class="setting-label">링크로 열기<small>cview://live?channelId=… · cview://search?q=… · cview://multilive</small></span></div>
       </section>`;
@@ -514,13 +530,21 @@ export class SettingsPage {
     b.disabled = true;
     try {
       if (b.dataset.sys === 'update') {
-        const u = await api.updateCheck();
-        const el = this.body.querySelector('.update-status');
-        if (!u.latest) el.textContent = `현재 ${u.current} · 공개된 릴리스가 없습니다`;
-        else if (u.newer) {
-          el.textContent = `새 버전 ${u.latest} 이 있습니다 (현재 ${u.current})`;
-          if (u.url) toast(`새 버전 ${u.latest}`, 8000, { label: '릴리스 페이지', run: () => api.openExternal(u.url) });
-        } else el.textContent = `최신 버전입니다 (${u.current})`;
+        const status = this.body.querySelector('.update-status');
+        if (status) status.textContent = '업데이트 서버를 확인하는 중…';
+        try {
+          await checkForUpdate();
+        } catch (er) {
+          if (status) status.textContent = `확인하지 못했습니다 — ${er.message || er}`;
+          throw er;
+        }
+        this.showUpdate();
+      } else if (b.dataset.sys === 'update-download') {
+        const u = lastUpdateResult();
+        if (u) await openDownload(u);
+      } else if (b.dataset.sys === 'update-page') {
+        const u = lastUpdateResult();
+        if (u && u.url) await api.openExternal(u.url);
       } else if (b.dataset.sys === 'notify-settings') {
         await api.openNotificationSettings();
       } else if (b.dataset.sys === 'notify') {
