@@ -1,5 +1,5 @@
 // 업데이트 확인 — 앱 메뉴 "업데이트 확인…" 시트와 설정 › 앱 줄이 같이 쓴다.
-// 피드(자체 HTTPS 서버, 없으면 GitHub 릴리스)는 백엔드 `update_check` 가 고른다.
+// 피드(자체 HTTPS 서버, CVIEW_UPDATE_URL 로 바꿀 수 있음)는 백엔드 `update_check` 가 고른다.
 import { api } from './api.js';
 import { esc } from './dom.js';
 

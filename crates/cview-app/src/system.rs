@@ -17,9 +17,7 @@ use cview_app_core::caching::following_store::to_live_channel_item;
 use cview_app_core::navigation::deep_link::DeepLink;
 use cview_app_core::services::background_update::{BackgroundUpdateBaseline, BackgroundUpdateDiff};
 use cview_app_core::services::notification_service::{NoopNotifier, NotificationService};
-use cview_app_core::services::update_service::{
-    compare_versions, GitHubAsset, GitHubRelease, UpdateService,
-};
+use cview_app_core::services::update_service::{compare_versions, GitHubAsset, GitHubRelease};
 use cview_core::utils::following_poll::FollowingPollReason;
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -271,17 +269,24 @@ fn validated_update_url(value: &str) -> Result<url::Url, CommandError> {
     Ok(parsed)
 }
 
+/// 기본 업데이트 피드(자체 HTTPS 서버). 빌드 환경 변수를 빠뜨려도 이 주소를 쓴다.
+const DEFAULT_UPDATE_FEED: &str =
+    "https://win-7sv7uak6k5b.horse-solfege.ts.net/releases/latest.json";
+
+/// 실행 시 환경 변수 → 빌드 시 값 → 기본 피드 순. 빈 값은 설정 안 한 것으로 본다.
+fn configured(v: Option<&str>) -> Option<&str> {
+    v.map(str::trim).filter(|v| !v.is_empty())
+}
+
 fn update_feed_url(
     runtime: Option<&str>,
     embedded: Option<&str>,
 ) -> Result<url::Url, CommandError> {
-    match runtime.or(embedded) {
-        Some(value) => validated_update_url(value),
-        None => validated_update_url(&format!(
-            "https://api.github.com/repos/{}/releases/latest",
-            UpdateService::REPOSITORY
-        )),
-    }
+    validated_update_url(
+        configured(runtime)
+            .or(configured(embedded))
+            .unwrap_or(DEFAULT_UPDATE_FEED),
+    )
 }
 
 /// 설정된 HTTPS 서버의 최신 릴리스 확인.
@@ -290,6 +295,11 @@ pub async fn update_check(app: AppHandle) -> CmdResult<UpdateCheckDto> {
     let current = app.package_info().version.to_string();
     let runtime_url = std::env::var("CVIEW_UPDATE_URL").ok();
     let url = update_feed_url(runtime_url.as_deref(), option_env!("CVIEW_UPDATE_URL"))?;
+    fetch_update(url, current).await
+}
+
+/// 피드를 받아 현재 버전과 비교한다.
+async fn fetch_update(url: url::Url, current: String) -> CmdResult<UpdateCheckDto> {
     let client = reqwest::Client::builder()
         .https_only(true)
         .build()
@@ -297,7 +307,11 @@ pub async fn update_check(app: AppHandle) -> CmdResult<UpdateCheckDto> {
     let resp = client
         .get(url)
         .header("Cache-Control", "no-cache")
-        .header("Accept", "application/vnd.github+json")
+        // IIS 정적 파일은 `application/vnd.github+json` 만 받겠다고 하면 406 을 돌려준다.
+        .header(
+            "Accept",
+            "application/json, application/vnd.github+json;q=0.9",
+        )
         .header("User-Agent", "CView-Rust")
         .timeout(Duration::from_secs(15))
         .send()
@@ -416,17 +430,34 @@ mod tests {
                 .host_str(),
             Some("example.com")
         );
+        // 빌드 환경 변수를 빠뜨렸거나 비어 있어도 자체 서버 피드
         assert_eq!(
-            update_feed_url(None, None).unwrap().host_str(),
-            Some("api.github.com")
+            update_feed_url(None, None).unwrap().as_str(),
+            DEFAULT_UPDATE_FEED
+        );
+        assert_eq!(
+            update_feed_url(Some(""), Some(" ")).unwrap().as_str(),
+            DEFAULT_UPDATE_FEED
         );
         for bad in [
             "http://example.com/feed",
             "https://user:secret@example.com/feed",
             "invalid",
-            "",
         ] {
             assert!(update_feed_url(Some(bad), Some(embedded)).is_err());
+        }
+    }
+
+    /// 실제 업데이트 서버(Tailscale 필요) — `cargo test -p cview-app -- --ignored live_update_feed`.
+    #[tokio::test]
+    #[ignore]
+    async fn live_update_feed() {
+        let url = update_feed_url(None, None).unwrap();
+        let u = fetch_update(url, "0.0.1".into()).await.unwrap();
+        assert!(u.newer, "{u:?}");
+        assert!(u.latest.is_some() && u.url.is_some(), "{u:?}");
+        if std::env::consts::OS == "macos" {
+            assert!(u.download_name.unwrap().ends_with(".dmg"));
         }
     }
 
