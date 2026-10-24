@@ -1139,6 +1139,30 @@ fn rate_budget_splits_twelve_percent() {
 }
 
 #[test]
+fn many_panes_cap_secondary_at_360p() {
+    use cview_app_core::viewmodels::multi_live::policy::focus_quality::cap_secondary_for_pane_count;
+    let t480 = HlsJsForcedQualityTarget::new(480, 2_000);
+    let t720 = HlsJsForcedQualityTarget::new(720, 4_000);
+    assert_eq!(
+        cap_secondary_for_pane_count(t480, 3, false),
+        t480,
+        "3개 이하는 그대로"
+    );
+    assert_eq!(cap_secondary_for_pane_count(t480, 4, false).height, 360);
+    assert_eq!(
+        cap_secondary_for_pane_count(t720, 6, false),
+        HlsJsForcedQualityTarget::new(360, 1_000)
+    );
+    assert_eq!(
+        cap_secondary_for_pane_count(t480, 6, true),
+        t480,
+        "소리 나는 보조는 480p 하한 유지"
+    );
+    let t360 = HlsJsForcedQualityTarget::new(360, 1_000);
+    assert_eq!(cap_secondary_for_pane_count(t360, 5, false), t360);
+}
+
+#[test]
 fn auto_picture_enhancement_only_on_main_pane() {
     let m = manager();
     let p = panes(3, "pic");

@@ -103,11 +103,16 @@ impl ManagerState {
             let target = if primary {
                 HlsJsForcedQualityTarget::MULTI_LIVE_1080P_8MBPS
             } else {
-                focus_quality::secondary_target(
-                    secondary_pane_size,
-                    s.player().multi_live_quality_target().height,
+                // 패인이 4개 이상이면 소리 없는 보조는 360p 로 — 메인은 그대로 1080p
+                focus_quality::cap_secondary_for_pane_count(
+                    focus_quality::secondary_target(
+                        secondary_pane_size,
+                        s.player().multi_live_quality_target().height,
+                        !s.player().is_muted(),
+                        thermal_cap,
+                    ),
+                    self.sessions.len(),
                     !s.player().is_muted(),
-                    thermal_cap,
                 )
             };
             if !s.player().set_multi_live_quality_target(target) {
