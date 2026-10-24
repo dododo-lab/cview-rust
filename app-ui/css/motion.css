@@ -389,3 +389,133 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
 }
 :root[data-motion="reduced"] .toast-timer { display: none; }
 :root[data-motion="reduced"] :is(.ml-watch-chip:hover, .ml-watch-chip:hover img) { translate: none !important; scale: none !important; }
+
+/* ══ 아이콘 호버 (2026-10-24) — 사이드바·계정 메뉴 아이콘이 마우스를 올리면 제 모양대로 한 번 움직인다 ══
+   - motion.js installIconHover 가 들어올 때 .hm 을 달고 hm-* 가 모두 끝나면 뗀다(스쳐도 끝까지, 다시 들어와도 겹치지 않게).
+   - transform 개별 속성(translate·rotate·scale)과 opacity 만 — 합성 단계에서 끝나 다시 그리기가 없다. 상시 도는 것은 없다.
+   - SVG 안쪽 도형을 따로 움직일 때는 transform-box: fill-box 로 도형 자신을 기준점으로 삼는다.
+   - 접힌 레일·펼친 사이드바, 밝은·어두운 테마 모두 같은 그림(currentColor)을 쓰므로 그대로 맞는다. */
+:root {
+  --hm-dur: .6s;
+  --hm-ease: cubic-bezier(.3, .7, .4, 1);
+}
+.nav-icon svg, .quick-search svg, .sidebar-toggle svg, .ap-icon svg, .login-icon svg { transform-origin: 50% 50%; }
+
+/* 홈 — 집이 살짝 웅크렸다 콩 뛴다 */
+@keyframes hm-hop {
+  0% { translate: 0 0; scale: 1; }
+  22% { translate: 0 1px; scale: 1.1 .88; }
+  50% { translate: 0 -3.5px; scale: .94 1.08; }
+  78% { translate: 0 0; scale: 1.04 .96; }
+  100% { translate: 0 0; scale: 1; }
+}
+.hm[data-route="home"] .nav-icon svg { transform-origin: 50% 90%; animation: hm-hop var(--hm-dur) var(--hm-ease); }
+
+/* 팔로잉 — 하트가 두 번 두근 */
+@keyframes hm-beat {
+  0% { scale: 1; } 14% { scale: 1.24; } 28% { scale: .96; } 42% { scale: 1.16; } 70%, 100% { scale: 1; }
+}
+.hm:is([data-route="following"], [data-ap-route="following"]) svg { animation: hm-beat .72s ease-out; }
+
+/* 인기 — 불꽃이 아래를 축으로 일렁인다 */
+@keyframes hm-flicker {
+  0% { rotate: 0deg; scale: 1; }
+  20% { rotate: -7deg; scale: 1.04 1.12; }
+  45% { rotate: 6deg; scale: .98 1.04; }
+  70% { rotate: -3deg; scale: 1.02 1.08; }
+  100% { rotate: 0deg; scale: 1; }
+}
+.hm[data-route="popular"] .nav-icon svg { transform-origin: 50% 92%; animation: hm-flicker .66s ease-in-out; }
+
+/* 카테고리 — 네 타일이 시계 방향으로 차례로 톡 */
+@keyframes hm-tile { 0%, 100% { scale: 1; } 40% { scale: .62; } 72% { scale: 1.1; } }
+.hm[data-route="categories"] .nav-icon rect { transform-box: fill-box; transform-origin: center; animation: hm-tile .44s var(--hm-ease) both; }
+.hm[data-route="categories"] .nav-icon rect:nth-child(2) { animation-delay: 70ms; }
+.hm[data-route="categories"] .nav-icon rect:nth-child(4) { animation-delay: 140ms; }
+.hm[data-route="categories"] .nav-icon rect:nth-child(3) { animation-delay: 210ms; }
+
+/* 라이브 — 화면이 눌렸다 튀어 오르며 살짝 기운다(전원 켜는 느낌) */
+@keyframes hm-tune {
+  0% { scale: 1; rotate: 0deg; }
+  25% { scale: .86; rotate: 0deg; }
+  55% { scale: 1.14; rotate: -5deg; }
+  80% { scale: .98; rotate: 2deg; }
+  100% { scale: 1; rotate: 0deg; }
+}
+.hm[data-route="live"] .nav-icon svg { animation: hm-tune var(--hm-dur) var(--hm-ease); }
+
+/* 멀티채팅 — 두 말풍선이 번갈아 말하듯 들썩 */
+@keyframes hm-chat-a { 0%, 100% { translate: 0 0; rotate: 0deg; } 35% { translate: -1px -2.5px; rotate: -8deg; } 70% { translate: 0 .5px; rotate: 2deg; } }
+@keyframes hm-chat-b { 0%, 100% { translate: 0 0; rotate: 0deg; } 35% { translate: 1px -2px; rotate: 8deg; } 70% { translate: 0 .5px; rotate: -2deg; } }
+.hm[data-route="multichat"] .nav-icon path { transform-box: fill-box; transform-origin: 30% 100%; animation: hm-chat-a .5s var(--hm-ease) both; }
+.hm[data-route="multichat"] .nav-icon path + path { transform-origin: 70% 100%; animation-name: hm-chat-b; animation-delay: 140ms; }
+
+/* 보관함 — 책꽂이가 한쪽으로 기울었다 제자리 */
+@keyframes hm-lean { 0% { rotate: 0deg; } 30% { rotate: -11deg; } 60% { rotate: 5deg; } 82% { rotate: -2deg; } 100% { rotate: 0deg; } }
+.hm:is([data-route="library"], [data-ap-route="library"]) svg { transform-origin: 20% 95%; animation: hm-lean .64s ease-in-out; }
+
+/* 통계 — 막대가 줄었다가 쑥 솟는다 */
+@keyframes hm-grow { 0% { scale: 1; } 30% { scale: 1 .55; } 65% { scale: 1 1.14; } 85% { scale: 1 .97; } 100% { scale: 1; } }
+.hm:is([data-route="stats"], [data-ap-route="stats"]) svg { transform-origin: 50% 84%; animation: hm-grow var(--hm-dur) var(--hm-ease); }
+
+/* 검색 — 돋보기가 찾듯이 좌우로 훑는다 */
+@keyframes hm-seek {
+  0% { translate: 0 0; rotate: 0deg; }
+  25% { translate: -1.5px -1px; rotate: -14deg; }
+  55% { translate: 1.5px .5px; rotate: 10deg; }
+  80% { translate: 0 0; rotate: -4deg; }
+  100% { translate: 0 0; rotate: 0deg; }
+}
+.hm[data-route="search"] .nav-icon svg, .quick-search.hm svg { transform-origin: 45% 45%; animation: hm-seek var(--hm-dur) ease-in-out; }
+
+/* 설정 — 톱니가 한 칸 돈다(톱니 8개라 90° 돌면 처음 모양과 같아 끝에 튀지 않는다) */
+@keyframes hm-gear { from { rotate: 0deg; } to { rotate: 90deg; } }
+.hm:is([data-route="settings"], [data-ap-route="settings"]) svg { animation: hm-gear .7s var(--ease-spring, ease-out); }
+
+/* 사이드바 접기 — 가운데 칸막이가 접히는 방향으로 슬쩍(접힌 레일에선 펼치는 쪽으로) */
+@keyframes hm-divider { 0%, 100% { translate: 0 0; } 45% { translate: var(--hm-dx, -3px) 0; } }
+.sidebar-toggle.hm svg path { animation: hm-divider .46s var(--hm-ease); }
+.sidebar.collapsed .sidebar-toggle { --hm-dx: 3px; }
+
+/* 계정 — 아바타가 톡, 로그인·로그아웃 화살표는 나가는 쪽으로 */
+@keyframes hm-pop { 0%, 100% { scale: 1; } 40% { scale: 1.1; } 70% { scale: .97; } }
+@keyframes hm-nudge { 0%, 100% { translate: 0 0; } 40% { translate: var(--hm-dx, 3px) 0; } 70% { translate: calc(var(--hm-dx, 3px) * -.25) 0; } }
+.account-trigger.hm .account-avatar, .side-live.hm .side-live-avatar { animation: hm-pop .5s var(--hm-ease); }
+.account-login.hm .login-icon svg { animation: hm-nudge .5s var(--hm-ease); }
+.ap-item.hm[data-action="logout"] svg { --hm-dx: -3px; animation: hm-nudge .5s var(--hm-ease); }
+.ap-item.hm[data-ap-menu="shortcuts"] svg { animation: hm-pop .46s var(--hm-ease); }
+@keyframes hm-info { 0%, 100% { rotate: 0deg; } 30% { rotate: -12deg; } 65% { rotate: 8deg; } }
+.ap-item.hm[data-ap-menu="about"] svg { animation: hm-info .55s ease-in-out; }
+
+/* ── 로고 — 올리면 앱 아이콘이 고개를 까딱하며 커지고, 로고 모양 안으로 빛줄기가 한 번 지나간다 ──
+   빛줄기는 로고 그림 자체를 마스크로 써서(같은 크기·위치) 로고 바깥으로 새지 않는다. */
+@keyframes hm-logo {
+  0% { rotate: 0deg; scale: 1; }
+  25% { rotate: -10deg; scale: 1.1; }
+  50% { rotate: 7deg; scale: 1.08; }
+  75% { rotate: -3deg; scale: 1.02; }
+  100% { rotate: 0deg; scale: 1; }
+}
+@keyframes hm-sheen { from { translate: -160% 0; opacity: 1; } 70% { opacity: 1; } to { translate: 260% 0; opacity: 0; } }
+.brand-sheen {
+  position: absolute; left: 0; top: 0; width: 124.3%; height: 124.3%; margin: -12.15%; pointer-events: none; overflow: hidden;
+  -webkit-mask: url(../img/logo-light.png) center / contain no-repeat; mask: url(../img/logo-light.png) center / contain no-repeat;
+}
+.brand-sheen::before {
+  content: ""; position: absolute; top: -10%; bottom: -10%; left: 0; width: 45%; opacity: 0;
+  background: linear-gradient(100deg, transparent 0%, rgba(255, 255, 255, .55) 50%, transparent 100%);
+  transform: skewX(-18deg);
+}
+.brand-mark .app-logo { transform-origin: 50% 60%; }
+.brand.hm .brand-mark .app-logo { animation: hm-logo .7s var(--hm-ease); }
+.brand.hm .brand-sheen { animation: hm-logo .7s var(--hm-ease); transform-origin: 50% 60%; }
+.brand.hm .brand-sheen::before { animation: hm-sheen .8s cubic-bezier(.4, 0, .2, 1) .08s; }
+
+/* ── 모션 줄이기 — 달리지도 않지만(motion.js) 혹시 붙어 있어도 멈춘 그대로 ── */
+@media (prefers-reduced-motion: reduce) {
+  .hm :is(svg, svg *, .app-logo, .brand-sheen, .account-avatar, .side-live-avatar), .brand-sheen::before { animation: none !important; }
+  .brand-sheen { display: none; }
+}
+:root[data-motion="reduced"] .hm :is(svg, svg *, .app-logo, .brand-sheen, .account-avatar, .side-live-avatar),
+:root[data-motion="reduced"] .brand-sheen::before { animation: none !important; }
+:root[data-motion="reduced"] .brand-sheen { display: none; }
