@@ -60,7 +60,8 @@ export function liveBadgeState(latency) {
   return { behind: latency > 8, text: latency > 8 ? `-${Math.round(latency)}초` : 'LIVE' };
 }
 
-function stamp() {
+/** 파일 이름용 시각 — 20261024_153012. */
+export function stamp() {
   const d = new Date();
   const p = (n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;

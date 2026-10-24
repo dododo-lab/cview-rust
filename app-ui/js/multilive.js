@@ -19,6 +19,7 @@ import { uptimeText } from './cards.js';
 import { MultiLiveAddDrawer } from './ml-add-drawer.js';
 import { snapshotPanes, playLayoutMotion, playExit, cancelExit, bindPaneDrag, releaseDragged, motionEnabled } from './ml-motion.js';
 import { MultiLiveMergedChat } from './ml-multichat.js';
+import { WatchTools, watchTopHtml } from './ml-watch.js';
 
 import { liveIcon, multiLiveIcon, liveModeSwitch, setLiveModeActive } from './live-mode.js';
 import { decoratePageHeader, setPageHeaderIcon } from './page-header.js';
@@ -178,7 +179,9 @@ export class MultiLivePage {
     }, true);
     this.stage.addEventListener('dblclick', (e) => {
       const pane = e.target.closest('.ml-pane');
-      if (!pane || this.watchSlot != null || e.target.closest('.ml-pane-bar, .ml-pane-top, .ml-pane-menu')) return;
+      if (!pane || e.target.closest('.ml-pane-bar, .ml-pane-top, .ml-pane-menu')) return;
+      // 라이브 단독 보기 — 예전 시청 화면처럼 영상 더블클릭은 전체 화면.
+      if (this.watchSlot != null) { this.watch.fullscreen(false); return; }
       const slot = Number(pane.dataset.slot);
       const s = (this.state.sessions || []).find((x) => x.slot === slot);
       // 포커스 배치에서 아래(메인이 아니던) 패인을 더블클릭하면 메인으로 올리기만 한다 — 첫 클릭이 이미 선택했다.
@@ -187,7 +190,7 @@ export class MultiLivePage {
       this.toggleSingle(slot);
     });
     document.addEventListener('keydown', (e) => {
-      if (this.root.hidden || !(e.metaKey && e.ctrlKey)) return;
+      if (this.root.hidden || this.watchSlot != null || !(e.metaKey && e.ctrlKey)) return;
       const map = { '1': 'grid', '2': 'focus', '3': 'custom' };
       if (map[e.key]) { e.preventDefault(); this.run(api.multiLiveSetLayout(map[e.key])); }
     });
@@ -242,6 +245,7 @@ export class MultiLivePage {
       onOpen: onOpenChannel,
       addLabel: '멀티라이브에 추가',
     });
+    this.watch = new WatchTools(this, { isLoggedIn });
 
     listenHere(Events.multiLiveCommand, (p) => p && this.dispatch(p.slot, p.script));
     listen(Events.multiLiveState, (s) => this.render(s));
@@ -270,7 +274,8 @@ export class MultiLivePage {
     }
     try {
       const ml = (await api.settingsGet()).multiLive || {};
-      this.root.querySelector('.ml-body').classList.toggle('chat-overlay', Boolean(ml.chatOverlayInGrid));
+      this.watch.gridChatOverlay = Boolean(ml.chatOverlayInGrid);
+      this.watch.applyChatMode();
       this.root.style.setProperty('--ml-chat-opacity', String(ml.chatOverlayOpacity ?? 0.5));
       const font = Number(ml.chatOverlayFontSize) || 12;
       this.root.style.setProperty('--ml-chat-font', `${font}px`);
@@ -315,6 +320,7 @@ export class MultiLivePage {
         <button class="ml-pane-btn ml-sec" data-ml="select" title="이 패인 채팅 보기" aria-label="이 패인 채팅 보기">${PANE_ICON.chat}</button>
         <button class="ml-pane-btn ml-sec" data-ml="info" title="채널 정보" aria-label="채널 정보">${PANE_ICON.info}</button>
         <button class="ml-pane-btn ml-sec" data-ml="retry" title="다시 연결" aria-label="다시 연결">${PANE_ICON.retry}</button>
+        ${watchTopHtml()}
         <button class="ml-pane-btn" data-mp="more" title="더 보기" aria-label="더 보기" aria-haspopup="menu" aria-expanded="false">${PANE_ICON.more}</button>
         <button class="ml-pane-close" data-ml="remove" title="닫기">${ICON_CLOSE}</button>
       </div>
@@ -455,6 +461,7 @@ export class MultiLivePage {
     this.alerts.attach(shown ? shown.el : this.stage);
     this.addBar.sync();
     this.mergedChat.sync();
+    this.watch.sync();
   }
 
   /** 패인 배치의 지문 — 이게 바뀔 때만 움직임을 준다(시청자 수 같은 잦은 상태 갱신은 그대로). */
@@ -833,7 +840,12 @@ export class MultiLivePage {
       case 'add': this.addBar.toggle(); break;
       case 'stop-all': this.run(api.multiLiveStopAll()); break;
       case 'select': if (sessionId && sessionId !== this.state.selectedId) this.run(api.multiLiveSelect(sessionId)); break;
-      case 'remove': if (sessionId) this.run(api.multiLiveRemove(sessionId)); break;
+      case 'remove':
+        if (!sessionId) break;
+        // 라이브 단독 보기의 닫기 — 둘러보다 연 방송이면 보던 화면(인기·카테고리 등)으로 돌아간다(app.js).
+        if (this.watchSlot != null && sessionId === this.state.watchId) window.dispatchEvent(new CustomEvent('cview:ml-watch-close', { detail: { remove: true } }));
+        else this.run(api.multiLiveRemove(sessionId));
+        break;
       case 'audio':
         if (!sessionId) break;
         // 소리 나는 패인은 끄기, 볼륨 0 인 패인은 되돌려 켜기(PaneControls). 그 밖엔 이 패인을 듣는다.
