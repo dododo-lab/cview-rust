@@ -170,9 +170,21 @@ export class MultiLivePage {
     this.alerts = new StreamAlerts(this.stage);
     this.single = null; // 한 채널 크게(MUL-11) — 슬롯
     this.gridDividers = this.buildGridDividers();
+    // 더블클릭이 시작될 때(첫 누름) 메인이 누구였는지 — 첫 클릭이 선택으로 메인을 먼저 바꿔 버린다.
+    this.stage.addEventListener('pointerdown', () => {
+      const now = performance.now();
+      if (now - (this.lastStageDown || 0) > 500) this.mainAtGestureStart = this.state && (this.state.focusMainId || this.state.selectedId);
+      this.lastStageDown = now;
+    }, true);
     this.stage.addEventListener('dblclick', (e) => {
       const pane = e.target.closest('.ml-pane');
-      if (pane && this.watchSlot == null && !e.target.closest('.ml-pane-bar, .ml-pane-top, .ml-pane-menu')) this.toggleSingle(Number(pane.dataset.slot));
+      if (!pane || this.watchSlot != null || e.target.closest('.ml-pane-bar, .ml-pane-top, .ml-pane-menu')) return;
+      const slot = Number(pane.dataset.slot);
+      const s = (this.state.sessions || []).find((x) => x.slot === slot);
+      // 포커스 배치에서 아래(메인이 아니던) 패인을 더블클릭하면 메인으로 올리기만 한다 — 첫 클릭이 이미 선택했다.
+      // "한 채널 크게"까지 켜면 메인이 바뀌면서 아래 패인이 모두 감춰졌다. 메인을 더블클릭하면 예전처럼 크게.
+      if (this.state.layout === 'focus' && this.single == null && s && s.id !== this.mainAtGestureStart) return;
+      this.toggleSingle(slot);
     });
     document.addEventListener('keydown', (e) => {
       if (this.root.hidden || !(e.metaKey && e.ctrlKey)) return;
