@@ -131,6 +131,34 @@ async function exitWatch() {
   try { pages.multilive.render(await api.multiLiveWatch(null)); } catch { /* 앱 밖 */ }
   syncLiveIndicators();
 }
+/** 라이브 메뉴 단독 보기가 앞에 떠 있으면 그 도구(ml-watch.js) — 메뉴 동작·단축키가 예전 시청 화면 대신 이리로 간다. */
+function activeWatch() {
+  return current === 'live' && !viewer.isOpen && isWatching() ? pages.multilive.watch : null;
+}
+// 단독 보기를 닫은 뒤 보던 화면으로 돌아갈지 — 멀티라이브 상태 알림(남은 패인이 있으면 멀티라이브로)보다 먼저 본다.
+let watchCloseBack = false;
+/**
+ * 단독 보기 닫기(닫기 단추·Esc·⌘W) — 예전 시청 화면처럼 보던 화면(인기·카테고리 등)으로 돌아간다.
+ * 둘러보다 연 채널(임시 보기)은 멀티라이브에서도 뺀다. 멀티라이브에 넣어 둔 채널은 닫기 단추면 빼고,
+ * Esc·⌘W 면 그대로 두고 멀티라이브 보기로 간다(배치를 잃지 않게).
+ */
+async function closeWatch({ remove = false } = {}) {
+  const id = pages.multilive.state.watchId;
+  if (!id) return;
+  const transient = Boolean(transientWatch && transientWatch.id === id);
+  if (!transient && !remove) { await navigate('multilive'); return; }
+  if (transient) transientWatch = null;
+  watchCloseBack = transient;
+  await pages.multilive.run(api.multiLiveRemove(id));
+  // 매니저는 지운 세션을 무대로 기억한 채 남는다 — 그대로 두면 다음 패인 선택이 그 패인을 무대로 올렸다.
+  await exitWatch();
+  // 상태 알림이 오지 않았거나 늦으면 여기서 마무리한다.
+  setTimeout(() => {
+    if (!watchCloseBack) return;
+    watchCloseBack = false;
+    if (current === 'live' && !viewer.isPlaying && !isWatching()) goBack();
+  }, 300);
+}
 /** 사이드바 라이브 메뉴 — 단독 재생 중이면 점, 멀티라이브 패인이 있으면 그 수. */
 function syncLiveIndicators() {
   sidebar.setPlaying('live', Boolean(viewer && viewer.isPlaying) || isWatching());
@@ -448,17 +476,20 @@ function installPalette() {
 
 const SHORTCUTS = [
   ['탐색', [['⌘1 ~ ⌘7', '홈 · 팔로잉 · 인기 · 멀티라이브 · 라이브 · 보관함 · 카테고리'], ['⌘K', '명령 팔레트'], ['⌘F', '검색'], ['⌘[  /  ⌥←', '뒤로'], ['⌘R', '새로고침'], ['⌘\\', '사이드바 접기'], ['⇧⌘L', '다크/라이트 전환'], ['⌘,', '설정']]],
-  ['시청', [['Space', '재생/일시정지'], ['M', '음소거'], ['↑ ↓', '볼륨'], ['L', '라이브로 이동'], ['B / ⇧⌘B', '북마크'], ['⌘S', '스크린샷'], ['⇧⌘F', '영상 전체 화면'], ['⌃⌘F', '영상+채팅 전체 화면'], ['⌘W / Esc', '시청 화면 닫기']]],
+  ['시청', [['Space', '재생/일시정지'], ['M', '음소거'], ['↑ ↓', '볼륨'], ['L', '라이브로 이동'], ['← →', '되감기 10초 (⇧ 60초)'], ['C', '채팅 표시 방식'], ['B / ⇧⌘B', '북마크'], ['⌘S', '스크린샷'], ['⇧⌘F', '영상 전체 화면'], ['⌃⌘F', '영상+채팅 전체 화면'], ['⌘W / Esc', '시청 화면 닫기']]],
   ['채팅', [['⇧⌘K', '채팅 지우기'], ['⌘J', '자동 스크롤'], [':이름', '이모티콘 자동완성'], ['@닉네임', '멘션 자동완성'], ['우클릭', '메시지 메뉴'], ['더블클릭', '프로필']]],
 ];
 
 // Esc 는 맨 위의 것 하나만 닫는다 — 메뉴·시트·입력란이 먼저 받고, 아무것도 없을 때만 시청 화면을 닫는다.
-const ESC_POPUPS = ':is(.quality-menu, .player-panel, .emoji-picker, .chat-tray, .chat-autocomplete):not([hidden], .exit-ghost)';
+const ESC_POPUPS = ':is(.quality-menu, .player-panel, .emoji-picker, .chat-tray, .chat-autocomplete, .ml-pane-menu, .ml-more-menu):not([hidden], .exit-ghost)';
 const ESC_LAYERS = '.sheet-scrim:not(.leaving), .palette-scrim:not([hidden], .exit-ghost)';
 function escapeTaken(e) {
   if (e.defaultPrevented) return true;
   const popups = document.querySelectorAll(ESC_POPUPS);
   if (popups.length) { for (const p of popups) p.hidden = true; return true; }
+  // 채널 추가 사이드바 — 안에 초점이 없을 때의 Esc 는 사이드바만 닫는다(라이브 단독 보기를 닫지 않게).
+  const drawer = !pages.multilive.root.hidden && pages.multilive.addBar.isOpen;
+  if (drawer) { pages.multilive.addBar.close(); return true; }
   const layer = document.querySelector('.ctx-menu, .design-menu');
   if (layer) { layer.remove(); return true; } // 초점을 받지 않는 메뉴 — 제 Esc 처리가 불리지 않는다
   if (document.querySelector(ESC_LAYERS)) return true;
@@ -537,7 +568,7 @@ async function showUpdateCheck() {
 
 function activeChat() {
   if (viewer.isOpen) return viewer.chat;
-  if (current === 'multilive') return pages.multilive.chat;
+  if (current === 'multilive' || activeWatch()) return pages.multilive.chat;
   return null;
 }
 
@@ -562,29 +593,40 @@ const MENU_ACTIONS = {
   'report-issue': () => api.openExternal('https://github.com/dododo-lab/cview-rust/issues').catch((e) => toast(e.message)),
   'notification-settings': () => api.openNotificationSettings().catch((e) => toast(e.message)),
   'open-logs': async () => { try { const i = await api.appInfo(); await api.revealPath(i.dataDir); } catch (e) { toast(e.message); } },
-  'play-pause': () => viewer.isOpen && viewer.controls.togglePlay(),
-  mute: () => viewer.isOpen && viewer.toggleMute(),
-  'go-live': () => viewer.isOpen && viewer.controls.goLive(),
-  screenshot: () => viewer.isPlaying && viewer.controls.screenshot(),
-  bookmark: () => viewer.isPlaying && viewer.controls.bookmark(),
-  'window-player': () => {
-    if (viewer.isPlaying) {
+  'play-pause': () => (viewer.isOpen ? viewer.controls.togglePlay() : activeWatch()?.togglePlay()),
+  mute: () => (viewer.isOpen ? viewer.toggleMute() : activeWatch()?.toggleMute()),
+  'go-live': () => (viewer.isOpen ? viewer.controls.goLive() : activeWatch()?.goLive()),
+  screenshot: () => (activeWatch() ? activeWatch().screenshot() : viewer.isPlaying && viewer.controls.screenshot()),
+  bookmark: () => (activeWatch() ? activeWatch().bookmark() : viewer.isPlaying && viewer.controls.bookmark()),
+  'window-player': async () => {
+    const w = activeWatch();
+    if (w && w.channelId) {
+      // 단독 보기의 채널을 새 창으로 — 같은 채널이 두 곳에서 재생되지 않게 이 창에서는 닫는다.
+      const id = w.channelId;
+      await closeWatch({ remove: true });
+      api.windowOpen('player', { channelId: id }).catch((er) => toast(er.message));
+    } else if (viewer.isPlaying) {
       const id = viewer.channelId;
       viewer.close();
       api.windowOpen('player', { channelId: id }).catch((er) => toast(er.message));
     } else api.windowOpen('player').catch((er) => toast(er.message));
   },
   'window-chat': () => {
-    const id = viewer.isOpen ? viewer.channelId : (current === 'chat' ? pages.chat.channelId : null);
+    const id = viewer.isOpen ? viewer.channelId : (activeWatch()?.channelId || (current === 'chat' ? pages.chat.channelId : null));
     api.windowOpen('chat', id ? { channelId: id } : null).catch((er) => toast(er.message));
   },
   'window-multichat': () => api.windowOpen('multichat').catch((er) => toast(er.message)),
   'window-stats': () => api.windowOpen('stats').catch((er) => toast(er.message)),
-  pip: () => (viewer.isPlaying ? viewer.controls.togglePip() : toast('재생 중인 방송이 없습니다')),
+  pip: () => {
+    const w = activeWatch();
+    if (w) w.togglePip();
+    else if (viewer.isPlaying) viewer.controls.togglePip();
+    else toast('재생 중인 방송이 없습니다');
+  },
   welcome: () => showWelcome({ force: true, onLogin: login }),
-  fullscreen: () => viewer.isOpen && viewer.controls.fullscreen(false),
-  'fullscreen-chat': () => viewer.isOpen && viewer.controls.fullscreen(true),
-  'close-viewer': () => viewer.isOpen && viewer.close(),
+  fullscreen: () => (viewer.isOpen ? viewer.controls.fullscreen(false) : activeWatch()?.fullscreen(false)),
+  'fullscreen-chat': () => (viewer.isOpen ? viewer.controls.fullscreen(true) : activeWatch()?.fullscreen(true)),
+  'close-viewer': () => (viewer.isOpen ? viewer.close() : activeWatch() && closeWatch()),
   'chat-clear': () => activeChat()?.clear(true),
   'chat-reconnect': () => activeChat()?.reconnect(),
   'chat-autoscroll': async () => {
@@ -692,7 +734,10 @@ async function main() {
     if (action.dataset.action === 'logout' && !action.closest('[data-page="settings"]')) logout();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && viewer.isOpen && !document.fullscreenElement && !escapeTaken(e)) viewer.close();
+    if (e.key === 'Escape' && !document.fullscreenElement) {
+      if (viewer.isOpen && !escapeTaken(e)) viewer.close();
+      else if (activeWatch() && !escapeTaken(e)) closeWatch();
+    }
     const typing = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA');
     if ((e.metaKey && e.key === '[') || (e.altKey && e.key === 'ArrowLeft' && !typing)) {
       e.preventDefault();
@@ -705,6 +750,7 @@ async function main() {
   window.addEventListener('cview:menu', (e) => { const run = MENU_ACTIONS[e.detail]; if (run) run(); });
   window.addEventListener('cview:play', (e) => e.detail && openChannel(e.detail.channelId));
   window.addEventListener('cview:ml-watch', (e) => e.detail && enterWatch(e.detail.sessionId));
+  window.addEventListener('cview:ml-watch-close', (e) => closeWatch(e.detail || {}));
   // 실패 화면의 "다시 시도" — 지금 화면을 다시 불러온다.
   document.addEventListener('click', (e) => {
     if (!e.target.closest('[data-retry]')) return;
@@ -715,7 +761,8 @@ async function main() {
     syncLiveIndicators();
     // 라이브 무대의 채널이 닫혔으면 멀티라이브(남은 패인이 있으면) 또는 이전 화면으로.
     if (current === 'live' && !viewer.isPlaying && !isWatching()) {
-      if ((pages.multilive.state.sessions || []).length) navigate('multilive', {}, { push: false });
+      if (watchCloseBack) { watchCloseBack = false; goBack(); }
+      else if ((pages.multilive.state.sessions || []).length) navigate('multilive', {}, { push: false });
       else goBack();
     }
   }, 0));
