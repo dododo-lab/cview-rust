@@ -13,6 +13,12 @@ pub const LATENCY_BACKOFF_STEP: f64 = 0.75;
 pub const LATENCY_BACKOFF_MAX: f64 = 3.0;
 /// 한 단계 되돌리기까지 필요한 무사고 재생 시간.
 pub const LATENCY_BACKOFF_HOLD: f64 = 45.0;
+/// 재버퍼가 반복되는 채널은 올린 목표를 이만큼 더 오래 지킨다(감쇠 한 단계마다).
+/// 실측(2026-10-24, 세그먼트 2.9초 채널): 멈춤이 80~100초마다 와서 45초 감쇠가 다음 멈춤 전에 목표를
+/// 3.9초로 되돌렸다(최고 4.5초) — 14분에 17번 멈춤. 첫·외딴 재버퍼는 그대로 45초라 지연이 덜 늘어난다.
+pub const LATENCY_BACKOFF_REPEAT_HOLD: f64 = 120.0;
+/// 직전 재버퍼에서 이 시간 안에 다시 재버퍼면 반복으로 본다.
+pub const LATENCY_BACKOFF_REPEAT_WINDOW: f64 = 180.0;
 /// 감쇠 바닥 해제까지의 무사고 시간.
 pub const LATENCY_BACKOFF_FLOOR_RELEASE: f64 = 600.0;
 /// 구조적 하한 = 실측 세그먼트 길이 + 이 여유.
@@ -26,6 +32,8 @@ impl State {
             self.latency_backoff_decay_at = DISTANT_PAST;
             self.latency_backoff_floor = 0.0;
             self.latency_backoff_floor_release_at = DISTANT_FUTURE;
+            self.latency_backoff_last_bump_at = DISTANT_PAST;
+            self.latency_backoff_hold = LATENCY_BACKOFF_HOLD;
             self.publish_effective_target_latency_if_changed();
         }
     }
@@ -55,7 +63,14 @@ impl State {
             return;
         }
         let next = LATENCY_BACKOFF_MAX.min(self.latency_backoff_seconds + LATENCY_BACKOFF_STEP);
-        self.latency_backoff_decay_at = now + LATENCY_BACKOFF_HOLD;
+        let repeat = now - self.latency_backoff_last_bump_at < LATENCY_BACKOFF_REPEAT_WINDOW;
+        self.latency_backoff_last_bump_at = now;
+        self.latency_backoff_hold = if repeat {
+            LATENCY_BACKOFF_REPEAT_HOLD
+        } else {
+            LATENCY_BACKOFF_HOLD
+        };
+        self.latency_backoff_decay_at = now + self.latency_backoff_hold;
         self.latency_backoff_floor = LATENCY_BACKOFF_STEP;
         self.latency_backoff_floor_release_at = now + LATENCY_BACKOFF_FLOOR_RELEASE;
         if next == self.latency_backoff_seconds {
@@ -84,7 +99,8 @@ impl State {
         let next = self
             .latency_backoff_floor
             .max(self.latency_backoff_seconds - LATENCY_BACKOFF_STEP);
-        self.latency_backoff_decay_at = now + LATENCY_BACKOFF_HOLD;
+        // 반복 재버퍼로 올린 목표는 내려올 때도 단계마다 같은 시간을 지킨다
+        self.latency_backoff_decay_at = now + self.latency_backoff_hold;
         if next == self.latency_backoff_seconds {
             return;
         }
@@ -312,15 +328,51 @@ mod tests {
         c.set_latency_backoff_enabled(true);
         let start = 5_000.0;
         c.bump_latency_backoff_at(start);
-        c.bump_latency_backoff_at(start);
+        c.bump_latency_backoff_at(start); // 곧바로 두 번 — 반복 재버퍼라 단계마다 120초
         assert_eq!(c.latency_backoff_seconds(), 1.5);
-        c.decay_latency_backoff_if_due_at(start + 44.0);
+        c.decay_latency_backoff_if_due_at(start + LATENCY_BACKOFF_REPEAT_HOLD - 1.0);
         assert_eq!(c.latency_backoff_seconds(), 1.5);
-        c.decay_latency_backoff_if_due_at(start + LATENCY_BACKOFF_HOLD);
+        c.decay_latency_backoff_if_due_at(start + LATENCY_BACKOFF_REPEAT_HOLD);
         assert_eq!(c.latency_backoff_seconds(), 0.75);
-        c.decay_latency_backoff_if_due_at(start + LATENCY_BACKOFF_HOLD * 2.0);
+        c.decay_latency_backoff_if_due_at(start + LATENCY_BACKOFF_REPEAT_HOLD * 2.0);
         assert_eq!(c.latency_backoff_seconds(), LATENCY_BACKOFF_STEP);
         assert_eq!(c.effective_target_latency(), 3.75);
+    }
+
+    #[test]
+    fn isolated_rebuffer_decays_after_short_hold() {
+        let c = make();
+        c.set_latency_backoff_enabled(true);
+        let t0 = 20_000.0;
+        c.bump_latency_backoff_at(t0);
+        c.decay_latency_backoff_if_due_at(t0 + LATENCY_BACKOFF_HOLD);
+        assert_eq!(c.latency_backoff_seconds(), 0.75, "바닥(한 단계)까지만");
+        // 창 밖에서 다시 한 번 — 여전히 외딴 재버퍼(45초)
+        let t1 = t0 + LATENCY_BACKOFF_REPEAT_WINDOW + 1.0;
+        c.bump_latency_backoff_at(t1);
+        assert_eq!(c.latency_backoff_seconds(), 1.5);
+        c.decay_latency_backoff_if_due_at(t1 + LATENCY_BACKOFF_HOLD);
+        assert_eq!(c.latency_backoff_seconds(), 0.75);
+    }
+
+    #[test]
+    fn repeated_rebuffers_keep_raised_target_longer() {
+        let c = make();
+        c.set_latency_backoff_enabled(true);
+        let t0 = 30_000.0;
+        c.bump_latency_backoff_at(t0);
+        c.bump_latency_backoff_at(t0 + 90.0); // 실측처럼 80~100초마다
+        assert_eq!(c.latency_backoff_seconds(), 1.5);
+        // 예전(45초)이면 내려갔을 때 — 그대로 지킨다
+        c.decay_latency_backoff_if_due_at(t0 + 90.0 + LATENCY_BACKOFF_HOLD + 1.0);
+        assert_eq!(c.latency_backoff_seconds(), 1.5);
+        c.decay_latency_backoff_if_due_at(t0 + 90.0 + LATENCY_BACKOFF_REPEAT_HOLD);
+        assert_eq!(c.latency_backoff_seconds(), 0.75);
+        // 세 번째 재버퍼도 창 안(직전 +160초)이면 다시 120초를 지킨다
+        c.bump_latency_backoff_at(t0 + 250.0);
+        assert_eq!(c.latency_backoff_seconds(), 1.5);
+        c.decay_latency_backoff_if_due_at(t0 + 250.0 + LATENCY_BACKOFF_HOLD + 1.0);
+        assert_eq!(c.latency_backoff_seconds(), 1.5);
     }
 
     #[test]
