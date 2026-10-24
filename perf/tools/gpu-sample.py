@@ -2,7 +2,8 @@
 """CView(본 프로세스 + 그 뒤에 뜬 WebKit 도우미)의 GPU 사용 시간 비율을 잰다.
 
 ioreg 의 AGX 사용자 클라이언트마다 붙은 AppUsage.accumulatedGPUTime(ns)을 두 번 읽어 차이를 낸다.
-출력: 프로세스별 GPU 바쁜 비율(%)과 합계, 시스템 전체 Device Utilization %.
+출력: 프로세스별 GPU 바쁜 비율(%)과 합계, WindowServer(화면 합성 — 웹뷰의 영상·레이어 합성이 여기로 잡힌다),
+시스템 전체 Device Utilization %.
 사용: gpu_sample.py [초=10] [반복=1]
 """
 import re
@@ -58,6 +59,7 @@ for _ in range(REPEAT):
     b, util = snapshot()
     total = 0.0
     lines = []
+    ws = sum((v - a.get(k, 0)) for k, v in b.items() if k[1] == "WindowServer") / 1e9 / INTERVAL * 100.0
     for key, v in b.items():
         if key[0] not in pids:
             continue
@@ -66,6 +68,6 @@ for _ in range(REPEAT):
             continue
         total += d
         lines.append(f"  {key[1]}[{key[0]}] {d:.1f}%")
-    print(f"{time.strftime('%H:%M:%S')} CView GPU {total:.1f}%  (시스템 Device {util}%)")
+    print(f"{time.strftime('%H:%M:%S')} CView GPU {total:.1f}%  WindowServer {ws:.1f}%  (시스템 Device {util}%)")
     for l in sorted(lines):
         print(l)
