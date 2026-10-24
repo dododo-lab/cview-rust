@@ -511,7 +511,8 @@ a { color: var(--primary); }
 }
 .badge-viewers, .badge-uptime {
   position: absolute; bottom: 8px; left: 8px; display: inline-flex; align-items: center; gap: 5px;
-  background: rgba(0, 0, 0, 0.62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  /* 흐림 없이 조금 더 진한 바탕 — 카드마다 흐림 레이어가 생겨 스크롤 프레임마다 다시 계산됐다(Metal 최적화 2026-10-24). */
+  background: rgba(0, 0, 0, 0.68);
   color: #fff; font-size: var(--fs-footnote); font-weight: 600; padding: 2px 7px; border-radius: 6px;
 }
 .badge-uptime { left: auto; right: 8px; font-weight: 500; color: rgba(255, 255, 255, 0.85); }
@@ -1059,8 +1060,8 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
   --ev: var(--donation);
   position: relative; overflow: hidden; display: flex; align-items: center; gap: 12px; max-width: min(520px, 80vw);
   padding: 12px 18px 12px 12px; border-radius: 18px; color: #fff;
-  background: linear-gradient(135deg, color-mix(in srgb, var(--ev) 26%, rgba(14, 15, 18, 0.86)), rgba(14, 15, 18, 0.86) 60%);
-  backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--ev) 26%, rgba(14, 15, 18, 0.9)), rgba(14, 15, 18, 0.9) 60%);
+  /* 흐림 없음 — 바탕이 거의 불투명이라 흐림은 눈에 안 띄고, 영상 위에서 프레임마다 다시 계산됐다(Metal 최적화 2026-10-24). */
   border: 1px solid color-mix(in srgb, var(--ev) 50%, transparent);
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
   animation: alert-in 0.4s var(--ease-out) both;
@@ -1144,8 +1145,8 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .quality-empty { padding: 8px 10px; font-size: var(--fs-footnote); color: var(--text-tertiary); }
 .player-osd {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 4; pointer-events: none;
-  padding: 10px 18px; border-radius: 14px; background: rgba(0, 0, 0, 0.62); color: #fff; font-weight: 700;
-  font-size: var(--fs-subhead); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  padding: 10px 18px; border-radius: 14px; background: rgba(0, 0, 0, 0.7); color: #fff; font-weight: 700;
+  font-size: var(--fs-subhead); /* 영상 위 — 흐림 없음(Metal 최적화 2026-10-24) */
 }
 .player-osd[hidden] { display: none; }
 .player-osd.fade { animation: osd-fade 1.3s ease forwards; }
@@ -1518,7 +1519,9 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .viewer.chat-mode-overlay .chat {
   position: absolute; right: 16px; top: 74px; bottom: 60px; z-index: 6; width: var(--overlay-w, 340px) !important;
   border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.12); overflow: hidden;
-  background: rgba(12, 13, 16, var(--overlay-bg, 0.5)); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  /* [Metal 최적화 2026-10-24] 흐림(backdrop-filter) 없음 — 재생 중인 영상 위의 흐림은 영상 프레임마다(30–60번/초)
+     채팅 창 크기만큼 다시 계산돼 화면 합성(WindowServer) GPU 를 계속 썼다. 대신 글자에 옅은 그림자로 읽기 쉽게. */
+  background: rgba(12, 13, 16, var(--overlay-bg, 0.5)); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
   --text-primary: #f4f5f7; --text-secondary: #d0d3d9; --text-tertiary: #a4a8b0; color: var(--text-primary);
 }
 .viewer.chat-mode-overlay .chat .chat-header, .viewer.chat-mode-overlay .chat .chat-input { background: transparent; border-color: rgba(255, 255, 255, 0.1); }
@@ -2063,12 +2066,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .stream-alert.ev-lv-6::after { padding: 2px; background: var(--don-holo); background-size: 300% 100%; animation: don-holo 2.4s linear infinite; }
 .stream-alert.ev-lv-6 .stream-alert-title b { background: var(--don-holo); background-size: 300% 100%; -webkit-background-clip: text; background-clip: text; animation: don-holo 2.4s linear infinite; }
 .stream-alert.ev-lv-6::before {
-  content: ""; position: absolute; inset: -40% auto -40% -30%; width: 34%; pointer-events: none;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.28), transparent); transform: skewX(-18deg);
+  content: ""; position: absolute; inset: -40% auto -40% -40%; width: 34%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.28), transparent); transform: skewX(-18deg); will-change: transform;
   animation: don-shine 2.6s var(--ease-out) .3s infinite;
 }
 @keyframes don-holo { from { background-position: 0% 50%; } to { background-position: 300% 50%; } }
-@keyframes don-shine { 0% { left: -40%; } 55%, 100% { left: 130%; } }
+/* 왼쪽 −40% → 130%(부모 폭 170% = 이 띠 폭 34% 의 5배)를 transform 으로 — left 를 움직이면 매 프레임 레이아웃·다시 그리기였다. */
+@keyframes don-shine { 0% { transform: translateX(0) skewX(-18deg); } 55%, 100% { transform: translateX(500%) skewX(-18deg); } }
 /* 모션 절약·시스템 모션 줄이기 — 흐름·반짝임은 끄고 정지 그라데이션만 */
 :root[data-motion="reduced"] .chat-line.ev-lv-6 .ev-card::after, :root[data-motion="reduced"] .stream-alert.ev-lv-6::after,
 :root[data-motion="reduced"] :is(.chat-line.ev-lv-6 .ev-value, .stream-alert.ev-lv-6 .stream-alert-icon, .stream-alert.ev-lv-6 .stream-alert-title b) { animation: none !important; }
@@ -2237,7 +2241,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 /* 화질 — 글자 알약, 메뉴는 어두운 반투명 */
 .chzzk-bar .quality-btn { height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.28); background: rgba(0, 0, 0, 0.25); color: #fff; font-size: 12px; font-weight: 700; }
 .chzzk-bar .quality-btn:hover { border-color: #fff; background: rgba(255, 255, 255, 0.12); }
-.chzzk-bar .quality-menu { bottom: 40px; background: rgba(24, 25, 28, 0.88); border: 1px solid rgba(255, 255, 255, 0.12); backdrop-filter: blur(16px) saturate(1.4); -webkit-backdrop-filter: blur(16px) saturate(1.4); color: #fff; }
+.chzzk-bar .quality-menu { bottom: 40px; background: rgba(24, 25, 28, 0.94); border: 1px solid rgba(255, 255, 255, 0.12); color: #fff; } /* 영상 위 — 흐림 없음 */
 .chzzk-bar .quality-item { color: #fff; }
 .chzzk-bar .quality-item.active { color: #00ffa3; }
 .chzzk-bar .quality-item.active::after { content: "✓"; color: #00ffa3; font-weight: 800; }
