@@ -114,4 +114,23 @@ export function installMicroMotion() {
     svg.classList.add('spin-once');
     svg.addEventListener('animationend', () => svg.classList.remove('spin-once'), { once: true });
   }, true);
+  installIconHover();
+}
+
+/**
+ * 사이드바 아이콘 호버 모션 — 마우스를 올리면 아이콘마다 제 모양에 맞는 짧은 동작을 한 번 한다(motion.css "아이콘 호버").
+ * - :hover 로 걸면 마우스가 금방 빠질 때 동작이 중간에 뚝 끊겨 제자리로 튄다. 그래서 들어올 때 .hm 을 달고,
+ *   그 안의 hm-* 애니메이션이 모두 끝나면 뗀다 — 짧게 스쳐도 끝까지 부드럽게 돈다.
+ * - 도는 중에 다시 들어와도 새로 시작하지 않는다(떨림 방지). 모션 줄이기면 아예 달지 않는다.
+ */
+const HOVER_SCOPE = '.sidebar :is(.nav-item, .quick-search, .sidebar-toggle, .brand, .account-trigger, .account-login, .side-live), .account-pop .ap-item';
+
+function installIconHover() {
+  document.addEventListener('pointerover', (e) => {
+    const host = e.target.closest?.(HOVER_SCOPE);
+    if (!host || host.contains(e.relatedTarget) || host.classList.contains('hm') || motionReduced()) return;
+    host.classList.add('hm');
+    const runs = host.getAnimations({ subtree: true }).filter((a) => String(a.animationName || '').startsWith('hm-'));
+    Promise.allSettled(runs.map((a) => a.finished)).then(() => host.classList.remove('hm'));
+  });
 }
