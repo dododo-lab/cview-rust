@@ -9,10 +9,12 @@
 #     APPLE_API_ISSUER · APPLE_API_KEY · APPLE_API_KEY_PATH   (App Store Connect API 키, 권장)
 #     APPLE_ID · APPLE_PASSWORD(앱 암호) · APPLE_TEAM_ID
 #
-# 사용: scripts/release-macos.sh [--dmg [--minor|--major]]
+# 사용: scripts/release-macos.sh [--dmg [--minor|--major] [--no-notarize]]
 #   --dmg 없이: 로컬 서명 빌드만(버전 그대로).
 #   --dmg     : 배포 빌드 — 버전과 빌드 번호를 **항상** 올린다(아래 "배포 빌드 순서").
 #   공증: CVIEW_NOTARIZE_PROFILE=cview-notarize scripts/release-macos.sh --dmg  (notarytool 프로파일이 있을 때)
+#   --no-notarize: --dmg 와 함께 — 공증만 건너뛰고 나머지(번호 올리기 · Windows 설치 파일 · 커밋 · 태그 · 푸시)는 그대로 한다.
+#                  공증 안 된 DMG 는 Gatekeeper 가 막으므로, 그래도 배포하겠다고 명시할 때만 쓴다.
 #
 # 버전의 기준은 하나다: crates/cview-app/tauri.conf.json
 #   "version"                    → CFBundleShortVersionString · 앱 정보 · 업데이트 비교 (Cargo 작업공간 버전도 같게 맞춘다)
@@ -30,6 +32,7 @@
 #       CVIEW_SKIP_WINDOWS=1 이면 건너뛴다.
 #   5) 성공하면 "release: vX.Y.Z (build N)" 커밋과 주석 태그 vX.Y.Z 를 만들고, origin 이 있으면 푸시한다.
 #      공증 프로파일 없이(서명만) 돌리면 4)의 서명 DMG 까지만 만들고 번호는 되돌린다 — 공증 안 된 DMG 에 번호를 쓰지 않는다.
+#      --no-notarize 를 주면 공증만 건너뛰고 4b)·5)를 그대로 한다(공증 안 된 배포를 명시적으로 허용).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # makensis(Homebrew 3.13)는 로캘이 비어 있으면 bad_alloc 으로 죽는다.
@@ -43,11 +46,13 @@ TARGET=$(cargo metadata --format-version 1 --no-deps | python3 -c 'import json,s
 echo "빌드 폴더: $TARGET"
 dist_build=0
 part=patch
+no_notarize=0
 for arg in "$@"; do
   case "$arg" in
     --dmg) dist_build=1 ;;
     --minor) part=minor ;;
     --major) part=major ;;
+    --no-notarize) no_notarize=1 ;;
     *) echo "알 수 없는 옵션: $arg"; exit 2 ;;
   esac
 done
@@ -57,7 +62,9 @@ if [[ -z "$identity" ]] || ! security find-identity -v -p codesigning | grep -qF
   echo "✗ 서명 인증서를 찾지 못했습니다: '$identity' — 키체인에 Developer ID 인증서가 있어야 합니다."; exit 1
 fi
 echo "서명 인증서: $identity"
-if [[ -z "${APPLE_API_KEY:-}${APPLE_ID:-}${CVIEW_NOTARIZE_PROFILE:-}" ]]; then
+if (( no_notarize )); then
+  echo "⚠︎ --no-notarize — 공증 없이 서명만 해서 배포합니다."
+elif [[ -z "${APPLE_API_KEY:-}${APPLE_ID:-}${CVIEW_NOTARIZE_PROFILE:-}" ]]; then
   echo "⚠︎ 공증 자격 증명이 없어 서명만 하고 공증은 건너뜁니다."
 fi
 
@@ -163,55 +170,63 @@ if (( dist_build )); then
   echo "── DMG 서명·복사 → $out"
   codesign --force --timestamp --sign "$identity" "$dmg"
   mkdir -p dist && cp "$dmg" "$out"
-  if [[ -z "${CVIEW_NOTARIZE_PROFILE:-}" ]]; then
+  if (( no_notarize )); then
+    # --no-notarize: 일부러 공증 없이 배포한다(서명만, Gatekeeper 가 막는다). 번호·커밋·태그·Windows 설치 파일은 공증한 배포와 같다.
+    echo "⚠︎ --no-notarize — 공증 없이 서명만 한 DMG 로 배포합니다: $out"
+    shasum -a 256 "$out"
+    stat -f "   %z bytes" "$out"
+    notarize_note="공증 안 함(--no-notarize) — 서명만."
+  elif [[ -z "${CVIEW_NOTARIZE_PROFILE:-}" ]]; then
     echo "⚠︎ 공증 프로파일이 없어 서명만 한 DMG 입니다(배포용 아님) — 번호는 되돌립니다: $out"
     exit 0
-  fi
-  echo "── 공증(프로파일 $CVIEW_NOTARIZE_PROFILE)"
-  # notarytool 은 결과가 Invalid 여도 0 으로 끝나므로 상태를 직접 확인한다.
-  # notarytool --wait 는 기다리는 중 스스로 죽는다(2026-10-21 SIGBUS — 문자열 포맷 중 스택 가드, 애플 도구 쪽; 0.1.8 은 3번 모두).
-  # 그래서 올리기만 하고(--no-wait, 바로 끝남) 상태는 짧은 info 호출로 15초마다 묻는다 — 한 번 죽어도 다음 물음이 이어간다.
-  # submit 도 올린 뒤 ID 를 찍기 전에 죽을 때가 있다(2026-10-21 0.1.10 — 애플에는 들어감). 그러면 history 에서
-  # 이 파일 이름으로 이번 실행 뒤에 들어간 제출을 찾아 이어 간다(다시 내면 같은 DMG 가 두 번 올라간다).
-  sub_id=""
-  submit_since=$(date -u +%Y-%m-%dT%H:%M:%S)
-  for attempt in 1 2 3; do
-    if submitted=$(xcrun notarytool submit "$out" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --no-wait --no-progress --output-format json); then
-      sub_id=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("id",""))' "$submitted" 2>/dev/null || true)
-      [[ -n "$sub_id" ]] && break
-    fi
-    sleep 5
-    sub_id=$(xcrun notarytool history --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --output-format json 2>/dev/null | python3 -c '
+  else
+    echo "── 공증(프로파일 $CVIEW_NOTARIZE_PROFILE)"
+    # notarytool 은 결과가 Invalid 여도 0 으로 끝나므로 상태를 직접 확인한다.
+    # notarytool --wait 는 기다리는 중 스스로 죽는다(2026-10-21 SIGBUS — 문자열 포맷 중 스택 가드, 애플 도구 쪽; 0.1.8 은 3번 모두).
+    # 그래서 올리기만 하고(--no-wait, 바로 끝남) 상태는 짧은 info 호출로 15초마다 묻는다 — 한 번 죽어도 다음 물음이 이어간다.
+    # submit 도 올린 뒤 ID 를 찍기 전에 죽을 때가 있다(2026-10-21 0.1.10 — 애플에는 들어감). 그러면 history 에서
+    # 이 파일 이름으로 이번 실행 뒤에 들어간 제출을 찾아 이어 간다(다시 내면 같은 DMG 가 두 번 올라간다).
+    sub_id=""
+    submit_since=$(date -u +%Y-%m-%dT%H:%M:%S)
+    for attempt in 1 2 3; do
+      if submitted=$(xcrun notarytool submit "$out" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --no-wait --no-progress --output-format json); then
+        sub_id=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("id",""))' "$submitted" 2>/dev/null || true)
+        [[ -n "$sub_id" ]] && break
+      fi
+      sleep 5
+      sub_id=$(xcrun notarytool history --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --output-format json 2>/dev/null | python3 -c '
 import json, sys
 name, since = sys.argv[1], sys.argv[2]
 subs = [s for s in json.load(sys.stdin).get("history", []) if s.get("name") == name and s.get("createdDate", "")[:19] >= since]
 print(max(subs, key=lambda s: s["createdDate"])["id"] if subs else "")' "$(basename "$out")" "$submit_since" 2>/dev/null || true)
-    if [[ -n "$sub_id" ]]; then echo "   submit 은 죽었지만 제출은 들어갔습니다 — history 에서 찾음"; break; fi
-    echo "⚠︎ 공증 제출 실패($attempt/3) — 다시 냅니다"
-    sleep 5
-  done
-  [[ -n "$sub_id" ]] || { echo "✗ 공증 제출을 하지 못했습니다"; exit 1; }
-  echo "   제출 $sub_id — 결과를 기다립니다"
-  result=""
-  sub_status="In Progress"
-  for poll in $(seq 1 120); do
-    sleep 15
-    if result=$(xcrun notarytool info "$sub_id" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --output-format json 2>/dev/null); then
-      sub_status=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("status",""))' "$result" 2>/dev/null || echo "")
-      [[ "$sub_status" == "In Progress" || -z "$sub_status" ]] || break
+      if [[ -n "$sub_id" ]]; then echo "   submit 은 죽었지만 제출은 들어갔습니다 — history 에서 찾음"; break; fi
+      echo "⚠︎ 공증 제출 실패($attempt/3) — 다시 냅니다"
+      sleep 5
+    done
+    [[ -n "$sub_id" ]] || { echo "✗ 공증 제출을 하지 못했습니다"; exit 1; }
+    echo "   제출 $sub_id — 결과를 기다립니다"
+    result=""
+    sub_status="In Progress"
+    for poll in $(seq 1 120); do
+      sleep 15
+      if result=$(xcrun notarytool info "$sub_id" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --output-format json 2>/dev/null); then
+        sub_status=$(python3 -c 'import json,sys;print(json.loads(sys.argv[1]).get("status",""))' "$result" 2>/dev/null || echo "")
+        [[ "$sub_status" == "In Progress" || -z "$sub_status" ]] || break
+      fi
+    done
+    echo "$result"
+    if [[ "$sub_status" != "Accepted" ]]; then
+      echo "✗ 공증 결과: $sub_status — 로그:"
+      xcrun notarytool log "$sub_id" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" || true
+      exit 1
     fi
-  done
-  echo "$result"
-  if [[ "$sub_status" != "Accepted" ]]; then
-    echo "✗ 공증 결과: $sub_status — 로그:"
-    xcrun notarytool log "$sub_id" --keychain-profile "$CVIEW_NOTARIZE_PROFILE" || true
-    exit 1
+    xcrun stapler staple "$out"
+    xcrun stapler validate "$out"
+    spctl -a -vv -t install "$out"
+    shasum -a 256 "$out"
+    stat -f "   %z bytes" "$out"
+    notarize_note="공증 제출 $sub_id — Accepted."
   fi
-  xcrun stapler staple "$out"
-  xcrun stapler validate "$out"
-  spctl -a -vv -t install "$out"
-  shasum -a 256 "$out"
-  stat -f "   %z bytes" "$out"
   if [[ -z "${CVIEW_SKIP_WINDOWS:-}" ]]; then
     echo "── Windows 설치 파일(x64, 교차 빌드)"
     win_out="dist/CView_${version}_x64-setup.exe"
@@ -225,7 +240,7 @@ print(max(subs, key=lambda s: s["createdDate"])["id"] if subs else "")' "$(basen
   fi
   echo "── 커밋·태그 v$version (빌드 $build)"
   git add $BUMPED_FILES
-  git commit -q -m "release: v$version (build $build)" -m "공증 제출 $sub_id — Accepted. dist/CView_${version}_arm64.dmg"
+  git commit -q -m "release: v$version (build $build)" -m "$notarize_note dist/CView_${version}_arm64.dmg"
   git tag -a "v$version" -m "CView v$version (build $build)"
   bumped=0
   trap - EXIT INT TERM
