@@ -54,6 +54,7 @@ export const Events = Object.freeze({
   playerEvent: 'player://event',
   multiLiveCommand: 'multilive://command',
   multiLiveState: 'multilive://state',
+  networkPresetChanged: 'settings://network-preset',
   downloadUpdate: 'download://update',
   deepLink: 'deeplink://open',
 });

@@ -134,7 +134,7 @@ export class MediaPage {
       const others = list.filter((c) => c.clipUID !== currentUid).slice(0, 16);
       dock.innerHTML = others.length ? `<div class="grid clip-grid dock-grid">${others.map(clipCard).join('')}</div>` : emptyState('다른 클립이 없습니다');
     } catch {
-      if (dock) dock.innerHTML = emptyState('목록을 불러오지 못했습니다');
+      if (seq === this.seq && dock) dock.innerHTML = emptyState('목록을 불러오지 못했습니다');
     }
   }
 

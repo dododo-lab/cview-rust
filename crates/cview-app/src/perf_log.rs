@@ -6,7 +6,8 @@
 //! - 쿠키·토큰·NID 같은 값은 키 이름으로 가린다([`redact`]). 요청 경로는 쿼리를 뺀다.
 //!
 //! 종류(`kind`): `startup.*`(시작 단계) · `net.request`(API 요청) · `process`(10초 표본: CPU·메모리·스레드,
-//! 앱 + 웹뷰 도우미, 채팅 처리량) · `chat.state` · `ui.*`(화면 수집기: 프레임·DOM·IPC·플레이어·시작 표시).
+//! 앱 + 웹뷰 도우미, 채팅 처리량) · `player.net`(10초 표본: 재생 중인 프록시마다 세그먼트 수·첫 바이트·전송 시간·
+//! 느린 조각·공급 공백·오류·kbps) · `chat.state` · `ui.*`(화면 수집기: 프레임·DOM·IPC·플레이어·시작 표시).
 //! 표로 바꾸기: `perf/tools/analyze-log.py <debug.jsonl>`.
 
 use std::io::Write;
@@ -310,6 +311,29 @@ fn sampler_loop() {
                 "ui_events_per_s": round1(UI_EVENTS.swap(0, Ordering::Relaxed) as f64 / secs),
             }),
         );
+        // 재생 중인 프록시마다 세그먼트 수신 요약 — 멈춤이 상류(첫 바이트·전송) 탓인지
+        // 요청 자체가 늦은(hls.js·재생목록 보류) 탓인지 가른다. 일이 없던 프록시는 남기지 않는다.
+        let streams: Vec<Value> = cview_player::proxy::take_perf_windows()
+            .into_iter()
+            .map(|(tag, w)| {
+                json!({
+                    "tag": tag,
+                    "segments": w.segments,
+                    "ttfb_p50_ms": (w.ttfb_p50 * 1000.0).round(),
+                    "ttfb_max_ms": (w.ttfb_max * 1000.0).round(),
+                    "fetch_p50_ms": (w.fetch_p50 * 1000.0).round(),
+                    "fetch_max_ms": (w.fetch_max * 1000.0).round(),
+                    "slow": w.slow,
+                    "gaps_client": w.gaps_client,
+                    "gaps_upstream": w.gaps_upstream,
+                    "errors": w.errors,
+                    "kbps": round1(w.bytes as f64 * 8.0 / 1000.0 / secs),
+                })
+            })
+            .collect();
+        if !streams.is_empty() {
+            emit("player.net", json!({ "streams": streams }));
+        }
     }
 }
 

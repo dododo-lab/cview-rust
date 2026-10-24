@@ -27,6 +27,8 @@ impl State {
         self.latency_backoff_decay_at = DISTANT_PAST;
         self.latency_backoff_floor = 0.0;
         self.latency_backoff_floor_release_at = DISTANT_FUTURE;
+        self.latency_backoff_last_bump_at = DISTANT_PAST;
+        self.latency_backoff_hold = super::backoff::LATENCY_BACKOFF_HOLD;
         self.published_target_latency = 0.0;
         self.pid.reset();
         self.ewma = EwmaCalculator::new(0.15);

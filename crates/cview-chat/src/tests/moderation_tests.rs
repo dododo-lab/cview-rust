@@ -346,9 +346,10 @@ fn should_show_agrees_with_filter() {
 #[test]
 fn expired_mute_is_not_an_active_rule() {
     let svc = ChatModerationService::new();
-    svc.mute_user("u1", 0.01);
+    // 10ms 로 걸면 전체 테스트가 병렬로 돌아 바쁠 때 첫 확인 전에 이미 풀려 가끔 실패했다
+    svc.mute_user("u1", 0.2);
     assert!(svc.has_active_rules());
-    std::thread::sleep(Duration::from_millis(30));
+    std::thread::sleep(Duration::from_millis(300));
     assert!(!svc.has_active_rules());
     assert!(!svc.is_muted("u1"));
 }

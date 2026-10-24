@@ -1,4 +1,5 @@
 // 작은 DOM 도우미.
+import { motionReduced } from './motion.js';
 
 /**
  * 시트·팝업 닫기 — leaving 을 달아 나가는 애니메이션(motion.css)이 끝나면 지운다.
@@ -6,13 +7,72 @@
  */
 export function dismiss(el, ms = 200) {
   if (!el || !el.isConnected || el.classList.contains('leaving')) return;
-  const reduced = document.documentElement.dataset.motion === 'reduced'
-    || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  if (reduced) { el.remove(); return; }
+  if (motionReduced()) { el.remove(); return; }
   el.classList.add('leaving');
   const done = () => el.remove();
   el.addEventListener('animationend', (e) => { if (e.target === el) done(); }, { once: true });
   setTimeout(done, ms + 60);
+}
+
+/**
+ * 영상 단축키(맨 글자·화살표·Space)를 대상에게 넘길 키인가 — 입력란·선택 상자, 버튼·링크의 Space/Enter,
+ * 시청 화면 위에 뜬 시트·패널·메뉴 안. 넘기지 않으면 선택 상자의 화살표가 볼륨을, 버튼의 Space 가 재생을 바꾼다.
+ */
+export function keyBelongsToTarget(e) {
+  if (e.defaultPrevented) return true;
+  const t = e.target;
+  if (!t || !t.closest) return false;
+  if (t.isContentEditable || t.closest('input, textarea, select')) return true;
+  if ((e.key === ' ' || e.key === 'Enter') && t.closest('button, a[href], [role="button"]')) return true;
+  return Boolean(t.closest('.sheet-scrim, .palette-scrim, .player-panel, .emoji-picker, .ctx-menu'));
+}
+
+/**
+ * hidden 으로 여닫는 떠 있는 것(팔레트·메뉴·플레이어 패널)의 나가는 모션.
+ * 상태는 바로 숨기고(열림 판단·토글이 hidden 을 그대로 본다), 같은 자리에 겉모습만 복제해 흐려지며 사라지게 한다.
+ * 복제는 원본 바로 뒤에 둔다 — 그사이 다시 열면 CSS(`:not([hidden]) + .exit-ghost`)가 복제를 감춘다.
+ */
+export function hideWithExit(el, ms = 160) {
+  if (!el || el.hidden) return;
+  el.hidden = true;
+  if (motionReduced() || !el.parentNode || !el.getClientRects) return;
+  const next = el.nextElementSibling;
+  if (next && next.classList.contains('exit-ghost')) next.remove();
+  const ghost = el.cloneNode(true);
+  ghost.hidden = false;
+  ghost.removeAttribute('id');
+  for (const n of ghost.querySelectorAll('[id]')) n.removeAttribute('id');
+  ghost.setAttribute('aria-hidden', 'true');
+  ghost.inert = true;
+  ghost.classList.add('exit-ghost');
+  el.after(ghost);
+  const done = () => ghost.remove();
+  ghost.addEventListener('animationend', (e) => { if (e.target === ghost) done(); }, { once: true });
+  setTimeout(done, ms + 80);
+}
+
+const FOCUS_KEYS = ['data-route', 'data-channel-id', 'data-dl-id', 'data-dl'];
+
+/** 초점 든 요소를 다시 찾을 선택자 — 자신과 조상의 식별 data-* 로(없으면 null). */
+function focusPath(el, root) {
+  const parts = [];
+  for (let n = el; n && n !== root; n = n.parentElement) {
+    const k = FOCUS_KEYS.filter((x) => n.hasAttribute(x)).map((x) => `[${x}="${CSS.escape(n.getAttribute(x))}"]`).join('');
+    if (k) parts.unshift(k);
+  }
+  return parts.length ? parts.join(' ') : null;
+}
+
+/**
+ * 안을 innerHTML 로 다시 그리는 동안 키보드 초점을 지킨다 — 초점 든 버튼이 문서에서 떨어지면
+ * 같은 식별(data-route·data-channel-id·data-dl-id·data-dl)의 새 버튼에 다시 준다.
+ */
+export function keepFocus(root, paint) {
+  const a = document.activeElement;
+  const sel = a && a !== root && root.contains(a) ? focusPath(a, root) : null;
+  paint();
+  if (!sel || a.isConnected) return;
+  root.querySelector(sel)?.focus({ preventScroll: true });
 }
 
 /** HTML 이스케이프. */
@@ -103,19 +163,18 @@ export function toast(message, ms = 2600, action = null) {
   const el = document.createElement('div');
   el.className = 'toast';
   el.dataset.msg = message;
-  el.innerHTML = `<span class="toast-text"></span>${action ? '<button class="toast-action"></button>' : ''}`;
+  const life = action ? Math.max(ms, 5000) : ms;
+  // 되돌리기 같은 동작이 있는 알림은 남은 시간을 아래 줄이 줄어드는 것으로 보인다
+  el.innerHTML = `<span class="toast-text"></span>${action ? `<button class="toast-action"></button><i class="toast-timer" style="animation-duration:${life}ms"></i>` : ''}`;
   el.querySelector('.toast-text').textContent = message;
   if (action) {
     const b = el.querySelector('.toast-action');
     b.textContent = action.label;
-    b.addEventListener('click', () => { el.classList.add('leaving'); setTimeout(() => el.remove(), 200); action.run(); });
+    b.addEventListener('click', () => { dismiss(el); action.run(); });
   }
   stack.append(el);
   while (stack.children.length > 4) stack.firstElementChild.remove();
-  setTimeout(() => {
-    el.classList.add('leaving');
-    setTimeout(() => el.remove(), 250);
-  }, action ? Math.max(ms, 5000) : ms);
+  setTimeout(() => dismiss(el), life);
 }
 
 /**

@@ -3,7 +3,7 @@
 // PLY-01 화질 선택, PLY-02 재생/일시정지·라이브 복귀·지연 배지, PLY-09 스크린샷, PLY-11 전체 화면 2종,
 // PLY-13 오류 오버레이 재시도, PLY-15 휠 볼륨·% 표시, PLY-17 북마크, 시청 화면 단축키.
 import { api } from './api.js';
-import { esc, toast } from './dom.js';
+import { esc, toast, keyBelongsToTarget, hideWithExit } from './dom.js';
 import { matchPlainAction } from './shortcuts.js';
 import { kbd } from './platform.js';
 
@@ -83,7 +83,7 @@ export class ViewerControls {
     const mute = root.querySelector('#mute');
     mute.insertAdjacentHTML('beforebegin', `
       <button class="icon-btn" id="ctl-play" title="일시정지 (Space)" aria-label="일시정지">${ICON.pause}</button>
-      <button class="live-chip" id="ctl-live" title="라이브로 이동">LIVE</button>`);
+      <button class="live-chip at-edge" id="ctl-live" title="라이브로 이동">LIVE</button>`);
     // 오른쪽: 화질 · 스크린샷 · 북마크 · 전체 화면(영상+채팅)
     const reload = root.querySelector('#reload');
     reload.insertAdjacentHTML('beforebegin', `
@@ -130,12 +130,16 @@ export class ViewerControls {
       const item = e.target.closest('[data-level]');
       if (item) this.chooseLevel(Number(item.dataset.level));
     });
-    document.addEventListener('click', () => { this.qualityMenu.hidden = true; });
+    document.addEventListener('click', () => hideWithExit(this.qualityMenu));
     root.querySelector('#ctl-shot').addEventListener('click', () => this.screenshot());
     root.querySelector('#ctl-bookmark').addEventListener('click', () => this.bookmark());
     root.querySelector('#ctl-fullscreen-chat').addEventListener('click', () => this.fullscreen(true));
     this.stage.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
-    this.stage.addEventListener('dblclick', () => this.fullscreen(false));
+    // 영상 자리만 — 컨트롤·패널·메뉴를 빠르게 두 번 눌러도 전체 화면이 되지 않게(멀티라이브 패인과 같게).
+    this.stage.addEventListener('dblclick', (e) => {
+      if (e.target.closest('.player-controls, .chzzk-bar, .player-panel, .stage-top, .quality-menu, .overlay-retry, button')) return;
+      this.fullscreen(false);
+    });
 
     viewer.player.onMessage((type, data) => this.onMessage(type, data));
     document.addEventListener('keydown', (e) => this.onKey(e));
@@ -180,7 +184,9 @@ export class ViewerControls {
     const top = stage.querySelector('.stage-top');
     const menuOpen = () => !this.qualityMenu.hidden || Boolean(this.root.querySelector('.player-panel:not([hidden])'));
     const hide = () => {
-      if (stage.classList.contains('paused') || menuOpen() || bar.matches(':hover') || top?.matches(':hover') || this.volumeReveal.isOpen()) { this.wake(); return; }
+      // 키보드 초점이 막대 안에 있으면 숨기지 않는다(마우스 클릭으로 생긴 초점은 :focus-visible 이 아니라 숨는다).
+      const keyFocus = stage.querySelector(':is(button, input, select):focus-visible');
+      if (stage.classList.contains('paused') || menuOpen() || bar.matches(':hover') || top?.matches(':hover') || keyFocus || this.volumeReveal.isOpen()) { this.wake(); return; }
       stage.classList.remove('ctl-visible');
       stage.classList.add('idle');
     };
@@ -261,6 +267,8 @@ export class ViewerControls {
     const badge = liveBadgeState(this.latency);
     this.liveButton.textContent = badge.text;
     this.liveButton.classList.toggle('behind', badge.behind || paused);
+    // 라이브 끝이면 숨긴다 — "LIVE" 는 위쪽 방송 정보 칩이 이미 보여 준다. 늦어지면 "-N초"(누르면 따라잡기)로 나타난다.
+    this.liveButton.classList.toggle('at-edge', !badge.behind);
     const auto = this.manualIndex < 0;
     const height = (v && v.videoHeight) || this.currentHeight;
     this.qualityButton.textContent = height ? `${auto ? '자동 · ' : ''}${height}p` : '자동';
@@ -283,7 +291,7 @@ export class ViewerControls {
 
   toggleQualityMenu() {
     if (!this.qualityMenu.hidden) {
-      this.qualityMenu.hidden = true;
+      hideWithExit(this.qualityMenu);
       return;
     }
     this.viewer.player.call('getLevels');
@@ -300,7 +308,7 @@ export class ViewerControls {
   }
 
   chooseLevel(index) {
-    this.qualityMenu.hidden = true;
+    hideWithExit(this.qualityMenu);
     const run = (s) => this.viewer.player.run(s);
     if (index < 0) {
       // 자동 — 상한을 -1 로 지우지 않고 앱 화질 상한·백그라운드 절약 상한을 다시 적용한다.
@@ -382,9 +390,7 @@ export class ViewerControls {
   }
 
   onKey(e) {
-    if (this.root.hidden || !this.viewer.isPlaying) return;
-    const t = e.target;
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    if (this.root.hidden || !this.viewer.isPlaying || keyBelongsToTarget(e)) return;
     const mod = e.metaKey || e.ctrlKey;
     const range = this.root.querySelector('#volume');
     // 사용자 단축키(맨 글자) — 수식 키 바인딩은 메뉴가 받는다 (SET-12).

@@ -1,7 +1,7 @@
 // CView 메인 — 사이드바 라우팅, 인증 상태, 시청 화면 연결.
 import { api, listen, Events, isTauri } from './api.js';
 import { toast, icons, dismiss } from './dom.js';
-import { installImageFade } from './motion.js';
+import { installImageFade, installSegmentGlider, installMicroMotion } from './motion.js';
 import { bindCardOpen } from './cards.js';
 import { FollowingPage, PopularPage, SearchPage } from './pages.js';
 import { SettingsPage } from './settings.js';
@@ -169,6 +169,7 @@ async function navigate(route, params = {}, { push = true } = {}) {
   }
   current = route;
   currentParams = params;
+  if (route === 'multilive') keepTransient(); // 멀티라이브 화면에서 본 패인은 남긴다
   if (LIVE_MODES.includes(route)) lastLiveMode = route;
   sidebar.setActive(LIVE_MODES.includes(route) ? 'live' : route);
   const watching = isWatching();
@@ -268,10 +269,40 @@ async function logout() {
   }
 }
 
+/**
+ * 다른 메뉴(홈·팔로잉·인기·검색·카테고리·사이드바·팔레트·채널 화면…)에서 라이브를 재생 — 늘 멀티라이브의
+ * 라이브 단독 보기(머리줄 채널 고르기·오른쪽 채팅)로 연다. 예전 시청 화면은 보조 플레이어 창과 멀티라이브가
+ * 가득 찼을 때만 쓴다.
+ * 재생으로 들어온 채널은 "임시 보기"(transientWatch) — 다른 방송을 열면 그 채널로 바뀌고 빠진다(둘러보는 동안
+ * 패인이 쌓이지 않게). 멀티라이브에 직접 추가하거나 멀티라이브 화면으로 가면 남긴다.
+ */
+let transientWatch = null; // { id, channelId }
+function keepTransient(channelId = null) {
+  if (transientWatch && (!channelId || transientWatch.channelId === channelId)) transientWatch = null;
+}
 async function openChannel(channelId) {
+  if (AUX || !pages.multilive) { await openInViewer(channelId); return; }
   // 이미 멀티라이브에 있는 채널 — 같은 플레이어를 라이브 무대로(원본 commitExistingWatch).
-  const existing = !AUX && pages.multilive ? multiLiveSessionFor(channelId) : null;
+  const existing = multiLiveSessionFor(channelId);
   if (existing) { await enterWatch(existing.id); return; }
+  const st = pages.multilive.state;
+  const prev = transientWatch && (st.sessions || []).some((x) => x.id === transientWatch.id) ? transientWatch : null;
+  transientWatch = null;
+  if (st.canAdd === false) {
+    // 가득 참 — 바꿔 낄 임시 보기가 있으면 먼저 빼고, 없으면 예전 시청 화면으로
+    if (!prev) { await openInViewer(channelId); return; }
+    await pages.multilive.run(api.multiLiveRemove(prev.id));
+  }
+  await pages.multilive.add(channelId, { quiet: true });
+  const s = multiLiveSessionFor(channelId);
+  if (!s) return; // 추가 실패 — run 이 이미 알렸다
+  await enterWatch(s.id);
+  transientWatch = { id: s.id, channelId };
+  if (prev && st.canAdd !== false) await pages.multilive.run(api.multiLiveRemove(prev.id));
+}
+
+/** 예전 시청 화면으로 — 보조 플레이어 창, 멀티라이브가 가득 찼을 때. */
+async function openInViewer(channelId) {
   if (isWatching()) await exitWatch();
   let player = null;
   try {
@@ -283,8 +314,22 @@ async function openChannel(channelId) {
   await navigate('live');
 }
 
-/** 카드·시청 화면의 "멀티라이브에 추가" — 멀티라이브 화면으로 옮겨 패인을 띄운다. */
-async function addToMultiLive(channelId) {
+/**
+ * 채널 추가 사이드바의 줄(썸네일·이름) — 멀티라이브 패인으로 넣어 같은 화면의 라이브 단독 보기로 올린다.
+ * openChannel 은 멀티라이브에 없는 채널을 예전 시청 화면으로 열어 머리줄·채팅 배치가 통째로 바뀌었다.
+ * 자리가 없을 때만 예전 시청 화면으로 연다.
+ */
+async function watchFromDrawer(channelId) {
+  await openChannel(channelId);
+}
+
+/**
+ * 카드·시청 화면·채널 추가 사이드바의 "멀티라이브에 추가" — 멀티라이브 화면으로 옮겨 패인을 띄우고 선택한다.
+ * 선택은 포커스 메인으로 올리므로 마지막 배치(포커스면 그 메인 자리)로 재생되고, 소리·채팅이 이 채널로 따라온다.
+ * quiet — 사이드바처럼 줄에 진행 표시가 따로 있으면 '추가하는 중' 안내를 띄우지 않는다.
+ */
+async function addToMultiLive(channelId, { quiet = false } = {}) {
+  keepTransient(channelId); // 직접 넣은 채널은 다음 재생 때 빼지 않는다
   // 라이브 시청 화면의 채널이면 넘겨준다 — 시청 화면을 닫고(같은 채널 두 번 재생 없음) 볼륨을 이어받아 선택 패인으로.
   const handoff = viewer.isPlaying && viewer.channelId === channelId;
   const muted = handoff && viewer.player.isMuted();
@@ -295,7 +340,7 @@ async function addToMultiLive(channelId) {
     await viewer.close({ silent: true });
   }
   if (current !== 'multilive') await navigate('multilive');
-  await pages.multilive.add(channelId);
+  await pages.multilive.add(channelId, { quiet });
   const s = multiLiveSessionFor(channelId);
   if (!s) return;
   if (s.id !== pages.multilive.state.selectedId) await pages.multilive.run(api.multiLiveSelect(s.id));
@@ -359,7 +404,7 @@ function installCardMenu() {
       else if (a === 'chat') { if (viewer.isPlaying) viewer.close(); navigate('chat', { channelId: id }); }
       else if (a === 'fav') {
         try { await api.favoriteSet(id, !isFav, name, image); toast(isFav ? '즐겨찾기에서 뺐습니다' : '즐겨찾기에 추가했습니다', 1500); refreshSidebarFollowing(); } catch (er) { toast(er.message); }
-      } else if (a === 'copy') navigator.clipboard.writeText(url).then(() => toast('링크를 복사했습니다', 1200));
+      } else if (a === 'copy') navigator.clipboard.writeText(url).then(() => toast('링크를 복사했습니다', 1200), () => toast('링크를 복사하지 못했습니다'));
       else if (a === 'open') api.openExternal(url).catch((er) => toast(er.message));
     });
   });
@@ -406,6 +451,21 @@ const SHORTCUTS = [
   ['채팅', [['⇧⌘K', '채팅 지우기'], ['⌘J', '자동 스크롤'], [':이름', '이모티콘 자동완성'], ['@닉네임', '멘션 자동완성'], ['우클릭', '메시지 메뉴'], ['더블클릭', '프로필']]],
 ];
 
+// Esc 는 맨 위의 것 하나만 닫는다 — 메뉴·시트·입력란이 먼저 받고, 아무것도 없을 때만 시청 화면을 닫는다.
+const ESC_POPUPS = ':is(.quality-menu, .player-panel, .emoji-picker, .chat-tray, .chat-autocomplete):not([hidden], .exit-ghost)';
+const ESC_LAYERS = '.sheet-scrim:not(.leaving), .palette-scrim:not([hidden], .exit-ghost)';
+function escapeTaken(e) {
+  if (e.defaultPrevented) return true;
+  const popups = document.querySelectorAll(ESC_POPUPS);
+  if (popups.length) { for (const p of popups) p.hidden = true; return true; }
+  const layer = document.querySelector('.ctx-menu, .design-menu');
+  if (layer) { layer.remove(); return true; } // 초점을 받지 않는 메뉴 — 제 Esc 처리가 불리지 않는다
+  if (document.querySelector(ESC_LAYERS)) return true;
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) { t.blur(); return true; }
+  return false;
+}
+
 function showSheet(html, cls = '') {
   document.querySelector('.sheet-scrim.app-sheet')?.remove();
   const scrim = document.createElement('div');
@@ -415,7 +475,7 @@ function showSheet(html, cls = '') {
   scrim.querySelector('.sheet').focus();
   const close = () => dismiss(scrim);
   scrim.addEventListener('click', (e) => { if (e.target === scrim || e.target.closest('[data-close]')) close(); });
-  scrim.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+  scrim.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
   return scrim;
 }
 
@@ -541,6 +601,8 @@ function trackFullscreen() {
 
 async function main() {
   installImageFade(); // 첫 화면 그림보다 먼저 — 놓친 load 로 썸네일이 투명하게 남지 않게
+  installSegmentGlider(); // 모든 세그먼트의 고른 칸 판이 미끄러지게
+  installMicroMotion();
   trackFullscreen();
   splashStep('화면 준비', 0.2);
   renderNav();
@@ -555,10 +617,10 @@ async function main() {
     onLogin: login,
     onLogout: logout,
   });
-  pages.multilive = new MultiLivePage(content, { isLoggedIn });
+  pages.multilive = new MultiLivePage(content, { isLoggedIn, onAddChannel: addToMultiLive, onOpenChannel: watchFromDrawer });
   pages.live = new LivePage(content, { isLoggedIn });
   pages.categories = new CategoriesPage(content);
-  pages.multichat = new MultiChatPage(content, { isLoggedIn });
+  pages.multichat = new MultiChatPage(content, { isLoggedIn, onPlay: openChannel });
   pages.chat = new ChatOnlyPage(content, { isLoggedIn, onBack: goBack, onPlay: openChannel, session: AUX === 'chat' ? `win-${Date.now()}` : null, standalone: AUX === 'chat' });
   pages.library = new LibraryPage(content, { isLoggedIn, onOpenChannel: openChannelPage });
   pages.stats = new StatsPage(content, { onOpenChannel: openChannelPage });
@@ -592,7 +654,7 @@ async function main() {
     if (action.dataset.action === 'logout' && !action.closest('[data-page="settings"]')) logout();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && viewer.isOpen && !document.fullscreenElement) viewer.close();
+    if (e.key === 'Escape' && viewer.isOpen && !document.fullscreenElement && !escapeTaken(e)) viewer.close();
     const typing = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA');
     if ((e.metaKey && e.key === '[') || (e.altKey && e.key === 'ArrowLeft' && !typing)) {
       e.preventDefault();

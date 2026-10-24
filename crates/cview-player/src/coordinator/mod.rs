@@ -337,6 +337,8 @@ pub const BACKGROUND_RECOVERY_MANIFEST_TTL: f64 = 20.0;
 pub const RECONNECT_COOLDOWN: f64 = 4.0;
 /// 멀티라이브 **비선택** 패인의 목표 지연(초) — 안정성 우선(`+RoleLatency`).
 pub const SECONDARY_PANE_STABILITY_TARGET_SECONDS: f64 = 10.5;
+/// [`StreamCoordinator::set_target_latency_margin`] 상한(초) — 백오프 최대(+3초)와 겹쳐도 지나치게 밀리지 않게.
+pub const MAX_TARGET_LATENCY_MARGIN_SECONDS: f64 = 3.0;
 
 impl StreamCoordinator {
     /// 기본 매니페스트 다운로더(reqwest)로 만든다.
@@ -408,6 +410,7 @@ impl StreamCoordinator {
             last_network_interface: None,
         };
         let proxy = proxy.unwrap_or_else(|| LocalStreamProxy::new(access.cookies.clone()));
+        proxy.set_perf_tag(&config.channel_id.chars().take(6).collect::<String>());
         Self {
             inner: Arc::new(Inner {
                 requires_authenticated_proxy: access.requires_proxy,

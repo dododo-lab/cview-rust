@@ -1,7 +1,7 @@
 // 다운로드 — 원본 VideoDownloadButton / VideoDownloadViews / DownloadsLibraryView.
 // VOD-06 다시보기·클립 받기(진행률·취소·다시 시도), VOD-07 보관함 "다운로드" 탭(진행 중/완료, 끝난 항목 지우기, 폴더 열기).
 import { api, listen, Events } from './api.js';
-import { esc, toast } from './dom.js';
+import { esc, toast, keepFocus } from './dom.js';
 import { emptyState } from './cards.js';
 import { relativeDate } from './channel.js';
 import { bytesText } from './stats.js';
@@ -47,7 +47,7 @@ function jobRow(j) {
     <span class="dl-kind">${j.kind === 'clip' ? '클립' : 'VOD'}</span>
     <span class="dl-text"><strong class="ellipsis">${esc(j.title)}</strong>
       <span class="ellipsis">${j.channelName ? `${esc(j.channelName)} · ` : ''}${esc(STATE_LABEL[j.state] || j.state)}${active && j.state === 'downloading' ? ` · ${pct}% · ${esc(bytesText(j.bytes))}` : ''}${j.error ? ` · ${esc(j.error)}` : ''}</span>
-      ${active ? `<span class="dl-track"><span class="dl-fill${j.state === 'preparing' || j.state === 'queued' ? ' indeterminate' : ''}" style="width:${pct}%"></span></span>` : ''}</span>
+      ${active ? `<span class="dl-track"><span class="dl-fill${j.state === 'preparing' || j.state === 'queued' ? ' indeterminate' : ''}" style="--p:${pct / 100}"></span></span>` : ''}</span>
     ${active ? '<button class="btn ghost" data-dl="cancel">취소</button>' : ''}
     ${j.state === 'failed' || j.state === 'cancelled' ? `<button class="btn" data-dl="retry" data-kind="${esc(j.kind)}" data-target="${esc(j.target)}" data-title="${esc(j.title)}">다시 시도</button>` : ''}
     ${j.state === 'completed' && j.filePath ? `<button class="btn" data-dl="reveal" data-path="${esc(j.filePath)}">Finder에서 보기</button>` : ''}
@@ -73,13 +73,14 @@ export async function mountDownloads(container) {
     // 완료·실패는 기록에도 남으므로 작업 목록에서는 진행 중·취소만 보인다.
     const active = d.jobs.filter((j) => j.state !== 'completed' && j.state !== 'failed');
     const histShown = d.history;
-    container.innerHTML = `
+    // 진행 이벤트마다 다시 그린다 — 취소·Finder에서 보기에 둔 키보드 초점을 지킨다
+    keepFocus(container, () => { container.innerHTML = `
       <div class="dl-head"><span class="muted">저장 폴더 · ${esc(d.folder)}</span><div class="grow"></div>
         <button class="btn ghost" data-dl="folder" data-path="${esc(d.folder)}">폴더 열기</button>
         ${histShown.length || active.some((j) => j.state === 'cancelled') ? '<button class="btn ghost" data-dl="clear">끝난 항목 지우기</button>' : ''}</div>
       ${active.length ? `<h3 class="section-title">진행 중</h3><div class="dl-list">${active.map(jobRow).join('')}</div>` : ''}
       <h3 class="section-title">받은 파일</h3>
-      ${histShown.length ? `<div class="dl-list">${histShown.map(historyRow).join('')}</div>` : emptyState('받은 파일이 없습니다', '다시보기·클립 화면의 "받기" 버튼으로 저장할 수 있어요')}`;
+      ${histShown.length ? `<div class="dl-list">${histShown.map(historyRow).join('')}</div>` : emptyState('받은 파일이 없습니다', '다시보기·클립 화면의 "받기" 버튼으로 저장할 수 있어요')}`; });
   };
   const onClick = async (e) => {
     const b = e.target.closest('[data-dl]');
@@ -98,8 +99,9 @@ export async function mountDownloads(container) {
       }
     } catch (er) { toast(er.message); }
   };
+  // 목록을 받은 뒤에 구독한다 — 받기가 실패하면 구독만 남아 해제 함수 없이 새던 문제
+  render(latest = await api.downloadList());
   container.addEventListener('click', onClick);
   subscribers.add(render);
-  render(latest = await api.downloadList());
   return () => { subscribers.delete(render); container.removeEventListener('click', onClick); };
 }

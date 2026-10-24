@@ -47,7 +47,8 @@ export function mergedLinesHtml(messages, { name, style }) {
 }
 
 export class MultiChatPage {
-  constructor(content, { isLoggedIn }) {
+  /** @param {{ isLoggedIn: () => boolean, onPlay?: (channelId: string) => void }} opts onPlay — 채널 추가 줄을 누르면 라이브로 */
+  constructor(content, { isLoggedIn, onPlay = null }) {
     this.isLoggedIn = isLoggedIn;
     this.root = document.createElement('section');
     this.root.className = 'page page-multichat';
@@ -94,6 +95,8 @@ export class MultiChatPage {
         return { sessions: this.channels, maxSessions: MAX_CHANNELS, canAdd: n < MAX_CHANNELS };
       },
       onAdd: (channelId) => this.add(channelId),
+      onOpen: onPlay,
+      addLabel: '채팅 추가',
       toggleSelector: '[data-mc="add"]',
       unit: '채널',
     });

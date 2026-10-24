@@ -3,14 +3,14 @@
 // SET-02~06 플레이어·지연·되감기·스크린샷·비디오, SET-07 채팅, SET-08 일반, SET-09 외관,
 // SET-10 성능, SET-11 네트워크(프리셋), SET-13 채널 알림, SET-15 동기화, SET-16 도메인, SET-17 백업·복원·초기화,
 // MUL-16 멀티라이브 설정.
-import { api } from './api.js';
+import { api, listen, Events } from './api.js';
 import { ACTIONS, FIXED, currentBindings, bindingLabel, bindingFromEvent, saveBinding, conflictOf } from './shortcuts.js';
 import { esc, toast } from './dom.js';
-import { emptyState, errorState } from './cards.js';
+import { emptyState, errorState, loadingState } from './cards.js';
 import { THEMES, THEME_LABELS, currentTheme, setTheme } from './theme.js';
 import { streamAlertsEnabled, setStreamAlertsEnabled, ALERT_HOME } from './donations.js';
 import { chatPrefs, updateChatPrefs, blockedLabel, loadChatPrefs } from './chat-prefs.js';
-import { DESIGN_STYLES, BACKGROUNDS, READING_WIDTHS } from './chat-extras.js';
+import { BACKGROUNDS, READING_WIDTHS } from './chat-extras.js';
 import { kbd } from './platform.js';
 
 const opt = (pairs) => pairs.map(([value, label]) => ({ value, label }));
@@ -133,7 +133,17 @@ const GROUPS = [
   ['overview', '개요'], ['watch', '시청'], ['chat', '채팅'], ['multi', '멀티라이브'],
   ['general', '일반'], ['link', '연동'], ['advanced', '고급'],
 ];
-const NETWORK_PRESETS = [['balanced', '밸런스'], ['stability', '안정 우선'], ['lowLatency', '저지연 우선'], ['performance', '고성능']];
+const NETWORK_PRESETS = [['auto', '자동'], ['balanced', '밸런스'], ['stability', '안정 우선'], ['lowLatency', '저지연 우선'], ['performance', '고성능']];
+
+/** 프리셋 줄 설명 — 자동이면 지금 고른 프리셋을 적는다. */
+function netPresetHelp(settings) {
+  if (settings.networkPreset === 'auto') {
+    const now = NETWORK_PRESETS.find(([v]) => v === settings.networkAutoChoice)?.[1];
+    return `자동 — 지금 ${now || '밸런스'}. 멀티라이브 2개 이상이면 고성능, 재생 오류가 나면 잠시 안정 우선으로 바꿉니다`;
+  }
+  if (settings.networkPreset === 'custom') return '직접 조정한 값 — 프리셋을 고르면 요청 한도·시간 제한·재연결 값을 함께 바꿉니다';
+  return '요청 한도·시간 제한·재연결 값을 함께 바꿉니다';
+}
 
 const CHAT_TOGGLES = [
   ['showTimestamp', '시간 표시', '메시지 옆에 받은 시각을 보여 줍니다'],
@@ -189,7 +199,7 @@ export class SettingsPage {
     this.showAdvanced = false;
     this.body.addEventListener('change', (e) => this.onChange(e.target));
     this.body.addEventListener('input', (e) => {
-      if (e.target.matches('.settings-search')) { this.query = e.target.value.trim().toLowerCase(); this.applySearch(); }
+      if (e.target.matches('.settings-search')) this.onSearch(e.target);
       if (e.target.type === 'range') {
         const out = e.target.parentElement.querySelector('output');
         if (out) out.textContent = e.target.dataset.pct ? `${Math.round(Number(e.target.value) * 100)}%` : e.target.value;
@@ -197,11 +207,18 @@ export class SettingsPage {
     });
     this.body.addEventListener('submit', (e) => this.onSubmit(e));
     this.body.addEventListener('click', (e) => this.onClick(e));
+    // 자동 프리셋이 값을 바꾸면 네트워크 값만 다시 읽어 프리셋 줄이 보일 때 다시 그린다.
+    listen(Events.networkPresetChanged, async () => {
+      if (!this.settings) return;
+      try { this.settings = await api.settingsGet(); } catch { return; }
+      if (this.body.querySelector('[data-net-preset]')) this.render();
+    });
   }
 
   async show() {
-    await loadChatPrefs();
+    if (!this.settings) this.body.innerHTML = loadingState();
     try {
+      await loadChatPrefs();
       this.settings = await api.settingsGet();
     } catch (e) {
       this.body.innerHTML = errorState('설정을 불러오지 못했습니다', e);
@@ -242,8 +259,8 @@ export class SettingsPage {
       sections.push(`<section class="settings-group" data-g="${g}"><h3>${esc(title)}${adv ? `<button class="link-btn adv-toggle" data-adv>${this.showAdvanced ? '고급 숨기기' : '고급 보기'}</button>` : ''}</h3>
         ${items.map((i) => itemHtml(i, this.settings)).join('')}</section>`);
       if (g === 'advanced' && title === '네트워크') {
-        sections.push(`<section class="settings-group" data-g="advanced"><h3>네트워크 프리셋</h3><div class="setting" data-search="네트워크 프리셋 밸런스 안정 저지연 고성능"><span class="setting-label">한 번에 맞추기<small>요청 한도·시간 제한·재연결 값을 함께 바꿉니다</small></span>
-          <div class="segmented">${NETWORK_PRESETS.map(([v, l]) => `<button class="seg" data-net-preset="${v}">${l}</button>`).join('')}</div></div></section>`);
+        sections.push(`<section class="settings-group" data-g="advanced"><h3>네트워크 프리셋</h3><div class="setting" data-search="네트워크 프리셋 자동 밸런스 안정 저지연 고성능"><span class="setting-label">한 번에 맞추기<small>${esc(netPresetHelp(this.settings))}</small></span>
+          <div class="segmented" role="radiogroup" aria-label="네트워크 프리셋">${NETWORK_PRESETS.map(([v, l]) => { const on = v === this.settings.networkPreset; return `<button class="seg ${on ? 'active' : ''}" data-net-preset="${v}" role="radio" aria-checked="${on}">${l}</button>`; }).join('')}</div></div></section>`);
       }
     }
     if (want('chat')) sections.push(this.chatHtml());
@@ -302,12 +319,7 @@ export class SettingsPage {
         <label class="setting" data-search="최대 표시 줄 수"><span class="setting-label">최대 표시 줄 수<small>오래된 메시지부터 지웁니다</small></span>
           <select class="select" data-chat="maxVisibleMessages">${[150, 300, 500, 1000].map((n) => `<option value="${n}" ${Number(p.maxVisibleMessages) === n ? 'selected' : ''}>${n}줄</option>`).join('')}</select></label>
       </section>
-      <section class="settings-group" data-g="chat"><h3>디자인 · 배경</h3>
-        <div class="setting style-setting" data-search="채팅 디자인 스타일 라운지 치지직 하이브리드 카카오 imessage 말풍선"><span class="setting-label">디자인 스타일<small>모든 채팅 화면에 함께 적용 · 채팅 머리글의 팔레트 버튼으로도 바꿀 수 있어요</small></span></div>
-        <div class="style-cards" data-search="채팅 디자인 스타일">${DESIGN_STYLES.map(([v, l, d]) => {
-          const on = (DESIGN_STYLES.some(([x]) => x === p.designStyle) ? p.designStyle : 'unified') === v;
-          return `<button type="button" class="style-card${on ? ' on' : ''}" data-design-style="${v}" aria-pressed="${on}"><span class="design-swatch sw-${v}"></span><b>${esc(l)}</b><small>${esc(d)}</small></button>`;
-        }).join('')}</div>
+      <section class="settings-group" data-g="chat"><h3>읽기 폭 · 배경</h3>
         <label class="setting" data-search="읽기 폭 채팅 너비"><span class="setting-label">읽기 폭<small>넓은 채팅 창에서 메시지 줄 길이를 제한합니다</small></span>
           <select class="select" data-chat-str="readingWidth">${READING_WIDTHS.map(([v, l]) => `<option value="${v}" ${(p.readingWidth || 'full') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="setting" data-search="채팅 배경"><span class="setting-label">배경</span>
@@ -348,6 +360,22 @@ export class SettingsPage {
         <form class="word-form" data-import><input type="text" placeholder='{"player": …}'><button class="btn">가져오기</button></form></div>
       <div class="setting" data-search="초기화 기본값"><span class="setting-label">모든 설정 초기화<small>로그인·시청 기록은 그대로 둡니다</small></span><button class="btn danger" data-reset-all>초기화</button></div>
     </section>`;
+  }
+
+  /**
+   * 검색어 — 비어 있다가 생기거나 그 반대면 그룹 구성이 바뀐다(검색 중엔 모든 탭의 설정을 그린다).
+   * applySearch 만 부르면 지금 탭 안에서만 찾았다. 다시 그린 뒤 입력란 초점·커서를 되돌린다.
+   */
+  onSearch(input) {
+    const was = Boolean(this.query);
+    this.query = input.value.trim().toLowerCase();
+    if (was === Boolean(this.query)) { this.applySearch(); return; }
+    const caret = input.selectionStart;
+    this.render();
+    const again = this.body.querySelector('.settings-search');
+    again.value = input.value;
+    again.focus();
+    again.setSelectionRange(caret, caret);
   }
 
   applySearch() {
@@ -418,10 +446,14 @@ export class SettingsPage {
 
   /** 다음 키 조합을 받아 바인딩으로 저장한다. Esc 취소. */
   captureBinding(btn) {
+    // 받는 중에 다시 누르면 취소 — 한 번에 하나만 받는다.
+    if (this.cancelCapture) { this.cancelCapture(); return; }
     const action = btn.dataset.bind;
     btn.textContent = '키를 누르세요…';
     btn.classList.add('primary');
     const onKey = async (e) => {
+      // 화면을 떠났으면 그만 받는다 — 다음 키(검색란 입력 등)를 삼켜 바인딩으로 저장하던 문제.
+      if (this.root.hidden || !btn.isConnected) { done(); return; }
       e.preventDefault();
       e.stopPropagation();
       if (e.key === 'Escape') { done(); this.render(); return; }
@@ -433,8 +465,16 @@ export class SettingsPage {
       try { await saveBinding(action, b); } catch (er) { toast(er.message); }
       this.render();
     };
-    const done = () => document.removeEventListener('keydown', onKey, true);
+    // 다른 곳을 누르면 취소(이 버튼을 다시 누르는 것은 위의 토글이 처리한다).
+    const onDown = (e) => { if (!btn.contains(e.target)) { done(); this.render(); } };
+    const done = () => {
+      document.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('pointerdown', onDown, true);
+      this.cancelCapture = null;
+    };
+    this.cancelCapture = () => { done(); this.render(); };
     document.addEventListener('keydown', onKey, true);
+    document.addEventListener('pointerdown', onDown, true);
   }
 
   async refreshOAuth() {
@@ -499,8 +539,6 @@ export class SettingsPage {
     if (bind) { this.captureBinding(bind); return; }
     const bindReset = e.target.closest('[data-bind-reset]');
     if (bindReset) { try { await saveBinding(bindReset.dataset.bindReset, null); this.render(); } catch (er) { toast(er.message); } return; }
-    const ds = e.target.closest('[data-design-style]');
-    if (ds) { updateChatPrefs({ designStyle: ds.dataset.designStyle }); this.render(); return; }
     const oa = e.target.closest('[data-oauth]');
     if (oa) { e.preventDefault(); this.onOAuth(oa); return; }
     const sys = e.target.closest('[data-sys]');

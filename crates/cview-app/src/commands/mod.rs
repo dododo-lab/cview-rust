@@ -37,6 +37,8 @@ pub mod events {
     pub const MULTILIVE_COMMAND: &str = "multilive://command";
     /// 멀티라이브 상태 — `MultiLiveStateDto`.
     pub const MULTILIVE_STATE: &str = "multilive://state";
+    /// 자동 네트워크 프리셋이 값을 바꿨다 — 페이로드 없음(설정 화면이 다시 읽는다).
+    pub const NETWORK_PRESET_CHANGED: &str = "settings://network-preset";
 }
 
 /// 명령 오류 — 프런트엔드에는 사용자용 문구 문자열로 간다.

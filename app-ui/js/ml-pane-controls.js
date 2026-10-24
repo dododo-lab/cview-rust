@@ -5,7 +5,7 @@
 // - 들리는 패인은 Rust 가 setVolume(0/1) 로 정한다. 패인 볼륨은 그 위에 곱하는 배율이라
 //   여러 소리 모드와 함께 써도 서로 덮어쓰지 않는다.
 // - 마우스를 움직이면 나타나고 재생 중 2.5초 가만히 있으면 커서와 함께 숨는다. 일시정지·메뉴 열림이면 계속 보인다.
-import { esc, toast } from './dom.js';
+import { esc, toast, hideWithExit } from './dom.js';
 import { qualityOptions, liveBadgeState, togglePipFor, installVolumeReveal } from './viewer-controls.js';
 import { ADJUST_RANGES, applyPicture, pictureFor, resetAdjust, setPicture } from './picture.js';
 
@@ -39,10 +39,10 @@ export function paneControlsHtml() {
           <button class="ml-pane-btn" data-ml="audio" title="이 패인 소리 켜기" aria-label="소리">${I.muted}</button>
           <input type="range" class="ml-vol-range" min="0" max="100" value="100" aria-label="패인 볼륨">
         </div>
-        <button class="ml-live-pill" data-mp="live" title="라이브로 이동">LIVE</button>
+        <button class="ml-live-pill at-edge" data-mp="live" title="라이브로 이동">LIVE</button>
         <span class="ml-pane-cap"></span>
         <div class="grow"></div>
-        <button class="ml-pane-btn" data-mp="gear" title="화질·지연" aria-label="화질·지연" aria-haspopup="menu">${I.gear}</button>
+        <button class="ml-pane-btn" data-mp="gear" title="화질·지연" aria-label="화질·지연" aria-haspopup="menu" aria-expanded="false">${I.gear}</button>
         <button class="ml-pane-btn ml-sec" data-mp="pip" title="PiP" aria-label="PiP">${I.pip}</button>
         <button class="ml-pane-btn ml-sec" data-ml="single" title="이 채널만 크게 (더블클릭)" aria-label="이 채널만 크게">${I.expand}</button>
         <button class="ml-pane-btn" data-mp="fullscreen" title="이 패인 전체 화면" aria-label="전체 화면">${I.fullscreen}</button>
@@ -98,7 +98,14 @@ export class PaneControls {
     this.el.addEventListener('focusin', wake);
     // 패인 밖을 누르거나 Esc 면 메뉴를 닫는다.
     document.addEventListener('pointerdown', (e) => { if (this.menuOpen && !this.el.contains(e.target)) this.closeMenus(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && this.menuOpen) this.closeMenus(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || !this.menuOpen) return;
+      // 메뉴 안에서 Esc 면 연 버튼으로 초점을 돌려준다(메뉴가 숨으며 초점이 body 로 떨어진다)
+      const back = this.el.contains(document.activeElement) && document.activeElement.closest('.ml-pane-menu') ? this.menuButton : null;
+      e.preventDefault();
+      this.closeMenus();
+      back?.focus({ preventScroll: true });
+    });
   }
 
   get video() {
@@ -117,15 +124,16 @@ export class PaneControls {
   }
 
   hide() {
-    const hovering = Boolean(this.el.querySelector('.ml-pane-bar:hover, .ml-pane-top:hover, .ml-pane-menu:hover')) || this.volumeReveal.isOpen();
+    const hovering = Boolean(this.el.querySelector('.ml-pane-bar:hover, .ml-pane-top:hover, .ml-pane-menu:hover, :is(button, input, select):focus-visible')) || this.volumeReveal.isOpen();
     if (this.el.classList.contains('paused') || this.menuOpen || hovering) { this.wake(); return; }
     this.el.classList.remove('ctl-visible');
     this.el.classList.toggle('idle', this.el.matches(':hover'));
   }
 
   closeMenus() {
-    this.gearMenu.hidden = true;
-    this.moreMenu.hidden = true;
+    hideWithExit(this.gearMenu);
+    hideWithExit(this.moreMenu);
+    for (const b of this.el.querySelectorAll('[data-mp="gear"], [data-mp="more"]')) b.setAttribute('aria-expanded', 'false');
   }
 
   // ── 상태 ─────────────────────────────────
@@ -166,6 +174,8 @@ export class PaneControls {
     // 700ms 마다 패인 수만큼 돈다 — 같은 값을 다시 쓰면(텍스트 노드 교체·title) 매번 스타일·레이아웃이 무효화된다.
     if (this.liveButton.textContent !== badge.text) this.liveButton.textContent = badge.text;
     this.liveButton.classList.toggle('behind', badge.behind || !playing);
+    // 라이브 끝이면 숨긴다 — "LIVE" 는 위쪽 방송 정보 칩이 이미 보여 준다. 늦어지면 "-N초"(누르면 따라잡기)로 나타난다.
+    this.liveButton.classList.toggle('at-edge', !badge.behind);
     const muted = !audible || this.gain === 0;
     const icon = muted ? PANE_ICON.muted : PANE_ICON.sound;
     if (this.audioButton.dataset.icon !== String(muted)) {
@@ -210,6 +220,10 @@ export class PaneControls {
       this.renderGear();
     }
     menu.hidden = false;
+    this.menuButton = this.el.querySelector(`[data-mp="${menu === this.gearMenu ? 'gear' : 'more'}"]`);
+    this.menuButton?.setAttribute('aria-expanded', 'true');
+    // 키보드로 열었으면 첫 항목으로 — 마우스로 열었으면 초점은 그대로(:focus-visible 이 아니다)
+    if (this.menuButton?.matches(':focus-visible')) menu.querySelector('button:not(:disabled), input, select')?.focus({ preventScroll: true });
     this.wake();
   }
 

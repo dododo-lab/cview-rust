@@ -64,7 +64,7 @@ export function friendlyError(err) {
  */
 export function errorState(title, err, extra = '') {
   const raw = String((err && err.message) || err || '');
-  return `<div class="empty error"><div class="empty-logo" aria-hidden="true"></div><strong>${esc(title)}</strong>`
+  return `<div class="empty error" role="alert"><div class="empty-logo" aria-hidden="true"></div><strong>${esc(title)}</strong>`
     + `<span>${esc(friendlyError(err))}</span>`
     + `<div class="error-actions"><button class="btn" data-retry>다시 시도</button>${extra}</div>`
     + (raw ? `<details class="error-detail"><summary>자세히</summary><code>${esc(raw)}</code></details>` : '')
@@ -73,12 +73,12 @@ export function errorState(title, err, extra = '') {
 
 /** 로딩 — 로고 로더(motion.css) + 문구. */
 export function loadingState(caption = '불러오는 중…') {
-  return `<div class="empty loading"><div class="spinner" aria-hidden="true"></div><span class="loading-caption">${esc(caption)}</span></div>`;
+  return `<div class="empty loading" role="status"><div class="spinner" aria-hidden="true"></div><span class="loading-caption">${esc(caption)}</span></div>`;
 }
 
 /** 카드 격자 스켈레톤 — 원본 SkeletonViews (SYS-14). */
 export function skeletonGrid(n = 8) {
-  return `<div class="loading-row"><div class="spinner" aria-hidden="true"></div><span>불러오는 중…</span></div><div class="grid">${Array.from({ length: n }, () => '<div class="sk-card"><div class="sk thumb-sk"></div><div class="sk line"></div><div class="sk line short"></div></div>').join('')}</div>`;
+  return `<div class="loading-row" role="status"><div class="spinner" aria-hidden="true"></div><span>불러오는 중…</span></div><div class="grid" aria-hidden="true">${Array.from({ length: n }, () => '<div class="sk-card"><div class="sk thumb-sk"></div><div class="sk line"></div><div class="sk line short"></div></div>').join('')}</div>`;
 }
 
 /** 갱신 시각 캡션 — 원본 FreshnessCaption. */
@@ -133,6 +133,9 @@ export function rememberChannel({ channelId, channelName = '', channelImage = ''
 /** 클릭/엔터로 채널을 연다. */
 export function bindCardOpen(root, onOpen) {
   const open = (el) => {
+    // 채널 추가 사이드바는 줄(열기)과 +(추가)를 스스로 나눠 처리한다 — 여기서 또 열면 + 도 라이브로 넘어간다.
+    // 사이드바는 + 를 누르는 즉시 목록을 다시 그려 누른 버튼이 문서에서 떨어진다 — 그래서 붙어 있는지도 본다.
+    if (!root.contains(el) || el.closest('.ml-addbar')) return;
     const card = el.closest('[data-channel-id]');
     if (card && el.closest('[data-open-channel]')) {
       window.dispatchEvent(new CustomEvent('cview:open-channel', { detail: { channelId: card.dataset.channelId } }));
@@ -144,6 +147,9 @@ export function bindCardOpen(root, onOpen) {
   };
   root.addEventListener('click', (e) => open(e.target));
   root.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') open(e.target);
+    // 카드(.card[tabindex])는 a11y.js 가, 버튼·링크는 브라우저가 Enter 를 click 으로 바꾼다 — 여기서 또 열면
+    // 채널이 두 번 열리고(재생 시작 두 번), 카드 안 + 버튼의 Enter 가 라이브로도 넘어간다.
+    if (e.key !== 'Enter' || e.target.closest('button, a[href], .card[tabindex]')) return;
+    open(e.target);
   });
 }

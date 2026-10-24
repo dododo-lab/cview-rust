@@ -7,7 +7,7 @@
 // - 패인을 누르면 선택 — 오디오·채팅·고화질이 그 패인을 따라간다.
 import { api, listen, listenHere, Events } from './api.js';
 import { setPicture, setSharpenDefault } from './picture.js';
-import { esc, safeUrl, toast, imageSrc, streamEndedArt, dismiss } from './dom.js';
+import { esc, safeUrl, toast, imageSrc, streamEndedArt, dismiss, hideWithExit } from './dom.js';
 import { PlayerBridge } from './player.js';
 import { ChatPanel } from './chat.js';
 import { StreamAlerts } from './donations.js';
@@ -68,7 +68,13 @@ export function pickTintHue(used, rand = Math.random) {
 }
 
 export class MultiLivePage {
-  constructor(content, { isLoggedIn }) {
+  /**
+   * @param {{ isLoggedIn: () => boolean, onAddChannel?: (channelId: string, opts?: { quiet?: boolean }) => Promise<void>,
+   *   onOpenChannel?: (channelId: string) => void }} opts
+   *   onAddChannel — 채널 추가 사이드바의 + (카드 + 와 같은 길: 선택·포커스 메인·시청 화면 넘겨받기),
+   *   onOpenChannel — 사이드바 줄(썸네일·이름)을 누르면 라이브 단독 보기로.
+   */
+  constructor(content, { isLoggedIn, onAddChannel = null, onOpenChannel = null }) {
     this.isLoggedIn = isLoggedIn;
     this.root = document.createElement('section');
     this.root.className = 'page page-multilive';
@@ -82,26 +88,31 @@ export class MultiLivePage {
         <div class="ml-watch-picker" role="group" aria-label="라이브로 볼 채널" hidden></div>
         <div class="grow"></div>
         <div class="ml-toolbar">
-          <div class="ml-focus-controls" hidden>
-            <div class="segmented ml-tb-seg" role="group" aria-label="포커스 방향">
-              ${FOCUS_DIRECTIONS.map((d) => `<button class="seg icon" data-direction="${d.id}" title="메인 위치: ${d.label}" aria-label="메인 위치 ${d.label}">${DIRECTION_ICONS[d.id]}</button>`).join('')}
-            </div>
-            <label class="ml-ratio" title="메인 패인 크기">
-              <input type="range" min="${FOCUS_RATIO.min * 100}" max="${FOCUS_RATIO.max * 100}" step="1" aria-label="메인 패인 크기">
-              <output></output>
-            </label>
-            <span class="ml-tb-sep" aria-hidden="true"></span>
-          </div>
-          <div class="segmented ml-tb-seg" role="group" aria-label="레이아웃">
-            <button class="seg" data-layout="grid" title="${kbd('균등 분할 (⌃⌘1)')}">그리드</button>
-            <button class="seg" data-layout="focus" title="${kbd('포커스 — 한 방송을 크게 (⌃⌘2)')}">포커스</button>
-            <button class="seg" data-layout="custom" title="${kbd('사용자 배치 — 경계를 끌어 크기 조절 (⌃⌘3)')}">사용자</button>
-          </div>
-          <span class="ml-tb-sep" aria-hidden="true"></span>
-          <button class="ml-tb-icon ml-multiaudio" data-ml="multi-audio" title="여러 소리 — 선택하지 않은 패인 소리도 함께 듣기" aria-label="여러 소리" aria-pressed="false">${ICON_SOUND}</button>
           <div class="ml-more">
             <button class="ml-tb-icon" data-ml-more title="더 보기" aria-label="더 보기" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg></button>
             <div class="ml-more-menu" role="menu" hidden>
+              <div class="ml-menu-section">
+                <div class="ml-menu-label">레이아웃</div>
+                <div class="segmented ml-tb-seg" role="group" aria-label="레이아웃">
+                  <button class="seg" data-layout="grid" title="${kbd('균등 분할 (⌃⌘1)')}">그리드</button>
+                  <button class="seg" data-layout="focus" title="${kbd('포커스 — 한 방송을 크게 (⌃⌘2)')}">포커스</button>
+                  <button class="seg" data-layout="custom" title="${kbd('사용자 배치 — 경계를 끌어 크기 조절 (⌃⌘3)')}">사용자</button>
+                </div>
+              </div>
+              <div class="ml-menu-section ml-focus-controls" hidden>
+                <div class="ml-menu-label">포커스 배치</div>
+                <div class="segmented ml-tb-seg" role="group" aria-label="포커스 방향">
+                  ${FOCUS_DIRECTIONS.map((d) => `<button class="seg icon" data-direction="${d.id}" title="메인 위치: ${d.label}" aria-label="메인 위치 ${d.label}">${DIRECTION_ICONS[d.id]}</button>`).join('')}
+                </div>
+                <label class="ml-ratio" title="메인 패인 크기">
+                  <input type="range" min="${FOCUS_RATIO.min * 100}" max="${FOCUS_RATIO.max * 100}" step="1" aria-label="메인 패인 크기">
+                  <output></output>
+                </label>
+              </div>
+              <div class="ml-menu-sep"></div>
+              <div class="ml-menu-label">소리</div>
+              <button class="ml-menu-item ml-multiaudio" role="menuitemcheckbox" data-ml="multi-audio" title="선택하지 않은 패인 소리도 함께 듣기" aria-checked="false">${ICON_SOUND}여러 소리</button>
+              <div class="ml-menu-sep"></div>
               <button class="ml-menu-item" role="menuitem" data-ml="presets"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h12v16l-6-4-6 4z"/></svg>프리셋 저장·불러오기</button>
               <button class="ml-menu-item" role="menuitem" data-ml="retry-all"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5a8 8 0 1 0-2.4 5.9"/><path d="M20 4.5v7h-7"/></svg>모두 다시 연결</button>
               <button class="ml-menu-item" role="menuitem" data-ml="alert-pos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>후원 알림 위치 조정</button>
@@ -159,9 +170,21 @@ export class MultiLivePage {
     this.alerts = new StreamAlerts(this.stage);
     this.single = null; // 한 채널 크게(MUL-11) — 슬롯
     this.gridDividers = this.buildGridDividers();
+    // 더블클릭이 시작될 때(첫 누름) 메인이 누구였는지 — 첫 클릭이 선택으로 메인을 먼저 바꿔 버린다.
+    this.stage.addEventListener('pointerdown', () => {
+      const now = performance.now();
+      if (now - (this.lastStageDown || 0) > 500) this.mainAtGestureStart = this.state && (this.state.focusMainId || this.state.selectedId);
+      this.lastStageDown = now;
+    }, true);
     this.stage.addEventListener('dblclick', (e) => {
       const pane = e.target.closest('.ml-pane');
-      if (pane && this.watchSlot == null && !e.target.closest('.ml-pane-bar, .ml-pane-top, .ml-pane-menu')) this.toggleSingle(Number(pane.dataset.slot));
+      if (!pane || this.watchSlot != null || e.target.closest('.ml-pane-bar, .ml-pane-top, .ml-pane-menu')) return;
+      const slot = Number(pane.dataset.slot);
+      const s = (this.state.sessions || []).find((x) => x.slot === slot);
+      // 포커스 배치에서 아래(메인이 아니던) 패인을 더블클릭하면 메인으로 올리기만 한다 — 첫 클릭이 이미 선택했다.
+      // "한 채널 크게"까지 켜면 메인이 바뀌면서 아래 패인이 모두 감춰졌다. 메인을 더블클릭하면 예전처럼 크게.
+      if (this.state.layout === 'focus' && this.single == null && s && s.id !== this.mainAtGestureStart) return;
+      this.toggleSingle(slot);
     });
     document.addEventListener('keydown', (e) => {
       if (this.root.hidden || !(e.metaKey && e.ctrlKey)) return;
@@ -210,23 +233,30 @@ export class MultiLivePage {
     this.addBar = new MultiLiveAddDrawer(this.root.querySelector('.ml-body'), {
       isLoggedIn,
       getState: () => this.state,
-      onAdd: (channelId) => this.run(api.multiLiveAdd(channelId)),
+      // + — 추가하고 그 패인을 선택한다. 포커스 배치면 메인으로 올라가 소리·채팅이 따라간다.
+      // 라이브 단독 보기 중이면 보던 채널은 그대로 두고 멀티라이브에만 넣는다(머리줄 채널 고르기에 생긴다).
+      onAdd: (channelId) => {
+        if (this.watchSlot != null) return this.add(channelId, { quiet: true });
+        return onAddChannel ? onAddChannel(channelId, { quiet: true }) : this.addAndSelect(channelId);
+      },
+      onOpen: onOpenChannel,
+      addLabel: '멀티라이브에 추가',
     });
 
     listenHere(Events.multiLiveCommand, (p) => p && this.dispatch(p.slot, p.script));
     listen(Events.multiLiveState, (s) => this.render(s));
 
     this.root.addEventListener('click', (e) => this.onClick(e));
-    // "⋯" 더 보기 메뉴 — 프리셋·모두 다시 연결·모두 닫기
+    // "⋯" 더 보기 메뉴 — 레이아웃·포커스 배치·여러 소리(설정은 메뉴를 연 채로 바꾼다)와 프리셋·모두 다시 연결·모두 닫기
     const moreBtn = this.root.querySelector('[data-ml-more]');
     const moreMenu = this.root.querySelector('.ml-more-menu');
-    const closeMore = () => { moreMenu.hidden = true; moreBtn.setAttribute('aria-expanded', 'false'); };
+    const closeMore = () => { hideWithExit(moreMenu); moreBtn.setAttribute('aria-expanded', 'false'); };
     moreBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       moreMenu.hidden = !moreMenu.hidden;
       moreBtn.setAttribute('aria-expanded', String(!moreMenu.hidden));
     });
-    moreMenu.addEventListener('click', () => closeMore());
+    moreMenu.addEventListener('click', (e) => { if (e.target.closest('.ml-menu-item:not(.ml-multiaudio)')) closeMore(); });
     document.addEventListener('pointerdown', (e) => { if (!moreMenu.hidden && !e.target.closest('.ml-more')) closeMore(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !moreMenu.hidden) closeMore(); });
     new ResizeObserver(() => this.reportStageSize()).observe(this.stage);
@@ -285,7 +315,7 @@ export class MultiLivePage {
         <button class="ml-pane-btn ml-sec" data-ml="select" title="이 패인 채팅 보기" aria-label="이 패인 채팅 보기">${PANE_ICON.chat}</button>
         <button class="ml-pane-btn ml-sec" data-ml="info" title="채널 정보" aria-label="채널 정보">${PANE_ICON.info}</button>
         <button class="ml-pane-btn ml-sec" data-ml="retry" title="다시 연결" aria-label="다시 연결">${PANE_ICON.retry}</button>
-        <button class="ml-pane-btn" data-mp="more" title="더 보기" aria-label="더 보기" aria-haspopup="menu">${PANE_ICON.more}</button>
+        <button class="ml-pane-btn" data-mp="more" title="더 보기" aria-label="더 보기" aria-haspopup="menu" aria-expanded="false">${PANE_ICON.more}</button>
         <button class="ml-pane-close" data-ml="remove" title="닫기">${ICON_CLOSE}</button>
       </div>
       <span class="ml-pane-sound" title="소리 나는 패인">${ICON_SOUND}</span>${paneControlsHtml()}`;
@@ -341,7 +371,7 @@ export class MultiLivePage {
     this.root.querySelector('[data-ml="alert-pos"]').hidden = n === 0;
     const ma = this.root.querySelector('[data-ml="multi-audio"]');
     ma.classList.toggle('active', Boolean(state.multiAudio));
-    ma.setAttribute('aria-pressed', String(Boolean(state.multiAudio)));
+    ma.setAttribute('aria-checked', String(Boolean(state.multiAudio)));
     // 지난 구성 기억(MUL-15) — 세션이 있으면 저장, 비면 다시 열기 버튼
     const savedIds = this.savedSessionIds();
     if (n > 0) this.saveSessionIds(sessions.map((x) => x.channelId));
@@ -386,6 +416,9 @@ export class MultiLivePage {
         pane.el.style.setProperty('--ml-hue', String(pane.hue));
       }
       pane.sessionId = s.id;
+      // 성능 수집기가 player.net(채널 앞 6자)과 맞춘다. data-channel-id 를 쓰면 안 된다 — 카드 열기(bindCardOpen)가
+      // 그 속성을 보고 패인 클릭을 "라이브로 열기"로 바꿔 포커스 전환 대신 라이브 단독 보기로 넘어갔다.
+      pane.el.dataset.perfChannel = s.channelId;
       pane.controls?.setChannel(s.channelId);
       this.renderPane(pane, s, order.indexOf(s.id), s.id === state.selectedId);
     }
@@ -530,14 +563,17 @@ export class MultiLivePage {
         this.ratioOutput.textContent = `${this.ratioInput.value}%`; this.syncRatioFill();
         this.render(this.state);
       };
+      // 놓기·취소 중 하나만 오므로 둘 다 떼어 낸다({ once } 만이면 남은 쪽이 다음 끌기에 한 번 더 저장한다).
       const up = () => {
         this.divider.removeEventListener('pointermove', move);
+        this.divider.removeEventListener('pointerup', up);
+        this.divider.removeEventListener('pointercancel', up);
         this.stage.classList.remove('resizing');
         this.commitRatio();
       };
       this.divider.addEventListener('pointermove', move);
-      this.divider.addEventListener('pointerup', up, { once: true });
-      this.divider.addEventListener('pointercancel', up, { once: true });
+      this.divider.addEventListener('pointerup', up);
+      this.divider.addEventListener('pointercancel', up);
     });
     this.divider.addEventListener('dblclick', () => {
       this.localRatio = 0.7;
@@ -575,15 +611,19 @@ export class MultiLivePage {
           this.localGrid = { ...(this.localGrid || { h: this.state.horizontalRatio, v: this.state.verticalRatio }), [axis]: Math.min(0.8, Math.max(0.2, frac)) };
           this.applyCustomGrid(true, (this.state.sessions || []).length);
         };
+        // 취소(pointercancel)도 — 없으면 resizing·끌기 리스너·localGrid 가 남아 실제 비율을 덮었다.
         const up = () => {
           d.removeEventListener('pointermove', move);
+          d.removeEventListener('pointerup', up);
+          d.removeEventListener('pointercancel', up);
           this.stage.classList.remove('resizing');
           const g = this.localGrid;
           this.localGrid = null;
           if (g) this.run(api.multiLiveSetRatios(g.h, g.v));
         };
         d.addEventListener('pointermove', move);
-        d.addEventListener('pointerup', up, { once: true });
+        d.addEventListener('pointerup', up);
+        d.addEventListener('pointercancel', up);
       });
       d.addEventListener('dblclick', () => this.run(api.multiLiveSetRatios(0.5, 0.5)));
     }
@@ -686,7 +726,10 @@ export class MultiLivePage {
       ${ids.length ? `<div class="word-form"><input type="text" maxlength="30" placeholder="지금 구성(${ids.length}개 채널) 이름"><button class="btn primary">저장</button></div>` : ''}
       <div class="sheet-actions"><button type="button" class="btn" data-preset-close>닫기</button></div></form>`;
     document.body.append(scrim);
-    const close = () => dismiss(scrim);
+    const opener = document.activeElement;
+    const close = () => { dismiss(scrim); if (opener?.isConnected) opener.focus({ preventScroll: true }); };
+    (scrim.querySelector('.word-form input') || scrim.querySelector('[data-preset-close]')).focus();
+    scrim.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
     scrim.addEventListener('click', async (e) => {
       if (e.target === scrim || e.target.closest('[data-preset-close]')) { close(); return; }
       const row = e.target.closest('[data-preset-id]');
@@ -829,10 +872,17 @@ export class MultiLivePage {
   }
 
   /** 채널 추가 — 카드·시청 화면의 "멀티라이브에 추가" 도 이걸 부른다. */
-  async add(channelId) {
+  async add(channelId, { quiet = false } = {}) {
     if (!channelId) return;
-    toast('멀티라이브에 추가하는 중…', 1500);
+    if (!quiet) toast('멀티라이브에 추가하는 중…', 1500);
     await this.run(api.multiLiveAdd(channelId));
+  }
+
+  /** 추가하고 선택 — 포커스 배치면 메인 패인이 된다(select 가 메인으로 올린다). */
+  async addAndSelect(channelId) {
+    await this.add(channelId, { quiet: true });
+    const s = (this.state.sessions || []).find((x) => x.channelId === channelId);
+    if (s && s.id !== this.state.selectedId) await this.run(api.multiLiveSelect(s.id));
   }
 }
 

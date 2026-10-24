@@ -1533,6 +1533,37 @@ fn managed_config() -> Configuration {
     }
 }
 
+#[test]
+fn target_latency_margin_shifts_band_and_resets() {
+    let c = coordinator_with(managed_config(), Arc::new(MockFetcher::default()));
+    let base = c
+        .low_latency_controller()
+        .expect("저지연 컨트롤러")
+        .current_configuration();
+    c.set_target_latency_margin(1.0);
+    let cfg = c.low_latency_controller().unwrap().current_configuration();
+    assert!((cfg.target_latency - (base.target_latency + 1.0)).abs() < 1e-9);
+    assert!(
+        (cfg.max_latency - (base.max_latency + 1.0)).abs() < 1e-9,
+        "밴드 폭은 그대로"
+    );
+    assert!(
+        cfg.slow_down_threshold <= 0.25 + 1e-9,
+        "늦추기 문턱을 좁혀 여유가 실제 전방 버퍼가 되게"
+    );
+    c.set_target_latency_margin(99.0); // 상한
+    let cfg = c.low_latency_controller().unwrap().current_configuration();
+    assert!(
+        (cfg.target_latency - (base.target_latency + MAX_TARGET_LATENCY_MARGIN_SECONDS)).abs()
+            < 1e-9
+    );
+    c.set_target_latency_margin(0.0);
+    assert_eq!(
+        c.low_latency_controller().unwrap().current_configuration(),
+        base
+    );
+}
+
 #[tokio::test]
 async fn unselected_pane_gets_stability_target_and_selection_owns_latency() {
     let c = coordinator_with(managed_config(), Arc::new(MockFetcher::default()));

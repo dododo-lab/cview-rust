@@ -1,7 +1,8 @@
 // 멀티라이브·멀티채팅 채널 추가 — 오른쪽 채팅 위로 미끄러져 나오는 사이드바.
 //
 // - 화면 가운데를 가리던 모달 대신, 채팅 자리를 잠시 덮는다 — 무대(패인)는 그대로 보인다.
-// - 고른 채널은 바로 추가하고 사이드바는 열어 둔다 — 여러 채널을 이어서 넣을 수 있다.
+// - 줄 오른쪽 + 를 누르면 바로 추가하고 사이드바는 열어 둔다 — 여러 채널을 이어서 넣을 수 있다.
+// - 썸네일·채널 이름(줄의 나머지)을 누르면 onOpen — 그 채널을 라이브 화면에서 단독으로 본다.
 // - 정렬(시청자·방송 시간·이름)과 출처(전체·팔로잉·인기)는 기억한다. 새로고침은 캐시를 건너뛴다.
 import { api } from './api.js';
 import { esc, safeUrl, toast, imageSrc } from './dom.js';
@@ -11,6 +12,7 @@ const ICON_CLOSE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 const ICON_REFRESH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5a8 8 0 1 0-2.4 5.9"/><path d="M20 4.5v7h-7"/></svg>';
 const ICON_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg>';
 const ICON_CHECK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+const ICON_HEART = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 20.5s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7.6a4.3 4.3 0 0 1 7.5 2.7c0 5.6-7.5 10.2-7.5 10.2Z"/></svg>';
 const ICON_SEARCH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg>';
 
 export const ADD_SORTS = Object.freeze([
@@ -77,6 +79,11 @@ export function mergeLives(following, popular) {
   return [...map.values()];
 }
 
+/** 불러오는 동안의 자리 — 줄 모양 스켈레톤(motion.css 의 sk 맥박). */
+function skeletonRows(n = 7) {
+  return `<div class="ml-addrow-sk-list" role="status" aria-label="방송 목록을 불러오는 중">${Array.from({ length: n }, () => '<div class="ml-addrow-sk"><span class="sk"></span><span class="ml-addrow-sk-text"><i class="sk"></i><i class="sk"></i><i class="sk short"></i></span></div>').join('')}</div>`;
+}
+
 function relTime(at, now = Date.now()) {
   const sec = Math.round((now - at) / 1000);
   if (sec < 10) return '방금';
@@ -88,16 +95,19 @@ export class MultiLiveAddDrawer {
   /**
    * @param {HTMLElement} host `.ml-body` — 채팅과 같은 컨테이너
    * @param {{ isLoggedIn: () => boolean, getState: () => any, onAdd: (channelId: string) => Promise<void>,
-   *   toggleSelector?: string, unit?: string }} opts
-   *   toggleSelector — 여는 버튼(바깥 클릭으로 치지 않는다), unit — 꽉 참 안내에 쓰는 이름(패인·채널)
+   *   onOpen?: (channelId: string) => void, addLabel?: string, toggleSelector?: string, unit?: string }} opts
+   *   onOpen — 줄(썸네일·이름)을 누를 때. 없으면 줄을 눌러도 추가한다.
+   *   addLabel — + 버튼 풍선말, toggleSelector — 여는 버튼(바깥 클릭으로 치지 않는다), unit — 꽉 참 안내에 쓰는 이름(패인·채널)
    */
-  constructor(host, { isLoggedIn, getState, onAdd, toggleSelector = '[data-ml="add"]', unit = '패인' }) {
+  constructor(host, { isLoggedIn, getState, onAdd, onOpen = null, addLabel = '추가', toggleSelector = '[data-ml="add"]', unit = '패인' }) {
     this.host = host;
     this.toggleSelector = toggleSelector;
     this.unit = unit;
     this.isLoggedIn = isLoggedIn;
     this.getState = getState;
     this.onAdd = onAdd;
+    this.onOpen = onOpen;
+    this.addLabel = addLabel;
     this.items = [];
     this.loadedAt = 0;
     this.loading = false;
@@ -115,17 +125,17 @@ export class MultiLiveAddDrawer {
     this.el.inert = true;
     this.el.innerHTML = `
       <header class="ml-addbar-head">
-        <strong>채널 추가</strong>
-        <span class="ml-addbar-count"></span>
+        <div class="ml-addbar-titles"><strong>채널 추가</strong><span class="ml-addbar-count"></span></div>
         <div class="grow"></div>
         <button class="ml-tb-icon ml-addbar-refresh" data-add="refresh" title="새로고침" aria-label="새로고침">${ICON_REFRESH}</button>
         <button class="ml-tb-icon" data-add="close" title="닫기 (Esc)" aria-label="닫기">${ICON_CLOSE}</button>
       </header>
+      <div class="ml-addbar-slots" aria-hidden="true"></div>
       <div class="ml-addbar-tools">
         <label class="ml-addbar-search">${ICON_SEARCH}<input type="search" placeholder="채널·제목·카테고리로 찾기" autocomplete="off" spellcheck="false" aria-label="방송 찾기"></label>
         <div class="ml-addbar-row">
           <div class="segmented ml-addbar-source" role="group" aria-label="출처">
-            ${ADD_SOURCES.map((s) => `<button class="seg" data-source="${s.id}">${s.label}</button>`).join('')}
+            ${ADD_SOURCES.map((s) => `<button class="seg" data-source="${s.id}">${s.label}<b class="ml-src-n" data-src-n="${s.id}"></b></button>`).join('')}
           </div>
           <select class="select ml-addbar-sort" aria-label="정렬">
             ${ADD_SORTS.map((s) => `<option value="${s.id}">${s.label}</option>`).join('')}
@@ -134,7 +144,8 @@ export class MultiLiveAddDrawer {
       </div>
       <div class="ml-addbar-notice" hidden></div>
       <div class="ml-addbar-list" tabindex="-1"></div>
-      <footer class="ml-addbar-foot"><span class="ml-addbar-status"></span></footer>`;
+      <footer class="ml-addbar-foot"><span class="ml-addbar-status"></span>
+        <span class="ml-addbar-keys" aria-hidden="true"><kbd>↑↓</kbd> 이동 <kbd>→</kbd> 추가 <kbd>esc</kbd> 닫기</span></footer>`;
     host.append(this.el);
 
     this.list = this.el.querySelector('.ml-addbar-list');
@@ -143,6 +154,7 @@ export class MultiLiveAddDrawer {
     this.notice = this.el.querySelector('.ml-addbar-notice');
     this.status = this.el.querySelector('.ml-addbar-status');
     this.countEl = this.el.querySelector('.ml-addbar-count');
+    this.slotsEl = this.el.querySelector('.ml-addbar-slots');
     this.refreshBtn = this.el.querySelector('[data-add="refresh"]');
     this.sortSelect.value = this.sort;
 
@@ -151,20 +163,29 @@ export class MultiLiveAddDrawer {
     this.filter.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        this.list.querySelector('.ml-addrow:not(:disabled)')?.click();
+        // 찾기 칸의 Enter 는 예전처럼 맨 위 방송을 추가한다(+).
+        this.list.querySelector('.ml-addrow-act:not(:disabled)')?.click();
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        this.list.querySelector('.ml-addrow:not(:disabled)')?.focus();
+        this.list.querySelector('.ml-addrow-open:not(:disabled)')?.focus();
       }
     });
+    // 위·아래는 줄 사이, 오른쪽·왼쪽은 같은 줄의 열기 ↔ + 사이.
     this.list.addEventListener('keydown', (e) => {
+      const row = document.activeElement?.closest?.('.ml-addrow');
+      if (!row || !this.list.contains(row)) return;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        const to = row.querySelector(e.key === 'ArrowRight' ? '.ml-addrow-act:not(:disabled)' : '.ml-addrow-open:not(:disabled)');
+        if (to && to !== document.activeElement) { e.preventDefault(); to.focus(); }
+        return;
+      }
       if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-      const rows = [...this.list.querySelectorAll('.ml-addrow:not(:disabled)')];
-      const i = rows.indexOf(document.activeElement);
-      if (i < 0) return;
+      const rows = [...this.list.querySelectorAll('.ml-addrow')];
+      const i = rows.indexOf(row);
       e.preventDefault();
-      if (e.key === 'ArrowUp' && i === 0) this.filter.focus();
-      else rows[Math.min(rows.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1))]?.focus();
+      if (e.key === 'ArrowUp' && i === 0) { this.filter.focus(); return; }
+      const next = rows[Math.min(rows.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1))];
+      next?.querySelector('.ml-addrow-open:not(:disabled)')?.focus();
     });
     this.sortSelect.addEventListener('change', () => { this.sort = this.sortSelect.value; this.persist(); this.renderList(); });
     this.el.addEventListener('keydown', (e) => {
@@ -193,8 +214,15 @@ export class MultiLiveAddDrawer {
     const docked = chat && !chat.classList.contains('collapsed') && !this.host.classList.contains('chat-overlay');
     const w = docked ? chat.getBoundingClientRect().width : 0;
     this.el.style.setProperty('--ml-addbar-w', `${Math.max(320, Math.round(w)) || 360}px`);
-    this.el.classList.add('open');
+    this.el.classList.add('open', 'entering');
+    clearTimeout(this.enterTimer);
+    this.enterTimer = setTimeout(() => this.el.classList.remove('entering'), 700); // 열 때만 줄이 차례로 떠오른다
     this.el.setAttribute('aria-hidden', 'false');
+    this.markToggles(true);
+    // 닫을 때 초점을 돌려줄 곳 — 키보드로 연 여는 버튼. 마우스로 누르면 WebKit 은 버튼에 초점을 주지 않아
+    // activeElement 가 엉뚱한 곳(패인·body)이므로 그때는 close() 가 보이는 여는 버튼을 고른다.
+    const prev = document.activeElement;
+    this.returnFocus = prev?.closest?.(this.toggleSelector) || null;
     this.el.inert = false;
     this.filter.value = '';
     this.sync();
@@ -205,9 +233,23 @@ export class MultiLiveAddDrawer {
 
   close() {
     if (!this.isOpen) return;
+    const hadFocus = this.el.contains(document.activeElement);
     this.el.classList.remove('open');
     this.el.setAttribute('aria-hidden', 'true');
     this.el.inert = true;
+    this.markToggles(false);
+    // 안에 초점이 있었으면(inert 가 body 로 떨어뜨린다) 연 버튼으로 돌려준다
+    if (hadFocus) {
+      const shown = (b) => b?.isConnected && b.offsetParent && !b.disabled;
+      const back = shown(this.returnFocus) ? this.returnFocus : [...document.querySelectorAll(this.toggleSelector)].find(shown);
+      back?.focus({ preventScroll: true });
+    }
+    this.returnFocus = null;
+  }
+
+  /** 여는 버튼에 열림 상태를 단다 — 머리줄 채널 추가가 열린 동안 눌린 모양(×)으로 보인다. */
+  markToggles(on) {
+    for (const b of document.querySelectorAll(this.toggleSelector)) b.setAttribute('aria-expanded', String(on));
   }
 
   /** 멀티라이브 상태가 바뀌면 — 추가됨 표시·남은 자리·꽉 참 안내. */
@@ -215,7 +257,13 @@ export class MultiLiveAddDrawer {
     if (!this.isOpen) return;
     const st = this.getState() || {};
     const n = (st.sessions || []).length;
-    this.countEl.textContent = `${n} / ${st.maxSessions ?? 4}`;
+    const max = st.maxSessions ?? 4;
+    const left = Math.max(0, max - n);
+    this.countEl.textContent = st.canAdd === false || !left ? `${n} / ${max} · 가득 찼어요` : `${n} / ${max} · ${left}개 더 볼 수 있어요`;
+    // 자리 칸 — 쓴 칸은 채우고 빈 칸은 비운다(꽉 차면 주황)
+    const slots = Array.from({ length: max }, (_, i) => `<i${i < n ? ' class="on"' : ''}></i>`).join('');
+    if (this.slotsHtml !== slots) { this.slotsEl.innerHTML = slots; this.slotsHtml = slots; }
+    this.slotsEl.classList.toggle('full', st.canAdd === false || !left);
     this.notice.hidden = st.canAdd !== false;
     this.notice.textContent = `최대 ${st.maxSessions ?? 4}개까지 볼 수 있어요 — ${this.unit}을 닫으면 더 추가할 수 있습니다`;
     this.renderList();
@@ -227,7 +275,7 @@ export class MultiLiveAddDrawer {
     this.failed = '';
     this.refreshBtn.classList.add('spinning');
     this.refreshBtn.disabled = true;
-    if (!this.items.length) this.list.innerHTML = '<div class="empty"><div class="spinner"></div></div>';
+    if (!this.items.length) { this.list.innerHTML = skeletonRows(); this.listHtml = ''; }
     this.renderStatus();
     const [following, popular] = await Promise.allSettled([
       this.isLoggedIn() ? api.followingLives(refresh) : Promise.resolve([]),
@@ -247,6 +295,34 @@ export class MultiLiveAddDrawer {
     this.renderList();
   }
 
+  /**
+   * 목록을 바꿔 끼운다 — 멀티라이브 상태가 올 때마다 불리므로 같으면 그대로 두고(썸네일·초점 유지),
+   * 바뀌면 키보드 초점을 같은 채널의 같은 자리(열기·+)로 되돌린다. + 가 막 비활성이 됐으면 그 줄의 열기로.
+   */
+  paintList(html) {
+    if (html === this.listHtml && this.list.querySelector('.ml-addrow')) return;
+    const active = document.activeElement;
+    const focused = active && this.list.contains(active) ? active.closest('[data-channel-id]') && active : null;
+    const id = focused?.dataset.channelId;
+    const wasAct = focused?.classList.contains('ml-addrow-act');
+    const scroll = this.list.scrollTop;
+    this.list.innerHTML = html;
+    this.listHtml = html;
+    this.list.scrollTop = scroll;
+    if (!id) return;
+    const row = [...this.list.querySelectorAll('.ml-addrow')].find((r) => r.dataset.channelId === id);
+    const to = row && ((wasAct && row.querySelector('.ml-addrow-act:not(:disabled)')) || row.querySelector('.ml-addrow-open:not(:disabled)'));
+    (to || this.filter).focus({ preventScroll: true });
+  }
+
+  /** 출처 탭 옆 개수 — 지금 검색어로 거른 수. */
+  renderCounts(query = '') {
+    for (const b of this.el.querySelectorAll('[data-src-n]')) {
+      const n = this.items.length ? filterLives(this.items, { source: b.dataset.srcN, query }).length : '';
+      b.textContent = n === '' ? '' : String(n);
+    }
+  }
+
   renderSource() {
     for (const b of this.el.querySelectorAll('[data-source]')) {
       const on = b.dataset.source === this.source;
@@ -258,6 +334,8 @@ export class MultiLiveAddDrawer {
   renderStatus() {
     if (this.loading) { this.status.textContent = '불러오는 중…'; return; }
     if (this.failed && !this.items.length) { this.status.textContent = this.failed; return; }
+    // 목록은 있는데 다시 받기가 실패했으면 — 낡은 목록이라는 것을 알린다(새로 고침 버튼으로 다시).
+    if (this.failed) { this.status.textContent = `갱신하지 못했습니다 · ${relTime(this.loadedAt)} 목록`; return; }
     const shown = this.list.querySelectorAll('.ml-addrow').length;
     this.status.textContent = this.loadedAt ? `방송 ${shown}개 · ${relTime(this.loadedAt)} 갱신` : '';
   }
@@ -269,37 +347,52 @@ export class MultiLiveAddDrawer {
     const added = new Set((st.sessions || []).map((s) => s.channelId));
     const items = sortLives(filterLives(this.items, { source: this.source, query: this.filter.value }), this.sort);
     if (!items.length) {
+      const q = this.filter.value.trim();
       const why = this.failed && !this.items.length
-        ? `<strong>방송 목록을 불러오지 못했습니다</strong><button class="btn" data-add="refresh">다시 시도</button>`
+        ? `<strong>방송 목록을 불러오지 못했습니다</strong><span>${esc(this.failed)}</span><button class="btn" data-add="refresh">다시 시도</button>`
         : this.source === 'following' && !this.isLoggedIn()
-          ? '<strong>로그인하면 팔로잉 방송을 볼 수 있어요</strong>'
-          : `<strong>${this.filter.value.trim() ? '찾는 방송이 없습니다' : '추가할 수 있는 방송이 없습니다'}</strong>`;
-      this.list.innerHTML = `<div class="empty">${why}</div>`;
+          ? '<strong>로그인하면 팔로잉 방송을 볼 수 있어요</strong><span>전체·인기에서 골라 추가할 수도 있어요</span>'
+          : q
+            ? `<strong>"${esc(q)}" 방송이 없습니다</strong><span>채널 이름·방송 제목·카테고리로 찾을 수 있어요</span>`
+            : '<strong>추가할 수 있는 방송이 없습니다</strong><span>새로고침으로 목록을 다시 받아 보세요</span>';
+      this.list.innerHTML = `<div class="empty"><div class="empty-logo" aria-hidden="true"></div>${why}</div>`;
+      this.renderCounts(q);
+      this.listHtml = '';
       this.renderStatus();
       return;
     }
-    const scroll = this.list.scrollTop;
-    this.list.innerHTML = items.map((l) => {
+    this.renderCounts(this.filter.value);
+    const html = items.map((l, i) => {
       const thumb = safeUrl(l.thumbnailUrl);
+      const avatar = safeUrl(l.channelImageUrl);
       const isAdded = added.has(l.channelId);
       const busy = this.adding.has(l.channelId);
       const uptime = uptimeText(l.openDate);
-      const tag = l.following ? '<span class="ml-addrow-tag">팔로잉</span>' : '';
-      const meta = [l.categoryName, uptime].filter(Boolean).map(esc).join(' · ');
+      const tag = l.following ? `<span class="ml-addrow-tag" title="팔로잉">${ICON_HEART}</span>` : '';
+      const id = esc(l.channelId);
+      const name = esc(l.channelName || '');
+      const actTitle = isAdded ? '이미 추가했어요' : busy ? '추가하는 중…' : canAdd ? this.addLabel : '자리가 없어요';
+      // 열기 영역과 + 를 따로 둔다(버튼 안에 버튼은 못 넣는다). onOpen 이 없으면 열기 영역도 추가한다.
       return `
-        <button class="ml-addrow${isAdded ? ' added' : ''}${busy ? ' busy' : ''}" data-add="pick" data-channel-id="${esc(l.channelId)}"
-          ${isAdded || busy || !canAdd ? 'disabled' : ''} title="${esc(l.liveTitle || l.channelName || '')}">
-          <span class="ml-addrow-thumb">${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
-            <span class="ml-addrow-viewers">${esc(l.viewerCountText ?? String(l.viewerCount ?? ''))}명</span></span>
+        <div class="ml-addrow${isAdded ? ' added' : ''}${busy ? ' busy' : ''}${!canAdd ? ' full' : ''}${this.justAdded === l.channelId ? ' just-added' : ''}" data-channel-id="${id}" style="--i:${Math.min(i, 8)}">
+          <button class="ml-addrow-open" data-add="${this.onOpen ? 'open' : 'pick'}" data-channel-id="${id}"
+            ${!this.onOpen && (isAdded || busy || !canAdd) ? 'disabled' : ''} title="${esc(this.onOpen ? `${l.channelName || ''} — 라이브로 보기` : (l.liveTitle || l.channelName || ''))}">
+          <span class="ml-addrow-thumb${thumb ? '' : ' no-thumb'}">${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">`
+            : avatar ? `<img class="ml-addrow-ph-bg" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer"><img class="ml-addrow-ph" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
+            <span class="ml-addrow-viewers"><i class="dot"></i>${esc(l.viewerCountText ?? String(l.viewerCount ?? ''))}</span>
+            ${uptime ? `<span class="ml-addrow-uptime">${esc(uptime)}</span>` : ''}
+            ${l.adult ? '<span class="ml-addrow-adult">19</span>' : ''}</span>
           <span class="ml-addrow-text">
-            <span class="ml-addrow-name"><span class="ellipsis">${esc(l.channelName)}</span>${tag}</span>
-            <span class="ml-addrow-title ellipsis">${esc(l.liveTitle || '')}</span>
-            ${meta ? `<span class="ml-addrow-meta ellipsis">${meta}</span>` : ''}
+            <span class="ml-addrow-name">${avatar ? `<img class="ml-addrow-avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="ml-addrow-avatar"></span>'}<span class="ellipsis">${esc(l.channelName)}</span>${tag}</span>
+            <span class="ml-addrow-title">${esc(l.liveTitle || '제목 없음')}</span>
+            ${l.categoryName ? `<span class="ml-addrow-cat ellipsis">${esc(l.categoryName)}</span>` : ''}
           </span>
-          <span class="ml-addrow-act" aria-hidden="true">${busy ? '<span class="spinner"></span>' : isAdded ? ICON_CHECK : ICON_PLUS}</span>
-        </button>`;
+          </button>
+          <button class="ml-addrow-act" data-add="pick" data-channel-id="${id}" ${isAdded || busy || !canAdd ? 'disabled' : ''}
+            title="${esc(actTitle)}" aria-label="${name} ${esc(actTitle)}">${busy ? '<span class="spinner"></span>' : isAdded ? ICON_CHECK : ICON_PLUS}</button>
+        </div>`;
     }).join('');
-    this.list.scrollTop = scroll;
+    this.paintList(html);
     this.renderStatus();
   }
 
@@ -314,15 +407,30 @@ export class MultiLiveAddDrawer {
     }
     const act = e.target.closest('[data-add]');
     if (!act) return;
+    // 바깥(페이지의 카드 열기)으로 올리지 않는다 — 아래에서 목록을 다시 그리면 누른 줄이 떨어져 엉뚱하게 열린다.
+    e.stopPropagation();
     switch (act.dataset.add) {
       case 'close': this.close(); break;
       case 'refresh': this.load(true); break;
+      case 'open': {
+        const id = act.dataset.channelId;
+        if (!id || !this.onOpen) break;
+        this.close();
+        this.onOpen(id);
+        break;
+      }
       case 'pick': {
         const id = act.dataset.channelId;
         if (!id || this.adding.has(id)) break;
         this.adding.add(id);
         this.renderList();
-        try { await this.onAdd(id); } finally {
+        try {
+          await this.onAdd(id);
+          // 방금 추가한 줄 — 체크가 톡 튀고 줄이 잠깐 빛난다(motion.css)
+          this.justAdded = id;
+          clearTimeout(this.justAddedTimer);
+          this.justAddedTimer = setTimeout(() => { this.justAdded = null; if (this.isOpen) this.renderList(); }, 1400);
+        } finally {
           this.adding.delete(id);
           if (this.isOpen) this.sync(); else this.renderList();
         }

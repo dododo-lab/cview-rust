@@ -3,13 +3,14 @@
 // 데이터(팔로잉·인기 라이브)와 로컬 최근 시청 기록만으로 그린다.
 import { api } from './api.js';
 import { esc, safeUrl, icons, imageSrc } from './dom.js';
-import { liveCard, emptyState, liveGrid, recentChannels, uptimeText, compactCount } from './cards.js';
+import { liveCard, emptyState, errorState, friendlyError, liveGrid, recentChannels, uptimeText, compactCount } from './cards.js';
 import { clipCard } from './channel.js';
 import { continueCard } from './media.js';
+import { motionReduced } from './motion.js';
 
 const HERO_SIZE = 5;
 // 자동 넘김 — 대기열 진행 막대(CSS `queue-progress`, 7초)가 끝나면 다음 장으로. 호버 중엔 CSS 가 멈춘다.
-const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+// 모션 줄이기(시스템·설정 "절약")면 넘기지 않는다 — 절약은 애니메이션 시간을 0 으로 만들어 끝 이벤트가 곧바로 온다.
 const POPULAR_SIZE = 48;
 const POPULAR_GRID = 24;
 const CHIP_LIMIT = 8;
@@ -198,7 +199,7 @@ export class HomePage {
     });
     this.body.addEventListener('click', (e) => this.onClick(e));
     this.body.addEventListener('animationend', (e) => {
-      if (e.animationName !== 'queue-progress' || this.root.hidden || reducedMotion.matches) return;
+      if (e.animationName !== 'queue-progress' || this.root.hidden || motionReduced()) return;
       this.setHero(this.heroIndex + 1);
     });
   }
@@ -250,7 +251,8 @@ export class HomePage {
     let html = '<div class="home">';
     if (!loggedIn) html += loginBanner();
     else if (followingRes.status === 'rejected') {
-      html += `<div class="home-notice">팔로잉 라이브를 불러오지 못했습니다 · ${esc(followingRes.reason && followingRes.reason.message)}</div>`;
+      // 원문 대신 쉬운 안내 + 다시 시도(app.js 가 홈을 다시 불러온다) — 다른 화면의 실패와 같게
+      html += `<div class="home-notice" role="alert">팔로잉 라이브를 불러오지 못했습니다 · ${esc(friendlyError(followingRes.reason))} <button class="link-btn" data-retry>다시 시도</button></div>`;
     } else if (following.length) {
       html += followingStrip(following);
     }
@@ -285,7 +287,7 @@ export class HomePage {
           <div class="popular-grid">${discover.length ? popularGrid(discover, this.category) : emptyState('추천할 라이브 채널이 없습니다')}</div>
         </section>`;
     } else {
-      html += emptyState('인기 라이브를 불러오지 못했습니다', popularRes.reason && popularRes.reason.message);
+      html += errorState('인기 라이브를 불러오지 못했습니다', popularRes.reason);
     }
     html += '<section class="home-section" data-rail="clips" hidden></section>';
     html += '</div>';
@@ -333,7 +335,7 @@ export class HomePage {
     const shelfBtn = e.target.closest('[data-shelf]');
     if (shelfBtn) {
       const shelf = shelfBtn.closest('.home-section').querySelector('.shelf');
-      shelf.scrollBy({ left: Number(shelfBtn.dataset.shelf) * shelf.clientWidth * 0.9, behavior: 'smooth' });
+      shelf.scrollBy({ left: Number(shelfBtn.dataset.shelf) * shelf.clientWidth * 0.9, behavior: motionReduced() ? 'auto' : 'smooth' });
       return;
     }
     const vod = e.target.closest('[data-vod-no]');

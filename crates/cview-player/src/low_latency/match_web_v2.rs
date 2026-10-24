@@ -165,7 +165,10 @@ mod tests {
         let now = SystemClock.now();
         c.process_backoff_only_tick_at(None, now + 10.0);
         assert_eq!(c.current_effective_target_latency(), 4.25);
+        // 곧바로 세 번 — 반복 재버퍼라 한 단계 내려오는 데 120초
         c.process_backoff_only_tick_at(None, now + LATENCY_BACKOFF_HOLD + 1.0);
+        assert_eq!(c.current_effective_target_latency(), 4.25);
+        c.process_backoff_only_tick_at(None, now + LATENCY_BACKOFF_REPEAT_HOLD + 1.0);
         assert_eq!(c.current_effective_target_latency(), 3.5);
         let r = rec.lock().unwrap();
         assert_eq!(r.targets.last(), Some(&3.5));

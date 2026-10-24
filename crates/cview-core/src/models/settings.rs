@@ -561,6 +561,8 @@ pub struct NetworkSettings {
     pub reconnect_base_delay: f64,
     pub max_connections_per_host: i64,
     pub force_stream_proxy: bool,
+    /// 자동 프리셋 — 켜져 있으면 앱이 시청 상황에 맞춰 위 값들을 프리셋으로 바꿔 넣는다.
+    pub auto_preset: bool,
 }
 
 impl Default for NetworkSettings {
@@ -580,6 +582,7 @@ impl Default for NetworkSettings {
             reconnect_base_delay: 1.0,
             max_connections_per_host: 6,
             force_stream_proxy: true,
+            auto_preset: false,
         }
     }
 }
@@ -604,10 +607,14 @@ impl NetworkSettings {
     }
 
     /// 프리셋에 정의된 값과 현재 값이 같은지 비교하여 프리셋 자동 감지.
+    /// 자동 프리셋이 켜져 있으면 값과 상관없이 `Auto`.
     pub fn matching_preset(&self) -> NetworkPreset {
+        if self.auto_preset {
+            return NetworkPreset::Auto;
+        }
         NetworkPreset::ALL
             .into_iter()
-            .filter(|p| *p != NetworkPreset::Custom)
+            .filter(|p| !matches!(p, NetworkPreset::Custom | NetworkPreset::Auto))
             .find(|p| *self == p.settings())
             .unwrap_or(NetworkPreset::Custom)
     }
@@ -617,6 +624,7 @@ impl NetworkSettings {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum NetworkPreset {
+    Auto,
     Balanced,
     Stability,
     LowLatency,
@@ -625,7 +633,8 @@ pub enum NetworkPreset {
 }
 
 impl NetworkPreset {
-    pub const ALL: [NetworkPreset; 5] = [
+    pub const ALL: [NetworkPreset; 6] = [
+        Self::Auto,
         Self::Balanced,
         Self::Stability,
         Self::LowLatency,
@@ -635,6 +644,7 @@ impl NetworkPreset {
 
     pub fn display_name(self) -> &'static str {
         match self {
+            Self::Auto => "자동",
             Self::Balanced => "밸런스",
             Self::Stability => "안정 우선",
             Self::LowLatency => "저지연 우선",
@@ -645,6 +655,7 @@ impl NetworkPreset {
 
     pub fn description(self) -> &'static str {
         match self {
+            Self::Auto => "시청 상황에 맞춰 밸런스·고성능·안정 우선을 고름",
             Self::Balanced => "일반 시청에 적합한 기본 설정",
             Self::Stability => "느린 네트워크에서도 끊김 없는 안정적인 연결",
             Self::LowLatency => "빠른 응답 우선. 불안정한 네트워크에서 끊김 가능",
@@ -655,6 +666,7 @@ impl NetworkPreset {
 
     pub fn icon(self) -> &'static str {
         match self {
+            Self::Auto => "wand.and.stars",
             Self::Balanced => "scale.3d",
             Self::Stability => "shield.checkered",
             Self::LowLatency => "bolt.fill",
@@ -663,9 +675,15 @@ impl NetworkPreset {
         }
     }
 
+    /// 프리셋 값. `Auto` 는 지금 고른 프리셋을 알 수 없으므로 밸런스 값에 자동 표시만 켠다 —
+    /// 실제 값은 [`Self::auto_choice`] 로 고른 프리셋에 `auto_preset` 을 켜서 넣는다.
     pub fn settings(self) -> NetworkSettings {
         let base = NetworkSettings::default();
         match self {
+            Self::Auto => NetworkSettings {
+                auto_preset: true,
+                ..base
+            },
             Self::Balanced | Self::Custom => base,
             Self::Stability => NetworkSettings {
                 request_rate_limit: 5,
@@ -706,6 +724,18 @@ impl NetworkPreset {
                 force_stream_proxy: true,
                 ..base
             },
+        }
+    }
+
+    /// 자동 프리셋이 고를 프리셋. 최근 재생 오류가 있으면 안정 우선, 동시 스트림이 둘 이상이면
+    /// 고성능, 그 밖에는 밸런스.
+    pub fn auto_choice(active_streams: usize, unstable: bool) -> NetworkPreset {
+        if unstable {
+            Self::Stability
+        } else if active_streams >= 2 {
+            Self::Performance
+        } else {
+            Self::Balanced
         }
     }
 }
@@ -989,6 +1019,34 @@ mod tests {
             ..NetworkSettings::default()
         };
         assert_eq!(custom.matching_preset(), NetworkPreset::Custom);
+        let auto = NetworkSettings {
+            auto_preset: true,
+            ..NetworkPreset::Performance.settings()
+        };
+        assert_eq!(auto.matching_preset(), NetworkPreset::Auto);
+    }
+
+    #[test]
+    fn network_auto_choice() {
+        assert_eq!(
+            NetworkPreset::auto_choice(0, false),
+            NetworkPreset::Balanced
+        );
+        assert_eq!(
+            NetworkPreset::auto_choice(1, false),
+            NetworkPreset::Balanced
+        );
+        assert_eq!(
+            NetworkPreset::auto_choice(3, false),
+            NetworkPreset::Performance
+        );
+        assert_eq!(
+            NetworkPreset::auto_choice(3, true),
+            NetworkPreset::Stability
+        );
+        // 구 저장본(키 없음)은 자동이 꺼진 채로 읽힌다.
+        let old: NetworkSettings = serde_json::from_str(r#"{"retryCount":3}"#).unwrap();
+        assert!(!old.auto_preset);
     }
 
     #[test]

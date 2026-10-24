@@ -103,11 +103,16 @@ impl ManagerState {
             let target = if primary {
                 HlsJsForcedQualityTarget::MULTI_LIVE_1080P_8MBPS
             } else {
-                focus_quality::secondary_target(
-                    secondary_pane_size,
-                    s.player().multi_live_quality_target().height,
+                // 패인이 4개 이상이면 소리 없는 보조는 360p 로 — 메인은 그대로 1080p
+                focus_quality::cap_secondary_for_pane_count(
+                    focus_quality::secondary_target(
+                        secondary_pane_size,
+                        s.player().multi_live_quality_target().height,
+                        !s.player().is_muted(),
+                        thermal_cap,
+                    ),
+                    self.sessions.len(),
                     !s.player().is_muted(),
-                    thermal_cap,
                 )
             };
             if !s.player().set_multi_live_quality_target(target) {
@@ -124,11 +129,15 @@ impl ManagerState {
         }
     }
 
-    /// (자동 개선, 업스케일) — 업스케일은 되감기 메인 세션만.
+    /// (자동 개선, 업스케일) — 둘 다 메인 세션만.
+    /// 자동 개선은 켜져 있는 동안 영상에 CSS 필터를 걸어 영상 프레임마다 GPU 로 거르고, 2초마다 프레임을
+    /// 읽어 간다. 작은 보조 패인에서는 보정이 거의 보이지 않는데 패인 수만큼 그 비용이 늘었다(GPU 최적화
+    /// 2026-10-24). 메인이 바뀌면 `reconcile_focus_quality` 가 다시 나눈다.
     pub fn picture_enhancement(&self, session_id: Uuid, ps: &PlayerSettings) -> (bool, bool) {
+        let main = Some(session_id) == self.rewind_main_session_id();
         (
-            ps.auto_picture_enhancement,
-            ps.video_upscaling && Some(session_id) == self.rewind_main_session_id(),
+            ps.auto_picture_enhancement && main,
+            ps.video_upscaling && main,
         )
     }
 

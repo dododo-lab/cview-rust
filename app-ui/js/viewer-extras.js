@@ -2,7 +2,7 @@
 // PLY-12 채팅 표시 모드(사이드·오버레이·숨김), PLY-14 헤더 채널 레일(다른 방송 바로 전환),
 // PLY-03 라이브 되감기(←/→ 10초, ⇧ 60초 — 재생 목록이 허용하는 범위 안), PLY-16 후원 알림 위치 끌어 맞추기.
 import { api } from './api.js';
-import { esc, safeUrl, imageSrc } from './dom.js';
+import { esc, safeUrl, imageSrc, keyBelongsToTarget } from './dom.js';
 import { chatPrefs, onChatPrefs, updateChatPrefs } from './chat-prefs.js';
 
 const MODES = ['side', 'overlay', 'hidden'];
@@ -118,9 +118,7 @@ export class ViewerExtras {
 
   onKey(e) {
     const v = this.viewer;
-    if (v.root.hidden || !v.isPlaying || e.metaKey || e.ctrlKey || e.altKey) return;
-    const t = e.target;
-    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    if (v.root.hidden || !v.isPlaying || e.metaKey || e.ctrlKey || e.altKey || keyBelongsToTarget(e)) return;
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
     const video = v.controls.video;
     if (!video || !video.seekable || !video.seekable.length) return;

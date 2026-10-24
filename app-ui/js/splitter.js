@@ -74,12 +74,14 @@ export function installChatSplitter({ container, chat, key }) {
     };
     const up = () => {
       handle.removeEventListener('pointermove', move);
+      handle.removeEventListener('pointerup', up);
+      handle.removeEventListener('pointercancel', up);
       container.classList.remove('resizing');
       persist();
     };
     handle.addEventListener('pointermove', move);
-    handle.addEventListener('pointerup', up, { once: true });
-    handle.addEventListener('pointercancel', up, { once: true });
+    handle.addEventListener('pointerup', up);
+    handle.addEventListener('pointercancel', up);
   });
   handle.addEventListener('dblclick', () => {
     state.width = CHAT_WIDTH.default;

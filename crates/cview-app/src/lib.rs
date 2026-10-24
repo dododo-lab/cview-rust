@@ -92,6 +92,10 @@ fn spawn_multi_live_state_task<R: Runtime>(app: AppHandle<R>) {
                 }
                 _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {}
             }
+            // 자동 네트워크 프리셋 — 멀티라이브 스트림 수·재생 오류에 맞춰 다시 고른다.
+            if commands::settings::apply_auto_network(&app.state::<AppServices>(), &shell) {
+                let _ = app.emit(events::NETWORK_PRESET_CHANGED, ());
+            }
             let state = shell.state_dto();
             if last.as_ref() != Some(&state) {
                 let _ = app.emit(events::MULTILIVE_STATE, &state);

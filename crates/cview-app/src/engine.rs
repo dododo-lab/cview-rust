@@ -366,6 +366,11 @@ impl HlsEngineControl for WebViewHlsEngine {
     fn set_controller_target_latency(&self, seconds: f64, generation: u64) {
         if self.is_latency_control_session_current(generation) {
             self.send(JsCommand::SetControllerTargetLatency(seconds));
+        } else {
+            tracing::debug!(
+                "엔진: 낡은 토큰의 목표 지연 {seconds:.2}s 버림 (토큰 {generation}, 현재 {})",
+                self.generation()
+            );
         }
     }
 
