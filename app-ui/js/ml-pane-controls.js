@@ -8,6 +8,7 @@
 import { esc, toast, hideWithExit } from './dom.js';
 import { qualityOptions, liveBadgeState, togglePipFor, installVolumeReveal } from './viewer-controls.js';
 import { ADJUST_RANGES, applyPicture, pictureFor, resetAdjust, setPicture } from './picture.js';
+import { watchBarHtml, watchBarEndHtml } from './ml-watch.js';
 
 const IDLE_MS = 2500;
 
@@ -41,11 +42,11 @@ export function paneControlsHtml() {
         </div>
         <button class="ml-live-pill at-edge" data-mp="live" title="라이브로 이동">LIVE</button>
         <span class="ml-pane-cap"></span>
-        <div class="grow"></div>
+        <div class="grow"></div>${watchBarHtml()}
         <button class="ml-pane-btn" data-mp="gear" title="화질·지연" aria-label="화질·지연" aria-haspopup="menu" aria-expanded="false">${I.gear}</button>
         <button class="ml-pane-btn ml-sec" data-mp="pip" title="PiP" aria-label="PiP">${I.pip}</button>
         <button class="ml-pane-btn ml-sec" data-ml="single" title="이 채널만 크게 (더블클릭)" aria-label="이 채널만 크게">${I.expand}</button>
-        <button class="ml-pane-btn" data-mp="fullscreen" title="이 패인 전체 화면" aria-label="전체 화면">${I.fullscreen}</button>
+        <button class="ml-pane-btn" data-mp="fullscreen" title="이 패인 전체 화면" aria-label="전체 화면">${I.fullscreen}</button>${watchBarEndHtml()}
       </div>
       <div class="ml-pane-menu ml-gear-menu" role="menu" hidden></div>
       <div class="ml-pane-menu ml-more-pane" role="menu" hidden>

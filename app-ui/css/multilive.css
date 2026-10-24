@@ -567,3 +567,24 @@
 .ml-mc-cell .chat-list { flex: 1; min-height: 0; }
 .ml-mc-cell .merged-line { box-shadow: none; padding-left: 0 !important; }
 .ml-mc-grid.focus .ml-mc-cell:not(.main) .chat-line { font-size: .92em; }
+
+/* 라이브 단독 보기 도구(ml-watch.js) — 예전 시청 화면의 스크린샷·북마크·채팅 표시 방식·영상+채팅 전체 화면·새 창 분리.
+   무대에 올린 패인에서만 보인다(멀티라이브 보기에서는 숨김). 좁은 패인은 단축키로만. */
+.ml-pane .ml-watch-only { display: none; }
+.page-multilive.as-watch .ml-pane.ml-single-target .ml-watch-only { display: grid; }
+@container (max-width: 520px) { .page-multilive.as-watch .ml-pane.ml-single-target .ml-pane-bar .ml-watch-only { display: none; } }
+.ml-pane-btn[data-mw="chatmode"].active { color: #00ffa3; }
+/* 위 정보 — 채널 이름 옆에 인증·팔로워·카테고리 */
+.ml-watch-meta { min-width: 0; font-size: 12px; font-weight: 600; color: rgba(255, 255, 255, 0.78); }
+.ml-watch-meta:empty { display: none; }
+.ml-watch-meta .verified { margin: 0 2px 0 0; color: #00ffa3; font-size: 11px; }
+.ml-watch-meta .sep { margin: 0 5px; font-style: normal; opacity: 0.6; }
+/* 머리줄 — 다른 방송으로 바로 바꿔 보기(멀티라이브에 없는 팔로잉 라이브) */
+.ml-watch-rail { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+.ml-watch-rail[hidden], .page-multilive:not(.as-watch) .ml-watch-rail { display: none; }
+/* 채팅 표시 방식 — 숨김 / 영상 위(예전 시청 화면과 같은 자리·너비) */
+.ml-body.chat-hidden :is(.ml-chat, .chat-splitter, .chat-reopen) { display: none !important; }
+.ml-body.chat-hidden .ml-stage { margin-right: 0; }
+.page-multilive.as-watch .ml-body.chat-overlay .ml-chat { right: 16px; top: 74px; bottom: 60px; width: var(--overlay-w, 320px) !important; border-radius: 16px; }
+/* 영상+채팅 전체 화면 */
+.ml-body:fullscreen { background: var(--background); padding: 8px; }
