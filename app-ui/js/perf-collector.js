@@ -73,7 +73,7 @@ function playerStats() {
     } catch { /* 플레이어 준비 전 */ }
     const q = v.getVideoPlaybackQuality ? v.getVideoPlaybackQuality() : null;
     const pane = f.closest('.ml-pane');
-    const channel = (pane || f).dataset.channelId;
+    const channel = (pane || f).dataset.perfChannel;
     out.push({
       where: f.id === 'player-frame' ? 'viewer' : pane ? `pane${pane.dataset.slot}` : 'other',
       tag: channel ? String(channel).slice(0, 6) : null, // player.net 의 tag 와 같은 이름

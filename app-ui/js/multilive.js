@@ -416,7 +416,9 @@ export class MultiLivePage {
         pane.el.style.setProperty('--ml-hue', String(pane.hue));
       }
       pane.sessionId = s.id;
-      pane.el.dataset.channelId = s.channelId; // 성능 수집기가 player.net(채널 앞 6자)과 맞춘다
+      // 성능 수집기가 player.net(채널 앞 6자)과 맞춘다. data-channel-id 를 쓰면 안 된다 — 카드 열기(bindCardOpen)가
+      // 그 속성을 보고 패인 클릭을 "라이브로 열기"로 바꿔 포커스 전환 대신 라이브 단독 보기로 넘어갔다.
+      pane.el.dataset.perfChannel = s.channelId;
       pane.controls?.setChannel(s.channelId);
       this.renderPane(pane, s, order.indexOf(s.id), s.id === state.selectedId);
     }

@@ -168,7 +168,7 @@ export class Viewer {
     this.channelId = channelId;
     // 성능 수집기가 player.net(채널 앞 6자)과 맞춘다
     const frame = document.getElementById('player-frame');
-    if (frame) frame.dataset.channelId = channelId;
+    if (frame) frame.dataset.perfChannel = channelId; // data-channel-id 는 카드 열기 속성이라 쓰지 않는다
     if (settings) this.lastSettings = settings;
     this.root.hidden = false;
     this.renderHeader(null);
