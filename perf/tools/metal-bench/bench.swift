@@ -100,7 +100,11 @@ for i in 0..<views {
     let r = NSRect(x: CGFloat(i % cols) * width, y: CGFloat(i / cols) * height, width: width, height: height)
     let wv = WKWebView(frame: r, configuration: cfg)
     let occlusion = NSSelectorFromString("_setWindowOcclusionDetectionEnabled:")
-    if wv.responds(to: occlusion) { wv.setValue(false, forKey: "_windowOcclusionDetectionEnabled") }
+    // KVC(setValue:forKey:)는 게터가 없어 예외를 던진다 — 세터를 직접 부른다.
+    if wv.responds(to: occlusion) {
+        typealias Setter = @convention(c) (AnyObject, Selector, Bool) -> Void
+        unsafeBitCast(wv.method(for: occlusion), to: Setter.self)(wv, occlusion, false)
+    }
     container.addSubview(wv)
     webViews.append(wv)
 }
