@@ -3,3 +3,5 @@ target/
 .DS_Store
 /app-icons/build/
 /crates/cview-app/gen/
+__pycache__/
+*.pyc

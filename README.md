@@ -33,7 +33,13 @@ cargo test --workspace
 for f in app-ui/js/*.js; do node --check "$f"; done
 ```
 
-macOS 배포는 `scripts/release-macos.sh` 가 위 검사·버전 올리기·서명·공증까지 한 번에 한다(버전 파일·태그·원격을 바꾼다).
+배포는 `scripts/release-macos.sh --dmg`가 검사·버전 증가·macOS 서명/공증·Windows 설치 파일 생성·업데이트 서버 업로드/게시·양쪽 다운로드 검증·Git 푸시까지 실행한다.
+
+```sh
+scripts/release-macos.sh --dmg
+```
+
+같은 Mac에서는 다른 AI도 이 명령을 사용하면 전용 SSH 키로 자동 게시한다. 공증 프로파일 기본값은 `cview-notarize`이다. Tailscale 연결과 깨끗한 작업 트리가 필요하다. [자동 게시·재시도·다른 PC 등록](tools/windows-update-server/AUTOMATION.md), [AI 작업 지침](AGENTS.md).
 
 ## 릴리스 빌드 시 업데이트 서버 게시 필수
 
@@ -42,7 +48,10 @@ macOS 배포는 `scripts/release-macos.sh` 가 위 검사·버전 올리기·서
 - 업데이트 서버: https://win-7sv7uak6k5b.horse-solfege.ts.net/
 - 최신 릴리스 피드: https://win-7sv7uak6k5b.horse-solfege.ts.net/releases/latest.json
 - 서버 게시 경로: `C:\CViewUpdates\site`
-- 서버 게시·검증 도구: `C:\CViewUpdates\tools\publish.py`, `C:\CViewUpdates\tools\check_server.py`
+- 서버 게시·검증 도구: `C:\CViewUpdates\tools\publish.py`, `C:\CViewUpdates\tools\check_server.py` (전용 `tools\python\python.exe`로 실행)
+- 외부 PC 업로드 공유: `\\100.117.247.29\CViewUpload$` (기존 서버 Administrator 계정, SMB 암호화 필수). macOS에서는 `smb://100.117.247.29/CViewUpload$`로 연결한다. [업로드·게시 사용 방법](tools/windows-update-server/README.md).
+- 원격 PowerShell: Tailscale 연결 후 `ssh Administrator@100.117.247.29`로 접속한다. [접속·원격 게시 명령](tools/windows-update-server/POWERSHELL-REMOTE.md).
+- 버전별 설치 파일과 `notes.txt`를 업로드한 뒤 서버의 관리자 PowerShell에서 `C:\CViewUpdates\tools\Publish-UploadedRelease.ps1 -Version <버전>`으로 게시·다운로드 검증을 실행할 수 있다.
 - 앱의 업데이트 확인과 다운로드에는 같은 Tailscale 네트워크 연결이 필요하다.
 
 릴리스마다 다음 순서를 반드시 따른다.
@@ -58,8 +67,8 @@ macOS 배포는 `scripts/release-macos.sh` 가 위 검사·버전 올리기·서
 
 ```powershell
 $baseUrl = 'https://win-7sv7uak6k5b.horse-solfege.ts.net'
-python C:\CViewUpdates\tools\publish.py --root C:\CViewUpdates\site --base-url $baseUrl --version 0.1.21 --artifact C:\Releases\CView_0.1.21_arm64.dmg --artifact C:\Releases\CView_0.1.21_x64-setup.exe --notes-file C:\Releases\notes.txt
-python C:\CViewUpdates\tools\check_server.py --base-url $baseUrl --download
+& C:\CViewUpdates\tools\python\python.exe -I -B C:\CViewUpdates\tools\publish.py --root C:\CViewUpdates\site --base-url $baseUrl --version 0.1.21 --artifact C:\Releases\CView_0.1.21_arm64.dmg --artifact C:\Releases\CView_0.1.21_x64-setup.exe --notes-file C:\Releases\notes.txt
+& C:\CViewUpdates\tools\python\python.exe -I -B C:\CViewUpdates\tools\check_server.py --base-url $baseUrl --download
 ```
 
-**현재 `scripts/release-macos.sh`는 자체 업데이트 서버 게시를 자동으로 수행하지 않는다.** 이 스크립트 또는 `cargo tauri build`가 성공하더라도 위 게시·검증 단계를 반드시 별도로 수행해야 한다.
+**`scripts/release-macos.sh --dmg`는 위 게시·검증까지 자동 수행한다.** `cargo tauri build`나 개발용 빌드에는 게시를 연결하지 않는다. 자동 게시가 실패하면 같은 버전·파일·설명으로 `scripts/publish-update.py`를 재실행하며, 다운로드 검증에 성공하기 전에는 릴리스 완료로 처리하지 않는다.

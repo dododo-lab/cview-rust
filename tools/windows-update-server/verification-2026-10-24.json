@@ -1,0 +1,47 @@
+{
+  "date": "2026-10-24",
+  "client": {
+    "server": "100.117.247.29",
+    "share": "CViewUpload$",
+    "probe": "_cview-upload-check-20261024.bin",
+    "size": 1048576,
+    "sha256": "04f978532e15fa5b29c9fe634eb76fe3d1a6d2432ac43cd7140df6a42c76045b",
+    "client_readback": "passed"
+  },
+  "server": {
+    "probe": {
+      "Algorithm": "SHA256",
+      "Hash": "04F978532E15FA5B29C9FE634EB76FE3D1A6D2432AC43CD7140DF6A42C76045B",
+      "Path": "C:\\CViewUpdates\\incoming\\_cview-upload-check-20261024.bin"
+    },
+    "helper": {
+      "Algorithm": "SHA256",
+      "Hash": "610C74C5C796C4C0D25F9998A842C1C84544787EF49C0757BE8DCB644D60F802",
+      "Path": "C:\\CViewUpdates\\tools\\Publish-UploadedRelease.ps1"
+    },
+    "server": "WIN-7SV7UAK6K5B",
+    "share": {
+      "Name": "CViewUpload$",
+      "Path": "C:\\CViewUpdates\\incoming",
+      "EncryptData": true,
+      "FolderEnumerationMode": 0,
+      "CachingMode": 0
+    },
+    "acl": "O:BAG:S-1-5-21-3584923887-3352421233-1357104111-513D:PAI(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)",
+    "access": [
+      {
+        "AccountName": "WIN-7SV7UAK6K5B\\Administrator",
+        "AccessRight": 0,
+        "AccessControlType": 0
+      }
+    ]
+  },
+  "result": "Client/server SHA-256 match; encrypted share and administrator-only ACL verified",
+  "installed_helper_validation": "Version must be newer than 0.1.20.",
+  "smb": {
+    "version": "3.1.1",
+    "encryption": "AES-256-GCM",
+    "encryption_required": true
+  },
+  "existing_release_check": "Verified v0.1.20: HTTPS, health, release page, 2 artifacts and SHA-256 downloads."
+}

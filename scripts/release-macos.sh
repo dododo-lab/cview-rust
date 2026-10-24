@@ -1,5 +1,5 @@
 #!/bin/zsh
-# macOS 릴리스 빌드·서명·공증 (SYS-26).
+# macOS·Windows 릴리스 빌드·서명·공증·업데이트 서버 자동 게시 (SYS-26).
 #
 # 서명: tauri.conf.json 의 bundle.macOS.signingIdentity(Developer ID)로 **모든 빌드(디버그·릴리스)** 를 서명한다.
 #   코드 식별(identifier + 팀 ID)이 빌드마다 같아야 키체인의 "항상 허용"이 유지된다 — 애드혹 서명은 빌드마다
@@ -12,7 +12,8 @@
 # 사용: scripts/release-macos.sh [--dmg [--minor|--major] [--no-notarize]]
 #   --dmg 없이: 로컬 서명 빌드만(버전 그대로).
 #   --dmg     : 배포 빌드 — 버전과 빌드 번호를 **항상** 올린다(아래 "배포 빌드 순서").
-#   공증: CVIEW_NOTARIZE_PROFILE=cview-notarize scripts/release-macos.sh --dmg  (notarytool 프로파일이 있을 때)
+#   공증 프로파일 기본값: cview-notarize (CVIEW_NOTARIZE_PROFILE로 변경 가능).
+#   릴리스 설명: CVIEW_RELEASE_NOTES_FILE=<UTF-8 파일> (없으면 Git 변경 목록 사용).
 #   --no-notarize: --dmg 와 함께 — 공증만 건너뛰고 나머지(번호 올리기 · Windows 설치 파일 · 커밋 · 태그 · 푸시)는 그대로 한다.
 #                  공증 안 된 DMG 는 Gatekeeper 가 막으므로, 그래도 배포하겠다고 명시할 때만 쓴다.
 #
@@ -29,10 +30,10 @@
 #   4b) 같은 버전의 Windows 설치 파일(NSIS, x64)을 이 Mac 에서 교차 빌드한다(x86_64-pc-windows-gnu · mingw-w64 · makensis).
 #       → dist/CView_X.Y.Z_x64-setup.exe. 코드 서명 인증서가 없어 서명되지 않는다(SmartScreen 경고).
 #       도구가 없으면(rustup target add x86_64-pc-windows-gnu · brew install mingw-w64 nsis) 실패로 보고 되돌린다.
-#       CVIEW_SKIP_WINDOWS=1 이면 건너뛴다.
-#   5) 성공하면 "release: vX.Y.Z (build N)" 커밋과 주석 태그 vX.Y.Z 를 만들고, origin 이 있으면 푸시한다.
-#      공증 프로파일 없이(서명만) 돌리면 4)의 서명 DMG 까지만 만들고 번호는 되돌린다 — 공증 안 된 DMG 에 번호를 쓰지 않는다.
-#      --no-notarize 를 주면 공증만 건너뛰고 4b)·5)를 그대로 한다(공증 안 된 배포를 명시적으로 허용).
+#       배포에서는 CVIEW_SKIP_WINDOWS를 허용하지 않는다.
+#   5) 커밋·태그 생성 → 양쪽 파일 SSH 전송 → 서버 원자적 게시 → 서버/클라이언트 전체 다운로드 검증 → Git 푸시.
+#      게시 중 실패하면 버전·산출물·설명을 보존하고 같은 버전으로 게시를 재시도한다.
+#      --no-notarize를 주면 공증만 건너뛰며 릴리스 설명에 명시한다.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # makensis(Homebrew 3.13)는 로캘이 비어 있으면 bad_alloc 으로 죽는다.
@@ -56,6 +57,13 @@ for arg in "$@"; do
     *) echo "알 수 없는 옵션: $arg"; exit 2 ;;
   esac
 done
+if (( no_notarize && ! dist_build )); then
+  echo "✗ --no-notarize는 --dmg와 함께 사용합니다."; exit 2
+fi
+if (( dist_build )); then
+  [[ -z "${CVIEW_SKIP_WINDOWS:-}" ]] || { echo "✗ 배포에는 두 플랫폼 설치 파일이 모두 필요합니다. CVIEW_SKIP_WINDOWS를 해제하세요."; exit 2; }
+  export CVIEW_NOTARIZE_PROFILE="${CVIEW_NOTARIZE_PROFILE:-cview-notarize}"
+fi
 
 identity="${APPLE_SIGNING_IDENTITY:-$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["bundle"]["macOS"].get("signingIdentity") or "")' "$CONF")}"
 if [[ -z "$identity" ]] || ! security find-identity -v -p codesigning | grep -qF "$identity"; then
@@ -73,7 +81,7 @@ bumped=0
 revert_bump() {
   if (( bumped )); then
     echo "↩︎ 배포 빌드가 끝나지 않아 버전·빌드 번호를 되돌립니다."
-    git checkout -- $BUMPED_FILES
+    git restore --source=HEAD --staged --worktree -- $BUMPED_FILES
     bumped=0
   fi
 }
@@ -81,6 +89,23 @@ revert_bump() {
 if (( dist_build )); then
   if [[ -n "$(git status --porcelain)" ]]; then
     echo "✗ 작업 트리가 깨끗하지 않습니다 — 배포 빌드는 커밋된 코드로만 만듭니다."; git status --short; exit 1
+  fi
+  echo "── 업데이트 서버·인증 사전 확인"
+  next_version=$(python3 - "$CONF" "$part" <<'PY'
+import json, sys
+major, minor, patch = map(int, json.load(open(sys.argv[1]))['version'].split('.'))
+if sys.argv[2] == 'major': major, minor, patch = major + 1, 0, 0
+elif sys.argv[2] == 'minor': minor, patch = minor + 1, 0
+else: patch += 1
+print(f'{major}.{minor}.{patch}')
+PY
+)
+  python3 scripts/publish-update.py --preflight --version "$next_version"
+  if (( ! no_notarize )); then
+    xcrun notarytool history --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --output-format json >/dev/null
+  fi
+  if [[ -n "${CVIEW_RELEASE_NOTES_FILE:-}" && ! -s "$CVIEW_RELEASE_NOTES_FILE" ]]; then
+    echo "✗ 릴리스 설명 파일이 없거나 비어 있습니다: $CVIEW_RELEASE_NOTES_FILE"; exit 1
   fi
   echo "── 검사(올리기 전에)"
   cargo fmt --all --check
@@ -238,12 +263,41 @@ print(max(subs, key=lambda s: s["createdDate"])["id"] if subs else "")' "$(basen
     shasum -a 256 "$win_out"
     stat -f "   %z bytes" "$win_out"
   fi
+  notes_out="dist/CView_${version}_notes.txt"
+  python3 - "$version" "$build" "$notes_out" "${CVIEW_RELEASE_NOTES_FILE:-}" "$no_notarize" <<'PY'
+from pathlib import Path
+import subprocess, sys
+version, build, output, source, unnotarized = sys.argv[1:]
+if source:
+    body = Path(source).read_text(encoding='utf-8').strip()
+else:
+    tag = subprocess.run(['git', 'describe', '--tags', '--abbrev=0'], capture_output=True, text=True)
+    revision = tag.stdout.strip() + '..HEAD' if tag.returncode == 0 else 'HEAD'
+    body = subprocess.check_output(['git', 'log', revision, '--format=- %s', '-30'], text=True).strip()
+    body = body or '새 배포 빌드입니다.'
+mac = '공증 안 함(--no-notarize), Developer ID 서명만 적용.' if unnotarized == '1' else 'Developer ID 서명 및 Apple 공증·스테이플 완료.'
+notes = (f'CView {version} (빌드 {build})\n\n{body}\n\nmacOS: Apple Silicon(arm64), {mac}\n'
+         'Windows: x64 NSIS 설치 파일. 코드 서명 인증서가 없어 미서명이며 SmartScreen 경고가 표시될 수 있습니다.\n'
+         '업데이트 확인과 다운로드에는 Tailscale 연결이 필요합니다.\n')
+Path(output).write_text(notes, encoding='utf-8')
+PY
   echo "── 커밋·태그 v$version (빌드 $build)"
   git add $BUMPED_FILES
   git commit -q -m "release: v$version (build $build)" -m "$notarize_note dist/CView_${version}_arm64.dmg"
-  git tag -a "v$version" -m "CView v$version (build $build)"
+  # A committed release may be published even if the SSH response is lost.
+  # Preserve its version and artifacts; retry publishing instead of rolling back.
   bumped=0
   trap - EXIT INT TERM
+  git tag -a "v$version" -m "CView v$version (build $build)"
+  echo "── 업데이트 서버 업로드·게시·다운로드 검증"
+  publish_flags=()
+  (( no_notarize )) && publish_flags+=(--allow-unnotarized)
+  if ! python3 scripts/publish-update.py --version "$version" --notes-file "$notes_out" "${publish_flags[@]}"; then
+    echo "✗ 게시·검증 미완료. 새 버전을 만들지 말고 같은 파일로 재시도하세요:"
+    echo "python3 scripts/publish-update.py --version $version --notes-file $notes_out ${publish_flags[*]}"
+    echo "검증 성공 후 git push origin HEAD 및 git push origin v$version 을 실행하세요."
+    exit 1
+  fi
   if git remote get-url origin >/dev/null 2>&1; then
     git push -q origin HEAD
     git push -q origin "v$version"
