@@ -4258,26 +4258,34 @@ const _UPSCALE_CAS = '#version 300 es\nprecision highp float;\n' +
     ' vec3 w = amp * (-1.0 / mix(8.0, 5.0, sharp));\n' +
     ' o = vec4(clamp(((b + d + f + h) * w + e) / (1.0 + 4.0 * w), 0.0, 1.0), 1.0);\n}';
 
-// 영상(행이 위에서부터) → 출력 크기 텍스처, 쌍선형. 확대가 필요 없을 때(같은 크기·축소) 선명화 앞 단계.
-const _GPU_COPY = '#version 300 es\nprecision highp float;\n' +
-    'in vec2 uv; out vec4 o; uniform sampler2D t;\n' +
-    'void main(){ o = vec4(texture(t, vec2(uv.x, 1.0 - uv.y)).rgb, 1.0); }';
+// [Metal 최적화 2026-10-24] 선명한 화면 패스 합치기 — 예전엔 복사 → 가로 흐림 → 세로 흐림 → 언샤프 합성
+//   네 번 출력 크기 화면을 그렸다. 지금은 가로 흐림이 영상 텍스처를 바로 읽고(flip 으로 행 순서만 맞춘다),
+//   세로 흐림이 언샤프 합성까지 한다 — 선명한 화면만 켜면 2패스, 업스케일과 같이면 4패스(예전 5).
+//   값은 같다: 복사 텍스처는 출력 텍셀 중심에서 영상을 한 번 읽은 것이고, 흐림도 텍셀 중심만 읽었다.
 // 분리형 가우시안(한 방향) — σ 는 출력(장치) 픽셀 단위, 반경 최대 12.
 const _GPU_BLUR = '#version 300 es\nprecision highp float;\n' +
-    'in vec2 uv; out vec4 o; uniform sampler2D t; uniform vec2 dir; uniform float sigma; uniform int radius;\n' +
+    'in vec2 uv; out vec4 o; uniform sampler2D t; uniform vec2 dir; uniform float sigma; uniform int radius; uniform float flip;\n' +
+    'void main(){\n' +
+    ' vec2 c = flip > 0.5 ? vec2(uv.x, 1.0 - uv.y) : uv;\n' +
+    ' vec3 acc = vec3(0.0); float ws = 0.0; float k = -0.5 / (sigma * sigma);\n' +
+    ' for (int i = -12; i <= 12; i++) {\n' +
+    '  if (i < -radius || i > radius) continue;\n' +
+    '  float w = exp(float(i * i) * k); acc += texture(t, c + dir * float(i)).rgb * w; ws += w;\n' +
+    ' }\n' +
+    ' o = vec4(acc / ws, 1.0);\n}';
+// 세로 흐림 + 언샤프 마스크 합성 — SVG 판과 같은 식: edge = clamp(원본 − 흐림, 0, 1), 결과 = clamp(원본 + edge).
+//   (feComposite arithmetic 결과는 0..1 로 잘린다 — 그래서 경계는 밝아지는 쪽으로만 더해진다.)
+const _GPU_BLUR_UNSHARP = '#version 300 es\nprecision highp float;\n' +
+    'in vec2 uv; out vec4 o; uniform sampler2D t; uniform sampler2D b; uniform vec2 dir; uniform float sigma; uniform int radius; uniform float flip;\n' +
     'void main(){\n' +
     ' vec3 acc = vec3(0.0); float ws = 0.0; float k = -0.5 / (sigma * sigma);\n' +
     ' for (int i = -12; i <= 12; i++) {\n' +
     '  if (i < -radius || i > radius) continue;\n' +
     '  float w = exp(float(i * i) * k); acc += texture(t, uv + dir * float(i)).rgb * w; ws += w;\n' +
     ' }\n' +
-    ' o = vec4(acc / ws, 1.0);\n}';
-// 언샤프 마스크 합성 — SVG 판과 같은 식: edge = clamp(원본 − 흐림, 0, 1), 결과 = clamp(원본 + edge).
-//   (feComposite arithmetic 결과는 0..1 로 잘린다 — 그래서 경계는 밝아지는 쪽으로만 더해진다.)
-const _GPU_UNSHARP = '#version 300 es\nprecision highp float;\n' +
-    'in vec2 uv; out vec4 o; uniform sampler2D t; uniform sampler2D b;\n' +
-    'void main(){ vec3 s = texture(t, uv).rgb; vec3 e = clamp(s - texture(b, uv).rgb, 0.0, 1.0);\n' +
-    ' o = vec4(clamp(s + e, 0.0, 1.0), 1.0); }';
+    ' vec3 s = texture(b, flip > 0.5 ? vec2(uv.x, 1.0 - uv.y) : uv).rgb;\n' +
+    ' vec3 e = clamp(s - acc / ws, 0.0, 1.0);\n' +
+    ' o = vec4(clamp(s + e, 0.0, 1.0), 1.0);\n}';
 
 function _compileUpscaleProgram(gl, fragment) {
     function shader(type, source) {
@@ -4295,27 +4303,46 @@ function _compileUpscaleProgram(gl, fragment) {
     return program;
 }
 
+// 유니폼 위치는 프로그램을 만들 때 한 번만 찾는다(예전엔 프레임마다 getUniformLocation 을 열 번 남짓 불렀다).
+//   샘플러 번호도 여기서 한 번 정한다 — 프로그램 상태라 매 프레임 다시 넣을 필요가 없다.
+function _uniforms(gl, program, names, samplers) {
+    const loc = {};
+    for (const n of names) loc[n] = gl.getUniformLocation(program, n);
+    if (samplers) {
+        gl.useProgram(program);
+        for (const n in samplers) gl.uniform1i(loc[n], samplers[n]);
+    }
+    return loc;
+}
+
 function _createUpscaler() {
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext && canvas.getContext('webgl2',
-        { alpha: true, premultipliedAlpha: true, antialias: false, depth: false, preserveDrawingBuffer: false });
+        { alpha: true, premultipliedAlpha: true, antialias: false, depth: false, preserveDrawingBuffer: false,
+          powerPreference: 'low-power' });
     if (!gl) return null;
     canvas.id = 'cview-upscale';
     canvas.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;display:none;';
     try {
         const up = {
+            backend: 'webgl', draw: _drawUpscaledFrameGL, clear: _clearUpscaledFrameGL,
             canvas: canvas, gl: gl, active: false, frameId: 0,
             catmull: _compileUpscaleProgram(gl, _UPSCALE_CATMULL),
             cas: _compileUpscaleProgram(gl, _UPSCALE_CAS),
-            copy: _compileUpscaleProgram(gl, _GPU_COPY),
             blur: _compileUpscaleProgram(gl, _GPU_BLUR),
-            unsharp: _compileUpscaleProgram(gl, _GPU_UNSHARP),
+            blurUnsharp: _compileUpscaleProgram(gl, _GPU_BLUR_UNSHARP),
             source: gl.createTexture(), scaled: gl.createTexture(), fbo: gl.createFramebuffer(),
             fboW: 0, fboH: 0, sourceMip: false,
-            // 선명화 단계 텍스처(출력 크기): CAS 결과 · 가로 흐림 · 세로 흐림
-            work: [gl.createTexture(), gl.createTexture(), gl.createTexture()],
-            workFbo: [gl.createFramebuffer(), gl.createFramebuffer(), gl.createFramebuffer()],
+            // 선명화 단계 텍스처(출력 크기): CAS 결과 · 가로 흐림
+            work: [gl.createTexture(), gl.createTexture()],
+            workFbo: [gl.createFramebuffer(), gl.createFramebuffer()],
             workW: 0, workH: 0
+        };
+        up.loc = {
+            catmull: _uniforms(gl, up.catmull, ['t', 'size'], { t: 0 }),
+            cas: _uniforms(gl, up.cas, ['t', 'texel', 'sharp'], { t: 0 }),
+            blur: _uniforms(gl, up.blur, ['t', 'dir', 'sigma', 'radius', 'flip'], { t: 0 }),
+            blurUnsharp: _uniforms(gl, up.blurUnsharp, ['t', 'b', 'dir', 'sigma', 'radius', 'flip'], { t: 0, b: 1 })
         };
         const quad = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, quad);
@@ -4361,11 +4388,10 @@ function _gpuTarget(up, i, w, h) {
     return up.work[i];
 }
 
-function _drawUpscaledFrame() {
-    const up = _upscaler;
-    if (!up || !up.active) return;
-    const gl = up.gl, rect = _containRect();
-    if (!rect || !video.videoWidth) return;
+// 캔버스(장치 픽셀) 크기와 그 안의 영상 사각형 — 두 백엔드가 같이 쓴다. y 는 위에서부터.
+function _gpuGeometry(up) {
+    const rect = _containRect();
+    if (!rect || !video.videoWidth) return null;
     const dpr = window.devicePixelRatio || 1;
     let cw = Math.round(video.clientWidth * dpr), ch = Math.round(video.clientHeight * dpr);
     const over = (cw * ch) / UPSCALE_MAX_OUTPUT_PIXELS;
@@ -4373,8 +4399,27 @@ function _drawUpscaledFrame() {
     cw = Math.max(1, Math.round(cw * shrink)); ch = Math.max(1, Math.round(ch * shrink));
     if (up.canvas.width !== cw || up.canvas.height !== ch) { up.canvas.width = cw; up.canvas.height = ch; }
     const k = (cw / Math.max(1, video.clientWidth));
-    const vx = Math.round(rect.x * k), vw = Math.max(1, Math.round(rect.w * k));
-    const vh = Math.max(1, Math.round(rect.h * k)), vy = ch - Math.round(rect.y * k) - vh;
+    const vx = Math.min(cw - 1, Math.max(0, Math.round(rect.x * k)));
+    const vy = Math.min(ch - 1, Math.max(0, Math.round(rect.y * k)));
+    const vw = Math.max(1, Math.min(cw - vx, Math.round(rect.w * k)));
+    const vh = Math.max(1, Math.min(ch - vy, Math.round(rect.h * k)));
+    // 선명한 화면 σ 는 CSS px 기준 세기를 출력 픽셀로 바꾼 값(SVG 필터도 요소의 CSS 좌표에서 흐린다).
+    const sigma = Math.max(0.3, _sharpen * k);
+    return { cw: cw, ch: ch, k: k, vx: vx, vy: vy, vw: vw, vh: vh,
+             sigma: sigma, radius: Math.min(12, Math.ceil(sigma * 3)) };
+}
+
+function _drawUpscaledFrame() {
+    const up = _upscaler;
+    if (!up || !up.active) return;
+    up.draw(up);
+}
+
+function _drawUpscaledFrameGL(up) {
+    const g = _gpuGeometry(up);
+    if (!g) return;
+    const gl = up.gl, L = up.loc;
+    const vw = g.vw, vh = g.vh;
     const upscale = _upscaleNeeded();
     const sharpen = _gpuSharpenActive();
     // 1) 영상 → 원본 텍스처
@@ -4388,66 +4433,360 @@ function _drawUpscaledFrame() {
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, mip ? gl.LINEAR_MIPMAP_LINEAR : gl.LINEAR);
         up.sourceMip = mip;
     }
-    // 2) 출력 크기 텍스처로 — 확대면 Catmull-Rom, 아니면 쌍선형(선명화만 켜진 경우)
-    if (up.fboW !== vw || up.fboH !== vh) {
-        gl.bindTexture(gl.TEXTURE_2D, up.scaled);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, vw, vh, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, up.fbo);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, up.scaled, 0);
-        up.fboW = vw; up.fboH = vh;
-    }
-    gl.bindFramebuffer(gl.FRAMEBUFFER, up.fbo);
-    gl.viewport(0, 0, vw, vh);
-    const first = upscale ? up.catmull : up.copy;
-    gl.useProgram(first);
-    gl.bindTexture(gl.TEXTURE_2D, up.source);
-    gl.uniform1i(gl.getUniformLocation(first, 't'), 0);
-    if (upscale) gl.uniform2f(gl.getUniformLocation(up.catmull, 'size'), video.videoWidth, video.videoHeight);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
     const toScreen = function() {
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        gl.viewport(0, 0, cw, ch);
+        gl.viewport(0, 0, g.cw, g.ch);
         gl.clearColor(0, 0, 0, 0);
         gl.clear(gl.COLOR_BUFFER_BIT);
-        gl.viewport(vx, vy, vw, vh);
+        gl.viewport(g.vx, g.ch - g.vy - vh, vw, vh);
     };
-    // 3) 확대면 CAS 선명화 — 선명한 화면도 켜져 있으면 화면 대신 작업 텍스처로
-    let base = up.scaled;
+    // 선명화가 읽을 원본: 확대면 CAS 결과(작업 텍스처 0), 아니면 영상 텍스처 그대로(행 순서만 뒤집어 읽는다).
+    let base = up.source, flip = 1;
     if (upscale) {
+        // 2) 출력 크기 텍스처로 Catmull-Rom 확대
+        if (up.fboW !== vw || up.fboH !== vh) {
+            gl.bindTexture(gl.TEXTURE_2D, up.scaled);
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, vw, vh, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, up.fbo);
+            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, up.scaled, 0);
+            up.fboW = vw; up.fboH = vh;
+        }
+        gl.bindFramebuffer(gl.FRAMEBUFFER, up.fbo);
+        gl.viewport(0, 0, vw, vh);
+        gl.useProgram(up.catmull);
+        gl.bindTexture(gl.TEXTURE_2D, up.source);
+        gl.uniform2f(L.catmull.size, video.videoWidth, video.videoHeight);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        // 3) CAS 선명화 — 선명한 화면도 켜져 있으면 화면 대신 작업 텍스처로
         if (sharpen) base = _gpuTarget(up, 0, vw, vh); else toScreen();
+        flip = 0;
         gl.useProgram(up.cas);
         gl.bindTexture(gl.TEXTURE_2D, up.scaled);
-        gl.uniform1i(gl.getUniformLocation(up.cas, 't'), 0);
-        gl.uniform2f(gl.getUniformLocation(up.cas, 'texel'), 1 / vw, 1 / vh);
-        gl.uniform1f(gl.getUniformLocation(up.cas, 'sharp'), UPSCALE_SHARPNESS);
+        gl.uniform2f(L.cas.texel, 1 / vw, 1 / vh);
+        gl.uniform1f(L.cas.sharp, UPSCALE_SHARPNESS);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         if (!sharpen) return;
     }
-    // 4) 선명한 화면 — 분리형 가우시안 두 번 + 언샤프 합성(SVG 판과 같은 식).
-    //    σ 는 CSS px 기준 세기를 출력 픽셀로 바꾼 값(SVG 필터도 요소의 CSS 좌표에서 흐린다).
-    const sigma = Math.max(0.3, _sharpen * k);
-    const radius = Math.min(12, Math.ceil(sigma * 3));
+    // 4) 선명한 화면 — 가로 흐림(원본 → 작업 텍스처 1), 세로 흐림 + 언샤프 합성(→ 화면).
     gl.useProgram(up.blur);
-    gl.uniform1i(gl.getUniformLocation(up.blur, 't'), 0);
-    gl.uniform1f(gl.getUniformLocation(up.blur, 'sigma'), sigma);
-    gl.uniform1i(gl.getUniformLocation(up.blur, 'radius'), radius);
+    gl.uniform1f(L.blur.sigma, g.sigma);
+    gl.uniform1i(L.blur.radius, g.radius);
+    gl.uniform1f(L.blur.flip, flip);
+    gl.uniform2f(L.blur.dir, 1 / vw, 0);
     const h1 = _gpuTarget(up, 1, vw, vh);
     gl.bindTexture(gl.TEXTURE_2D, base);
-    gl.uniform2f(gl.getUniformLocation(up.blur, 'dir'), 1 / vw, 0);
-    gl.drawArrays(gl.TRIANGLES, 0, 3);
-    const v2 = _gpuTarget(up, 2, vw, vh);
-    gl.bindTexture(gl.TEXTURE_2D, h1);
-    gl.uniform2f(gl.getUniformLocation(up.blur, 'dir'), 0, 1 / vh);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     toScreen();
-    gl.useProgram(up.unsharp);
+    gl.useProgram(up.blurUnsharp);
+    gl.uniform1f(L.blurUnsharp.sigma, g.sigma);
+    gl.uniform1i(L.blurUnsharp.radius, g.radius);
+    gl.uniform1f(L.blurUnsharp.flip, flip);
+    gl.uniform2f(L.blurUnsharp.dir, 0, 1 / vh);
     gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_2D, v2);
-    gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, base);
-    gl.uniform1i(gl.getUniformLocation(up.unsharp, 't'), 0);
-    gl.uniform1i(gl.getUniformLocation(up.unsharp, 'b'), 1);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, h1);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+
+function _clearUpscaledFrameGL(up) {
+    const gl = up.gl;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+}
+
+// ─── [Metal 최적화 2026-10-24] WebGPU 백엔드 — WebKit 의 WebGPU 는 Metal 을 바로 부른다 ───
+//   WebGL 은 ANGLE 이 GL 호출을 Metal 로 번역하고, 영상은 프레임마다 texImage2D 로 RGBA 텍스처에
+//   한 번 복사(YUV→RGB 변환 포함)해야 했다. WebGPU 는 importExternalTexture 로 디코더가 낸 프레임
+//   (IOSurface)을 복사 없이 바로 읽는다 — 프레임마다 영상 해상도 복사 한 번과 GL 번역 비용이 빠진다.
+//   · 쓸 수 없으면(구형 macOS·어댑터 없음·장치 분실·검증 오류) 조용히 WebGL 로 돌아간다.
+//   · 처음 필요할 때만 장치를 연다 — 화질 기능을 안 쓰는 패인은 GPU 장치를 만들지 않는다.
+//   · ?gpu=webgl 로 WebGL 을 강제할 수 있다(측정·비교용, perf/tools/metal-bench).
+const GPU_BACKEND_PREF = (function() {
+    try {
+        const q = new URLSearchParams(location.search).get('gpu');
+        return q === 'webgl' || q === 'webgpu' ? q : 'auto';
+    } catch (e) { return 'auto'; }
+})();
+let _webgpu = null;            // { device, format }
+let _webgpuState = 'idle';     // idle | pending | ready | failed
+
+function _probeWebGPU() {
+    if (_webgpuState !== 'idle') return;
+    const gpu = typeof navigator !== 'undefined' ? navigator.gpu : null;
+    if (GPU_BACKEND_PREF === 'webgl' || !gpu || typeof gpu.requestAdapter !== 'function') {
+        _webgpuState = 'failed';
+        return;
+    }
+    _webgpuState = 'pending';
+    gpu.requestAdapter({ powerPreference: 'low-power' })
+        .then(function(adapter) { return adapter ? adapter.requestDevice() : null; })
+        .then(function(device) {
+            if (!device) throw new Error('no adapter');
+            _webgpu = { device: device, format: gpu.getPreferredCanvasFormat() };
+            _webgpuState = 'ready';
+            device.lost.then(function(info) {
+                if (_webgpu && _webgpu.device === device) _webgpuFail('WEBGPU_DEVICE_LOST', info && info.message);
+            });
+            device.addEventListener('uncapturederror', function(ev) {
+                _webgpuFail('WEBGPU_ERROR', ev && ev.error && ev.error.message);
+            });
+        })
+        .catch(function(e) {
+            _webgpuState = 'failed';
+            _webgpu = null;
+            postToSwift('pictureEnhance', { gpuBackend: 'webgl', error: 'WEBGPU_UNAVAILABLE', detail: String(e).slice(0, 120) });
+        })
+        .then(function() { _reconcileUpscaler(); });
+}
+
+// WebGPU 를 버리고 WebGL 로 다시 만든다.
+function _webgpuFail(code, detail) {
+    if (_webgpuState === 'failed') return;
+    _webgpuState = 'failed';
+    _webgpu = null;
+    const up = _upscaler;
+    if (up && up.backend === 'webgpu') {
+        _deactivateUpscaler();
+        if (up.canvas.parentNode) up.canvas.parentNode.removeChild(up.canvas);
+        _upscaler = null;
+    }
+    postToSwift('pictureEnhance', { gpuBackend: 'webgl', error: code, detail: String(detail || '').slice(0, 120) });
+    _reconcileUpscaler();
+}
+
+// WGSL — GLSL 판과 같은 식. uv 는 위에서부터(WebGPU 텍스처·화면 좌표가 둘 다 위가 0)라 뒤집기가 없다.
+//   외부 텍스처(영상)는 밉맵이 없어, 크게 줄일 때는 출력 픽셀 하나에 n×n 표본을 평균한다(밉맵 대신).
+const _WGSL = `
+struct U { a: vec4f, b: vec4f };
+struct V { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
+@group(0) @binding(0) var smp: sampler;
+@group(0) @binding(1) var ext: texture_external;
+@group(0) @binding(2) var ta: texture_2d<f32>;
+@group(0) @binding(3) var tb: texture_2d<f32>;
+@group(0) @binding(4) var<uniform> u: U;
+
+@vertex fn vs(@builtin(vertex_index) i: u32) -> V {
+  var p = array<vec2f, 3>(vec2f(-1.0, -1.0), vec2f(3.0, -1.0), vec2f(-1.0, 3.0));
+  var o: V;
+  o.pos = vec4f(p[i], 0.0, 1.0);
+  o.uv = vec2f(p[i].x * 0.5 + 0.5, 0.5 - p[i].y * 0.5);
+  return o;
+}
+fn ex(c: vec2f) -> vec3f { return textureSampleBaseClampToEdge(ext, smp, c).rgb; }
+fn sa(c: vec2f) -> vec3f { return textureSampleLevel(ta, smp, c, 0.0).rgb; }
+fn sb(c: vec2f) -> vec3f { return textureSampleLevel(tb, smp, c, 0.0).rgb; }
+
+// 영상 → 출력 크기. u.a = (영상 w, h, 표본 n, 모드 1=Catmull-Rom), u.b.xy = 출력 텍셀
+@fragment fn resample(v: V) -> @location(0) vec4f {
+  if (u.a.w > 0.5) {
+    let size = u.a.xy;
+    let sp = v.uv * size; let t1 = floor(sp - 0.5) + 0.5; let f = sp - t1;
+    let w0 = f * (-0.5 + f * (1.0 - 0.5 * f)); let w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+    let w2 = f * (0.5 + f * (2.0 - 1.5 * f)); let w3 = f * f * (-0.5 + 0.5 * f);
+    let w12 = w1 + w2; let t12 = (t1 + w2 / w12) / size; let t0 = (t1 - 1.0) / size; let t3 = (t1 + 2.0) / size;
+    let r = ex(vec2f(t0.x, t0.y)) * w0.x * w0.y + ex(vec2f(t12.x, t0.y)) * w12.x * w0.y
+      + ex(vec2f(t3.x, t0.y)) * w3.x * w0.y + ex(vec2f(t0.x, t12.y)) * w0.x * w12.y
+      + ex(vec2f(t12.x, t12.y)) * w12.x * w12.y + ex(vec2f(t3.x, t12.y)) * w3.x * w12.y
+      + ex(vec2f(t0.x, t3.y)) * w0.x * w3.y + ex(vec2f(t12.x, t3.y)) * w12.x * w3.y
+      + ex(vec2f(t3.x, t3.y)) * w3.x * w3.y;
+    return vec4f(clamp(r, vec3f(0.0), vec3f(1.0)), 1.0);
+  }
+  let n = max(1, i32(u.a.z));
+  var acc = vec3f(0.0);
+  for (var y = 0; y < n; y++) {
+    for (var x = 0; x < n; x++) {
+      let off = (vec2f(f32(x), f32(y)) + 0.5) / f32(n) - 0.5;
+      acc += ex(v.uv + off * u.b.xy);
+    }
+  }
+  return vec4f(acc / f32(n * n), 1.0);
+}
+
+// AMD FidelityFX CAS. u.a = (텍셀 x, y, 세기)
+@fragment fn cas(v: V) -> @location(0) vec4f {
+  let tx = u.a.xy;
+  let a = sa(v.uv + vec2f(-1.0, -1.0) * tx); let b = sa(v.uv + vec2f(0.0, -1.0) * tx); let c = sa(v.uv + vec2f(1.0, -1.0) * tx);
+  let d = sa(v.uv + vec2f(-1.0, 0.0) * tx); let e = sa(v.uv); let f = sa(v.uv + vec2f(1.0, 0.0) * tx);
+  let g = sa(v.uv + vec2f(-1.0, 1.0) * tx); let h = sa(v.uv + vec2f(0.0, 1.0) * tx); let i = sa(v.uv + vec2f(1.0, 1.0) * tx);
+  var mn = min(min(min(d, e), min(f, b)), h); mn += min(mn, min(min(a, c), min(g, i)));
+  var mx = max(max(max(d, e), max(f, b)), h); mx += max(mx, max(max(a, c), max(g, i)));
+  let amp = sqrt(clamp(min(mn, 2.0 - mx) / max(mx, vec3f(1e-4)), vec3f(0.0), vec3f(1.0)));
+  let w = amp * (-1.0 / mix(8.0, 5.0, u.a.z));
+  return vec4f(clamp(((b + d + f + h) * w + e) / (1.0 + 4.0 * w), vec3f(0.0), vec3f(1.0)), 1.0);
+}
+
+// 가우시안 무게. u.a = (방향 x, y, σ, 반경)
+fn gw(i: i32) -> f32 { return exp(f32(i * i) * (-0.5 / (u.a.z * u.a.z))); }
+
+// 가로 흐림 — 영상(외부 텍스처)에서 바로 / 작업 텍스처에서
+@fragment fn blurExt(v: V) -> @location(0) vec4f {
+  let r = i32(u.a.w); var acc = vec3f(0.0); var ws = 0.0;
+  for (var i = -12; i <= 12; i++) {
+    if (i < -r || i > r) { continue; }
+    let w = gw(i); acc += ex(v.uv + u.a.xy * f32(i)) * w; ws += w;
+  }
+  return vec4f(acc / ws, 1.0);
+}
+@fragment fn blurTex(v: V) -> @location(0) vec4f {
+  let r = i32(u.a.w); var acc = vec3f(0.0); var ws = 0.0;
+  for (var i = -12; i <= 12; i++) {
+    if (i < -r || i > r) { continue; }
+    let w = gw(i); acc += sa(v.uv + u.a.xy * f32(i)) * w; ws += w;
+  }
+  return vec4f(acc / ws, 1.0);
+}
+
+// 세로 흐림(tb) + 언샤프 합성 — 원본은 영상 / 작업 텍스처(ta)
+fn vblur(c: vec2f) -> vec3f {
+  let r = i32(u.a.w); var acc = vec3f(0.0); var ws = 0.0;
+  for (var i = -12; i <= 12; i++) {
+    if (i < -r || i > r) { continue; }
+    let w = gw(i); acc += sb(c + u.a.xy * f32(i)) * w; ws += w;
+  }
+  return acc / ws;
+}
+fn unsharp(s: vec3f, bl: vec3f) -> vec4f {
+  let e = clamp(s - bl, vec3f(0.0), vec3f(1.0));
+  return vec4f(clamp(s + e, vec3f(0.0), vec3f(1.0)), 1.0);
+}
+@fragment fn unsharpExt(v: V) -> @location(0) vec4f { return unsharp(ex(v.uv), vblur(v.uv)); }
+@fragment fn unsharpTex(v: V) -> @location(0) vec4f { return unsharp(sa(v.uv), vblur(v.uv)); }
+`;
+
+// 각 단계가 실제로 쓰는 바인딩(자동 레이아웃은 안 쓰는 바인딩을 빼므로 정확히 맞춘다).
+const _WGPU_BINDINGS = {
+    resample: ['ext'], cas: ['ta'], blurExt: ['ext'], blurTex: ['ta'],
+    unsharpExt: ['ext', 'tb'], unsharpTex: ['ta', 'tb']
+};
+const _WGPU_SLOT = { ext: 1, ta: 2, tb: 3 };
+
+function _createUpscalerWebGPU() {
+    if (!_webgpu) return null;
+    const device = _webgpu.device;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext && canvas.getContext('webgpu');
+    if (!ctx) return null;
+    try {
+        ctx.configure({ device: device, format: _webgpu.format, alphaMode: 'premultiplied' });
+        const module = device.createShaderModule({ code: _WGSL });
+        const up = {
+            backend: 'webgpu', draw: _drawUpscaledFrameWebGPU, clear: _clearUpscaledFrameWebGPU,
+            canvas: canvas, ctx: ctx, device: device, module: module, active: false, frameId: 0,
+            sampler: device.createSampler({ magFilter: 'linear', minFilter: 'linear',
+                addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' }),
+            pipes: {},
+            // 단계마다 유니폼 버퍼 하나(한 번 제출 안에서 서로 덮어쓰지 않게)
+            ubuf: [0, 1, 2, 3].map(function() {
+                return device.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+            }),
+            udata: new Float32Array(8),
+            tex: [null, null, null], texW: 0, texH: 0
+        };
+        canvas.id = 'cview-upscale';
+        canvas.style.cssText = 'position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;display:none;';
+        document.body.appendChild(canvas);
+        return up;
+    } catch (e) {
+        postToSwift('pictureEnhance', { gpuBackend: 'webgl', error: 'WEBGPU_SETUP', detail: String(e).slice(0, 120) });
+        return null;
+    }
+}
+
+function _wgpuPipe(up, entry, toScreen) {
+    const format = toScreen ? _webgpu.format : 'rgba8unorm';
+    const key = entry + '|' + format;
+    let p = up.pipes[key];
+    if (!p) {
+        p = up.device.createRenderPipeline({
+            layout: 'auto',
+            vertex: { module: up.module, entryPoint: 'vs' },
+            fragment: { module: up.module, entryPoint: entry, targets: [{ format: format }] },
+            primitive: { topology: 'triangle-list' }
+        });
+        up.pipes[key] = p;
+    }
+    return p;
+}
+
+function _wgpuWorkTextures(up, w, h) {
+    if (up.texW === w && up.texH === h) return;
+    for (let i = 0; i < up.tex.length; i++) {
+        if (up.tex[i]) up.tex[i].destroy();
+        up.tex[i] = up.device.createTexture({ size: [w, h], format: 'rgba8unorm',
+            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+    }
+    up.texW = w; up.texH = h;
+}
+
+// 한 단계 = 렌더 패스 하나. target 이 null 이면 화면(캔버스)의 영상 사각형에 그린다.
+function _wgpuPass(up, enc, entry, slot, uniforms, srcs, target, g, screenView) {
+    const toScreen = !target;
+    const pipe = _wgpuPipe(up, entry, toScreen);
+    const d = up.udata;
+    d.fill(0);
+    for (let i = 0; i < uniforms.length; i++) d[i] = uniforms[i];
+    up.device.queue.writeBuffer(up.ubuf[slot], 0, d);
+    const entries = [{ binding: 0, resource: up.sampler }, { binding: 4, resource: { buffer: up.ubuf[slot] } }];
+    for (const name of _WGPU_BINDINGS[entry]) {
+        const src = srcs[name];
+        entries.push({ binding: _WGPU_SLOT[name], resource: name === 'ext' ? src : src.createView() });
+    }
+    const bind = up.device.createBindGroup({ layout: pipe.getBindGroupLayout(0), entries: entries });
+    const pass = enc.beginRenderPass({ colorAttachments: [{
+        view: toScreen ? screenView : target.createView(),
+        clearValue: { r: 0, g: 0, b: 0, a: 0 }, loadOp: 'clear', storeOp: 'store'
+    }] });
+    if (toScreen) pass.setViewport(g.vx, g.vy, g.vw, g.vh, 0, 1);
+    pass.setPipeline(pipe);
+    pass.setBindGroup(0, bind);
+    pass.draw(3);
+    pass.end();
+}
+
+function _drawUpscaledFrameWebGPU(up) {
+    const g = _gpuGeometry(up);
+    if (!g) return;
+    const vw = g.vw, vh = g.vh;
+    const upscale = _upscaleNeeded();
+    const sharpen = _gpuSharpenActive();
+    // 디코더 프레임을 복사 없이 — 이 프레임 콜백 안에서만 유효하다.
+    const ext = up.device.importExternalTexture({ source: video });
+    const screenView = up.ctx.getCurrentTexture().createView();
+    const enc = up.device.createCommandEncoder();
+    const tx = 1 / vw, ty = 1 / vh;
+    _wgpuWorkTextures(up, vw, vh);
+    const A = up.tex[0], B = up.tex[1], C = up.tex[2];
+    // 크게 줄일 때 출력 픽셀 하나에 들어가는 영상 화소 수만큼 표본(최대 4×4) — WebGL 판의 밉맵 대신.
+    const ratio = video.videoWidth / vw;
+    const n = upscale ? 1 : Math.max(1, Math.min(4, Math.round(ratio)));
+    if (upscale) {
+        _wgpuPass(up, enc, 'resample', 0, [video.videoWidth, video.videoHeight, 1, 1, tx, ty], { ext: ext }, A, g);
+        _wgpuPass(up, enc, 'cas', 1, [tx, ty, UPSCALE_SHARPNESS, 0], { ta: A }, sharpen ? C : null, g, screenView);
+        if (sharpen) {
+            _wgpuPass(up, enc, 'blurTex', 2, [tx, 0, g.sigma, g.radius], { ta: C }, B, g);
+            _wgpuPass(up, enc, 'unsharpTex', 3, [0, ty, g.sigma, g.radius], { ta: C, tb: B }, null, g, screenView);
+        }
+    } else if (n === 1) {
+        // 같은 크기·조금 줄일 때: 영상에서 바로 가로 흐림, 세로 흐림 + 합성 → 2패스
+        _wgpuPass(up, enc, 'blurExt', 0, [tx, 0, g.sigma, g.radius], { ext: ext }, B, g);
+        _wgpuPass(up, enc, 'unsharpExt', 1, [0, ty, g.sigma, g.radius], { ext: ext, tb: B }, null, g, screenView);
+    } else {
+        _wgpuPass(up, enc, 'resample', 0, [video.videoWidth, video.videoHeight, n, 0, tx, ty], { ext: ext }, A, g);
+        _wgpuPass(up, enc, 'blurTex', 1, [tx, 0, g.sigma, g.radius], { ta: A }, B, g);
+        _wgpuPass(up, enc, 'unsharpTex', 2, [0, ty, g.sigma, g.radius], { ta: A, tb: B }, null, g, screenView);
+    }
+    up.device.queue.submit([enc.finish()]);
+}
+
+function _clearUpscaledFrameWebGPU(up) {
+    try {
+        const enc = up.device.createCommandEncoder();
+        enc.beginRenderPass({ colorAttachments: [{ view: up.ctx.getCurrentTexture().createView(),
+            clearValue: { r: 0, g: 0, b: 0, a: 0 }, loadOp: 'clear', storeOp: 'store' }] }).end();
+        up.device.queue.submit([enc.finish()]);
+    } catch (e) { /* 캔버스가 아직 설정되지 않았으면 지울 것도 없다 */ }
 }
 
 function _scheduleUpscaledFrame() {
@@ -4455,8 +4794,9 @@ function _scheduleUpscaledFrame() {
     if (!up || !up.active || !video.requestVideoFrameCallback) return;
     up.frameId = video.requestVideoFrameCallback(function() {
         up.frameId = 0;
-        if (!up.active) return;
+        if (!up.active || _upscaler !== up) return;
         try { _drawUpscaledFrame(); } catch (e) {
+            if (up.backend === 'webgpu') { _webgpuFail('WEBGPU_DRAW', String(e)); return; }
             _upscalerFailed = true;
             _sharpenGpuFailed = true;
             _deactivateUpscaler();
@@ -4485,7 +4825,10 @@ function _reconcileUpscaler() {
         return;
     }
     if (!_upscaler) {
-        _upscaler = _createUpscaler();
+        // WebGPU 장치를 여는 동안(수십 ms)은 SVG·CSS 필터로 보이고, 열리면 이 함수가 다시 불린다.
+        if (_webgpuState === 'idle') _probeWebGPU();
+        if (_webgpuState === 'pending') return;
+        _upscaler = (_webgpuState === 'ready' && _createUpscalerWebGPU()) || _createUpscaler();
         if (!_upscaler) {
             _upscalerFailed = true;
             _sharpenGpuFailed = true;
@@ -4493,6 +4836,7 @@ function _reconcileUpscaler() {
             postToSwift('pictureEnhance', { upscale: false, error: 'WEBGL_UNAVAILABLE' });
             return;
         }
+        postToSwift('pictureEnhance', { gpuBackend: _upscaler.backend });
     }
     if (_upscaler.active) return;
     _upscaler.active = true;
@@ -4506,10 +4850,7 @@ function _reconcileUpscaler() {
 function _clearUpscaledFrame() {
     const up = _upscaler;
     if (!up) return;
-    const gl = up.gl;
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.clearColor(0, 0, 0, 0);
-    gl.clear(gl.COLOR_BUFFER_BIT);
+    up.clear(up);
     _deactivateUpscaler();
 }
 
