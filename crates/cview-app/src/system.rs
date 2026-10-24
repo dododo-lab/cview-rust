@@ -219,16 +219,48 @@ pub struct UpdateCheckDto {
     pub published_at: Option<String>,
 }
 
-/// GitHub 최신 릴리스 확인.
+fn validated_update_url(value: &str) -> Result<url::Url, CommandError> {
+    let parsed = url::Url::parse(value)
+        .map_err(|_| CommandError("업데이트 서버 주소가 올바르지 않습니다".into()))?;
+    if parsed.scheme() != "https"
+        || parsed.host_str().is_none()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.fragment().is_some()
+    {
+        return Err(CommandError(
+            "업데이트 주소는 인증 정보 없는 HTTPS 주소여야 합니다".into(),
+        ));
+    }
+    Ok(parsed)
+}
+
+fn update_feed_url(
+    runtime: Option<&str>,
+    embedded: Option<&str>,
+) -> Result<url::Url, CommandError> {
+    match runtime.or(embedded) {
+        Some(value) => validated_update_url(value),
+        None => validated_update_url(&format!(
+            "https://api.github.com/repos/{}/releases/latest",
+            UpdateService::REPOSITORY
+        )),
+    }
+}
+
+/// 설정된 HTTPS 서버의 최신 릴리스 확인.
 #[tauri::command]
 pub async fn update_check(app: AppHandle) -> CmdResult<UpdateCheckDto> {
     let current = app.package_info().version.to_string();
-    let url = format!(
-        "https://api.github.com/repos/{}/releases/latest",
-        UpdateService::REPOSITORY
-    );
-    let resp = reqwest::Client::new()
+    let runtime_url = std::env::var("CVIEW_UPDATE_URL").ok();
+    let url = update_feed_url(runtime_url.as_deref(), option_env!("CVIEW_UPDATE_URL"))?;
+    let client = reqwest::Client::builder()
+        .https_only(true)
+        .build()
+        .map_err(|e| CommandError(format!("업데이트 연결 초기화 실패: {e}")))?;
+    let resp = client
         .get(url)
+        .header("Cache-Control", "no-cache")
         .header("Accept", "application/vnd.github+json")
         .header("User-Agent", "CView-Rust")
         .timeout(Duration::from_secs(15))
@@ -264,6 +296,9 @@ pub async fn update_check(app: AppHandle) -> CmdResult<UpdateCheckDto> {
         .await
         .map_err(|e| CommandError(format!("릴리스 정보를 읽지 못했습니다: {e}")))?;
     let latest = release.version_string().to_string();
+    if let Some(page) = release.html_url.as_ref() {
+        validated_update_url(page.as_str())?;
+    }
     Ok(UpdateCheckDto {
         newer: compare_versions(&latest, &current) == std::cmp::Ordering::Greater,
         current,
@@ -277,6 +312,33 @@ pub async fn update_check(app: AppHandle) -> CmdResult<UpdateCheckDto> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn update_endpoint_configuration() {
+        let embedded = "https://win-7sv7uak6k5b.horse-solfege.ts.net/releases/latest.json";
+        assert_eq!(
+            update_feed_url(None, Some(embedded)).unwrap().as_str(),
+            embedded
+        );
+        assert_eq!(
+            update_feed_url(Some("https://example.com/feed"), Some(embedded))
+                .unwrap()
+                .host_str(),
+            Some("example.com")
+        );
+        assert_eq!(
+            update_feed_url(None, None).unwrap().host_str(),
+            Some("api.github.com")
+        );
+        for bad in [
+            "http://example.com/feed",
+            "https://user:secret@example.com/feed",
+            "invalid",
+            "",
+        ] {
+            assert!(update_feed_url(Some(bad), Some(embedded)).is_err());
+        }
+    }
 
     #[test]
     fn deep_link_payloads() {
