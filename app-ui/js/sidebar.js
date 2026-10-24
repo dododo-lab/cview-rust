@@ -1,6 +1,6 @@
 // 왼쪽 사이드바 — 브랜드/접기, 빠른 검색, 메뉴, 방송 중인 팔로잉, 계정 카드.
 // 접힘 상태는 로컬에 기억하고, 좁은 창(<1100px)에서는 사용자가 펼치지 않은 한 아이콘 레일로 접는다.
-import { esc, safeUrl, icons, imageSrc } from './dom.js';
+import { esc, safeUrl, icons, imageSrc, keepFocus } from './dom.js';
 import { setTheme, currentTheme, onThemeChange, THEMES, THEME_LABELS } from './theme.js';
 
 const COLLAPSE_KEY = 'cview.sidebarCollapsed';
@@ -217,12 +217,14 @@ export class Sidebar {
   /** 메뉴 옆 숫자(멀티라이브 패인 수 등). 0 이면 지운다. */
   setBadge(route, count) {
     if (!this.badges) this.badges = new Map();
-    if ((this.badges.get(route) || 0) === (count || 0)) return;
+    const before = this.badges.get(route) || 0;
+    if (before === (count || 0)) return;
     if (count) this.badges.set(route, count); else this.badges.delete(route);
     const item = this.nav.querySelector(`[data-route="${route}"]`);
     if (!item) return;
     item.querySelector('.nav-badge')?.remove();
-    if (count) item.insertAdjacentHTML('beforeend', `<span class="nav-badge">${count > 99 ? '99+' : count}</span>`);
+    // 늘어나면 톡 튄다(motion.css .nav-badge.bump)
+    if (count) item.insertAdjacentHTML('beforeend', `<span class="nav-badge${count > before ? ' bump' : ''}">${count > 99 ? '99+' : count}</span>`);
   }
 
   /** 메뉴 옆 "재생 중" 표시(라이브 메뉴). */
@@ -244,6 +246,11 @@ export class Sidebar {
 
   /** 방송 중인 팔로잉. `null` 이면(비로그인·실패) 숨긴다. */
   setFollowing(lives) {
+    // 팔로잉 폴링(2분)마다 메뉴·방송 중 목록을 다시 그린다 — Tab 으로 고르던 항목의 초점을 지킨다
+    keepFocus(this.root, () => this.paintFollowing(lives));
+  }
+
+  paintFollowing(lives) {
     const active = this.nav.querySelector('.nav-item.active')?.dataset.route;
     this.liveCount = lives ? lives.length : null;
     this.renderNav();

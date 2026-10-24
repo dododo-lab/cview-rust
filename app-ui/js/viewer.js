@@ -166,6 +166,9 @@ export class Viewer {
   async open(channelId, settings) {
     const token = ++this.startToken;
     this.channelId = channelId;
+    // 성능 수집기가 player.net(채널 앞 6자)과 맞춘다
+    const frame = document.getElementById('player-frame');
+    if (frame) frame.dataset.perfChannel = channelId; // data-channel-id 는 카드 열기 속성이라 쓰지 않는다
     if (settings) this.lastSettings = settings;
     this.root.hidden = false;
     this.renderHeader(null);
@@ -173,6 +176,8 @@ export class Viewer {
     this.status.textContent = '';
     if (settings && typeof settings.volumeLevel === 'number') {
       this.volume.value = String(Math.round(settings.volumeLevel * 100));
+      // 채움 색(--fill)도 — 속성이 아니라 값을 바꿔 viewer-controls 의 감시자가 모른다(input 을 쏘면 음소거가 풀린다)
+      this.volume.style.setProperty('--fill', `${this.volume.value}%`);
     }
     this.startMuted = settings ? Boolean(settings.startMuted) : false;
     try {

@@ -187,6 +187,8 @@ pub struct PlayerState {
     pub current_channel_id: Option<String>,
     pub is_multi_live: bool,
     pub precision_sync_requested: bool,
+    /// 멀티라이브 메인 패인의 목표 지연 여유(초) — 매니저가 패인 수로 정한다. 새 코디네이터에도 이어 준다.
+    pub latency_margin: f64,
     pub current_engine_type: PlayerEngineType,
     pub current_proxy_mode: String,
     pub proxy_route_status: Option<StreamProxyRouteStatus>,
@@ -267,6 +269,7 @@ impl Default for PlayerState {
             current_channel_id: None,
             is_multi_live: false,
             precision_sync_requested: false,
+            latency_margin: 0.0,
             current_engine_type: PlayerEngineType::Hlsjs,
             current_proxy_mode: "pending".into(),
             proxy_route_status: None,
@@ -675,6 +678,28 @@ impl PlayerViewModel {
         };
         if let Some(c) = coordinator {
             spawn_detached(async move { c.set_low_latency_sync_active(active).await });
+        }
+    }
+
+    /// 멀티라이브 패인으로 쓴다 — 다음 재생 시작부터 저지연을 매니저가 관리(Managed: 선택 패인만 정밀 싱크,
+    /// 비선택은 안정성 목표 10.5초)하고, 화질은 역할 목표(매니저의 `set_multi_live_quality_target`)를 따르며,
+    /// 로컬 되감기 녹화는 기본으로 끈다. 단독 시청 플레이어는 그대로(false).
+    pub fn set_multi_live(&self, on: bool) {
+        self.state.lock().is_multi_live = on;
+    }
+
+    /// 멀티라이브 메인 패인 목표 지연 여유(초). 같은 값이면 아무것도 하지 않는다.
+    pub fn set_latency_margin(&self, seconds: f64) {
+        let coordinator = {
+            let mut s = self.state.lock();
+            if (s.latency_margin - seconds).abs() < 0.01 {
+                return;
+            }
+            s.latency_margin = seconds;
+            s.coordinator.clone()
+        };
+        if let Some(c) = coordinator {
+            c.set_target_latency_margin(seconds);
         }
     }
 
@@ -1235,6 +1260,10 @@ impl PlayerViewModel {
             let mut s = self.state.lock();
             s.session_id = s.session_id.wrapping_add(1);
             s.coordinator = Some(coordinator.clone());
+            // 다시 연결·채널 바꾸기로 새 코디네이터가 생겨도 매니저가 정한 여유를 잃지 않는다
+            if s.latency_margin > 0.0 {
+                coordinator.set_target_latency_margin(s.latency_margin);
+            }
             s.rewind_settings = RewindSettings::from_settings(&settings);
             Self::apply_timeshift_window(&mut s, 0.0);
             s.rewind_seek_hint = None;

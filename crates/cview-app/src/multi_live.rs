@@ -349,6 +349,9 @@ impl PanePlayer {
         settings: &PlayerSettings,
     ) -> Arc<Self> {
         let vm = PlayerViewModel::new(None);
+        // 패인은 멀티라이브 플레이어다 — 빠뜨리면 모든 패인이 단독 시청처럼 각자 3초를 쫓는 PID 를 돌리고
+        // (Automatic), 비선택 안정성 목표(10.5초)·선택 전환·역할별 화질 목표가 하나도 걸리지 않았다.
+        vm.set_multi_live(true);
         if let Some(e) = &engine {
             vm.inject_engine(e.engine.clone());
         }
@@ -460,6 +463,9 @@ impl MultiLivePlayer for PanePlayer {
     fn restore_surface_after_occlusion(&self) {}
     fn set_gpu_render_tier_hidden(&self, _keep_alive: bool) {}
     fn set_max_rate_override(&self, _rate: Option<f64>) {}
+    fn set_latency_margin(&self, seconds: f64) {
+        self.vm.set_latency_margin(seconds);
+    }
     fn configure_time_machine_access(&self, is_cheat_key_user: bool, available: bool) {
         self.vm
             .configure_time_machine_access(is_cheat_key_user, available);

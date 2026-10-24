@@ -271,6 +271,16 @@ fn multi_live_menu_exposes_single_closest_1080p() {
 }
 
 #[test]
+fn set_multi_live_marks_pane_player() {
+    let vm = PlayerViewModel::new(None);
+    assert!(!vm.read().is_multi_live, "기본은 단독 시청");
+    vm.set_multi_live(true);
+    assert!(vm.read().is_multi_live);
+    // 멀티라이브여야 역할별 화질 목표가 걸린다(아니면 무시된다)
+    assert!(vm.set_multi_live_quality_target(HlsJsForcedQualityTarget::new(480, 2_000)));
+}
+
+#[test]
 fn multi_live_quality_click_only_accepts_target() {
     let vm = PlayerViewModel::new(None);
     vm.lock().is_multi_live = true;

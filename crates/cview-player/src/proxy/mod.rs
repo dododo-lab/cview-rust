@@ -36,7 +36,7 @@ use crate::manifest::{ByteRange, HlsByteSpan};
 use crate::policy::constants::proxy_defaults;
 use crate::policy::playback_key_access::{CookieProvider, PlaybackCookie};
 use smp_token::SmpSegmentTokenState;
-use telemetry::{ProxyTelemetry, SupplyGapCause};
+use telemetry::{ProxyPerfWindow, ProxyTelemetry, SupplyGapCause};
 use timeshift::{TimeshiftBackend, TIMESHIFT_PATH_PREFIX};
 use transfer_diagnostics::{ProxyTransferDiagnostic, ProxyTransferTrace, TransferRecords};
 
@@ -86,6 +86,25 @@ pub(crate) struct Inner {
     upstream_override: Option<UpstreamOverride>,
     pub(crate) active_connections: Arc<AtomicUsize>,
     epoch: Instant,
+    /// 성능 로그에 붙일 이름(채널 ID 앞 6자) — 코디네이터가 단다.
+    perf_tag: Mutex<String>,
+}
+
+/// 살아 있는 프록시 목록 — 성능 로그 표본 루프가 10초마다 세그먼트 수신 요약을 꺼내 간다(약한 참조).
+static PERF_REGISTRY: Mutex<Vec<std::sync::Weak<Inner>>> = Mutex::new(Vec::new());
+
+/// 살아 있는 프록시마다 지난 창의 세그먼트 수신 요약(이름, 요약). 이 창에 일이 없던 프록시는 빠진다.
+pub fn take_perf_windows() -> Vec<(String, ProxyPerfWindow)> {
+    let mut registry = lock(&PERF_REGISTRY);
+    registry.retain(|w| w.strong_count() > 0);
+    registry
+        .iter()
+        .filter_map(|w| w.upgrade())
+        .filter_map(|inner| {
+            let window = inner.telemetry.take_perf_window()?;
+            Some((lock(&inner.perf_tag).clone(), window))
+        })
+        .collect()
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -124,7 +143,7 @@ impl LocalStreamProxy {
     }
 
     fn build(cookies: CookieProvider, upstream_override: Option<UpstreamOverride>) -> Self {
-        Self {
+        let proxy = Self {
             inner: Arc::new(Inner {
                 lifecycle: tokio::sync::Mutex::new(()),
                 state: Mutex::new(ProxyState::default()),
@@ -141,8 +160,16 @@ impl LocalStreamProxy {
                 upstream_override,
                 active_connections: Arc::new(AtomicUsize::new(0)),
                 epoch: Instant::now(),
+                perf_tag: Mutex::new(String::new()),
             }),
-        }
+        };
+        lock(&PERF_REGISTRY).push(Arc::downgrade(&proxy.inner));
+        proxy
+    }
+
+    /// 성능 로그 이름(채널 ID 앞 6자 등).
+    pub fn set_perf_tag(&self, tag: &str) {
+        *lock(&self.inner.perf_tag) = tag.to_string();
     }
 
     // MARK: - 상태

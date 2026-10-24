@@ -1,30 +1,21 @@
 // 채팅 부가 기능 — 원본 ChatModerationService(명령)·ChatTTSService·ChatPanelEventRail·ChatStatsView·
 // ChatDesignStyle·ChatBackgroundScope. 채팅 패널마다 설치한다.
-// CHT-07 명령어, CHT-13 디자인 스타일 8종, CHT-15 배경, CHT-17 후원·구독 TTS, CHT-18 이벤트 레일,
+// CHT-07 명령어, CHT-13 말풍선 디자인, CHT-15 배경, CHT-17 후원·구독 TTS, CHT-18 이벤트 레일,
 // CHT-19 채팅 내보내기, CHT-24 채팅 통계.
 import { api } from './api.js';
 import { esc, toast } from './dom.js';
 import { chatPrefs, onChatPrefs, updateChatPrefs } from './chat-prefs.js';
 import { formatCheese, donationKindLabel, eventMeta, EVENT_ICONS } from './donations.js';
 
-/** 원본 ChatDesignStyle — 앞 다섯은 고를 수 있는 스타일, 뒤 셋은 이전 스타일(저장값 호환). */
-export const DESIGN_STYLES = [
-  ['unified', 'Chat Lounge', '대화 카드와 아바타로 방송 옆 대화 공간을 구성합니다'],
-  ['chzzk', '치지직 스타일', '배지·닉네임·본문을 간결한 줄 형태로 표시합니다'],
-  ['hybrid', 'Lounge × CHZZK', '대화 카드와 간결한 채널 배지를 결합한 통합 디자인'],
-  ['kakao', '카카오톡형 말풍선', '프로필 옆 말풍선, 내 말은 노란 말풍선'],
-  ['imessage', 'iMessage형 말풍선', '회색·파란 꼬리 말풍선으로 메신저처럼'],
-  ['calm', '차분하게 (이전)', '여백과 얇은 구분선으로 편하게 읽기'],
-  ['compact', '촘촘하게 (이전)', '한 화면에 더 많은 메시지'],
-  ['dashboard', '대시보드 (이전)', '시간·닉네임·본문을 열로 정렬'],
-];
+// 채팅 디자인은 카카오톡형 말풍선 하나(2026-10-23 통합). 라운지·치지직·하이브리드·iMessage·이전 스타일은 없앴고
+// 좋던 점(닉네임 해시색·호버 줄·아바타 색·"나를 언급"·둥근 입력창)은 이 말풍선에 넣었다. 저장된 designStyle 은 쓰지 않는다.
+const OLD_STYLE_CLASSES = ['unified', 'chzzk', 'hybrid', 'kakao', 'imessage', 'calm', 'compact', 'dashboard'].map((v) => `style-${v}`);
 /** 읽기 폭 — 원본 ChatReadingWidthMenu. */
 export const READING_WIDTHS = [['full', '전체', null], ['wide', '넓게', 720], ['normal', '보통', 560], ['narrow', '좁게', 420]];
 
-/** 채팅 화면(패널·통합 목록)에 디자인 스타일·읽기 폭·표시 설정(글자 크기·줄 간격·시간·배지·역할 색)을 입힌다.
- *  글자 크기는 --chat-font 와 배율 --chat-scale(기본 14px = 1)로 — 디자인마다 닉네임·아바타·이모티콘 크기가 따라 커진다. */
+/** 채팅 화면(패널·통합 목록)에 말풍선 디자인·읽기 폭·표시 설정(글자 크기·줄 간격·시간·배지·역할 색)을 입힌다.
+ *  글자 크기는 --chat-font 와 배율 --chat-scale(기본 14px = 1)로 — 닉네임·아바타·이모티콘 크기가 따라 커진다. */
 export function applyChatSkin(el, p = chatPrefs()) {
-  const style = DESIGN_STYLES.some(([v]) => v === p.designStyle) ? p.designStyle : 'unified';
   const font = Math.min(24, Math.max(10, Number(p.fontSize) || 14));
   el.classList.add('chat-skin');
   el.style.setProperty('--chat-font', `${font}px`);
@@ -34,31 +25,26 @@ export function applyChatSkin(el, p = chatPrefs()) {
   el.classList.toggle('hide-badge', !p.showBadge);
   el.classList.toggle('no-role-color', !p.highlightRoles);
   el.classList.toggle('no-nick-colors', p.nicknameColors === false);
-  for (const [v] of DESIGN_STYLES) el.classList.toggle(`style-${v}`, v === style);
+  el.classList.remove(...OLD_STYLE_CLASSES);
   const w = READING_WIDTHS.find(([v]) => v === p.readingWidth);
   if (w && w[2]) { el.dataset.readWidth = w[0]; el.style.setProperty('--chat-read-width', `${w[2]}px`); }
   else { delete el.dataset.readWidth; el.style.removeProperty('--chat-read-width'); }
 }
 
-/** 채팅 머리글 "디자인" 메뉴 — 스타일·읽기 폭 고르기. */
+/** 채팅 머리글 "보기" 메뉴 — 읽기 폭 고르기. */
 export function showDesignMenu(anchor) {
   document.querySelector('.design-menu')?.remove();
   const p = chatPrefs();
-  const cur = DESIGN_STYLES.some(([v]) => v === p.designStyle) ? p.designStyle : 'unified';
   const menu = document.createElement('div');
   menu.className = 'design-menu';
   menu.setAttribute('role', 'menu');
-  menu.innerHTML = `<div class="design-menu-head">채팅 디자인</div>
-    ${DESIGN_STYLES.map(([v, l, d], i) => `${i === 5 ? '<div class="design-menu-sep"></div><div class="design-menu-head">이전 스타일</div>' : ''}<button class="design-item${v === cur ? ' on' : ''}" data-style="${v}" role="menuitemradio" aria-checked="${v === cur}"><span class="design-swatch sw-${v}"></span><span class="design-text"><b>${esc(l)}</b><small>${esc(d)}</small></span><span class="design-check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span></button>`).join('')}
-    <div class="design-menu-sep"></div><div class="design-menu-head">읽기 폭</div>
+  menu.innerHTML = `<div class="design-menu-head">읽기 폭</div>
     <div class="segmented design-width">${READING_WIDTHS.map(([v, l]) => `<button class="seg${(p.readingWidth || 'full') === v ? ' active' : ''}" data-width="${v}">${l}</button>`).join('')}</div>`;
   document.body.append(menu);
   const r = anchor.getBoundingClientRect();
   menu.style.top = `${Math.min(window.innerHeight - menu.offsetHeight - 8, r.bottom + 6)}px`;
   menu.style.left = `${Math.max(8, Math.min(window.innerWidth - menu.offsetWidth - 8, r.right - menu.offsetWidth))}px`;
   menu.addEventListener('click', (e) => {
-    const st = e.target.closest('[data-style]');
-    if (st) { updateChatPrefs({ designStyle: st.dataset.style }); menu.remove(); return; }
     const wd = e.target.closest('[data-width]');
     if (wd) { updateChatPrefs({ readingWidth: wd.dataset.width }); menu.remove(); }
   });
@@ -129,7 +115,7 @@ export function installChatExtras(panel) {
   statsBtn.after(exportBtn);
   const designBtn = document.createElement('button');
   designBtn.className = 'icon-btn chat-hbtn';
-  designBtn.title = '채팅 디자인·읽기 폭';
+  designBtn.title = '읽기 폭';
   designBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1 0 1.5-.8 1.5-1.6 0-1.1-.9-1.4-.9-2.4 0-.9.7-1.5 1.6-1.5H17a4 4 0 0 0 4-4c0-4.7-4-8.5-9-8.5Z"/><circle cx="7.5" cy="11" r="1" fill="currentColor"/><circle cx="10.5" cy="7" r="1" fill="currentColor"/><circle cx="15" cy="7.5" r="1" fill="currentColor"/></svg>';
   statsBtn.before(designBtn);
   designBtn.addEventListener('click', (e) => { e.stopPropagation(); showDesignMenu(designBtn); });
@@ -278,6 +264,6 @@ export function installChatExtras(panel) {
     for (const [v] of BACKGROUNDS) root.classList.toggle(`bg-${v}`, v === mode);
     root.style.setProperty('--chat-bg-strength', String(Math.min(1, Math.max(0, Number(bg.strength ?? 0.5)))));
   };
-  onChatPrefs(applyLook);
+  panel.cleanups.push(onChatPrefs(applyLook)); // 패널을 버리면 구독도 — 닫힌 멀티채팅 패널이 DOM 째 남았다
   applyLook();
 }

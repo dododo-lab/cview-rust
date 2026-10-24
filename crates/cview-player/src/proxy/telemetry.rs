@@ -86,9 +86,44 @@ struct Counters {
     client_aborts: i64,
 }
 
+/// 성능 로그 한 창(보통 10초) 동안의 세그먼트 수신 요약 — `take_perf_window` 가 꺼내고 비운다.
+/// 멈춤이 상류(CDN 첫 바이트·전송) 탓인지, 요청 자체가 늦은(hls.js·재생목록 보류) 탓인지 가르는 데 쓴다.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ProxyPerfWindow {
+    /// 받은 세그먼트 수.
+    pub segments: u32,
+    /// 첫 바이트(초) 중앙값·최대.
+    pub ttfb_p50: f64,
+    pub ttfb_max: f64,
+    /// 세그먼트 하나 전송(초) 중앙값·최대.
+    pub fetch_p50: f64,
+    pub fetch_max: f64,
+    /// 상류 지연 문턱(첫 바이트 1.5초·전송 3초)을 넘은 세그먼트 수.
+    pub slow: u32,
+    /// 공급 공백 — 요청이 안 온(hls.js 측) 횟수 / 상류 재생목록 보류 횟수.
+    pub gaps_client: u32,
+    pub gaps_upstream: u32,
+    /// HTTP 오류·연결 오류 수.
+    pub errors: u32,
+    /// 상류에서 받은 바이트.
+    pub bytes: i64,
+}
+
+#[derive(Debug, Default)]
+struct PerfAccumulator {
+    ttfb: Vec<f64>,
+    fetch: Vec<f64>,
+    slow: u32,
+    gaps_client: u32,
+    gaps_upstream: u32,
+    errors: u32,
+    bytes: i64,
+}
+
 #[derive(Debug, Default)]
 struct State {
     counters: Counters,
+    perf: PerfAccumulator,
     consecutive_403: i64,
     response_times: Vec<f64>,
     /// (fetch, ttfb)
@@ -143,6 +178,13 @@ impl ProxyTelemetry {
         }
         let typical = typical_segment_interval(&recent).unwrap_or(0.0);
         let cause = supply_gap_cause(gap, playlist_wait);
+        {
+            let mut s = self.lock();
+            match cause {
+                SupplyGapCause::Client => s.perf.gaps_client += 1,
+                SupplyGapCause::UpstreamPlaylist => s.perf.gaps_upstream += 1,
+            }
+        }
         match cause {
             SupplyGapCause::Client => tracing::warn!(
                 "공급 공백: 세그먼트 요청이 {gap:.2}초(평소 {typical:.2}초) 동안 없었다 — hls.js 미요청 구간"
@@ -179,6 +221,11 @@ impl ProxyTelemetry {
         };
         let summary = {
             let mut s = self.lock();
+            s.perf.fetch.push(fetch);
+            s.perf.ttfb.push(ttfb);
+            if ttfb >= SEGMENT_TTFB_THRESHOLD || fetch >= SEGMENT_FETCH_THRESHOLD {
+                s.perf.slow += 1;
+            }
             s.segment_fetch_samples.push((fetch, ttfb));
             let len = s.segment_fetch_samples.len();
             if len > SEGMENT_FETCH_WINDOW {
@@ -224,6 +271,7 @@ impl ProxyTelemetry {
         s.counters.total_requests += 1;
         s.counters.cache_misses += 1;
         s.counters.error_count += 1;
+        s.perf.errors += 1;
         if status != 403 {
             return false;
         }
@@ -242,6 +290,7 @@ impl ProxyTelemetry {
         s.counters.total_requests += 1;
         s.counters.cache_misses += 1;
         s.counters.error_count += 1;
+        s.perf.errors += 1;
     }
 
     pub fn record_segment_metrics(&self, elapsed: f64, bytes_received: i64) {
@@ -253,6 +302,7 @@ impl ProxyTelemetry {
         }
         if bytes_received > 0 {
             s.counters.total_bytes_received += bytes_received;
+            s.perf.bytes += bytes_received;
         }
     }
 
@@ -317,6 +367,35 @@ impl ProxyTelemetry {
         }
     }
 
+    /// 지난 창의 세그먼트 수신 요약을 꺼내고 비운다. 이 창에 아무 일도 없었으면 `None`.
+    pub fn take_perf_window(&self) -> Option<ProxyPerfWindow> {
+        let p = std::mem::take(&mut self.lock().perf);
+        if p.fetch.is_empty() && p.gaps_client == 0 && p.gaps_upstream == 0 && p.errors == 0 {
+            return None;
+        }
+        let stat = |v: &[f64]| {
+            if v.is_empty() {
+                (0.0, 0.0)
+            } else {
+                (quantile(v, 0.5), v.iter().copied().fold(0.0, f64::max))
+            }
+        };
+        let (ttfb_p50, ttfb_max) = stat(&p.ttfb);
+        let (fetch_p50, fetch_max) = stat(&p.fetch);
+        Some(ProxyPerfWindow {
+            segments: p.fetch.len() as u32,
+            ttfb_p50,
+            ttfb_max,
+            fetch_p50,
+            fetch_max,
+            slow: p.slow,
+            gaps_client: p.gaps_client,
+            gaps_upstream: p.gaps_upstream,
+            errors: p.errors,
+            bytes: p.bytes,
+        })
+    }
+
     /// 통계 리셋(세션 종료 시) — 직전 세그먼트 시각·평소 주기·재생목록 대기도 버린다.
     pub fn reset(&self) {
         let mut s = self.lock();
@@ -330,6 +409,37 @@ impl ProxyTelemetry {
 mod tests {
     //! `Tests/CViewPlayerTests/ProxySupplyGapTelemetryTests.swift` 포팅.
     use super::*;
+
+    #[test]
+    fn perf_window_summarizes_and_resets() {
+        let t = ProxyTelemetry::default();
+        assert_eq!(t.take_perf_window(), None);
+        t.record_segment_fetch_sample(0.4, 0.1);
+        t.record_segment_fetch_sample(0.6, 0.2);
+        t.record_segment_fetch_sample(3.5, 1.8); // 상류 지연
+        t.record_segment_metrics(0.5, 1000);
+        t.record_segment_http_error(500);
+        let w = t.take_perf_window().expect("창이 있다");
+        assert_eq!(w.segments, 3);
+        assert_eq!(w.slow, 1);
+        assert_eq!(w.errors, 1);
+        assert_eq!(w.bytes, 1000);
+        assert!((w.fetch_p50 - 0.6).abs() < 1e-9 && (w.fetch_max - 3.5).abs() < 1e-9);
+        assert!((w.ttfb_max - 1.8).abs() < 1e-9);
+        // 꺼내면 비운다
+        assert_eq!(t.take_perf_window(), None);
+    }
+
+    #[test]
+    fn perf_window_counts_supply_gaps() {
+        let t = ProxyTelemetry::default();
+        for at in [0.0, 2.0, 4.0, 6.0, 8.0] {
+            t.note_segment_request_arrived(at);
+        }
+        t.note_segment_request_arrived(20.0); // 평소 2초의 1.8배를 크게 넘는 공백
+        let w = t.take_perf_window().expect("공백이 기록된다");
+        assert_eq!((w.gaps_client, w.gaps_upstream, w.segments), (1, 0, 0));
+    }
 
     #[test]
     fn thresholds_match_segment_duration() {

@@ -21,7 +21,8 @@ use tokio::task::JoinHandle;
 use crate::clock::{self, SharedClock, DISTANT_FUTURE, DISTANT_PAST};
 
 pub use backoff::{
-    LATENCY_BACKOFF_FLOOR_RELEASE, LATENCY_BACKOFF_HOLD, LATENCY_BACKOFF_MAX, LATENCY_BACKOFF_STEP,
+    LATENCY_BACKOFF_FLOOR_RELEASE, LATENCY_BACKOFF_HOLD, LATENCY_BACKOFF_MAX,
+    LATENCY_BACKOFF_REPEAT_HOLD, LATENCY_BACKOFF_REPEAT_WINDOW, LATENCY_BACKOFF_STEP,
     SEGMENT_TARGET_MARGIN,
 };
 pub use config::LowLatencyConfiguration;
@@ -96,6 +97,10 @@ pub struct State {
     pub(crate) latency_backoff_decay_at: f64,
     pub(crate) latency_backoff_floor: f64,
     pub(crate) latency_backoff_floor_release_at: f64,
+    /// 직전 백오프 단계를 올린 시각 — 반복 재버퍼인지 가른다.
+    pub(crate) latency_backoff_last_bump_at: f64,
+    /// 지금 감쇠 한 단계에 필요한 무사고 시간(평소 45초, 반복 재버퍼면 120초).
+    pub(crate) latency_backoff_hold: f64,
     pub(crate) seek_grace_auto_resume_at: Option<f64>,
     pub(crate) debug_tag: String,
     pub(crate) cooldown_until: f64,
@@ -142,6 +147,8 @@ impl State {
             latency_backoff_decay_at: DISTANT_PAST,
             latency_backoff_floor: 0.0,
             latency_backoff_floor_release_at: DISTANT_FUTURE,
+            latency_backoff_last_bump_at: DISTANT_PAST,
+            latency_backoff_hold: LATENCY_BACKOFF_HOLD,
             seek_grace_auto_resume_at: None,
             debug_tag: String::new(),
             cooldown_until: DISTANT_PAST,

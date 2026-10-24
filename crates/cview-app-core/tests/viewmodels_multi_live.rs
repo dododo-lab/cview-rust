@@ -148,6 +148,7 @@ struct FakePlayer {
     rewind: AtomicBool,
     precision: AtomicBool,
     rate_override: Mutex<Option<f64>>,
+    latency_margin: Mutex<f64>,
     starts: Mutex<Vec<MultiLiveStreamRequest>>,
     stops: AtomicUsize,
 }
@@ -163,6 +164,7 @@ impl FakePlayer {
             rewind: AtomicBool::new(false),
             precision: AtomicBool::new(false),
             rate_override: Mutex::new(None),
+            latency_margin: Mutex::new(0.0),
             starts: Mutex::new(Vec::new()),
             stops: AtomicUsize::new(0),
         })
@@ -237,6 +239,9 @@ impl MultiLivePlayer for FakePlayer {
     fn set_gpu_render_tier_hidden(&self, _keep_alive: bool) {}
     fn set_max_rate_override(&self, rate: Option<f64>) {
         *self.rate_override.lock().unwrap() = rate;
+    }
+    fn set_latency_margin(&self, seconds: f64) {
+        *self.latency_margin.lock().unwrap() = seconds;
     }
     fn configure_time_machine_access(&self, _a: bool, _b: bool) {}
     fn is_time_machine_available(&self) -> bool {
@@ -1131,6 +1136,81 @@ fn rate_budget_splits_twelve_percent() {
     st.apply_rate_budget();
     assert_eq!(*p[0].player.rate_override.lock().unwrap(), None);
     assert!(policy::rate_budget_plan(&[Uuid::new_v4()], None).is_none());
+}
+
+#[test]
+fn many_panes_cap_secondary_at_360p() {
+    use cview_app_core::viewmodels::multi_live::policy::focus_quality::cap_secondary_for_pane_count;
+    let t480 = HlsJsForcedQualityTarget::new(480, 2_000);
+    let t720 = HlsJsForcedQualityTarget::new(720, 4_000);
+    assert_eq!(
+        cap_secondary_for_pane_count(t480, 3, false),
+        t480,
+        "3개 이하는 그대로"
+    );
+    assert_eq!(cap_secondary_for_pane_count(t480, 4, false).height, 360);
+    assert_eq!(
+        cap_secondary_for_pane_count(t720, 6, false),
+        HlsJsForcedQualityTarget::new(360, 1_000)
+    );
+    assert_eq!(
+        cap_secondary_for_pane_count(t480, 6, true),
+        t480,
+        "소리 나는 보조는 480p 하한 유지"
+    );
+    let t360 = HlsJsForcedQualityTarget::new(360, 1_000);
+    assert_eq!(cap_secondary_for_pane_count(t360, 5, false), t360);
+}
+
+#[test]
+fn auto_picture_enhancement_only_on_main_pane() {
+    let m = manager();
+    let p = panes(3, "pic");
+    let mut st = m.lock();
+    st.set_sessions(p.iter().map(|x| x.session.clone()).collect());
+    st.set_selected_session_id(Some(p[1].session.id()));
+    let ps = PlayerSettings {
+        auto_picture_enhancement: true,
+        video_upscaling: true,
+        ..PlayerSettings::default()
+    };
+    let on: Vec<(bool, bool)> = p
+        .iter()
+        .map(|x| st.picture_enhancement(x.session.id(), &ps))
+        .collect();
+    assert_eq!(
+        on,
+        vec![(false, false), (true, true), (false, false)],
+        "보조 패인은 자동 보정·업스케일 없이"
+    );
+}
+
+#[test]
+fn main_pane_gets_latency_margin_by_pane_count() {
+    assert_eq!(policy::main_pane_latency_margin(1), 0.0);
+    assert_eq!(policy::main_pane_latency_margin(3), 0.0);
+    assert_eq!(policy::main_pane_latency_margin(4), 1.0);
+    assert_eq!(policy::main_pane_latency_margin(5), 1.0);
+    assert_eq!(policy::main_pane_latency_margin(6), 1.5);
+    let m = manager();
+    let p = panes(4, "margin");
+    let mut st = m.lock();
+    st.set_sessions(p.iter().map(|x| x.session.clone()).collect());
+    st.set_selected_session_id(Some(p[2].session.id()));
+    st.apply_rate_budget();
+    let margins: Vec<f64> = p
+        .iter()
+        .map(|x| *x.player.latency_margin.lock().unwrap())
+        .collect();
+    assert_eq!(
+        margins,
+        vec![0.0, 0.0, 1.0, 0.0],
+        "선택(메인) 패인만 여유를 받는다"
+    );
+    // 패인이 셋으로 줄면 여유를 거둔다
+    st.set_sessions(p[..3].iter().map(|x| x.session.clone()).collect());
+    st.apply_rate_budget();
+    assert_eq!(*p[2].player.latency_margin.lock().unwrap(), 0.0);
 }
 
 #[test]

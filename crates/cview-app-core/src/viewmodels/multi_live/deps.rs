@@ -93,6 +93,8 @@ pub trait MultiLivePlayer: Send + Sync {
     fn set_gpu_render_tier_hidden(&self, keep_alive: bool);
     /// `streamCoordinator?.lowLatencyController?.setMaxRateOverride`.
     fn set_max_rate_override(&self, rate: Option<f64>);
+    /// 메인 패인 목표 지연 여유(초) — [`crate::viewmodels::multi_live::policy::main_pane_latency_margin`].
+    fn set_latency_margin(&self, _seconds: f64) {}
     fn configure_time_machine_access(
         &self,
         is_cheat_key_user: bool,

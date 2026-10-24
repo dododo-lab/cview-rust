@@ -93,7 +93,7 @@
 | CHT-10 | ✅ 메시지 핀 고정·스트리머 공지 숨기기 | `StreamerNoticeBannerView`, `pinMessage` | 공지 배너 표시만, `PinnedNoticeCache` | S |
 | CHT-11 | ✅ 읽음 구분선·"맨 아래로" 버튼·자동 스크롤 토글(`⌘J`) | `ChatLiveScrollPolicy`, `ChatViewModel+ReadDivider` | `read_divider.rs`; 하단 근처면 자동 스크롤만 | S |
 | CHT-12 | ✅ 채팅 지우기(`⇧⌘K`)·다시 연결 버튼 | `CViewApp` 채팅 메뉴, `ChatConnectionStatusBadge` | 상태 텍스트만 | S |
-| CHT-13 | ✅ 채팅 디자인 스타일 8종(unified/chzzk/hybrid/kakao/imessage/calm/compact/dashboard) | `ChatCHZZKDesign`, `ChatHybridDesign`, `ChatMessengerDesign`, `ChatPanelView+Lounge`, `ChatMessageRow+*` | 단일 스타일 | L |
+| CHT-13 | ✅ 채팅 디자인 스타일 — 2026-10-23 카카오톡형 말풍선 하나로 통합(묶음·호버·해시색 아바타·이모티콘 크게, 나머지 7종 제거. 저장된 designStyle 은 쓰지 않음) | `ChatCHZZKDesign`, `ChatHybridDesign`, `ChatMessengerDesign`, `ChatPanelView+Lounge`, `ChatMessageRow+*` | 단일 스타일 | L |
 | CHT-14 | ✅ 표시 옵션: 글자 크기·줄 간격·타임스탬프·배지·이모티콘·정렬·읽기 폭 | `ChatSettingsTab`, `ChatReadingWidthMenu`, `ChatRowMetrics` | 설정 `chat` 도메인은 저장 가능, UI·렌더 미반영 | M |
 | CHT-15 | 🧪 채팅 배경(채널 색/사용자 색/중립, 강도) | `ChatBackgroundScope`, `CViewUI/ChatBackgroundPalette`, `Components/ChatBackgroundSettingsRows` | 없음 | S |
 | CHT-16 | ✅ 후원만 보기·후원 표시 끄기 | 설정 `showDonation`/`showDonationsOnly` | 없음 | S |
@@ -222,7 +222,7 @@ Swift 설정은 6그룹(개요/시청/채팅/멀티/연동/고급) + 검색 색�
 
 - 설정: SET-01 ~ SET-17 전부(먼저 SET-16 도메인 확장 → SET-01 구조 → 각 탭).
 - 플레이어 고급: PLY-03 되감기(로컬 타임시프트 녹화기 등록 포함), PLY-04 속도, PLY-05 고급 패널, PLY-06 이퀄라이저, PLY-07 비디오 보정, PLY-08 화면 비율, PLY-10 녹화, PLY-12 채팅 오버레이 모드, PLY-14 헤더 채널 레일, PLY-16 알림 위치, PLY-17 북마크, PLY-19 백그라운드 정책.
-- 채팅 확장: CHT-07 명령어, CHT-09 하이라이트, CHT-13 디자인 스타일 8종, CHT-15 배경, CHT-16 후원 필터, CHT-17 TTS(Web Speech API), CHT-18 이벤트 레일, CHT-19 내보내기, CHT-21 갱신 상한, CHT-22 채팅만 보기, CHT-24 채팅 통계.
+- 채팅 확장: CHT-07 명령어, CHT-09 하이라이트, CHT-13 말풍선 디자인(통합), CHT-15 배경, CHT-16 후원 필터, CHT-17 TTS(Web Speech API), CHT-18 이벤트 레일, CHT-19 내보내기, CHT-21 갱신 상한, CHT-22 채팅만 보기, CHT-24 채팅 통계.
 - 멀티: MUL-01 멀티채팅(채팅 엔진 다중 세션화가 선행 — `chat_connect` 가 단일 세션), MUL-02 머지 채팅, MUL-03 검색, MUL-04 개요, MUL-06 레이아웃, MUL-07 재배치, MUL-09 다중 오디오, MUL-10 그리드 채팅 오버레이, MUL-11 싱글 스테이지, MUL-13 제안 토스트, MUL-14 프리셋, MUL-15 레이아웃 기억, MUL-16 멀티 설정.
 - 데이터: DAT-01 메모, DAT-04 통계, DAT-06 저장소 복구, VOD-06 다운로더, VOD-07 다운로드 보관함.
 - 탐색 부가: NAV-05 인사이트 레일, NAV-07 디스커버리, NAV-13 사이드바 빠른 액션, NAV-15 허브 모드, NAV-16 워크스페이스 복원.

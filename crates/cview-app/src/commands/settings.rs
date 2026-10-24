@@ -4,7 +4,7 @@
 //! 해석에 실패하면(잘못된 값) 아무것도 바꾸지 않는다.
 
 use cview_core::models::settings::{
-    AppTheme, AppearanceSettings, GeneralSettings, NetworkSettings, PlayerSettings,
+    AppTheme, AppearanceSettings, GeneralSettings, NetworkPreset, NetworkSettings, PlayerSettings,
 };
 use cview_core::models::settings_ui::{
     ChannelNotificationSettings, KeyboardShortcutSettings, MultiChatSettings, MultiLiveSettings,
@@ -16,6 +16,7 @@ use serde_json::Value;
 use tauri::State;
 
 use super::{CmdResult, CommandError};
+use crate::multi_live::{MultiLiveShell, PaneStateDto};
 use crate::state::AppServices;
 
 /// 프런트가 다루는 설정 도메인.
@@ -32,7 +33,14 @@ pub struct SettingsDto {
     pub keyboard: Value,
     pub channel_notifications: Value,
     pub sync: Value,
+    /// 지금 값에 맞는 네트워크 프리셋(`auto` 면 자동).
+    pub network_preset: NetworkPreset,
+    /// 자동 프리셋이 지금 넣어 둔 프리셋(자동이 꺼져 있으면 없음).
+    pub network_auto_choice: Option<NetworkPreset>,
 }
+
+/// 도메인이 아닌, 현재 값에서 계산해 덧붙이는 DTO 키 — 백업에는 넣지 않는다.
+const DERIVED_KEYS: &[&str] = &["networkPreset", "networkAutoChoice"];
 
 /// 설정 도메인 이름(프런트·백업 파일 키).
 pub const DOMAINS: &[&str] = &[
@@ -87,6 +95,8 @@ fn snapshot(services: &AppServices) -> SettingsDto {
         keyboard: to_value(&s.keyboard()),
         channel_notifications: to_value(&s.channel_notifications()),
         sync: to_value(&s.sync()),
+        network_preset: s.network().matching_preset(),
+        network_auto_choice: auto_network_choice(&s.network()),
     }
 }
 
@@ -106,7 +116,13 @@ fn apply_domain(services: &AppServices, domain: &str, patch: Value) -> CmdResult
         }
         "chat" => s.set_chat(merge_patch(s.chat(), patch)),
         "network" => {
-            s.set_network(apply_patch::<NetworkSettings>(&s.network(), patch)?);
+            // 값 하나를 손으로 바꾸면 자동 프리셋은 꺼진다(백업 복원처럼 `autoPreset` 을 함께 보내면 그 값을 따른다).
+            let manual = patch.get("autoPreset").is_none();
+            let mut next = apply_patch::<NetworkSettings>(&s.network(), patch)?;
+            if manual {
+                next.auto_preset = false;
+            }
+            s.set_network(next);
             services.api.update_network_settings(&s.network());
         }
         "multiLive" => s.set_multi_live(apply_patch::<MultiLiveSettings>(&s.multi_live(), patch)?),
@@ -156,12 +172,69 @@ pub async fn settings_update(
 #[tauri::command]
 pub async fn network_preset(
     services: State<'_, AppServices>,
-    preset: cview_core::models::settings::NetworkPreset,
+    shell: State<'_, MultiLiveShell>,
+    preset: NetworkPreset,
 ) -> CmdResult<SettingsDto> {
     let s = &services.settings;
     s.set_network(preset.settings());
-    services.api.update_network_settings(&s.network());
+    if preset == NetworkPreset::Auto {
+        apply_auto_network(&services, &shell);
+    } else {
+        services.api.update_network_settings(&s.network());
+    }
     Ok(snapshot(&services))
+}
+
+/// 재생 오류가 사라진 뒤에도 안정 우선을 유지하는 시간 — 오류·복구가 오가며 프리셋이 흔들리지 않게.
+const AUTO_STABILITY_HOLD: std::time::Duration = std::time::Duration::from_secs(90);
+
+/// 마지막으로 재생 오류를 본 시각.
+static LAST_UNSTABLE: std::sync::Mutex<Option<std::time::Instant>> = std::sync::Mutex::new(None);
+
+/// 자동 프리셋이 켜져 있으면 멀티라이브 상황으로 프리셋을 골라 넣는다. 바꿨으면 `true`.
+pub fn apply_auto_network(services: &AppServices, shell: &MultiLiveShell) -> bool {
+    let s = &services.settings;
+    let current = s.network();
+    if !current.auto_preset {
+        return false;
+    }
+    let state = shell.state_dto();
+    let live = |p: &&crate::multi_live::MultiLivePaneDto| {
+        !p.decode_suspended && matches!(p.state, PaneStateDto::Playing | PaneStateDto::Loading)
+    };
+    let active = state.sessions.iter().filter(live).count();
+    let erroring = state
+        .sessions
+        .iter()
+        .any(|p| matches!(p.state, PaneStateDto::Error { .. }));
+    let unstable = {
+        let mut last = LAST_UNSTABLE.lock().unwrap_or_else(|e| e.into_inner());
+        if erroring {
+            *last = Some(std::time::Instant::now());
+        }
+        last.is_some_and(|t| t.elapsed() < AUTO_STABILITY_HOLD)
+    };
+    let choice = NetworkPreset::auto_choice(active, unstable);
+    let next = NetworkSettings {
+        auto_preset: true,
+        ..choice.settings()
+    };
+    if next == current {
+        return false;
+    }
+    tracing::info!(?choice, active, unstable, "자동 네트워크 프리셋 전환");
+    s.set_network(next);
+    services.api.update_network_settings(&s.network());
+    true
+}
+
+/// 자동 프리셋이 지금 고른 프리셋(자동이 꺼져 있으면 `None`).
+pub fn auto_network_choice(settings: &NetworkSettings) -> Option<NetworkPreset> {
+    let mut plain = settings.clone();
+    if !std::mem::take(&mut plain.auto_preset) {
+        return None;
+    }
+    Some(plain.matching_preset())
 }
 
 /// 설정 내보내기 — 모든 도메인을 JSON 문자열로(백업, SET-17).
@@ -170,6 +243,9 @@ pub async fn settings_export(services: State<'_, AppServices>) -> CmdResult<Stri
     let mut v =
         serde_json::to_value(snapshot(&services)).map_err(|e| CommandError(e.to_string()))?;
     if let Value::Object(map) = &mut v {
+        for k in DERIVED_KEYS {
+            map.remove(*k);
+        }
         map.insert("cviewSettingsVersion".into(), Value::from(1));
     }
     serde_json::to_string_pretty(&v).map_err(|e| CommandError(e.to_string()))
@@ -249,9 +325,17 @@ mod tests {
             keyboard: Value::Null,
             channel_notifications: Value::Null,
             sync: Value::Null,
+            network_preset: NetworkPreset::Balanced,
+            network_auto_choice: None,
         };
         let v = serde_json::to_value(dto).unwrap();
-        let keys: Vec<_> = v.as_object().unwrap().keys().cloned().collect();
+        let keys: Vec<_> = v
+            .as_object()
+            .unwrap()
+            .keys()
+            .filter(|k| !DERIVED_KEYS.contains(&k.as_str()))
+            .cloned()
+            .collect();
         for d in DOMAINS {
             assert!(keys.iter().any(|k| k == d), "DTO 에 {d} 없음");
         }

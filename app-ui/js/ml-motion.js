@@ -7,15 +7,17 @@
 // - 끌기는 포인터 이벤트로 직접 한다(HTML5 끌어 놓기는 iframe 위에서 자주 끊긴다).
 //   메인(포커스) 패인 위에 놓으면 맞바꾸고 메인이 된다 — 규칙은 Rust `drop_tile`.
 
-const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
+import { motionReduced } from './motion.js';
+
 const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)';
 const MOVE_MS = 340;
 const ENTER_MS = 300;
 const EXIT_MS = 220;
 const DRAG_THRESHOLD = 6;
 
+/** 시스템 모션 줄이기·설정 "절약" 둘 다 — Web Animations 는 CSS 의 시간 0 규칙을 받지 않는다. */
 export function motionEnabled() {
-  return !REDUCED_MOTION.matches;
+  return !motionReduced();
 }
 
 /** 보이는 패인의 화면 위 자리(애니메이션 중이면 지금 보이는 자리). */

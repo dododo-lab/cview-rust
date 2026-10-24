@@ -252,6 +252,30 @@ pub mod focus_quality {
 
     pub const THERMAL_SECONDARY_MAX_HEIGHT: i64 = 360;
     const TIERS: [i64; 3] = [360, 480, 720];
+    /// 패인이 이만큼 이상이면 보조 패인을 360p 로 묶는다(메인·PiP 는 그대로).
+    /// 실측(2026-10-24, M1 Max, 5패인 1080p + 480p×4): CPU 합계 41.5%(WebKit GPU 20%)·WindowServer 40.9%.
+    /// 보조가 작게 보이는 배치라 360p 와 480p 의 차이는 거의 안 보이는데 디코딩·합성량은 패인 수만큼 쌓인다.
+    pub const MANY_PANES_THRESHOLD: usize = 4;
+    pub const MANY_PANES_SECONDARY_MAX_HEIGHT: i64 = 360;
+
+    /// 패인 수에 따른 보조 상한 — [`MANY_PANES_THRESHOLD`] 이상이면 소리 없는 보조를 360p·1Mbps 로.
+    /// 소리 나는 보조(여러 소리·소리만 옮긴 패인)는 듣는 채널이라 480p 하한을 그대로 둔다.
+    pub fn cap_secondary_for_pane_count(
+        target: HlsJsForcedQualityTarget,
+        session_count: usize,
+        audible: bool,
+    ) -> HlsJsForcedQualityTarget {
+        if audible
+            || session_count < MANY_PANES_THRESHOLD
+            || target.height <= MANY_PANES_SECONDARY_MAX_HEIGHT
+        {
+            return target;
+        }
+        HlsJsForcedQualityTarget {
+            height: MANY_PANES_SECONDARY_MAX_HEIGHT,
+            target_bitrate_kbps: 1_000,
+        }
+    }
 
     /// 보조 패인 목표 — 360/480/720 계단, ±15% 히스테리시스, 가청 480 하한, 발열 360 상한.
     pub fn secondary_target(
@@ -318,6 +342,18 @@ pub mod focus_quality {
         };
         let rows = (count as f64 / columns as f64).ceil() as usize;
         (w / columns as f64, h / rows.max(1) as f64)
+    }
+}
+
+/// 메인(선택) 패인의 목표 지연 여유(초) — 함께 재생하는 패인이 많으면 대역폭을 나눠 써 다음 조각이 늦게 온다.
+/// 실측(2026-10-20~24, 10초 표본): 메인 패인 멈춤은 10분당 패인 1~3개 1.7~6.6회, 4개 16회, 5~7개 29~36회였고,
+/// 메인 지연 3~4초 구간 14.7회 → 4~5초 6.0회로 1초 여유에 절반 아래로 줄었다(CPU 는 늘 150% 미만, CDN 첫 바이트
+/// 20~90ms — 대역폭 경쟁이 원인). 단독·3개 이하는 웹과 같은 3초 그대로 둔다.
+pub fn main_pane_latency_margin(session_count: usize) -> f64 {
+    match session_count {
+        0..=3 => 0.0,
+        4 | 5 => 1.0,
+        _ => 1.5,
     }
 }
 
