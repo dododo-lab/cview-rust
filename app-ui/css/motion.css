@@ -524,6 +524,10 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
    [라이브|멀티라이브] 전환 버튼이 화면을 오가도 위아래로 뛰지 않는다. */
 .page[data-page="live"] > .page-header.ph-compact,
 .viewer-header.ph-compact { padding-top: var(--sp-sm); padding-bottom: var(--sp-sm); }
+/* 좌우도 멀티라이브 머리줄과 같은 8px — 32px 이면 화면을 오갈 때 아이콘·제목·전환 버튼이 24px 씩 옆으로 뛴다 */
+.page[data-page="live"] > .page-header.ph-compact { padding-left: var(--sp-sm); padding-right: var(--sp-sm); }
+/* 제목 칸은 '멀티라이브' 폭으로 — '라이브'가 짧아 전환 버튼이 제목 길이만큼 옆으로 뛰지 않게 */
+.ph-compact:has(.live-mode-seg) .page-title { min-width: 4.3em; }
 /* 머리줄 새로고침도 멀티라이브 툴바 버튼과 같은 30px — 36px 이면 머리줄이 그만큼 높아진다 */
 .page[data-page="live"] > .page-header.ph-compact .icon-btn.round { width: 30px; height: 30px; }
 /* 목록 화면 설명은 머리줄 대신 본문 첫 줄 */
