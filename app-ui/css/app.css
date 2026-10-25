@@ -1554,20 +1554,23 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
   --cs-av: calc(34px * var(--chat-scale, 1));
   background: var(--cs-canvas);
 }
+/* 라이트는 흰색 계열 캔버스에 옅은 회색 말풍선(2026-10-26 사용자 요청) — 하늘색 캔버스·흰 말풍선에서 바꿨다. */
 :root[data-theme="light"] .chat-skin {
-  --cs-canvas: #bacee0; --cs-surface: #ffffff; --cs-ink: #191919; --cs-sub: #2c3640; --cs-fill: #9db4cb; --cs-field: #ffffff;
-  --cs-avtext: #1c2833; --cs-time: #3d4955; --cs-hover: rgba(255, 255, 255, 0.22); --cs-shadow: 0 1px 1px rgba(0, 40, 80, 0.08); --cs-pill: rgba(0, 30, 60, 0.12);
+  --cs-canvas: #fafbfc; --cs-surface: #eef1f5; --cs-ink: #191919; --cs-sub: #2c3640; --cs-fill: #e2e7ee; --cs-field: #eef1f5;
+  --cs-avtext: #1c2833; --cs-time: #5d6772; --cs-hover: rgba(15, 20, 30, 0.035); --cs-shadow: 0 1px 1px rgba(15, 20, 30, 0.05); --cs-pill: rgba(15, 20, 30, 0.08);
+  --cs-head-mix: 3%;
 }
 @media (prefers-color-scheme: light) {
   :root[data-theme="system"] .chat-skin {
-    --cs-canvas: #bacee0; --cs-surface: #ffffff; --cs-ink: #191919; --cs-sub: #2c3640; --cs-fill: #9db4cb; --cs-field: #ffffff;
-    --cs-avtext: #1c2833; --cs-time: #3d4955; --cs-hover: rgba(255, 255, 255, 0.22); --cs-shadow: 0 1px 1px rgba(0, 40, 80, 0.08); --cs-pill: rgba(0, 30, 60, 0.12);
+    --cs-canvas: #fafbfc; --cs-surface: #eef1f5; --cs-ink: #191919; --cs-sub: #2c3640; --cs-fill: #e2e7ee; --cs-field: #eef1f5;
+    --cs-avtext: #1c2833; --cs-time: #5d6772; --cs-hover: rgba(15, 20, 30, 0.035); --cs-shadow: 0 1px 1px rgba(15, 20, 30, 0.05); --cs-pill: rgba(15, 20, 30, 0.08);
+    --cs-head-mix: 3%;
   }
 }
 
 /* 틀 — 머리글은 캔버스보다 살짝 어둡게, 입력창은 둥근 칸과 노란 보내기 버튼 */
 .chat-skin .chat-header, .chat-skin .chat-input { background: var(--cs-canvas); border-color: var(--cs-edge); }
-.chat-skin .chat-header { background: color-mix(in srgb, var(--cs-canvas) 92%, #000 8%); }
+.chat-skin .chat-header { background: color-mix(in srgb, var(--cs-canvas), #000 var(--cs-head-mix, 8%)); }
 .chat-skin .chat-input input { background: var(--cs-field); color: var(--cs-ink); border: 0; border-radius: 18px; padding-inline: 14px; box-shadow: var(--cs-shadow); }
 .chat-skin .chat-input input::placeholder { color: var(--cs-time); }
 .chat-skin .chat-input .btn.primary { background: #fee500; color: #191919; border-radius: 18px; font-weight: 700; box-shadow: none; }
