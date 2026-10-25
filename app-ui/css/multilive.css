@@ -13,7 +13,7 @@
 
 .ml-body { flex: 1; min-height: 0; display: flex; gap: 0; margin-top: var(--sp-sm); position: relative; }
 .ml-body .ml-stage { margin-right: 4px; }
-.ml-chat { border-radius: var(--radius-lg); border: 1px solid var(--border-subtle); overflow: hidden; }
+.ml-chat { border-radius: var(--radius-lg); border: 1px solid var(--border-subtle); overflow: hidden; box-shadow: var(--shadow-sm); }
 
 /* 무대 — 세션 수별 격자. 패인 위치는 order 로만 바꾼다(iframe 을 옮기지 않는다). */
 .ml-stage {
@@ -76,12 +76,10 @@
 .ml-empty .btn { margin-top: var(--sp-sm); }
 
 .ml-pane {
-  position: relative; min-width: 0; min-height: 0; overflow: hidden; border-radius: 10px;
-  background: var(--video-stage); outline: 2px solid transparent; outline-offset: -2px;
-  transition: outline-color 0.15s;
+  position: relative; min-width: 0; min-height: 0; overflow: hidden; border-radius: var(--radius-md);
+  background: var(--video-stage); outline: 2px solid transparent; outline-offset: 2px;
 }
 .ml-pane[hidden] { display: none; }
-.ml-pane.selected { outline-color: var(--primary); }
 .ml-pane iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--video-stage); }
 .ml-pane-hit { position: absolute; inset: 0; cursor: pointer; }
 
@@ -289,13 +287,6 @@
 .ml-body.chat-overlay .ml-stage { margin-right: 0; }
 .preset-list { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow-y: auto; }
 .preset-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--surface-base); border: 1px solid var(--border-subtle); }
-/* 오디오 글로우 (MUL-09) — 소리가 나는 패인 테두리가 은은하게 숨 쉰다 */
-.ml-pane.audible::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 4;
-  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary) 70%, transparent), 0 0 18px var(--primary-glow);
-  animation: ml-audio-glow 2.4s ease-in-out infinite; will-change: opacity; }
-/* 숨 쉬기는 opacity 로 — 패인 크기 box-shadow 를 애니메이션하면 영상 위를 매 프레임 다시 그린다. */
-@keyframes ml-audio-glow { 50% { opacity: 0.45; } }
-:root[data-motion="reduced"] .ml-pane.audible::after { animation: none; }
 
 /* ══ 상단 바(툴바) — 한 줄 그룹, 높이 30px 통일, 옅은 구분선 ══ */
 .ml-header { flex-wrap: nowrap; min-width: 0; }
@@ -397,7 +388,7 @@
 .ml-drag { cursor: grab; }
 .ml-pane-avatar { flex: none; cursor: pointer; }
 /* 위 정보 — 라이브 화면 상단(.stage-top)과 같은 짜임: 제목 · 채널 · 지표 칩. 글자 그림자로 밝은 영상 위에서도 읽힌다. */
-.ml-pane-avatar img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; display: block; box-shadow: 0 0 0 2px #00ffa3, 0 2px 8px rgba(0, 0, 0, 0.5); }
+.ml-pane-avatar img { width: 34px; height: 34px; border-radius: 50%; object-fit: cover; display: block; box-shadow: 0 0 0 2px var(--ml-ring), 0 2px 8px rgba(0, 0, 0, 0.5); }
 .ml-pane-text { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 3px; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85), 0 0 1px rgba(0, 0, 0, 0.9); }
 .ml-pane-line { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .ml-pane-title { font-size: 13.5px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; color: #fff; }
@@ -425,8 +416,13 @@
   .ml-pane-stats .stat svg { width: 13px; height: 13px; }
 }
 /* 소리 나는 패인 — 컨트롤이 숨어도 왼쪽 위에 작게 */
-.ml-pane-sound { position: absolute; left: 10px; top: 10px; z-index: 2; display: none; color: #00ffa3; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6)); pointer-events: none; }
-.ml-pane-sound svg { width: 18px; height: 18px; }
+/* 소리 나는 패인 (MUL-09) — 테두리 글로우 대신 왼쪽 위 배지. 테두리는 '채팅 연결(선택)' 하나만 뜻한다. */
+.ml-pane-sound {
+  position: absolute; left: 10px; top: 10px; z-index: 2; display: none; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%; color: #00ffa3; background: rgba(8, 9, 11, 0.62);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1), 0 2px 6px rgba(0, 0, 0, 0.35); pointer-events: none;
+}
+.ml-pane-sound svg { width: 15px; height: 15px; }
 .ml-pane.audible:not(.ctl-visible):not(.paused) .ml-pane-sound { display: inline-flex; }
 /* 아래 막대 */
 .ml-vol { display: inline-flex; align-items: center; border-radius: 7px; }
@@ -505,18 +501,30 @@
 /* 패인 볼륨 슬라이더 키보드 초점 */
 .ml-vol .ml-vol-range:focus-visible { width: 64px; opacity: 1; margin: 0 8px 0 2px; outline: 2px solid #00ffa3; outline-offset: 3px; border-radius: 2px; }
 
-/* 패인·채팅 테두리 색 — 패인마다 무작위 색조(--ml-hue, multilive.js)를 1px 로 연하게. 포커스 메인 패인은 빼고,
-   채팅은 선택 패인의 색. 다크(기본)는 밝은 색, 라이트는 조금 어둡게. 영상(iframe) 위에 그리려고 패인은 ::before
-   (오디오 글로우 ::after 와 따로). */
-.ml-pane, .ml-chat { --ml-tint: hsl(var(--ml-hue, 0) 90% 76%); --ml-tint-mix: 60%; }
-:root[data-theme="light"] :is(.ml-pane, .ml-chat) { --ml-tint: hsl(var(--ml-hue, 0) 70% 55%); --ml-tint-mix: 50%; }
+/* ── 패인·채팅 테두리 (2026-10-25 리디자인) ──
+   테두리 색은 한 가지 뜻만 — "이 패인의 채팅이 오른쪽에 떠 있다(선택)". Meet·Teams 의 발화자 테두리처럼 한 패인만 색을 띤다.
+   · 모든 패인: 영상 가장자리를 또렷하게 하는 중립 1px 헤어라인(밝은 영상에서도 경계가 보이게 안쪽에 그린다).
+   · 선택 패인: 채널 색조(--ml-hue, multilive.js) 2px 링을 2px 띄워서(outline-offset) — 영상을 가리지 않고, 번짐 없이.
+   · 채팅: 테두리는 중립, 머리줄 위 3px 띠가 선택 패인과 같은 색 — 어느 패인의 채팅인지 색으로 잇는다(멀티채팅 칸과 같은 문법).
+   · 소리: 테두리 대신 배지(.ml-pane-sound). 채널 색은 패인 아바타 링·통합 채팅 줄 색과도 같다.
+   다크(기본)는 밝은 색조, 라이트는 조금 어둡게. 패인은 ::before 로 영상(iframe) 위에 그린다. */
+.ml-pane, .ml-chat { --ml-ring: hsl(var(--ml-hue, 158) 85% 66%); --pane-edge: rgba(255, 255, 255, 0.07); --pane-edge-hover: rgba(255, 255, 255, 0.16); }
+:root[data-theme="light"] :is(.ml-pane, .ml-chat) { --ml-ring: hsl(var(--ml-hue, 158) 75% 44%); --pane-edge: rgba(0, 0, 0, 0.1); --pane-edge-hover: rgba(0, 0, 0, 0.2); }
 @media (prefers-color-scheme: light) {
-  :root[data-theme="system"] :is(.ml-pane, .ml-chat) { --ml-tint: hsl(var(--ml-hue, 0) 70% 55%); --ml-tint-mix: 50%; }
+  :root[data-theme="system"] :is(.ml-pane, .ml-chat) { --ml-ring: hsl(var(--ml-hue, 158) 75% 44%); --pane-edge: rgba(0, 0, 0, 0.1); --pane-edge-hover: rgba(0, 0, 0, 0.2); }
 }
-.ml-pane::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 4; transition: box-shadow 0.2s; }
-.ml-pane[style*="--ml-hue"]::before { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ml-tint) var(--ml-tint-mix), transparent); }
-.ml-stage.ml-focus .ml-pane.ml-first::before, .ml-pane.selected::before, .ml-pane:fullscreen::before { box-shadow: none; }
-.ml-chat.tinted, .ml-body.chat-overlay .ml-chat.tinted { border-color: color-mix(in srgb, var(--ml-tint) var(--ml-tint-mix), transparent); }
+.ml-pane::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 4;
+  box-shadow: inset 0 0 0 1px var(--pane-edge); transition: box-shadow 0.15s; }
+.ml-pane:hover::before { box-shadow: inset 0 0 0 1px var(--pane-edge-hover); }
+.ml-pane.selected { outline-color: var(--ml-ring); }
+/* 패인이 하나만 보일 때(한 채널 크게·라이브 단독 보기·전체 화면)는 고를 것이 없으니 링도 없다. */
+.ml-stage.ml-n1 .ml-pane.selected, .ml-stage.ml-single .ml-pane.selected, .page-multilive.as-watch .ml-pane.selected, .ml-pane:fullscreen { outline-color: transparent; }
+.ml-pane:fullscreen::before { box-shadow: none; }
+.ml-chat .chat-header { position: relative; }
+.ml-chat.tinted .chat-header::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--ml-ring); pointer-events: none; }
+.ml-body.chat-overlay .ml-chat.tinted .chat-header::before { opacity: 0.9; }
+/* 라이브 단독 보기는 채널이 하나라 이을 것이 없다 — 띠도 뺀다. */
+.page-multilive.as-watch .ml-chat.tinted .chat-header::before { display: none; }
 
 /* 패인 ⚙ 메뉴 — 화면 보정(선명한 화면·밝기·대비·채도) */
 .ml-pane-menu .ml-check { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
@@ -549,17 +557,17 @@
 .ml-mc-grid.focus { grid-template-columns: minmax(0, 1fr); }
 .ml-mc-cell {
   min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: var(--radius-md);
-  border: 1px solid color-mix(in srgb, var(--mc-color) 45%, transparent);
-  background: color-mix(in srgb, var(--mc-color) 4%, transparent);
-  transition: border-color .2s var(--ease-out, ease-out);
+  border: 1px solid var(--border-subtle); background: var(--surface-base);
+  transition: border-color .2s var(--ease-out, ease-out), box-shadow .2s var(--ease-out, ease-out);
 }
-.ml-mc-cell.selected { border-color: color-mix(in srgb, var(--mc-color) 85%, transparent); }
+/* 칸 색은 머리줄 위 2px 띠로만 — 테두리는 중립, 보내는(선택) 칸만 채널 색 테두리. */
+.ml-mc-cell.selected { border-color: color-mix(in srgb, var(--mc-color) 70%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--mc-color) 35%, transparent); }
 .ml-mc-cell-head {
   flex: none; display: flex; align-items: center; gap: 7px; padding: 6px 9px; min-width: 0; border: 0; cursor: pointer;
-  background: color-mix(in srgb, var(--mc-color) 12%, transparent); color: var(--text-primary);
+  background: color-mix(in srgb, var(--mc-color) 8%, transparent); box-shadow: inset 0 2px 0 var(--mc-color); color: var(--text-primary);
   font: inherit; font-size: var(--fs-footnote); font-weight: 700; text-align: left;
 }
-.ml-mc-cell-head:hover { background: color-mix(in srgb, var(--mc-color) 20%, transparent); }
+.ml-mc-cell-head:hover { background: color-mix(in srgb, var(--mc-color) 15%, transparent); }
 .ml-mc-cell-head i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--mc-color); }
 .ml-mc-cell-head span { flex: 1; min-width: 0; }
 .ml-mc-cell-send { display: none; flex: none; font-size: var(--fs-micro); font-weight: 700; color: var(--mc-color); }
@@ -588,3 +596,7 @@
 .page-multilive.as-watch .ml-body.chat-overlay .ml-chat { right: 16px; top: 74px; bottom: 60px; width: var(--overlay-w, 320px) !important; border-radius: 16px; }
 /* 영상+채팅 전체 화면 */
 .ml-body:fullscreen { background: var(--background); padding: 8px; }
+
+/* 채팅 머리줄 — 도구 단추가 많아 "채팅" 제목이 "채.."로 잘리고 상태가 두 줄로 꺾였다. 제목은 그대로 두고 상태 글자만 줄인다. */
+.ml-chat .chat-header strong { flex: none; }
+.ml-chat .chat-header .chat-state { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
