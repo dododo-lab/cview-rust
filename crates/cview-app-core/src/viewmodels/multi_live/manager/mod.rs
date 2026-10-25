@@ -909,6 +909,18 @@ impl ManagerState {
         }
         cancel_slot(&mut self.stage_handoff_hide_task);
         self.reconcile_hlsjs_pane_offscreen_surfaces();
+        // 리뷰 C-1 — 무대 왕복 뒤 멈춘 패인이 매니저 판정(디코드 정지)인지 가르는 기록.
+        let decode_off = self
+            .sessions
+            .iter()
+            .filter(|s| self.decode_active.get(&s.id()) == Some(&false))
+            .count();
+        tracing::info!(
+            "live_stage stage={id:?} previous={previous:?} warm={:?} grid={} decode_off={decode_off} sessions={}",
+            self.previous_stage_session_id,
+            self.is_grid_layout,
+            self.sessions.len()
+        );
         if previous.is_some() && id.is_some() {
             self.stage_handoff_started_at = Some(Instant::now());
             if let Some(incoming) = id.and_then(|i| self.session(i).cloned()) {

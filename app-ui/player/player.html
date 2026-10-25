@@ -1984,7 +1984,13 @@ function cancelVisibilityResync() {
 document.addEventListener('visibilitychange', function() {
     if (document.hidden) releaseFallbackCatchup('hidden');
     cancelVisibilityResync();
-    if (document.visibilityState === 'visible' && hls && !video.paused &&
+    // [C-1 2026-10-26] **재생 의도가 남은 채 멈춘 패인도 여기서 되살린다.** 창이 가려진 동안 WebKit 은
+    //   소리 없는 영상을 멈추고, 그 사이 `resumeLoading` 이 오면(라이브 무대 해제·디코드 예산 복귀)
+    //   100ms 콜백의 `forceLiveResync` 가 `document.hidden` 에서 엣지 이동을 건너뛴다 — 패인은 몇 분 전
+    //   위치(라이브 창 밖)에 멈춘 채 남아 조각을 하나도 받지 못한다. 종전 조건(`!video.paused`)은 그
+    //   패인을 복귀 때도 제외해, 다시 보여도 영구 검은 화면이었다. `forceLiveResync` 는 `_wantsPlaying`
+    //   (사용자 pause 면 거짓)·`_suspended` 를 스스로 보고, 멈춰 있으면 play 를 건 뒤 지연을 재서 엣지로 옮긴다.
+    if (document.visibilityState === 'visible' && hls &&
         !_suspended && _wantsPlaying && _liveLatencyCorrectionEnabled) {
         // 포그라운드 복귀: 오래된 buffered range를 건널 수 있는 하드 리싱크 사용.
         forceLiveResync();

@@ -1715,3 +1715,85 @@ fn background_mode_and_snapshot() {
     let err = serde_json::to_value(MultiLiveLoadState::Error("x".into())).unwrap();
     assert_eq!(err["detail"], "x");
 }
+
+// MARK: - 라이브 무대 왕복 (리뷰 C-1)
+
+use cview_app_core::viewmodels::multi_live::manager::ManagerState;
+
+/// `multilive_watch(Some(id))` 와 같은 순서 — 선택·그리드 끄기·무대 세우기.
+fn enter_watch_stage(st: &mut ManagerState, id: Uuid) {
+    st.select_session(id, true);
+    st.set_grid_layout(false);
+    st.set_stage_session(Some(id));
+}
+
+/// `multilive_watch(None)` → `enforce_hub_mode` 와 같은 순서 — 무대 해제·그리드 복귀.
+fn exit_watch_stage(st: &mut ManagerState) {
+    st.set_stage_session(None);
+    st.set_grid_layout(true);
+}
+
+fn assert_all_panes_restored(m: &MultiLiveManager, p: &[Pane]) {
+    let st = m.read();
+    assert_eq!(st.stage_session_id(), None);
+    assert!(st.is_grid_layout());
+    assert_eq!(
+        suspended(p),
+        vec![false; p.len()],
+        "무대 해제 뒤 모든 패인 로딩 재개"
+    );
+    for x in p {
+        let e = x.engine.st();
+        assert_eq!(e.surface_visible, Some(true), "무대 해제 뒤 화면 표면 복귀");
+        assert!(!e.paused, "무대 왕복은 재생 의도를 바꾸지 않는다");
+        drop(e);
+        assert_eq!(st.decode_active(x.session.id()), Some(true));
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn watch_stage_round_trip_restores_every_pane() {
+    let (m, p) = focus_setup();
+    let main = p[0].session.id();
+    m.lock().reconcile_decode_budget();
+    for _ in 0..3 {
+        {
+            let mut st = m.lock();
+            enter_watch_stage(&mut st, main);
+            assert_eq!(st.stage_session_id(), Some(main));
+            assert!(
+                !p[0].engine.is_loading_suspended(),
+                "무대 패인은 계속 디코딩"
+            );
+            assert_eq!(p[0].engine.st().surface_visible, Some(true));
+            assert!(!p[0].engine.st().paused);
+            // 무대 밖 MRU 하위 패인은 로딩을 멈춘다(유지 2개).
+            assert_eq!(suspended(&p).iter().filter(|s| **s).count(), 1);
+        }
+        tokio::time::sleep(Duration::from_secs(6)).await;
+        exit_watch_stage(&mut m.lock());
+        assert_all_panes_restored(&m, &p);
+        tokio::time::sleep(Duration::from_secs(6)).await;
+        assert_all_panes_restored(&m, &p);
+        assert_eq!(m.read().focus_main_session_id(), Some(main));
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn watch_stage_handoff_then_exit_restores_every_pane() {
+    let (m, p) = focus_setup();
+    m.lock().reconcile_decode_budget();
+    enter_watch_stage(&mut m.lock(), p[0].session.id());
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    {
+        // 무대에서 다른 채널로 바꿔 보기 — 선택이 무대를 옮긴다(핸드오프).
+        let mut st = m.lock();
+        st.select_session(p[3].session.id(), true);
+        assert_eq!(st.stage_session_id(), Some(p[3].session.id()));
+    }
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    exit_watch_stage(&mut m.lock());
+    assert_all_panes_restored(&m, &p);
+    tokio::time::sleep(Duration::from_secs(6)).await;
+    assert_all_panes_restored(&m, &p);
+}

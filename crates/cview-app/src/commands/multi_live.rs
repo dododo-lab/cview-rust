@@ -91,6 +91,11 @@ pub async fn multilive_watch(
             .store(session_id.is_some(), std::sync::atomic::Ordering::SeqCst);
     }
     enforce_hub_mode(&shell);
+    shell.log_stage_transition(if session_id.is_some() {
+        "watch"
+    } else {
+        "unwatch"
+    });
     Ok(shell.state_dto())
 }
 
@@ -99,12 +104,15 @@ pub async fn multilive_watch(
 /// (`restoreVideoSurfacesForMenuEnter`).
 #[tauri::command]
 pub async fn multilive_park(shell: State<'_, MultiLiveShell>, parked: bool) -> CmdResult<()> {
-    let mut st = shell.manager.lock();
-    if parked {
-        st.park_video_surfaces_for_resident_menu_leave();
-    } else {
-        st.restore_video_surfaces_for_menu_enter();
+    {
+        let mut st = shell.manager.lock();
+        if parked {
+            st.park_video_surfaces_for_resident_menu_leave();
+        } else {
+            st.restore_video_surfaces_for_menu_enter();
+        }
     }
+    shell.log_stage_transition(if parked { "park" } else { "unpark" });
     Ok(())
 }
 
