@@ -4541,6 +4541,21 @@ function _probeWebGPU() {
         .then(function() { _reconcileUpscaler(); });
 }
 
+// [선명한 화면 검은 화면 2026-10-25] MSE(hls.js) 영상은 WebGPU 로 그리지 않는다.
+//   macOS 27.2 WebKit 에서 MediaSource 로 재생하는 <video> 를 importExternalTexture 로 읽으면 오류 없이
+//   검은 프레임만 나온다(치지직 라이브 1080p60 실측: 영상 밝기 0.17~0.21, WebGPU 캔버스 0.000·불투명).
+//   파일 재생(AVPlayer 경로)은 정상이라 metal-bench(mp4)에서는 드러나지 않았다. 앱의 재생은 전부
+//   hls.js(MSE)이므로 이때는 처음부터 WebGL 을 쓴다. ?gpu=webgpu 는 측정용으로 그대로 강제한다.
+//   이 판정이 빗나가도 _verifyGpuOutput 이 검은 출력을 잡아 다음 백엔드로 넘긴다.
+function _webgpuAllowedForSource() {
+    if (GPU_BACKEND_PREF === 'webgpu') return true;
+    if (GPU_BACKEND_PREF === 'webgl') return false;
+    if (hls || video.srcObject) return false;
+    // 네이티브 HLS(hls.js 미지원 폴백)도 같은 디코더 경로로 보고 막는다.
+    const src = video.currentSrc || video.src || '';
+    return src.indexOf('blob:') !== 0 && !/\.m3u8(\?|#|$)/i.test(src);
+}
+
 // WebGPU 를 버리고 WebGL 로 다시 만든다.
 function _webgpuFail(code, detail) {
     if (_webgpuState === 'failed') return;
@@ -4796,16 +4811,95 @@ function _scheduleUpscaledFrame() {
         up.frameId = 0;
         if (!up.active || _upscaler !== up) return;
         try { _drawUpscaledFrame(); } catch (e) {
-            if (up.backend === 'webgpu') { _webgpuFail('WEBGPU_DRAW', String(e)); return; }
-            _upscalerFailed = true;
-            _sharpenGpuFailed = true;
-            _deactivateUpscaler();
-            _applyComposedFilter(); // 선명한 화면은 SVG 필터로
-            postToSwift('pictureEnhance', { upscale: false, error: 'WEBGL_DRAW', detail: String(e).slice(0, 120) });
+            _gpuBackendFailed(up, 'DRAW', String(e));
             return;
         }
+        if (_gpuVerifyDue(up) && !_verifyGpuOutput(up)) return;
         _scheduleUpscaledFrame();
     });
+}
+
+// 그리기 백엔드를 버린다 — WebGPU 면 WebGL 로 다시 만들고, WebGL 이면 SVG 필터(선명한 화면)·업스케일 끔으로.
+function _gpuBackendFailed(up, code, detail) {
+    if (up.backend === 'webgpu') { _webgpuFail('WEBGPU_' + code, detail); return; }
+    _upscalerFailed = true;
+    _sharpenGpuFailed = true;
+    _deactivateUpscaler();
+    _applyComposedFilter(); // 선명한 화면은 SVG 필터로
+    postToSwift('pictureEnhance', { upscale: false, error: 'WEBGL_' + code, detail: String(detail || '').slice(0, 120) });
+}
+
+// ─── [선명한 화면 검은 화면 2026-10-25] GPU 출력 검사 ───
+//   GPU 경로는 예외도 검증 오류도 없이 영상 자리에 **불투명한 검정**만 그릴 수 있다 — 실제 앱(hls.js·MSE
+//   영상)에서 선명한 화면을 켜면 소리·채팅은 나오는데 화면이 검게 남았다. 캔버스가 영상 위를 덮으므로
+//   이런 실패는 아무 신호 없이 화면을 가린다. 그래서 켤 때마다 몇 프레임 뒤 원본 영상과 GPU 캔버스를
+//   16×9 로 줄여 비교하고, 영상은 밝은데 캔버스만 불투명한 검정이면 그 백엔드를 버린다
+//   (WebGPU → WebGL → SVG 필터). 결론이 날 때까지(어두운 장면이면 다시) 최대 GPU_VERIFY_MAX_TRIES 번,
+//   한 번 통과하면 그 활성화 동안은 더 보지 않는다 — 동기 읽기 비용은 켤 때 몇 번뿐이다.
+const GPU_VERIFY_FIRST_FRAME = 6;     // 켠 뒤 이만큼 그린 다음 첫 검사
+const GPU_VERIFY_RETRY_FRAMES = 30;   // 결론이 안 나면(어두운 장면·읽기 실패) 다시 볼 간격
+const GPU_VERIFY_MAX_TRIES = 12;
+const GPU_VERIFY_MIN_VIDEO_LUMA = 0.06;
+let _gpuProbe = null;
+
+function _gpuVerifyDue(up) {
+    const v = up.verify;
+    if (!v || v.done) return false;
+    v.drawn++;
+    return v.drawn >= v.next;
+}
+
+// src 의 (sx, sy, sw, sh) 를 16×9 로 줄여 평균 밝기·불투명도(0..1). 읽을 수 없으면 null.
+function _gpuProbeMean(src, sx, sy, sw, sh) {
+    if (!_gpuProbe) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 16; canvas.height = 9;
+        const ctx = canvas.getContext && canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return null;
+        _gpuProbe = ctx;
+    }
+    const ctx = _gpuProbe;
+    try {
+        ctx.clearRect(0, 0, 16, 9);
+        if (sw > 0) ctx.drawImage(src, sx, sy, sw, sh, 0, 0, 16, 9); else ctx.drawImage(src, 0, 0, 16, 9);
+        const d = ctx.getImageData(0, 0, 16, 9).data;
+        let l = 0, a = 0;
+        for (let i = 0; i < d.length; i += 4) {
+            l += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+            a += d[i + 3];
+        }
+        const n = d.length / 4;
+        return { luma: l / n / 255, alpha: a / n / 255 };
+    } catch (e) { return null; }
+}
+
+// 순수 함수 — 검사 결론(JS 테스트가 직접 부른다). 'pass' | 'fail' | 'wait'
+function gpuVerifyVerdict(videoMean, canvasMean) {
+    if (!videoMean || !canvasMean) return 'wait';
+    if (videoMean.luma < GPU_VERIFY_MIN_VIDEO_LUMA) return 'wait'; // 어두운 장면은 비교할 수 없다
+    if (canvasMean.alpha < 0.5) return 'wait'; // 캔버스를 읽지 못했다(투명) — 이 경우 영상이 비쳐 보인다
+    return canvasMean.luma < Math.max(0.02, videoMean.luma * 0.2) ? 'fail' : 'pass';
+}
+
+// 방금 그린 프레임을 검사한다(그린 콜백 안에서 — WebGL 버퍼는 합성 뒤 지워진다). 백엔드를 버렸으면 false.
+function _verifyGpuOutput(up) {
+    const v = up.verify;
+    const g = _gpuGeometry(up);
+    const verdict = g ? gpuVerifyVerdict(_gpuProbeMean(video, 0, 0, 0, 0),
+        _gpuProbeMean(up.canvas, g.vx, g.vy, g.vw, g.vh)) : 'wait';
+    v.tries++;
+    if (verdict === 'fail') {
+        postToSwift('pictureEnhance', { gpuBackend: up.backend, error: 'GPU_BLACK_OUTPUT' });
+        _gpuBackendFailed(up, 'BLACK', 'canvas black while video is not');
+        return false;
+    }
+    if (verdict === 'pass' || v.tries >= GPU_VERIFY_MAX_TRIES) {
+        v.done = true;
+        if (verdict === 'pass') postToSwift('pictureEnhance', { gpuBackend: up.backend, verified: true });
+    } else {
+        v.next = v.drawn + GPU_VERIFY_RETRY_FRAMES;
+    }
+    return true;
 }
 
 function _deactivateUpscaler() {
@@ -4826,9 +4920,10 @@ function _reconcileUpscaler() {
     }
     if (!_upscaler) {
         // WebGPU 장치를 여는 동안(수십 ms)은 SVG·CSS 필터로 보이고, 열리면 이 함수가 다시 불린다.
-        if (_webgpuState === 'idle') _probeWebGPU();
-        if (_webgpuState === 'pending') return;
-        _upscaler = (_webgpuState === 'ready' && _createUpscalerWebGPU()) || _createUpscaler();
+        const webgpuOk = _webgpuAllowedForSource();
+        if (webgpuOk && _webgpuState === 'idle') _probeWebGPU();
+        if (webgpuOk && _webgpuState === 'pending') return;
+        _upscaler = (webgpuOk && _webgpuState === 'ready' && _createUpscalerWebGPU()) || _createUpscaler();
         if (!_upscaler) {
             _upscalerFailed = true;
             _sharpenGpuFailed = true;
@@ -4840,6 +4935,7 @@ function _reconcileUpscaler() {
     }
     if (_upscaler.active) return;
     _upscaler.active = true;
+    _upscaler.verify = { drawn: 0, next: GPU_VERIFY_FIRST_FRAME, tries: 0, done: false };
     _applyComposedFilter(); // 영상·캔버스 모두 색 보정만(선명화는 캔버스가)
     _upscaler.canvas.style.display = '';
     try { _drawUpscaledFrame(); } catch (e) { /* 첫 프레임이 아직 없으면 다음 콜백에서 그린다 */ }
