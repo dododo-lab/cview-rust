@@ -12,18 +12,32 @@ use super::messages::EmojiMap;
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmoticonPack {
+    #[serde(alias = "emojiPackId")]
     pub emoticon_pack_id: String,
+    #[serde(alias = "emojiPackName")]
     pub emoticon_pack_name: String,
     #[serde(
         rename = "emoticonPackImageUrl",
+        alias = "emojiPackImageUrl",
         default,
         skip_serializing_if = "Option::is_none"
     )]
     pub emoticon_pack_image_url: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "emojiType", default, skip_serializing_if = "Option::is_none")]
     pub emoticon_pack_type: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "emojis", default, skip_serializing_if = "Option::is_none")]
     pub emoticons: Option<Vec<EmoticonItem>>,
+    /// 구독 팩의 티어별 이모티콘(`tier1Emojis`·`tier2Emojis`) — [`EmoticonPack::with_unlocked_tiers`] 가
+    /// `emoticons` 로 접는다. 화면으로는 내보내지 않는다.
+    #[serde(rename = "tier1Emojis", default, skip_serializing)]
+    pub tier1_emoticons: Option<Vec<EmoticonItem>>,
+    #[serde(rename = "tier2Emojis", default, skip_serializing)]
+    pub tier2_emoticons: Option<Vec<EmoticonItem>>,
+    /// 구독하지 않아 쓸 수 없는 팩(`emojiPackLocked`)·2티어(`emojiTier2Locked`).
+    #[serde(rename = "emojiPackLocked", default, skip_serializing)]
+    pub locked: bool,
+    #[serde(rename = "emojiTier2Locked", default, skip_serializing)]
+    pub tier2_locked: bool,
 }
 
 impl EmoticonPack {
@@ -34,6 +48,10 @@ impl EmoticonPack {
             emoticon_pack_image_url: None,
             emoticon_pack_type: None,
             emoticons: None,
+            tier1_emoticons: None,
+            tier2_emoticons: None,
+            locked: false,
+            tier2_locked: false,
         }
     }
 
@@ -41,12 +59,31 @@ impl EmoticonPack {
     pub fn id(&self) -> &str {
         &self.emoticon_pack_id
     }
+
+    /// 쓸 수 있는 이모티콘만 `emoticons` 에 모은 팩 — 잠긴 팩은 비우고, 구독 팩은 열린 티어를 덧붙인다.
+    pub fn with_unlocked_tiers(mut self) -> Self {
+        let tier1 = self.tier1_emoticons.take().unwrap_or_default();
+        let tier2 = self.tier2_emoticons.take().unwrap_or_default();
+        if self.locked {
+            self.emoticons = None;
+            return self;
+        }
+        if !tier1.is_empty() || (!tier2.is_empty() && !self.tier2_locked) {
+            let list = self.emoticons.get_or_insert_with(Vec::new);
+            list.extend(tier1);
+            if !self.tier2_locked {
+                list.extend(tier2);
+            }
+        }
+        self
+    }
 }
 
 /// 개별 이모티콘.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmoticonItem {
+    #[serde(alias = "emojiId")]
     pub emoticon_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub emoticon_name: Option<String>,
@@ -94,19 +131,33 @@ impl EmoticonItem {
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EmoticonDeploy {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "emojiPacks", default, skip_serializing_if = "Option::is_none")]
     pub emoticon_packs: Option<Vec<EmoticonPack>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "subscriptionEmojiPacks", default, skip_serializing_if = "Option::is_none")]
     pub subscription_emoticon_packs: Option<Vec<EmoticonPack>>,
+    /// 치트키 팩(`cheatKeyEmojiPacks`) — 웹은 일반 팩 뒤에 붙인다.
+    #[serde(alias = "cheatKeyEmojiPacks", default, skip_serializing_if = "Option::is_none")]
+    pub cheat_key_emoticon_packs: Option<Vec<EmoticonPack>>,
 }
 
 impl EmoticonDeploy {
-    /// 모든 팩 (일반 + 구독).
+    /// 모든 팩 (일반 + 치트키 + 구독).
     pub fn all_packs(&self) -> Vec<&EmoticonPack> {
         self.emoticon_packs
             .iter()
             .flatten()
+            .chain(self.cheat_key_emoticon_packs.iter().flatten())
             .chain(self.subscription_emoticon_packs.iter().flatten())
+            .collect()
+    }
+
+    /// 쓸 수 있는 이모티콘만 담은 팩 목록(잠긴 팩 제외, 구독 티어 접기) — 선택기·자동완성·보내기용.
+    pub fn usable_packs(&self) -> Vec<EmoticonPack> {
+        self.all_packs()
+            .into_iter()
+            .cloned()
+            .map(EmoticonPack::with_unlocked_tiers)
+            .filter(|p| !p.locked)
             .collect()
     }
 
@@ -263,6 +314,7 @@ mod tests {
         let deploy = EmoticonDeploy {
             emoticon_packs: Some(vec![p1]),
             subscription_emoticon_packs: Some(vec![p2]),
+            ..Default::default()
         };
         assert_eq!(deploy.all_packs().len(), 2);
         assert_eq!(deploy.all_packs()[0].emoticon_pack_id, "p1");

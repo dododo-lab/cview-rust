@@ -171,8 +171,9 @@ impl EndpointProtocol for ChzzkEndpoint {
             HomePopularClips { .. } => "/service/v1/home/recommended/clips".into(),
             TopLives { .. } => "/service/v1/lives".into(),
             UserStatus => "/service/v1/users/me".into(),
+            // 2026 치지직 개편으로 emoticon-deploy 는 404 — 웹과 같은 emoji-packs(필드도 emoji*) 를 쓴다.
             EmoticonDeploy { channel_id } => {
-                format!("/service/v1/channels/{channel_id}/emoticon-deploy")
+                format!("/service/v1/channels/{channel_id}/emoji-packs")
             }
             EmoticonPack { pack_id } => format!("/service/v1/emoticon-packs/{pack_id}"),
             UserEmoticons => "/service/v2/emoticons".into(),

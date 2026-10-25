@@ -131,6 +131,20 @@ export function imageSrc(value, kind = 'static') {
   return `${CVIMG_BASE}${encodeURIComponent(`${kind}/${sized}`)}`;
 }
 
+/** `{:name:}` 이모티콘 치환 (치지직 채팅 본문 규칙). 나머지는 이스케이프. 채팅·후원 알림이 함께 쓴다. */
+export function renderContent(content, emojis, showEmoji = true) {
+  const map = emojis || {};
+  return String(content ?? '')
+    .split(/(\{:[^{}:]+:\})/g)
+    .map((part) => {
+      const m = /^\{:([^{}:]+):\}$/.exec(part);
+      const url = m && safeUrl(map[m[1]]);
+      if (!url) return esc(part);
+      return showEmoji ? `<img decoding="async" class="emoji" src="${esc(imageSrc(url, 'static'))}" alt="${esc(m[1])}" referrerpolicy="no-referrer">` : `<span class="emoji-text">:${esc(m[1])}:</span>`;
+    })
+    .join('');
+}
+
 export function $(selector, root = document) {
   return root.querySelector(selector);
 }

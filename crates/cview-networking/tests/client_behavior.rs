@@ -796,11 +796,11 @@ async fn resolve_emoticon_packs_backfills_empty_packs_in_parallel() {
 #[tokio::test]
 async fn basic_emoticon_packs_falls_back_to_user_emoticons() {
     let t = MockTransport::new(Duration::ZERO, |req, _| match path_of(req).as_str() {
-        "/service/v1/channels/c1/emoticon-deploy" => ok(json!({
+        "/service/v1/channels/c1/emoji-packs" => ok(json!({
             "emoticonPacks": [pack_json("basic", &["b"])],
             "subscriptionEmoticonPacks": [pack_json("sub", &["s"])]
         })),
-        "/service/v1/channels/c2/emoticon-deploy" => ok(json!({"emoticonPacks": []})),
+        "/service/v1/channels/c2/emoji-packs" => ok(json!({"emoticonPacks": []})),
         "/service/v2/emoticons" => ok(json!({"emoticonPacks": [pack_json("user", &["u"])]})),
         other => panic!("unexpected {other}"),
     });
@@ -808,6 +808,38 @@ async fn basic_emoticon_packs_falls_back_to_user_emoticons() {
     let ids = |v: Vec<EmoticonPack>| v.iter().map(|p| p.id().to_string()).collect::<Vec<_>>();
     assert_eq!(ids(c.basic_emoticon_packs("c1").await), ["basic", "sub"]);
     assert_eq!(ids(c.basic_emoticon_packs("c2").await), ["user"]);
+}
+
+#[tokio::test]
+async fn basic_emoticon_packs_reads_new_emoji_packs_shape() {
+    // 2026 치지직 개편 응답 — emoji* 필드, 치트키 팩, 구독 팩의 티어별 이모티콘과 잠금.
+    let t = MockTransport::new(Duration::ZERO, |req, _| match path_of(req).as_str() {
+        "/service/v1/channels/c1/emoji-packs" => ok(json!({
+            "emojiPacks": [{"emojiPackId": "dp_1", "emojiPackName": "CHZZK", "emojiPackLocked": false,
+                "emojis": [{"emojiId": "d_1", "imageUrl": "https://img.test/d_1.png"}]}],
+            "cheatKeyEmojiPacks": [],
+            "subscriptionEmojiPacks": [
+                {"emojiPackId": "sub_open", "emojiPackName": "구독", "emojiPackLocked": false, "emojiTier2Locked": true,
+                 "emojis": [], "tier1Emojis": [{"emojiId": "s_1", "imageUrl": "https://img.test/s_1.png"}],
+                 "tier2Emojis": [{"emojiId": "s_2", "imageUrl": "https://img.test/s_2.png"}]},
+                {"emojiPackId": "sub_locked", "emojiPackName": "잠김", "emojiPackLocked": true,
+                 "tier1Emojis": [{"emojiId": "l_1", "imageUrl": "https://img.test/l_1.png"}]}
+            ]
+        })),
+        other => panic!("unexpected {other}"),
+    });
+    let c = client(t.clone(), None);
+    let packs = c.basic_emoticon_packs("c1").await;
+    let ids: Vec<_> = packs.iter().map(|p| p.id().to_string()).collect();
+    assert_eq!(ids, ["dp_1", "sub_open"], "잠긴 구독 팩은 뺀다");
+    let (map, _) = c.resolve_emoticon_packs(&packs).await;
+    assert_eq!(map["d_1"], "https://img.test/d_1.png");
+    assert_eq!(map["s_1"], "https://img.test/s_1.png");
+    assert!(!map.contains_key("s_2"), "잠긴 2티어는 쓸 수 없다");
+    assert!(!map.contains_key("l_1"));
+    let json = serde_json::to_value(&packs[0]).unwrap();
+    assert_eq!(json["emoticonPackId"], "dp_1", "화면에는 예전 필드 이름으로 보낸다");
+    assert_eq!(json["emoticons"][0]["emoticonId"], "d_1");
 }
 
 #[tokio::test]
@@ -826,7 +858,7 @@ async fn global_basic_emoticons_is_empty_on_404_and_skips_afterwards() {
 #[tokio::test]
 async fn load_merged_emoticons_prefers_channel_values_and_keeps_cache_order() {
     let t = MockTransport::new(Duration::ZERO, |req, _| match path_of(req).as_str() {
-        "/service/v1/channels/c/emoticon-deploy" => ok(json!({
+        "/service/v1/channels/c/emoji-packs" => ok(json!({
             "emoticonPacks": [pack_json("cached", &["x"]), pack_json("chan", &["shared", "y"])]
         })),
         other => panic!("unexpected {other}"),
@@ -857,7 +889,7 @@ async fn prepare_connection_loads_token_uid_and_emoticons() {
         "/nng_main/v1/user/getUserStatus" => ok(
             json!({"hasProfile": true, "userIdHash": "hash", "nickname": "닉", "loggedIn": true}),
         ),
-        "/service/v1/channels/s/emoticon-deploy" => {
+        "/service/v1/channels/s/emoji-packs" => {
             ok(json!({"emoticonPacks": [pack_json("p", &["e"])]}))
         }
         other => panic!("unexpected {other}"),

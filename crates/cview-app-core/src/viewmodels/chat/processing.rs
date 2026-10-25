@@ -202,9 +202,19 @@ impl ChatState {
         if channel_emoticons.is_empty() || !item.content.contains("{:") {
             return item.clone();
         }
+        // 본문에 쓰인 `{:id:}` 만 채운다 — 채널 맵(수백 개)을 메시지마다 통째로 붙이면 화면으로 가는 이벤트가 불어난다.
         let mut merged = item.emojis.clone();
-        for (k, v) in channel_emoticons {
-            merged.entry(k.clone()).or_insert_with(|| v.clone());
+        for segment in item.content.split("{:").skip(1) {
+            let Some(end) = segment.find(":}") else {
+                continue;
+            };
+            let id = &segment[..end];
+            if merged.contains_key(id) {
+                continue;
+            }
+            if let Some(url) = channel_emoticons.get(id) {
+                merged.insert(id.to_string(), url.clone());
+            }
         }
         if merged.len() == item.emojis.len() {
             return item.clone();

@@ -644,6 +644,8 @@ select.select {
 .chat-line .nick.streamer { color: var(--primary-text); }
 .chat-line .nick.manager, .chat-line .nick.channelManager { color: var(--accent-blue); }
 .chat-line .badge { display: inline-block; width: calc(16px * var(--chat-scale, 1)); height: calc(16px * var(--chat-scale, 1)); vertical-align: -3px; margin-right: 3px; }
+/* 이모티콘 — 채팅 줄 밖(공지·멘션 트레이·후원 알림)에서도 글자 높이에 맞춘다(원본 크기로 커지지 않게). */
+.emoji { display: inline-block; height: 1.5em; width: auto; vertical-align: middle; }
 .chat-line .emoji { display: inline-block; height: calc(22px * var(--chat-scale, 1)); vertical-align: middle; }
 .chat-line.system { display: flex; justify-content: center; padding: 6px 0; }
 .chat-line.blinded .text { color: var(--text-tertiary); font-style: italic; }

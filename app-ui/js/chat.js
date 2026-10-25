@@ -4,7 +4,9 @@
 // CHT-11 자동 스크롤·"새 메시지" 버튼·읽음 구분선(⌘J), CHT-12 지우기(⇧⌘K)·재연결, CHT-14 표시 옵션,
 // CHT-16 후원 필터, CHT-20 입력 상태 배너.
 import { api, listen, Events } from './api.js';
-import { esc, safeUrl, toast, imageSrc, dismiss, hideWithExit } from './dom.js';
+import { esc, safeUrl, toast, imageSrc, dismiss, hideWithExit, renderContent } from './dom.js';
+
+export { renderContent };
 import { DonationRanking, eventCardHtml, eventClasses, EVENT_ICONS } from './donations.js';
 import { installChatExtras } from './chat-extras.js';
 import { nickColorClass } from './nick-color.js';
@@ -22,19 +24,6 @@ const ICON = {
   pin: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 3l6 6-3 1-4 4 1 5-2 2-4-5-5 5-1-1 5-5-5-4 2-2 5 1 4-4z"/></svg>',
 };
 
-/** `{:name:}` 이모티콘 치환 (치지직 채팅 본문 규칙). 나머지는 이스케이프. */
-export function renderContent(content, emojis, showEmoji = true) {
-  const map = emojis || {};
-  return String(content ?? '')
-    .split(/(\{:[^{}:]+:\})/g)
-    .map((part) => {
-      const m = /^\{:([^{}:]+):\}$/.exec(part);
-      const url = m && safeUrl(map[m[1]]);
-      if (!url) return esc(part);
-      return showEmoji ? `<img decoding="async" class="emoji" src="${esc(imageSrc(url, 'static'))}" alt="${esc(m[1])}" referrerpolicy="no-referrer">` : `<span class="emoji-text">:${esc(m[1])}:</span>`;
-    })
-    .join('');
-}
 
 // 닉네임 색을 바꾸는 역할만 클래스로 붙인다. 역할 문자열을 그대로 클래스로 쓰면 일반 시청자
 // `viewer` 가 시청 화면 섹션의 `.viewer`(position:absolute; inset:0) 와 겹쳐 닉네임이 창 전체를 덮는다.
@@ -721,11 +710,16 @@ export class ChatPanel {
   async loadEmoticons(channelId) {
     if (!channelId) return;
     if (emoticonCache.has(channelId)) { this.emoticons = emoticonCache.get(channelId); return; }
+    this.emoticons = []; // 앞 채널의 팩이 남아 다른 채널 이모티콘을 고르지 않게
     try {
       const packs = await api.chatEmoticons(channelId);
-      emoticonCache.set(channelId, packs);
-      if (this.channelId === channelId) this.emoticons = packs;
-    } catch { this.emoticons = []; }
+      // 빈 목록은 캐시하지 않는다 — 한 번 실패한 채널이 앱을 다시 켤 때까지 빈 선택기로 남았다.
+      if (packs.length) emoticonCache.set(channelId, packs);
+      if (this.channelId !== channelId) return;
+      this.emoticons = packs;
+      // 목록이 오기 전에 선택기를 열었으면 바로 다시 그린다(닫았다 열어야 보였다).
+      if (!this.picker.hidden) this.renderPicker();
+    } catch { if (this.channelId === channelId) this.emoticons = []; }
   }
 
   /** 이모티콘 팩 + 채팅에서 본 이모티콘 팩. */

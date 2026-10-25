@@ -435,7 +435,7 @@ impl ChzzkApiClient {
     /// 채널 배포가 비었거나 실패하면 사용자 전체 이모티콘으로 폴백하고, 그것도 없으면 빈 목록.
     pub async fn basic_emoticon_packs(&self, channel_id: &str) -> Vec<EmoticonPack> {
         if let Ok(deploy) = self.emoticon_deploy(channel_id).await {
-            let all: Vec<EmoticonPack> = deploy.all_packs().into_iter().cloned().collect();
+            let all = deploy.usable_packs();
             tracing::info!(
                 "basicEmoticonPacks({channel_id}): {}개 팩 (기본 {}, 구독 {})",
                 all.len(),
@@ -450,7 +450,7 @@ impl ChzzkApiClient {
             }
         }
         match self.user_emoticons().await {
-            Ok(deploy) => deploy.all_packs().into_iter().cloned().collect(),
+            Ok(deploy) => deploy.usable_packs(),
             Err(_) => Vec::new(),
         }
     }

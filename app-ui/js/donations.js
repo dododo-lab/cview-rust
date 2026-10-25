@@ -7,7 +7,7 @@
 // - 스트림 알림: 시청 화면 위에 새 후원·구독을 잠깐 띄운다(설정에서 끌 수 있음, 기본 켬).
 //   떠 있는 알림을 끌면 그 자리로 옮기고(영상 크기 대비 비율로 저장), 더블클릭하면 기본 위치로 돌린다.
 import { api, invoke } from './api.js';
-import { esc, safeUrl, imageSrc, toast } from './dom.js';
+import { esc, safeUrl, imageSrc, toast, renderContent } from './dom.js';
 
 const ALERT_KEY = 'cview.streamAlerts';
 const ALERT_MS = 6500;
@@ -267,7 +267,7 @@ export class StreamAlerts {
         <span class="stream-alert-kicker">${esc(e.title)}${e.detail ? ` · ${esc(e.detail)}` : ''}</span>
         <span class="stream-alert-title"><span class="stream-alert-nick">${esc(m.nickname || '익명')}</span><b>${esc(e.value)}</b></span>
         ${e.extra ? `<span class="stream-alert-msg">${esc(e.extra)}</span>` : ''}
-        ${m.content ? `<span class="stream-alert-msg">${esc(m.content)}</span>` : ''}
+        ${m.content ? `<span class="stream-alert-msg">${renderContent(m.content, m.emojis)}</span>` : ''}
       </span>`;
     this.show(item, ALERT_MS);
   }
