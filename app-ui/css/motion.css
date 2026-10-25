@@ -90,11 +90,11 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
   .page:not([hidden]), .viewer:not([hidden]) .viewer-main, .page-body > *, .insight-panel .ip-scroll > *,
   .splash-logo *, .splash-name, .splash-bar, .splash-step, body.app-entering .app,
   .nav-item.playing .nav-label::after, .rec-btn.recording .rec-dot, .dl-fill.indeterminate, .ml-addbar-refresh.spinning svg,
-  .ml-pane.audible::after, .queue-item.active .queue-progress { animation: none !important; }
+  .queue-item.active .queue-progress { animation: none !important; }
 }
 :root[data-motion="reduced"] :is(.spinner, .sk, .ip-skeleton span, .ip-skeleton i, .page, .viewer-main, .page-body > *, .insight-panel .ip-scroll > *, .splash-logo *, .splash-name, .splash-bar, .splash-step, .app),
 :root[data-motion="reduced"] .spinner::before, :root[data-motion="reduced"] .spinner::after,
-:root[data-motion="reduced"] .nav-item.playing .nav-label::after, :root[data-motion="reduced"] .ml-pane.audible::after,
+:root[data-motion="reduced"] .nav-item.playing .nav-label::after,
 :root[data-motion="reduced"] :is(.rec-btn.recording .rec-dot, .dl-fill.indeterminate, .ml-addbar-refresh.spinning svg, .queue-item.active .queue-progress) { animation: none !important; }
 
 /* 카드 스켈레톤 위 작은 로더 줄 */
@@ -261,7 +261,6 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 /* ── 멀티라이브 ── */
 /* 패인 나타남·사라짐·자리 이동은 ml-motion.js(FLIP, transform·opacity 만)가 맡는다. */
 .ml-pane { transition: outline-color var(--dur-2) var(--ease-out), box-shadow var(--dur-3) var(--ease-out); }
-.ml-pane.selected { box-shadow: 0 0 0 4px color-mix(in srgb, var(--primary) 18%, transparent); }
 .ml-pane.drop-target { scale: .985; transition: scale var(--dur-2) var(--ease-out); }
 .ml-empty { animation: mo-rise var(--dur-4) var(--ease-emph) both; }
 .ml-addrow-act { transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out), scale .3s var(--ease-spring); }

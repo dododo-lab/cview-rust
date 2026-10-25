@@ -8,6 +8,8 @@
 //
 // 사용: bench <root> <page 경로?쿼리> <영상 URL> <뷰 수> <폭pt> <높이pt> <초> <모드 JS>
 //   모드 JS 는 영상이 재생되기 시작하면 각 뷰에서 한 번 실행된다(예: "setSharpen(true,1)").
+//   영상 URL 이 .m3u8 이면 앱처럼 hls.js(MSE)로 재생한다. 플레이어의 pictureEnhance 메시지는
+//   "player <뷰> pictureEnhance ..." 로 찍힌다(백엔드·오류·검은 화면 검사 결과).
 //   1초마다 "tick <뷰> frames=<누적 프레임> backend=<webgpu|webgl|none> secure=<bool> gpu=<bool>" 를 찍는다.
 import AppKit
 import WebKit
@@ -54,8 +56,17 @@ final class Bridge: NSObject, WKScriptMessageHandler {
         fflush(stdout)
     }
 }
+// 플레이어의 postToSwift — 화질 경로 메시지(pictureEnhance: 백엔드·오류·검사 결과)만 찍는다.
 final class Sink: NSObject, WKScriptMessageHandler {
-    func userContentController(_ c: WKUserContentController, didReceive m: WKScriptMessage) {}
+    let index: Int
+    init(_ index: Int) { self.index = index }
+    func userContentController(_ c: WKUserContentController, didReceive m: WKScriptMessage) {
+        guard let d = m.body as? [String: Any], (d["type"] as? String) == "pictureEnhance" else { return }
+        let data = (d["data"] as? [String: Any]) ?? [:]
+        let text = data.keys.sorted().map { "\($0)=\(data[$0]!)" }.joined(separator: " ")
+        print("player \(index) pictureEnhance \(text)")
+        fflush(stdout)
+    }
 }
 
 // 영상 재생·프레임 세기·모드 적용. player.html 의 전역(video·setSharpen·setPictureEnhancement·_upscaler)을 쓴다.
@@ -67,7 +78,12 @@ func setupScript() -> String {
       function count(){ video.requestVideoFrameCallback(function(){ frames++; count(); }); }
       video.crossOrigin = 'anonymous'; video.muted = true; video.loop = true;
       video.addEventListener('playing', function(){ if (applied) return; applied = true; try { \(modeJS) } catch (e) {} });
-      video.src = '\(src)'; video.play().catch(function(){});
+      var src = '\(src)';
+      // .m3u8 은 앱과 같이 hls.js(MSE)로 — 파일 재생(AVPlayer)과 MSE 는 WebKit 안에서 프레임 경로가 다르다.
+      if (/\\.m3u8(\\?|$)/.test(src) && typeof Hls !== 'undefined' && Hls.isSupported()) {
+        var h = new Hls(); h.loadSource(src); h.attachMedia(video);
+        h.on(Hls.Events.MANIFEST_PARSED, function(){ video.play().catch(function(){}); });
+      } else { video.src = src; video.play().catch(function(){}); }
       count();
       setInterval(function(){
         window.webkit.messageHandlers.bench.postMessage({ frames: frames,
@@ -95,7 +111,7 @@ for i in 0..<views {
     let cfg = WKWebViewConfiguration()
     cfg.setURLSchemeHandler(scheme, forURLScheme: "cvbench")
     cfg.userContentController.add(Bridge(i), name: "bench")
-    cfg.userContentController.add(Sink(), name: "player")
+    cfg.userContentController.add(Sink(i), name: "player")
     cfg.mediaTypesRequiringUserActionForPlayback = []
     let r = NSRect(x: CGFloat(i % cols) * width, y: CGFloat(i / cols) * height, width: width, height: height)
     let wv = WKWebView(frame: r, configuration: cfg)

@@ -848,9 +848,13 @@ impl MultiLiveShell {
     /// 프런트엔드 상태 — 내용이 바뀔 때만 오르는 `rev` 를 붙인다. 화면은 상태를 이벤트·명령 응답·1초 주기
     /// 세 경로로 순서 없이 받으므로, 늦게 온 낡은 상태(재사용된 슬롯을 '닫힌 패인'으로 보고 멈추게 하던 것)를
     /// `rev` 로 걸러 낸다.
+    ///
+    /// 상태를 읽는 일과 `rev` 를 매기는 일은 `last_state` 잠금 안에서 함께 한다. 따로 하면 1초 주기 방출이
+    /// 메인 전환 *전* 상태를 읽어 둔 사이 `multilive_select` 가 새 상태에 `rev` 를 매기고, 그 뒤 주기 방출이
+    /// 낡은 상태를 '바뀐 것'으로 보고 더 큰 `rev` 를 붙여 보냈다 — 화면이 이전 메인으로 되돌아가던 원인.
     pub fn state_dto(&self) -> MultiLiveStateDto {
-        let mut dto = self.state_dto_raw();
         let mut last = self.last_state.lock().unwrap_or_else(|e| e.into_inner());
+        let mut dto = self.state_dto_raw();
         let changed = last.as_ref() != Some(&dto);
         if changed {
             *last = Some(dto.clone());
