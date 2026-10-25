@@ -97,7 +97,7 @@ export class MultiLivePage {
         ${liveModeSwitch('multilive')}
         <span class="page-subtitle ml-count"></span>
         <div class="ml-watch-picker" role="group" aria-label="라이브로 볼 채널" hidden></div>
-        <div class="grow"></div>
+        <div class="grow" data-tauri-drag-region></div>
         <div class="ml-toolbar">
           <div class="ml-more">
             <button class="ml-tb-icon" data-ml-more title="더 보기" aria-label="더 보기" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg></button>
