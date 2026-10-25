@@ -46,6 +46,26 @@ python3 scripts/publish-update.py --version <버전> --notes-file dist/CView_<�
 
 ## 장애 후 재시도
 
+### SSH 키가 맞는데 인증이 거부되는 경우
+
+2026-10-25에는 Mac의 Proxifier가 서버 SSH 연결까지 iPhone SOCKS5 프록시(`172.20.10.1:8443`)로 보내는 문제가 있었다. Mac의 Tailscale 주소와 키 지문은 정상이어도 서버가 본 출발지는 iOS 장치의 `100.123.134.100`이었다. 서버 OpenSSH 로그에는 `correct key but not from a permitted host`와 `required=100.70.172.3`이 기록됐다.
+
+현재 Mac의 Proxifier `iossocks-simple` 프로필에는 다음 규칙을 Default 규칙보다 위에 적용했다.
+
+| 항목 | 값 |
+| --- | --- |
+| 이름 | `CView update SSH (Tailscale)` |
+| Applications | Any |
+| Target Hosts | `100.117.247.29` |
+| Target Ports | `22` |
+| Action | Direct |
+
+이 규칙은 SSH를 Mac의 Tailscale 연결로 전달한다. 기존 배포 키와 서버의 Mac 출발지 제한을 유지한다. Proxifier 프로필을 바꾸거나 가져온 뒤에는 이 규칙과 순서를 확인하고 `--preflight`, `--probe`를 실행한다. `tailscale status`에 표시된 Mac 주소만으로 서버가 관측한 출발지까지 확인한 것으로 판단하지 않는다.
+
+수정 후 비대화형 키 인증, 실제 1 MiB 전송·재읽기·SHA-256·정리, v0.1.24의 두 설치 파일 전체 HTTPS 다운로드 검증을 통과했다. 새 릴리스는 게시하지 않았다. 검증 기록: `access-verification-2026-10-25.json`.
+
+### 게시 작업 재시도
+
 빌드·공증 단계 실패 시에는 아직 게시하지 않았으므로 버전 변경을 되돌린다. 로컬 릴리스 커밋이 만들어진 이후에는 버전과 파일을 보존한다. SSH 응답 유실이나 다운로드 검사 실패가 있어도 이미 서버에 게시됐을 수 있기 때문이다.
 
 ```sh
