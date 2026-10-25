@@ -78,12 +78,12 @@
             <h1 class="home-greeting">안녕하세요</h1>
             <p class="home-summary">지금 볼 만한 라이브를 모았어요</p>
           </div>
-          <div class="grow"></div>
+          <div class="grow" data-tauri-drag-region></div>
           <form class="search-field home-search" role="search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
             <input type="search" placeholder="채널, 라이브 검색…" autocomplete="off" spellcheck="false">
           </form>
-          <button class="icon-btn round" data-action="refresh" title="새로고침">
+          <button class="icon-btn round" data-action="refresh" title="새로고침" aria-label="새로고침">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>
           </button>
         </header>
@@ -94,7 +94,7 @@
         <header class="page-header" data-tauri-drag-region>
           <h1 class="page-title">팔로잉</h1>
           <span class="page-subtitle">방송 중인 팔로우 채널</span>
-          <div class="grow"></div>
+          <div class="grow" data-tauri-drag-region></div>
           <button class="icon-btn round" data-action="refresh" title="새로고침" aria-label="새로고침">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>
           </button>
@@ -106,7 +106,7 @@
         <header class="page-header" data-tauri-drag-region>
           <h1 class="page-title">인기</h1>
           <span class="page-subtitle">시청자 많은 순</span>
-          <div class="grow"></div>
+          <div class="grow" data-tauri-drag-region></div>
           <button class="icon-btn round" data-action="refresh" title="새로고침" aria-label="새로고침">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>
           </button>
@@ -144,22 +144,22 @@
                 <div class="title ellipsis"></div>
                 <div class="meta ellipsis"></div>
               </div>
-              <button class="icon-btn" id="viewer-close" title="닫기">
+              <button class="icon-btn" id="viewer-close" title="닫기" aria-label="시청 화면 닫기">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
               </button>
             </div>
             <iframe id="player-frame" src="player/player.html" title="플레이어" allow="autoplay; fullscreen"></iframe>
-            <div class="player-overlay" hidden><div class="spinner"></div><span></span></div>
+            <div class="player-overlay" role="status" aria-live="polite" hidden><div class="spinner"></div><span></span></div>
           </div>
           <div class="player-controls">
-            <button class="icon-btn" id="mute" title="음소거 해제"></button>
+            <button class="icon-btn" id="mute" title="음소거 해제" aria-label="음소거 해제"></button>
             <input type="range" id="volume" min="0" max="100" value="100" aria-label="볼륨">
             <span class="player-status"></span>
             <div class="grow"></div>
-            <button class="icon-btn" id="reload" title="다시 연결">
+            <button class="icon-btn" id="reload" title="다시 연결" aria-label="다시 연결">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>
             </button>
-            <button class="icon-btn" id="fullscreen" title="전체 화면">
+            <button class="icon-btn" id="fullscreen" title="전체 화면" aria-label="영상 전체 화면">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
             </button>
           </div>

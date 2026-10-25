@@ -499,7 +499,13 @@ export class SettingsPage {
       if (!b) return;
       done();
       const clash = conflictOf(action, b);
-      if (clash) toast(`${ACTIONS.find(([a]) => a === clash)?.[1] || clash} 와 겹칩니다 — 그 동작도 같은 키로 실행됩니다`, 4000);
+      // 예약 키(고정 키·메뉴·시스템)는 저장하지 않는다 — 그 키의 원래 동작이 말없이 죽는다(M-8).
+      if (clash && clash.kind === 'reserved') {
+        toast(`${bindingLabel(b)} 은(는) "${clash.label}"에 쓰는 고정 키라 쓸 수 없습니다 — 다른 키를 고르세요`, 4000);
+        this.render();
+        return;
+      }
+      if (clash) toast(`${clash.label} 와 겹칩니다 — 그 동작도 같은 키로 실행됩니다`, 4000);
       try { await saveBinding(action, b); } catch (er) { toast(er.message); }
       this.render();
     };

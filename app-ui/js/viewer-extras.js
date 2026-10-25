@@ -45,6 +45,14 @@ export class ViewerExtras {
     }).observe(this.rail.parentElement);
     window.addEventListener('cview:sidebar-settled', () => this.fitRail());
 
+    // 오버레이 채팅의 위쪽 기준 — 머리줄 높이를 재서 CSS(--viewer-head-h)에 넘긴다(DZ-3). 전체 화면에선 머리줄이 숨어 0.
+    const head = root.querySelector('.viewer-header');
+    if (head) {
+      const syncHead = () => root.style.setProperty('--viewer-head-h', `${head.offsetHeight}px`);
+      new ResizeObserver(syncHead).observe(head);
+      syncHead();
+    }
+
     document.addEventListener('keydown', (e) => this.onKey(e));
   }
 
@@ -60,9 +68,10 @@ export class ViewerExtras {
     const m = this.mode;
     for (const x of MODES) root.classList.toggle(`chat-mode-${x}`, x === m);
     const p = chatPrefs();
-    root.style.setProperty('--overlay-w', `${Math.min(560, Math.max(240, Number(p.overlayWidth) || 340))}px`);
+    root.style.setProperty('--overlay-w', `${Math.min(560, Math.max(240, Number(p.overlayWidth) || 320))}px`); // 기본 폭은 단독 무대(ml-watch)와 같게(DS-8)
     root.style.setProperty('--overlay-bg', String(Math.min(0.95, Math.max(0.1, Number(p.overlayBackgroundOpacity) || 0.5))));
     this.modeButton.title = `${MODE_LABEL[m]} — 눌러서 바꾸기`;
+    this.modeButton.setAttribute('aria-label', `채팅 표시 방식 바꾸기 (지금: ${MODE_LABEL[m].replace('채팅: ', '')})`);
     this.modeButton.classList.toggle('active', m !== 'side');
   }
 
@@ -84,7 +93,7 @@ export class ViewerExtras {
     const others = lives.filter((l) => l.channelId !== currentId).slice(0, 10);
     this.rail.innerHTML = others.map((l) => {
       const avatar = safeUrl(l.channelImageUrl);
-      return `<button class="rail-item" data-rail-channel="${esc(l.channelId)}" title="${esc(l.channelName)} · ${esc(l.liveTitle || '')}">${avatar ? `<img class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar">${esc((l.channelName || '?').slice(0, 1))}</span>`}</button>`;
+      return `<button class="rail-item" data-rail-channel="${esc(l.channelId)}" title="${esc(l.channelName)} · ${esc(l.liveTitle || '')}" aria-label="${esc(l.channelName)} 방송으로 바꾸기">${avatar ? `<img class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar">${esc((l.channelName || '?').slice(0, 1))}</span>`}</button>`;
     }).join('') + '<button class="rail-more" hidden></button>';
     this.fitRail();
   }
@@ -112,6 +121,7 @@ export class ViewerExtras {
     more.hidden = false;
     more.textContent = `+${hiddenCount}`;
     more.title = `팔로잉 라이브 ${hiddenCount}개 더 — 팔로잉 화면에서 보기`;
+    more.setAttribute('aria-label', more.title);
   }
 
   // ── 라이브 되감기 키 (PLY-03, 부분) ────────

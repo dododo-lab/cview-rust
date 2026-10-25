@@ -38,6 +38,10 @@ export function installChatSplitter({ container, chat, key }) {
   handle.title = '끌어서 채팅 너비 조절 · 두 번 눌러 기본값';
   handle.setAttribute('role', 'separator');
   handle.setAttribute('aria-orientation', 'vertical');
+  handle.setAttribute('aria-label', '채팅 너비');
+  handle.setAttribute('aria-valuemin', String(CHAT_WIDTH.min));
+  // 키보드로도 조절 — ←/→ 16px, Home/End 최소·최대, Enter 기본값(L-8).
+  handle.tabIndex = 0;
   chat.before(handle);
 
   const collapse = document.createElement('button');
@@ -60,6 +64,7 @@ export function installChatSplitter({ container, chat, key }) {
     handle.hidden = state.collapsed;
     reopen.hidden = !state.collapsed;
     handle.setAttribute('aria-valuenow', String(width));
+    handle.setAttribute('aria-valuemax', String(clampChatWidth(CHAT_WIDTH.max, container.getBoundingClientRect().width)));
   };
   const persist = () => save(storeKey, { width: state.width, collapsed: state.collapsed });
 
@@ -82,6 +87,23 @@ export function installChatSplitter({ container, chat, key }) {
     handle.addEventListener('pointermove', move);
     handle.addEventListener('pointerup', up);
     handle.addEventListener('pointercancel', up);
+  });
+  handle.addEventListener('keydown', (e) => {
+    const box = container.getBoundingClientRect().width;
+    const now = clampChatWidth(state.width, box);
+    let next = null;
+    // 채팅이 오른쪽에 있으므로 ← 는 채팅을 넓히고 → 는 좁힌다(막대가 그 방향으로 움직인다).
+    if (e.key === 'ArrowLeft') next = now + (e.shiftKey ? 64 : 16);
+    else if (e.key === 'ArrowRight') next = now - (e.shiftKey ? 64 : 16);
+    else if (e.key === 'Home') next = CHAT_WIDTH.min;
+    else if (e.key === 'End') next = CHAT_WIDTH.max;
+    else if (e.key === 'Enter') next = CHAT_WIDTH.default;
+    if (next == null) return;
+    e.preventDefault();
+    e.stopPropagation();
+    state.width = clampChatWidth(next, box);
+    apply();
+    persist();
   });
   handle.addEventListener('dblclick', () => {
     state.width = CHAT_WIDTH.default;

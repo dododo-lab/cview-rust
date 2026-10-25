@@ -37,6 +37,7 @@
 
   /* 상태 */
   --live: #ff3b30;
+  --live-badge: #e5262b;        /* 흰 글자를 얹는 LIVE 배지 바탕 — 흰 글자 대비 4.5:1 이상(--live 는 점·글자·링용) */
   --donation: #ffcc33;
   --donation-bg: rgba(255, 204, 51, 0.1);
   --donation-border: rgba(255, 204, 51, 0.35);
@@ -109,6 +110,7 @@
   --border: #d9dce3;
   --border-subtle: #e8eaef;
   --live: #f03a2e;
+  --live-badge: #e5262b;
   --donation: #8f6100;
   --donation-bg: rgba(255, 190, 30, 0.14);
   --donation-border: rgba(214, 150, 0, 0.4);
@@ -156,6 +158,7 @@
     --border: #d9dce3;
     --border-subtle: #e8eaef;
     --live: #f03a2e;
+    --live-badge: #e5262b;
     --donation: #8f6100;
     --donation-bg: rgba(255, 190, 30, 0.14);
     --donation-border: rgba(214, 150, 0, 0.4);
@@ -349,13 +352,13 @@ a { color: var(--primary); }
 .account-trigger {
   display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; margin: -4px; padding: 4px;
   border: 0; border-radius: 10px; background: none; color: inherit; text-align: left; cursor: pointer;
-  transition: background var(--dur-2, 0.16s) var(--ease-out);
+  transition: background var(--dur-2) var(--ease-out);
 }
 .account-trigger:hover, .account.menu-open .account-trigger { background: var(--surface-elevated); }
 .account-trigger:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .account-trigger .account-avatar { display: block; }
 .account-trigger .account-avatar .avatar { display: block; }
-.account-chevron { flex: none; display: grid; place-items: center; width: 18px; height: 18px; margin-right: 2px; color: var(--text-tertiary); rotate: -90deg; transition: rotate var(--dur-2, 0.16s) var(--ease-out); }
+.account-chevron { flex: none; display: grid; place-items: center; width: 18px; height: 18px; margin-right: 2px; color: var(--text-tertiary); rotate: -90deg; transition: rotate var(--dur-2) var(--ease-out); }
 .account-chevron svg { width: 14px; height: 14px; }
 .account.menu-open .account-chevron { rotate: 90deg; }
 .login-icon { display: none; }
@@ -386,7 +389,7 @@ a { color: var(--primary); }
 /* motion.css 의 줄 전환(배경·색·누름 scale)에 패딩을 더한다 — 선택자를 한 단계 구체적으로 해야 덮이지 않는다 */
 .sidebar :is(.nav-item, .side-live) {
   transition-property: background, color, border-color, box-shadow, opacity, scale, padding;
-  transition-duration: var(--dur-2, 0.16s), var(--dur-2, 0.16s), var(--dur-2, 0.16s), var(--dur-2, 0.16s), var(--dur-2, 0.16s), 0.3s, var(--sb-dur);
+  transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), 0.3s, var(--sb-dur);
   transition-timing-function: var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-spring, ease-out), var(--sb-ease);
 }
 .sidebar.collapsed .nav-item { padding: 0 0 0 calc(var(--sb-rail) / 2 - 10px); }
@@ -434,7 +437,7 @@ a { color: var(--primary); }
 .ap-head { display: flex; align-items: center; gap: 10px; padding: 8px 8px 10px; }
 .ap-head .avatar { width: 40px; height: 40px; flex: none; }
 .ap-who { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.ap-who b { font-size: var(--fs-body, 14px); font-weight: 700; }
+.ap-who b { font-size: var(--fs-body); font-weight: 700; }
 .ap-who small { color: var(--text-tertiary); font-size: var(--fs-footnote); }
 .ap-sep { height: 1px; background: color-mix(in srgb, var(--text-primary) 10%, transparent); margin: 4px 6px; flex: none; }
 .ap-item {
@@ -506,13 +509,14 @@ a { color: var(--primary); }
 .thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.25s ease; }
 .card:hover .thumb img { transform: scale(1.03); }
 .badge-live {
-  position: absolute; top: 8px; left: 8px; background: var(--live); color: #fff;
+  position: absolute; top: 8px; left: 8px; background: var(--live-badge); color: #fff;
   font-size: var(--fs-micro); font-weight: 700; padding: 2px 6px; border-radius: 4px; letter-spacing: 0.4px;
 }
 .badge-viewers, .badge-uptime {
   position: absolute; bottom: 8px; left: 8px; display: inline-flex; align-items: center; gap: 5px;
   background: rgba(0, 0, 0, 0.62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
   color: #fff; font-size: var(--fs-footnote); font-weight: 600; padding: 2px 7px; border-radius: 6px;
+  font-variant-numeric: tabular-nums;   /* 숫자가 갱신돼도 폭이 흔들리지 않게(DT-3) */
 }
 .badge-uptime { left: auto; right: 8px; font-weight: 500; color: rgba(255, 255, 255, 0.85); }
 .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--live); flex: none; display: inline-block; }
@@ -548,8 +552,11 @@ a { color: var(--primary); }
 .empty {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-sm);
   padding: 64px var(--sp-lg); color: var(--text-tertiary); text-align: center;
+  word-break: keep-all; overflow-wrap: anywhere;   /* 한국어는 어절 단위로 줄바꿈(DT-2) */
 }
 .empty strong { color: var(--text-secondary); font-size: var(--fs-subhead); }
+/* 여러 줄 안내문도 어절 단위로(DT-2) */
+:is(.mc-empty, .ip-empty, .welcome p, .home-notice, .tray-empty, .side-empty, .chat-notice, .pp-note, .setting-label small, .player-overlay span) { word-break: keep-all; overflow-wrap: anywhere; }
 /* 로더(.spinner)는 motion.css 의 로고 로더. spin 은 새로고침 아이콘 회전에 쓴다. */
 @keyframes spin { to { transform: rotate(360deg); } }
 .skeleton { background: var(--surface-elevated); border-radius: var(--radius-md); aspect-ratio: 16 / 9; }
@@ -601,6 +608,8 @@ select.select {
 .viewer-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .player-stage { position: relative; flex: 1; background: var(--video-stage); min-height: 0; }
 .player-stage iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: var(--video-stage); }
+/* 영상 위 투명 클릭 차단층(viewer-controls.js) — 초점이 iframe 으로 넘어가 단축키가 죽지 않게(H-4). z-index 없이 DOM 순서로 오버레이 밑 */
+.player-hit { position: absolute; inset: 0; }
 .player-overlay {
   position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
   gap: var(--sp-sm); color: var(--text-secondary); pointer-events: none; background: rgba(0, 0, 0, 0.35);
@@ -730,7 +739,7 @@ select.select {
 .strip-item:focus-visible { outline: none; }
 .strip-item:focus-visible .strip-ring { box-shadow: 0 0 0 2px var(--text-primary); }
 .strip-live {
-  position: absolute; top: 58px; background: var(--live); color: #fff; font-size: 9px; font-weight: 800;
+  position: absolute; top: 58px; background: var(--live-badge); color: #fff; font-size: 9px; font-weight: 800;
   padding: 0 5px; border-radius: 4px; letter-spacing: 0.4px; border: 2px solid var(--deck); line-height: 1.4;
 }
 .strip-name { margin-top: 8px; width: 100%; font-size: var(--fs-footnote); font-weight: 600; }
@@ -818,7 +827,7 @@ select.select {
 .recent-item .avatar { width: 38px; height: 38px; }
 .recent-item.is-live .avatar { box-shadow: 0 0 0 2px var(--deck), 0 0 0 4px var(--live); }
 .recent-text { min-width: 0; display: flex; flex-direction: column; font-size: var(--fs-caption); }
-.recent-meta { font-size: var(--fs-micro); color: var(--text-tertiary); }
+.recent-meta { font-size: var(--fs-micro); color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
 .recent-meta b { color: var(--live); font-weight: 800; }
 
 /* 가로 선반 */
@@ -888,7 +897,7 @@ html, body {
 .btn:active:not(:disabled) { transform: scale(0.98); }
 .btn.primary { box-shadow: 0 6px 18px var(--primary-glow); }
 .btn.ghost { box-shadow: none; }
-.btn:focus-visible, .icon-btn:focus-visible, .chip:focus-visible, .seg:focus-visible, .link-btn:focus-visible { box-shadow: var(--focus-ring); }
+/* 초점 고리는 아래 '키보드 포커스 (DSN-06)'의 outline 하나만 — 예전엔 여기 box-shadow 고리까지 겹쳐 두 겹이 그려졌다(DF-1) */
 .icon-btn { border-radius: 10px; }
 
 .page-header {
@@ -954,7 +963,7 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
    머리줄이 좁아도 줄지 않는다. */
 .segmented.live-mode-seg { flex: none; height: 32px; padding: 3px; gap: 2px; border-radius: 10px; align-items: stretch; margin-left: 2px; }
 .segmented.live-mode-seg .seg {
-  padding: 0 12px 0 10px; gap: 6px; border-radius: 7px; font-size: var(--fs-footnote); font-weight: 600; color: var(--text-tertiary);
+  padding: 0 12px 0 10px; gap: 6px; border-radius: 7px; font-size: var(--fs-footnote); font-weight: 600; color: var(--text-secondary);   /* tertiary 는 떠 있는 면 위에서 대비 미달(DC-4) */
   transition: background .16s var(--ease-out), color .16s var(--ease-out), box-shadow .16s var(--ease-out);
 }
 .segmented.live-mode-seg .seg svg { width: 14px; height: 14px; flex: none; }
@@ -1033,9 +1042,15 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 /* 주간 후원 랭킹 */
 .donation-rank { border-bottom: 1px solid var(--border-subtle); padding: 6px var(--sp-md) 8px; }
 .donation-rank[hidden] { display: none; }
-.donation-rank-head { display: flex; align-items: center; gap: 6px; font-size: var(--fs-micro); font-weight: 700; color: var(--text-tertiary); margin-bottom: 6px; }
+.donation-rank-head { display: flex; align-items: center; gap: 6px; font-size: var(--fs-footnote); font-weight: 700; color: var(--text-tertiary); margin-bottom: 6px; }
 .donation-rank-head svg { width: 12px; height: 12px; color: var(--donation); }
 .donation-rank-list { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+/* 칩 줄이 넘치면 오른쪽 끝을 흐리게 — 더 있다는 표시(D-10). 마지막 칩은 여백만큼 더 밀어 다 보이게 */
+.donation-rank-list {
+  padding-right: 24px;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+}
 .donation-rank-list::-webkit-scrollbar { display: none; }
 .rank-chip {
   flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 3px; border-radius: 999px;
@@ -1084,7 +1099,8 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
   content: ""; position: absolute; left: 3px; top: 0; bottom: 0; width: 2px; background: var(--primary);
   opacity: 0; transition: opacity 0.15s var(--ease-out);
 }
-.chat-splitter:hover::after, .resizing .chat-splitter::after { opacity: 1; }
+.chat-splitter:hover::after, .resizing .chat-splitter::after, .chat-splitter:focus-visible::after { opacity: 1; }
+.chat-splitter:focus-visible { outline: none; }   /* 초점은 가운데 막대(::after)를 켜서 보인다 */
 .resizing, .resizing * { user-select: none; cursor: col-resize; }
 .resizing iframe { pointer-events: none; }
 .chat.collapsed { display: none; }
@@ -1113,10 +1129,10 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 /* ══ 시청 화면 컨트롤 (viewer-controls.js) ═══════════════════ */
 .live-chip {
   height: 24px; padding: 0 9px; border-radius: 6px; border: 0; font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.4px;
-  background: var(--live); color: #fff; font-variant-numeric: tabular-nums;
+  background: var(--live-badge); color: #fff; font-variant-numeric: tabular-nums;
 }
 .live-chip.behind { background: var(--surface-overlay); color: var(--text-secondary); }
-.live-chip.behind:hover { background: var(--live); color: #fff; }
+.live-chip.behind:hover { background: var(--live-badge); color: #fff; }
 .quality-wrap { position: relative; }
 .quality-btn {
   height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--surface-elevated);
@@ -1375,7 +1391,7 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .follow-meta { display: inline-flex; align-items: center; gap: 10px; }
 .follow-meta > span:empty { display: none; }
 .dense-title.fx-last { color: var(--text-tertiary); }
-.fx-verified { width: 14px; height: 14px; margin-left: 4px; vertical-align: -2px; color: var(--primary); --fx-check: var(--on-primary, #fff); }
+.fx-verified { width: 14px; height: 14px; margin-left: 4px; vertical-align: -2px; color: var(--primary); --fx-check: var(--on-primary); }
 .fx-bell { width: 13px; height: 13px; margin-left: 4px; vertical-align: -2px; color: var(--warning); }
 .follow-find { width: 180px; padding: 6px 10px; }
 @media (max-width: 900px) { .dense-row.follow-row { grid-template-columns: auto minmax(140px, 1fr) auto; } .follow-row .dense-title, .follow-row .follow-meta { display: none; } }
@@ -1511,21 +1527,29 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 /* 오버레이: 채팅이 영상 위에 반투명으로 뜬다 */
 .viewer.chat-mode-overlay .chat-splitter, .viewer.chat-mode-hidden .chat-splitter, .viewer.chat-mode-hidden .chat-reopen { display: none !important; }
 .viewer.chat-mode-hidden .chat { display: none; }
+/* 위치 — .viewer 기준이라 머리줄 높이(--viewer-head-h, viewer-extras.js 가 잰다)에 영상 위쪽 버튼 줄(약 62px)을 더한 곳부터.
+   예전 top: 74px 는 영상 위 20px 지점이라 stage-top 의 닫기·채팅 방식 버튼을 덮었다(DZ-3).
+   폭·테두리는 단독 무대(.ml-body.chat-overlay)와 같게 — 기본 320, 선 대신 그림자(DS-8). */
+.viewer { --viewer-head-h: 55px; }
 .viewer.chat-mode-overlay .chat {
-  position: absolute; right: 16px; top: 74px; bottom: 60px; z-index: 6; width: var(--overlay-w, 340px) !important;
-  border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.12); overflow: hidden;
+  position: absolute; right: 16px; top: calc(var(--viewer-head-h) + 62px); bottom: 60px; z-index: 6; width: var(--overlay-w, 320px) !important;
+  border-radius: 16px; border: 0; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35); overflow: hidden;
   /* 흐림 없이 — 재생 중인 영상 위 흐림은 영상 프레임마다 다시 계산돼 GPU 를 늘 쓴다(GPU 최적화 2026-10-24) */
   background: rgba(12, 13, 16, min(0.94, calc(var(--overlay-bg, 0.5) + 0.12))); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
   --text-primary: #f4f5f7; --text-secondary: #d0d3d9; --text-tertiary: #a4a8b0; color: var(--text-primary);
 }
 .viewer.chat-mode-overlay .chat .chat-header, .viewer.chat-mode-overlay .chat .chat-input { background: transparent; border-color: rgba(255, 255, 255, 0.1); }
 .viewer.chat-mode-overlay .chat .chat-input input { background: rgba(0, 0, 0, 0.35); color: #fff; }
+/* 화질 메뉴가 열려 있는 동안은 아래 막대를 채팅보다 위로 — 메뉴가 오른쪽 위로 펼쳐져 채팅 밑에 깔렸다(DZ-3) */
+.viewer.chat-mode-overlay .player-stage:has(.quality-menu:not([hidden])) > .player-controls { z-index: 7; }
 .alert-ghost { border-style: dashed; }
 
 /* ══ 채팅 부가 (chat-extras.js · chat-only.js) ═════════════════ */
 .chat-events { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 6px var(--sp-md); border-bottom: 1px solid var(--border-subtle); }
 .chat-events[hidden] { display: none; }
 .chat-events::-webkit-scrollbar { display: none; }
+/* 이벤트 칩 줄도 넘치면 오른쪽 끝을 흐리게(D-10) */
+.chat-events { padding-right: 24px; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); }
 .event-chip { --ev: var(--donation); flex: none; display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-micro); padding: 3px 9px 3px 3px; border-radius: 999px; color: var(--text-secondary); white-space: nowrap;
   background: color-mix(in srgb, var(--ev) 10%, var(--surface-base)); border: 1px solid color-mix(in srgb, var(--ev) 24%, transparent); }
 .event-chip-icon { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; color: var(--ev); background: color-mix(in srgb, var(--ev) 18%, transparent); }
@@ -1551,6 +1575,7 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
   --cs-canvas: #22272e; --cs-surface: #363c44; --cs-ink: #f2f4f6; --cs-sub: #c9d1da; --cs-fill: #3a424c; --cs-field: #2c323a;
   --cs-own: #fee500; --cs-owntext: #191919; --cs-avtext: #e4e9ee; --cs-time: #adb6c0; --cs-edge: transparent; --cs-accent: #fee500;
   --cs-hover: rgba(255, 255, 255, 0.045); --cs-shadow: 0 1px 1px rgba(0, 0, 0, 0.22); --cs-pill: rgba(0, 0, 0, 0.22);
+  --cs-send: #fee500; --cs-send-text: #191919;   /* 보내기 버튼 — 카카오 노랑(의도한 스킨색, 두 테마 같음) */
   --cs-av: calc(34px * var(--chat-scale, 1));
   background: var(--cs-canvas);
 }
@@ -1564,13 +1589,20 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
     --cs-avtext: #1c2833; --cs-time: #3d4955; --cs-hover: rgba(255, 255, 255, 0.22); --cs-shadow: 0 1px 1px rgba(0, 40, 80, 0.08); --cs-pill: rgba(0, 30, 60, 0.12);
   }
 }
+/* 영상 위(오버레이) 채팅은 테마와 상관없이 늘 어두운 면 — 라이트 테마의 --cs-* 가 남으면 닉네임(#2c3640)이
+   1.58:1 로 읽히지 않았다(DC-1). 위 라이트 규칙(0,3,0)보다 구체적이라 순서와 무관하게 다크 값으로 고정된다. */
+:is(.viewer.chat-mode-overlay .chat, .ml-body.chat-overlay .ml-chat):is(.chat-skin),
+:is(.viewer.chat-mode-overlay .chat, .ml-body.chat-overlay .ml-chat) .chat-skin {
+  --cs-canvas: #22272e; --cs-surface: #363c44; --cs-ink: #f2f4f6; --cs-sub: #c9d1da; --cs-fill: #3a424c; --cs-field: #2c323a;
+  --cs-avtext: #e4e9ee; --cs-time: #adb6c0; --cs-hover: rgba(255, 255, 255, 0.045); --cs-shadow: 0 1px 1px rgba(0, 0, 0, 0.22); --cs-pill: rgba(0, 0, 0, 0.22);
+}
 
 /* 틀 — 머리글은 캔버스보다 살짝 어둡게, 입력창은 둥근 칸과 노란 보내기 버튼 */
 .chat-skin .chat-header, .chat-skin .chat-input { background: var(--cs-canvas); border-color: var(--cs-edge); }
 .chat-skin .chat-header { background: color-mix(in srgb, var(--cs-canvas) 92%, #000 8%); }
 .chat-skin .chat-input input { background: var(--cs-field); color: var(--cs-ink); border: 0; border-radius: 18px; padding-inline: 14px; box-shadow: var(--cs-shadow); }
 .chat-skin .chat-input input::placeholder { color: var(--cs-time); }
-.chat-skin .chat-input .btn.primary { background: #fee500; color: #191919; border-radius: 18px; font-weight: 700; box-shadow: none; }
+.chat-skin .chat-input .btn.primary { background: var(--cs-send); color: var(--cs-send-text); border-radius: 18px; font-weight: 700; box-shadow: none; }
 .chat-skin .chat-input .btn.primary:hover:not(:disabled) { filter: brightness(0.96); box-shadow: none; }
 .chat-skin .chat-line .text { color: var(--cs-ink); }
 
@@ -1852,7 +1884,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .dense-row:focus-visible { outline-offset: -2px; }
 
 /* ── 스플래시 (SYS-10)·환영 안내 (SYS-11) ───────── */
-.splash { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: var(--background); transition: opacity .32s var(--ease-out); }
+.splash { position: fixed; inset: 0; z-index: 210;   /* .toast-stack(200)보다 위 */ display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: var(--background); transition: opacity .32s var(--ease-out); }
 .splash.leaving { opacity: 0; pointer-events: none; }
 .splash-mark { width: 64px; height: 64px; display: grid; place-items: center; border-radius: 18px; background: var(--brand-gradient); color: var(--on-primary); box-shadow: 0 12px 40px var(--primary-glow); animation: splash-pulse 1.4s ease-in-out infinite; }
 .splash-mark svg { width: 30px; height: 30px; }
@@ -2039,7 +2071,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 
 /* ══ 오버레이 제목 막대 — 시스템 제목 막대 없이 신호등을 사이드바 위쪽에(원본 hiddenTitleBar + TrafficLightsAnimator) ══ */
 .titlebar-strip { flex: none; height: 30px; margin: -14px -12px 0; -webkit-user-select: none; user-select: none; }
-.content-drag { position: absolute; top: 0; left: 0; right: 0; height: 14px; z-index: 40; }
+/* 끌기 띠는 머리줄 버튼 위로 내려오지 않게 8px 만(DZ-4) — 멀티라이브 머리줄 버튼이 위에서 8px 부터라 14px 면 윗부분 6px 를
+   눌러도 클릭 대신 창이 끌렸다. 나머지 빈 곳은 머리줄·.grow 의 data-tauri-drag-region 이 끈다(Tauri 2 는 자식에 상속하지 않는다). */
+.content-drag { position: absolute; top: 0; left: 0; right: 0; height: 8px; z-index: 40; }
 .brand-row { -webkit-user-select: none; user-select: none; }
 :root.is-fullscreen .titlebar-strip { height: 14px; }
 /* 보조 창(사이드바 없음): 신호등 아래로 내용을 내린다 */
@@ -2183,9 +2217,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .chzzk-bar .vol-group:hover input[type="range"], .chzzk-bar .vol-group:focus-within input[type="range"], .chzzk-bar .vol-group.open input[type="range"] { width: 86px; opacity: 1; margin: 0 10px 0 4px; }
 .chzzk-bar .vol-group input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5); }
 /* LIVE 알약 */
-.chzzk-bar .live-chip { height: 22px; margin: 0 8px 0 6px; padding: 0 8px; border-radius: 4px; font-size: 11px; font-weight: 800; letter-spacing: 0.06em; background: #ff2b2b; color: #fff; box-shadow: 0 2px 6px rgba(255, 43, 43, 0.35); }
+.chzzk-bar .live-chip { height: 22px; margin: 0 8px 0 6px; padding: 0 8px; border-radius: 4px; font-size: 11px; font-weight: 800; letter-spacing: 0.06em; background: var(--live-badge); color: #fff; box-shadow: 0 2px 6px color-mix(in srgb, var(--live-badge) 35%, transparent); }
 .chzzk-bar .live-chip.behind { background: rgba(255, 255, 255, 0.18); color: #fff; box-shadow: none; }
-.chzzk-bar .live-chip.behind:hover { background: #ff2b2b; }
+.chzzk-bar .live-chip.behind:hover { background: var(--live-badge); }
 .chzzk-bar .live-chip.at-edge { display: none; } /* LIVE 는 위쪽 정보 칩에만 — 늦어졌을 때만 따라잡기 버튼으로 */
 .chzzk-bar .player-status { color: rgba(255, 255, 255, 0.82); font-size: 12px; font-variant-numeric: tabular-nums; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
 /* 화질 — 글자 알약, 메뉴는 어두운 반투명 */
@@ -2235,7 +2269,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
   background: rgba(0, 0, 0, 0.58);
   color: #fff; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .stage-top .stat svg { width: 13px; height: 13px; opacity: 0.85; }
-.stage-top .stat.live { background: #e5262b; font-weight: 800; letter-spacing: 0.04em; }
+.stage-top .stat.live { background: var(--live-badge); font-weight: 800; letter-spacing: 0.04em; }
 .stage-top .stat.off { color: rgba(255, 255, 255, 0.75); }
 .stage-top .icon-btn { flex: none; width: 36px; height: 36px; border-radius: 8px; color: rgba(255, 255, 255, 0.92); background: none; }
 .stage-top .icon-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
