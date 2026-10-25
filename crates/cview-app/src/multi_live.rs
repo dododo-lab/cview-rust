@@ -864,6 +864,47 @@ impl MultiLiveShell {
         dto
     }
 
+    /// 라이브 무대 세우기/해제·접기 직후 패인마다의 상태를 디버그 로그(`multilive.stage`)에 남긴다(리뷰 C-1).
+    ///
+    /// 무대 왕복 뒤 검은 패인이 '매니저가 로딩을 멈춰 둔 것'인지 '페이지(WebKit)가 멈춘 것'인지 가르려면
+    /// 그 순간의 디코드 판정·로딩 정지·재생 의도를 패인 슬롯과 함께 봐야 한다. `ui.player`(화면 수집기)의
+    /// `where: paneN` 과 같은 슬롯 번호, `player.net` 과 같은 채널 앞 6자를 쓴다. 꺼져 있으면 비용이 없다.
+    pub fn log_stage_transition(&self, action: &str) {
+        if !crate::perf_log::enabled() {
+            return;
+        }
+        let st = self.manager.read();
+        let panes: Vec<serde_json::Value> = st
+            .sessions()
+            .iter()
+            .map(|s| {
+                let engine = self
+                    .registry
+                    .player_of(s.player())
+                    .and_then(|p| p.pane_engine());
+                serde_json::json!({
+                    "where": engine.as_ref().map(|e| format!("pane{}", e.slot)),
+                    "tag": s.channel_id().chars().take(6).collect::<String>(),
+                    "decode": st.decode_active(s.id()),
+                    "loading_suspended": engine.as_ref().map(|e| e.is_loading_suspended()),
+                    "playback_desired": engine.as_ref().map(|e| e.is_playback_desired()),
+                    "muted": s.player().is_muted(),
+                    "stage": st.stage_session_id() == Some(s.id()),
+                    "selected": st.selected_session_id() == Some(s.id()),
+                })
+            })
+            .collect();
+        crate::perf_log::emit(
+            "multilive.stage",
+            serde_json::json!({
+                "action": action,
+                "grid": st.is_grid_layout(),
+                "watching": self.watching.load(Ordering::SeqCst),
+                "panes": panes,
+            }),
+        );
+    }
+
     fn state_dto_raw(&self) -> MultiLiveStateDto {
         let st = self.manager.read();
         let selected = st.selected_session_id();
