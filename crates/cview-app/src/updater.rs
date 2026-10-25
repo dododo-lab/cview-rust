@@ -169,7 +169,14 @@ async fn install(app: &AppHandle) -> CmdResult<()> {
         installer_ext(os).unwrap_or_default()
     ));
 
-    download(app, asset, &file, &expected).await?;
+    let handle = app.clone();
+    download(
+        &move |received, total| emit(&handle, "download", received, total),
+        asset,
+        &file,
+        &expected,
+    )
+    .await?;
     emit(app, "verify", 0, 0);
 
     #[cfg(target_os = "macos")]
@@ -177,7 +184,11 @@ async fn install(app: &AppHandle) -> CmdResult<()> {
         let (file, stage, version) = (file.clone(), dir.clone(), version.clone());
         let handle = app.clone();
         tauri::async_runtime::spawn_blocking(move || {
-            mac::install(&file, &stage, &version, &|| emit(&handle, "install", 0, 0))
+            let bundle = mac::current_bundle()?;
+            let old = mac::install(&file, &stage, &version, &bundle, &|| {
+                emit(&handle, "install", 0, 0)
+            })?;
+            mac::relaunch_after_exit(std::process::id(), &bundle, &old, "/usr/bin/open")
         })
         .await
         .map_err(|e| err(format!("업데이트 설치 작업이 중단됐습니다: {e}")))??;
@@ -193,7 +204,7 @@ async fn install(app: &AppHandle) -> CmdResult<()> {
 
 /// 설치 파일을 받으며 크기·SHA-256 을 확인한다. 맞지 않으면 파일을 지운다.
 async fn download(
-    app: &AppHandle,
+    progress: &(dyn Fn(u64, u64) + Send + Sync),
     asset: &GitHubAsset,
     file: &Path,
     expected: &[u8; 32],
@@ -225,7 +236,7 @@ async fn download(
     let mut hasher = Sha256::new();
     let mut received: u64 = 0;
     let mut last = Instant::now();
-    emit(app, "download", 0, total);
+    progress(0, total);
     let outcome: CmdResult<()> = async {
         loop {
             let chunk = tokio::time::timeout(Duration::from_secs(60), resp.chunk())
@@ -243,14 +254,14 @@ async fn download(
                 .map_err(|e| err(format!("설치 파일을 저장하지 못했습니다: {e}")))?;
             if last.elapsed() >= Duration::from_millis(120) {
                 last = Instant::now();
-                emit(app, "download", received, total);
+                progress(received, total);
             }
         }
         out.flush()
             .await
             .and(out.sync_all().await)
             .map_err(|e| err(format!("설치 파일을 저장하지 못했습니다: {e}")))?;
-        emit(app, "download", received, total);
+        progress(received, total);
         if received != total {
             return Err(err("설치 파일을 끝까지 받지 못했습니다"));
         }
@@ -355,12 +366,8 @@ mod mac {
         }
     }
 
-    pub fn install(
-        dmg: &Path,
-        work: &Path,
-        version: &str,
-        on_install: &dyn Fn(),
-    ) -> Result<(), CommandError> {
+    /// 실행 중인 앱 번들 — 바꿀 수 없는 위치면 그 이유로 실패.
+    pub fn current_bundle() -> Result<PathBuf, CommandError> {
         let exe = std::env::current_exe()
             .map_err(|e| err(format!("실행 중인 앱 위치를 알 수 없습니다: {e}")))?;
         let bundle = bundle_of(&exe)
@@ -368,6 +375,17 @@ mod mac {
         if let Some(why) = replace_blocker(&bundle) {
             return Err(err(why));
         }
+        Ok(bundle)
+    }
+
+    /// DMG 속 새 버전을 검증해 `bundle` 자리에 넣는다. 돌려주는 값은 옮겨 둔 예전 번들(재실행 뒤 지운다).
+    pub fn install(
+        dmg: &Path,
+        work: &Path,
+        version: &str,
+        bundle: &Path,
+        on_install: &dyn Fn(),
+    ) -> Result<PathBuf, CommandError> {
         let parent = bundle
             .parent()
             .ok_or_else(|| err("앱이 있는 폴더를 알 수 없습니다"))?;
@@ -477,35 +495,165 @@ mod mac {
 
         // 3) 이름 맞바꾸기 — 실패하면 원래대로 돌린다. 실행 중인 번들은 옮겨도 이 프로세스는 계속 돈다.
         on_install();
-        std::fs::rename(&bundle, &old).map_err(|e| {
+        std::fs::rename(bundle, &old).map_err(|e| {
             let _ = std::fs::remove_dir_all(&staged);
             err(format!("지금 앱을 옮기지 못했습니다: {e}"))
         })?;
-        if let Err(e) = std::fs::rename(&staged, &bundle) {
-            let _ = std::fs::rename(&old, &bundle);
+        if let Err(e) = std::fs::rename(&staged, bundle) {
+            let _ = std::fs::rename(&old, bundle);
             let _ = std::fs::remove_dir_all(&staged);
             return Err(err(format!("새 버전을 넣지 못했습니다: {e}")));
         }
 
-        // 4) 이 프로세스가 끝나면(최대 60초 기다림) 새 번들을 열고 예전 번들을 지운다.
-        let script = r#"i=0; while /bin/kill -0 "$1" 2>/dev/null && [ $i -lt 300 ]; do /bin/sleep 0.2; i=$((i+1)); done; /usr/bin/open "$2"; /bin/rm -rf "$3""#;
+        Ok(old)
+    }
+
+    /// `pid` 가 끝나면(최대 60초 기다림) `opener` 로 새 번들을 열고 예전 번들을 지운다.
+    /// 앱과 다른 프로세스 그룹에서 돌아 앱이 끝나도 같이 끝나지 않는다.
+    pub fn relaunch_after_exit(
+        pid: u32,
+        bundle: &Path,
+        old: &Path,
+        opener: &str,
+    ) -> Result<(), CommandError> {
+        use std::os::unix::process::CommandExt;
+        let script = r#"i=0; while /bin/kill -0 "$1" 2>/dev/null && [ $i -lt 300 ]; do /bin/sleep 0.2; i=$((i+1)); done; "$4" "$2"; /bin/rm -rf "$3""#;
         Command::new("/bin/sh")
             .arg("-c")
             .arg(script)
             .arg("cview-relaunch")
-            .arg(std::process::id().to_string())
-            .arg(&bundle)
-            .arg(&old)
+            .arg(pid.to_string())
+            .arg(bundle)
+            .arg(old)
+            .arg(opener)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
+            .process_group(0)
             .spawn()
+            .map(|_| ())
             .map_err(|e| {
                 err(format!(
                     "새 버전은 설치했지만 다시 열지 못했습니다 — CView 를 직접 다시 열어 주세요 ({e})"
                 ))
-            })?;
-        Ok(())
+            })
+    }
+
+    /// 실제 업데이트 서버로 끝까지 — 받기 · SHA-256 · DMG · 서명 · 공증 · 교체 · 재실행 신호.
+    /// 진짜 앱은 건드리지 않는다: 임시 폴더의 가짜 `CView.app` 을 바꾸고, `open` 대신 기록 스크립트를 부른다.
+    /// Tailscale 필요 — `cargo test -p cview-app --lib -- --ignored updater_e2e_real_feed`.
+    #[cfg(test)]
+    mod e2e {
+        use std::path::Path;
+        use std::time::Duration;
+
+        use crate::system::{current_feed_url, fetch_release, release_installer};
+        use crate::updater::{can_auto_install, download, parse_sha256};
+
+        fn plist_version(app: &Path) -> String {
+            let out = std::process::Command::new("/usr/bin/plutil")
+                .args(["-extract", "CFBundleShortVersionString", "raw", "-o", "-"])
+                .arg(app.join("Contents/Info.plist"))
+                .output()
+                .unwrap();
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        }
+
+        #[tokio::test]
+        #[ignore]
+        async fn updater_e2e_real_feed() {
+            let release = fetch_release(current_feed_url().unwrap())
+                .await
+                .unwrap()
+                .expect("공개된 릴리스");
+            let version = release.version_string().to_string();
+            let asset = release_installer(&release)
+                .expect("macOS 설치 파일")
+                .clone();
+            assert!(can_auto_install(&asset, "macos"), "{asset:?}");
+            let expected = parse_sha256(asset.sha256.as_deref().unwrap()).unwrap();
+
+            let tmp = tempfile::tempdir().unwrap();
+            let work = tmp.path().join("updates");
+            std::fs::create_dir_all(&work).unwrap();
+            let dmg = work.join(format!("CView_{version}.dmg"));
+            let seen = std::sync::Mutex::new((0u64, 0u64, 0usize));
+            download(
+                &|r, t| {
+                    let mut s = seen.lock().unwrap();
+                    *s = (r, t, s.2 + 1);
+                },
+                &asset,
+                &dmg,
+                &expected,
+            )
+            .await
+            .unwrap();
+            let (received, total, calls) = *seen.lock().unwrap();
+            assert_eq!((received, total), (asset.size as u64, asset.size as u64));
+            assert!(calls >= 2);
+
+            // 받은 파일을 1바이트 바꾸면 SHA-256 에서 막혀야 한다.
+            let mut wrong = expected;
+            wrong[0] ^= 1;
+            let bad = work.join("bad.dmg");
+            assert!(download(&|_, _| {}, &asset, &bad, &wrong).await.is_err());
+            assert!(!bad.exists() && !bad.with_extension("part").exists());
+
+            // 가짜 "지금 앱".
+            let apps = tmp.path().join("Applications");
+            let bundle = apps.join("CView.app");
+            std::fs::create_dir_all(bundle.join("Contents")).unwrap();
+            std::fs::write(bundle.join("Contents/marker"), "old").unwrap();
+
+            let old = super::install(&dmg, &work, &version, &bundle, &|| {}).unwrap();
+            assert_eq!(plist_version(&bundle), version);
+            assert_eq!(
+                std::fs::read_to_string(old.join("Contents/marker")).unwrap(),
+                "old"
+            );
+            assert!(!work.join("mnt").exists(), "DMG 를 떼야 한다");
+            assert!(!apps.join(format!(".CView-update-{version}.app")).exists());
+
+            // 버전이 다르면 교체하지 않고 원래 번들을 남긴다.
+            let before = plist_version(&bundle);
+            assert!(super::install(&dmg, &work, "9.9.9", &bundle, &|| {}).is_err());
+            assert_eq!(plist_version(&bundle), before);
+
+            // 재실행: 프로세스가 끝나야 opener 를 부르고 예전 번들을 지운다.
+            let opened = tmp.path().join("opened");
+            let opener = tmp.path().join("opener.sh");
+            std::fs::write(
+                &opener,
+                format!("#!/bin/sh\necho \"$1\" > '{}'\n", opened.display()),
+            )
+            .unwrap();
+            std::process::Command::new("/bin/chmod")
+                .arg("+x")
+                .arg(&opener)
+                .status()
+                .unwrap();
+            let mut child = std::process::Command::new("/bin/sleep")
+                .arg("1")
+                .spawn()
+                .unwrap();
+            super::relaunch_after_exit(child.id(), &bundle, &old, opener.to_str().unwrap())
+                .unwrap();
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            assert!(!opened.exists(), "프로세스가 끝나기 전에 열면 안 된다");
+            child.wait().unwrap();
+            for _ in 0..50 {
+                if opened.exists() && !old.exists() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(100)).await;
+            }
+            assert_eq!(
+                std::fs::read_to_string(&opened).unwrap().trim(),
+                bundle.to_str().unwrap()
+            );
+            assert!(!old.exists(), "예전 번들을 지워야 한다");
+        }
     }
 }
 
