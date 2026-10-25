@@ -524,6 +524,8 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
    [라이브|멀티라이브] 전환 버튼이 화면을 오가도 위아래로 뛰지 않는다. */
 .page[data-page="live"] > .page-header.ph-compact,
 .viewer-header.ph-compact { padding-top: var(--sp-sm); padding-bottom: var(--sp-sm); }
+/* 머리줄 새로고침도 멀티라이브 툴바 버튼과 같은 30px — 36px 이면 머리줄이 그만큼 높아진다 */
+.page[data-page="live"] > .page-header.ph-compact .icon-btn.round { width: 30px; height: 30px; }
 /* 목록 화면 설명은 머리줄 대신 본문 첫 줄 */
 .page[data-page="live"] > .live-lead { margin: calc(-1 * var(--sp-sm)) 0 var(--sp-lg); }
 /* 섹션 안 짧은 안내(로그인·한쪽 실패) */
