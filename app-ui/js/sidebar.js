@@ -206,9 +206,10 @@ export class Sidebar {
     this.nav.innerHTML = this.routes.filter((r) => r.id !== 'search' && r.sidebar !== false).map((r) => {
       const count = r.id === 'following' ? this.liveCount : (this.badges && this.badges.get(r.id));
       const badge = count ? `<span class="nav-badge">${count > 99 ? '99+' : count}</span>` : '';
+      const label = this.navLabels && this.navLabels.get(r.id);
       return `
         ${r.section ? `<div class="nav-section">${esc(r.section)}</div>` : ''}
-        <button class="nav-item${this.playing.has(r.id) ? ' playing' : ''}" data-route="${r.id}" data-tip="${esc(r.title)}">
+        <button class="nav-item${this.playing.has(r.id) ? ' playing' : ''}" data-route="${r.id}" data-tip="${esc(r.title)}"${label ? ` aria-label="${esc(label)}"` : ''}>
           <span class="nav-icon">${r.icon}</span><span class="nav-label">${esc(r.title)}</span>${badge}
         </button>`;
     }).join('');
@@ -232,6 +233,15 @@ export class Sidebar {
     if (on) this.playing.add(route); else this.playing.delete(route);
     const item = this.nav.querySelector(`[data-route="${route}"]`);
     if (item) item.classList.toggle('playing', on);
+  }
+
+  /** 메뉴의 스크린리더 이름 — 점·숫자만으로는 읽히지 않는 상태(재생 중·패인 수)를 말로. 빈 값이면 보이는 글자 그대로. */
+  setNavLabel(route, label) {
+    if (!this.navLabels) this.navLabels = new Map();
+    if (label) this.navLabels.set(route, label); else this.navLabels.delete(route);
+    const item = this.nav.querySelector(`[data-route="${route}"]`);
+    if (!item) return;
+    if (label) item.setAttribute('aria-label', label); else item.removeAttribute('aria-label');
   }
 
   setActive(route) {

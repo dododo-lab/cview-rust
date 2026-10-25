@@ -45,19 +45,44 @@ export function motionReduced() {
  * - 판은 transform(translate)·크기만 바꾼다. 처음 놓을 때·모션 줄이기면 애니메이션 없이 바로.
  * - 고른 칸이 바뀌면(class) 다시 놓고, 세그먼트 크기가 바뀌면(사이드바 접기·창 크기) ResizeObserver 로 맞춘다.
  * - 세그먼트를 통째로 다시 그리면(innerHTML) 새 세그먼트를 찾아 붙인다.
+ * - 숨은 페이지에서 고른 칸이 바뀌면(크기 0) 놓지 못한 채로 기억해 두고, 다시 보이면(IntersectionObserver) 놓는다.
+ *   ResizeObserver 만으로는 다시 보일 때 크기가 같다고 보고 부르지 않는 경로가 있어 판이 옛 칸에 남았다.
  */
+let replaceDirtyGliders = () => {};
+/** 화면을 바꾼 뒤(app.js navigate) 숨어 있다 보이게 된 세그먼트의 판을 다시 놓는다 — 관찰자 콜백보다 먼저 맞춘다. */
+export function refreshSegmentGliders() { replaceDirtyGliders(); }
+
 export function installSegmentGlider() {
   const tracked = new WeakSet();
+  const dirty = new Set();
   const ro = new ResizeObserver((entries) => {
     for (const e of entries) {
-      if (!e.target.isConnected) { ro.unobserve(e.target); continue; }
+      if (!e.target.isConnected) { ro.unobserve(e.target); dirty.delete(e.target); continue; }
       place(e.target, false);
     }
   });
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.target.isConnected) { io.unobserve(e.target); dirty.delete(e.target); continue; }
+      if (e.isIntersecting && dirty.has(e.target)) place(e.target, false);
+    }
+  });
+  replaceDirtyGliders = () => {
+    for (const box of [...dirty]) {
+      if (!box.isConnected) { io.unobserve(box); dirty.delete(box); continue; }
+      place(box, false);
+    }
+  };
   function place(box, animate = true) {
     const active = box.querySelector(':scope > .seg.active');
     let g = box.querySelector(':scope > .seg-glider');
-    if (!active || !active.offsetWidth) { if (g) g.style.opacity = '0'; return; }
+    if (!active || !active.offsetWidth) {
+      if (g) g.style.opacity = '0';
+      // 숨어 있어 못 놓음 — 다시 보이면 놓는다(고른 칸이 없는 세그먼트는 기다리지 않는다).
+      if (active && !dirty.has(box)) { dirty.add(box); io.observe(box); }
+      return;
+    }
+    if (dirty.delete(box)) io.unobserve(box);
     box.classList.add('has-glider'); // position:relative — 아래 offset 이 이 상자 기준이 되게 먼저 단다
     if (!g) {
       g = document.createElement('span');

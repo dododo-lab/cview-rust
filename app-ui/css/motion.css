@@ -518,3 +518,15 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
 :root[data-motion="reduced"] .hm :is(svg, svg *, .app-logo, .brand-sheen, .account-avatar, .side-live-avatar),
 :root[data-motion="reduced"] .brand-sheen::before { animation: none !important; }
 :root[data-motion="reduced"] .brand-sheen { display: none; }
+
+/* ── 라이브 메뉴 라우팅·머리줄 (UX 리뷰) ── */
+/* 머리줄 높이 하나로(DS-1) — 라이브 목록·예전 시청 화면도 멀티라이브(위아래 8px + 전환 버튼 30px)와 같은 46px.
+   [라이브|멀티라이브] 전환 버튼이 화면을 오가도 위아래로 뛰지 않는다. */
+.page[data-page="live"] > .page-header.ph-compact,
+.viewer-header.ph-compact { padding-top: var(--sp-sm); padding-bottom: var(--sp-sm); }
+/* 목록 화면 설명은 머리줄 대신 본문 첫 줄 */
+.page[data-page="live"] > .live-lead { margin: calc(-1 * var(--sp-sm)) 0 var(--sp-lg); }
+/* 섹션 안 짧은 안내(로그인·한쪽 실패) */
+.live-note { display: flex; align-items: center; gap: 4px; margin: 0; color: var(--text-tertiary); font-size: var(--fs-caption); }
+/* 숫자가 갱신돼도 폭이 흔들리지 않게(DT-3) */
+.recent-meta, .badge-viewers, .badge-uptime { font-variant-numeric: tabular-nums; }
