@@ -508,10 +508,11 @@
    · 채팅: 선택 패인과 같은 색 그림자로 둘을 잇는다.
    · 소리: 배지(.ml-pane-sound). 채널 색은 패인 아바타 링·통합 채팅 줄 색과도 같다.
    그림자는 정적으로만 — 크기 애니메이션은 영상 위를 매 프레임 다시 그린다. 페이지 여백(8px) 안에 들게 번짐을 작게 둔다.
-   다크(기본)는 밝은 색조를 진하게, 라이트는 어둡게·옅게. */
+   다크(기본)는 어두운 바탕에서 빛처럼 보이게 밝은 파스텔 색조를 더 짙게, 검은 그림자는 옅게(색을 덮지 않게).
+   라이트는 어두운 색조를 옅게. */
 .ml-pane, .ml-chat {
-  --ml-ring: hsl(var(--ml-hue, 158) 85% 66%); --ml-glow: hsl(var(--ml-hue, 158) 85% 60%);
-  --ml-drop: rgba(0, 0, 0, 0.45); --ml-glow-a: 16%; --ml-glow-sel: 34%;
+  --ml-ring: hsl(var(--ml-hue, 158) 85% 66%); --ml-glow: hsl(var(--ml-hue, 158) 100% 78%);
+  --ml-drop: rgba(0, 0, 0, 0.28); --ml-glow-a: 26%; --ml-glow-sel: 46%;
 }
 :root[data-theme="light"] :is(.ml-pane, .ml-chat) {
   --ml-ring: hsl(var(--ml-hue, 158) 75% 44%); --ml-glow: hsl(var(--ml-hue, 158) 75% 50%);
@@ -571,13 +572,17 @@
 .ml-mc-cell {
   min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: var(--radius-md);
   border: 0; background: var(--surface-base);
-  box-shadow: 0 1px 4px var(--mc-drop, rgba(0, 0, 0, 0.4)), 0 3px 10px -2px color-mix(in srgb, var(--mc-color) 16%, transparent);
+  box-shadow: 0 1px 4px var(--mc-drop), 0 3px 10px -2px color-mix(in srgb, var(--mc-glow) var(--mc-glow-a), transparent);
   transition: box-shadow .2s var(--ease-out, ease-out);
 }
 /* 칸도 패인처럼 선 없이 — 채널 색 그림자만, 보내는(선택) 칸은 조금 더 짙게. */
-.ml-mc-cell.selected { box-shadow: 0 1px 4px var(--mc-drop, rgba(0, 0, 0, 0.4)), 0 3px 12px -1px color-mix(in srgb, var(--mc-color) 34%, transparent); }
-:root[data-theme="light"] .ml-mc-cell { --mc-drop: rgba(15, 20, 30, 0.12); }
-@media (prefers-color-scheme: light) { :root[data-theme="system"] .ml-mc-cell { --mc-drop: rgba(15, 20, 30, 0.12); } }
+.ml-mc-cell.selected { box-shadow: 0 1px 4px var(--mc-drop), 0 3px 12px -1px color-mix(in srgb, var(--mc-glow) var(--mc-glow-sel), transparent); }
+/* 다크는 패인처럼 밝은 파스텔 번짐, 라이트는 칸 색 그대로 옅게. */
+.ml-mc-cell { --mc-glow: hsl(var(--lh, 0) 100% 78%); --mc-drop: rgba(0, 0, 0, 0.28); --mc-glow-a: 24%; --mc-glow-sel: 44%; }
+:root[data-theme="light"] .ml-mc-cell { --mc-glow: var(--mc-color); --mc-drop: rgba(15, 20, 30, 0.12); --mc-glow-a: 16%; --mc-glow-sel: 34%; }
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] .ml-mc-cell { --mc-glow: var(--mc-color); --mc-drop: rgba(15, 20, 30, 0.12); --mc-glow-a: 16%; --mc-glow-sel: 34%; }
+}
 .ml-mc-cell-head {
   flex: none; display: flex; align-items: center; gap: 7px; padding: 6px 9px; min-width: 0; border: 0; cursor: pointer;
   background: color-mix(in srgb, var(--mc-color) 8%, transparent); color: var(--text-primary);
