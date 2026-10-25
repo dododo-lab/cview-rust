@@ -2,7 +2,7 @@
 import { api, listen, Events, isTauri } from './api.js';
 import { toast, icons, dismiss, esc } from './dom.js';
 import { checkForUpdate, currentVersionText, updateDetailHtml, downloadTarget, openDownload, canInstall, installUpdate, progressHtml, renderProgress } from './update-check.js';
-import { installImageFade, installSegmentGlider, installMicroMotion } from './motion.js';
+import { installImageFade, installSegmentGlider, refreshSegmentGliders, installMicroMotion } from './motion.js';
 import { bindCardOpen } from './cards.js';
 import { FollowingPage, PopularPage, SearchPage } from './pages.js';
 import { SettingsPage } from './settings.js';
@@ -63,7 +63,7 @@ let sidebar = null;
 let insights = null;
 
 function renderNav() {
-  sidebar = new Sidebar(document.querySelector('.sidebar'), { routes: ROUTES, onNavigate: (route) => navigate(route === 'live' ? lastLiveMode : route) });
+  sidebar = new Sidebar(document.querySelector('.sidebar'), { routes: ROUTES, onNavigate: (route) => (route === 'live' ? openLiveMenu() : navigate(route)) });
 }
 
 // 사이드바 "방송 중" 목록 — Rust FollowingStore 가 60초 안의 결과를 재사용하므로 주기 호출이 가볍다.
@@ -119,17 +119,26 @@ function setMultiLiveParked(on) {
 function multiLiveSessionFor(channelId) {
   return (pages.multilive.state.sessions || []).find((x) => x.channelId === channelId && x.slot != null) || null;
 }
-async function enterWatch(sessionId) {
-  if (viewer.isPlaying) await viewer.close({ silent: true });
+// 채널을 무대에 올리는 중(openChannel·enterWatch) — 그 사이 오는 상태 알림이 화면을 멀티라이브로 끌고 가지 않게.
+let pendingWatch = 0;
+async function enterWatch(sessionId, { push = true } = {}) {
+  pendingWatch++;
   try {
-    pages.multilive.render(await api.multiLiveWatch(sessionId));
-  } catch (e) { toast(e.message); return; }
-  syncLiveIndicators();
-  await navigate('live');
+    if (viewer.isPlaying) await viewer.close({ silent: true });
+    try {
+      pages.multilive.render(await api.multiLiveWatch(sessionId));
+    } catch (e) { toast(e.message); return; }
+    syncLiveIndicators();
+    await navigate('live', {}, { push });
+  } finally { pendingWatch--; syncLiveIndicators(); }
 }
 async function exitWatch() {
   try { pages.multilive.render(await api.multiLiveWatch(null)); } catch { /* 앱 밖 */ }
   syncLiveIndicators();
+}
+/** 라이브 메뉴인데 목록(LivePage) 대신 무대·예전 시청 화면이 보이는 중 — 숨은 목록은 새로 불러오지 않는다. */
+function liveListHidden() {
+  return current === 'live' && Boolean((viewer && viewer.isPlaying) || isWatching());
 }
 /** 라이브 메뉴 단독 보기가 앞에 떠 있으면 그 도구(ml-watch.js) — 메뉴 동작·단축키가 예전 시청 화면 대신 이리로 간다. */
 function activeWatch() {
@@ -159,30 +168,44 @@ async function closeWatch({ remove = false } = {}) {
     if (current === 'live' && !viewer.isPlaying && !isWatching()) goBack();
   }, 300);
 }
-/** 사이드바 라이브 메뉴 — 단독 재생 중이면 점, 멀티라이브 패인이 있으면 그 수. */
+/**
+ * 사이드바 라이브 메뉴 — 단독 재생 중이면 점, 멀티라이브 패인이 있으면 그 수.
+ * 둘러보다 연 채널(임시 보기)은 멀티라이브에 넣은 패인이 아니라 세지 않는다.
+ */
 function syncLiveIndicators() {
-  sidebar.setPlaying('live', Boolean(viewer && viewer.isPlaying) || isWatching());
-  sidebar.setBadge('live', (pages.multilive && (pages.multilive.state.sessions || []).length) || 0);
+  const playing = Boolean(viewer && viewer.isPlaying) || isWatching();
+  const sessions = (pages.multilive && pages.multilive.state.sessions) || [];
+  const count = sessions.filter((x) => !(transientWatch && x.id === transientWatch.id)).length;
+  sidebar.setPlaying('live', playing);
+  if (pendingWatch) return; // 여는 중 — 막 넣은 패인이 임시 보기로 정해지기 전에 숫자가 튀지 않게(끝나면 다시 맞춘다)
+  sidebar.setBadge('live', count);
+  sidebar.setNavLabel('live', playing || count ? ['라이브', playing && '재생 중', count && `멀티라이브 ${count}개`].filter(Boolean).join(', ') : '');
 }
 
 // 사이드바 라이브 메뉴를 누르면 마지막으로 본 보기(라이브·멀티라이브)로 간다.
 let lastLiveMode = 'live';
+/** 라이브 메뉴로 들어가는 모든 길(사이드바·메뉴 막대·팔레트·허브 링크)이 같은 곳으로 — 마지막으로 본 보기. */
+function openLiveMenu() {
+  return navigate(lastLiveMode);
+}
 
 /**
  * 머리줄 [라이브 | 멀티라이브] 전환.
  * 멀티라이브 → 라이브: 포커스 레이아웃이면 메인 패인, 아니면 선택한 패인의 채널을 같은 세션 그대로(다시 연결 없이)
  * 라이브 무대에 올린다. 나머지 채널은 라이브 머리줄의 채널 고르기로 바꿔 본다.
  * 멀티라이브가 비어 있으면 예전처럼 라이브 화면(재생 중인 방송·이어 볼 채널)으로 간다.
+ * 예전 시청 화면에서 보던 방송이 있으면 그 화면으로만 돌아간다(멀티라이브 패인으로 바꾸지 않는다).
+ * 두 보기는 한 메뉴라 서로를 뒤로 가기 기록에 쌓지 않는다(⌘[ 는 라이브 메뉴 전의 화면으로).
  */
 function switchLiveMode(mode) {
-  if (mode === 'live' && current === 'multilive' && !isWatching()) {
+  if (mode === 'live' && current === 'multilive' && !isWatching() && !viewer.isPlaying) {
     const st = pages.multilive.state;
     const sessions = (st.sessions || []).filter((x) => x.slot != null);
     const mainId = (st.layout === 'focus' && st.focusMainId) || st.selectedId;
     const pick = sessions.find((x) => x.id === mainId) || sessions[0];
-    if (pick) { enterWatch(pick.id); return; }
+    if (pick) return enterWatch(pick.id, { push: false });
   }
-  navigate(mode);
+  return navigate(mode, {}, { push: false });
 }
 
 // 내비게이션 스택 — 원본 AppRouter. 화면마다 파라미터(채널 ID 등)를 가진다.
@@ -211,6 +234,7 @@ async function navigate(route, params = {}, { push = true } = {}) {
   for (const [id, page] of Object.entries(pages)) {
     page.root.hidden = showViewer || id !== (showWatch ? 'multilive' : route);
   }
+  refreshSegmentGliders(); // 숨어 있는 동안 고른 칸이 바뀐 세그먼트(전환 버튼 등)의 판을 제자리로
   if (showViewer) {
     setMenuHidden(viewer.player.iframe, false);
     viewer.reveal();
@@ -274,7 +298,7 @@ function onAuthChanged(status) {
   if (wasLoggedIn !== isLoggedIn()) refreshSidebarFollowing();
   if (viewer) viewer.refreshAuth();
   if (wasLoggedIn !== isLoggedIn()) refreshChatAuth();
-  if (wasLoggedIn !== isLoggedIn() && current && current !== 'search' && !(viewer && viewer.isOpen)) {
+  if (wasLoggedIn !== isLoggedIn() && current && current !== 'search' && !(viewer && viewer.isOpen) && !liveListHidden()) {
     pages[current].show();
   }
   if (current === 'settings') pages.settings.render();
@@ -307,10 +331,14 @@ async function logout() {
  */
 let transientWatch = null; // { id, channelId }
 function keepTransient(channelId = null) {
-  if (transientWatch && (!channelId || transientWatch.channelId === channelId)) transientWatch = null;
+  if (transientWatch && (!channelId || transientWatch.channelId === channelId)) { transientWatch = null; syncLiveIndicators(); }
 }
 async function openChannel(channelId) {
   if (AUX || !pages.multilive) { await openInViewer(channelId); return; }
+  pendingWatch++;
+  try { await openChannelWatch(channelId); } finally { pendingWatch--; syncLiveIndicators(); }
+}
+async function openChannelWatch(channelId) {
   // 이미 멀티라이브에 있는 채널 — 같은 플레이어를 라이브 무대로(원본 commitExistingWatch).
   const existing = multiLiveSessionFor(channelId);
   if (existing) { await enterWatch(existing.id); return; }
@@ -325,8 +353,8 @@ async function openChannel(channelId) {
   await pages.multilive.add(channelId, { quiet: true });
   const s = multiLiveSessionFor(channelId);
   if (!s) return; // 추가 실패 — run 이 이미 알렸다
-  await enterWatch(s.id);
   transientWatch = { id: s.id, channelId };
+  await enterWatch(s.id);
   if (prev && st.canAdd !== false) await pages.multilive.run(api.multiLiveRemove(prev.id));
 }
 
@@ -448,7 +476,7 @@ function installPalette() {
     onPlay: openChannel,
     onSearch: (q) => navigate('search', { query: q }),
     actions: () => [
-      ...ROUTES.map((r) => ({ group: '화면', label: r.title, hint: '이동', run: () => navigate(r.id) })),
+      ...ROUTES.map((r) => ({ group: '화면', label: r.title, hint: '이동', run: () => (r.id === 'live' ? openLiveMenu() : navigate(r.id)) })),
       { group: '화면', label: '검색', hint: '라이브·채널·다시보기', run: () => navigate('search') },
       { group: '보관함', label: '인기 클립', hint: '보관함', run: () => navigate('library', { tab: 'clips' }) },
       { group: '보관함', label: '이어 보기', hint: '다시보기', run: () => navigate('library', { tab: 'continue' }) },
@@ -598,13 +626,14 @@ const MENU_ACTIONS = {
   'nav-following': () => navigate('following'),
   'nav-popular': () => navigate('popular'),
   'nav-multilive': () => navigate('multilive'),
-  'nav-live': () => navigate('live'),
+  'nav-live': () => openLiveMenu(),
   'nav-library': () => navigate('library'),
   'nav-categories': () => navigate('categories'),
   search: () => navigate('search'),
   palette: () => (palette.isOpen ? palette.close() : palette.open()),
   back: () => goBack(),
-  refresh: () => pages[current] && (pages[current].acceptsParams ? pages[current].show({ ...currentParams, refresh: true }) : pages[current].show(true)),
+  // 라이브 메뉴에서 무대·시청 화면이 앞에 있으면 뒤에 숨은 목록은 다시 불러오지 않는다.
+  refresh: () => pages[current] && !liveListHidden() && (pages[current].acceptsParams ? pages[current].show({ ...currentParams, refresh: true }) : pages[current].show(true)),
   'toggle-sidebar': () => sidebar.toggle(),
   'theme-toggle': () => setTheme(resolvedTheme() === 'dark' ? 'light' : 'dark'),
   settings: () => navigate('settings'),
@@ -669,7 +698,7 @@ function installMenuAndShortcuts() {
     if (!(e.metaKey || e.ctrlKey)) return;
     if (e.altKey && e.metaKey) {
       const hub = HUBS.find(([k]) => e.code === `Digit${k}`);
-      if (hub) { e.preventDefault(); navigate(hub[1]); hubFlash(hub[2]); return; }
+      if (hub) { e.preventDefault(); if (hub[1] === 'live') openLiveMenu(); else navigate(hub[1]); hubFlash(hub[2]); return; }
     }
     if (e.key === '/') { e.preventDefault(); showShortcuts(); }
     else if (e.key === ',') { e.preventDefault(); navigate('settings'); }
@@ -719,7 +748,7 @@ async function main() {
     onLogout: logout,
   });
   pages.multilive = new MultiLivePage(content, { isLoggedIn, onAddChannel: addToMultiLive, onOpenChannel: watchFromDrawer });
-  pages.live = new LivePage(content, { isLoggedIn });
+  pages.live = new LivePage(content, { isLoggedIn, modeSwitch: !AUX });
   pages.categories = new CategoriesPage(content);
   pages.multichat = new MultiChatPage(content, { isLoggedIn, onPlay: openChannel });
   pages.chat = new ChatOnlyPage(content, { isLoggedIn, onBack: goBack, onPlay: openChannel, session: AUX === 'chat' ? `win-${Date.now()}` : null, standalone: AUX === 'chat' });
@@ -736,8 +765,9 @@ async function main() {
     bindLiveModeSwitch(switchLiveMode);
   }
   // 화면 머리줄 — 메뉴 아이콘 칩 + 제목 위·설명 아래(page-header.js). 멀티라이브(스스로 꾸민다)·시청 화면은 한 줄.
+  // 라이브 목록도 한 줄 — 전환 버튼이 세 화면(목록·무대·멀티라이브)에서 같은 높이에 있게(설명은 본문 첫 줄로).
   for (const r of ROUTES) {
-    if (pages[r.id] && r.id !== 'multilive') decoratePageHeader(pages[r.id].root.querySelector(':scope > .page-header'), r.icon);
+    if (pages[r.id] && r.id !== 'multilive') decoratePageHeader(pages[r.id].root.querySelector(':scope > .page-header'), r.icon, { compact: r.id === 'live' });
   }
   decoratePageHeader(document.querySelector('.viewer-header'), liveIcon, { compact: true });
   installBackgroundSaver();
@@ -778,10 +808,17 @@ async function main() {
     const page = pages[current];
     if (page) page.acceptsParams ? page.show(currentParams) : page.show(true);
   });
+  // 라이브 무대의 채널이 닫힌 "순간"에만 화면을 옮긴다 — 조건만 보면 목록 화면에 머물 때도(1초마다 오는 알림)
+  // 멀티라이브로 끌려가고, 채널을 여는 도중(무대에 오르기 전)에도 멀티라이브가 번쩍 보였다.
+  let wasWatching = false;
   listen(Events.multiLiveState, () => setTimeout(() => {
     syncLiveIndicators();
+    const watching = isWatching();
+    const ended = wasWatching && !watching;
+    wasWatching = watching;
+    if (pendingWatch) return;
     // 라이브 무대의 채널이 닫혔으면 멀티라이브(남은 패인이 있으면) 또는 이전 화면으로.
-    if (current === 'live' && !viewer.isPlaying && !isWatching()) {
+    if (ended && current === 'live' && !viewer.isPlaying) {
       if (watchCloseBack) { watchCloseBack = false; goBack(); }
       else if ((pages.multilive.state.sessions || []).length) navigate('multilive', {}, { push: false });
       else goBack();
@@ -814,7 +851,7 @@ async function main() {
   installPrefsEffects({
     viewer,
     refreshCurrent: () => {
-      if (viewer.isOpen || palette.isOpen) return;
+      if (viewer.isOpen || palette.isOpen || liveListHidden()) return;
       if (['home', 'following', 'popular', 'categories', 'live'].includes(current)) pages[current].show(current === 'categories' ? {} : false);
       refreshSidebarFollowing();
     },
@@ -878,7 +915,7 @@ function openDeepLink(p) {
       else openChannel(p.channelId);
       break;
     case 'channel': openChannelPage(p.channelId); break;
-    case 'following': navigate(HUB_ROUTE[p.mode] || 'following'); break;
+    case 'following': if (HUB_ROUTE[p.mode] === 'live') openLiveMenu(); else navigate(HUB_ROUTE[p.mode] || 'following'); break;
     case 'multilive': navigate('multilive'); break;
     case 'home': navigate('home'); break;
     case 'search': navigate('search', p.query ? { query: p.query } : {}); break;
