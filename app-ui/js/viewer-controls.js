@@ -89,8 +89,8 @@ export class ViewerControls {
     const reload = root.querySelector('#reload');
     reload.insertAdjacentHTML('beforebegin', `
       <div class="quality-wrap">
-        <button class="quality-btn" id="ctl-quality" title="화질" aria-haspopup="menu">자동</button>
-        <div class="quality-menu" role="menu" hidden></div>
+        <button class="quality-btn" id="ctl-quality" title="화질" aria-haspopup="menu" aria-expanded="false" aria-controls="ctl-quality-menu">자동</button>
+        <div class="quality-menu" id="ctl-quality-menu" role="menu" aria-label="화질" hidden></div>
       </div>
       <button class="icon-btn" id="ctl-shot" title="${kbd('스크린샷 (⌘S)')}" aria-label="스크린샷">${ICON.camera}</button>
       <button class="icon-btn" id="ctl-bookmark" title="북마크" aria-label="북마크">${ICON.bookmark}</button>`);
@@ -104,6 +104,8 @@ export class ViewerControls {
     this.qualityMenu = root.querySelector('.quality-menu');
     this.osd = document.createElement('div');
     this.osd.className = 'player-osd';
+    this.osd.setAttribute('role', 'status');
+    this.osd.setAttribute('aria-live', 'polite');
     this.osd.hidden = true;
     this.stage.append(this.osd);
 
@@ -131,7 +133,29 @@ export class ViewerControls {
       const item = e.target.closest('[data-level]');
       if (item) this.chooseLevel(Number(item.dataset.level));
     });
-    document.addEventListener('click', () => hideWithExit(this.qualityMenu));
+    document.addEventListener('click', () => this.closeQualityMenu());
+    // 메뉴 키보드 — ↑↓ 로 항목 이동, Esc 로 닫고 연 버튼으로 초점을 돌려준다(L-7).
+    this.qualityMenu.addEventListener('keydown', (e) => {
+      const items = [...this.qualityMenu.querySelectorAll('[role="menuitemradio"]')];
+      const i = items.indexOf(document.activeElement);
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.closeQualityMenu(true);
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!items.length) return;
+        const next = e.key === 'ArrowDown' ? (i + 1) % items.length : (i - 1 + items.length) % items.length;
+        items[next].focus();
+      } else if (e.key === 'Home' || e.key === 'End') {
+        e.preventDefault();
+        e.stopPropagation();
+        items[e.key === 'Home' ? 0 : items.length - 1]?.focus();
+      } else if (e.key === 'Tab') {
+        this.closeQualityMenu();
+      }
+    });
     root.querySelector('#ctl-shot').addEventListener('click', () => this.screenshot());
     root.querySelector('#ctl-bookmark').addEventListener('click', () => this.bookmark());
     root.querySelector('#ctl-fullscreen-chat').addEventListener('click', () => this.fullscreen(true));
@@ -204,6 +228,18 @@ export class ViewerControls {
     top?.addEventListener('focusin', this.wake);
     // 영상은 iframe 안이라 그 문서의 마우스 움직임도 받는다(같은 출처).
     const iframe = stage.querySelector('iframe');
+    // 영상 위 투명 클릭 차단층(H-4) — 멀티라이브 .ml-pane-hit 처럼. 영상을 누르면 초점이 iframe 으로 넘어가
+    // 부모 문서의 단축키(Space·M·방향키·F·C·P·L)와 Esc 가 모두 죽고, 무대의 dblclick(전체 화면)도 받지 못했다.
+    // iframe 바로 뒤에 두고 z-index 를 주지 않아 오류 오버레이(다시 시도)·막대·가운데 재생 버튼보다는 아래에 깔린다.
+    const hit = document.createElement('div');
+    hit.className = 'player-hit';
+    hit.setAttribute('aria-hidden', 'true');
+    iframe.after(hit);
+    // 누르면 남아 있던 버튼 초점도 내려놓는다 — Space 가 방금 누른 버튼을 다시 누르지 않고 재생/일시정지로 가게.
+    hit.addEventListener('mousedown', () => {
+      const a = document.activeElement;
+      if (a && a !== document.body && stage.contains(a)) a.blur();
+    });
     const hook = () => {
       try {
         const doc = iframe.contentDocument;
@@ -215,6 +251,17 @@ export class ViewerControls {
         doc.addEventListener('mousedown', this.wake);
         // 휠도 영상(iframe) 위에서 받는다 — 거품이 부모 문서로 오지 않아 영상 위에서는 볼륨이 바뀌지 않았다.
         doc.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
+        // 그래도 초점이 iframe 에 들어가면(전체 화면 전환 등) 키와 두 번 누르기를 부모로 넘긴다(H-4).
+        doc.addEventListener('keydown', (e) => {
+          const t = e.target;
+          if (t && t.closest && t.closest('input, textarea, select, [contenteditable]')) return;
+          const clone = new KeyboardEvent('keydown', {
+            key: e.key, code: e.code, repeat: e.repeat, bubbles: true, cancelable: true,
+            metaKey: e.metaKey, ctrlKey: e.ctrlKey, altKey: e.altKey, shiftKey: e.shiftKey,
+          });
+          if (!document.dispatchEvent(clone)) e.preventDefault();
+        });
+        doc.addEventListener('dblclick', () => this.fullscreen(false));
         // 미디어 이벤트는 거품이 일지 않아 캡처로 받는다.
         const setBuffering = (on) => stage.classList.toggle('buffering', on);
         doc.addEventListener('waiting', () => setBuffering(true), true);
@@ -264,6 +311,8 @@ export class ViewerControls {
       this.playButton.dataset.paused = String(paused);
       this.playButton.innerHTML = paused ? ICON.play : ICON.pause;
       this.playButton.title = paused ? '재생 (Space)' : '일시정지 (Space)';
+      // 스크린리더도 지금 누르면 무엇이 되는지 알게(M-7) — title 만 바뀌고 aria-label 은 "일시정지"로 고정이었다.
+      this.playButton.setAttribute('aria-label', paused ? '재생' : '일시정지');
     }
     const badge = liveBadgeState(this.latency);
     this.liveButton.textContent = badge.text;
@@ -292,24 +341,40 @@ export class ViewerControls {
 
   toggleQualityMenu() {
     if (!this.qualityMenu.hidden) {
-      hideWithExit(this.qualityMenu);
+      this.closeQualityMenu(true);
       return;
     }
     this.viewer.player.call('getLevels');
     this.renderQualityMenu();
     this.qualityMenu.hidden = false;
+    this.qualityButton.setAttribute('aria-expanded', 'true');
+    // 열면 고른 항목(없으면 첫 항목)으로 초점(L-7).
+    const first = this.qualityMenu.querySelector('[aria-checked="true"]') || this.qualityMenu.querySelector('[role="menuitemradio"]');
+    first?.focus();
+  }
+
+  /** 화질 메뉴 닫기 — refocus 면 연 버튼으로 초점을 돌려준다(Esc·다시 누르기). 메뉴 안에 초점이 있었어도 돌려준다. */
+  closeQualityMenu(refocus = false) {
+    if (this.qualityMenu.hidden) return;
+    const inside = this.qualityMenu.contains(document.activeElement);
+    hideWithExit(this.qualityMenu);
+    this.qualityButton.setAttribute('aria-expanded', 'false');
+    if (refocus || inside) this.qualityButton.focus();
   }
 
   renderQualityMenu() {
     const items = [{ index: -1, label: '자동' }, ...this.levels];
+    // 다시 그리면 초점이 사라지므로, 메뉴 안에 초점이 있었으면 같은 자리 항목으로 돌려놓는다.
+    const focused = this.qualityMenu.contains(document.activeElement) ? document.activeElement.dataset.level : null;
     this.qualityMenu.innerHTML = items.map((o) => `
-      <button class="quality-item${o.index === this.manualIndex ? ' active' : ''}" role="menuitemradio" data-level="${o.index}">
+      <button class="quality-item${o.index === this.manualIndex ? ' active' : ''}" role="menuitemradio" aria-checked="${o.index === this.manualIndex}" tabindex="-1" data-level="${o.index}">
         ${esc(o.label)}${o.height >= 1080 ? '<span class="hd">HD</span>' : ''}
       </button>`).join('') || '<div class="quality-empty">화질 정보를 불러오는 중…</div>';
+    if (focused != null) this.qualityMenu.querySelector(`[data-level="${CSS.escape(focused)}"]`)?.focus();
   }
 
   chooseLevel(index) {
-    hideWithExit(this.qualityMenu);
+    this.closeQualityMenu();
     const run = (s) => this.viewer.player.run(s);
     if (index < 0) {
       // 자동 — 상한을 -1 로 지우지 않고 앱 화질 상한·백그라운드 절약 상한을 다시 적용한다.
@@ -422,6 +487,9 @@ export class ViewerControls {
       this.fullscreen(true);
     } else if (e.key.toLowerCase() === 'l' && !mod) {
       this.goLive();
+    } else if (e.key.toLowerCase() === 'b' && !mod && !e.altKey && !e.shiftKey) {
+      // 단독 무대(ml-watch)와 같게 맨 글자 B 도 북마크(M-9 — 두 화면의 키를 맞춘다). 예약 키라 사용자 단축키와 겹치지 않는다.
+      this.bookmark();
     }
   }
 

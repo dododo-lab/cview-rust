@@ -138,6 +138,8 @@ export function eventCardHtml(m, { time = '', badges = '', nick = '', content = 
   const e = eventMeta(m);
   if (!e) return '';
   const anon = m.anonymous || m.nickname === '익명';
+  // 닉네임 자리도 "익명"이면 배지와 "익명"이 두 번 붙는다 — 그때는 배지만 남긴다(D-4).
+  const anonNick = anon && (!m.nickname || m.nickname === '익명');
   return `<div class="ev-card">
     <div class="ev-head">
       <span class="ev-icon">${EVENT_ICONS[e.icon] || ''}</span>
@@ -145,7 +147,7 @@ export function eventCardHtml(m, { time = '', badges = '', nick = '', content = 
       ${e.detail ? `<span class="ev-detail">${esc(e.detail)}</span>` : ''}
       <span class="ev-value">${esc(e.value)}</span>
     </div>
-    <div class="ev-from">${tag}${badges}${nick}${anon ? '<span class="ev-anon">익명</span>' : ''}${time}</div>
+    <div class="ev-from">${tag}${badges}${anonNick ? '' : nick}${anon ? '<span class="ev-anon">익명</span>' : ''}${time}</div>
     ${e.extra ? `<div class="ev-extra">${esc(e.extra)}</div>` : ''}
     ${content ? `<div class="ev-body">${content}</div>` : ''}
   </div>`;

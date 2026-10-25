@@ -101,11 +101,15 @@ export class Viewer {
     return !this.root.hidden;
   }
 
-  showOverlay(text, isError = false) {
+  showOverlay(text, isError = false, detail = '') {
     if (!text) {
       this.overlay.hidden = true;
+      this.overlay.removeAttribute('title');
       return;
     }
+    // 기술적인 원문(hls 오류 종류 등)은 화면 문구 대신 툴팁으로만(L-11).
+    if (detail) this.overlay.title = detail;
+    else this.overlay.removeAttribute('title');
     this.overlay.hidden = false;
     const ended = text === PHASE_TEXT.streamEnded || text === PHASE_TEXT.offline;
     this.overlay.classList.toggle('error', isError);
@@ -223,6 +227,7 @@ export class Viewer {
     this.player.call('setMuted', muted);
     this.muteButton.innerHTML = muted ? icons.muted : icons.volume;
     this.muteButton.title = muted ? '음소거 해제' : '음소거';
+    this.muteButton.setAttribute('aria-label', this.muteButton.title);
   }
 
   toggleMute() {
@@ -241,7 +246,10 @@ export class Viewer {
         this.setMuted(this.startMuted);
       }
     } else if (type === 'fatalError') {
-      this.showOverlay(`재생 오류: ${data.details || data.type || ''}`, true);
+      // 사용자에게는 쉬운 문구, 원문은 툴팁·콘솔에(L-11).
+      const detail = [data.type, data.details].filter(Boolean).join(' · ');
+      if (detail) console.warn('[viewer] 재생 오류:', detail, data);
+      this.showOverlay('영상을 재생하지 못했습니다. 잠시 뒤 다시 시도해 주세요.', true, detail ? `오류 정보: ${detail}` : '');
     } else if (type === 'playbackState') {
       if (data.state === 'stalled') this.showOverlay(PHASE_TEXT.buffering);
       else this.showOverlay('');
