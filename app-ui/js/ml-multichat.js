@@ -14,6 +14,7 @@ import { esc } from './dom.js';
 import { mergedLinesHtml } from './multichat.js';
 import { applyChatSkin } from './chat-extras.js';
 import { onChatPrefs } from './chat-prefs.js';
+import { bindMenuKeys, focusFirstMenuItem } from './ml-pane-controls.js';
 
 const STORE_KEY = 'cview.ml.chatView';
 const MODES = [
@@ -80,7 +81,17 @@ export class MultiLiveMergedChat {
     header.insertBefore(wrap, header.querySelector('.chat-hbtn') || null);
     this.button = wrap.querySelector('.ml-merge-btn');
     this.menu = wrap.querySelector('.ml-mc-menu');
-    this.button.addEventListener('click', (e) => { e.stopPropagation(); this.openMenu(this.menu.hidden); });
+    // 키보드 — 키보드로 열면 지금 보기(없으면 첫 항목)로, ↑↓ 이동, 고르거나 Esc 로 닫으면 연 버튼으로 초점을 돌려준다.
+    bindMenuKeys(this.menu);
+    this.button.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = this.menu.hidden;
+      this.openMenu(open);
+      if (open && this.button.matches(':focus-visible')) {
+        const cur = this.menu.querySelector('[data-mc-view].active');
+        if (cur) cur.focus({ preventScroll: true }); else focusFirstMenuItem(this.menu);
+      }
+    });
     this.menu.addEventListener('click', (e) => {
       const b = e.target.closest('[data-mc-view]');
       if (b) { this.setMode(b.dataset.mcView); this.openMenu(false); }
@@ -98,8 +109,10 @@ export class MultiLiveMergedChat {
   get on() { return this.mode !== 'off'; }
 
   openMenu(open) {
+    const back = !open && this.menu.contains(document.activeElement); // 숨으며 초점이 body 로 떨어지지 않게
     this.menu.hidden = !open;
     this.button.setAttribute('aria-expanded', String(open));
+    if (back) this.button.focus({ preventScroll: true });
   }
 
   setMode(mode) {
@@ -145,7 +158,7 @@ export class MultiLiveMergedChat {
         c = { key: sessionKey(s.id), chatChannelId: s.chatChannelId, channelId: s.channelId, name, hue: hue ?? 0 };
         c.cell = document.createElement('section');
         c.cell.className = 'ml-mc-cell';
-        c.cell.innerHTML = `<button type="button" class="ml-mc-cell-head" data-session="${esc(s.id)}"><i></i><span class="ellipsis"></span><b class="ml-mc-cell-send">보내기</b></button>
+        c.cell.innerHTML = `<button type="button" class="ml-mc-cell-head" data-session="${esc(s.id)}"><i></i><span class="ellipsis"></span><b class="ml-mc-cell-send" title="채팅 입력이 이 채널로 갑니다">입력 대상</b></button>
           <div class="chat-list"><div class="empty">새 메시지를 기다리는 중…</div></div>`;
         c.list = c.cell.querySelector('.chat-list');
         this.conns.set(s.id, c);

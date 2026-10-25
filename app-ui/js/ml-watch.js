@@ -70,6 +70,15 @@ export class WatchTools {
       const b = e.target.closest('[data-rail-channel]');
       if (b) window.dispatchEvent(new CustomEvent('cview:play', { detail: { channelId: b.dataset.railChannel } }));
     });
+    // 넘치면 말없이 자르지 않는다 — 가로로 넘겨 볼 수 있고(CSS), 넘친 쪽 끝을 흐리게 한다.
+    this.rail.addEventListener('scroll', () => this.syncRailFade(), { passive: true });
+    new ResizeObserver(() => this.syncRailFade()).observe(this.rail);
+    // 세로 휠로도 가로로 넘긴다(트랙패드 가로 밀기는 그대로)
+    this.rail.addEventListener('wheel', (e) => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || this.rail.scrollWidth <= this.rail.clientWidth) return;
+      e.preventDefault();
+      this.rail.scrollLeft += e.deltaY;
+    }, { passive: false });
 
     this.root.addEventListener('click', (e) => {
       const b = e.target.closest('[data-mw]');
@@ -189,6 +198,15 @@ export class WatchTools {
       return `<button class="rail-item" data-rail-channel="${esc(l.channelId)}" title="${esc(l.channelName)} · ${esc(l.liveTitle || '')} — 이 방송으로 바꿔 보기">${avatar ? `<img class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar">${esc((l.channelName || '?').slice(0, 1))}</span>`}</button>`;
     }).join('');
     this.rail.hidden = !others.length;
+    requestAnimationFrame(() => this.syncRailFade());
+  }
+
+  /** 다른 방송 줄 끝 흐림 — 오른쪽(왼쪽)에 가려진 항목이 있을 때만. */
+  syncRailFade() {
+    const r = this.rail;
+    const over = !r.hidden && r.scrollWidth > r.clientWidth + 1;
+    r.classList.toggle('fade-start', over && r.scrollLeft > 1);
+    r.classList.toggle('fade-end', over && r.scrollLeft + r.clientWidth < r.scrollWidth - 1);
   }
 
   // ── 채팅 표시 방식 (PLY-12) — 예전 시청 화면과 같은 설정(chat.displayMode)을 쓴다 ──
@@ -208,7 +226,10 @@ export class WatchTools {
     this.body.style.setProperty('--overlay-w', `${Math.min(560, Math.max(240, Number(p.overlayWidth) || 320))}px`);
     for (const b of this.root.querySelectorAll('[data-mw="chatmode"]')) {
       b.title = `${CHAT_MODE_LABEL[mode]} — 눌러서 바꾸기 (C)`;
-      b.classList.toggle('active', mode !== 'side');
+      // 좁은 패인의 ⋯ 메뉴 항목(ml-pane-controls.js)은 지금 방식을 글자로 — 막대 단추는 켜짐 색으로
+      const label = b.classList.contains('ml-menu-item') ? b.querySelector('span') : null;
+      if (label) label.textContent = `${CHAT_MODE_LABEL[mode]} — 바꾸기`;
+      else b.classList.toggle('active', mode !== 'side');
     }
     this.page.reportStageSize();
   }
