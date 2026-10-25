@@ -38,6 +38,7 @@ url.workspace = true
 async-trait.workspace = true
 futures-util.workspace = true
 percent-encoding = "2"
+sha2 = "0.10"
 reqwest.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }

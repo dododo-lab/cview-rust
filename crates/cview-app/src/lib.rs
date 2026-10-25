@@ -19,6 +19,7 @@ pub mod playback;
 pub mod state;
 pub mod system;
 pub mod tray;
+pub mod updater;
 pub mod webview_store;
 pub mod window_prefs;
 pub mod windows;
@@ -306,6 +307,7 @@ pub fn run() {
             system::notify_send,
             system::notify_permission,
             system::update_check,
+            updater::update_install,
             commands::content::open_path,
             commands::content::open_notification_settings,
             commands::download::download_start,
