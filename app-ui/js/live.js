@@ -20,7 +20,7 @@ export class LivePage {
       <header class="page-header" data-tauri-drag-region>
         <h1 class="page-title">라이브</h1>
         ${modeSwitch ? liveModeSwitch('live') : ''}
-        <div class="grow"></div>
+        <div class="grow" data-tauri-drag-region></div>
         <button class="icon-btn round" data-action="refresh" title="새로고침" aria-label="새로고침">${refreshIcon}</button>
       </header>
       <p class="page-subtitle live-lead">볼 방송을 고르세요 — 최근 본 채널과 지금 방송 중인 채널</p>

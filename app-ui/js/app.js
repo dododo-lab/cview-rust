@@ -19,7 +19,7 @@ import { ChannelPage } from './channel.js';
 import { MediaPage } from './media.js';
 import { LibraryPage, libraryIcon } from './library.js';
 import { StatsPage, statsIcon } from './stats.js';
-import { loadShortcuts } from './shortcuts.js';
+import { loadShortcuts, shortcutHelpRows } from './shortcuts.js';
 import { InsightPanel } from './insight-panel.js';
 import { installA11y } from './a11y.js';
 import { splashStep, hideSplash, showWelcome } from './onboarding.js';
@@ -502,9 +502,10 @@ function installPalette() {
 
 // ── 메뉴·단축키·정보·오프라인 (SYS-01·02·03·09·12) ─────────────────
 
-const SHORTCUTS = [
+// '시청' 묶음은 바꿀 수 있는 단축키를 따르므로 열 때마다 만든다(shortcuts.js shortcutHelpRows).
+const shortcutGroups = () => [
   ['탐색', [['⌘1 ~ ⌘7', '홈 · 팔로잉 · 인기 · 멀티라이브 · 라이브 · 보관함 · 카테고리'], ['⌘K', '명령 팔레트'], ['⌘F', '검색'], ['⌘[  /  ⌥←', '뒤로'], ['⌘R', '새로고침'], ['⌘\\', '사이드바 접기'], ['⇧⌘L', '다크/라이트 전환'], ['⌘,', '설정']]],
-  ['시청', [['Space', '재생/일시정지'], ['M', '음소거'], ['↑ ↓', '볼륨'], ['L', '라이브로 이동'], ['← →', '되감기 10초 (⇧ 60초)'], ['C', '채팅 표시 방식'], ['B / ⇧⌘B', '북마크'], ['⌘S', '스크린샷'], ['⇧⌘F', '영상 전체 화면'], ['⌃⌘F', '영상+채팅 전체 화면'], ['⌘W / Esc', '시청 화면 닫기']]],
+  ['시청', shortcutHelpRows()],
   ['채팅', [['⇧⌘K', '채팅 지우기'], ['⌘J', '자동 스크롤'], [':이름', '이모티콘 자동완성'], ['@닉네임', '멘션 자동완성'], ['우클릭', '메시지 메뉴'], ['더블클릭', '프로필']]],
 ];
 
@@ -540,7 +541,7 @@ function showSheet(html, cls = '') {
 }
 
 function showShortcuts() {
-  showSheet(`<h2>키보드 단축키</h2><div class="shortcut-cols">${SHORTCUTS.map(([g, list]) => `
+  showSheet(`<h2>키보드 단축키</h2><div class="shortcut-cols">${shortcutGroups().map(([g, list]) => `
     <section><h3>${g}</h3>${list.map(([k, d]) => `<div class="shortcut-row"><kbd>${kbd(k)}</kbd><span>${kbd(d)}</span></div>`).join('')}</section>`).join('')}</div>`, 'wide');
 }
 
