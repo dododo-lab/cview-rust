@@ -133,10 +133,18 @@ impl EmoticonItem {
 pub struct EmoticonDeploy {
     #[serde(alias = "emojiPacks", default, skip_serializing_if = "Option::is_none")]
     pub emoticon_packs: Option<Vec<EmoticonPack>>,
-    #[serde(alias = "subscriptionEmojiPacks", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        alias = "subscriptionEmojiPacks",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub subscription_emoticon_packs: Option<Vec<EmoticonPack>>,
     /// 치트키 팩(`cheatKeyEmojiPacks`) — 웹은 일반 팩 뒤에 붙인다.
-    #[serde(alias = "cheatKeyEmojiPacks", default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        alias = "cheatKeyEmojiPacks",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
     pub cheat_key_emoticon_packs: Option<Vec<EmoticonPack>>,
 }
 

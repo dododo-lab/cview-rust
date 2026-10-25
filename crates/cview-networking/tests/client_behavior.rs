@@ -838,7 +838,10 @@ async fn basic_emoticon_packs_reads_new_emoji_packs_shape() {
     assert!(!map.contains_key("s_2"), "잠긴 2티어는 쓸 수 없다");
     assert!(!map.contains_key("l_1"));
     let json = serde_json::to_value(&packs[0]).unwrap();
-    assert_eq!(json["emoticonPackId"], "dp_1", "화면에는 예전 필드 이름으로 보낸다");
+    assert_eq!(
+        json["emoticonPackId"], "dp_1",
+        "화면에는 예전 필드 이름으로 보낸다"
+    );
     assert_eq!(json["emoticons"][0]["emoticonId"], "d_1");
 }
 
