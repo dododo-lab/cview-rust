@@ -8,9 +8,39 @@
 import { esc, toast, hideWithExit } from './dom.js';
 import { qualityOptions, liveBadgeState, togglePipFor, installVolumeReveal } from './viewer-controls.js';
 import { ADJUST_RANGES, applyPicture, pictureFor, resetAdjust, setPicture } from './picture.js';
-import { watchBarHtml, watchBarEndHtml } from './ml-watch.js';
+import { watchBarHtml, watchBarEndHtml, WATCH_ICON } from './ml-watch.js';
 
 const IDLE_MS = 2500;
+
+/** 메뉴 안에서 보이는(누를 수 있는) 항목 — 숨은 좁은 화면 전용 항목은 뺀다. */
+function menuItems(menu) {
+  return [...menu.querySelectorAll('button:not(:disabled), input, select')].filter((el) => el.getClientRects().length > 0);
+}
+
+/** 메뉴의 첫 항목으로 초점을 옮긴다(키보드로 열었을 때). */
+export function focusFirstMenuItem(menu) {
+  menuItems(menu)[0]?.focus({ preventScroll: true });
+}
+
+/**
+ * 메뉴 키보드 — ↑↓ 로 항목 사이를 돌고 Home/End 로 처음·끝. 슬라이더(range) 위의 ↑↓ 는 값 조절이라 그대로 둔다.
+ * 머리줄 ⋯ 메뉴·채팅 보기 메뉴·패인 ⚙/⋯ 메뉴가 같이 쓴다.
+ */
+export function bindMenuKeys(menu) {
+  menu.addEventListener('keydown', (e) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key) || e.target.matches?.('input[type="range"], select')) return;
+    const items = menuItems(menu);
+    if (!items.length) return;
+    e.preventDefault();
+    const i = items.indexOf(document.activeElement);
+    let next;
+    if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = items.length - 1;
+    else if (i < 0) next = e.key === 'ArrowDown' ? 0 : items.length - 1;
+    else next = (i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+    items[next].focus({ preventScroll: true });
+  });
+}
 
 export const PANE_ICON = {
   play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5-13-7.5Z"/></svg>',
@@ -33,6 +63,7 @@ export function paneControlsHtml() {
   const I = PANE_ICON;
   return `
       <button class="ml-center-play" data-mp="play" aria-label="재생">${I.play}</button>
+      <span class="ml-paused-label" aria-hidden="true">일시정지됨</span>
       <div class="spinner ml-buffer" aria-hidden="true"></div>
       <div class="ml-pane-bar">
         <button class="ml-pane-btn" data-mp="play" title="일시정지" aria-label="일시정지">${I.pause}</button>
@@ -56,6 +87,7 @@ export function paneControlsHtml() {
         <button class="ml-menu-item" data-ml="retry">${I.retry}<span>다시 연결</span></button>
         <button class="ml-menu-item ml-narrow-only" data-mp="pip">${I.pip}<span>PiP</span></button>
         <button class="ml-menu-item ml-narrow-only" data-ml="single">${I.expand}<span>이 채널만 크게</span></button>
+        <button class="ml-menu-item ml-watch-only" data-mw="chatmode">${WATCH_ICON.chat}<span>채팅 표시 방식</span></button>
       </div>`;
 }
 
@@ -82,6 +114,8 @@ export class PaneControls {
     this.audioButton = this.el.querySelector('.ml-vol [data-ml="audio"]');
 
     this.el.addEventListener('click', (e) => this.onClick(e));
+    bindMenuKeys(this.gearMenu);
+    bindMenuKeys(this.moreMenu);
     this.gearMenu.addEventListener('input', (e) => this.onAdjustInput(e));
     this.range.addEventListener('input', () => this.setGain(Number(this.range.value) / 100));
     this.volumeReveal = installVolumeReveal(this.el.querySelector('.ml-vol'), this.range);
@@ -154,9 +188,32 @@ export class PaneControls {
     }
   }
 
-  /** 주기적으로(페이지가 보일 때) 영상 상태를 막대에 맞춘다. */
+  /**
+   * 슬롯에 다른 세션이 들어왔을 때 — 앞 채널의 볼륨 배율(0 이면 새 채널도 무음)·되돌릴 볼륨·수동 화질·지연을 넘기지 않는다.
+   * 화면 보정은 채널마다 기억하므로 setChannel 이 따로 건다.
+   */
+  reset() {
+    const manual = this.manualIndex >= 0;
+    this.gain = 1;
+    this.lastGain = undefined;
+    this.manualIndex = -1;
+    this.latency = 0;
+    this.levels = [];
+    this.audible = false;
+    this.range.value = '100';
+    this.syncRangeFill();
+    this.closeMenus();
+    this.el.classList.remove('audible', 'paused', 'buffering');
+    // 앞 채널에서 고른 화질 고정을 푼다(자동 — 매니저의 화질 상한은 그대로).
+    if (manual) this.bridge.run('try { if (typeof setLockTopLevel === "function") setLockTopLevel(false); if (hls) { hls.currentLevel = -1; hls.loadLevel = -1; if (typeof applyAdaptiveLevelCap === "function") applyAdaptiveLevelCap(); } } catch (e) {}');
+    this.patchVolume();
+  }
+
+  /** 주기적으로(페이지가 보일 때) 영상 상태를 막대에 맞춘다. audible 은 Rust 가 정한 '들리는 패인'. */
   sync(audible) {
     this.audible = audible;
+    // 소리 배지·초록 아이콘은 실제로 소리가 날 때만(볼륨 0 으로 끈 패인은 '소리 남'이 아니다).
+    this.el.classList.toggle('audible', Boolean(audible) && this.gain > 0);
     const v = this.video;
     const paused = Boolean(v && v.paused && v.readyState > 0);
     if (paused !== this.el.classList.contains('paused')) {
@@ -190,7 +247,7 @@ export class PaneControls {
   // ── 동작 ─────────────────────────────────
 
   onClick(e) {
-    const menuItem = e.target.closest('.ml-pane-menu [data-ml], .ml-pane-menu [data-mp]');
+    const menuItem = e.target.closest('.ml-pane-menu [data-ml], .ml-pane-menu [data-mp], .ml-pane-menu [data-mw]');
     const action = e.target.closest('[data-mp]');
     if (!e.target.closest('.ml-pane-menu') && !e.target.closest('[data-mp="gear"], [data-mp="more"]')) this.closeMenus();
     // 화면 보정(선명한 화면·밝기 등)은 여러 번 만지므로 메뉴를 닫지 않는다.
@@ -224,7 +281,7 @@ export class PaneControls {
     this.menuButton = this.el.querySelector(`[data-mp="${menu === this.gearMenu ? 'gear' : 'more'}"]`);
     this.menuButton?.setAttribute('aria-expanded', 'true');
     // 키보드로 열었으면 첫 항목으로 — 마우스로 열었으면 초점은 그대로(:focus-visible 이 아니다)
-    if (this.menuButton?.matches(':focus-visible')) menu.querySelector('button:not(:disabled), input, select')?.focus({ preventScroll: true });
+    if (this.menuButton?.matches(':focus-visible')) focusFirstMenuItem(menu);
     this.wake();
   }
 
@@ -357,9 +414,14 @@ export class PaneControls {
     return true;
   }
 
-  /** 패인(영상 위 포함) 휠 — 패인 볼륨 ±5. */
+  /**
+   * 패인(영상 위 포함) 휠 — 이미 소리 나는 패인의 볼륨만 ±5.
+   * 들리지 않는 패인 위에서는 아무것도 하지 않는다 — 트랙패드로 스치기만 해도 setGain → makeAudible → 선택으로
+   * 소리·채팅·포커스 메인이 한꺼번에 바뀌었다. 선택은 클릭으로만 한다.
+   */
   onWheel(e) {
     if (e.target.closest && e.target.closest('.ml-pane-menu')) return;
+    if (!this.audible) return;
     e.preventDefault();
     const next = Math.min(100, Math.max(0, Number(this.range.value) + (e.deltaY > 0 ? -5 : 5)));
     if (String(next) === this.range.value) return;

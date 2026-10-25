@@ -12,6 +12,7 @@ import { motionReduced } from './motion.js';
 const EASE = 'cubic-bezier(0.32, 0.72, 0, 1)';
 const MOVE_MS = 340;
 const ENTER_MS = 300;
+const ENTER_HOLD_MS = 90; // 새 패인이 나타나기 전 잠깐 — 추가 직후의 선택(메인으로) 응답을 기다린다
 const EXIT_MS = 220;
 const DRAG_THRESHOLD = 6;
 
@@ -31,28 +32,38 @@ export function snapshotPanes(panes) {
   return rects;
 }
 
-/** 새 배치가 적용된 뒤 — 이전 자리에서 새 자리로 미끄러지고, 새로 생긴 패인은 커지며 나타난다. */
+/**
+ * 새 배치가 적용된 뒤 — 이전 자리에서 새 자리로 미끄러지고, 새로 생긴 패인은 커지며 나타난다.
+ * - 이동은 균등 scale(가로·세로 같은 배율, 이전 칸 안에 들게) + 가운데 맞춤 — scale(sx, sy) 는 340ms 동안
+ *   영상·글자·모서리를 찌그러뜨렸다.
+ * - 새 패인은 ENTER_HOLD_MS 동안 보이지 않다가 나타난다. 그 사이 배치가 또 바뀌면(채널 추가 직후 선택 → 메인으로)
+ *   옮겨 가지 않고 최종 자리에서 나타난다 — 서브 칸에 나타났다가 메인으로 다시 날아가는 두 번 움직임이 없다.
+ */
 export function playLayoutMotion(panes, before) {
   if (!motionEnabled()) return;
+  const now = performance.now();
   for (const [slot, p] of panes) {
     if (p.el.hidden || p.exiting) continue;
     const b = p.el.getBoundingClientRect();
     if (!b.width || !b.height) continue;
     const a = before.get(slot);
-    if (!a) {
+    const holding = p.enterHoldUntil && now < p.enterHoldUntil;
+    if (!a || holding) {
+      if (!holding) p.enterHoldUntil = now + ENTER_HOLD_MS;
       p.anim?.cancel();
       p.anim = p.el.animate([
         { opacity: 0, transform: 'scale(0.9)' },
         { opacity: 1, transform: 'none' },
-      ], { duration: ENTER_MS, easing: EASE });
+      ], { duration: ENTER_MS, delay: Math.max(0, p.enterHoldUntil - now), easing: EASE, fill: 'backwards' });
       continue;
     }
-    const dx = a.left - b.left, dy = a.top - b.top;
-    const sx = a.width / b.width, sy = a.height / b.height;
-    if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(sx - 1) < 0.01 && Math.abs(sy - 1) < 0.01) continue;
+    const s = Math.min(a.width / b.width, a.height / b.height);
+    const dx = (a.left + a.width / 2) - (b.left + (b.width * s) / 2);
+    const dy = (a.top + a.height / 2) - (b.top + (b.height * s) / 2);
+    if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(s - 1) < 0.01) continue;
     p.anim?.cancel();
     p.anim = p.el.animate([
-      { transformOrigin: '0 0', transform: `translate(${dx}px, ${dy}px) scale(${sx}, ${sy})` },
+      { transformOrigin: '0 0', transform: `translate(${dx}px, ${dy}px) scale(${s})` },
       { transformOrigin: '0 0', transform: 'none' },
     ], { duration: MOVE_MS, easing: EASE });
   }
@@ -172,7 +183,8 @@ export function bindPaneDrag(page, onDrop) {
     const target = d.target;
     if (target) target.el.classList.remove('drop-target');
     stage.classList.remove('ml-dragging');
-    // 놓은 자리에서 새 자리(또는 제자리)로 미끄러지게 — 다음 render 가 지금 위치를 재고 transform 을 푼다.
+    // 놓은 자리에서 새 자리(또는 제자리)로 미끄러지게 — 새 순서가 담긴 render 가 지금 위치를 재고 transform 을 푼다
+    // (onDrop 이 응답을 기다리는 동안 옛 순서 상태로는 풀지 않는다 — multilive.js dragAwait).
     page.dragRelease = d.pane;
     if (!cancelled && target && target.sessionId && d.pane.sessionId && target !== d.pane) onDrop(d.pane.sessionId, target.sessionId, d.pane);
     else page.render(page.state);

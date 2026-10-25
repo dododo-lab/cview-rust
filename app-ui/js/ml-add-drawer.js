@@ -238,7 +238,8 @@ export class MultiLiveAddDrawer {
     this.el.setAttribute('aria-hidden', 'true');
     this.el.inert = true;
     this.markToggles(false);
-    // 안에 초점이 있었으면(inert 가 body 로 떨어뜨린다) 연 버튼으로 돌려준다
+    // 안에 초점이 있었으면(inert 가 body 로 떨어뜨린다) 연 버튼으로 돌려준다. 가득 차도 여는 버튼은 aria-disabled 라
+    // (disabled 가 아니라) 초점을 받을 수 있다 — 예전엔 열린 채 가득 차면 돌려줄 곳이 없어 초점이 사라졌다.
     if (hadFocus) {
       const shown = (b) => b?.isConnected && b.offsetParent && !b.disabled;
       const back = shown(this.returnFocus) ? this.returnFocus : [...document.querySelectorAll(this.toggleSelector)].find(shown);
@@ -426,10 +427,16 @@ export class MultiLiveAddDrawer {
         this.renderList();
         try {
           await this.onAdd(id);
-          // 방금 추가한 줄 — 체크가 톡 튀고 줄이 잠깐 빛난다(motion.css)
-          this.justAdded = id;
-          clearTimeout(this.justAddedTimer);
-          this.justAddedTimer = setTimeout(() => { this.justAdded = null; if (this.isOpen) this.renderList(); }, 1400);
+          // 방금 추가한 줄 — 체크가 톡 튀고 줄이 잠깐 빛난다(motion.css). onAdd 는 실패를 toast 로 알리고 삼키므로
+          // 실제로 들어갔는지 상태로 확인한다 — 실패했는데 "추가됨" 체크가 나왔다.
+          const added = ((this.getState() || {}).sessions || []).some((s) => s.channelId === id);
+          if (added) {
+            this.justAdded = id;
+            clearTimeout(this.justAddedTimer);
+            this.justAddedTimer = setTimeout(() => { this.justAdded = null; if (this.isOpen) this.renderList(); }, 1400);
+          }
+        } catch (err) {
+          toast(err?.message || '추가하지 못했습니다');
         } finally {
           this.adding.delete(id);
           if (this.isOpen) this.sync(); else this.renderList();
