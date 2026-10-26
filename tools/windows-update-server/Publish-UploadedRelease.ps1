@@ -10,7 +10,7 @@ param(
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 $root = 'C:\CViewUpdates'
-$baseUrl = 'https://win-7sv7uak6k5b.horse-solfege.ts.net'
+$baseUrl = 'https://cv.dododo.app'
 $folder = Join-Path (Join-Path $root 'incoming') $Version
 $artifacts = @(
     (Join-Path $folder "CView_${Version}_arm64.dmg"),

@@ -45,7 +45,7 @@ scripts/release-macos.sh --dmg
 
 **배포용 릴리스 빌드는 매번 업데이트 서버 게시와 검증까지 완료해야 한다.** 설치 파일을 로컬 `dist/`에 만들기만 한 상태는 릴리스 완료로 보지 않는다. 이 규칙은 macOS와 Windows 모두에 적용한다. 개발용 실행·디버그 빌드는 게시 대상이 아니다.
 
-- 업데이트 서버: https://win-7sv7uak6k5b.horse-solfege.ts.net/
+- 업데이트 서버(공개 다운로드·릴리스 페이지): https://cv.dododo.app/
 - 최신 릴리스 피드: https://win-7sv7uak6k5b.horse-solfege.ts.net/releases/latest.json
 - 서버 게시 경로: `C:\CViewUpdates\site`
 - 서버 게시·검증 도구: `C:\CViewUpdates\tools\publish.py`, `C:\CViewUpdates\tools\check_server.py` (전용 `tools\python\python.exe`로 실행)
@@ -66,7 +66,7 @@ scripts/release-macos.sh --dmg
 서버 게시 예시(버전·파일 경로는 실제 빌드 결과로 바꾼다):
 
 ```powershell
-$baseUrl = 'https://win-7sv7uak6k5b.horse-solfege.ts.net'
+$baseUrl = 'https://cv.dododo.app'
 & C:\CViewUpdates\tools\python\python.exe -I -B C:\CViewUpdates\tools\publish.py --root C:\CViewUpdates\site --base-url $baseUrl --version 0.1.21 --artifact C:\Releases\CView_0.1.21_arm64.dmg --artifact C:\Releases\CView_0.1.21_x64-setup.exe --notes-file C:\Releases\notes.txt
 & C:\CViewUpdates\tools\python\python.exe -I -B C:\CViewUpdates\tools\check_server.py --base-url $baseUrl --download
 ```
