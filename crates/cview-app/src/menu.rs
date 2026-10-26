@@ -1,4 +1,5 @@
-//! 앱 메뉴 막대 — 원본 `CViewApp` 의 CommandMenu(재생·채팅·보기·창·도움말) (SYS-03).
+//! 앱 메뉴 막대 — 원본 `CViewApp` 의 CommandMenu(보기·이동·재생·채팅·창·도움말) (SYS-03).
+//! 메뉴마다 종류가 같은 항목끼리 묶고 묶음 사이에 구분선([`SEP`])을 둔다.
 //!
 //! macOS 에서 메뉴 단축키는 웹뷰보다 먼저 키를 가져가므로, 공용 단축키(⌘1~7, ⌘R, ⌘S, ⌘, …)는 메뉴에
 //! 두고 고르면 `menu://action` `{ id }` 로 화면에 넘긴다. 화면(app.js)이 같은 동작을 실행한다.
@@ -13,21 +14,16 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 /// 화면으로 보내는 메뉴 이벤트 이름.
 pub const MENU_ACTION: &str = "menu://action";
 
-/// (id, 표시 이름, 단축키) — 단축키는 Tauri 가속기 문법.
+/// (id, 표시 이름, 단축키) — 단축키는 Tauri 가속기 문법. id 가 빈 [`SEP`] 는 구분선.
 type Item = (&'static str, &'static str, Option<&'static str>);
 
+/// 메뉴 안에서 종류가 다른 항목 묶음 사이에 넣는 구분선.
+const SEP: Item = ("", "", None);
+
+/// 보기 — 화면 다시 그리기와 겉모습(사이드바·테마).
 const VIEW: &[Item] = &[
-    ("nav-home", "홈", Some("CmdOrCtrl+1")),
-    ("nav-following", "팔로잉", Some("CmdOrCtrl+2")),
-    ("nav-popular", "인기", Some("CmdOrCtrl+3")),
-    ("nav-multilive", "멀티라이브", Some("CmdOrCtrl+4")),
-    ("nav-live", "라이브", Some("CmdOrCtrl+5")),
-    ("nav-library", "보관함", Some("CmdOrCtrl+6")),
-    ("nav-categories", "카테고리", Some("CmdOrCtrl+7")),
-    ("search", "검색", Some("CmdOrCtrl+F")),
-    ("palette", "명령 팔레트", Some("CmdOrCtrl+K")),
-    ("back", "뒤로", Some("CmdOrCtrl+[")),
     ("refresh", "새로고침", Some("CmdOrCtrl+R")),
+    SEP,
     (
         "toggle-sidebar",
         "사이드바 접기/펼치기",
@@ -40,12 +36,31 @@ const VIEW: &[Item] = &[
     ),
 ];
 
+/// 이동 — 페이지 이동, 뒤로, 찾아 들어가기(검색·명령 팔레트).
+const GO: &[Item] = &[
+    ("nav-home", "홈", Some("CmdOrCtrl+1")),
+    ("nav-following", "팔로잉", Some("CmdOrCtrl+2")),
+    ("nav-popular", "인기", Some("CmdOrCtrl+3")),
+    ("nav-multilive", "멀티라이브", Some("CmdOrCtrl+4")),
+    ("nav-live", "라이브", Some("CmdOrCtrl+5")),
+    ("nav-library", "보관함", Some("CmdOrCtrl+6")),
+    ("nav-categories", "카테고리", Some("CmdOrCtrl+7")),
+    SEP,
+    ("back", "뒤로", Some("CmdOrCtrl+[")),
+    SEP,
+    ("search", "검색", Some("CmdOrCtrl+F")),
+    ("palette", "명령 팔레트", Some("CmdOrCtrl+K")),
+];
+
+/// 재생 — 재생 제어 / 기록 / 화면 모드 / 닫기.
 const PLAYBACK: &[Item] = &[
     ("play-pause", "재생/일시정지", None),
     ("mute", "음소거", None),
     ("go-live", "라이브로 이동", None),
+    SEP,
     ("screenshot", "스크린샷", Some("CmdOrCtrl+S")),
     ("bookmark", "북마크", Some("CmdOrCtrl+Shift+B")),
+    SEP,
     ("fullscreen", "영상 전체 화면", Some("CmdOrCtrl+Shift+F")),
     (
         "fullscreen-chat",
@@ -53,6 +68,7 @@ const PLAYBACK: &[Item] = &[
         Some(FULLSCREEN_CHAT_ACCEL),
     ),
     ("pip", "화면 속 화면(PiP)", Some("Alt+CmdOrCtrl+P")),
+    SEP,
     ("close-viewer", "시청 화면 닫기", Some("CmdOrCtrl+W")),
 ];
 
@@ -62,30 +78,57 @@ const FULLSCREEN_CHAT_ACCEL: &str = "Cmd+Ctrl+F";
 #[cfg(not(target_os = "macos"))]
 const FULLSCREEN_CHAT_ACCEL: &str = "Ctrl+Shift+Alt+F";
 
+/// 채팅 — 보기 설정·연결 / 지우기(되돌릴 수 없는 동작은 맨 끝).
 const CHAT: &[Item] = &[
-    ("chat-clear", "채팅 지우기", Some("CmdOrCtrl+Shift+K")),
     (
         "chat-autoscroll",
         "자동 스크롤 켜기/끄기",
         Some("CmdOrCtrl+J"),
     ),
     ("chat-reconnect", "채팅 다시 연결", None),
+    SEP,
+    ("chat-clear", "채팅 지우기", Some("CmdOrCtrl+Shift+K")),
 ];
 
+/// 윈도우 — 기본 창 조작 뒤에 붙는 앱 창 열기.
 const WINDOWS: &[Item] = &[
     ("window-player", "새 플레이어 창", Some("CmdOrCtrl+N")),
+    SEP,
     ("window-chat", "채팅 창", Some("CmdOrCtrl+Shift+C")),
     ("window-multichat", "멀티채팅 창", Some("CmdOrCtrl+Shift+M")),
+    SEP,
     ("window-stats", "통계 창", Some("CmdOrCtrl+Shift+T")),
 ];
 
+/// 도움말 — 사용법 안내 / 문제 해결.
 const HELP: &[Item] = &[
     ("shortcuts", "키보드 단축키", Some("CmdOrCtrl+/")),
     ("welcome", "처음 안내 다시 보기", None),
+    SEP,
     ("report-issue", "문제 보고…", None),
     ("open-logs", "데이터 폴더 열기", None),
-    ("notification-settings", "알림 설정 열기…", None),
 ];
+
+/// 앱 메뉴(CView)에 직접 다는 항목.
+const APP_ITEMS: &[&str] = &["about", "check-update", "settings", "notification-settings"];
+
+/// 목록 → 메뉴 항목. [`SEP`] 는 구분선이 된다.
+fn entries<R: Runtime>(
+    app: &AppHandle<R>,
+    list: &[Item],
+) -> tauri::Result<Vec<Box<dyn tauri::menu::IsMenuItem<R>>>> {
+    let built = items(app, list)?;
+    let mut built = built.into_iter();
+    let mut out: Vec<Box<dyn tauri::menu::IsMenuItem<R>>> = Vec::new();
+    for (id, _, _) in list {
+        if id.is_empty() {
+            out.push(Box::new(PredefinedMenuItem::separator(app)?));
+        } else if let Some(item) = built.next() {
+            out.push(Box::new(item));
+        }
+    }
+    Ok(out)
+}
 
 fn items<R: Runtime>(app: &AppHandle<R>, list: &[Item]) -> tauri::Result<Vec<MenuItem<R>>> {
     let keyboard = app
@@ -93,6 +136,7 @@ fn items<R: Runtime>(app: &AppHandle<R>, list: &[Item]) -> tauri::Result<Vec<Men
         .map(|s| s.settings.keyboard())
         .unwrap_or_default();
     list.iter()
+        .filter(|(id, _, _)| !id.is_empty())
         .map(|(id, label, accel)| match user_accelerator(&keyboard, id) {
             // 사용자 단축키가 있는 항목 — 수식 키가 있을 때만 메뉴에 단다(맨 글자는 입력을 빼앗는다).
             Some(user) => MenuItem::with_id(app, *id, *label, true, user.as_deref()),
@@ -180,6 +224,13 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let check_update =
         MenuItem::with_id(app, "check-update", "업데이트 확인…", true, None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", "설정…", true, Some("CmdOrCtrl+,"))?;
+    let notification_settings = MenuItem::with_id(
+        app,
+        "notification-settings",
+        "알림 설정…",
+        true,
+        None::<&str>,
+    )?;
     let app_menu = Submenu::with_items(
         app,
         "CView",
@@ -189,8 +240,12 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &check_update,
             &PredefinedMenuItem::separator(app)?,
             &settings,
+            &notification_settings,
             &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::hide(app, Some("CView 가리기"))?,
+            &PredefinedMenuItem::hide_others(app, Some("기타 가리기"))?,
+            &PredefinedMenuItem::show_all(app, Some("모두 보기"))?,
+            &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::quit(app, Some("CView 종료"))?,
         ],
     )?;
@@ -205,40 +260,42 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
             &PredefinedMenuItem::cut(app, Some("오려두기"))?,
             &PredefinedMenuItem::copy(app, Some("복사"))?,
             &PredefinedMenuItem::paste(app, Some("붙여넣기"))?,
+            &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::select_all(app, Some("모두 선택"))?,
         ],
     )?;
-    let sub = |title: &str, list: &[Item]| -> tauri::Result<Submenu<R>> {
-        let built = items(app, list)?;
-        let refs: Vec<&dyn tauri::menu::IsMenuItem<R>> = built
-            .iter()
-            .map(|i| i as &dyn tauri::menu::IsMenuItem<R>)
-            .collect();
+    // `head` 는 목록 앞에 붙는 기본 항목(윈도우 메뉴의 최소화 등). 둘 다 있으면 사이에 구분선.
+    let sub = |title: &str,
+               head: Vec<Box<dyn tauri::menu::IsMenuItem<R>>>,
+               list: &[Item]|
+     -> tauri::Result<Submenu<R>> {
+        let mut all = head;
+        if !all.is_empty() {
+            all.push(Box::new(PredefinedMenuItem::separator(app)?));
+        }
+        all.extend(entries(app, list)?);
+        let refs: Vec<&dyn tauri::menu::IsMenuItem<R>> = all.iter().map(|i| i.as_ref()).collect();
         Submenu::with_items(app, title, true, &refs)
     };
-    let view = sub("보기", VIEW)?;
-    let playback = sub("재생", PLAYBACK)?;
-    let chat = sub("채팅", CHAT)?;
-    let window_items = items(app, WINDOWS)?;
-    let window = Submenu::with_items(
-        app,
+    let view = sub("보기", Vec::new(), VIEW)?;
+    let go = sub("이동", Vec::new(), GO)?;
+    let playback = sub("재생", Vec::new(), PLAYBACK)?;
+    let chat = sub("채팅", Vec::new(), CHAT)?;
+    let window = sub(
         "윈도우",
-        true,
-        &[
-            &PredefinedMenuItem::minimize(app, Some("최소화"))?,
-            &PredefinedMenuItem::maximize(app, Some("확대/축소"))?,
-            &PredefinedMenuItem::fullscreen(app, Some("전체 화면"))?,
-            &PredefinedMenuItem::separator(app)?,
-            &window_items[0],
-            &window_items[1],
-            &window_items[2],
-            &window_items[3],
+        vec![
+            Box::new(PredefinedMenuItem::minimize(app, Some("최소화"))?),
+            Box::new(PredefinedMenuItem::maximize(app, Some("확대/축소"))?),
+            Box::new(PredefinedMenuItem::fullscreen(app, Some("전체 화면"))?),
         ],
+        WINDOWS,
     )?;
-    let help = sub("도움말", HELP)?;
+    let help = sub("도움말", Vec::new(), HELP)?;
     Menu::with_items(
         app,
-        &[&app_menu, &edit, &view, &playback, &chat, &window, &help],
+        &[
+            &app_menu, &edit, &view, &go, &playback, &chat, &window, &help,
+        ],
     )
 }
 
@@ -249,11 +306,12 @@ pub fn forward<R: Runtime>(app: &AppHandle<R>, id: &str) {
     }
 }
 
+/// 화면으로 넘기는 항목이 든 메뉴 목록 전부.
+const ALL: [&[Item]; 6] = [VIEW, GO, PLAYBACK, CHAT, WINDOWS, HELP];
+
 pub fn is_known(id: &str) -> bool {
-    matches!(id, "about" | "check-update" | "settings")
-        || [VIEW, PLAYBACK, CHAT, WINDOWS, HELP]
-            .iter()
-            .any(|list| list.iter().any(|(i, _, _)| *i == id))
+    !id.is_empty()
+        && (APP_ITEMS.contains(&id) || ALL.iter().any(|list| list.iter().any(|(i, _, _)| *i == id)))
 }
 
 #[cfg(test)]
@@ -263,8 +321,8 @@ mod tests {
     #[test]
     fn ids_are_unique_and_known() {
         let mut seen = std::collections::HashSet::new();
-        for list in [VIEW, PLAYBACK, CHAT, HELP] {
-            for (id, label, _) in list {
+        for list in ALL {
+            for (id, label, _) in list.iter().filter(|(id, _, _)| !id.is_empty()) {
                 assert!(seen.insert(*id), "중복 ID {id}");
                 assert!(!label.is_empty());
                 assert!(is_known(id));
@@ -272,7 +330,33 @@ mod tests {
         }
         assert!(is_known("settings"));
         assert!(is_known("check-update"));
+        assert!(is_known("notification-settings"));
         assert!(!is_known("rm -rf"));
+        assert!(!is_known(""));
+    }
+
+    #[test]
+    fn separators_only_between_groups() {
+        for list in ALL {
+            assert!(!list.first().unwrap().0.is_empty(), "맨 앞 구분선");
+            assert!(!list.last().unwrap().0.is_empty(), "맨 끝 구분선");
+            assert!(
+                !list
+                    .windows(2)
+                    .any(|w| w[0].0.is_empty() && w[1].0.is_empty()),
+                "구분선 연속"
+            );
+        }
+    }
+
+    #[test]
+    fn shortcuts_are_unique() {
+        let mut seen = std::collections::HashSet::new();
+        for (_, _, accel) in ALL.iter().flat_map(|l| l.iter()) {
+            if let Some(a) = accel {
+                assert!(seen.insert(*a), "중복 단축키 {a}");
+            }
+        }
     }
 }
 
