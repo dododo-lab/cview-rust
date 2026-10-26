@@ -200,6 +200,7 @@ pub(crate) struct ClientState {
 pub(crate) struct Inner {
     pub base_url: Url,
     pub game_api_base_url: Url,
+    pub comment_api_base_url: Url,
     pub auth: Option<Arc<dyn AuthTokenProvider>>,
     pub cache: Arc<ResponseCache>,
     pub transport: Arc<dyn HttpTransport>,
@@ -224,6 +225,8 @@ pub struct ClientConfig {
     pub base_url: Url,
     /// Game API 기본 URL (채팅 토큰·userStatus).
     pub game_api_base_url: Url,
+    /// 댓글 API 기본 URL (채널 커뮤니티 글).
+    pub comment_api_base_url: Url,
     pub transport: Arc<dyn HttpTransport>,
 }
 
@@ -234,6 +237,7 @@ impl ClientConfig {
             cache: Arc::new(ResponseCache::default()),
             base_url: Url::parse(DEFAULT_BASE_URL).expect("valid base url"),
             game_api_base_url: Url::parse(GAME_API_BASE_URL).expect("valid game url"),
+            comment_api_base_url: Url::parse(COMMENT_API_BASE_URL).expect("valid comment url"),
             transport,
         }
     }
@@ -243,6 +247,8 @@ impl ClientConfig {
 pub const DEFAULT_BASE_URL: &str = "https://api.chzzk.naver.com";
 /// Game API 기본 URL (chat access token 등).
 pub const GAME_API_BASE_URL: &str = "https://comm-api.game.naver.com/nng_main";
+/// 댓글 API 기본 URL (채널 커뮤니티 글 — 치지직 웹과 같은 주소).
+pub const COMMENT_API_BASE_URL: &str = "https://apis.naver.com/nng_main/nng_comment_api";
 
 /// stale 재검증 동시 수.
 pub const STALE_REVALIDATION_CONCURRENCY: usize = 2;
@@ -369,6 +375,7 @@ impl ChzzkApiClient {
             inner: Arc::new(Inner {
                 base_url: config.base_url,
                 game_api_base_url: config.game_api_base_url,
+                comment_api_base_url: config.comment_api_base_url,
                 auth: config.auth_provider,
                 cache,
                 transport: config.transport,

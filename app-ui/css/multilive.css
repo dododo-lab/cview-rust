@@ -16,7 +16,9 @@
 .ml-header .btn svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
 
 .ml-body { flex: 1; min-height: 0; display: flex; gap: 0; margin-top: var(--sp-sm); position: relative; }
-.ml-body .ml-stage { margin-right: 4px; }
+/* 무대 칸 — 무대(.ml-stage)와 그 아래 단독 보기 채널 정보(.ml-watch-info)를 세로로 쌓는다. 채팅 옆 간격은 이 칸이 갖는다. */
+.ml-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; margin-right: 4px; }
+.ml-main > .ml-stage { min-height: 0; }
 .ml-chat { border-radius: var(--radius-lg); border: 0; overflow: hidden; }
 
 /* 무대 — 세션 수별 격자. 패인 위치는 order 로만 바꾼다(iframe 을 옮기지 않는다). */
@@ -280,7 +282,7 @@
 .ml-body.chat-overlay .ml-chat .chat-line { font-size: var(--ml-chat-font, 12px); }
 /* 오버레이 글자 크기 설정에 맞춰 닉네임·시간·이모티콘·이벤트 카드도 같은 배율로 */
 .ml-body.chat-overlay .ml-chat .chat-list { --chat-scale: var(--ml-chat-scale, 0.857); }
-.ml-body.chat-overlay .ml-stage { margin-right: 0; }
+.ml-body.chat-overlay .ml-main { margin-right: 0; }
 .preset-list { display: flex; flex-direction: column; gap: 6px; max-height: 300px; overflow-y: auto; }
 .preset-row { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--surface-base); border: 1px solid var(--border-subtle); }
 
@@ -679,7 +681,7 @@
 .ml-watch-rail[hidden], .page-multilive:not(.as-watch) .ml-watch-rail { display: none; }
 /* 채팅 표시 방식 — 숨김 / 영상 위(예전 시청 화면과 같은 자리·너비) */
 .ml-body.chat-hidden :is(.ml-chat, .chat-splitter, .chat-reopen) { display: none !important; }
-.ml-body.chat-hidden .ml-stage { margin-right: 0; }
+.ml-body.chat-hidden .ml-main { margin-right: 0; }
 .page-multilive.as-watch .ml-body.chat-overlay .ml-chat { right: 16px; top: 74px; bottom: 60px; width: var(--overlay-w, 320px) !important; border-radius: 16px; }
 /* 영상+채팅 전체 화면 */
 .ml-body:fullscreen { background: var(--background); padding: 8px; }
@@ -687,3 +689,60 @@
 /* 채팅 머리줄 — 도구 단추가 많아 "채팅" 제목이 "채.."로 잘리고 상태가 두 줄로 꺾였다. 제목은 그대로 두고 상태 글자만 줄인다. */
 .ml-chat .chat-header strong { flex: none; }
 .ml-chat .chat-header .chat-state { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── 라이브 단독 보기 — 영상 아래 채널 정보·다시보기·클립·커뮤니티(ml-watch-info.js) ──
+   무대 칸이 세로로 스크롤한다. 영상은 16:9 로 칸 폭을 채우되, 아래 채널 줄(72px)이 늘 보이게 높이를 남긴다 —
+   영상 위 휠은 볼륨이라, 채널 줄이 보여야 그 위에서 휠로 아래 탭까지 넘길 수 있다. */
+.page-multilive.as-watch .ml-main { overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+.page-multilive.as-watch .ml-main > .ml-stage { flex: none; width: 100%; aspect-ratio: 16 / 9; max-height: calc(100% - 72px); }
+.ml-watch-info[hidden], .page-multilive:not(.as-watch) .ml-watch-info { display: none; }
+/* 영상+채팅 전체 화면 — 정보 칸은 빼고 영상이 화면을 채운다 */
+.ml-body:fullscreen .ml-main { overflow: hidden; }
+.ml-body:fullscreen .ml-main > .ml-stage { flex: 1; aspect-ratio: auto; max-height: none; }
+.ml-body:fullscreen .ml-watch-info { display: none; }
+
+.ml-watch-info { flex: none; padding: 12px 6px var(--sp-xl); min-width: 0; }
+.mwi-head { display: flex; align-items: center; gap: 12px; min-height: 48px; min-width: 0; }
+.mwi-head > .avatar { width: 44px; height: 44px; flex: none; border-radius: 50%; }
+.mwi-head > .avatar.live { box-shadow: 0 0 0 2px var(--surface-base), 0 0 0 4px var(--live, #e5262b); }
+.mwi-id { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mwi-id h2 { font-size: 17px; font-weight: 700; letter-spacing: -0.3px; line-height: 1.25; }
+.mwi-id .verified { margin-left: 4px; color: var(--primary-text); font-size: 0.8em; }
+.mwi-live { font-size: var(--fs-body, 14px); color: var(--text-primary); line-height: 1.35; }
+.mwi-sub { font-size: var(--fs-footnote); color: var(--text-tertiary); line-height: 1.35; }
+.mwi-sub .sep { margin: 0 6px; font-style: normal; opacity: 0.6; }
+.mwi-cat { color: var(--primary-text); font-weight: 600; }
+.mwi-actions { flex: none; display: flex; align-items: center; gap: 6px; }
+.mwi-actions .icon-btn.round { width: 32px; height: 32px; }
+.mwi-actions .icon-btn.round svg { width: 16px; height: 16px; }
+.mwi-tabs { margin: var(--sp-lg) 0 var(--sp-md); }
+.mwi-body { min-width: 0; }
+.mwi-body .load-more { display: block; margin: var(--sp-lg) auto 0; }
+.mwi-desc { color: var(--text-secondary); white-space: pre-wrap; line-height: 1.6; user-select: text; max-width: 760px; }
+
+.mwi-posts { display: flex; flex-direction: column; gap: 10px; max-width: 760px; }
+.mwi-post { padding: 14px 16px; border-radius: var(--radius-lg); background: var(--surface-base); border: 1px solid var(--border-subtle); min-width: 0; }
+.mwi-post-head { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: var(--fs-footnote); }
+.mwi-post-head .avatar { width: 28px; height: 28px; flex: none; border-radius: 50%; }
+.mwi-post-head strong { font-size: var(--fs-caption); min-width: 0; }
+.mwi-post-head .verified { color: var(--primary-text); font-size: 11px; }
+.mwi-post-title { flex: none; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 600;
+  color: var(--title-color, var(--text-secondary)); background: color-mix(in srgb, var(--title-color, var(--text-secondary)) 14%, transparent); }
+.mwi-post-head time { margin-left: auto; flex: none; color: var(--text-tertiary); }
+.mwi-post-text { margin-top: 10px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; color: var(--text-primary); user-select: text; }
+.mwi-post-text.clamped { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; overflow: hidden; }
+.mwi-post > .link-btn { margin-top: 4px; }
+.mwi-post-images { display: grid; gap: 4px; margin-top: 10px; border-radius: 10px; overflow: hidden; max-width: 520px; }
+.mwi-post-images.n2, .mwi-post-images.n4 { grid-template-columns: 1fr 1fr; }
+.mwi-post-images.n3 { grid-template-columns: 1fr 1fr 1fr; }
+.mwi-post-img { display: block; padding: 0; border: 0; background: var(--surface-elevated); cursor: pointer; aspect-ratio: 1; overflow: hidden; }
+.mwi-post-images.n1 .mwi-post-img { aspect-ratio: auto; max-height: 360px; }
+.mwi-post-img img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.mwi-post-foot { display: flex; align-items: center; gap: 14px; margin-top: 10px; color: var(--text-tertiary); font-size: var(--fs-footnote); }
+.mwi-post-foot > span { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.mwi-post-foot svg { width: 14px; height: 14px; }
+.mwi-post-foot .link-btn { margin-left: auto; }
+.ml-watch-info .link-btn { color: var(--primary-text); font-size: var(--fs-footnote); font-weight: 600; }
+.ml-watch-info .link-btn:hover { text-decoration: underline; }
+/* 단독 보기에서 채팅을 영상 위에 띄우면 영상 높이까지만(아래 정보 칸을 덮지 않게) — 높이는 multilive.js 가 잰다 */
+.page-multilive.as-watch .ml-body.chat-overlay .ml-chat { bottom: auto; height: calc(var(--ml-stage-h, 100%) - 24px); }

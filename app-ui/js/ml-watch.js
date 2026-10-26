@@ -13,6 +13,7 @@ import { togglePipFor, stamp } from './viewer-controls.js';
 import { seekTarget } from './viewer-extras.js';
 import { compactCount } from './cards.js';
 import { kbd } from './platform.js';
+import { WatchInfoPanel } from './ml-watch-info.js';
 
 const CHAT_MODES = ['side', 'overlay', 'hidden'];
 const CHAT_MODE_LABEL = { side: '채팅: 옆', overlay: '채팅: 영상 위', hidden: '채팅: 숨김' };
@@ -55,6 +56,8 @@ export class WatchTools {
     this.channelId = null;
     this.info = null; // { channelId, verified, followers, category }
     this.hooked = new WeakSet(); // 스크린샷 응답을 듣는 패인 브리지
+    // 영상 아래 채널 정보·다시보기·클립·커뮤니티
+    this.infoPanel = new WatchInfoPanel(page.root.querySelector('.ml-watch-info'));
 
     this.osd = document.createElement('div');
     this.osd.className = 'player-osd';
@@ -128,6 +131,7 @@ export class WatchTools {
       this.loadRail(id);
     }
     this.rail.hidden = !id || !this.rail.childElementCount;
+    this.infoPanel.show(id);
     // 위 정보 줄의 인증·팔로워·카테고리 — 지금 무대 패인에만
     for (const p of this.page.panes.values()) {
       const meta = p.el.querySelector('.ml-watch-meta');

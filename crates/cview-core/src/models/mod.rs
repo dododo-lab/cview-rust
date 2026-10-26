@@ -6,6 +6,7 @@ pub mod chat;
 
 pub mod channel;
 pub mod clip;
+pub mod community;
 pub mod decode;
 pub mod equalizer;
 pub mod live;

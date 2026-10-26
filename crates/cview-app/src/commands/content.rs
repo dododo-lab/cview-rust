@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use base64::Engine;
 use chrono::Utc;
 use cview_core::models::clip::ClipDetail;
+use cview_core::models::community::{ChannelPost, ChannelPostItem};
 use cview_core::models::live::LiveStatus;
 use cview_core::models::search::{ClipInfo, VodInfo};
 use cview_core::models::ChannelInfo;
@@ -135,6 +136,33 @@ pub async fn channel_clips(
         page_start(page, size),
         size,
     ))
+}
+
+/// 채널 커뮤니티 글 — `page` 는 0부터, 한 쪽 10개(서버 고정). 커뮤니티를 닫은 채널은 빈 목록.
+#[tauri::command]
+pub async fn channel_posts(
+    services: State<'_, AppServices>,
+    channel_id: String,
+    page: Option<i64>,
+) -> CmdResult<PageDto<ChannelPost>> {
+    let size = cview_networking::CHANNEL_POSTS_PAGE_SIZE;
+    let page = page.unwrap_or(0).max(0);
+    let start = page_start(page, size);
+    let res = services.api.channel_posts(&channel_id, start).await?;
+    let (data, total) = res
+        .comments
+        .map(|c| (c.data, c.total_count))
+        .unwrap_or_default();
+    // 가린 글(지움·비밀)을 빼기 전, 서버가 준 개수로 다음 쪽을 판단한다.
+    let has_more = PageDto::new(vec![(); data.len()], total, start, size).has_more;
+    Ok(PageDto {
+        items: data
+            .into_iter()
+            .filter_map(ChannelPostItem::into_post)
+            .collect(),
+        total_count: total,
+        has_more,
+    })
 }
 
 /// 인기 클립 — `filter`: `WITHIN_1_DAY` / `WITHIN_7_DAYS` / `WITHIN_30_DAYS`,

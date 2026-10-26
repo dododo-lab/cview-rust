@@ -135,6 +135,7 @@ export class MultiLivePage {
         </div>
       </header>
       <div class="page-body ml-body">
+        <div class="ml-main">
         <div class="ml-stage">
           <div class="ml-empty">
             <strong>여러 방송을 한 화면에서 보세요</strong>
@@ -143,6 +144,8 @@ export class MultiLivePage {
             <button class="btn lg ml-restore" data-ml="restore" hidden>지난 구성 다시 열기</button>
           </div>
           <button class="ml-focus-add" data-ml="add" hidden title="채널 추가" aria-label="채널 추가">${ICON_PLUS}<span>채널 추가</span></button>
+        </div>
+        <section class="ml-watch-info" aria-label="채널 정보" hidden></section>
         </div>
         <aside class="chat ml-chat">
           <header class="chat-header">
@@ -293,7 +296,12 @@ export class MultiLivePage {
     document.addEventListener('pointerdown', (e) => { if (!moreMenu.hidden && !e.target.closest('.ml-more')) closeMore(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !moreMenu.hidden) closeMore(); });
     // 무대 크기 — Rust 에 알리고, 2분할이면 쌓을지 다시 고른다.
-    new ResizeObserver(() => { this.reportStageSize(); this.syncStack(); }).observe(this.stage);
+    new ResizeObserver(() => {
+      this.reportStageSize();
+      this.syncStack();
+      // 단독 보기의 영상 위 채팅이 아래 정보 칸까지 덮지 않게 무대 높이를 넘긴다(multilive.css)
+      this.root.querySelector('.ml-body').style.setProperty('--ml-stage-h', `${this.stage.offsetHeight}px`);
+    }).observe(this.stage);
   }
 
   async show() {

@@ -984,3 +984,32 @@ async fn weekly_donation_ranking_decodes_chat_model() {
     assert_eq!(r.rank_list[0].donation_amount, 1000);
     assert_eq!(r.donation_user_weekly_rank, None);
 }
+
+#[tokio::test]
+async fn channel_posts_uses_comment_api_with_fixed_page_size() {
+    // 댓글 API 는 limit 10·30 만 받는다 — 10 고정, 쪽은 offset 으로.
+    let t = MockTransport::new(Duration::ZERO, |req, _| {
+        assert_eq!(req.url.host_str(), Some("apis.naver.com"));
+        assert_eq!(
+            req.url.path(),
+            "/nng_main/nng_comment_api/v1/type/CHANNEL_POST/id/c1/comments"
+        );
+        let q: std::collections::HashMap<_, _> = req.url.query_pairs().into_owned().collect();
+        assert_eq!(q["limit"], "10");
+        assert_eq!(q["offset"], "20");
+        assert_eq!(q["orderType"], "DESC");
+        ok(json!({"comments": {"totalCount": 21, "data": [
+            {"comment": {"commentId": 5, "content": "안녕", "createdDate": "20260907191415"},
+             "user": {"userNickname": "스트리머"}}
+        ]}}))
+    });
+    let c = client(t.clone(), None);
+    let page = c.channel_posts("c1", 20).await.unwrap().comments.unwrap();
+    assert_eq!(page.total_count, Some(21));
+    assert_eq!(page.data[0].comment.comment_id, 5);
+    assert!(
+        c.channel_posts("../x", 0).await.is_err(),
+        "채널 ID 는 경로에 그대로 넣으므로 영숫자만"
+    );
+    assert_eq!(t.sends(), 1);
+}

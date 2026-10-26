@@ -30,7 +30,7 @@ mod wait;
 
 pub use cache::ResponseCache;
 pub use client::{AgedResponse, ChzzkApiClient, ClientConfig, ResponseBody};
-pub use client_content::emoticon_family;
+pub use client_content::{emoticon_family, CHANNEL_POSTS_PAGE_SIZE};
 pub use client_live::{
     following_max_pages, TraversalOptions, FOLLOWING_PAGE_SIZE, FOLLOWING_ROW_LIMIT,
 };

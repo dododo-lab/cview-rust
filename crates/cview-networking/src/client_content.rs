@@ -8,21 +8,25 @@ use std::collections::HashMap;
 
 use cview_core::models::chat::{DonationRankResponse, EmoticonDeploy, EmoticonPack};
 use cview_core::models::clip::{ClipInkeyContent, NaverVodPlayResponse};
+use cview_core::models::community::ChannelPostsContent;
 use cview_core::models::{
     ChannelInfo, ChannelSearchItem, ChannelViewerInfo, ClipDetail, ClipInfo, LiveInfo,
     LiveSearchItem, SearchResult, TimeMachinePlaybackInfo, VideoSearchItem, VodDetail, VodInfo,
 };
-use cview_core::protocols::{HttpCookie, HttpMethod};
+use cview_core::protocols::{HttpCookie, HttpMethod, QueryItem};
 use url::Url;
 
 use crate::client::{
-    transport_to_api_error, AuthContext, ChzzkApiClient, RequestOptions, ResponseBody,
+    build_url, transport_to_api_error, AuthContext, ChzzkApiClient, RequestOptions, ResponseBody,
 };
 use crate::constants::api_defaults;
 use crate::endpoint::ChzzkEndpoint;
 use crate::headers;
 use crate::response::{ChzzkResponse, FollowingContent, PagedContent};
 use crate::transport::HttpRequest;
+
+/// 커뮤니티 글 한 쪽 크기 — 서버가 받는 값(10·30) 중 하나.
+pub const CHANNEL_POSTS_PAGE_SIZE: i64 = 10;
 
 /// 이모티콘 endpoint family (404 negative cache 키).
 pub mod emoticon_family {
@@ -296,6 +300,45 @@ impl ChzzkApiClient {
         play.best_hls_url()
             .and_then(|s| Url::parse(&s).ok())
             .ok_or(ApiError::EmptyContent)
+    }
+
+    // MARK: - 커뮤니티
+
+    /// 채널 커뮤니티 글 한 쪽(새 글부터). 서버는 `limit` 10·30 만 받는다(그 밖은 400) — 10 으로 고정하고
+    /// `offset` 으로 넘긴다. 커뮤니티를 닫은 채널은 `comments` 가 빈 응답이다.
+    pub async fn channel_posts(
+        &self,
+        channel_id: &str,
+        offset: i64,
+    ) -> Result<ChannelPostsContent, ApiError> {
+        if channel_id.is_empty() || !channel_id.chars().all(|c| c.is_ascii_alphanumeric()) {
+            return Err(ApiError::DecodingFailed("잘못된 채널 ID".into()));
+        }
+        let query = [
+            QueryItem::new("limit", CHANNEL_POSTS_PAGE_SIZE.to_string()),
+            QueryItem::new("offset", offset.max(0).to_string()),
+            QueryItem::new("orderType", "DESC"),
+            QueryItem::new("pagingType", "PAGE"),
+        ];
+        let url = build_url(
+            &self.inner.comment_api_base_url,
+            &format!("/v1/type/CHANNEL_POST/id/{channel_id}/comments"),
+            Some(&query),
+        )?;
+        let mut request = HttpRequest::new(HttpMethod::Get, url);
+        request.set_header("User-Agent", Some(headers::CHROME_USER_AGENT));
+        request.set_header("Origin", Some(headers::CHZZK_ORIGIN));
+        request.set_header("Referer", Some(headers::CHZZK_REFERER));
+        let response = self
+            .send(request, None)
+            .await
+            .map_err(transport_to_api_error)?;
+        if !(200..=299).contains(&response.status) {
+            return Err(ApiError::http(response.status as i64));
+        }
+        let parsed: ChzzkResponse<ChannelPostsContent> = serde_json::from_slice(&response.body)
+            .map_err(|e| ApiError::DecodingFailed(e.to_string()))?;
+        Ok(parsed.content.unwrap_or_default())
     }
 
     // MARK: - 이모티콘 (404 negative cache)

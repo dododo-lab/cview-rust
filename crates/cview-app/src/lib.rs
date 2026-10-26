@@ -333,6 +333,7 @@ pub fn run() {
             commands::content::following_vods,
             commands::content::channel_vods,
             commands::content::channel_clips,
+            commands::content::channel_posts,
             commands::content::popular_clips,
             commands::content::search_videos,
             commands::content::clip_play,

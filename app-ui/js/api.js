@@ -109,6 +109,7 @@ export const api = {
   channelDetail: (channelId) => invoke('channel_detail', { channelId }),
   channelVods: (channelId, page = 0, size = 24) => invoke('channel_vods', { channelId, page, size }),
   channelClips: (channelId, page = 0, size = 24) => invoke('channel_clips', { channelId, page, size }),
+  channelPosts: (channelId, page = 0) => invoke('channel_posts', { channelId, page }),
   popularClips: (filter, order) => invoke('popular_clips', { filter, order }),
   searchVideos: (keyword, offset = 0, size = 24) => invoke('search_videos', { keyword, offset, size }),
   clipPlay: (clipUid) => invoke('clip_play', { clipUid }),
