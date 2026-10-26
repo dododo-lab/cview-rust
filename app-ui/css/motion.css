@@ -524,14 +524,31 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
    [라이브|멀티라이브] 전환 버튼이 화면을 오가도 위아래로 뛰지 않는다. */
 .page[data-page="live"] > .page-header.ph-compact,
 .viewer-header.ph-compact { padding-top: var(--sp-sm); padding-bottom: var(--sp-sm); }
-/* 좌우도 멀티라이브 머리줄과 같은 8px — 32px 이면 화면을 오갈 때 아이콘·제목·전환 버튼이 24px 씩 옆으로 뛴다 */
-.page[data-page="live"] > .page-header.ph-compact { padding-left: var(--sp-sm); padding-right: var(--sp-sm); }
+/* 라이브 목록은 멀티라이브처럼 머리줄을 페이지 맨 위에 고정하고 아래 .live-scroll 만 스크롤한다 — 페이지 전체가
+   스크롤하면 스크롤 막대(10px)만큼 머리줄 폭이 줄어 오른쪽 버튼이 화면을 오갈 때마다 옆으로 뛰었다.
+   머리줄 모양(위치·여백·유리 배경·아래 선)도 멀티라이브 머리줄과 같게. */
+.page[data-page="live"] { display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+.page[data-page="live"][hidden] { display: none; }
+.page[data-page="live"] > .page-header.ph-compact {
+  flex: none; position: relative; top: auto; margin: 0; padding: var(--sp-sm);
+  background: var(--glass); border-bottom-color: var(--border-subtle); animation: none;
+}
+.page[data-page="live"] > .page-header::after { display: none; }
+.page[data-page="live"] > .live-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-sm) var(--sp-xxl) var(--sp-xl); }
 /* 제목 칸은 '멀티라이브' 폭으로 — '라이브'가 짧아 전환 버튼이 제목 길이만큼 옆으로 뛰지 않게 */
 .ph-compact:has(.live-mode-seg) .page-title { min-width: 4.3em; }
 /* 머리줄 새로고침도 멀티라이브 툴바 버튼과 같은 30px — 36px 이면 머리줄이 그만큼 높아진다 */
 .page[data-page="live"] > .page-header.ph-compact .icon-btn.round { width: 30px; height: 30px; }
 /* 목록 화면 설명은 머리줄 대신 본문 첫 줄 */
-.page[data-page="live"] > .live-lead { margin: calc(-1 * var(--sp-sm)) 0 var(--sp-lg); }
+.page[data-page="live"] .live-lead { margin: 0 0 var(--sp-lg); }
+/* 라이브 ↔ 멀티라이브 전환 — 머리줄은 그대로 두고 아래 본문(목록·영상 영역)만 떠오른다.
+   페이지 전체에 걸린 page-in 과 아이콘·제목 등장 애니메이션이 머리줄까지 8px 출렁이게 했다. */
+.page:is([data-page="live"], .page-multilive):not([hidden]) { animation: none; }
+.page:is([data-page="live"], .page-multilive) > .page-header :is(.ph-icon, .ph-text) { animation: none; }
+.page[data-page="live"]:not([hidden]) > .live-scroll,
+.page-multilive:not([hidden]) > .ml-body { animation: page-in .26s cubic-bezier(.2, .8, .2, 1) both; }
+@media (prefers-reduced-motion: reduce) { .page:is([data-page="live"], .page-multilive) > :is(.live-scroll, .ml-body) { animation: none !important; } }
+:root[data-motion="reduced"] .page:is([data-page="live"], .page-multilive) > :is(.live-scroll, .ml-body) { animation: none !important; }
 /* 섹션 안 짧은 안내(로그인·한쪽 실패) */
 .live-note { display: flex; align-items: center; gap: 4px; margin: 0; color: var(--text-tertiary); font-size: var(--fs-caption); }
 /* 숫자가 갱신돼도 폭이 흔들리지 않게(DT-3) */

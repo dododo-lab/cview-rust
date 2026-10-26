@@ -23,8 +23,10 @@ export class LivePage {
         <div class="grow" data-tauri-drag-region></div>
         <button class="icon-btn round" data-action="refresh" title="새로고침" aria-label="새로고침">${refreshIcon}</button>
       </header>
-      <p class="page-subtitle live-lead">볼 방송을 고르세요 — 최근 본 채널과 지금 방송 중인 채널</p>
-      <div class="page-body"></div>`;
+      <div class="live-scroll">
+        <p class="page-subtitle live-lead">볼 방송을 고르세요 — 최근 본 채널과 지금 방송 중인 채널</p>
+        <div class="page-body"></div>
+      </div>`;
     content.append(this.root);
     this.body = this.root.querySelector('.page-body');
     this.root.querySelector('[data-action="refresh"]').addEventListener('click', () => this.show(true));
