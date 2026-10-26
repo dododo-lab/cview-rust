@@ -662,6 +662,9 @@
 .ml-mc-cell-send { display: none; flex: none; padding: 1px 6px; border-radius: 999px; font-size: var(--fs-micro); font-weight: 600; color: var(--mc-color); background: color-mix(in srgb, var(--mc-color) 12%, transparent); }
 .ml-mc-cell.selected .ml-mc-cell-send { display: inline; }
 .ml-mc-cell .chat-list { flex: 1; min-height: 0; }
+/* 둥근 모서리·overflow:hidden 칸 안의 스크롤 목록 — WebKit 이 프로그램으로 내린 스크롤·새 줄을 다시 그리지 않고 멈춘
+   화면으로 남겨 두는 경우가 있어 목록을 자기 레이어로 올린다. */
+.ml-mc-cell .chat-list, .ml-chat .ml-merged-list { transform: translateZ(0); }
 .ml-mc-cell .merged-line { box-shadow: none; padding-left: 0 !important; }
 .ml-mc-grid.focus .ml-mc-cell:not(.main) .chat-line { font-size: .92em; }
 
