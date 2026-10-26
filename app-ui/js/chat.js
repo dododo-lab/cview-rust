@@ -11,6 +11,7 @@ import { DonationRanking, eventCardHtml, eventClasses, EVENT_ICONS } from './don
 import { installChatExtras } from './chat-extras.js';
 import { nickColorClass } from './nick-color.js';
 import { kbd } from './platform.js';
+import { chatFollower } from './chat-follow.js';
 import {
   chatPrefs, onChatPrefs, updateChatPrefs, passesFilters, mentionsMe, getMyNickname,
 } from './chat-prefs.js';
@@ -219,6 +220,7 @@ export class ChatPanel {
     this.list.after(this.jump);
     this.jump.addEventListener('click', () => this.scrollToBottom());
     this.list.addEventListener('scroll', () => this.onScroll(), { passive: true });
+    this.follower = chatFollower(this.list, () => chatPrefs().autoScroll);
 
     this.banner = document.createElement('div');
     this.banner.className = 'chat-input-banner';
@@ -443,7 +445,7 @@ export class ChatPanel {
     const prefs = chatPrefs();
     const placeholder = this.list.querySelector('.empty');
     if (placeholder) placeholder.remove();
-    const follow = prefs.autoScroll && this.atBottom;
+    const follow = prefs.autoScroll && this.follower.stuck;
     if (!follow && !this.list.querySelector('.read-divider') && this.list.children.length) {
       this.list.insertAdjacentHTML('beforeend', '<div class="read-divider"><span>여기까지 읽음</span></div>');
       this.lastGroup = null; // 구분선 너머로는 묶지 않는다
@@ -463,7 +465,7 @@ export class ChatPanel {
     while (extra-- > 0) this.list.firstElementChild.remove();
     // 맨 위에 남은 줄이 묶음 중간이면 아바타·이름을 다시 보인다
     this.list.firstElementChild?.classList.remove('cont');
-    if (follow) this.list.scrollTop = this.list.scrollHeight;
+    if (follow) this.follower.snap();
     else { this.unread += shown.length; this.renderJump(); }
   }
 
@@ -484,6 +486,7 @@ export class ChatPanel {
   }
 
   scrollToBottom() {
+    this.follower.stuck = true;
     this.list.scrollTop = this.list.scrollHeight;
     this.unread = 0;
     this.renderJump();
