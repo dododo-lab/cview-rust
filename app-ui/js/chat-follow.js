@@ -1,12 +1,10 @@
 // 채팅 바닥 따라가기 — "바닥을 따라갈지"를 매번 스크롤 위치로 다시 재지 않고, 사용자가 직접 올렸을 때만 끈다.
-// 앱이 뒤에 가 있는 동안(가려짐·최소화) WebKit 은 그리기를 멈춰서, 그동안 코드가 바닥으로 내린 위치가 화면 쪽에
-// 반영되지 않았다가 다시 보일 때 예전 위치로 되돌아오는 스크롤이 생긴다. 예전엔 그 순간 "바닥이 아님"으로 읽혀
-// 새 메시지가 와도 따라가지 않고 멈춰 있었다. 이제 사용자 손이 닿지 않은 스크롤은 따라가기를 끄지 않고 바닥으로 되돌린다.
+// 스크롤 이벤트는 위치를 바꾼 뒤 한 박자 늦게 오므로, 그사이 새 줄이 붙거나 이모티콘·배지 이미지가 늦게 로드돼
+// 높이가 늘면 우리가 바닥으로 내린 스크롤조차 "바닥이 아님"으로 읽힌다. 붐비는 라이브 채팅에서는 이게 수시로 일어나
+// 따라가기가 꺼지고 멈춰 있었다(앱이 가려졌다 돌아올 때 WebKit 이 예전 위치를 되돌리는 것도 같은 꼴).
+// 그래서 휠·터치·키·포인터처럼 사용자 손이 닿은 스크롤만 따라가기를 끄고, 나머지는 바닥으로 되돌린다.
 const BOTTOM_SLACK = 40;
 const USER_GRACE_MS = 800;
-const RESTORE_WINDOW_MS = 1500;
-
-let restoreUntil = 0; // 다시 보인 직후 — 이 동안 사용자 손이 닿지 않은 스크롤은 WebKit 의 위치 복원으로 본다
 
 const followers = new Set(); // WeakRef<Follower>
 const byList = new WeakMap();
@@ -36,10 +34,9 @@ class Follower {
 
   onScroll() {
     if (atBottom(this.list)) { this.stuck = true; return; }
-    const restoring = document.hidden || performance.now() < restoreUntil;
-    // 가려졌다 돌아올 때의 위치 복원 — 사용자가 건드리지 않았으면 따라가기를 끄지 않고 바닥으로 되돌린다.
-    if (restoring && !this.userActive) { if (this.stuck) this.snap(); return; }
-    this.stuck = false;
+    if (this.userActive && !document.hidden) { this.stuck = false; return; }
+    // 사용자가 건드리지 않은 스크롤(늦게 늘어난 높이, 가려졌다 돌아올 때의 위치 복원) — 따라가던 중이면 바닥으로 되돌린다.
+    if (this.stuck && this.enabled()) this.snap();
   }
 
   snap() {
@@ -76,7 +73,6 @@ export function followAppend(list, insert) {
 }
 
 function resyncAll() {
-  restoreUntil = performance.now() + RESTORE_WINDOW_MS;
   for (const ref of followers) {
     const f = ref.deref();
     if (f) f.resync(); else followers.delete(ref);
@@ -85,7 +81,12 @@ function resyncAll() {
 
 document.addEventListener('visibilitychange', () => { if (!document.hidden) resyncAll(); });
 window.addEventListener('focus', resyncAll);
-window.addEventListener('pointerup', () => {
+const release = () => {
   if (pressed) { pressed.userUntil = performance.now() + USER_GRACE_MS; pressed = null; }
-}, true);
+};
+window.addEventListener('pointerup', release, true);
+window.addEventListener('pointercancel', release, true);
+// 플레이어(iframe) 위에서 손을 떼면 pointerup 이 여기 오지 않는다 — 버튼이 떨어진 채 움직이면 놓은 것으로 본다.
+window.addEventListener('pointermove', (e) => { if (pressed && e.buttons === 0) release(); }, true);
+window.addEventListener('blur', release);
 window.addEventListener('pageshow', resyncAll);
