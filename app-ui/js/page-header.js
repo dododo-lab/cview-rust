@@ -25,11 +25,5 @@ export function decoratePageHeader(header, icon, { compact = false } = {}) {
   if (sub) text.append(sub);
 }
 
-/** 제목이 바뀌는 화면(멀티라이브 ↔ 라이브 단독 무대)에서 칩 아이콘도 함께 바꾼다. */
-export function setPageHeaderIcon(header, key, icon) {
-  const chip = header && header.querySelector(':scope > .ph-icon');
-  if (chip && chip.dataset.icon !== key) { chip.innerHTML = icon; chip.dataset.icon = key; }
-}
-
 /** 새로고침 아이콘 — 홈 머리줄과 같은 동그란 버튼에 쓴다. */
 export const refreshIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>';

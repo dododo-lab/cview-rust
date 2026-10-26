@@ -22,7 +22,7 @@ import { MultiLiveMergedChat } from './ml-multichat.js';
 import { WatchTools, watchTopHtml } from './ml-watch.js';
 
 import { liveIcon, multiLiveIcon, liveModeSwitch, setLiveModeActive } from './live-mode.js';
-import { decoratePageHeader, setPageHeaderIcon } from './page-header.js';
+import { decoratePageHeader } from './page-header.js';
 
 export { multiLiveIcon };
 
@@ -93,7 +93,7 @@ export class MultiLivePage {
     this.root.hidden = true;
     this.root.innerHTML = `
       <header class="page-header ml-header" data-tauri-drag-region>
-        <h1 class="page-title">멀티라이브</h1>
+        <h1 class="page-title">라이브</h1>
         ${liveModeSwitch('multilive')}
         <span class="page-subtitle ml-count"></span>
         <div class="ml-watch-picker" role="group" aria-label="라이브로 볼 채널" hidden></div>
@@ -159,8 +159,8 @@ export class MultiLivePage {
       </div>`;
     content.append(this.root);
     // 툴바가 빽빽한 화면이라 머리줄은 한 줄(수 알약은 줄 안에). 아이콘은 보기(라이브·멀티라이브)를 따른다.
-    decoratePageHeader(this.root.querySelector('.ml-header'), multiLiveIcon, { compact: true });
-    setPageHeaderIcon(this.root.querySelector('.ml-header'), 'multilive', multiLiveIcon);
+    // 라이브 목록과 같은 메뉴 제목·아이콘 — 두 보기를 오가도 머리줄은 그대로, 지금 보기는 전환 버튼이 보여 준다.
+    decoratePageHeader(this.root.querySelector('.ml-header'), liveIcon, { compact: true });
 
     this.stage = this.root.querySelector('.ml-stage');
     this.empty = this.root.querySelector('.ml-empty');
@@ -432,10 +432,8 @@ export class MultiLivePage {
     const watched = state.watchId ? sessions.find((x) => x.id === state.watchId) : null;
     this.watchSlot = watched && watched.slot != null ? watched.slot : null;
     this.root.classList.toggle('as-watch', this.watchSlot != null);
-    // 단독 무대일 땐 라이브, 아니면 멀티라이브 — 머리줄 제목과 전환 버튼이 지금 보기를 따른다.
+    // 단독 무대일 땐 라이브, 아니면 멀티라이브 — 전환 버튼이 지금 보기를 따른다(제목·아이콘은 늘 '라이브').
     const mode = this.watchSlot != null ? 'live' : 'multilive';
-    this.root.querySelector('.ml-header .page-title').textContent = mode === 'live' ? '라이브' : '멀티라이브';
-    setPageHeaderIcon(this.root.querySelector('.ml-header'), mode, mode === 'live' ? liveIcon : multiLiveIcon);
     setLiveModeActive(this.root.querySelector('.ml-header'), mode);
     this.renderWatchPicker(sessions, watched);
     const single = this.watchSlot ?? this.single;
