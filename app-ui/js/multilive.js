@@ -28,6 +28,8 @@ export { multiLiveIcon };
 
 const ICON_CLOSE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
 const ICON_SOUND = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4V9Z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+// 보조 창(?w=player|chat|…) — 멀티라이브는 메인 창에서만 보여 준다(app.js openChannel).
+const AUX_WINDOW = new URLSearchParams(location.search).has('w');
 const ICON_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
 
 const STAT_ICON = {
@@ -873,6 +875,8 @@ export class MultiLivePage {
 
   /** 채팅은 선택 패인의 채널을 따라간다. */
   syncChat(session) {
+    // 보조 창에도 이 화면이 만들어지지만 쓰지 않는다 — 거기서 `ml` 세션을 열면 그 창을 닫을 때 메인 창 채팅까지 끊겼다.
+    if (AUX_WINDOW) return;
     const key = session && session.chatChannelId ? `${session.id}:${session.chatChannelId}` : null;
     if (key === this.chatKey) return;
     this.chatKey = key;

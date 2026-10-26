@@ -27,6 +27,13 @@ const MODES = [
 const TITLES = { off: '채팅', merged: '멀티채팅', grid: '채팅 그리드', focus: '채팅 포커스' };
 const MAX_LINES = 600;
 const MAX_CELL_LINES = 300;
+// 칸·통합 목록을 올려 둔 채 이만큼 손대지 않으면 다시 바닥을 따라간다(작은 칸에는 '새 메시지' 버튼이 없다).
+const RESUME_FOLLOW_MS = 8000;
+// 끊김·실패를 알린 칸은 이만큼 기다렸다가(엔진이 스스로 다시 붙으면 취소) 다시 연결한다.
+const RECONNECT_MS = 4000;
+// 보조 창(?w=player|chat|…)에도 멀티라이브 화면이 만들어진다 — 거기서 같은 `mlx:` 세션을 열면 그 창을 닫을 때
+// 셸이 '그 창이 연 세션'으로 보고 메인 창 칸들의 연결까지 끊었다. 멀티라이브는 메인 창에서만 쓰므로 보조 창은 열지 않는다.
+const AUX_WINDOW = new URLSearchParams(location.search).has('w');
 const ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h11a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H9l-4 3v-3H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M19 9h1a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-1v3l-4-3h-4"/></svg>';
 
 const sessionKey = (id) => `mlx:${id}`;
@@ -47,7 +54,7 @@ function appendTo(list, html, max) {
     if (empty) empty.remove();
     list.insertAdjacentHTML('beforeend', html);
     while (list.children.length > max) list.firstElementChild.remove();
-  });
+  }, { resumeMs: RESUME_FOLLOW_MS });
 }
 
 export class MultiLiveMergedChat {
@@ -145,7 +152,7 @@ export class MultiLiveMergedChat {
   sync() {
     const state = this.getState() || {};
     const all = (state.sessions || []).filter((s) => s.chatChannelId);
-    const sessions = this.on ? all : [];
+    const sessions = this.on && !AUX_WINDOW ? all : [];
     const hueOf = new Map();
     for (const p of this.getPanes().values()) if (p.sessionId) hueOf.set(p.sessionId, p.hue);
     const keep = new Set();
@@ -163,10 +170,7 @@ export class MultiLiveMergedChat {
           <div class="chat-list"><div class="empty">새 메시지를 기다리는 중…</div></div>`;
         c.list = c.cell.querySelector('.chat-list');
         this.conns.set(s.id, c);
-        const conn = c;
-        api.chatConnect(c.chatChannelId, c.channelId, c.key).catch((e) => {
-          if (this.conns.get(s.id) === conn) this.system(conn, `${conn.name} 채팅에 연결하지 못했어요 — ${e.message}`);
-        });
+        this.connect(s.id, c);
       }
       c.name = name;
       if (hue != null) c.hue = hue;
@@ -178,8 +182,31 @@ export class MultiLiveMergedChat {
     this.layoutCells(sessions, state.selectedId);
   }
 
+  connect(id, c) {
+    clearTimeout(c.retry);
+    c.retry = null;
+    c.connectAt = performance.now();
+    api.chatConnect(c.chatChannelId, c.channelId, c.key).catch((e) => {
+      if (this.conns.get(id) !== c) return;
+      this.system(c, `${c.name} 채팅에 연결하지 못했어요 — ${e.message}`);
+      this.scheduleReconnect(id, c);
+    });
+  }
+
+  /** 끊긴 칸을 잠시 뒤 다시 연결한다 — 그사이 엔진이 다시 붙거나 메시지가 오면 취소된다. */
+  scheduleReconnect(id, c) {
+    if (c.retry) return;
+    c.retry = setTimeout(() => {
+      c.retry = null;
+      if (this.conns.get(id) !== c) return;
+      c.skipRecent = true; // 다시 붙으면 오는 최근 50줄은 이미 칸에 있다
+      this.connect(id, c);
+    }, RECONNECT_MS);
+  }
+
   drop(id, c) {
     this.conns.delete(id);
+    clearTimeout(c.retry);
     c.cell.remove();
     api.chatDisconnect(c.key).catch(() => {});
   }
@@ -210,15 +237,29 @@ export class MultiLiveMergedChat {
   }
 
   onEvent(p) {
-    if (!this.on || !p || !p.event || p.event.type !== 'messages' || typeof p.session !== 'string' || !p.session.startsWith('mlx:')) return;
+    if (!this.on || !p || !p.event || typeof p.session !== 'string' || !p.session.startsWith('mlx:')) return;
     const c = this.conns.get(p.session.slice(4));
     if (!c || c.key !== p.session) return;
-    if (p.event.chatChannelId && p.event.chatChannelId !== c.chatChannelId) return; // 바꾸기 전 채널의 늦은 메시지
+    const ev = p.event;
+    if (ev.chatChannelId && ev.chatChannelId !== c.chatChannelId) return; // 바꾸기 전 채널의 늦은 메시지
+    // 연결 상태 — 선택 패인이 아닌 칸은 상태 표시가 없어, 끊긴 채 남으면 칸이 조용히 멈춰 보였다.
+    const state = ev.type === 'state' ? ev.state : ev.type;
+    // 다시 연결하며 떼어 낸 이전 엔진의 '끊김'이 늦게 올 수 있다 — 연결 직후 것은 무시한다(되풀이 재연결 방지).
+    if (state === 'disconnected' || state === 'failed') {
+      if (performance.now() - (c.connectAt || 0) > RECONNECT_MS) this.scheduleReconnect(p.session.slice(4), c);
+      return;
+    }
+    if (state === 'connected' || state === 'connecting' || state === 'reconnecting') { clearTimeout(c.retry); c.retry = null; return; }
+    if (ev.type !== 'messages') return;
+    clearTimeout(c.retry);
+    c.retry = null;
+    if (ev.recent && c.skipRecent) { c.skipRecent = false; return; }
+    c.skipRecent = false;
     const style = `--lh:${Number(c.hue) || 0}`;
-    const tagged = mergedLinesHtml(p.event.messages, { name: c.name, style });
+    const tagged = mergedLinesHtml(ev.messages, { name: c.name, style });
     if (!tagged) return;
     appendTo(this.list, tagged, MAX_LINES);
-    appendTo(c.list, mergedLinesHtml(p.event.messages, { name: '', style }), MAX_CELL_LINES);
+    appendTo(c.list, mergedLinesHtml(ev.messages, { name: '', style }), MAX_CELL_LINES);
   }
 
   system(c, text) {

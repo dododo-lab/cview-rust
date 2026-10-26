@@ -18,7 +18,8 @@ class Follower {
     this.enabled = enabled || (() => true);
     this.stuck = true;
     this.userUntil = 0;
-    const touch = () => { this.userUntil = performance.now() + USER_GRACE_MS; };
+    this.touchedAt = 0; // 사용자 손이 마지막으로 닿은 때(followAppend 의 resumeMs)
+    const touch = () => { this.touchedAt = performance.now(); this.userUntil = this.touchedAt + USER_GRACE_MS; };
     list.addEventListener('wheel', touch, { passive: true });
     list.addEventListener('touchstart', touch, { passive: true });
     list.addEventListener('keydown', touch);
@@ -63,9 +64,14 @@ export function chatFollower(list, enabled) {
   return f;
 }
 
-/** 목록 끝에 붙이고 넘치면 앞에서 지운 뒤, 따라가던 중이면 바닥으로 내린다. */
-export function followAppend(list, insert) {
+/**
+ * 목록 끝에 붙이고 넘치면 앞에서 지운 뒤, 따라가던 중이면 바닥으로 내린다.
+ * resumeMs — 따라가기가 꺼져 있어도 사용자가 그만큼 손대지 않았으면 다시 바닥을 따라간다. '새 메시지' 버튼이 없는
+ * 작은 칸(멀티라이브 그리드·포커스)은 살짝 올린 뒤 그대로 두면 멈춘 칸처럼 보였다.
+ */
+export function followAppend(list, insert, { resumeMs = 0 } = {}) {
   const f = chatFollower(list);
+  if (!f.stuck && resumeMs > 0 && pressed !== f && performance.now() - f.touchedAt > resumeMs) f.stuck = true;
   const follow = f.stuck;
   insert();
   if (follow) f.snap();
@@ -82,7 +88,7 @@ function resyncAll() {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) resyncAll(); });
 window.addEventListener('focus', resyncAll);
 const release = () => {
-  if (pressed) { pressed.userUntil = performance.now() + USER_GRACE_MS; pressed = null; }
+  if (pressed) { pressed.touchedAt = performance.now(); pressed.userUntil = pressed.touchedAt + USER_GRACE_MS; pressed = null; }
 };
 window.addEventListener('pointerup', release, true);
 window.addEventListener('pointercancel', release, true);
