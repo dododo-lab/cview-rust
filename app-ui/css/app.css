@@ -1,3 +1,9 @@
+/* 나눔고딕(SIL OFL 1.1, fonts/NanumGothic-OFL.txt) — 앱 안에 넣어 macOS·Windows 어디서나 같은 글꼴로 보인다.
+   굵기는 세 가지뿐이라 500 이하는 보통, 600~700은 굵게, 750 이상은 아주 굵게로 묶는다. */
+@font-face { font-family: "NanumGothic"; src: url("../fonts/NanumGothic-Regular.woff2") format("woff2"); font-weight: 100 599; font-display: block; }
+@font-face { font-family: "NanumGothic"; src: url("../fonts/NanumGothic-Bold.woff2") format("woff2"); font-weight: 600 749; font-display: block; }
+@font-face { font-family: "NanumGothic"; src: url("../fonts/NanumGothic-ExtraBold.woff2") format("woff2"); font-weight: 750 900; font-display: block; }
+
 /* CView — 원본 Swift DesignTokens(Sources/CViewCore/DesignSystem)를 바탕으로 한 토큰 체계. */
 /* ── 디자인 토큰 ──────────────────────────────
    색은 모두 토큰으로만 쓴다. 다크가 기본이고, [data-theme="light"] 와 시스템(라이트)에서 라이트 값으로
@@ -183,7 +189,7 @@ html, body {
   height: 100%;
   background: var(--background);
   color: var(--text-primary);
-  font: var(--fs-body) / 1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo",
+  font: var(--fs-body) / 1.45 "NanumGothic", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo",
     "Noto Sans KR", "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
@@ -880,7 +886,7 @@ select.select {
 
 /* ══ 2026 리프레시 — 공통 컴포넌트 ═════════════════════════════ */
 html, body {
-  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+  font-family: "NanumGothic", -apple-system, BlinkMacSystemFont, "SF Pro Text",
     "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
   letter-spacing: -0.1px;
 }
