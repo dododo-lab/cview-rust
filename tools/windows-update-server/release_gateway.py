@@ -13,7 +13,7 @@ import tempfile
 from contextlib import contextmanager
 
 ROOT = Path(r'C:\CViewUpdates')
-BASE = 'https://win-7sv7uak6k5b.horse-solfege.ts.net'
+BASE = 'https://cv.dododo.app'
 PROTOCOL = 'cview-release-v1'
 
 

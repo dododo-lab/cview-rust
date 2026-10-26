@@ -15,7 +15,7 @@
 | 계정 | `WIN-7SV7UAK6K5B\Administrator` |
 | 비밀번호 | 기존 서버 Administrator 비밀번호 |
 | 서버 저장 위치 | `C:\CViewUpdates\incoming` |
-| 다운로드 사이트 | https://win-7sv7uak6k5b.horse-solfege.ts.net/ |
+| 다운로드 사이트 | https://cv.dododo.app/ |
 
 `$`까지 포함해 주소를 입력한다. 공유 목록에서 숨겨지는 전용 공유이며, 공유 권한은 기존 Administrator 계정 하나에만 부여했다. NTFS 권한은 Administrators와 SYSTEM만 허용하고 SMB 암호화를 필수로 적용했다. 새 계정·비밀번호·공유기 포트 개방은 추가하지 않았다. 기존 SMB 서비스와 방화벽 범위를 사용하므로 LAN에서의 기존 접근 가능 범위도 그대로다.
 
