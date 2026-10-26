@@ -538,6 +538,10 @@
 .ml-watch-rail .rail-item { background: var(--live-badge, #e5262b); }
 .ml-watch-rail .rail-item:hover, .ml-watch-rail .rail-item:focus-visible { background: color-mix(in srgb, var(--live-badge, #e5262b) 80%, #fff); }
 /* 다른 방송 줄이 넘치면 말없이 자르지 않고 가로로 넘겨 볼 수 있게(Tab 초점이 가면 그 자리로 굴러간다) — 넘친 쪽 끝은 흐리게(ml-watch.js 가 fade-* 를 단다). */
+/* 머리줄 높이(30px 줄 + 위아래 8px)를 넘지 않게 — 링 포함 30px(아바타 26 + 링 2×2). 레일의 위아래 2px 는 확대(hover)할
+   자리라 음수 margin 으로 레이아웃에서 뺀다. 예전 32px 링 + 2px 여백(36px)이 머리줄을 6px 키워 목록 화면과 높이가 달랐다. */
+.ml-watch-rail { margin-block: -2px; }
+.ml-watch-rail .rail-item .avatar { width: 26px; height: 26px; }
 .ml-watch-rail { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; scroll-padding-inline: 12px; }
 .ml-watch-rail::-webkit-scrollbar { display: none; }
 .ml-watch-rail.fade-end { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
