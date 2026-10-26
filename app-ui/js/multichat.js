@@ -10,6 +10,7 @@ import { applyChatSkin } from './chat-extras.js';
 import { nickColorClass } from './nick-color.js';
 import { chatPrefs, onChatPrefs, passesFilters } from './chat-prefs.js';
 import { kbd } from './platform.js';
+import { chatFollower } from './chat-follow.js';
 import { MultiLiveAddDrawer } from './ml-add-drawer.js';
 
 export const multiChatIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H8l-4 3V5Z"/><path d="M18 8h1a2 2 0 0 1 2 2v10l-3.5-2.6H11a2 2 0 0 1-2-2V15h5a4 4 0 0 0 4-4V8Z" opacity=".6"/></svg>';
@@ -231,7 +232,8 @@ export class MultiChatPage {
     if (!c) return;
     const html = mergedLinesHtml(p.event.messages, { name: c.name, style: `--mc-color:${c.color}` });
     if (!html) return;
-    const atBottom = this.mergedList.scrollHeight - this.mergedList.scrollTop - this.mergedList.clientHeight < 40;
+    const follower = chatFollower(this.mergedList);
+    const follow = follower.stuck;
     const before = this.mergedList.lastElementChild;
     this.mergedList.insertAdjacentHTML('beforeend', html);
     // 검색 중이면 새로 붙은 줄만 거른다(예전엔 메시지 묶음마다 600줄 + 모든 패널을 다시 훑었다).
@@ -244,7 +246,7 @@ export class MultiChatPage {
       }
     }
     while (this.mergedList.children.length > 600) this.mergedList.firstElementChild.remove();
-    if (atBottom) this.mergedList.scrollTop = this.mergedList.scrollHeight;
+    if (follow) follower.snap();
   }
 
   async sendMerged() {
@@ -276,7 +278,7 @@ export class MultiChatPage {
     const f = e.target.closest('[data-mc-focus]');
     if (f) { this.focus(f.dataset.mcFocus); return; }
     const l = e.target.closest('[data-mc-layout]');
-    if (l) { this.layout = l.dataset.mcLayout; if (this.layout === 'merged') this.mergedList.innerHTML = '<div class="empty">새 메시지를 기다리는 중…</div>'; this.render(); this.persist(); return; }
+    if (l) { this.layout = l.dataset.mcLayout; if (this.layout === 'merged') { this.mergedList.innerHTML = '<div class="empty">새 메시지를 기다리는 중…</div>'; chatFollower(this.mergedList).stuck = true; } this.render(); this.persist(); return; }
     const a = e.target.closest('[data-mc]');
     if (!a) return;
     if (a.dataset.mc === 'add') this.addBar.toggle();

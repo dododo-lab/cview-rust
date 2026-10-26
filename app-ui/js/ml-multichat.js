@@ -14,6 +14,7 @@ import { esc } from './dom.js';
 import { mergedLinesHtml } from './multichat.js';
 import { applyChatSkin } from './chat-extras.js';
 import { onChatPrefs } from './chat-prefs.js';
+import { chatFollower, followAppend } from './chat-follow.js';
 import { bindMenuKeys, focusFirstMenuItem } from './ml-pane-controls.js';
 
 const STORE_KEY = 'cview.ml.chatView';
@@ -41,12 +42,12 @@ function loadMode() {
 
 /** 칸에 붙이고 넘치면 앞에서 지운다 — 바닥에 있었으면 계속 바닥을 따라간다. */
 function appendTo(list, html, max) {
-  const atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
-  const empty = list.querySelector(':scope > .empty');
-  if (empty) empty.remove();
-  list.insertAdjacentHTML('beforeend', html);
-  while (list.children.length > max) list.firstElementChild.remove();
-  if (atBottom) list.scrollTop = list.scrollHeight;
+  followAppend(list, () => {
+    const empty = list.querySelector(':scope > .empty');
+    if (empty) empty.remove();
+    list.insertAdjacentHTML('beforeend', html);
+    while (list.children.length > max) list.firstElementChild.remove();
+  });
 }
 
 export class MultiLiveMergedChat {
@@ -204,7 +205,7 @@ export class MultiLiveMergedChat {
     const sig = `${this.mode}|${order.join(',')}`;
     if (sig !== this.layoutSig) {
       this.layoutSig = sig;
-      requestAnimationFrame(() => { for (const c of this.conns.values()) c.list.scrollTop = c.list.scrollHeight; });
+      requestAnimationFrame(() => { for (const c of this.conns.values()) { const f = chatFollower(c.list); f.stuck = true; f.snap(); } });
     }
   }
 
