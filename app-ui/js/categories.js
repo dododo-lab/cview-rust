@@ -42,7 +42,12 @@ export class CategoriesPage {
         const list = new Set(pinned());
         if (list.has(pin.dataset.pin)) list.delete(pin.dataset.pin); else list.add(pin.dataset.pin);
         try { localStorage.setItem(PIN_KEY, JSON.stringify([...list])); } catch { /* 무시 */ }
+        const name = pin.dataset.pin;
         this.render();
+        // 다시 그린 뒤에도 같은 별에 초점을 둔다(키보드로 고정·해제를 이어 할 수 있게)
+        if (document.activeElement === document.body || !document.activeElement?.isConnected) {
+          [...this.body.querySelectorAll('[data-pin]')].find((b) => b.dataset.pin === name)?.focus({ preventScroll: true });
+        }
         return;
       }
       const c = e.target.closest('[data-category]');
@@ -77,11 +82,15 @@ export class CategoriesPage {
     this.sub.textContent = `지금 방송 중인 카테고리 ${groups.length}개 · 상위 라이브 ${this.lives.length}개 기준`;
     this.body.innerHTML = groups.length ? `<div class="category-grid">${groups.map((g) => {
       const thumb = safeUrl(g.thumb);
-      return `<button class="category-card" data-category="${esc(g.name)}">
-        <span class="category-art">${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>
-        <span class="category-info"><strong class="ellipsis">${esc(g.name)}</strong><span>라이브 ${g.count} · ${esc(compactCount(g.viewers))}명</span></span>
-        <span class="category-pin${pins.has(g.name) ? ' on' : ''}" data-pin="${esc(g.name)}" title="${pins.has(g.name) ? '고정 해제' : '위에 고정'}">★</span>
-      </button>`;
+      const on = pins.has(g.name);
+      // 고정 별은 카드(상세로 이동)와 형제인 독립 단추 — 안에 두면 초점을 받지 못하고 Enter 가 상세로 갔다
+      return `<div class="category-item">
+        <button class="category-card" data-category="${esc(g.name)}">
+          <span class="category-art">${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>
+          <span class="category-info"><strong class="ellipsis">${esc(g.name)}</strong><span>라이브 ${g.count} · ${esc(compactCount(g.viewers))}명</span></span>
+        </button>
+        <button class="category-pin${on ? ' on' : ''}" data-pin="${esc(g.name)}" aria-pressed="${on}" aria-label="${esc(g.name)} ${on ? '고정 해제' : '위에 고정'}" title="${on ? '고정 해제' : '위에 고정'}">★</button>
+      </div>`;
     }).join('')}</div>` : emptyState('카테고리가 없습니다');
   }
 }

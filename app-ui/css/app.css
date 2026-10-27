@@ -1429,7 +1429,10 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .category-info { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px 12px; }
 .category-info strong { font-size: var(--fs-body); }
 .category-info span { color: var(--text-tertiary); font-size: var(--fs-footnote); }
-.category-pin { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: rgba(0, 0, 0, 0.5); color: rgba(255, 255, 255, 0.6); font-size: 13px; }
+.category-item { position: relative; display: flex; flex-direction: column; }
+.category-item > .category-card { flex: 1; }
+.category-pin { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; background: rgba(0, 0, 0, 0.5); color: rgba(255, 255, 255, 0.6); font-size: 13px; cursor: pointer; }
+.category-pin:focus-visible { outline: none; box-shadow: var(--focus-ring); color: #fff; }
 .category-pin.on { color: #ffcc33; }
 .category-pin:hover { color: #fff; }
 .clip-shelf { grid-auto-columns: minmax(150px, 170px); }
