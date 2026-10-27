@@ -807,7 +807,11 @@ async function main() {
   document.addEventListener('click', (e) => {
     if (!e.target.closest('[data-retry]')) return;
     const page = pages[current];
-    if (page) page.acceptsParams ? page.show(currentParams) : page.show(true);
+    if (!page) return;
+    // 검색처럼 입력으로 연 화면은 경로 매개변수에 검색어가 없다 — 제 retry 가 마지막 입력으로 다시 한다
+    if (page.retry) page.retry();
+    else if (page.acceptsParams) page.show(currentParams);
+    else page.show(true);
   });
   // 라이브 무대의 채널이 닫힌 "순간"에만 화면을 옮긴다 — 조건만 보면 목록 화면에 머물 때도(1초마다 오는 알림)
   // 멀티라이브로 끌려가고, 채널을 여는 도중(무대에 오르기 전)에도 멀티라이브가 번쩍 보였다.
