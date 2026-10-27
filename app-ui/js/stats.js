@@ -5,6 +5,7 @@ import { api } from './api.js';
 import { esc, safeUrl, toast, imageSrc } from './dom.js';
 import { emptyState, loadingState, errorState } from './cards.js';
 import { relativeDate } from './channel.js';
+import { syncTabs, bindTabKeys } from './a11y.js';
 
 export const statsIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>';
 
@@ -72,17 +73,19 @@ export class StatsPage {
         <h1 class="page-title">통계</h1>
         <span class="page-subtitle">이 기기에서 본 방송 기록으로 계산합니다</span>
       </header>
-      <div class="chips lib-tabs" role="tablist">${TABS.map(([id, label]) => `<button class="chip" data-tab="${id}" role="tab">${label}</button>`).join('')}</div>
+      <div class="chips lib-tabs" role="tablist" aria-label="통계">${TABS.map(([id, label]) => `<button class="chip" data-tab="${id}" role="tab">${label}</button>`).join('')}</div>
       <div class="page-body stats-body"></div>`;
     content.append(this.root);
     this.body = this.root.querySelector('.page-body');
+    this.tabs = this.root.querySelector('.lib-tabs');
     this.seq = 0;
+    bindTabKeys(this.tabs);
     this.root.addEventListener('click', (e) => this.onClick(e));
   }
 
   show(params = {}) {
     if (params.tab) this.tab = params.tab;
-    for (const b of this.root.querySelectorAll('[data-tab]')) b.classList.toggle('active', b.dataset.tab === this.tab);
+    syncTabs(this.tabs, this.tab, this.body, 'stats');
     this.load();
   }
 

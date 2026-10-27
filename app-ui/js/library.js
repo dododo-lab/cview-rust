@@ -7,6 +7,7 @@ import { emptyState, loadingState, errorState } from './cards.js';
 import { vodCard, clipCard, relativeDate, formatDuration } from './channel.js';
 import { continueCard } from './media.js';
 import { mountDownloads } from './downloads.js';
+import { syncTabs, bindTabKeys } from './a11y.js';
 
 export const libraryIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h4v16H4zM10 4h4v16h-4zM16.2 4.4l3.8-1 4 15.5-3.8 1z" transform="scale(.92) translate(1 1)"/></svg>';
 
@@ -64,19 +65,21 @@ export class LibraryPage {
         <h1 class="page-title">보관함</h1>
         <span class="page-subtitle">클립 · 다시보기 · 즐겨찾기 · 북마크</span>
       </header>
-      <div class="chips lib-tabs" role="tablist">${TABS.map(([id, label]) => `<button class="chip" data-tab="${id}" role="tab">${label}</button>`).join('')}</div>
+      <div class="chips lib-tabs" role="tablist" aria-label="보관함">${TABS.map(([id, label]) => `<button class="chip" data-tab="${id}" role="tab">${label}</button>`).join('')}</div>
       <div class="lib-filters"></div>
       <div class="page-body"></div>`;
     content.append(this.root);
     this.body = this.root.querySelector('.page-body');
     this.filters = this.root.querySelector('.lib-filters');
+    this.tabs = this.root.querySelector('.lib-tabs');
     this.seq = 0;
+    bindTabKeys(this.tabs);
     this.root.addEventListener('click', (e) => this.onClick(e));
   }
 
   show(params = {}) {
     if (params.tab) this.tab = params.tab;
-    for (const b of this.root.querySelectorAll('[data-tab]')) b.classList.toggle('active', b.dataset.tab === this.tab);
+    syncTabs(this.tabs, this.tab, this.body, 'lib');
     this.load();
   }
 
