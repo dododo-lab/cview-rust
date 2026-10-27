@@ -194,6 +194,6 @@ cargo audit --json
 | push/PR 회귀 CI 부재 | `.github/workflows/ci.yml` 추가. macOS에서 `fmt`·Clippy(`-D warnings`)·`cargo test`, Ubuntu에서 채팅 회귀 12개·배포 자동화 15개·스크립트 문법·`cargo audit` 실행 |
 | 채팅 회귀 검사 상시화 | 증거의 `frontend-behavior.mjs`를 `tests/frontend/chat-behavior.mjs`로 옮겨 반복 실행. 증거 파일은 당시 상태로 보존 |
 | Linux 의존성 경고 5건 | 4건은 수정판이 없는 유지보수 중단 공지, `glib`는 `>=0.20` 필요(현재 Tauri/wry는 gtk-rs 0.18 사용). `cargo update`로 해소되지 않음을 확인. CI의 `cargo audit --deny warnings`에서 근거와 함께 예외 처리하고 새 공지는 실패로 막음. Linux 지원 시 재검토 |
-| 기본 target 볼륨 공간 부족 | 진단만 수행. `/Volumes/data` 가용 44 MiB, CView target 122 GB 중 `debug` 98 GB(`deps` 85 GB). 삭제는 사용자 승인 후 진행 |
+| 기본 target 볼륨 공간 부족 | `/Volumes/data` 가용 44 MiB, CView target 122 GB 중 `debug` 98 GB(`deps` 85 GB)였음. 사용자 승인 후 재생성 가능한 `target/debug`만 삭제해 가용 95 GiB 확보. `target/release`·로그·스크린샷은 보존. 배포 빌드와 target 잠금이 겹치지 않도록 기본 경로 재빌드는 다음 정상 빌드로 확인 |
 
 CI는 실서버 업데이트 테스트(`#[ignore]`)와 Windows 교차 Clippy를 포함하지 않는다. 기존 주석에 따르면 2026-10-20 당시 이 계정의 Actions 실행이 startup_failure였으므로, 첫 PR 실행 결과로 동작 여부를 확인해야 한다.
