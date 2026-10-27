@@ -1778,6 +1778,16 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .cleanup-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
 .cleanup-row span { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-footnote); }
 .cleanup-row small { color: var(--text-tertiary); }
+/* 설명이 길어도 버튼은 줄지 않는다 — 좁을 때 '백 / 업'처럼 글자가 세로로 갈라졌다. 줄바꿈은 설명 쪽에서 */
+.cleanup-row > span { flex: 1; min-width: 0; }
+.cleanup-row > .btn { flex: none; white-space: nowrap; min-width: 64px; }
+/* 되돌릴 수 없는 정리의 확인 시트 */
+.confirm-facts { display: grid; grid-template-columns: max-content 1fr; gap: 8px 14px; margin: 0; font-size: var(--fs-footnote); }
+.confirm-facts dt { color: var(--text-tertiary); font-weight: 600; }
+.confirm-facts dd { margin: 0; color: var(--text-secondary); }
+.confirm-check { display: flex; align-items: flex-start; gap: 10px; font-size: var(--fs-footnote); cursor: pointer; }
+.confirm-check > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.confirm-check small { color: var(--text-tertiary); }
 .muted.small { font-size: var(--fs-micro); word-break: break-all; }
 
 /* ── 다운로드 (VOD-06·07) ───────────────── */
