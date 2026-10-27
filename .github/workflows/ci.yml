@@ -1,0 +1,74 @@
+# push/PR 회귀 검사. 배포·게시는 하지 않는다(정식 배포는 scripts/release-macos.sh --dmg).
+# 제품 대상이 macOS 이므로 Rust 검사는 macOS 러너에서 돌린다. Windows 는 교차 Clippy 를
+# 로컬 검증 절차(docs/PROJECT_VERIFICATION_2026-10-27.md 10절)로 확인한다.
+# 실서버 업데이트 테스트(#[ignore])는 네트워크·운영 서버에 의존하므로 CI 에서 제외한다.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      CARGO_INCREMENTAL: 0
+      CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ci-macos
+
+      - name: 포맷
+        run: cargo fmt --all -- --check
+
+      - name: Clippy (macOS)
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: 테스트
+        run: cargo test --workspace --locked
+
+  scripts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: zsh
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq zsh
+
+      - name: 채팅 회귀 검사
+        run: node --experimental-vm-modules tests/frontend/chat-behavior.mjs
+
+      - name: 배포 자동화 테스트
+        run: python3 -B -m unittest discover -s tools/windows-update-server/tests -v
+
+      - name: 배포 스크립트 문법
+        run: |
+          zsh -n scripts/release-macos.sh
+          python3 -m py_compile scripts/publish-update.py
