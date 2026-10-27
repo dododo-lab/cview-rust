@@ -1765,7 +1765,7 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .mc-merged-banner { margin-top: 8px; }
 /* 그리드 칸 머리 — 짧은 채널명·연결 상태는 줄이지 않는다. 좁은 칸에서는 드문 도구를 '⋯' 뒤로 (F12) */
 .mc-pane { container-type: inline-size; }
-.mc-pane .chat-header .mc-name { flex: 0 1 auto; min-width: min(5.5em, 30%); }
+.mc-pane .chat-header .mc-name { flex: 0 0 auto; max-width: 45%; }
 .mc-pane .chat-header .chat-state { flex: none; white-space: nowrap; }
 .mc-tools-more { display: none; }
 @container (max-width: 520px) {
