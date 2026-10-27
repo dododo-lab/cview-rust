@@ -1,0 +1,65 @@
+glib v0.18.5
+├── atk v0.18.2
+│   └── gtk v0.18.2
+│       ├── libappindicator v0.9.0
+│       │   └── tray-icon v0.25.1
+│       │       └── tauri v2.12.4
+│       │           ├── cview-app v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app)
+│       │           ├── tauri-plugin-deep-link v2.6.2
+│       │           │   ├── cview-app v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app)
+│       │           │   └── tauri-plugin-single-instance v2.5.4
+│       │           │       └── cview-app v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app)
+│       │           ├── tauri-plugin-notification v2.7.0
+│       │           │   └── cview-app v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app)
+│       │           └── tauri-plugin-single-instance v2.5.4 (*)
+│       ├── muda v0.20.0
+│       │   ├── tauri v2.12.4 (*)
+│       │   └── tray-icon v0.25.1 (*)
+│       ├── tao v0.37.1
+│       │   └── tauri-runtime-wry v2.12.2
+│       │       └── tauri v2.12.4 (*)
+│       ├── tauri v2.12.4 (*)
+│       ├── tauri-runtime v2.12.2
+│       │   ├── tauri v2.12.4 (*)
+│       │   └── tauri-runtime-wry v2.12.2 (*)
+│       ├── tauri-runtime-wry v2.12.2 (*)
+│       ├── webkit2gtk v2.0.2
+│       │   ├── tauri v2.12.4 (*)
+│       │   ├── tauri-runtime v2.12.2 (*)
+│       │   ├── tauri-runtime-wry v2.12.2 (*)
+│       │   └── wry v0.57.0
+│       │       └── tauri-runtime-wry v2.12.2 (*)
+│       └── wry v0.57.0 (*)
+├── cairo-rs v0.18.5
+│   ├── gdk v0.18.2
+│   │   ├── gdkx11 v0.18.2
+│   │   │   └── wry v0.57.0 (*)
+│   │   ├── gtk v0.18.2 (*)
+│   │   └── webkit2gtk v2.0.2 (*)
+│   ├── gtk v0.18.2 (*)
+│   └── webkit2gtk v2.0.2 (*)
+├── gdk v0.18.2 (*)
+├── gdk-pixbuf v0.18.5
+│   ├── gdk v0.18.2 (*)
+│   └── gtk v0.18.2 (*)
+├── gdkx11 v0.18.2 (*)
+├── gio v0.18.4
+│   ├── gdk v0.18.2 (*)
+│   ├── gdk-pixbuf v0.18.5 (*)
+│   ├── gdkx11 v0.18.2 (*)
+│   ├── gtk v0.18.2 (*)
+│   ├── pango v0.18.3
+│   │   ├── gdk v0.18.2 (*)
+│   │   └── gtk v0.18.2 (*)
+│   ├── soup3 v0.5.0
+│   │   ├── webkit2gtk v2.0.2 (*)
+│   │   └── wry v0.57.0 (*)
+│   └── webkit2gtk v2.0.2 (*)
+├── gtk v0.18.2 (*)
+├── javascriptcore-rs v1.1.2
+│   ├── webkit2gtk v2.0.2 (*)
+│   └── wry v0.57.0 (*)
+├── libappindicator v0.9.0 (*)
+├── pango v0.18.3 (*)
+├── soup3 v0.5.0 (*)
+└── webkit2gtk v2.0.2 (*)
