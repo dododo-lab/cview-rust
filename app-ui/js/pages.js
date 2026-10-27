@@ -19,6 +19,12 @@ export function arrangeLives(lives, { sort = 'viewers', category = '' } = {}) {
   return list;
 }
 
+/** 인기 화면 머리 설명 — 정렬과 카테고리 필터. 순수 함수. */
+export function popularSubtitle(sort, category = '') {
+  const order = sort === 'recent' ? '최근 시작한 순' : '시청자 많은 순';
+  return category ? `${category} · ${order}` : order;
+}
+
 /** 카테고리별 묶음 — [{ name, count, viewers }] 시청자 많은 순. */
 export function categoryGroups(lives) {
   const map = new Map();
@@ -68,6 +74,9 @@ export class PopularPage {
   render() {
     const cats = categoryGroups(this.lives).slice(0, 14);
     const list = arrangeLives(this.lives, { sort: this.sort, category: this.category });
+    // 머리 설명도 지금 정렬·필터를 따른다(예전엔 '최근 시작'을 골라도 '시청자 많은 순'으로 남았다)
+    const sub = this.root.querySelector('.page-subtitle');
+    if (sub) sub.textContent = popularSubtitle(this.sort, this.category);
     this.body.innerHTML = `
       <div class="list-toolbar">
         <div class="segmented"><button class="seg${this.sort === 'viewers' ? ' active' : ''}" data-sort="viewers">시청자순</button><button class="seg${this.sort === 'recent' ? ' active' : ''}" data-sort="recent">최근 시작</button></div>

@@ -1492,6 +1492,9 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .settings-tabs { margin: 0; flex: 1; }
 .settings-search { width: 220px; height: 34px; border-radius: 10px; border: 1px solid var(--border-subtle); background: var(--surface-base); padding: 0 12px; outline: none; }
 .settings-search:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
+.settings-search-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 16px; text-align: center; color: var(--text-tertiary); font-size: var(--fs-footnote); }
+.settings-search-empty[hidden] { display: none; }
+.settings-search-empty strong { color: var(--text-primary); font-size: var(--fs-body); }
 .settings-groups .settings-group { max-width: 860px; }
 .settings-group h3 { display: flex; align-items: center; gap: 8px; }
 .adv-toggle { margin-left: auto; font-size: var(--fs-footnote); padding: 0 var(--sp-lg) 0 0; }
