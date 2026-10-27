@@ -82,3 +82,38 @@ export function installA11y() {
     }
   });
 }
+
+/**
+ * 탭 묶음(role=tablist)의 선택 상태를 맞춘다 — 선택 탭만 aria-selected·tabindex 0(나머지 -1, 화살표로 옮긴다),
+ * 패널은 role=tabpanel 로 선택 탭과 잇는다. `prefix` 로 탭·패널 id 를 만든다(`<prefix>-tab-<id>`, `<prefix>-panel`).
+ * 예전엔 CSS active 만 바뀌어 화면 낭독기가 지금 탭을 알 수 없었다.
+ */
+export function syncTabs(tablist, activeId, panel, prefix) {
+  const panelId = `${prefix}-panel`;
+  if (panel) { panel.id = panelId; panel.setAttribute('role', 'tabpanel'); }
+  for (const b of tablist.querySelectorAll('[role="tab"]')) {
+    const on = b.dataset.tab === activeId;
+    b.id = `${prefix}-tab-${b.dataset.tab}`;
+    b.classList.toggle('active', on);
+    b.setAttribute('aria-selected', String(on));
+    b.setAttribute('aria-controls', panelId);
+    b.tabIndex = on ? 0 : -1;
+    if (on && panel) panel.setAttribute('aria-labelledby', b.id);
+  }
+}
+
+/** 탭 묶음의 키보드 — ←/→ 로 옆 탭, Home/End 로 처음·끝 탭을 고르고 초점을 옮긴다(고르면 click 으로 바뀐다). */
+export function bindTabKeys(tablist) {
+  tablist.addEventListener('keydown', (e) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const tabs = [...tablist.querySelectorAll('[role="tab"]')];
+    const i = tabs.indexOf(e.target.closest('[role="tab"]'));
+    if (i < 0) return;
+    const j = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+    if (j === undefined) return;
+    e.preventDefault();
+    const next = tabs[(j + tabs.length) % tabs.length];
+    next.focus();
+    next.click();
+  });
+}

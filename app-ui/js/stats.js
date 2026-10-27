@@ -2,11 +2,65 @@
 // AppState+StoreRecovery / LocalDataHygiene(데이터 관리 탭).
 // DAT-04 통계 화면, DSN-05 차트·랭킹 바, DAT-06 저장소 상태·정리·백업.
 import { api } from './api.js';
-import { esc, safeUrl, toast, imageSrc } from './dom.js';
+import { esc, safeUrl, toast, imageSrc, dismiss } from './dom.js';
 import { emptyState, loadingState, errorState } from './cards.js';
 import { relativeDate } from './channel.js';
+import { syncTabs, bindTabKeys } from './a11y.js';
 
 export const statsIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>';
+
+/**
+ * 되돌릴 수 없는 정리 — 첫 클릭에 바로 지우지 않고 대상·영향·복구 방법을 보인 뒤 한 번 더 확인한다.
+ * 캐시 비우기(다시 받아 옴)는 바로 한다. 키는 data_cleanup 의 kind.
+ */
+export const DESTRUCTIVE_CLEANUPS = {
+  oldHistory: {
+    title: '90일 지난 시청 기록을 지울까요?',
+    target: '90일보다 오래된 시청 기록',
+    effect: '전체 시청 시간·채널 순위·시간대 통계에서 빠집니다. 최근 90일 기록과 즐겨찾기·북마크는 그대로 둡니다.',
+  },
+  recent: {
+    title: '최근 시청 목록을 비울까요?',
+    target: '보관함 › 최근 시청에 남은 채널 목록',
+    effect: '채널마다 남은 마지막 시청 시각을 지웁니다. 즐겨찾기·메모·통계용 시청 기록은 그대로 둡니다.',
+  },
+};
+
+/**
+ * 정리 확인 시트 — 취소·Esc·바깥 클릭이면 null, 확인이면 { backup } (지우기 전에 백업할지).
+ * 초점은 처음에 "취소"에 둔다(Enter 한 번으로 지워지지 않게).
+ */
+export function confirmCleanup(kind) {
+  const info = DESTRUCTIVE_CLEANUPS[kind];
+  return new Promise((resolve) => {
+    const scrim = document.createElement('div');
+    scrim.className = 'sheet-scrim cleanup-confirm';
+    scrim.innerHTML = `<form class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="cleanup-title" aria-describedby="cleanup-desc">
+      <h2 id="cleanup-title">${esc(info.title)}</h2>
+      <dl class="confirm-facts" id="cleanup-desc">
+        <dt>지울 대상</dt><dd>${esc(info.target)}</dd>
+        <dt>영향</dt><dd>${esc(info.effect)}</dd>
+        <dt>복구</dt><dd>지운 뒤에는 앱 안에서 되돌릴 수 없습니다. 지우기 전에 백업해 두면 앱을 끈 뒤 백업 폴더의 파일로 바꿔 복원할 수 있습니다.</dd>
+      </dl>
+      <label class="confirm-check"><span class="toggle"><input type="checkbox" data-backup checked><span></span></span>
+        <span>지우기 전에 지금 상태를 백업 <small>백업은 최근 2개만 남깁니다 · 백업에 실패하면 지우지 않습니다</small></span></label>
+      <div class="sheet-actions"><button type="button" class="btn" data-cancel>취소</button><button type="submit" class="btn danger">지우기</button></div>
+    </form>`;
+    document.body.append(scrim);
+    const form = scrim.querySelector('form');
+    let done = false;
+    const finish = (value) => {
+      if (done) return;
+      done = true;
+      dismiss(scrim);
+      resolve(value);
+    };
+    scrim.addEventListener('click', (e) => { if (e.target === scrim || e.target.closest('[data-cancel]')) finish(null); });
+    scrim.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(null); } });
+    form.addEventListener('submit', (e) => { e.preventDefault(); finish({ backup: form.querySelector('[data-backup]').checked }); });
+    scrim.querySelector('[data-cancel]').focus();
+  });
+}
 
 const TABS = [
   ['overview', '개요'],
@@ -72,17 +126,19 @@ export class StatsPage {
         <h1 class="page-title">통계</h1>
         <span class="page-subtitle">이 기기에서 본 방송 기록으로 계산합니다</span>
       </header>
-      <div class="chips lib-tabs" role="tablist">${TABS.map(([id, label]) => `<button class="chip" data-tab="${id}" role="tab">${label}</button>`).join('')}</div>
+      <div class="chips lib-tabs" role="tablist" aria-label="통계">${TABS.map(([id, label]) => `<button class="chip" data-tab="${id}" role="tab">${label}</button>`).join('')}</div>
       <div class="page-body stats-body"></div>`;
     content.append(this.root);
     this.body = this.root.querySelector('.page-body');
+    this.tabs = this.root.querySelector('.lib-tabs');
     this.seq = 0;
+    bindTabKeys(this.tabs);
     this.root.addEventListener('click', (e) => this.onClick(e));
   }
 
   show(params = {}) {
     if (params.tab) this.tab = params.tab;
-    for (const b of this.root.querySelectorAll('[data-tab]')) b.classList.toggle('active', b.dataset.tab === this.tab);
+    syncTabs(this.tabs, this.tab, this.body, 'stats');
     this.load();
   }
 
@@ -188,7 +244,9 @@ export class StatsPage {
         <section class="stats-card"><h3>저장된 항목</h3>
           <table class="data-table">${h.tables.map((t) => `<tr><td>${esc(t.label)}</td><td class="num">${t.rows.toLocaleString()}</td></tr>`).join('')}</table></section>
         <section class="stats-card"><h3>정리</h3>
-          <div class="cleanup-list">${cleanups.map(([k, l, s]) => `<div class="cleanup-row"><span><strong>${esc(l)}</strong><small>${esc(s)}</small></span><button class="btn" data-stats="cleanup" data-kind="${k}">정리</button></div>`).join('')}</div>
+          <div class="cleanup-list">${cleanups.map(([k, l, s]) => `<div class="cleanup-row"><span><strong>${esc(l)}</strong><small>${esc(s)}</small></span>${DESTRUCTIVE_CLEANUPS[k]
+            ? `<button class="btn danger" data-stats="cleanup" data-kind="${k}" aria-haspopup="dialog">지우기…</button>`
+            : `<button class="btn" data-stats="cleanup" data-kind="${k}">정리</button>`}</div>`).join('')}</div>
           <h3 class="sub-h">백업</h3>
           <div class="cleanup-row"><span><strong>지금 백업</strong><small>최근 2개만 남깁니다 · 복원은 앱을 끈 뒤 백업 폴더의 파일로 바꿉니다</small></span><button class="btn primary" data-stats="backup">백업</button></div>
           ${h.backups.map((b) => `<div class="cleanup-row"><span><strong>${esc(new Date(b.createdAt).toLocaleString())}</strong><small>${esc(b.reason)} · ${esc(bytesText(b.bytes))}</small></span></div>`).join('')}
@@ -210,8 +268,24 @@ export class StatsPage {
     const paint = (h) => { if (seq === this.seq && this.tab === 'data') this.renderData(h); };
     try {
       if (b.dataset.stats === 'cleanup') {
+        const kind = b.dataset.kind;
+        if (DESTRUCTIVE_CLEANUPS[kind]) {
+          const ok = await confirmCleanup(kind);
+          if (!ok) { b.focus(); return; } // 취소 — 아무것도 바꾸지 않는다
+          b.disabled = true;
+          if (ok.backup) {
+            try { paint(await api.dataBackupNow()); } catch (er) {
+              b.disabled = false;
+              toast(`백업하지 못해 지우지 않았습니다 — ${er.message}`, 5000);
+              return;
+            }
+          }
+          paint(await api.dataCleanup(kind));
+          toast(ok.backup ? '백업한 뒤 지웠습니다' : '지웠습니다', 1800);
+          return;
+        }
         b.disabled = true;
-        paint(await api.dataCleanup(b.dataset.kind));
+        paint(await api.dataCleanup(kind));
         toast('정리했습니다', 1500);
       } else if (b.dataset.stats === 'backup') {
         b.disabled = true;

@@ -1,7 +1,7 @@
 // 사이드바 화면들 — 팔로잉 / 인기 / 검색 / 설정. 홈은 home.js.
 import { api } from './api.js';
 import { esc, safeUrl, imageSrc } from './dom.js';
-import { liveGrid, channelRow, emptyState, loadingState, compactCount, skeletonGrid, freshnessText, errorState, uptimeText } from './cards.js';
+import { liveGrid, channelRow, emptyState, loadingState, compactCount, skeletonGrid, freshnessText, errorState, friendlyError, uptimeText } from './cards.js';
 import { FOLLOW_SORTS, FOLLOW_FILTERS, arrangeFollowed, followedInsights, followBadges, followAgeText, parseFollowDate, FollowExtras } from './following-info.js';
 import { vodCard } from './channel.js';
 
@@ -17,6 +17,12 @@ export function arrangeLives(lives, { sort = 'viewers', category = '' } = {}) {
   if (sort === 'recent') list.sort((a, b) => Date.parse(b.openDate || 0) - Date.parse(a.openDate || 0));
   else list.sort((a, b) => (b.viewerCount || 0) - (a.viewerCount || 0));
   return list;
+}
+
+/** 인기 화면 머리 설명 — 정렬과 카테고리 필터. 순수 함수. */
+export function popularSubtitle(sort, category = '') {
+  const order = sort === 'recent' ? '최근 시작한 순' : '시청자 많은 순';
+  return category ? `${category} · ${order}` : order;
 }
 
 /** 카테고리별 묶음 — [{ name, count, viewers }] 시청자 많은 순. */
@@ -68,6 +74,9 @@ export class PopularPage {
   render() {
     const cats = categoryGroups(this.lives).slice(0, 14);
     const list = arrangeLives(this.lives, { sort: this.sort, category: this.category });
+    // 머리 설명도 지금 정렬·필터를 따른다(예전엔 '최근 시작'을 골라도 '시청자 많은 순'으로 남았다)
+    const sub = this.root.querySelector('.page-subtitle');
+    if (sub) sub.textContent = popularSubtitle(this.sort, this.category);
     this.body.innerHTML = `
       <div class="list-toolbar">
         <div class="segmented"><button class="seg${this.sort === 'viewers' ? ' active' : ''}" data-sort="viewers">시청자순</button><button class="seg${this.sort === 'recent' ? ' active' : ''}" data-sort="recent">최근 시작</button></div>
@@ -241,6 +250,8 @@ function saveRecentSearch(q) {
   try { localStorage.setItem(RECENT_SEARCH_KEY, JSON.stringify(list)); } catch { /* 무시 */ }
 }
 
+const VOD_PAGE = 24;
+
 export class SearchPage {
   constructor(root) {
     this.root = root;
@@ -250,11 +261,19 @@ export class SearchPage {
     this.acceptsParams = true;
     this.seq = 0;
     this.tab = 'all';
-    this.result = null;
-    this.videos = null;
+    this.query = '';
+    this.lastQuery = ''; // 마지막으로 제출한 검색어 — 오류 화면의 "다시 시도"가 이것으로 다시 찾는다
+    this.result = null; // { lives, channels } — 채널·라이브 검색이 실패했으면 null
+    this.mainError = null;
+    this.videos = null; // { items, hasMore, loading, error } — 다시보기 검색이 실패했으면 null
+    this.videosError = null;
     root.querySelector('form').addEventListener('submit', (e) => {
       e.preventDefault();
       this.run(this.input.value);
+    });
+    // 입력란이 비면(X 단추·전체 지우기) 이전 결과를 남기지 않고 처음 화면으로 — 늦게 온 응답도 무시된다
+    this.input.addEventListener('input', () => {
+      if (!this.input.value.trim() && !this.idle) this.run('');
     });
     this.body.addEventListener('click', (e) => {
       const r = e.target.closest('[data-recent]');
@@ -269,6 +288,9 @@ export class SearchPage {
       const dc = e.target.closest('[data-discover-cat]');
       if (dc) { window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: 'categories', params: { category: dc.dataset.discoverCat } } })); return; }
       if (e.target.closest('[data-recent-clear]')) { try { localStorage.removeItem(RECENT_SEARCH_KEY); } catch { /* 무시 */ } this.renderIdle(); return; }
+      const rs = e.target.closest('[data-search-retry]');
+      if (rs) { e.stopPropagation(); this.retrySource(rs.dataset.searchRetry); return; }
+      if (e.target.closest('[data-vod-more]')) { e.stopPropagation(); this.loadMoreVideos(); return; }
       const t = e.target.closest('[data-stab]');
       if (t) { this.tab = t.dataset.stab; this.renderResults(); return; }
       const vod = e.target.closest('[data-vod-no]');
@@ -282,6 +304,14 @@ export class SearchPage {
   show(params = {}) {
     if (params && params.query) { this.input.value = params.query; this.run(params.query); }
     this.input.focus();
+  }
+
+  /** 오류 화면의 "다시 시도"(app.js) — 경로 매개변수가 없어도 마지막으로 제출한 검색어로 다시 찾는다. */
+  retry() {
+    const q = this.lastQuery;
+    if (!q) { this.show(); return; }
+    this.input.value = q;
+    this.run(q);
   }
 
   async loadDiscovery() {
@@ -306,6 +336,7 @@ export class SearchPage {
   }
 
   renderIdle() {
+    this.idle = true;
     const recent = recentSearches();
     setTimeout(() => this.renderDiscovery(), 0);
     this.body.innerHTML = '<div class="discovery-top"></div><div class="discovery"></div>';
@@ -318,38 +349,117 @@ export class SearchPage {
   async run(keyword) {
     const q = keyword.trim();
     const seq = ++this.seq; // 비운 검색도 순번을 올린다 — 늦게 온 이전 결과가 최근 검색 화면을 덮지 않게
-    if (!q) { this.renderIdle(); return; }
+    if (!q) {
+      this.query = '';
+      this.result = null;
+      this.videos = null;
+      this.renderIdle();
+      return;
+    }
+    this.lastQuery = q;
+    this.idle = false;
     saveRecentSearch(q);
     this.body.innerHTML = loadingState();
-    const [main, vods] = await Promise.allSettled([api.search(q), api.searchVideos(q, 0, 24)]);
+    const [main, vods] = await Promise.allSettled([api.search(q), api.searchVideos(q, 0, VOD_PAGE)]);
     if (seq !== this.seq) return;
     if (main.status === 'rejected' && vods.status === 'rejected') {
+      this.query = '';
+      this.result = null;
+      this.videos = null;
       this.body.innerHTML = errorState('검색하지 못했습니다', main.reason);
       return;
     }
     this.query = q;
-    this.result = main.status === 'fulfilled' ? main.value : { lives: [], channels: [] };
-    this.videos = vods.status === 'fulfilled' ? vods.value.items : [];
+    this.setMain(main);
+    this.setVideos(vods);
+    this.renderResults();
+  }
+
+  setMain(res) {
+    this.result = res.status === 'fulfilled' ? res.value : null;
+    this.mainError = res.status === 'rejected' ? res.reason : null;
+  }
+
+  setVideos(res) {
+    this.videos = res.status === 'fulfilled' ? { items: res.value.items || [], hasMore: Boolean(res.value.hasMore), loading: false, error: null } : null;
+    this.videosError = res.status === 'rejected' ? res.reason : null;
+  }
+
+  /** 한쪽 검색만 실패했을 때 그쪽만 다시 받는다 — 받은 다른 쪽 결과는 그대로 둔다. */
+  async retrySource(kind) {
+    const q = this.query;
+    const seq = this.seq;
+    if (!q) return;
+    if (kind === 'main') { this.mainError = null; this.mainRetrying = true; } else { this.videosError = null; this.videosRetrying = true; }
+    this.renderResults();
+    const [res] = await Promise.allSettled([kind === 'main' ? api.search(q) : api.searchVideos(q, 0, VOD_PAGE)]);
+    if (seq !== this.seq || q !== this.query) return; // 그사이 다른 검색으로 바뀌었다
+    if (kind === 'main') { this.mainRetrying = false; this.setMain(res); } else { this.videosRetrying = false; this.setVideos(res); }
+    this.renderResults();
+  }
+
+  /** 다시보기 다음 구간 — 받은 개수를 시작 위치로. 실패하면 받은 목록은 두고 "다시 시도"를 보인다. */
+  async loadMoreVideos() {
+    const v = this.videos;
+    if (!v || v.loading || !v.hasMore) return;
+    const q = this.query;
+    const seq = this.seq;
+    v.loading = true;
+    v.error = null;
+    this.renderResults();
+    try {
+      const page = await api.searchVideos(q, v.items.length, VOD_PAGE);
+      if (seq !== this.seq || q !== this.query || v !== this.videos) return;
+      const seen = new Set(v.items.map((x) => x.videoNo));
+      const fresh = (page.items || []).filter((x) => !seen.has(x.videoNo));
+      v.items.push(...fresh);
+      v.hasMore = Boolean(page.hasMore) && fresh.length > 0;
+    } catch (e) {
+      if (seq !== this.seq || q !== this.query || v !== this.videos) return;
+      v.error = e;
+    }
+    v.loading = false;
     this.renderResults();
   }
 
   renderResults() {
-    if (!this.result) return;
-    const { lives, channels } = this.result;
-    const videos = this.videos || [];
-    const tabs = [['all', `전체`], ['lives', `라이브 ${lives.length}`], ['channels', `채널 ${channels.length}`], ['videos', `다시보기 ${videos.length}`]];
+    if (!this.query) return;
+    const mainFailed = !this.result;
+    const vodFailed = !this.videos;
+    const { lives, channels } = this.result || { lives: [], channels: [] };
+    const v = this.videos || { items: [], hasMore: false };
+    const videos = v.items;
+    const n = (failed, count, more = false) => (failed ? '실패' : `${count}${more ? '+' : ''}`);
+    const tabs = [['all', '전체'], ['lives', `라이브 ${n(mainFailed, lives.length)}`], ['channels', `채널 ${n(mainFailed, channels.length)}`], ['videos', `다시보기 ${n(vodFailed, videos.length, v.hasMore)}`]];
     const tabBar = `<div class="segmented search-tabs">${tabs.map(([id, l]) => `<button class="seg${this.tab === id ? ' active' : ''}" data-stab="${id}">${l}</button>`).join('')}</div>`;
-    const sec = (id, title, items, html, limit) => {
+    const sec = (id, title, items, html, limit, more = false) => {
       if (!items.length) return '';
       const full = this.tab === id;
       if (this.tab !== 'all' && !full) return '';
-      return `<div class="section-head"><h2 class="section-title">${title}</h2><div class="grow"></div>${!full && items.length > limit ? `<button class="link-btn" data-stab="${id}">전체 보기</button>` : ''}</div>${html(full ? items : items.slice(0, limit))}`;
+      return `<div class="section-head"><h2 class="section-title">${title}</h2><div class="grow"></div>${!full && (items.length > limit || more) ? `<button class="link-btn" data-stab="${id}">전체 보기</button>` : ''}</div>${html(full ? items : items.slice(0, limit))}`;
     };
+    // 실패한 쪽 — "결과 없음"과 구분해 알리고 그쪽만 다시 받는다
+    const failBox = (kind, label, err, retrying) => (retrying
+      ? `<div class="search-source-error" role="status">${esc(label)} 다시 찾는 중…</div>`
+      : `<div class="search-source-error" role="alert"><span><strong>${esc(label)} 검색에 실패했습니다</strong><small>${esc(friendlyError(err))}</small></span><button class="btn" data-search-retry="${kind}">다시 시도</button></div>`);
+    const showMain = this.tab === 'all' || this.tab === 'lives' || this.tab === 'channels';
+    const showVod = this.tab === 'all' || this.tab === 'videos';
+    const errors = [
+      showMain && mainFailed ? failBox('main', '라이브·채널', this.mainError, this.mainRetrying) : '',
+      showVod && vodFailed ? failBox('videos', '다시보기', this.videosError, this.videosRetrying) : '',
+    ].join('');
+    let vodMore = '';
+    if (this.tab === 'videos' && this.videos) {
+      if (v.loading) vodMore = '<button class="btn load-more" disabled>불러오는 중…</button>';
+      else if (v.error) vodMore = `<div class="search-source-error" role="alert"><span><strong>다시보기를 더 불러오지 못했습니다</strong><small>${esc(friendlyError(v.error))}</small></span><button class="btn" data-vod-more>다시 시도</button></div>`;
+      else if (v.hasMore) vodMore = '<button class="btn load-more" data-vod-more>더 보기</button>';
+    }
     const html = [
       sec('lives', '라이브', lives, (l) => liveGrid(l), 8),
       sec('channels', '채널', channels, (c) => `<div class="channel-list">${c.map(channelRow).join('')}</div>`, 6),
-      sec('videos', '다시보기', videos, (v) => `<div class="grid">${v.map(vodCard).join('')}</div>`, 8),
+      sec('videos', '다시보기', videos, (x) => `<div class="grid">${x.map(vodCard).join('')}</div>`, 8, v.hasMore),
     ].join('');
-    this.body.innerHTML = tabBar + (html || emptyState('검색 결과가 없습니다', `"${this.query}"`));
+    const empty = !html && !errors ? emptyState('검색 결과가 없습니다', `"${this.query}"`) : '';
+    this.body.innerHTML = tabBar + errors + html + vodMore + empty;
   }
 }

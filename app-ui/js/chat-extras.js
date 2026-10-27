@@ -104,17 +104,17 @@ export function installChatExtras(panel) {
 
   // ── 통계 버튼 (CHT-24) ──
   const statsBtn = document.createElement('button');
-  statsBtn.className = 'icon-btn chat-hbtn';
+  statsBtn.className = 'icon-btn chat-hbtn chat-tool-extra';
   statsBtn.title = '채팅 통계';
   statsBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>';
   panel.header.querySelector('[data-chat="clear"]').before(statsBtn);
   const exportBtn = document.createElement('button');
-  exportBtn.className = 'icon-btn chat-hbtn';
+  exportBtn.className = 'icon-btn chat-hbtn chat-tool-extra';
   exportBtn.title = '채팅 내보내기';
   exportBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>';
   statsBtn.after(exportBtn);
   const designBtn = document.createElement('button');
-  designBtn.className = 'icon-btn chat-hbtn';
+  designBtn.className = 'icon-btn chat-hbtn chat-tool-extra';
   designBtn.title = '읽기 폭';
   designBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1 0 1.5-.8 1.5-1.6 0-1.1-.9-1.4-.9-2.4 0-.9.7-1.5 1.6-1.5H17a4 4 0 0 0 4-4c0-4.7-4-8.5-9-8.5Z"/><circle cx="7.5" cy="11" r="1" fill="currentColor"/><circle cx="10.5" cy="7" r="1" fill="currentColor"/><circle cx="15" cy="7.5" r="1" fill="currentColor"/></svg>';
   statsBtn.before(designBtn);

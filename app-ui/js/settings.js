@@ -234,7 +234,7 @@ export class SettingsPage {
       <div class="chips settings-tabs">${GROUPS.map(([id, l]) => `<button class="chip${this.group === id ? ' active' : ''}" data-group="${id}">${l}</button>`).join('')}</div>
       <input type="search" class="settings-search" placeholder="설정 검색" value="${esc(this.query)}">
     </div>`;
-    this.body.innerHTML = `${tabs}<div class="settings-groups">${this.groupHtml()}</div>`;
+    this.body.innerHTML = `${tabs}<div class="settings-groups">${this.groupHtml()}</div><div class="settings-search-empty" role="status" hidden></div>`;
     this.applySearch();
     this.refreshOAuth();
     if (this.body.querySelector('.update-row')) this.showUpdate();
@@ -423,9 +423,17 @@ export class SettingsPage {
       const hit = !q || (row.dataset.search || '').includes(q);
       row.hidden = adv || !hit;
     }
+    let shown = 0;
     for (const sec of this.body.querySelectorAll('.settings-group')) {
       sec.hidden = Boolean(q) && !sec.querySelector('.setting:not([hidden])');
+      if (!sec.hidden) shown += 1;
     }
+    // 0건 — 아래가 빈 채로 남지 않게 무엇을 찾았는지와 검색 지우기를 보인다
+    const none = this.body.querySelector('.settings-search-empty');
+    if (!none) return;
+    none.hidden = !q || shown > 0;
+    const typed = this.body.querySelector('.settings-search')?.value.trim() || q;
+    none.innerHTML = none.hidden ? '' : `<strong>"${esc(typed)}"와 맞는 설정이 없습니다</strong><span>다른 낱말로 찾거나 위의 묶음에서 골라 보세요</span><button class="btn" data-settings-clear>검색 지우기</button>`;
   }
 
   async onChange(target) {
@@ -600,6 +608,12 @@ export class SettingsPage {
     if (sys) { this.onSystem(sys); return; }
     const g = e.target.closest('[data-group]');
     if (g) { this.group = g.dataset.group; this.query = ''; this.render(); return; }
+    if (e.target.closest('[data-settings-clear]')) {
+      this.query = '';
+      this.render();
+      this.body.querySelector('.settings-search')?.focus();
+      return;
+    }
     if (e.target.closest('[data-adv]')) { e.preventDefault(); this.showAdvanced = !this.showAdvanced; this.render(); return; }
     const action = e.target.closest('[data-action]');
     if (action) {

@@ -66,11 +66,13 @@ export class MultiChatPage {
         <button class="btn ghost" data-mc="close-all">모두 닫기</button>
       </header>
       <div class="mc-overview"></div>
+      <div class="mc-search-note" role="status" hidden></div>
       <div class="mc-body">
         <div class="mc-empty"><strong>여러 채널의 채팅을 한 화면에서</strong><span>최대 ${MAX_CHANNELS}개 채널을 추가해 탭·그리드로 보거나 하나의 타임라인으로 합쳐 볼 수 있어요.</span><button class="btn primary lg" data-mc="add">+ 채널 추가</button></div>
         <div class="mc-panes"></div>
         <div class="mc-merged" hidden>
           <div class="chat-list mc-merged-list"></div>
+          <div class="chat-input-banner mc-merged-banner" hidden></div>
           <form class="chat-input mc-merged-input"><select class="select mc-target"></select><input type="text" maxlength="100" placeholder="선택한 채널로 보내기" autocomplete="off"><button class="btn primary">보내기</button></form>
         </div>
       </div>`;
@@ -85,6 +87,9 @@ export class MultiChatPage {
     skin();
     this.target = this.root.querySelector('.mc-target');
     this.search = this.root.querySelector('.mc-search');
+    this.searchNote = this.root.querySelector('.mc-search-note');
+    this.mergedForm = this.root.querySelector('.mc-merged-input');
+    this.mergedBanner = this.root.querySelector('.mc-merged-banner');
     this.channels = []; // { channelId, name, image, color, chatChannelId, panel, el, rate: [] }
     this.active = null;
     this.layout = 'tabs';
@@ -104,7 +109,9 @@ export class MultiChatPage {
 
     this.root.addEventListener('click', (e) => this.onClick(e));
     this.search.addEventListener('input', () => this.applySearch());
-    this.root.querySelector('.mc-merged-input').addEventListener('submit', (e) => { e.preventDefault(); this.sendMerged(); });
+    this.mergedForm.addEventListener('submit', (e) => { e.preventDefault(); this.sendMerged(); });
+    this.target.addEventListener('change', () => this.updateMergedInput());
+    this.mergedBanner.addEventListener('click', (e) => { if (e.target.closest('[data-login]')) window.dispatchEvent(new Event('cview:login')); });
     listen('chat://session-event', (p) => this.onSessionEvent(p));
     document.addEventListener('keydown', (e) => {
       if (this.root.hidden) return;
@@ -168,9 +175,17 @@ export class MultiChatPage {
     const session = `mc:${channelId}`;
     const panel = new ChatPanel(el.querySelector('.chat'), { isLoggedIn: this.isLoggedIn, session });
     // 패널 머리 버튼들이 생긴 뒤 맨 끝에 닫기를 둔다.
-    el.querySelector('.chat-header').insertAdjacentHTML('beforeend', '<button class="icon-btn chat-hbtn" data-mc="remove" title="이 채널 닫기">✕</button>');
+    // 좁은 칸(그리드)에서는 자주 쓰지 않는 도구(읽기 폭·통계·내보내기·지우기)를 "⋯" 뒤로 접는다 — 채널명·연결 상태 자리를 남긴다(CSS 컨테이너 쿼리)
+    el.querySelector('.chat-header').insertAdjacentHTML('beforeend', `<button class="icon-btn chat-hbtn mc-tools-more" data-mc="tools" title="도구 더 보기" aria-expanded="false"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg></button>
+      <button class="icon-btn chat-hbtn" data-mc="remove" title="이 채널 닫기">✕</button>`);
+    el.querySelector('.mc-name').title = live.channelName || channelId;
     const entry = { channelId, name: live.channelName || channelId, image: live.channelImageUrl, color, chatChannelId: live.chatChannelId, panel, el, session, rate: [], isLive: live.isLive };
-    panel.appendHooks.push((msgs) => { const now = Date.now(); for (let i = 0; i < msgs.length; i++) entry.rate.push(now); });
+    panel.appendHooks.push((msgs) => {
+      const now = Date.now();
+      for (let i = 0; i < msgs.length; i++) entry.rate.push(now);
+      if (this.search.value.trim()) this.filterTail(panel.list, msgs.length);
+    });
+    panel.inputHooks.push(() => this.updateMergedInput());
     this.channels.push(entry);
     panel.connect(live.chatChannelId, channelId);
     if (!this.active) this.active = channelId;
@@ -209,6 +224,29 @@ export class MultiChatPage {
     this.target.innerHTML = this.channels.map((c) => `<option value="${esc(c.session)}" ${c.channelId === this.active ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
     this.renderOverview();
     this.applySearch();
+    this.updateMergedInput();
+  }
+
+  /**
+   * 통합 입력 — 고른 채널 패널의 로그인·연결·보내기 권한을 그대로 따른다(탭·그리드와 같게).
+   * 예전엔 비로그인이어도 입력·보내기가 켜져 있었다(서버는 막지만 보낼 수 있는 것처럼 보였다).
+   */
+  updateMergedInput() {
+    const c = this.channels.find((x) => x.session === this.target.value);
+    const loggedIn = this.isLoggedIn();
+    const p = c && c.panel;
+    const enabled = Boolean(loggedIn && p && p.connected && p.canSend);
+    const input = this.mergedForm.querySelector('input');
+    input.disabled = !enabled;
+    this.mergedForm.querySelector('button').disabled = !enabled;
+    this.target.disabled = !loggedIn || !this.channels.length;
+    input.placeholder = loggedIn ? '선택한 채널로 보내기' : '로그인 후 채팅 참여 가능';
+    let html = '';
+    if (!loggedIn) html = '로그인하면 채팅에 참여할 수 있어요 <button class="link-btn" data-login>로그인</button>';
+    else if (p && !p.connected) html = `${esc(c.name)} 채팅에 연결되어 있지 않습니다`;
+    else if (p && !p.canSend) html = `${esc(c.name)} 채팅방에서는 지금 채팅을 보낼 수 없습니다 (팔로워·구독자 전용이거나 제한 중)`;
+    this.mergedBanner.innerHTML = html;
+    this.mergedBanner.hidden = !html;
   }
 
   /** 개요 칩 — 채널·연결 상태·분당 메시지 (MUL-04). 탭 모드에서는 탭 역할도 한다. */
@@ -234,6 +272,7 @@ export class MultiChatPage {
     if (!html) return;
     const follower = chatFollower(this.mergedList);
     const follow = follower.stuck;
+    this.mergedList.querySelector(':scope > .empty')?.remove(); // 첫 메시지가 오면 "기다리는 중" 안내를 걷는다
     const before = this.mergedList.lastElementChild;
     this.mergedList.insertAdjacentHTML('beforeend', html);
     // 검색 중이면 새로 붙은 줄만 거른다(예전엔 메시지 묶음마다 600줄 + 모든 패널을 다시 훑었다).
@@ -246,13 +285,14 @@ export class MultiChatPage {
       }
     }
     while (this.mergedList.children.length > 600) this.mergedList.firstElementChild.remove();
+    if (q) this.queueSearchNote();
     if (follow) follower.snap();
   }
 
   async sendMerged() {
-    const input = this.root.querySelector('.mc-merged-input input');
+    const input = this.mergedForm.querySelector('input');
     const text = input.value.trim();
-    if (!text) return;
+    if (!text || input.disabled) return;
     try { await api.chatSend(text, this.target.value); input.value = ''; } catch (e) { toast(e.message); }
   }
 
@@ -270,6 +310,45 @@ export class MultiChatPage {
       }
     }
     this.search.title = q ? `일치 ${hits}개` : '메시지 검색';
+    this.renderSearchNote(q, hits);
+  }
+
+  /** 패널에 새로 붙은 끝의 n줄만 검색어로 거른다 — 검색 중에 온 메시지가 걸러지지 않고 섞였다. */
+  filterTail(list, n) {
+    const q = this.search.value.trim();
+    let line = list.lastElementChild;
+    for (let i = 0; i < n && line; line = line.previousElementSibling) {
+      if (!line.classList.contains('chat-line')) continue;
+      const ok = lineMatches(line.textContent, q);
+      line.classList.toggle('search-hidden', !ok);
+      line.classList.toggle('search-hit', ok);
+      i += 1;
+    }
+    this.queueSearchNote();
+  }
+
+  /** 새 메시지마다 세지 않고 한 프레임에 한 번 일치 수를 다시 센다. */
+  queueSearchNote() {
+    if (this.notePending) return;
+    this.notePending = true;
+    requestAnimationFrame(() => {
+      this.notePending = false;
+      const q = this.search.value.trim();
+      const boxes = this.layout === 'merged' ? [this.mergedList] : this.channels.map((c) => c.panel.list);
+      const hits = boxes.reduce((n, b) => n + b.querySelectorAll('.chat-line.search-hit').length, 0);
+      this.search.title = q ? `일치 ${hits}개` : '메시지 검색';
+      this.renderSearchNote(q, hits);
+    });
+  }
+
+  /** 검색 중 상태 — 일치 수와 검색 지우기. 0건이면 "기다리는 중"이 아니라 결과 없음으로 알린다. */
+  renderSearchNote(q, hits) {
+    const show = Boolean(q) && this.channels.length > 0;
+    this.searchNote.hidden = !show;
+    this.root.classList.toggle('mc-searching', show);
+    if (!show) { this.searchNote.innerHTML = ''; return; }
+    this.searchNote.classList.toggle('none', hits === 0);
+    this.searchNote.innerHTML = `<span>${hits ? `"${esc(q)}" 일치 ${hits}개` : `"${esc(q)}"와 일치하는 메시지가 없습니다 · 새 메시지가 오면 여기에 걸러 보입니다`}</span><button class="link-btn" data-mc="clear-search">검색 지우기</button>`;
   }
 
   async onClick(e) {
@@ -282,7 +361,12 @@ export class MultiChatPage {
     const a = e.target.closest('[data-mc]');
     if (!a) return;
     if (a.dataset.mc === 'add') this.addBar.toggle();
+    if (a.dataset.mc === 'clear-search') { this.search.value = ''; this.applySearch(); this.search.focus(); }
     if (a.dataset.mc === 'remove') this.remove(a.closest('.mc-pane').dataset.channelId);
+    if (a.dataset.mc === 'tools') {
+      const head = a.closest('.chat-header');
+      a.setAttribute('aria-expanded', String(head.classList.toggle('tools-open')));
+    }
     if (a.dataset.mc === 'close-all') for (const c of [...this.channels]) await this.remove(c.channelId);
   }
 }

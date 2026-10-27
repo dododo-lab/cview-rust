@@ -1201,6 +1201,15 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .channel-info { max-width: 820px; }
 .channel-desc { padding: var(--sp-sm) var(--sp-lg) var(--sp-lg); color: var(--text-secondary); white-space: pre-wrap; line-height: 1.6; user-select: text; }
 .load-more { display: block; margin: var(--sp-lg) auto; }
+/* 검색 한쪽 실패 — '결과 없음'과 구분해 알리고 그쪽만 다시 받는다 */
+.search-source-error {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: var(--sp-md) 0; padding: 10px 14px;
+  border-radius: var(--radius-md); border: 1px solid color-mix(in srgb, var(--error) 35%, transparent);
+  background: color-mix(in srgb, var(--error) 8%, transparent); font-size: var(--fs-footnote);
+}
+.search-source-error > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.search-source-error small { color: var(--text-tertiary); }
+.search-source-error > .btn { flex: none; white-space: nowrap; }
 .badge-duration {
   position: absolute; right: 8px; bottom: 8px; background: rgba(0, 0, 0, 0.72); color: #fff; font-size: var(--fs-footnote);
   font-weight: 600; padding: 1px 6px; border-radius: 5px; font-variant-numeric: tabular-nums;
@@ -1420,7 +1429,10 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .category-info { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px 12px; }
 .category-info strong { font-size: var(--fs-body); }
 .category-info span { color: var(--text-tertiary); font-size: var(--fs-footnote); }
-.category-pin { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: rgba(0, 0, 0, 0.5); color: rgba(255, 255, 255, 0.6); font-size: 13px; }
+.category-item { position: relative; display: flex; flex-direction: column; }
+.category-item > .category-card { flex: 1; }
+.category-pin { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; background: rgba(0, 0, 0, 0.5); color: rgba(255, 255, 255, 0.6); font-size: 13px; cursor: pointer; }
+.category-pin:focus-visible { outline: none; box-shadow: var(--focus-ring); color: #fff; }
 .category-pin.on { color: #ffcc33; }
 .category-pin:hover { color: #fff; }
 .clip-shelf { grid-auto-columns: minmax(150px, 170px); }
@@ -1480,6 +1492,9 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .settings-tabs { margin: 0; flex: 1; }
 .settings-search { width: 220px; height: 34px; border-radius: 10px; border: 1px solid var(--border-subtle); background: var(--surface-base); padding: 0 12px; outline: none; }
 .settings-search:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
+.settings-search-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 16px; text-align: center; color: var(--text-tertiary); font-size: var(--fs-footnote); }
+.settings-search-empty[hidden] { display: none; }
+.settings-search-empty strong { color: var(--text-primary); font-size: var(--fs-body); }
 .settings-groups .settings-group { max-width: 860px; }
 .settings-group h3 { display: flex; align-items: center; gap: 8px; }
 .adv-toggle { margin-left: auto; font-size: var(--fs-footnote); padding: 0 var(--sp-lg) 0 0; }
@@ -1741,6 +1756,27 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .mc-merged-input .select { flex: none; max-width: 160px; }
 .merged-line { box-shadow: inset 3px 0 0 var(--mc-color); padding-left: 8px !important; }
 .mc-tag { font-size: var(--fs-micro); font-weight: 800; color: var(--mc-color); margin-right: 6px; }
+/* 검색 중 — 일치 수·검색 지우기. 0건이면 '기다리는 중'을 감추고 결과 없음으로 */
+.mc-search-note { flex: none; display: flex; align-items: center; gap: 10px; margin: 0 0 8px; padding: 6px 12px; border-radius: 10px; background: var(--surface-elevated); color: var(--text-secondary); font-size: var(--fs-footnote); }
+.mc-search-note[hidden] { display: none; }
+.mc-search-note.none { color: var(--text-primary); }
+.mc-search-note .link-btn { margin-left: auto; color: var(--primary-text); font-weight: 700; white-space: nowrap; }
+.mc-searching .mc-merged-list > .empty { display: none; }
+.mc-merged-banner { margin-top: 8px; }
+/* 그리드 칸 머리 — 짧은 채널명·연결 상태는 줄이지 않는다. 좁은 칸에서는 드문 도구를 '⋯' 뒤로 (F12) */
+.mc-pane { container-type: inline-size; }
+.mc-pane .chat-header .mc-name { flex: 0 0 auto; max-width: 45%; }
+.mc-pane .chat-header .chat-state { flex: none; white-space: nowrap; }
+.mc-tools-more { display: none; }
+@container (max-width: 520px) {
+  .mc-pane .mc-tools-more { display: inline-grid; place-items: center; }
+  .mc-pane .chat-header:not(.tools-open) .chat-tool-extra { display: none; }
+  /* 펼치면 접었던 도구를 둘째 줄에 */
+  .mc-pane .chat-header.tools-open { flex-wrap: wrap; row-gap: 2px; padding-top: 6px; padding-bottom: 6px; }
+  .mc-pane .chat-header.tools-open::after { content: ""; order: 1; flex-basis: 100%; }
+  .mc-pane .chat-header.tools-open .chat-tool-extra { order: 2; }
+  .mc-pane .chat-header .mc-tools-more[aria-expanded="true"] { color: var(--primary-text); }
+}
 .chat-line.search-hidden { display: none !important; }
 .chat-line.search-hit .text { background: color-mix(in srgb, var(--warning) 22%, transparent); border-radius: 4px; }
 
@@ -1778,6 +1814,16 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .cleanup-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; }
 .cleanup-row span { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-footnote); }
 .cleanup-row small { color: var(--text-tertiary); }
+/* 설명이 길어도 버튼은 줄지 않는다 — 좁을 때 '백 / 업'처럼 글자가 세로로 갈라졌다. 줄바꿈은 설명 쪽에서 */
+.cleanup-row > span { flex: 1; min-width: 0; }
+.cleanup-row > .btn { flex: none; white-space: nowrap; min-width: 64px; }
+/* 되돌릴 수 없는 정리의 확인 시트 */
+.confirm-facts { display: grid; grid-template-columns: max-content 1fr; gap: 8px 14px; margin: 0; font-size: var(--fs-footnote); }
+.confirm-facts dt { color: var(--text-tertiary); font-weight: 600; }
+.confirm-facts dd { margin: 0; color: var(--text-secondary); }
+.confirm-check { display: flex; align-items: flex-start; gap: 10px; font-size: var(--fs-footnote); cursor: pointer; }
+.confirm-check > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.confirm-check small { color: var(--text-tertiary); }
 .muted.small { font-size: var(--fs-micro); word-break: break-all; }
 
 /* ── 다운로드 (VOD-06·07) ───────────────── */

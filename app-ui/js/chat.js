@@ -159,6 +159,7 @@ export class ChatPanel {
     this.seenEmoji = new Map(); // 채팅에서 본 이모티콘 id → url (이모티콘 API 가 막힌 채널의 대체 팩)
 
     this.appendHooks = [];
+    this.inputHooks = []; // 보내기 가능 상태가 바뀔 때(로그인·연결·보내기 권한) — 통합 채팅 입력이 따라 한다
     this.sendHooks = [];
     PANELS.add(this);
     // 정리할 것들 — 멀티채팅에서 패널을 닫으면 destroy() 가 푼다.
@@ -185,7 +186,7 @@ export class ChatPanel {
     header.insertAdjacentHTML('beforeend', `
       <div class="grow"></div>
       <button class="icon-btn chat-hbtn mention-btn" title="나를 부른 메시지" aria-label="멘션">${ICON.at}<span class="mention-count" hidden></span></button>
-      <button class="icon-btn chat-hbtn" data-chat="clear" title="${kbd('채팅 지우기 (⇧⌘K)')}" aria-label="채팅 지우기">${ICON.trash}</button>
+      <button class="icon-btn chat-hbtn chat-tool-extra" data-chat="clear" title="${kbd('채팅 지우기 (⇧⌘K)')}" aria-label="채팅 지우기">${ICON.trash}</button>
       <button class="icon-btn chat-hbtn" data-chat="reconnect" title="다시 연결" aria-label="다시 연결">${ICON.refresh}</button>`);
     header.addEventListener('click', (e) => {
       const b = e.target.closest('[data-chat], .mention-btn');
@@ -389,6 +390,9 @@ export class ChatPanel {
     else if (this.connected && !this.canSend) html = '이 채팅방에서는 지금 채팅을 보낼 수 없습니다 (팔로워·구독자 전용이거나 제한 중)';
     this.banner.innerHTML = html;
     this.banner.hidden = !html;
+    for (const fn of this.inputHooks) {
+      try { fn(); } catch (e) { console.error(e); }
+    }
   }
 
   // ── 메시지 ─────────────────────────────────
