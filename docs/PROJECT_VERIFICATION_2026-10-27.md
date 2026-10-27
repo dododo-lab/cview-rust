@@ -186,3 +186,14 @@ cargo audit --json
 실서버 테스트는 일반 테스트에서 제외돼 있으므로 별도로 실행해야 한다. 이번에는 빌드된 `cview_app` 테스트 실행 파일에 `--ignored --nocapture --test-threads=1`을 전달해 2개를 실행했다. 실행 파일의 해시는 다음 빌드에서 달라질 수 있다. 로컬 서버 테스트에는 포트 바인딩 권한, 실서버 테스트에는 네트워크·보안 서비스 접근이 필요하다.
 
 [소스 인벤토리·해시](verification/2026-10-27/source-inventory.json)와 [최종 소스 불변 확인](verification/2026-10-27/final-source-check.json)을 보존했다. 제품 소스가 바뀌면 이 결과의 기준 커밋과 구분해 다시 검증해야 한다.
+
+## 11. 후속 조치 반영 (2026-10-27)
+
+| 항목 | 반영 |
+| --- | --- |
+| push/PR 회귀 CI 부재 | `.github/workflows/ci.yml` 추가. macOS에서 `fmt`·Clippy(`-D warnings`)·`cargo test`, Ubuntu에서 채팅 회귀 12개·배포 자동화 15개·스크립트 문법·`cargo audit` 실행 |
+| 채팅 회귀 검사 상시화 | 증거의 `frontend-behavior.mjs`를 `tests/frontend/chat-behavior.mjs`로 옮겨 반복 실행. 증거 파일은 당시 상태로 보존 |
+| Linux 의존성 경고 5건 | 4건은 수정판이 없는 유지보수 중단 공지, `glib`는 `>=0.20` 필요(현재 Tauri/wry는 gtk-rs 0.18 사용). `cargo update`로 해소되지 않음을 확인. CI의 `cargo audit --deny warnings`에서 근거와 함께 예외 처리하고 새 공지는 실패로 막음. Linux 지원 시 재검토 |
+| 기본 target 볼륨 공간 부족 | 진단만 수행. `/Volumes/data` 가용 44 MiB, CView target 122 GB 중 `debug` 98 GB(`deps` 85 GB). 삭제는 사용자 승인 후 진행 |
+
+CI는 실서버 업데이트 테스트(`#[ignore]`)와 Windows 교차 Clippy를 포함하지 않는다. 기존 주석에 따르면 2026-10-20 당시 이 계정의 Actions 실행이 startup_failure였으므로, 첫 PR 실행 결과로 동작 여부를 확인해야 한다.
