@@ -45,6 +45,27 @@ jobs:
       - name: 테스트
         run: cargo test --workspace --locked
 
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      # 아래 5건은 Linux GTK·알림(Tauri) 경로에만 있고 macOS·Windows 그래프에는 없다.
+      # 수정판이 없거나(unmaintained) glib >=0.20 이 필요해 상위 Tauri/gtk-rs 갱신을 기다린다.
+      # Linux 지원을 시작하면 다시 검토한다. 근거: docs/verification/2026-10-27/dependency-warning-paths.json
+      #   RUSTSEC-2024-0370 proc-macro-error · RUSTSEC-2026-0370 zvariant · RUSTSEC-2026-0371 zbus_names
+      #   RUSTSEC-2026-0372 zvariant_derive · RUSTSEC-2024-0429 glib 0.18 (unsound)
+      - name: 의존성 보안 공지
+        run: >-
+          cargo audit --deny warnings
+          --ignore RUSTSEC-2024-0370 --ignore RUSTSEC-2026-0370 --ignore RUSTSEC-2026-0371
+          --ignore RUSTSEC-2026-0372 --ignore RUSTSEC-2024-0429
+
   scripts:
     runs-on: ubuntu-latest
     timeout-minutes: 15
