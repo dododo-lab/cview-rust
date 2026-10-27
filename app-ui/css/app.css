@@ -1753,6 +1753,27 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .mc-merged-input .select { flex: none; max-width: 160px; }
 .merged-line { box-shadow: inset 3px 0 0 var(--mc-color); padding-left: 8px !important; }
 .mc-tag { font-size: var(--fs-micro); font-weight: 800; color: var(--mc-color); margin-right: 6px; }
+/* 검색 중 — 일치 수·검색 지우기. 0건이면 '기다리는 중'을 감추고 결과 없음으로 */
+.mc-search-note { flex: none; display: flex; align-items: center; gap: 10px; margin: 0 0 8px; padding: 6px 12px; border-radius: 10px; background: var(--surface-elevated); color: var(--text-secondary); font-size: var(--fs-footnote); }
+.mc-search-note[hidden] { display: none; }
+.mc-search-note.none { color: var(--text-primary); }
+.mc-search-note .link-btn { margin-left: auto; color: var(--primary-text); font-weight: 700; white-space: nowrap; }
+.mc-searching .mc-merged-list > .empty { display: none; }
+.mc-merged-banner { margin-top: 8px; }
+/* 그리드 칸 머리 — 짧은 채널명·연결 상태는 줄이지 않는다. 좁은 칸에서는 드문 도구를 '⋯' 뒤로 (F12) */
+.mc-pane { container-type: inline-size; }
+.mc-pane .chat-header .mc-name { flex: 0 1 auto; min-width: min(5.5em, 30%); }
+.mc-pane .chat-header .chat-state { flex: none; white-space: nowrap; }
+.mc-tools-more { display: none; }
+@container (max-width: 520px) {
+  .mc-pane .mc-tools-more { display: inline-grid; place-items: center; }
+  .mc-pane .chat-header:not(.tools-open) .chat-tool-extra { display: none; }
+  /* 펼치면 접었던 도구를 둘째 줄에 */
+  .mc-pane .chat-header.tools-open { flex-wrap: wrap; row-gap: 2px; padding-top: 6px; padding-bottom: 6px; }
+  .mc-pane .chat-header.tools-open::after { content: ""; order: 1; flex-basis: 100%; }
+  .mc-pane .chat-header.tools-open .chat-tool-extra { order: 2; }
+  .mc-pane .chat-header .mc-tools-more[aria-expanded="true"] { color: var(--primary-text); }
+}
 .chat-line.search-hidden { display: none !important; }
 .chat-line.search-hit .text { background: color-mix(in srgb, var(--warning) 22%, transparent); border-radius: 4px; }
 
