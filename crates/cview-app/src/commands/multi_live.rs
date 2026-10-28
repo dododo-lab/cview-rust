@@ -27,16 +27,19 @@ pub async fn multilive_state(shell: State<'_, MultiLiveShell>) -> CmdResult<Mult
 
 /// 채널을 패인으로 추가한다. 이미 있으면 그 패인을 선택한다. 단독 시청 화면은 멈추지 않는다 —
 /// 소리는 화면이 `multilive_set_audio_suspended` 로 한쪽만 내게 한다.
+/// `live` — 라이브 단독 보기에 담는 추가(카드로 열기·머리줄 채널 추가)라 라이브 단독 보기 상한을 따른다.
 #[tauri::command]
 pub async fn multilive_add(
     shell: State<'_, MultiLiveShell>,
     channel_id: String,
+    live: Option<bool>,
 ) -> CmdResult<MultiLiveStateDto> {
     enforce_hub_mode(&shell);
-    let result = shell
-        .manager
-        .add_session(&channel_id, AddSessionOptions::default(), None)
-        .await;
+    let options = AddSessionOptions {
+        live_view: live.unwrap_or(false),
+        ..AddSessionOptions::default()
+    };
+    let result = shell.manager.add_session(&channel_id, options, None).await;
     enforce_hub_mode(&shell);
     tracing::info!(channel_id = %channel_id, ?result, "멀티라이브 세션 추가");
     if let Some(message) = add_result_message(&result) {

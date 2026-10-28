@@ -269,7 +269,7 @@ export class MultiLivePage {
       // + — 추가하고 그 패인을 선택한다. 포커스 배치면 메인으로 올라가 소리·채팅이 따라간다.
       // 라이브 단독 보기 중이면 보던 채널은 그대로 두고 멀티라이브에만 넣는다(머리줄 채널 고르기에 생긴다).
       onAdd: (channelId) => {
-        if (this.watchSlot != null) return this.add(channelId, { quiet: true });
+        if (this.watchSlot != null) return this.add(channelId, { quiet: true, live: true });
         return onAddChannel ? onAddChannel(channelId, { quiet: true }) : this.addAndSelect(channelId);
       },
       onOpen: onOpenChannel,
@@ -1016,13 +1016,14 @@ export class MultiLivePage {
    * select — 추가한 패인을 곧바로 선택한다(포커스면 메인). 추가 응답과 선택 응답을 따로 그리면 새 패인이 서브 칸에
    * 나타났다가 메인으로 다시 날아가 두 번 움직였다 — 선택까지 끝난 상태 하나만 그린다(그 사이 상태 이벤트도 건너뛴다).
    * 기본은 선택하지 않는다(라이브 단독 보기·스마트 큐·둘러보기 열기는 보던 채널·선택을 그대로 둔다).
+   * live — 라이브 단독 보기에 담는 추가(카드로 열기·머리줄 채널 추가)라 멀티라이브 대신 라이브 상한을 따른다.
    */
-  async add(channelId, { quiet = false, select = false } = {}) {
+  async add(channelId, { quiet = false, select = false, live = false } = {}) {
     if (!channelId) return false;
     if (!quiet) toast('멀티라이브에 추가하는 중…', 1500);
     this.addHold = select ? channelId : null;
     try {
-      let state = await api.multiLiveAdd(channelId);
+      let state = await api.multiLiveAdd(channelId, live);
       const s = (state.sessions || []).find((x) => x.channelId === channelId);
       if (select && s && s.id !== state.selectedId) {
         try { state = await api.multiLiveSelect(s.id); } catch (e) { toast(e.message); }

@@ -345,17 +345,19 @@ async function openChannelWatch(channelId) {
   const st = pages.multilive.state;
   const prev = transientWatch && (st.sessions || []).some((x) => x.id === transientWatch.id) ? transientWatch : null;
   transientWatch = null;
-  if (st.canAdd === false) {
+  // 라이브 단독 보기 상한 — 멀티라이브 상한과 따로다(지금 보기가 멀티라이브여도 라이브로 여는 추가는 이쪽).
+  const full = (st.canAddLive ?? st.canAdd) === false;
+  if (full) {
     // 가득 참 — 바꿔 낄 임시 보기가 있으면 먼저 빼고, 없으면 예전 시청 화면으로
     if (!prev) { await openInViewer(channelId); return; }
     await pages.multilive.run(api.multiLiveRemove(prev.id));
   }
-  await pages.multilive.add(channelId, { quiet: true });
+  await pages.multilive.add(channelId, { quiet: true, live: true });
   const s = multiLiveSessionFor(channelId);
   if (!s) return; // 추가 실패 — run 이 이미 알렸다
   transientWatch = { id: s.id, channelId };
   await enterWatch(s.id);
-  if (prev && st.canAdd !== false) await pages.multilive.run(api.multiLiveRemove(prev.id));
+  if (prev && !full) await pages.multilive.run(api.multiLiveRemove(prev.id));
 }
 
 /** 예전 시청 화면으로 — 보조 플레이어 창, 멀티라이브가 가득 찼을 때. */
