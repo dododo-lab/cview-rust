@@ -10,9 +10,7 @@ use uuid::Uuid;
 
 use super::{spawn_detached, ManagerState};
 use crate::viewmodels::multi_live::layout::MultiLiveGridLayoutMode;
-use crate::viewmodels::multi_live::policy::{
-    tuning, WATCH_KEEP_ALIVE_WARM_COUNT, ZAP_REQUEST_MAX_AGE_SECS,
-};
+use crate::viewmodels::multi_live::policy::{tuning, WATCH_KEEP_ALIVE_WARM_COUNT};
 use crate::viewmodels::multi_live::session::MultiLiveSession;
 use crate::viewmodels::support::{cancel_slot, slot_is, TaskSlot};
 
@@ -174,17 +172,7 @@ impl ManagerState {
             .and_then(|s| self.session(s))
             .map(|s| s.channel_id().to_string())
         {
-            if let Some(request) = self.zap_requests.remove(&channel_id) {
-                let elapsed = now.duration_since(request.at).as_secs_f64();
-                if elapsed <= ZAP_REQUEST_MAX_AGE_SECS {
-                    tracing::info!(
-                        "live_zap phase={} reason={reason} total_ms={} sessions={}",
-                        if request.warm { "warm" } else { "cold" },
-                        elapsed * 1_000.0,
-                        self.sessions.len()
-                    );
-                }
-            }
+            self.complete_watch_zap(&channel_id, reason);
         }
         self.stage_handoff_baseline_session_id = None;
         self.stage_handoff_baseline_tick = 0;

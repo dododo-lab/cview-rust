@@ -1,12 +1,40 @@
 //! 세션 시작·재시도·메뉴 수명주기 작업 예약(세대별 단일 작업).
 
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
+
+use uuid::Uuid;
 
 use super::{ManagerShared, ManagerState, MenuSessionLifecycleIntent};
 use crate::viewmodels::multi_live::deps::ChatConnectionKind;
 use crate::viewmodels::multi_live::policy::{self, tuning};
 use crate::viewmodels::multi_live::session::MultiLiveSession;
 use crate::viewmodels::support::{cancel_slot, slot_is, TaskSlot};
+
+/// 시작 예약이 할 일.
+#[derive(Debug, Clone, Copy)]
+enum StartupJob {
+    Start {
+        pane_count: usize,
+        delay: Option<Duration>,
+    },
+    Retry,
+}
+
+/// 세션의 앞선 예약을 끊고 세대를 하나 올려 돌려준다.
+fn next_generation(
+    tasks: &mut HashMap<Uuid, TaskSlot>,
+    generations: &mut HashMap<Uuid, u64>,
+    sid: Uuid,
+) -> u64 {
+    if let Some(t) = tasks.remove(&sid) {
+        t.cancel();
+    }
+    let generation = generations.get(&sid).copied().unwrap_or(0).wrapping_add(1);
+    generations.insert(sid, generation);
+    generation
+}
 
 impl ManagerState {
     pub(super) fn clear_per_session_tracking(&mut self) {
@@ -78,23 +106,27 @@ impl ManagerState {
         &mut self,
         session: &Arc<MultiLiveSession>,
         pane_count: usize,
-        delay: Option<std::time::Duration>,
+        delay: Option<Duration>,
     ) {
+        self.schedule_startup(session, StartupJob::Start { pane_count, delay });
+    }
+
+    fn schedule_session_retry(&mut self, session: &Arc<MultiLiveSession>) {
+        self.schedule_startup(session, StartupJob::Retry);
+    }
+
+    /// 시작·재시도 공용 — 세션마다 작업 하나만 남기고, 끝난 작업은 제 세대일 때만 기록을 지운다.
+    fn schedule_startup(&mut self, session: &Arc<MultiLiveSession>, job: StartupJob) {
         let sid = session.id();
-        if let Some(t) = self.session_startup_tasks.remove(&sid) {
-            t.cancel();
-        }
-        let generation = self
-            .session_startup_generations
-            .get(&sid)
-            .copied()
-            .unwrap_or(0)
-            .wrapping_add(1);
-        self.session_startup_generations.insert(sid, generation);
+        let generation = next_generation(
+            &mut self.session_startup_tasks,
+            &mut self.session_startup_generations,
+            sid,
+        );
         let this = self.this.clone();
         let weak_session = Arc::downgrade(session);
         let task = TaskSlot::spawn(move |_| async move {
-            if let Some(d) = delay {
+            if let StartupJob::Start { delay: Some(d), .. } = job {
                 tokio::time::sleep(d).await;
             }
             let (Some(shared), Some(session)) = (this.upgrade(), weak_session.upgrade()) else {
@@ -103,39 +135,10 @@ impl ManagerState {
             if !shared.obs.read().contains(sid) {
                 return;
             }
-            session.start(pane_count).await;
-            let mut st = shared.obs.lock();
-            if st.session_startup_generations.get(&sid) != Some(&generation) {
-                return;
+            match job {
+                StartupJob::Start { pane_count, .. } => session.start(pane_count).await,
+                StartupJob::Retry => session.retry().await,
             }
-            st.session_startup_tasks.remove(&sid);
-            st.session_startup_generations.remove(&sid);
-        });
-        self.session_startup_tasks.insert(sid, task);
-    }
-
-    fn schedule_session_retry(&mut self, session: &Arc<MultiLiveSession>) {
-        let sid = session.id();
-        if let Some(t) = self.session_startup_tasks.remove(&sid) {
-            t.cancel();
-        }
-        let generation = self
-            .session_startup_generations
-            .get(&sid)
-            .copied()
-            .unwrap_or(0)
-            .wrapping_add(1);
-        self.session_startup_generations.insert(sid, generation);
-        let this = self.this.clone();
-        let weak_session = Arc::downgrade(session);
-        let task = TaskSlot::spawn(move |_| async move {
-            let (Some(shared), Some(session)) = (this.upgrade(), weak_session.upgrade()) else {
-                return;
-            };
-            if !shared.obs.read().contains(sid) {
-                return;
-            }
-            session.retry().await;
             let mut st = shared.obs.lock();
             if st.session_startup_generations.get(&sid) != Some(&generation) {
                 return;
@@ -152,17 +155,11 @@ impl ManagerState {
         intent: MenuSessionLifecycleIntent,
     ) {
         let sid = session.id();
-        if let Some(t) = self.session_menu_lifecycle_tasks.remove(&sid) {
-            t.cancel();
-        }
-        let generation = self
-            .session_menu_lifecycle_generations
-            .get(&sid)
-            .copied()
-            .unwrap_or(0)
-            .wrapping_add(1);
-        self.session_menu_lifecycle_generations
-            .insert(sid, generation);
+        let generation = next_generation(
+            &mut self.session_menu_lifecycle_tasks,
+            &mut self.session_menu_lifecycle_generations,
+            sid,
+        );
         let teardown_generation = self.teardown_generation;
         let this = self.this.clone();
         let weak_session = Arc::downgrade(session);
