@@ -538,6 +538,11 @@
 /* 라이브 단독 무대 — 멀티라이브의 다른 채널로 바꿔 보기 */
 .ml-watch-picker { display: flex; gap: 6px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .ml-watch-picker[hidden] { display: none; }
+.ml-watch-picker::-webkit-scrollbar { display: none; }
+/* 칩이 넘치면 가려진 쪽 끝을 흐리게(multilive.js 가 fade-* 를 단다) — 다른 방송 줄과 같다 */
+.ml-watch-picker.fade-end { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
+.ml-watch-picker.fade-start { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px); mask-image: linear-gradient(to right, transparent, #000 28px); }
+.ml-watch-picker.fade-start.fade-end { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
 .ml-watch-chip {
   flex: none; display: inline-flex; align-items: center; gap: 6px; max-width: 160px; height: 28px; padding: 0 10px 0 4px;
   border-radius: 14px; border: 1px solid var(--border-subtle); background: var(--surface-elevated);

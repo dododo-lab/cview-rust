@@ -129,6 +129,9 @@ export class WatchTools {
       for (const meta of this.root.querySelectorAll('.ml-watch-meta')) meta.remove();
       this.loadInfo(id);
       this.loadRail(id);
+    } else if (id && this.railLives && this.railKey !== this.sessionKey()) {
+      // 같은 채널을 보는 채로 채널 추가 사이드바(+)로 담았거나 뺐다 — 머리줄 칩과 다른 방송 줄에 같은 채널이 겹치지 않게.
+      this.renderRail();
     }
     this.rail.hidden = !id || !this.rail.childElementCount;
     this.infoPanel.show(id);
@@ -188,15 +191,27 @@ export class WatchTools {
   async loadRail(currentId) {
     this.rail.innerHTML = '';
     this.rail.hidden = true;
+    this.railLives = null;
     if (!currentId) return;
     let lives = [];
     try {
       lives = this.isLoggedIn() ? await api.followingLives(false) : await api.popularLives(20, false);
     } catch { return; }
     if (currentId !== this.channelId) return;
+    this.railLives = lives;
+    this.renderRail();
+  }
+
+  /** 멀티라이브 세션의 채널 묶음 — 바뀌면 다른 방송 줄을 다시 거른다. */
+  sessionKey() {
+    return (this.page.state.sessions || []).map((x) => x.channelId).sort().join('\n');
+  }
+
+  renderRail() {
+    this.railKey = this.sessionKey();
     // 멀티라이브에 이미 있는 채널은 왼쪽 채널 고르기에 있다 — 여기엔 그 밖의 방송만.
     const have = new Set((this.page.state.sessions || []).map((x) => x.channelId));
-    const others = lives.filter((l) => !have.has(l.channelId)).slice(0, 10);
+    const others = this.railLives.filter((l) => !have.has(l.channelId)).slice(0, 10);
     this.rail.innerHTML = others.map((l) => {
       const avatar = safeUrl(l.channelImageUrl);
       return `<button class="rail-item" data-rail-channel="${esc(l.channelId)}" title="${esc(l.channelName)} · ${esc(l.liveTitle || '')} — 이 방송으로 바꿔 보기">${avatar ? `<img class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar">${esc((l.channelName || '?').slice(0, 1))}</span>`}</button>`;

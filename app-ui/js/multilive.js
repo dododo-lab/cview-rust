@@ -177,6 +177,15 @@ export class MultiLivePage {
     this.focusInfo = new WatchInfoPanel(this.focusInfoEl);
     this.count = this.root.querySelector('.ml-count');
     this.watchPicker = this.root.querySelector('.ml-watch-picker');
+    this.watchPicker.addEventListener('scroll', () => this.syncWatchPickerFade(), { passive: true });
+    new ResizeObserver(() => this.syncWatchPickerFade()).observe(this.watchPicker);
+    // 세로 휠로도 가로로 넘긴다(트랙패드 가로 밀기는 그대로)
+    this.watchPicker.addEventListener('wheel', (e) => {
+      const p = this.watchPicker;
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || p.scrollWidth <= p.clientWidth) return;
+      e.preventDefault();
+      p.scrollLeft += e.deltaY;
+    }, { passive: false });
     this.focusControls = this.root.querySelector('.ml-focus-controls');
     this.ratioInput = this.root.querySelector('.ml-ratio input');
     this.ratioOutput = this.root.querySelector('.ml-ratio output');
@@ -935,9 +944,10 @@ export class MultiLivePage {
    */
   renderWatchPicker(sessions, watched) {
     const list = watched ? sessions.filter((x) => x.slot != null) : [];
-    this.watchPicker.hidden = list.length < 2;
-    if (this.watchPicker.hidden) { this.watchPicker.innerHTML = ''; return; }
-    this.watchPicker.innerHTML = list.map((x) => {
+    const picker = this.watchPicker;
+    picker.hidden = list.length < 2;
+    if (picker.hidden) { picker.innerHTML = ''; this.watchPickerHtml = ''; return; }
+    const html = list.map((x) => {
       const on = x.id === watched.id;
       const avatar = safeUrl(x.profileImageUrl);
       const name = x.channelName || x.channelId;
@@ -946,6 +956,26 @@ export class MultiLivePage {
         <span class="ellipsis">${esc(name)}</span>
       </button>`;
     }).join('');
+    // 상태 알림마다 다시 그리면 칩의 호버·키보드 초점이 날아간다 — 바뀐 때만.
+    if (html === this.watchPickerHtml) return;
+    this.watchPickerHtml = html;
+    picker.innerHTML = html;
+    // 칩이 넘치면 가로로 넘겨 보는데, 새로 연 채널(지금 보는 칩)이 넘친 쪽에 숨으면 추가가 안 된 것처럼 보였다 — 보이는 자리로.
+    const active = picker.querySelector('.ml-watch-chip.active');
+    if (active) {
+      const left = active.offsetLeft - picker.offsetLeft;
+      if (left < picker.scrollLeft) picker.scrollLeft = left - 12;
+      else if (left + active.offsetWidth > picker.scrollLeft + picker.clientWidth) picker.scrollLeft = left + active.offsetWidth - picker.clientWidth + 12;
+    }
+    this.syncWatchPickerFade();
+  }
+
+  /** 채널 칩 줄 끝 흐림 — 다른 방송 줄처럼 가려진 칩이 있는 쪽만. */
+  syncWatchPickerFade() {
+    const p = this.watchPicker;
+    const over = !p.hidden && p.scrollWidth > p.clientWidth + 1;
+    p.classList.toggle('fade-start', over && p.scrollLeft > 1);
+    p.classList.toggle('fade-end', over && p.scrollLeft + p.clientWidth < p.scrollWidth - 1);
   }
 
   async onClick(e) {
