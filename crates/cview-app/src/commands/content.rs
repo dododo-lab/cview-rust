@@ -649,6 +649,16 @@ fn shellexpand_home(path: &str, home: &Path) -> String {
     }
 }
 
+/// 외부 도우미(open·explorer·xdg-open·rundll32)를 띄운다. 끝나기를 기다리지 않되, 끝난 프로세스는
+/// 따로 거둬 좀비로 남지 않게 한다(`Child` 를 그냥 버리면 Unix 에서 앱이 끝날 때까지 남는다).
+fn launch(spawned: std::io::Result<std::process::Child>, fail: &str) -> CmdResult<()> {
+    let mut child = spawned.map_err(|e| CommandError(format!("{fail}: {e}")))?;
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
+}
+
 /// Finder(탐색기)에서 파일·폴더를 보여 준다.
 #[tauri::command]
 pub async fn reveal_path(path: String) -> CmdResult<()> {
@@ -666,9 +676,7 @@ pub async fn reveal_path(path: String) -> CmdResult<()> {
     let result = std::process::Command::new("xdg-open")
         .arg(p.parent().unwrap_or(&p))
         .spawn();
-    result
-        .map(|_| ())
-        .map_err(|e| CommandError(format!("열 수 없습니다: {e}")))
+    launch(result, "열 수 없습니다")
 }
 
 /// 기본 앱으로 열어도 되는 파일 — 받은 영상·녹화·스크린샷·내보낸 채팅. 웹뷰가 넘긴 경로로 앱 번들·스크립트·
@@ -706,9 +714,7 @@ pub async fn open_path(path: String) -> CmdResult<()> {
     let result = std::process::Command::new("explorer").arg(&p).spawn();
     #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
     let result = std::process::Command::new("xdg-open").arg(&p).spawn();
-    result
-        .map(|_| ())
-        .map_err(|e| CommandError(format!("열 수 없습니다: {e}")))
+    launch(result, "열 수 없습니다")
 }
 
 /// 시스템 알림 설정 열기(SYS-19 도움말 액션).
@@ -725,9 +731,7 @@ pub async fn open_notification_settings() -> CmdResult<()> {
     #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
     let result: std::io::Result<std::process::Child> =
         Err(std::io::Error::other("지원하지 않는 환경"));
-    result
-        .map(|_| ())
-        .map_err(|e| CommandError(format!("알림 설정을 열 수 없습니다: {e}")))
+    launch(result, "알림 설정을 열 수 없습니다")
 }
 
 /// 외부 브라우저로 링크를 연다(치지직에서 열기 등). http(s) 만 허용한다.
@@ -750,9 +754,7 @@ pub async fn open_external(url: String) -> CmdResult<()> {
     let result = std::process::Command::new("xdg-open")
         .arg(parsed.as_str())
         .spawn();
-    result
-        .map(|_| ())
-        .map_err(|e| CommandError(format!("열 수 없습니다: {e}")))
+    launch(result, "열 수 없습니다")
 }
 
 #[cfg(test)]
