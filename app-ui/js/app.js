@@ -148,15 +148,27 @@ function activeWatch() {
 let watchCloseBack = false;
 /**
  * 단독 보기 닫기(닫기 단추·Esc·⌘W) — 예전 시청 화면처럼 보던 화면(인기·카테고리 등)으로 돌아간다.
- * 둘러보다 연 채널(임시 보기)은 멀티라이브에서도 뺀다. 멀티라이브에 넣어 둔 채널은 닫기 단추면 빼고,
- * Esc·⌘W 면 그대로 두고 멀티라이브 보기로 간다(배치를 잃지 않게).
+ * 둘러보다 연 채널은 멀티라이브에서도 뺀다. 멀티라이브에 넣어 둔 채널은 닫기 단추면 빼고,
+ * Esc·⌘W 면 그대로 두고 멀티라이브 보기로 간다(배치를 잃지 않게). 닫기 단추는 머리줄에 남은 채널이 있으면 그리로.
  */
 async function closeWatch({ remove = false } = {}) {
   const id = pages.multilive.state.watchId;
   if (!id) return;
-  const transient = Boolean(transientWatch && transientWatch.id === id);
+  const transient = browsedWatch.has(id);
   if (!transient && !remove) { await navigate('multilive'); return; }
-  if (transient) transientWatch = null;
+  browsedWatch.delete(id);
+  // 닫기 단추 — 머리줄에 다른 채널이 남아 있으면 탭을 닫듯 옆 채널로 바꿔 보고 라이브 화면에 머문다.
+  // 옆 채널을 먼저 무대에 올리고 뺀다(무대가 비는 순간 멀티라이브로 끌려가지 않게).
+  if (remove) {
+    const list = (pages.multilive.state.sessions || []).filter((x) => x.slot != null);
+    const at = list.findIndex((x) => x.id === id);
+    const next = list[at + 1] || list[at - 1];
+    if (at >= 0 && next) {
+      await enterWatch(next.id, { push: false });
+      await pages.multilive.run(api.multiLiveRemove(id));
+      return;
+    }
+  }
   watchCloseBack = transient;
   await pages.multilive.run(api.multiLiveRemove(id));
   // 매니저는 지운 세션을 무대로 기억한 채 남는다 — 그대로 두면 다음 패인 선택이 그 패인을 무대로 올렸다.
@@ -175,7 +187,7 @@ async function closeWatch({ remove = false } = {}) {
 function syncLiveIndicators() {
   const playing = Boolean(viewer && viewer.isPlaying) || isWatching();
   const sessions = (pages.multilive && pages.multilive.state.sessions) || [];
-  const count = sessions.filter((x) => !(transientWatch && x.id === transientWatch.id)).length;
+  const count = sessions.filter((x) => !browsedWatch.has(x.id)).length;
   sidebar.setPlaying('live', playing);
   if (pendingWatch) return; // 여는 중 — 막 넣은 패인이 임시 보기로 정해지기 전에 숫자가 튀지 않게(끝나면 다시 맞춘다)
   sidebar.setBadge('live', count);
@@ -324,14 +336,29 @@ async function logout() {
 
 /**
  * 다른 메뉴(홈·팔로잉·인기·검색·카테고리·사이드바·팔레트·채널 화면…)에서 라이브를 재생 — 늘 멀티라이브의
- * 라이브 단독 보기(머리줄 채널 고르기·오른쪽 채팅)로 연다. 예전 시청 화면은 보조 플레이어 창과 멀티라이브가
+ * 라이브 단독 보기(머리줄 채널 고르기·오른쪽 채팅)로 연다. 예전 시청 화면은 보조 플레이어 창과 라이브 단독 보기가
  * 가득 찼을 때만 쓴다.
- * 재생으로 들어온 채널은 "임시 보기"(transientWatch) — 다른 방송을 열면 그 채널로 바뀌고 빠진다(둘러보는 동안
- * 패인이 쌓이지 않게). 멀티라이브에 직접 추가하거나 멀티라이브 화면으로 가면 남긴다.
+ * 재생으로 들어온 채널은 "둘러본 채널"(browsedWatch) — 머리줄 채널 고르기에 차례로 쌓여 다시 연결 없이 바꿔 본다.
+ * 라이브 단독 보기 상한이 차면 가장 오래전에 둘러본 채널부터 바꿔 낀다(예전엔 하나만 두고 다음 재생이 늘 바꿔 껴서
+ * 머리줄에 채널이 하나만 남았다). 멀티라이브에 직접 추가하거나 멀티라이브 화면으로 가면 남긴다(사이드바 수에 센다).
  */
-let transientWatch = null; // { id, channelId }
+const browsedWatch = new Map(); // 세션 id → 채널 id, 연 차례
 function keepTransient(channelId = null) {
-  if (transientWatch && (!channelId || transientWatch.channelId === channelId)) { transientWatch = null; syncLiveIndicators(); }
+  let changed = false;
+  for (const [id, ch] of browsedWatch) {
+    if (channelId && ch !== channelId) continue;
+    browsedWatch.delete(id);
+    changed = true;
+  }
+  if (changed) syncLiveIndicators();
+}
+/** 자리를 내줄 둘러본 채널 — 가장 오래전에 연 것, 되도록 지금 보는 채널은 빼고. */
+function oldestBrowsed() {
+  const st = pages.multilive.state;
+  const live = new Set((st.sessions || []).map((x) => x.id));
+  for (const id of [...browsedWatch.keys()]) if (!live.has(id)) browsedWatch.delete(id);
+  const ids = [...browsedWatch.keys()];
+  return ids.find((id) => id !== st.watchId) || ids[0] || null;
 }
 async function openChannel(channelId) {
   if (AUX || !pages.multilive) { await openInViewer(channelId); return; }
@@ -343,21 +370,19 @@ async function openChannelWatch(channelId) {
   const existing = multiLiveSessionFor(channelId);
   if (existing) { await enterWatch(existing.id); return; }
   const st = pages.multilive.state;
-  const prev = transientWatch && (st.sessions || []).some((x) => x.id === transientWatch.id) ? transientWatch : null;
-  transientWatch = null;
   // 라이브 단독 보기 상한 — 멀티라이브 상한과 따로다(지금 보기가 멀티라이브여도 라이브로 여는 추가는 이쪽).
-  const full = (st.canAddLive ?? st.canAdd) === false;
-  if (full) {
-    // 가득 참 — 바꿔 낄 임시 보기가 있으면 먼저 빼고, 없으면 예전 시청 화면으로
+  if ((st.canAddLive ?? st.canAdd) === false) {
+    // 가득 참 — 가장 오래전에 둘러본 채널을 먼저 빼고, 없으면(모두 직접 넣은 채널) 예전 시청 화면으로
+    const prev = oldestBrowsed();
     if (!prev) { await openInViewer(channelId); return; }
-    await pages.multilive.run(api.multiLiveRemove(prev.id));
+    browsedWatch.delete(prev);
+    await pages.multilive.run(api.multiLiveRemove(prev));
   }
   await pages.multilive.add(channelId, { quiet: true, live: true });
   const s = multiLiveSessionFor(channelId);
   if (!s) return; // 추가 실패 — run 이 이미 알렸다
-  transientWatch = { id: s.id, channelId };
+  browsedWatch.set(s.id, channelId);
   await enterWatch(s.id);
-  if (prev && !full) await pages.multilive.run(api.multiLiveRemove(prev.id));
 }
 
 /** 예전 시청 화면으로 — 보조 플레이어 창, 멀티라이브가 가득 찼을 때. */
