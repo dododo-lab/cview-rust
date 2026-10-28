@@ -129,6 +129,15 @@ pub struct AddSessionOptions {
     pub restoring_from_persistence: bool,
     pub watch_transition: bool,
     pub defer_auto_selection: bool,
+    /// 라이브 단독 보기에 담는 추가 — 멀티라이브 상한 대신 라이브 단독 보기 상한을 쓴다.
+    pub live_view: bool,
+}
+
+impl AddSessionOptions {
+    /// 라이브 단독 보기 상한을 따르는 추가인가(시청 전환 포함).
+    pub fn counts_toward_live_limit(&self) -> bool {
+        self.live_view || self.watch_transition
+    }
 }
 
 impl Default for AddSessionOptions {
@@ -138,6 +147,7 @@ impl Default for AddSessionOptions {
             restoring_from_persistence: false,
             watch_transition: false,
             defer_auto_selection: false,
+            live_view: false,
         }
     }
 }
@@ -351,11 +361,40 @@ impl ManagerState {
         self.adding_channel_ids.contains(channel_id)
     }
 
-    pub fn effective_max_sessions(&self) -> usize {
+    /// 멀티라이브 보기 상한 — 함께 재생하는 패인 수.
+    pub fn max_multi_live_sessions(&self) -> usize {
         let setting = self.settings.as_ref().map_or(MAX_SESSIONS, |s| {
             s.multi_live().max_concurrent_sessions.max(0) as usize
         });
         setting.max(MAX_SESSIONS)
+    }
+
+    /// 라이브 단독 보기 상한 — 무대 밖 채널은 로딩을 멈추고 머리줄 채널 고르기에만 남는다.
+    pub fn max_live_view_sessions(&self) -> usize {
+        let setting = self.settings.as_ref().map_or(MAX_SESSIONS, |s| {
+            s.multi_live().max_live_channels.max(0) as usize
+        });
+        setting.max(MAX_SESSIONS)
+    }
+
+    /// 추가 경로별 상한 — 라이브 단독 보기에 담는 추가인가.
+    pub fn max_sessions_for(&self, live_view: bool) -> usize {
+        if live_view {
+            self.max_live_view_sessions()
+        } else {
+            self.max_multi_live_sessions()
+        }
+    }
+
+    /// 지금 보기의 상한 — 무대가 있으면(라이브 단독 보기) 라이브, 아니면 멀티라이브.
+    pub fn effective_max_sessions(&self) -> usize {
+        self.max_sessions_for(self.stage_session_id.is_some())
+    }
+
+    /// 엔진 풀 상한 — 두 보기가 같은 세션 목록을 쓰므로 큰 쪽.
+    pub fn engine_pool_max_sessions(&self) -> usize {
+        self.max_live_view_sessions()
+            .max(self.max_multi_live_sessions())
     }
 
     pub fn has_open_session_slot(&self) -> bool {
@@ -363,11 +402,16 @@ impl ManagerState {
     }
 
     pub fn can_add_session(&self) -> bool {
+        self.can_add_session_for(self.stage_session_id.is_some())
+    }
+
+    /// 이 보기(라이브 단독 보기·멀티라이브)에 하나 더 넣을 자리가 있는가.
+    pub fn can_add_session_for(&self, live_view: bool) -> bool {
         !self.is_stopping_all
             && has_session_capacity(
                 self.sessions.len() as i64,
                 self.adding_channel_ids.len() as i64,
-                self.effective_max_sessions() as i64,
+                self.max_sessions_for(live_view) as i64,
             )
     }
 
@@ -674,7 +718,7 @@ impl MultiLiveManager {
 
     /// 엔진 풀 상한을 설정과 맞춘다.
     pub async fn sync_engine_pool_max(&self) {
-        let target = self.read().effective_max_sessions();
+        let target = self.read().engine_pool_max_sessions();
         self.shared
             .core
             .deps

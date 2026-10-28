@@ -135,12 +135,13 @@ impl MultiLiveManager {
                 Err(LiveDetailFailure::Message(m)) => return R::ApiError { message: m },
             }
         }
+        let live_view = options.counts_toward_live_limit();
         let has_room_excluding_self = |st: &ManagerState| {
             !st.is_stopping_all
                 && has_session_capacity(
                     st.sessions.len() as i64,
                     st.adding_channel_ids.len() as i64 - 1,
-                    st.effective_max_sessions() as i64,
+                    st.max_sessions_for(live_view) as i64,
                 )
         };
         if !is_current() {
@@ -169,7 +170,7 @@ impl MultiLiveManager {
             }
         }
         if allows_provisional_overflow {
-            let max = self.read().effective_max_sessions();
+            let max = self.read().engine_pool_max_sessions();
             pool.set_max_pool_size(max + 1).await;
         }
         let acquired = pool.acquire().await;
@@ -221,7 +222,7 @@ impl MultiLiveManager {
         }
         let commit = {
             let mut st = self.lock();
-            let limit = st.effective_max_sessions() + usize::from(allows_provisional_overflow);
+            let limit = st.max_sessions_for(live_view) + usize::from(allows_provisional_overflow);
             if st.sessions.len() >= limit {
                 Commit::Full
             } else if (options.watch_transition && st.session_for_channel(channel_id).is_some())
@@ -297,7 +298,7 @@ impl MultiLiveManager {
         }
         let over = {
             let st = self.read();
-            st.sessions.len() > st.effective_max_sessions()
+            st.sessions.len() > st.max_sessions_for(live_view)
         };
         if over {
             if self

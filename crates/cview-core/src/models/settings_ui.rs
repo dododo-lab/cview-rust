@@ -414,11 +414,18 @@ fn de_max_sessions<'de, D: Deserializer<'de>>(d: D) -> Result<i64, D::Error> {
 }
 
 /// 멀티라이브 설정. 제거된 프로세스 격리 키는 디코드 시 무시된다.
+///
+/// 라이브 단독 보기 채널 수(`maxLiveChannels`)가 없던 설정은 멀티라이브 최대 동시 세션 값을 이어받는다
+/// (예전엔 두 보기가 그 값 하나를 함께 썼다).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", default)]
+#[serde(remote = "Self", rename_all = "camelCase", default)]
 pub struct MultiLiveSettings {
+    /// 멀티라이브 보기에서 함께 재생하는 최대 패인 수.
     #[serde(deserialize_with = "de_max_sessions")]
     pub max_concurrent_sessions: i64,
+    /// 라이브 단독 보기에 담아 두는(머리줄 채널 고르기) 최대 채널 수.
+    #[serde(deserialize_with = "de_max_sessions")]
+    pub max_live_channels: i64,
     pub default_layout_mode: MultiLiveLayoutMode,
     pub multi_audio_enabled: bool,
     pub secondary_volume: f32,
@@ -441,10 +448,31 @@ pub struct MultiLiveSettings {
     pub default_focus_direction: MultiLiveFocusDirectionSetting,
 }
 
+impl Serialize for MultiLiveSettings {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        MultiLiveSettings::serialize(self, serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for MultiLiveSettings {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let mut value = serde_json::Value::deserialize(deserializer)?;
+        if let Some(map) = value.as_object_mut() {
+            if !map.contains_key("maxLiveChannels") {
+                if let Some(shared) = map.get("maxConcurrentSessions").cloned() {
+                    map.insert("maxLiveChannels".into(), shared);
+                }
+            }
+        }
+        MultiLiveSettings::deserialize(value).map_err(de::Error::custom)
+    }
+}
+
 impl Default for MultiLiveSettings {
     fn default() -> Self {
         Self {
             max_concurrent_sessions: 4,
+            max_live_channels: 4,
             default_layout_mode: MultiLiveLayoutMode::Preset,
             multi_audio_enabled: false,
             secondary_volume: 0.3,
@@ -779,10 +807,28 @@ mod tests {
         let s: MultiLiveSettings =
             serde_json::from_value(json!({"maxConcurrentSessions": 8})).unwrap();
         assert_eq!(s.max_concurrent_sessions, 8);
+        assert_eq!(
+            s.max_live_channels, 8,
+            "예전 공용 값을 라이브 단독 보기도 이어받는다"
+        );
         assert!(serde_json::to_value(MultiLiveSettings::default())
             .unwrap()
             .get("selectedSessionBWWeight")
             .is_some());
+    }
+
+    #[test]
+    fn multi_live_limits_are_separate() {
+        let s: MultiLiveSettings =
+            serde_json::from_value(json!({"maxConcurrentSessions": 6, "maxLiveChannels": 12}))
+                .unwrap();
+        assert_eq!((s.max_concurrent_sessions, s.max_live_channels), (6, 12));
+        let s: MultiLiveSettings = serde_json::from_value(json!({"maxLiveChannels": 2})).unwrap();
+        assert_eq!((s.max_concurrent_sessions, s.max_live_channels), (4, 4));
+        let json = serde_json::to_value(&s).unwrap();
+        assert_eq!(json["maxLiveChannels"], 4);
+        let back: MultiLiveSettings = serde_json::from_value(json).unwrap();
+        assert_eq!(back, s);
     }
 
     #[test]

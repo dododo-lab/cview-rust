@@ -1429,11 +1429,18 @@ async fn watch_entry_preflight_and_api_unavailable_keeps_sessions() {
 }
 
 fn live_manager(backend: Arc<FakeBackend>, pool: Arc<FakePool>) -> (MultiLiveManager, Arc<Toasts>) {
+    live_manager_with(backend, pool, MultiLiveSettings::default())
+}
+
+fn live_manager_with(
+    backend: Arc<FakeBackend>,
+    pool: Arc<FakePool>,
+    ml: MultiLiveSettings,
+) -> (MultiLiveManager, Arc<Toasts>) {
     let toasts = Arc::new(Toasts(Mutex::new(Vec::new())));
     let mut deps = MultiLiveDeps::new(pool, Arc::new(FakeFactory));
     deps.toast = Some(toasts.clone());
     let m = MultiLiveManager::new(deps);
-    let ml = MultiLiveSettings::default();
     m.lock().configure(
         Some(backend),
         Some(Arc::new(FakeSettings { ml })),
@@ -1443,6 +1450,85 @@ fn live_manager(backend: Arc<FakeBackend>, pool: Arc<FakePool>) -> (MultiLiveMan
     );
     m.lock().is_terminating = true;
     (m, toasts)
+}
+
+#[tokio::test]
+async fn live_view_and_multi_live_limits_are_separate() {
+    let ml = MultiLiveSettings {
+        max_concurrent_sessions: 4,
+        max_live_channels: 6,
+        ..MultiLiveSettings::default()
+    };
+    let (m, _) = live_manager_with(
+        Arc::new(FakeBackend::default()),
+        Arc::new(FakePool::default()),
+        ml,
+    );
+    m.lock().set_grid_layout(true);
+    let multi = AddSessionOptions {
+        start_immediately: false,
+        ..AddSessionOptions::default()
+    };
+    let live = AddSessionOptions {
+        live_view: true,
+        ..multi
+    };
+    for i in 0..4 {
+        assert!(m
+            .add_session(&format!("ch-{i}"), multi, None)
+            .await
+            .is_new_session());
+    }
+    assert!(
+        !m.read().can_add_session(),
+        "멀티라이브 보기는 4개에서 가득"
+    );
+    assert!(
+        m.read().can_add_session_for(true),
+        "라이브 단독 보기는 더 담을 수 있다"
+    );
+    assert_eq!(
+        m.add_session("ch-4", multi, None).await,
+        MultiLiveAddSessionResult::MaxSessionsReached
+    );
+    for i in 4..6 {
+        assert!(m
+            .add_session(&format!("ch-{i}"), live, None)
+            .await
+            .is_new_session());
+    }
+    assert_eq!(
+        m.add_session("ch-6", live, None).await,
+        MultiLiveAddSessionResult::MaxSessionsReached
+    );
+    {
+        let st = m.read();
+        assert_eq!(st.sessions().len(), 6);
+        assert_eq!(
+            (
+                st.effective_max_sessions(),
+                st.max_live_view_sessions(),
+                st.engine_pool_max_sessions()
+            ),
+            (4, 6, 6)
+        );
+    }
+    // 무대(라이브 단독 보기)가 서면 지금 보기 상한이 라이브 쪽으로 바뀐다.
+    let first = m.read().sessions()[0].id();
+    m.lock().set_grid_layout(false);
+    m.lock().set_stage_session(Some(first));
+    assert_eq!(m.read().effective_max_sessions(), 6);
+    m.lock().set_stage_session(None);
+    m.lock().set_grid_layout(true);
+    // 멀티라이브로 돌아오면 넘는 2개는 동시 재생 한도로 멈춘다.
+    m.lock().reconcile_decode_budget();
+    let st = m.read();
+    let paused = st
+        .pane_suspension()
+        .values()
+        .filter(|c| **c == policy::PaneSuspensionCause::DecodeBudget)
+        .count();
+    assert_eq!(paused, 2);
 }
 
 #[tokio::test]

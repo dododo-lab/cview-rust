@@ -89,11 +89,16 @@ impl ManagerState {
             }
             return;
         }
-        let k = policy::effective_decode_budget(
+        let mut k = policy::effective_decode_budget(
             sessions.len(),
             self.effective_max_sessions(),
             self.memory_pressure_k_override,
         );
+        // 라이브 단독 보기에서 멀티라이브 상한보다 많이 담아 온 채 멀티라이브로 돌아오면 넘는 패인은
+        // 재생을 멈춘다(동시 재생 한도 — 선택하면 그 패인이 재생된다).
+        if self.stage_session_id.is_none() {
+            k = k.min(self.max_multi_live_sessions());
+        }
         let focus_main = if self.grid_layout_mode == MultiLiveGridLayoutMode::Focus {
             self.focus_main_session_id
         } else {

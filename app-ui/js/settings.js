@@ -65,7 +65,8 @@ export const SCHEMA = [
     { type: 'action', action: 'reset-alert-pos', label: '알림 위치 초기화', help: '영상 위 알림은 끌어서 옮길 수 있어요(알림을 더블클릭해도 기본 위치로 돌아갑니다)', button: '기본 위치로' },
   ]],
   ['multi', '멀티라이브', [
-    { d: 'multiLive', k: 'maxConcurrentSessions', label: '최대 동시 세션', help: '원본과 같이 4~20개 (많을수록 CPU·대역폭을 더 씁니다)', type: 'range', min: 4, max: 20, step: 1 },
+    { d: 'multiLive', k: 'maxConcurrentSessions', label: '멀티라이브 최대 동시 세션', help: '멀티라이브에서 함께 재생하는 패인 수, 4~20개 (많을수록 CPU·대역폭을 더 씁니다). 라이브에서 더 많이 담아 왔다면 넘는 패인은 멈춘 채로 보이고 누르면 재생됩니다', type: 'range', min: 4, max: 20, step: 1 },
+    { d: 'multiLive', k: 'maxLiveChannels', label: '라이브 단독 보기 최대 채널', help: '라이브 화면 머리줄에 담아 두고 다시 연결 없이 바꿔 볼 수 있는 채널 수, 4~20개 (보는 채널 밖은 로딩을 멈춰 가볍습니다)', type: 'range', min: 4, max: 20, step: 1 },
     { d: 'multiLive', k: 'defaultLayoutMode', label: '기본 레이아웃', type: 'select', options: opt([['preset', '균등 분할'], ['focus', '포커스 모드']]) },
     { d: 'multiLive', k: 'defaultFocusDirection', label: '포커스 메인 위치', type: 'select', options: opt([['left', '왼쪽'], ['right', '오른쪽'], ['top', '위'], ['bottom', '아래']]) },
     { d: 'multiLive', k: 'rememberLastLayout', label: '마지막 레이아웃 기억', type: 'toggle' },

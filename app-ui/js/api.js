@@ -76,7 +76,8 @@ export const api = {
   playerMessage: (message) => invoke('player_message', { message }),
 
   multiLiveState: () => invoke('multilive_state'),
-  multiLiveAdd: (channelId) => invoke('multilive_add', { channelId }),
+  // live — 라이브 단독 보기에 담는 추가(라이브 단독 보기 상한을 따른다)
+  multiLiveAdd: (channelId, live = false) => invoke('multilive_add', { channelId, live }),
   multiLiveRemove: (sessionId) => invoke('multilive_remove', { sessionId }),
   multiLiveSelect: (sessionId) => invoke('multilive_select', { sessionId }),
   multiLiveWatch: (sessionId) => invoke('multilive_watch', { sessionId }),

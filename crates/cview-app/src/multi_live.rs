@@ -950,6 +950,9 @@ impl MultiLiveShell {
                 .map(|u| u.to_string()),
             can_add: st.can_add_session(),
             max_sessions: st.effective_max_sessions(),
+            can_add_live: st.can_add_session_for(true),
+            max_live_sessions: st.max_live_view_sessions(),
+            max_multi_sessions: st.max_multi_live_sessions(),
             layout: layout_name(st.grid_layout_mode()).to_string(),
             focus_direction: st.focus_direction().raw_value().to_string(),
             focus_ratio: st.layout_ratios().focus_ratio,
@@ -1054,8 +1057,14 @@ pub struct MultiLiveStateDto {
     pub selected_id: Option<String>,
     /// 포커스 레이아웃의 메인 패인(없으면 선택 패인).
     pub focus_main_id: Option<String>,
+    /// 지금 보기(라이브 단독 보기면 라이브, 아니면 멀티라이브)에 더 넣을 수 있는가와 그 상한.
     pub can_add: bool,
     pub max_sessions: usize,
+    /// 라이브 단독 보기에 담는 추가(카드로 열기·머리줄 채널 추가) — 지금 어느 보기든 이 상한을 따른다.
+    pub can_add_live: bool,
+    pub max_live_sessions: usize,
+    /// 멀티라이브 보기 상한.
+    pub max_multi_sessions: usize,
     pub layout: String,
     /// 포커스 메인 위치 — `left` / `right` / `top` / `bottom`.
     pub focus_direction: String,
