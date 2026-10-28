@@ -1,4 +1,3 @@
-
 //! 원본: `Tests/CViewAppTests` 의 AppState 인증 경계·프로필 재동기화·로컬 삭제·프리셋 게이트·
 //! 저장소 복구 테스트 핵심.
 use super::*;

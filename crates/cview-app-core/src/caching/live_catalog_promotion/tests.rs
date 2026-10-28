@@ -1,4 +1,3 @@
-
 //! 원본: `Tests/CViewAppTests/LiveCatalogPromotionTests.swift`
 use super::*;
 use chrono::FixedOffset;

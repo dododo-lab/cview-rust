@@ -284,9 +284,7 @@ pub mod focus_quality {
         audible: bool,
         thermal_cap: bool,
     ) -> HlsJsForcedQualityTarget {
-        let required = pane_size
-            .map(|(w, h)| h.min(w * 9.0 / 16.0))
-            .unwrap_or(360.0);
+        let required = pane_size.map_or(360.0, |(w, h)| h.min(w * 9.0 / 16.0));
         let mut height = TIERS
             .iter()
             .copied()

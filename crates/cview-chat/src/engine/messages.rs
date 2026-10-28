@@ -57,9 +57,7 @@ impl EngineInner {
                 self.emit(ChatEngineEvent::Connected);
             }
             ChatEvent::ConnectionRejected { ret_code, ret_msg } => {
-                let code = ret_code
-                    .map(|c| c.to_string())
-                    .unwrap_or_else(|| "missing".into());
+                let code = ret_code.map_or_else(|| "missing".into(), |c| c.to_string());
                 let suffix = ret_msg
                     .as_deref()
                     .map(str::trim)

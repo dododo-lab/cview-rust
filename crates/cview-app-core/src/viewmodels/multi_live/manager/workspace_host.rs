@@ -30,8 +30,7 @@ impl FollowingWorkspaceHost for MultiLiveManager {
     fn presented_frame_tick(&self, session_id: Uuid) -> u64 {
         self.read()
             .session(session_id)
-            .map(|s| s.player().presented_frame_tick())
-            .unwrap_or(0)
+            .map_or(0, |s| s.player().presented_frame_tick())
     }
 
     fn is_adding_channel(&self, channel_id: &str) -> bool {

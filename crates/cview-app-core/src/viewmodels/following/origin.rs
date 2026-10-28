@@ -31,8 +31,7 @@ impl FollowingState {
         NavigationOriginStart {
             origin: inherited
                 .as_ref()
-                .map(|r| r.origin)
-                .unwrap_or_else(|| self.capture_multi_navigation_origin(host)),
+                .map_or_else(|| self.capture_multi_navigation_origin(host), |r| r.origin),
             chain_root: inherited.map(|r| r.chain_root),
         }
     }

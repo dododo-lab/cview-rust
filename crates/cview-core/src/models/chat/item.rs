@@ -53,7 +53,7 @@ impl ChatMessageItem {
         };
 
         let empty: Vec<ChatBadge> = Vec::new();
-        let profile_badges = profile.map(|p| &p.badges).unwrap_or(&empty);
+        let profile_badges = profile.map_or(&empty, |p| &p.badges);
         let subscription_months = extras
             .and_then(|e| e.subscription.as_ref())
             .map(|s| s.months)
@@ -277,8 +277,7 @@ fn replace_chzzk_codes(input: &str, replacement: &str) -> String {
         let end = body
             .char_indices()
             .find(|(_, c)| *c == '{' || *c == '}' || c.is_whitespace())
-            .map(|(i, _)| i)
-            .unwrap_or(body.len());
+            .map_or(body.len(), |(i, _)| i);
         // 탐욕 매치 후 되짚기: `[^{}\s]+` 다음에 `:}` 가 와야 한다. 즉 run 끝이 `}` 이고
         // 그 직전이 `:` 이며 run 길이(콜론 제외)가 1 이상이어야 한다.
         let run = &body[..end];

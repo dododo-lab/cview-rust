@@ -350,9 +350,9 @@ impl ChatState {
     }
 
     fn queue_lag_ms(&self) -> f64 {
-        self.pending_first_enqueued_at
-            .map(|first| (Utc::now() - first).num_microseconds().unwrap_or(0) as f64 / 1000.0)
-            .unwrap_or(0.0)
+        self.pending_first_enqueued_at.map_or(0.0, |first| {
+            (Utc::now() - first).num_microseconds().unwrap_or(0) as f64 / 1000.0
+        })
     }
 
     pub fn schedule_batch_flush(&mut self) {

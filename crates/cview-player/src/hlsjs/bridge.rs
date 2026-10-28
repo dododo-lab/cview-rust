@@ -43,7 +43,7 @@ fn int(data: &Map<String, Value>, key: &str) -> Option<i64> {
 
 /// Swift `(x as? NSNumber)?.intValue` — 소수는 버림.
 fn int_lenient(data: &Map<String, Value>, key: &str, fallback: i64) -> i64 {
-    number(data, key).map(|v| v as i64).unwrap_or(fallback)
+    number(data, key).map_or(fallback, |v| v as i64)
 }
 
 fn boolean(data: &Map<String, Value>, key: &str) -> Option<bool> {
@@ -273,8 +273,9 @@ impl HlsJsPlaybackSnapshot {
             match_web_v2: HlsJsMatchWebV2Metrics::parse(data),
             network_metrics: data
                 .get("networkMetrics")
-                .map(|v| HlsJsNetworkMetrics::from_value(v, sampled_at))
-                .unwrap_or_else(HlsJsNetworkMetrics::empty),
+                .map_or_else(HlsJsNetworkMetrics::empty, |v| {
+                    HlsJsNetworkMetrics::from_value(v, sampled_at)
+                }),
         }
     }
 

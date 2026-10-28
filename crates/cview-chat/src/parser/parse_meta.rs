@@ -51,8 +51,10 @@ impl ChatMessageParser {
         let notice_id = ["messageId", "msgId", "id", "noticeId"]
             .into_iter()
             .find_map(|key| body_str(dict, key).filter(|s| !s.is_empty()))
-            .map(|sid| format!("notice_{sid}"))
-            .unwrap_or_else(|| format!("notice_{:x}", fnv1a(&format!("{nickname}\u{1}{msg}"))));
+            .map_or_else(
+                || format!("notice_{:x}", fnv1a(&format!("{nickname}\u{1}{msg}"))),
+                |sid| format!("notice_{sid}"),
+            );
 
         Ok(ChatMessage {
             id: notice_id,

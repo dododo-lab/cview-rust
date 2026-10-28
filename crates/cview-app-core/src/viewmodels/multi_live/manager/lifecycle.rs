@@ -233,8 +233,7 @@ impl MultiLiveManager {
                 let channel_name = live_info
                     .channel
                     .as_ref()
-                    .map(|c| c.channel_name.clone())
-                    .unwrap_or_else(|| channel_id.to_string());
+                    .map_or_else(|| channel_id.to_string(), |c| c.channel_name.clone());
                 let profile = live_info
                     .channel
                     .as_ref()

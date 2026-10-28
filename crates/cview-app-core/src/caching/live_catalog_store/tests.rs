@@ -1,4 +1,3 @@
-
 //! 원본: `Tests/CViewAppTests/LiveCatalogStoreOwnershipTests.swift`,
 //! `LiveCatalogStoreSchedulerTests.swift` (체크포인트·배선 소스 가드 제외).
 use super::*;

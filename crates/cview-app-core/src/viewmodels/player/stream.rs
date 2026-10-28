@@ -78,8 +78,9 @@ impl PlayerViewModel {
         } else {
             req.player_settings
                 .as_ref()
-                .map(|p| LatencyPresetPairing::pairing(Some(p)).configuration)
-                .unwrap_or(LowLatencyConfiguration::WEB_PARITY_HLSJS)
+                .map_or(LowLatencyConfiguration::WEB_PARITY_HLSJS, |p| {
+                    LatencyPresetPairing::pairing(Some(p)).configuration
+                })
         };
         let mut config = Configuration::new(req.channel_id.clone());
         config.enable_low_latency = policy.low_latency_enabled;

@@ -18,7 +18,7 @@ impl ChatState {
                     .deps
                     .preferences
                     .last_read_message_id(&cid, self.multi_chat_scope);
-                self.cached_last_read_state = Some((cid.clone(), id.clone()));
+                self.cached_last_read_state = Some((cid, id.clone()));
                 id
             }
         };

@@ -712,8 +712,7 @@ pub fn cached_data(vod: &VodInfo, channel_id: &str, tag: &str, fetched_at: Date)
         channel_id: Some(
             vod.channel
                 .as_ref()
-                .map(|c| c.channel_id.clone())
-                .unwrap_or_else(|| channel_id.to_string()),
+                .map_or_else(|| channel_id.to_string(), |c| c.channel_id.clone()),
         ),
         content_hash: CachedVod::compute_content_hash(
             &vod.video_title,

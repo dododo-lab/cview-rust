@@ -152,7 +152,7 @@ impl ChzzkApiClient {
                         if crate::observer::is_active() {
                             crate::observer::observe(&crate::observer::RequestRecord {
                                 method: "GET",
-                                path: endpoint.path().to_string(),
+                                path: endpoint.path(),
                                 status: None,
                                 error: None,
                                 duration_ms: 0.0,

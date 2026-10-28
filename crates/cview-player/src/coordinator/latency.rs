@@ -192,9 +192,8 @@ impl StreamCoordinator {
             let suspended = hls.is_loading_suspended();
             if flag == suspended {
                 // 빠른 suspend→resume 에서 플래그만 보면 폐기된 PID 토큰이 영구히 남는다.
-                let token_current = active
-                    .map(|t| hls.is_latency_control_session_current(t))
-                    .unwrap_or(false);
+                let token_current =
+                    active.is_some_and(|t| hls.is_latency_control_session_current(t));
                 if !suspended && self.should_run_low_latency_sync() && !token_current {
                     self.start_low_latency_sync().await;
                 }
@@ -584,7 +583,7 @@ fn buffer_health_provider(b: Binding) -> crate::low_latency::F64Provider {
         let Some(engine) = b.engine.upgrade() else {
             return 1.0;
         };
-        let level = engine.hls().map(|h| h.buffer_health()).unwrap_or(1.0);
+        let level = engine.hls().map_or(1.0, |h| h.buffer_health());
         if let Some((c, _)) = b.current() {
             c.publish_buffer_health(level);
         }

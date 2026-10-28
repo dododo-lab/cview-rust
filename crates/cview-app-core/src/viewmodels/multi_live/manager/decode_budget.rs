@@ -82,8 +82,7 @@ impl ManagerState {
         let reduce_enabled = self
             .settings
             .as_ref()
-            .map(|s| s.multi_live().background_quality_reduction)
-            .unwrap_or(true);
+            .is_none_or(|s| s.multi_live().background_quality_reduction);
         if !reduce_enabled && self.memory_pressure_k_override.is_none() {
             for s in &sessions {
                 self.apply_decode_state(s, true);

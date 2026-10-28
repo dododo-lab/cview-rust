@@ -405,9 +405,7 @@ impl MultiLiveBandwidthCoordinator {
             now,
             cfg.sample_freshness_interval.clamp(0.0, 20.0),
         );
-        let usable = capacity
-            .map(|c| (c * cfg.safety_factor.clamp(0.0, 1.0)).max(0.0))
-            .unwrap_or(0.0);
+        let usable = capacity.map_or(0.0, |c| (c * cfg.safety_factor.clamp(0.0, 1.0)).max(0.0));
 
         let avg_buffer = streams.iter().map(|s| s.buffer_length).sum::<f64>() / count;
         let is_emergency = avg_buffer < cfg.emergency_buffer_threshold;
@@ -612,8 +610,7 @@ pub fn cap_level_by_pane_size(pane_width: i64, pane_height: i64, is_selected: bo
     TIERS
         .iter()
         .find(|(w, h)| *w >= pane_width || *h >= pane_height)
-        .map(|(_, h)| *h)
-        .unwrap_or(1080)
+        .map_or(1080, |(_, h)| *h)
 }
 
 #[cfg(test)]

@@ -225,9 +225,7 @@ pub fn playlist_base_path(
     response_url: Option<&Url>,
     target_host: &str,
 ) -> String {
-    let base = response_url
-        .map(|u| u.as_str().to_string())
-        .unwrap_or_else(|| request_url.to_string());
+    let base = response_url.map_or_else(|| request_url.to_string(), |u| u.as_str().to_string());
     let dir = extract_directory_path(&base);
     match host_of(&base) {
         Some(host) if host != target_host => format!("/_p_/{host}{dir}"),

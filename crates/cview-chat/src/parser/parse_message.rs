@@ -370,9 +370,7 @@ pub(crate) fn stable_message_id(
         }
     }
 
-    let type_part = msg_type_code
-        .map(|c| c.to_string())
-        .unwrap_or_else(|| "0".into());
+    let type_part = msg_type_code.map_or_else(|| "0".into(), |c| c.to_string());
     let fingerprint = extras_fingerprint(dict.get("extras"), normalized_extras);
     let payload = format!("{uid}|{msg_time}|{type_part}|{msg}|{fingerprint}");
     let hex = format!("{:x}", fnv1a(&payload));

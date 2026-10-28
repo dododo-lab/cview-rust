@@ -597,7 +597,7 @@ impl FollowingStore {
                 row,
                 fetched.and_then(|f| f.0.as_ref()),
                 meta.get(&row.channel_id),
-                fetched.map(|f| f.1).unwrap_or(listed),
+                fetched.map_or(listed, |f| f.1),
             );
             if let Some(entry) = merged.meta {
                 next_meta.insert(row.channel_id.clone(), entry);

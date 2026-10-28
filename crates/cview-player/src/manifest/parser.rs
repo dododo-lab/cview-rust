@@ -182,8 +182,7 @@ impl MediaPlaylist {
     pub fn end_time(&self) -> f64 {
         self.segments
             .last()
-            .map(|s| s.start_time + s.duration)
-            .unwrap_or(0.0)
+            .map_or(0.0, |s| s.start_time + s.duration)
     }
 }
 
@@ -490,7 +489,7 @@ fn parse_init_segment(attr: &str, base: &Url) -> Option<InitSegment> {
 /// `#EXT-X-KEY` — METHOD=NONE 이면 해제, 모르는 METHOD/URI 없음이면 직전 키 유지.
 fn parse_key(attr: &str, current: Option<EncryptionInfo>, base: &Url) -> Option<EncryptionInfo> {
     let attrs = parse_attributes(attr);
-    let method = attrs.get("METHOD").map(String::as_str).unwrap_or("NONE");
+    let method = attrs.get("METHOD").map_or("NONE", String::as_str);
     if method == "NONE" {
         return None;
     }

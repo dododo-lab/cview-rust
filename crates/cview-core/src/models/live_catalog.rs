@@ -64,8 +64,7 @@ impl From<&LiveInfo> for LiveCatalogRow {
             channel_name: info
                 .channel
                 .as_ref()
-                .map(|c| c.channel_name.clone())
-                .unwrap_or_else(|| "Unknown".into()),
+                .map_or_else(|| "Unknown".into(), |c| c.channel_name.clone()),
             channel_image_url: info
                 .channel
                 .as_ref()

@@ -363,7 +363,7 @@ impl PlayerState {
     }
 
     fn live_edge_tolerance(&self) -> f64 {
-        5.0_f64.max(self.latency_info.map(|l| l.target).unwrap_or(3.5) * 1.5)
+        5.0_f64.max(self.latency_info.map_or(3.5, |l| l.target) * 1.5)
     }
 
     pub fn rewind_live_edge_tolerance(&self) -> f64 {
@@ -405,7 +405,7 @@ impl PlayerState {
         let source = self.rewind_source();
         let uses_window = source == RewindSource::ServerTimeMachine
             || (source == RewindSource::LocalTimeshift && self.is_time_shifting);
-        let latency = self.latency_info.map(|l| l.current).unwrap_or(0.0);
+        let latency = self.latency_info.map_or(0.0, |l| l.current);
         if window <= 0.0 || !uses_window {
             return latency;
         }
@@ -867,10 +867,7 @@ impl PlayerViewModel {
         let Some(engine) = s.engine.as_ref().filter(|e| e.is_hlsjs()) else {
             return;
         };
-        let latency = engine
-            .hls()
-            .map(|h| h.live_latency_seconds())
-            .unwrap_or(0.0);
+        let latency = engine.hls().map_or(0.0, |h| h.live_latency_seconds());
         if should_skip_background_resync(latency, engine.effective_live_target_latency_seconds()) {
             return;
         }
@@ -1012,8 +1009,7 @@ impl PlayerViewModel {
             None => "pending".into(),
             Some(st) => st
                 .effective
-                .map(|m| m.raw_value().to_string())
-                .unwrap_or_else(|| "unavailable".into()),
+                .map_or_else(|| "unavailable".into(), |m| m.raw_value().to_string()),
         };
     }
 
@@ -1022,8 +1018,7 @@ impl PlayerViewModel {
             .read()
             .engine
             .as_ref()
-            .map(|e| e.current_time())
-            .unwrap_or(0.0)
+            .map_or(0.0, |e| e.current_time())
     }
 
     pub fn duration(&self) -> f64 {
@@ -1031,8 +1026,7 @@ impl PlayerViewModel {
             .read()
             .engine
             .as_ref()
-            .map(|e| e.duration())
-            .unwrap_or(0.0)
+            .map_or(0.0, |e| e.duration())
     }
 
     pub fn seek(&self, position: f64) {

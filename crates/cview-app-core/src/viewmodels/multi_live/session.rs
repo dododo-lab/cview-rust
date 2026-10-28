@@ -540,10 +540,7 @@ impl MultiLiveSession {
                     let Some(api) = b.upgrade() else {
                         return false;
                     };
-                    api.live_status(&cid)
-                        .await
-                        .map(|s| s.is_closed)
-                        .unwrap_or(false)
+                    api.live_status(&cid).await.is_ok_and(|s| s.is_closed)
                 })
             });
             self.player.set_stream_ended_probe(Some(probe));
@@ -1106,8 +1103,7 @@ async fn poll_loop(weak: Weak<MultiLiveSession>) {
             Some(s) if s.obs.read().is_background => BACKGROUND_POLL_INTERVAL,
             Some(s) => s
                 .backend()
-                .map(|b| b.foreground_poll_interval())
-                .unwrap_or(Duration::from_secs(60)),
+                .map_or(Duration::from_secs(60), |b| b.foreground_poll_interval()),
             None => break,
         };
         tokio::time::sleep(interval).await;

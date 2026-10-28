@@ -1,4 +1,3 @@
-
 //! 원본: `Tests/CViewAppTests/FollowingStoreTests.swift` 핵심 계약.
 use super::*;
 use crate::services::support::ManualClock;

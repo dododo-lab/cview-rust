@@ -616,8 +616,7 @@ impl WebSocketService {
             let s = self.inner.lock();
             s.background
                 .policy()
-                .map(|p| p.revision.wrapping_add(1))
-                .unwrap_or(0)
+                .map_or(0, |p| p.revision.wrapping_add(1))
         };
         self.set_background_mode_policy(BackgroundModePolicy {
             enabled,

@@ -1,4 +1,3 @@
-
 //! 원본: `Tests/CViewCoreTests/LiveDetailRefreshPolicyTests.swift`
 use super::*;
 use crate::utils::time::from_unix;

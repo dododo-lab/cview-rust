@@ -486,7 +486,7 @@ impl SearchState {
     }
 
     fn now(&self) -> f64 {
-        self.this.upgrade().map(|s| (s.clock)()).unwrap_or(0.0)
+        self.this.upgrade().map_or(0.0, |s| (s.clock)())
     }
 
     pub fn current_results_are_fresh(&self) -> bool {

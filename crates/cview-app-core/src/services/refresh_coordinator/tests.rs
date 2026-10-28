@@ -1,4 +1,3 @@
-
 //! 원본: `Tests/CViewAppTests/RefreshCoordinatorTests.swift`(코디네이터 동작 스위트).
 use super::*;
 use crate::services::support::ManualClock;

@@ -352,11 +352,9 @@ impl ManagerState {
     }
 
     pub fn effective_max_sessions(&self) -> usize {
-        let setting = self
-            .settings
-            .as_ref()
-            .map(|s| s.multi_live().max_concurrent_sessions.max(0) as usize)
-            .unwrap_or(MAX_SESSIONS);
+        let setting = self.settings.as_ref().map_or(MAX_SESSIONS, |s| {
+            s.multi_live().max_concurrent_sessions.max(0) as usize
+        });
         setting.max(MAX_SESSIONS)
     }
 

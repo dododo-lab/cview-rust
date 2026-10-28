@@ -462,11 +462,7 @@ impl StitchedCatalogVerifier {
         }
         let (rows, replaced) = Self::merge_by_channel(combined);
         let pages = inputs.top_up.received_pages
-            + inputs
-                .continuation
-                .as_ref()
-                .map(|c| c.received_pages)
-                .unwrap_or(0);
+            + inputs.continuation.as_ref().map_or(0, |c| c.received_pages);
         StitchVerdict::Accepted(Stitched {
             rows,
             replaced_by_restart: replaced,
