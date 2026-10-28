@@ -366,14 +366,12 @@ impl VaultSecretStore {
         f: impl FnOnce(&mut HashMap<String, Vec<u8>>) -> Result<T, StoreError>,
     ) -> Result<T, StoreError> {
         let mut guard = self.cache.lock().unwrap_or_else(|e| e.into_inner());
-        if guard.is_none() {
-            *guard = Some(
-                self.item
-                    .get()
-                    .map(|d| d.map(|b| self.decode_or_backup(&b)).unwrap_or_default()),
-            );
-        }
-        match guard.as_mut().expect("채움") {
+        let cached = guard.get_or_insert_with(|| {
+            self.item
+                .get()
+                .map(|d| d.map(|b| self.decode_or_backup(&b)).unwrap_or_default())
+        });
+        match cached {
             Ok(map) => f(map),
             Err(e) => Err(e.clone()),
         }
