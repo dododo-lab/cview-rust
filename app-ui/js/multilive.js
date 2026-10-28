@@ -13,13 +13,14 @@ import { ChatPanel } from './chat.js';
 import { StreamAlerts } from './donations.js';
 import { PaneControls, paneControlsHtml, PANE_ICON, bindMenuKeys, focusFirstMenuItem } from './ml-pane-controls.js';
 import { installChatSplitter } from './splitter.js';
-import { FOCUS_DIRECTIONS, FOCUS_RATIO, focusGrid, ratioFromPointer, clampFocusRatio } from './focus-layout.js';
+import { FOCUS_DIRECTIONS, FOCUS_RATIO, focusGrid, focusInfoSplit, ratioFromPointer, clampFocusRatio } from './focus-layout.js';
 import { kbd } from './platform.js';
 import { uptimeText } from './cards.js';
 import { MultiLiveAddDrawer } from './ml-add-drawer.js';
 import { snapshotPanes, playLayoutMotion, playExit, cancelExit, bindPaneDrag, releaseDragged, motionEnabled } from './ml-motion.js';
 import { MultiLiveMergedChat } from './ml-multichat.js';
 import { WatchTools, watchTopHtml } from './ml-watch.js';
+import { WatchInfoPanel } from './ml-watch-info.js';
 
 import { liveIcon, multiLiveIcon, liveModeSwitch, setLiveModeActive } from './live-mode.js';
 import { decoratePageHeader } from './page-header.js';
@@ -146,6 +147,7 @@ export class MultiLivePage {
             <button class="btn lg ml-restore" data-ml="restore" hidden>지난 구성 다시 열기</button>
           </div>
           <button class="ml-focus-add" data-ml="add" hidden title="채널 추가" aria-label="채널 추가">${ICON_PLUS}<span>채널 추가</span></button>
+          <section class="ml-focus-info" aria-label="메인 채널 정보" hidden></section>
         </div>
         <section class="ml-watch-info" aria-label="채널 정보" hidden></section>
         </div>
@@ -170,6 +172,9 @@ export class MultiLivePage {
     this.stage = this.root.querySelector('.ml-stage');
     this.empty = this.root.querySelector('.ml-empty');
     this.focusAdd = this.root.querySelector('.ml-focus-add');
+    // 포커스(메인 왼쪽·오른쪽) 메인 아래 채널 정보 — 라이브 단독 보기와 같은 카드·탭, 이 칸 안에서 스크롤한다.
+    this.focusInfoEl = this.root.querySelector('.ml-focus-info');
+    this.focusInfo = new WatchInfoPanel(this.focusInfoEl);
     this.count = this.root.querySelector('.ml-count');
     this.watchPicker = this.root.querySelector('.ml-watch-picker');
     this.focusControls = this.root.querySelector('.ml-focus-controls');
@@ -301,6 +306,7 @@ export class MultiLivePage {
     new ResizeObserver(() => {
       this.reportStageSize();
       this.syncStack();
+      this.syncFocusInfo();
       // 단독 보기의 영상 위 채팅이 아래 정보 칸까지 덮지 않게 무대 높이를 넘긴다(multilive.css)
       this.root.querySelector('.ml-body').style.setProperty('--ml-stage-h', `${this.stage.offsetHeight}px`);
     }).observe(this.stage);
@@ -614,6 +620,7 @@ export class MultiLivePage {
       for (const p of panes) { p.el.style.gridRow = ''; p.el.style.gridColumn = ''; }
       this.focusAdd.hidden = true;
       this.divider.hidden = true;
+      this.syncFocusInfo();
       return;
     }
     const st = this.state;
@@ -637,6 +644,30 @@ export class MultiLivePage {
     const pos = st.focusDirection === 'right' || st.focusDirection === 'bottom' ? 1 - r : r;
     d.style.left = d.classList.contains('vertical') ? `calc(${(pos * 100).toFixed(2)}% - 4px)` : '';
     d.style.top = d.classList.contains('horizontal') ? `calc(${(pos * 100).toFixed(2)}% - 4px)` : '';
+    this.syncFocusInfo();
+  }
+
+  /**
+   * 메인 왼쪽·오른쪽 포커스 — 메인 칸은 무대 높이를 다 받아 16:9 영상 위아래가 검은 띠였다. 메인 영상을 폭에 맞는
+   * 16:9 높이로 줄이고 아래 남는 칸에 메인 채널 정보를 둔다. 배치·비율·무대 크기가 바뀔 때마다 다시 잰다.
+   * 남는 칸이 낮거나(focusInfoSplit) 한 채널 크게·단독 보기·전체 화면이면 예전처럼 메인이 칸을 다 쓴다.
+   */
+  syncFocusInfo() {
+    const st = this.state || {};
+    const sessions = st.sessions || [];
+    const side = st.focusDirection === 'left' || st.focusDirection === 'right';
+    const on = side && this.stage.classList.contains('ml-focus') && this.watchSlot == null && this.single == null && !document.fullscreenElement;
+    const mainId = on ? paneOrder(sessions, st.focusMainId || st.selectedId, st.layout)[0] : null;
+    const main = mainId ? sessions.find((x) => x.id === mainId) : null;
+    const split = main ? focusInfoSplit(this.stage.clientWidth, this.stage.clientHeight, this.localRatio ?? st.focusRatio) : null;
+    this.stage.classList.toggle('has-info', Boolean(split));
+    if (split) {
+      this.stage.style.setProperty('--ml-focus-video-h', `${split.videoH}px`);
+      this.focusInfoEl.style.height = `${split.infoH}px`;
+      this.focusInfoEl.style.gridColumn = st.focusDirection === 'right' ? '2' : '1';
+    }
+    this.focusInfo.show(split ? main.channelId : null);
+    if (split) this.focusInfo.syncViewers(main.viewerCountText);
   }
 
   bindFocusControls() {

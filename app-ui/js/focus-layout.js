@@ -53,3 +53,20 @@ export function ratioFromPointer(direction, fx, fy) {
     default: return clampFocusRatio(fx);
   }
 }
+
+/** 메인 아래 채널 정보 칸의 최소 높이 — 이보다 낮게 남으면 정보 칸 없이 메인이 칸을 다 쓴다(채널 카드 한 장 높이). */
+export const FOCUS_INFO_MIN = 96;
+
+/**
+ * 메인 왼쪽·오른쪽 포커스 — 메인 칸은 무대 높이를 다 받는데 16:9 영상은 폭이 정하는 높이까지만 차서 위아래가 검은 띠였다.
+ * 메인 영상을 폭에 맞는 16:9 높이로 줄이고 남는 높이를 아래 정보 칸으로 돌린다. 순수 함수.
+ * 무대 열은 `r fr (1-r) fr` + 간격(gap) 하나라 메인 열 폭은 (폭 - 간격) × r 이다.
+ * @returns {{ videoH: number, infoH: number } | null} 정보 칸이 FOCUS_INFO_MIN 보다 낮으면 null(예전 배치)
+ */
+export function focusInfoSplit(stageW, stageH, ratio, gap = 6) {
+  const mainW = (stageW - gap) * clampFocusRatio(ratio);
+  if (!(mainW > 0) || !(stageH > 0)) return null;
+  const videoH = Math.ceil((mainW * 9) / 16);
+  const infoH = Math.floor(stageH - videoH - gap);
+  return infoH >= FOCUS_INFO_MIN ? { videoH, infoH } : null;
+}

@@ -50,6 +50,18 @@
 .ml-focus-add:hover svg { background: var(--primary); color: var(--on-primary); }
 .ml-focus-add:focus-visible { box-shadow: var(--focus-ring); }
 
+/* 메인 왼쪽·오른쪽 포커스 — 메인 영상은 폭에 맞는 16:9 높이로 위에 붙이고, 아래 남는 칸에 메인 채널 정보(라이브 단독 보기와
+   같은 카드·탭)를 둔다. 높이·열은 multilive.js syncFocusInfo 가 정한다(남는 칸이 낮으면 has-info 없이 예전 배치). */
+.ml-stage.ml-focus.has-info .ml-pane.ml-first { align-self: start; height: var(--ml-focus-video-h); }
+.ml-focus-info {
+  grid-row: 1 / -1; align-self: end; min-width: 0; min-height: 0; padding: 0 2px var(--sp-lg); --mwi-gap: 12px;
+  overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  /* 좁은 칸 접기(.mwi-btn 글자·팔로워)는 @container ml-main 을 따른다 — 이 칸이 그 기준 폭이 되게 같은 이름을 준다. */
+  container: ml-main / inline-size;
+}
+.ml-focus-info[hidden], .ml-stage:not(.has-info) .ml-focus-info { display: none; }
+.ml-focus-info .mwi-tabbar { margin-top: var(--sp-md); }
+
 /* 메인 크기 구분선 */
 .ml-divider { position: absolute; z-index: 4; border-radius: 4px; touch-action: none; }
 .ml-divider[hidden] { display: none; }
