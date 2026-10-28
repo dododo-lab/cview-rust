@@ -551,3 +551,71 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
 .live-note { display: flex; align-items: center; gap: 4px; margin: 0; color: var(--text-tertiary); font-size: var(--fs-caption); }
 /* 숫자가 갱신돼도 폭이 흔들리지 않게(DT-3) */
 .recent-meta, .badge-viewers, .badge-uptime { font-variant-numeric: tabular-nums; }
+
+/* ══ 버튼 모션 (2026-10-28) — 앱의 모든 단추가 누르면 들어가고, 올리면 반응하고, 키보드 초점은 고리가 조여 들며 생긴다 ══
+   - 위 "누름 피드백" 목록에 없는 단추도 빠짐없이: 기본값은 :where() 로 걸어 우선순위가 0 — 단추마다 따로 정한
+     누름 크기·전환(넓은 줄 .985, 링크 .97 등)이 있으면 그쪽이 이긴다. 따로 transition 을 쓴 단추는 들어가는 것만 바로, 나머지는 그대로.
+   - 카드(.card 등 div·a)는 넣지 않는다 — 카드는 위 "카드" 규칙이 transform 으로 따로 누른다(겹치면 두 번 줄어든다).
+   - transform 계열(scale·translate)·opacity 만 움직여 합성 단계에서 끝난다. 상시 도는 것은 없다.
+   - 모션 줄이기·절약이면 크기·이동을 없애고 시간은 app.css 전역 규칙이 0 으로 만든다. */
+
+/* ── 누름 — 기본(작은 단추 크기) ── */
+:where(button, a.btn) {
+  transition-property: background-color, color, border-color, box-shadow, opacity, scale, translate;
+  transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), .32s, var(--dur-3);
+  transition-timing-function: var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-spring), var(--ease-out);
+}
+:where(button:active:not(:disabled), a.btn:active) { scale: .95; transition-duration: var(--dur-1); }
+/* 넓은 줄·큰 단추는 덜 — 화면 폭만큼 긴 줄이 5% 줄면 출렁여 보인다 */
+:is(.history-row, .discover-item, .picker-row, .ml-mc-cell-head, .quick-search, .load-more, .side-more, .ml-restore):active:not(:disabled) { scale: .985; }
+/* 끌어 옮기는 손잡이는 누르는 동안 끌기라 그대로 */
+.ml-drag:active { scale: none; }
+:is(.side-quick-btn, .overlay-retry, .ml-state-retry, .ml-merge-btn, .mc-chip, .ip-chip, .ml-live-pill):active:not(:disabled) { scale: .96; }
+/* 이 단추들은 예전 transition 이 scale 을 빼고 있어 들어갔다 나올 때 툭 끊겼다 — 같은 스프링으로 */
+.side-quick-btn { transition: background var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out), transform .3s var(--ease-spring), scale .3s var(--ease-spring); }
+.side-quick-btn:active { transform: none; }
+.mwi-lb-btn { transition: background var(--dur-2) var(--ease-out), scale .32s var(--ease-spring); }
+.mwi-lb-btn:hover { background: rgba(255, 255, 255, .18); }
+.mwi-lb-btn:active { scale: .9; transition-duration: var(--dur-1); }
+.ml-center-play { transition: transform .32s var(--ease-spring), background var(--dur-2) var(--ease-out), scale .32s var(--ease-spring); }
+.ml-center-play:active { scale: .92; transition-duration: var(--dur-1); }
+
+/* ── 호버 — 글자 단추는 1px 떠오르고, 아이콘 단추는 아이콘이 톡 커진다 ── */
+.btn {
+  transition-property: background, color, border-color, box-shadow, filter, transform, translate;
+  transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), .3s, var(--dur-3);
+  transition-timing-function: var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-spring), var(--ease-out);
+}
+.btn:hover:not(:disabled):not(:active) { translate: 0 -1px; }
+.btn:not(.ghost):hover:not(:disabled):not(:active) { box-shadow: var(--shadow-sm), 0 6px 16px -10px rgba(0, 0, 0, .35); }
+.btn.primary:hover:not(:disabled):not(:active) { box-shadow: 0 8px 22px var(--primary-glow); }
+:is(.icon-btn, .ml-tb-icon, .chat-hbtn, .ml-pane-btn, .ml-pane-close, .mc-tools-more, .ml-watch-btn, .ip-toggle, .mwi-btn, .side-quick-btn, .back-btn) svg {
+  transition: scale .32s var(--ease-spring), rotate .32s var(--ease-spring);
+}
+:is(.icon-btn, .ml-tb-icon, .chat-hbtn, .ml-pane-btn, .ml-pane-close, .mc-tools-more, .ml-watch-btn, .ip-toggle, .mwi-btn.icon, .side-quick-btn):hover:not(:disabled) svg { scale: 1.1; }
+.back-btn:hover svg { translate: -2px 0; transition: translate .32s var(--ease-spring); }
+
+/* ── 아이콘 한 번 움직임(motion.js installIconHover, 위 "아이콘 호버"와 같은 .hm 방식) ── */
+/* 닫기 — X 가 90° 돌아 제자리(대칭이라 끝 모양이 같다) */
+@keyframes hm-close { from { rotate: 0deg; } to { rotate: 90deg; } }
+:is(.ml-pane-close, .mwi-lb-btn.close, #viewer-close, [data-add="close"], [data-mc="remove"]).hm svg { animation: hm-close .42s var(--ease-spring); }
+/* 바깥에서 열기 — 화살표가 빠져나가는 쪽(오른쪽 위)으로 슬쩍 */
+@keyframes hm-out { 0%, 100% { translate: 0 0; } 40% { translate: 2.5px -2.5px; } 70% { translate: -.5px .5px; } }
+:is([data-mwi="external"], [data-action="open-external"]).hm svg { animation: hm-out .5s var(--hm-ease); }
+/* 채널 홈 — 사이드바 홈과 같은 콩 뛰기 */
+[data-mwi="channel"].hm svg { transform-origin: 50% 90%; animation: hm-hop var(--hm-dur) var(--hm-ease); }
+/* 사진 넘기기 — 가는 쪽으로 */
+.mwi-lb-btn.prev.hm svg { --hm-dx: -3px; animation: hm-nudge .46s var(--hm-ease); }
+.mwi-lb-btn.next.hm svg { --hm-dx: 3px; animation: hm-nudge .46s var(--hm-ease); }
+
+/* ── 키보드 초점 — 고리가 바깥에서 조여 들며 나타난다(outline-offset·색만, 초점이 옮겨 갈 때 한 번) ── */
+@keyframes mo-focus-ring { from { outline-color: transparent; outline-offset: 6px; } }
+:where(button, a, [role="button"], [role="tab"], .card, input[type="checkbox"]):focus-visible { animation: mo-focus-ring .24s var(--ease-out); }
+
+/* ── 모션 줄이기 — 호버로 더한 크기·이동만 없앤다(색 변화는 남는다) ── */
+@media (prefers-reduced-motion: reduce) {
+  .btn:hover, .mwi-hero .mwi-btn:hover,
+  :is(.icon-btn, .ml-tb-icon, .chat-hbtn, .ml-pane-btn, .ml-pane-close, .mc-tools-more, .ml-watch-btn, .ip-toggle, .mwi-btn, .side-quick-btn, .back-btn):hover svg { scale: none !important; translate: none !important; }
+}
+:root[data-motion="reduced"] :is(.btn:hover, .mwi-hero .mwi-btn:hover,
+  :is(.icon-btn, .ml-tb-icon, .chat-hbtn, .ml-pane-btn, .ml-pane-close, .mc-tools-more, .ml-watch-btn, .ip-toggle, .mwi-btn, .side-quick-btn, .back-btn):hover svg) { scale: none !important; translate: none !important; }

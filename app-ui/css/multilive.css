@@ -721,62 +721,98 @@
 .ml-body:fullscreen .ml-main > .ml-stage { flex: 1; aspect-ratio: auto; max-height: none; }
 .ml-body:fullscreen .ml-watch-info { display: none; }
 
-/* 정보 칸 디자인 — 채널 색(--tone)이 은은하게 번진 큰 카드 + 알약 메타 + 미끄러지는 탭(붙어 다님) + 부드러운 카드 목록 */
+/* 정보 칸 디자인 — 채널 색(--tone)이 아바타 뒤에서만 은은히 번지는 차분한 카드(2026-10-28 리디자인).
+   예전 카드는 채널 색이 왼쪽 위에서 카드 절반까지 번져(밝은 테마에선 분홍 띠처럼) 글보다 배경이 먼저 보였고,
+   메타 셋이 모두 회색 알약이라 무엇이 중요한지 구분이 없었다. 지금은
+   - 배경은 거의 단색 + 머리카락 테두리, 채널 색은 아바타 뒤 작은 빛으로만(누구 방송인지 색으로 기억되게).
+   - 이름 줄 → 방송 제목 → 메타 순서로 글 위계를 또렷하게. 메타는 카테고리만 꼬리표, 시청자·경과는 아이콘 붙은 글자(둘 사이를 점으로 나눔).
+   - 단추는 오른쪽 가운데: [채널 홈]은 진한 반전 알약(주 동작), 바깥 열기는 테두리만 있는 동그라미.
+   - 밝은·어두운 테마 모두 토큰(--surface-*, --text-*)만 써서 같은 규칙으로 맞는다. */
 .ml-watch-info { flex: none; padding: 10px 2px var(--sp-xxl); min-width: 0; --mwi-gap: 12px; }
 
 .mwi-hero {
   position: relative; isolation: isolate; overflow: hidden; display: flex; align-items: center; gap: 16px; min-width: 0;
-  padding: 16px 18px; border-radius: 20px;
+  padding: 14px 16px 14px 14px; border-radius: 18px;
   background:
-    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--tone) 22%, transparent), transparent 55%),
-    linear-gradient(180deg, color-mix(in srgb, var(--surface-elevated) 92%, transparent), var(--surface-base));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 16%, var(--border-subtle)), 0 1px 0 rgba(255, 255, 255, .03) inset, 0 14px 32px -24px color-mix(in srgb, var(--tone) 70%, transparent);
+    radial-gradient(220px 150px at 44px 50%, color-mix(in srgb, var(--tone) 16%, transparent), transparent 72%),
+    var(--surface-base);
+  box-shadow: inset 0 0 0 1px var(--border-subtle), 0 1px 2px rgba(0, 0, 0, .04), 0 10px 28px -20px rgba(0, 0, 0, .35);
 }
-.mwi-avatar { position: relative; flex: none; width: 60px; height: 60px; border-radius: 50%; padding: 3px; background: var(--border-subtle); }
-.mwi-avatar.live { background: conic-gradient(from 200deg, var(--live), #ff7a59, var(--live)); }
+/* 위 가장자리 빛 — 유리판처럼 윗선만 살짝 밝다(어두운 테마에서 카드가 배경에 묻히지 않게) */
+.mwi-hero::before {
+  content: ""; position: absolute; inset: 0 0 auto; height: 1px; z-index: -1; pointer-events: none;
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text-primary) 14%, transparent) 30%, transparent 85%);
+}
+.mwi-avatar { position: relative; flex: none; width: 58px; height: 58px; border-radius: 50%; padding: 2.5px; background: var(--border-subtle); }
+.mwi-avatar.live {
+  background: conic-gradient(from 210deg, var(--live), #ff8a4c, #ff3d7f, var(--live));
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--live) 12%, transparent), 0 6px 16px -6px color-mix(in srgb, var(--live) 55%, transparent);
+}
 .mwi-avatar > img, .mwi-avatar > span {
   display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; object-fit: cover;
-  border: 2px solid var(--surface-base); background: var(--surface-overlay); font-weight: 700; font-size: 20px;
+  border: 2.5px solid var(--surface-base); background: var(--surface-overlay); font-weight: 700; font-size: 20px;
 }
 .mwi-live-tag {
-  position: absolute; left: 50%; bottom: -4px; translate: -50% 0; padding: 1px 6px; border-radius: 6px;
-  background: var(--live); color: #fff; font-size: 10px; font-weight: 800; letter-spacing: .4px; box-shadow: 0 0 0 2px var(--surface-base);
+  position: absolute; left: 50%; bottom: -5px; translate: -50% 0; padding: 1px 6px; border-radius: 999px;
+  background: var(--live); color: #fff; font-size: 9.5px; font-weight: 800; line-height: 14px; letter-spacing: .6px;
+  box-shadow: 0 0 0 2.5px var(--surface-base);
 }
-.mwi-id { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.mwi-id { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .mwi-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.mwi-name h2 { font-size: 18px; font-weight: 800; letter-spacing: -0.4px; line-height: 1.2; min-width: 0; }
+.mwi-name h2 { font-size: 17px; font-weight: 800; letter-spacing: -0.4px; line-height: 1.25; min-width: 0; }
 .mwi-verified { flex: none; display: inline-grid; width: 16px; height: 16px; color: var(--primary); --mwi-check: var(--on-primary, #000); }
 .mwi-verified.sm { width: 13px; height: 13px; }
 .mwi-verified svg { width: 100%; height: 100%; }
-.mwi-followers { flex: none; margin-left: 2px; padding-left: 8px; border-left: 1px solid var(--border); font-size: 12px; line-height: 14px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.mwi-followers { flex: none; display: inline-flex; align-items: center; gap: 4px; margin-left: 2px; font-size: 12px; line-height: 14px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.mwi-followers::before { content: ""; width: 3px; height: 3px; margin-right: 4px; border-radius: 50%; background: currentColor; opacity: .7; }
 .mwi-followers b { color: var(--text-secondary); font-weight: 700; }
 .mwi-title {
-  font-size: 14.5px; font-weight: 600; line-height: 1.4; color: var(--text-primary);
+  font-size: 14.5px; font-weight: 600; line-height: 1.42; color: var(--text-primary); letter-spacing: -0.15px;
   display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere;
 }
-.mwi-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.mwi-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin-top: 2px; }
+/* 메타 — 시청자·경과는 배경 없는 글자. 꼬리표가 아닌 것끼리는 사이에 작은 점 */
 .mwi-pill {
-  display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px;
-  font-size: 12px; font-weight: 600; color: var(--text-secondary); background: color-mix(in srgb, var(--text-primary) 7%, transparent);
-  font-variant-numeric: tabular-nums; white-space: nowrap;
+  position: relative; display: inline-flex; align-items: center; gap: 5px; height: 22px;
+  font-size: 12px; font-weight: 600; color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap;
 }
-.mwi-pill-cat { color: var(--primary-text); background: color-mix(in srgb, var(--primary) 14%, transparent); }
-.mwi-pill-live { color: var(--text-primary); }
-.mwi-pill svg { width: 12px; height: 12px; flex: none; opacity: .8; }
-.mwi-pill-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 25%, transparent); }
-.mwi-actions { flex: none; display: flex; align-items: center; gap: 8px; align-self: flex-start; }
+.mwi-pill:not(.mwi-pill-cat) + .mwi-pill::before {
+  content: ""; position: absolute; left: -7.5px; top: 50%; width: 3px; height: 3px; margin-top: -1.5px; border-radius: 50%;
+  background: var(--text-tertiary); opacity: .6;
+}
+/* 카테고리 — 유일한 꼬리표(브랜드 색 옅게) */
+.mwi-pill-cat {
+  padding: 0 9px; border-radius: 7px; font-weight: 700; color: var(--primary-text);
+  background: color-mix(in srgb, var(--primary) 13%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+.mwi-pill-live { color: var(--live); font-weight: 700; }
+.mwi-pill svg { width: 13px; height: 13px; flex: none; opacity: .75; }
+.mwi-pill-live i { position: relative; width: 6px; height: 6px; border-radius: 50%; background: var(--live); box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 22%, transparent); }
+.mwi-actions { flex: none; display: flex; align-items: center; gap: 8px; align-self: center; }
 .mwi-btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; padding: 0 14px; border-radius: 999px;
-  font-size: 13px; font-weight: 700; color: var(--text-primary);
-  background: color-mix(in srgb, var(--text-primary) 8%, transparent); box-shadow: inset 0 0 0 1px var(--border-subtle);
-  transition: background var(--dur-2, .16s) var(--ease-out), box-shadow var(--dur-2, .16s) var(--ease-out);
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 16px; border-radius: 999px;
+  font-size: 13px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.1px;
+  background: color-mix(in srgb, var(--text-primary) 7%, transparent); box-shadow: inset 0 0 0 1px var(--border-subtle);
+  transition: background var(--dur-2, .16s) var(--ease-out), color var(--dur-2, .16s) var(--ease-out), box-shadow var(--dur-2, .16s) var(--ease-out),
+    translate var(--dur-3, .26s) var(--ease-out), scale .32s var(--ease-spring, ease-out);
 }
-.mwi-btn:hover { background: color-mix(in srgb, var(--text-primary) 13%, transparent); }
+.mwi-btn:hover { background: color-mix(in srgb, var(--text-primary) 12%, transparent); }
 .mwi-btn svg { width: 15px; height: 15px; flex: none; }
-.mwi-btn.icon { width: 34px; padding: 0; }
+/* 주 동작 — 글자색과 배경을 뒤집은 진한 알약(밝은 테마는 검정, 어두운 테마는 흰색) */
+.mwi-hero .mwi-btn[data-mwi="channel"] {
+  color: var(--background); background: var(--text-primary);
+  box-shadow: 0 1px 0 color-mix(in srgb, #fff 18%, transparent) inset, 0 6px 16px -8px color-mix(in srgb, var(--text-primary) 60%, transparent);
+}
+.mwi-hero .mwi-btn[data-mwi="channel"]:hover { background: color-mix(in srgb, var(--text-primary) 86%, var(--background)); box-shadow: 0 10px 22px -10px color-mix(in srgb, var(--text-primary) 70%, transparent); }
+.mwi-hero .mwi-btn.icon { background: transparent; box-shadow: inset 0 0 0 1px var(--border); color: var(--text-secondary); }
+.mwi-hero .mwi-btn.icon:hover { color: var(--text-primary); background: color-mix(in srgb, var(--text-primary) 7%, transparent); }
+.mwi-hero .mwi-btn:hover { translate: 0 -1px; }
+.mwi-btn:active:not(:disabled) { scale: .94; translate: 0 0; transition-duration: var(--dur-1, .12s); }
+.mwi-btn.icon { width: 36px; padding: 0; }
 .mwi-btn.ghost { background: transparent; box-shadow: none; color: var(--text-tertiary); width: 30px; height: 30px; }
 .mwi-btn.ghost:hover { color: var(--text-primary); background: color-mix(in srgb, var(--text-primary) 8%, transparent); }
-@container ml-main (max-width: 620px) { .mwi-btn:not(.icon) span { display: none; } .mwi-btn:not(.icon) { width: 34px; padding: 0; } .mwi-followers { display: none; } }
+@container ml-main (max-width: 620px) { .mwi-btn:not(.icon) span { display: none; } .mwi-btn:not(.icon) { width: 36px; padding: 0; } .mwi-followers { display: none; } }
+@container ml-main (max-width: 460px) { .mwi-hero { align-items: flex-start; } .mwi-actions { flex-direction: column; } }
 
 /* 탭 — 스크롤해도 무대 칸 위에 붙어 있는 유리 막대 + 미끄러지는 알약(motion.js 세그먼트 판) */
 .mwi-tabbar {
