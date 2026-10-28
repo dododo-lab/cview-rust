@@ -71,7 +71,7 @@ export function linkifyPost(text) {
 }
 
 export class WatchInfoPanel {
-  /** @param {HTMLElement} el 무대 아래 칸(.ml-watch-info) */
+  /** @param {HTMLElement} el 무대 아래 칸(.ml-watch-info) 또는 포커스 메인 아래 칸(.ml-focus-info, 스스로 스크롤) */
   constructor(el) {
     this.el = el;
     this.channelId = null;
@@ -87,7 +87,7 @@ export class WatchInfoPanel {
   }
 
   get scroller() {
-    return this.el.closest('.ml-main');
+    return this.el.classList.contains('ml-focus-info') ? this.el : this.el.closest('.ml-main');
   }
 
   /** 단독 보기 채널이 바뀔 때(없으면 null) — 같은 채널이면 그대로 둔다. */
@@ -101,6 +101,14 @@ export class WatchInfoPanel {
     this.scroller?.scrollTo({ top: 0 });
     if (!channelId) { this.el.innerHTML = ''; return; }
     this.load();
+  }
+
+  /** 멀티라이브 상태의 시청자 수 — 카드는 처음 불러온 값이라 포커스 정보 칸에서는 상태가 올 때마다 맞춘다. */
+  syncViewers(text) {
+    const pill = this.detail?.live && text ? this.el.querySelector('.mwi-pill-live') : null;
+    if (!pill) return;
+    const html = `<i aria-hidden="true"></i>${esc(text)}명`;
+    if (pill.innerHTML !== html) pill.innerHTML = html;
   }
 
   disconnect() {
