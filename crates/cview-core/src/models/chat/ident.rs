@@ -16,8 +16,7 @@ fn random_u64() -> u64 {
     h.write_u64(COUNTER.fetch_add(1, Ordering::Relaxed));
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_nanos() as u64)
-        .unwrap_or(0);
+        .map_or(0, |d| d.as_nanos() as u64);
     h.write_u64(nanos);
     h.finish()
 }

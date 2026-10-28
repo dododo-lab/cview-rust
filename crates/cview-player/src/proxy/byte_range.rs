@@ -79,9 +79,7 @@ impl ByteRangeWindow {
         if start >= total as u64 {
             return None;
         }
-        let end = end
-            .map(|e| e.min(i64::MAX as u64) as i64)
-            .unwrap_or(total - 1);
+        let end = end.map_or(total - 1, |e| e.min(i64::MAX as u64) as i64);
         Some(Self {
             first: start as i64,
             last: end.min(total - 1),

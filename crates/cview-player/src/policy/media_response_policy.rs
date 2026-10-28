@@ -16,8 +16,10 @@ pub fn media_type(value: Option<&str>) -> String {
         .unwrap_or("application/octet-stream")
         .split(';')
         .next()
-        .map(|s| s.trim_matches([' ', '\t']).to_lowercase())
-        .unwrap_or_else(|| "application/octet-stream".into())
+        .map_or_else(
+            || "application/octet-stream".into(),
+            |s| s.trim_matches([' ', '\t']).to_lowercase(),
+        )
 }
 
 /// URL 마지막 경로 요소의 확장자(소문자). Foundation `pathExtension` 과 같다.

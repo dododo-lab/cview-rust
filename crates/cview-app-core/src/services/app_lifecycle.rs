@@ -141,8 +141,7 @@ impl BackgroundPeriod {
     /// 비활성 구간 길이(초). 구간이 없으면 0.
     pub fn duration(&self, now: Date) -> TimeInterval {
         self.entry_time
-            .map(|t| (now - t).num_milliseconds() as f64 / 1000.0)
-            .unwrap_or(0.0)
+            .map_or(0.0, |t| (now - t).num_milliseconds() as f64 / 1000.0)
             .max(0.0)
     }
 

@@ -183,8 +183,7 @@ pub async fn resolve_live_session(
     let channel_name = detail
         .channel
         .as_ref()
-        .map(|c| c.channel_name.clone())
-        .unwrap_or_else(|| stream_channel_id.into());
+        .map_or_else(|| stream_channel_id.into(), |c| c.channel_name.clone());
     Ok(Some(LiveChatSessionPlan {
         stream_channel_id: stream_channel_id.into(),
         channel_name,

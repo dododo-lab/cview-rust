@@ -403,12 +403,8 @@ impl FollowingPublishItem for PublishRow<'_> {
 pub fn live_channel_item_from(info: &LiveInfo) -> LiveChannelItem {
     let channel = info.channel.as_ref();
     LiveChannelItem {
-        id: channel
-            .map(|c| c.channel_id.clone())
-            .unwrap_or_else(|| info.live_id.to_string()),
-        channel_name: channel
-            .map(|c| c.channel_name.clone())
-            .unwrap_or_else(|| "Unknown".into()),
+        id: channel.map_or_else(|| info.live_id.to_string(), |c| c.channel_id.clone()),
+        channel_name: channel.map_or_else(|| "Unknown".into(), |c| c.channel_name.clone()),
         channel_image_url: channel
             .and_then(|c| c.channel_image_url.as_ref())
             .map(|u| u.to_string()),
@@ -661,9 +657,7 @@ impl HomeState {
         } else {
             None
         };
-        self.total_viewers = first_paint
-            .map(|s| s.viewer_total)
-            .unwrap_or(result.total_viewers);
+        self.total_viewers = first_paint.map_or(result.total_viewers, |s| s.viewer_total);
         self.apply_popular_derived();
     }
 

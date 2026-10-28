@@ -119,8 +119,7 @@ impl CacheState {
 fn seconds_between(later: DateTime<Utc>, earlier: DateTime<Utc>) -> f64 {
     (later - earlier)
         .num_microseconds()
-        .map(|us| us as f64 / 1_000_000.0)
-        .unwrap_or(f64::MAX)
+        .map_or(f64::MAX, |us| us as f64 / 1_000_000.0)
 }
 
 fn add_seconds(base: DateTime<Utc>, seconds: f64) -> DateTime<Utc> {

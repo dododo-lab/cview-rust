@@ -144,8 +144,7 @@ impl StreamCoordinator {
         self.inner
             .proxy
             .timeshift_backend()
-            .map(|r| r.recorded_duration())
-            .unwrap_or(0.0)
+            .map_or(0.0, |r| r.recorded_duration())
     }
 
     pub fn is_local_timeshift_active(&self) -> bool {

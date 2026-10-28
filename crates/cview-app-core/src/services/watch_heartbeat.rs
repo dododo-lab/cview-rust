@@ -297,7 +297,7 @@ impl WatchHeartbeatCenter {
 }
 
 fn prefix8(s: &str) -> &str {
-    s.char_indices().nth(8).map(|(i, _)| &s[..i]).unwrap_or(s)
+    s.char_indices().nth(8).map_or(s, |(i, _)| &s[..i])
 }
 
 #[cfg(test)]

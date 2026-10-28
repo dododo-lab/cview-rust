@@ -29,10 +29,7 @@ pub fn apply_quality_intent(
     engine.set_user_quality_ceiling_height(if is_multi_live {
         0
     } else {
-        policy
-            .preferred_quality
-            .map(|q| q.max_height_cap())
-            .unwrap_or(0)
+        policy.preferred_quality.map_or(0, |q| q.max_height_cap())
     });
     engine.set_force_highest_quality(policy.force_highest_quality());
     let target = is_multi_live.then_some(multi_live_target);

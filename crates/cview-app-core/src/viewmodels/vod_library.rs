@@ -8,7 +8,7 @@
 //! Swift `Task.isCancelled` 확인은 요청 토큰 비교로 대신한다(토큰이 바뀌면 결과를 버린다).
 
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use async_trait::async_trait;
 use futures_util::future::{BoxFuture, FutureExt, Shared};
@@ -68,17 +68,17 @@ pub struct VodLibraryMutationQueue {
 }
 
 impl VodLibraryMutationQueue {
+    /// 잠금 — 앞선 작업이 패닉으로 독을 남겨도 대기열 기록은 그대로 쓴다.
+    fn guard(&self) -> MutexGuard<'_, QueueInner> {
+        self.inner.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     pub fn new() -> Self {
         Self::default()
     }
 
     pub fn has_pending(&self) -> bool {
-        !self
-            .inner
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .jobs
-            .is_empty()
+        !self.guard().jobs.is_empty()
     }
 
     /// 앞선 같은 항목 작업이 끝난 뒤 `write` 를 실행한다. 작업은 호출자가 기다리지 않아도 돈다.
@@ -93,7 +93,7 @@ impl VodLibraryMutationQueue {
         W: std::future::Future<Output = Result<(), String>> + Send + 'static,
     {
         let (token, task) = {
-            let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+            let mut inner = self.guard();
             inner.sequence = inner.sequence.wrapping_add(1);
             let token = inner.sequence;
             let previous = inner.jobs.get(&video_no).map(|j| j.task.clone());
@@ -137,17 +137,11 @@ impl VodLibraryMutationQueue {
     }
 
     pub fn is_current(&self, video_no: i64, token: u64) -> bool {
-        self.inner
-            .lock()
-            .unwrap()
-            .jobs
-            .get(&video_no)
-            .map(|j| j.token)
-            == Some(token)
+        self.guard().jobs.get(&video_no).map(|j| j.token) == Some(token)
     }
 
     pub fn finish(&self, video_no: i64, token: u64) {
-        let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let mut inner = self.guard();
         if inner.jobs.get(&video_no).map(|j| j.token) == Some(token) {
             inner.jobs.remove(&video_no);
         }

@@ -338,8 +338,7 @@ impl ChzzkApiClient {
         self.lock_state()
             .user_status_flight
             .as_ref()
-            .map(|f| f.wait.waiter_count())
-            .unwrap_or(0)
+            .map_or(0, |f| f.wait.waiter_count())
     }
 
     /// 아직 끝나지 않은 userStatus 공유 작업 수.
@@ -411,7 +410,7 @@ impl ChzzkApiClient {
                     follow,
                     channel_name: channel.channel_name.unwrap_or_else(|| "Unknown".into()),
                     channel_image_url: channel.channel_image_url,
-                    is_live: item.streamer.map(|s| s.is_actually_live()).unwrap_or(false),
+                    is_live: item.streamer.is_some_and(|s| s.is_actually_live()),
                     list_live_info: item.live_info,
                 });
             }

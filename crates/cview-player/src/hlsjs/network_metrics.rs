@@ -184,8 +184,7 @@ impl HlsJsNetworkMetrics {
             media_source_kind: data
                 .get("mediaSourceKind")
                 .and_then(Value::as_str)
-                .map(|s| s.chars().take(32).collect())
-                .unwrap_or_else(|| "unknown".into()),
+                .map_or_else(|| "unknown".into(), |s| s.chars().take(32).collect()),
             playlist_media_age_ms: number(data, "playlistMediaAgeMs", -1.0),
             playlist_segment_stale_ratio: number(data, "playlistSegmentStaleRatio", 0.0)
                 .clamp(0.0, 1.0),

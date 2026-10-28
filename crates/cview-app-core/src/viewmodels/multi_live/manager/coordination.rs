@@ -79,14 +79,10 @@ impl ManagerState {
                 buffer_length: hls.buffer_ahead_seconds().max(0.0),
                 playback_rate: hls.rate(),
                 buffer_confidence: 1.0,
-                measured_fetch_duration: last
-                    .as_ref()
-                    .map(|t| t.end - t.request_start)
-                    .unwrap_or(0.0),
+                measured_fetch_duration: last.as_ref().map_or(0.0, |t| t.end - t.request_start),
                 measured_segment_duration: last
                     .as_ref()
-                    .map(|t| t.media_duration)
-                    .unwrap_or_else(|| hls.measured_segment_duration()),
+                    .map_or_else(|| hls.measured_segment_duration(), |t| t.media_duration),
                 transfers,
                 protects_quality: Some(sid) == self.selected_session_id
                     || Some(sid) == quality_main

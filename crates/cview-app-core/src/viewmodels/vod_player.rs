@@ -342,8 +342,7 @@ impl VodPlayerState {
         self.current_quality_id
             .as_ref()
             .and_then(|id| self.qualities().iter().find(|q| &q.id == id))
-            .map(|q| q.name.clone())
-            .unwrap_or_else(|| "자동".into())
+            .map_or_else(|| "자동".into(), |q| q.name.clone())
     }
 
     /// 진행률 (0.0 ~ 1.0).
@@ -749,9 +748,7 @@ impl VodPlayerViewModel {
             if quality_id.is_some() && quality.is_none() {
                 return;
             }
-            let url = quality
-                .map(|q| q.url.clone())
-                .unwrap_or_else(|| info.stream_url.clone());
+            let url = quality.map_or_else(|| info.stream_url.clone(), |q| q.url.clone());
             s.current_quality_id = quality.map(|q| q.id.clone());
             s.playback_state = VodPlayback::Buffering;
             (

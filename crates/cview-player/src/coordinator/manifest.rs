@@ -182,7 +182,7 @@ impl StreamCoordinator {
         s.manifest_generation += 1;
         s.current_manifest_lease = Some(ManifestLease::new(
             stream_url,
-            variant.uri.clone(),
+            variant.uri,
             s.manifest_generation,
             ManifestLeaseSource::PeriodicRefresh,
         ));

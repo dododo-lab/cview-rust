@@ -308,11 +308,7 @@ impl ChatState {
         }
         let char_count = text.chars().count();
         let safe = cursor_offset.min(char_count);
-        let cursor_byte = text
-            .char_indices()
-            .nth(safe)
-            .map(|(b, _)| b)
-            .unwrap_or(text.len());
+        let cursor_byte = text.char_indices().nth(safe).map_or(text.len(), |(b, _)| b);
         let before = &text[..cursor_byte];
         if let Some(m) = emoji_trigger_regex().find(before) {
             let query = before[m.start() + 1..m.end()].to_string();

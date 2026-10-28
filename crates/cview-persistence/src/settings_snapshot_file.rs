@@ -55,9 +55,7 @@ impl SettingsSnapshotFile {
         root.insert("schemaVersion".into(), Value::from(Self::SCHEMA_VERSION));
         root.insert(
             "savedAt".into(),
-            serde_json::Number::from_f64(saved_at)
-                .map(Value::Number)
-                .unwrap_or(Value::Null),
+            serde_json::Number::from_f64(saved_at).map_or(Value::Null, Value::Number),
         );
         root.insert("settings".into(), Value::Object(settings));
         let Ok(out) = crate::json::to_sorted_vec_pretty(&Value::Object(root)) else {

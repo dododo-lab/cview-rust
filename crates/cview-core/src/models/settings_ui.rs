@@ -292,10 +292,7 @@ impl<'de> Deserialize<'de> for KeyboardShortcutSettings {
         }
         let raw = Raw::deserialize(deserializer)?;
         Ok(Self {
-            bindings: raw
-                .bindings
-                .map(|p| p.0)
-                .unwrap_or_else(Self::default_bindings),
+            bindings: raw.bindings.map_or_else(Self::default_bindings, |p| p.0),
         })
     }
 }
@@ -354,22 +351,19 @@ impl ChannelNotificationSettings {
     pub fn is_live_notification_enabled(&self, channel_id: &str) -> bool {
         self.settings
             .get(channel_id)
-            .map(|s| s.notify_on_live)
-            .unwrap_or(true)
+            .is_none_or(|s| s.notify_on_live)
     }
 
     pub fn is_category_change_notification_enabled(&self, channel_id: &str) -> bool {
         self.settings
             .get(channel_id)
-            .map(|s| s.notify_on_category_change)
-            .unwrap_or(true)
+            .is_none_or(|s| s.notify_on_category_change)
     }
 
     pub fn is_title_change_notification_enabled(&self, channel_id: &str) -> bool {
         self.settings
             .get(channel_id)
-            .map(|s| s.notify_on_title_change)
-            .unwrap_or(true)
+            .is_none_or(|s| s.notify_on_title_change)
     }
 }
 

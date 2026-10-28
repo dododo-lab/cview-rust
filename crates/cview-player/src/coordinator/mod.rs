@@ -463,8 +463,7 @@ impl StreamCoordinator {
     pub fn uptime(&self) -> f64 {
         self.st()
             .start_time
-            .map(|t| t.elapsed().as_secs_f64())
-            .unwrap_or(0.0)
+            .map_or(0.0, |t| t.elapsed().as_secs_f64())
     }
 
     pub fn proxy_route_status(&self) -> Option<StreamProxyRouteStatus> {

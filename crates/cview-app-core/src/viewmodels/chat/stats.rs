@@ -123,10 +123,9 @@ impl ChatState {
     fn log_chat_diagnostics_if_needed(&mut self) {
         let now = Utc::now();
         let is_idle = self.recent_message_timestamps.is_empty();
-        let elapsed = self
-            .last_diagnostic_log_at
-            .map(|l| (now - l).num_milliseconds() as f64 / 1000.0)
-            .unwrap_or(f64::INFINITY);
+        let elapsed = self.last_diagnostic_log_at.map_or(f64::INFINITY, |l| {
+            (now - l).num_milliseconds() as f64 / 1000.0
+        });
         let is_connected = self.connection_state.is_connected();
         let has_new_drop = self.dropped_message_count > self.last_diagnostic_dropped_count;
         let anomalous = !is_connected

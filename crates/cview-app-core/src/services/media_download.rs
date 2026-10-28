@@ -116,16 +116,14 @@ pub const DOWNLOAD_FOLDER_DEFAULTS_KEY: &str = "CView.downloadFolderPath";
 
 /// 사용자 지정이 없을 때의 기본 폴더 — `~/Movies/CView`(없으면 `~/Downloads/CView`, 그다음 임시 폴더).
 pub fn default_download_folder(home: Option<&Path>) -> PathBuf {
-    let base = home
-        .map(|h| {
-            let movies = h.join("Movies");
-            if movies.is_dir() {
-                movies
-            } else {
-                h.join("Downloads")
-            }
-        })
-        .unwrap_or_else(std::env::temp_dir);
+    let base = home.map_or_else(std::env::temp_dir, |h| {
+        let movies = h.join("Movies");
+        if movies.is_dir() {
+            movies
+        } else {
+            h.join("Downloads")
+        }
+    });
     base.join("CView")
 }
 

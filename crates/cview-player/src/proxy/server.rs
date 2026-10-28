@@ -304,8 +304,7 @@ impl LocalStreamProxy {
             uri.to_string()
         } else {
             uri.path_and_query()
-                .map(|p| p.as_str().to_string())
-                .unwrap_or_else(|| "/".into())
+                .map_or_else(|| "/".into(), |p| p.as_str().to_string())
         };
         let path = routing::canonicalize_akamai_token_path(&raw);
         match *req.method() {
@@ -509,7 +508,7 @@ impl LocalStreamProxy {
             return Attempt::done(error_response(502, "Bad Gateway", true));
         }
         let length: i64 = if identity {
-            resp.content_length().map(|l| l as i64).unwrap_or(-1)
+            resp.content_length().map_or(-1, |l| l as i64)
         } else {
             -1
         };

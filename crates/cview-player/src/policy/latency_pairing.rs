@@ -51,9 +51,10 @@ impl LatencyPresetPairing {
                 profile: pick(HlsJsStreamingProfile::UltraLow),
             },
             Some(LatencyPreset::Custom) | None => Self {
-                configuration: settings
-                    .map(Self::custom_configuration)
-                    .unwrap_or(LowLatencyConfiguration::WEB_PARITY_HLSJS),
+                configuration: settings.map_or(
+                    LowLatencyConfiguration::WEB_PARITY_HLSJS,
+                    Self::custom_configuration,
+                ),
                 profile: pick(if preset.is_none() {
                     HlsJsStreamingProfile::WebParity
                 } else {

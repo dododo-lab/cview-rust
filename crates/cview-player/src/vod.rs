@@ -256,8 +256,10 @@ pub fn parse_playback_json(
                         id: track
                             .get("encodingTrackId")
                             .and_then(Value::as_str)
-                            .map(str::to_string)
-                            .unwrap_or_else(|| uuid::Uuid::new_v4().to_string().to_uppercase()),
+                            .map_or_else(
+                                || uuid::Uuid::new_v4().to_string().to_uppercase(),
+                                str::to_string,
+                            ),
                         name,
                         resolution: format!("{width}x{height}"),
                         bandwidth: bitrate,

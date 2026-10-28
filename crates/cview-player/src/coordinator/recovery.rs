@@ -31,7 +31,7 @@ pub fn decide_recovery(signal: &RecoverySignal) -> RecoveryDecision {
 fn reason_text(signal: &RecoverySignal) -> String {
     match signal {
         RecoverySignal::EngineError { engine, detail } => {
-            format!("engine error ({:?}): {detail}", engine)
+            format!("engine error ({engine:?}): {detail}")
         }
         RecoverySignal::PlaybackStall { source } => format!("playback stall ({source})"),
         RecoverySignal::ManifestRefreshFailure { count } => {

@@ -333,9 +333,7 @@ impl StreamRecordingService {
         channel_name: &str,
         now: DateTime<Local>,
     ) -> PathBuf {
-        let base = movies_dir
-            .map(Path::to_path_buf)
-            .unwrap_or_else(std::env::temp_dir);
+        let base = movies_dir.map_or_else(std::env::temp_dir, Path::to_path_buf);
         let sanitized: String = channel_name
             .chars()
             .map(|c| {

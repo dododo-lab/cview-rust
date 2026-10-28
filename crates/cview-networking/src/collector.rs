@@ -83,7 +83,7 @@ where
     G: Fn(AllLivesProgress),
 {
     // 재개하면 이미 받은 페이지만큼 상한을 줄여, 조각을 이어 붙여도 전체 상한이 유지된다.
-    let already = options.start.map(|s| s.received_pages).unwrap_or(0);
+    let already = options.start.map_or(0, |s| s.received_pages);
     let safety_max_pages = options.max_pages.max(1).saturating_sub(already).max(1);
     let mut all: Vec<LiveInfo> = Vec::new();
     let mut seen_ids = options.seed_live_ids.clone();
