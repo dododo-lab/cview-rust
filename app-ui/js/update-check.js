@@ -7,12 +7,17 @@ import { esc } from './dom.js';
 let last = null; // 마지막 확인 결과 — 설정 화면을 다시 그려도 남긴다
 let appInfo = null;
 
+/** "0.1.1 (빌드 3)" — 빌드 번호가 없거나 0 이면 버전만. */
+export function versionText(info) {
+  return info.build && info.build !== '0' ? `${info.version} (빌드 ${info.build})` : info.version;
+}
+
 /** 지금 앱 버전("0.1.20 (빌드 20)"). 앱 밖이면 null. */
 export async function currentVersionText() {
   if (!appInfo) {
     try { appInfo = await api.appInfo(); } catch { return null; }
   }
-  return appInfo.build && appInfo.build !== '0' ? `${appInfo.version} (빌드 ${appInfo.build})` : appInfo.version;
+  return versionText(appInfo);
 }
 
 export function lastUpdateResult() { return last; }
