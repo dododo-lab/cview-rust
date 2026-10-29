@@ -344,11 +344,21 @@ export class MultiLivePage {
   dispatch(slot, script) {
     const pane = this.panes.get(slot);
     if (pane) {
+      // 닫히는 중인 슬롯에 새 명령 — Rust 가 그 엔진을 새 채널에 다시 썼다. 퇴장이 끝나며 부르는
+      // stop() 이 새 스트림을 끊지 않게 지금 되돌린다(상태 갱신은 명령보다 늦게 올 수 있다).
+      this.reviveExiting(pane);
       pane.bridge.exec(script);
       return;
     }
     if (!this.pending.has(slot)) this.pending.set(slot, []);
     this.pending.get(slot).push(script);
+  }
+
+  /** 퇴장 중이던 패인을 되돌린다 — 퇴장이 건 음소거도 페이지의 음소거 의도로 되돌린다. */
+  reviveExiting(pane) {
+    if (!pane.exiting) return;
+    cancelExit(pane);
+    pane.bridge.run('try { video.muted = _pendingMuted; } catch (e) {}');
   }
 
   ensurePane(slot) {
@@ -482,7 +492,7 @@ export class MultiLivePage {
       if (s.slot == null) continue;
       live.add(s.slot);
       const pane = this.ensurePane(s.slot);
-      cancelExit(pane); // 사라지는 중에 같은 슬롯이 다시 쓰이면 되돌린다
+      this.reviveExiting(pane); // 사라지는 중에 같은 슬롯이 다시 쓰이면 되돌린다
       if (pane.sessionId !== s.id) {
         const used = [...this.panes.values()].filter((p) => p !== pane && p.sessionId && p.hue != null).map((p) => p.hue);
         pane.hue = pickTintHue(used);
