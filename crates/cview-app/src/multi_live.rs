@@ -75,8 +75,6 @@ pub struct PaneEngine {
     slot: u32,
     engine: Arc<WebViewHlsEngine>,
     caps: Mutex<PaneCaps>,
-    loading_suspended: AtomicBool,
-    suspend_intent: AtomicBool,
     playback_desired: AtomicBool,
     /// 숨김 단계(`SessionTier::Hidden`)가 멈춘 로딩 — 이 단계가 멈춘 것만 되돌린다(디코드 예산 정지는 건드리지 않는다).
     tier_suspended: AtomicBool,
@@ -89,8 +87,6 @@ impl PaneEngine {
             slot,
             engine: Arc::new(WebViewHlsEngine::new(command, PLAYER_PROFILE, false)),
             caps: Mutex::new(PaneCaps::default()),
-            loading_suspended: AtomicBool::new(false),
-            suspend_intent: AtomicBool::new(false),
             playback_desired: AtomicBool::new(true),
             tier_suspended: AtomicBool::new(false),
         }
@@ -110,18 +106,16 @@ impl PaneEngine {
     }
 
     fn send_caps(&self, caps: PaneCaps) {
-        self.engine.send(JsCommand::SetAdaptiveCaps {
-            max_resolution: caps.max_height.max(0),
-            max_bitrate: caps.max_bitrate_kbps.max(0),
-        });
+        self.engine
+            .set_managed_quality_caps(caps.max_height, caps.max_bitrate_kbps);
     }
 
     /// 풀로 돌아올 때 — 재생을 멈추고 상한을 푼다.
     fn reset(&self) {
         PlayerEngineProtocol::stop(self.engine.as_ref());
         *lock(&self.caps) = PaneCaps::default();
-        self.loading_suspended.store(false, Ordering::SeqCst);
-        self.suspend_intent.store(false, Ordering::SeqCst);
+        self.engine.set_managed_quality_caps(0, 0);
+        self.engine.clear_suspend_intent();
         self.playback_desired.store(true, Ordering::SeqCst);
         self.tier_suspended.store(false, Ordering::SeqCst);
     }
@@ -132,13 +126,13 @@ impl MultiLiveHlsEngine for PaneEngine {
         PlayerEngineProtocol::is_playing(self.engine.as_ref())
     }
     fn is_suspend_intent_active(&self) -> bool {
-        self.suspend_intent.load(Ordering::SeqCst)
+        PlayerEngineProtocol::is_suspend_intent_active(self.engine.as_ref())
     }
     fn is_in_error_state(&self) -> bool {
         PlayerEngineProtocol::is_in_error_state(self.engine.as_ref())
     }
     fn is_loading_suspended(&self) -> bool {
-        self.loading_suspended.load(Ordering::SeqCst)
+        PlayerEngineProtocol::is_suspend_intent_active(self.engine.as_ref())
     }
     fn is_playback_desired(&self) -> bool {
         self.playback_desired.load(Ordering::SeqCst)
@@ -198,7 +192,7 @@ impl MultiLiveHlsEngine for PaneEngine {
     /// 보이는 단계로 돌아오면 그 정지만 푼다.
     fn set_gpu_render_tier(&self, tier: SessionTier) {
         if tier == SessionTier::Hidden {
-            if !self.loading_suspended.load(Ordering::SeqCst) {
+            if !self.is_loading_suspended() {
                 self.tier_suspended.store(true, Ordering::SeqCst);
                 self.suspend_loading();
             }
@@ -216,14 +210,10 @@ impl MultiLiveHlsEngine for PaneEngine {
         PlayerEngineProtocol::resume(self.engine.as_ref());
     }
     fn resume_loading(&self) {
-        self.suspend_intent.store(false, Ordering::SeqCst);
-        self.loading_suspended.store(false, Ordering::SeqCst);
-        self.engine.send(JsCommand::ResumeLoading);
+        self.engine.resume_loading();
     }
     fn suspend_loading(&self) {
-        self.suspend_intent.store(true, Ordering::SeqCst);
-        self.loading_suspended.store(true, Ordering::SeqCst);
-        self.engine.send(JsCommand::SuspendLoading);
+        self.engine.suspend_loading();
     }
     fn set_buffer_caps(&self, max_len: f64, max_max_len: f64, max_size: i64) {
         self.engine.send(JsCommand::SetBufferCaps {
