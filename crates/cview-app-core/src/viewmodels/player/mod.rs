@@ -115,7 +115,9 @@ pub type StreamEventTap = Arc<dyn Fn(&StreamEvent) + Send + Sync>;
 #[derive(Default, Clone)]
 pub struct PlayerCallbacks {
     pub on_playback_state_changed: Option<Arc<dyn Fn() + Send + Sync>>,
-    pub on_check_stream_ended: Option<Arc<dyn Fn() -> BoxFuture<'static, bool> + Send + Sync>>,
+    /// 재연결 전에 방송이 끝났는지 묻는다 — 인자는 재생 중인 채널 ID.
+    pub on_check_stream_ended:
+        Option<Arc<dyn Fn(String) -> BoxFuture<'static, bool> + Send + Sync>>,
     pub on_volume_changed: Option<Arc<dyn Fn(f32) + Send + Sync>>,
     pub on_mute_changed: Option<Arc<dyn Fn(bool) + Send + Sync>>,
     /// 코디네이터 이벤트 탭 — 뷰모델이 처리하기 직전에 현재 세션 이벤트를 그대로 넘긴다
