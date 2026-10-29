@@ -76,8 +76,10 @@ pub struct PaneEngine {
     engine: Arc<WebViewHlsEngine>,
     caps: Mutex<PaneCaps>,
     playback_desired: AtomicBool,
-    /// 숨김 단계(`SessionTier::Hidden`)가 멈춘 로딩 — 이 단계가 멈춘 것만 되돌린다(디코드 예산 정지는 건드리지 않는다).
+    /// 정지 이유 두 가지 — 숨김 단계(`SessionTier::Hidden`)와 매니저 정지(디코드 예산·메뉴 이탈).
+    /// 둘 중 하나라도 남아 있으면 정지를 유지한다: 한쪽의 재개가 다른 쪽 정지를 풀면 숨은 패인이 다시 받아 온다.
     tier_suspended: AtomicBool,
+    manager_suspended: AtomicBool,
 }
 
 impl PaneEngine {
@@ -89,6 +91,7 @@ impl PaneEngine {
             caps: Mutex::new(PaneCaps::default()),
             playback_desired: AtomicBool::new(true),
             tier_suspended: AtomicBool::new(false),
+            manager_suspended: AtomicBool::new(false),
         }
     }
 
@@ -118,6 +121,7 @@ impl PaneEngine {
         self.engine.clear_suspend_intent();
         self.playback_desired.store(true, Ordering::SeqCst);
         self.tier_suspended.store(false, Ordering::SeqCst);
+        self.manager_suspended.store(false, Ordering::SeqCst);
     }
 }
 
@@ -192,12 +196,13 @@ impl MultiLiveHlsEngine for PaneEngine {
     /// 보이는 단계로 돌아오면 그 정지만 푼다.
     fn set_gpu_render_tier(&self, tier: SessionTier) {
         if tier == SessionTier::Hidden {
-            if !self.is_loading_suspended() {
-                self.tier_suspended.store(true, Ordering::SeqCst);
-                self.suspend_loading();
+            if !self.tier_suspended.swap(true, Ordering::SeqCst) {
+                self.engine.suspend_loading();
             }
-        } else if self.tier_suspended.swap(false, Ordering::SeqCst) {
-            self.resume_loading();
+        } else if self.tier_suspended.swap(false, Ordering::SeqCst)
+            && !self.manager_suspended.load(Ordering::SeqCst)
+        {
+            self.engine.resume_loading();
         }
     }
     fn set_video_surface_visible(&self, _visible: bool) {}
@@ -210,9 +215,13 @@ impl MultiLiveHlsEngine for PaneEngine {
         PlayerEngineProtocol::resume(self.engine.as_ref());
     }
     fn resume_loading(&self) {
-        self.engine.resume_loading();
+        self.manager_suspended.store(false, Ordering::SeqCst);
+        if !self.tier_suspended.load(Ordering::SeqCst) {
+            self.engine.resume_loading();
+        }
     }
     fn suspend_loading(&self) {
+        self.manager_suspended.store(true, Ordering::SeqCst);
         self.engine.suspend_loading();
     }
     fn set_buffer_caps(&self, max_len: f64, max_max_len: f64, max_size: i64) {
@@ -1124,6 +1133,29 @@ mod tests {
         pool.discard(c).await;
         pool.drain().await;
         assert_eq!(pool.total_active_count().await, 0);
+    }
+
+    #[tokio::test]
+    async fn hidden_tier_and_manager_suspend_do_not_undo_each_other() {
+        let (pool, _) = pool();
+        let engine = pool.acquire().await.unwrap();
+        let pane = pool.find_active(&engine).unwrap();
+        pane.set_gpu_render_tier(SessionTier::Hidden);
+        engine.suspend_loading();
+        engine.resume_loading();
+        assert!(
+            engine.is_loading_suspended(),
+            "숨김 단계가 남아 있으면 예산 재개로 풀리지 않는다"
+        );
+        pane.set_gpu_render_tier(SessionTier::Visible);
+        assert!(!engine.is_loading_suspended());
+        engine.suspend_loading();
+        pane.set_gpu_render_tier(SessionTier::Hidden);
+        pane.set_gpu_render_tier(SessionTier::Visible);
+        assert!(
+            engine.is_loading_suspended(),
+            "보이게 돌아와도 예산 정지는 유지한다"
+        );
     }
 
     #[tokio::test]
