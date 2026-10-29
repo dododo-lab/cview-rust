@@ -74,6 +74,8 @@ pub trait MultiLivePlayer: Send + Sync {
     fn detach_engine(&self) -> Option<SharedHlsEngine>;
     fn is_muted(&self) -> bool;
     fn set_muted(&self, muted: bool);
+    /// 세션 볼륨(음소거와 별개) — 여러 소리 모드의 보조 패인 볼륨에 쓴다.
+    fn set_volume(&self, _volume: f32) {}
     fn stream_phase(&self) -> StreamPhase;
     fn presented_frame_tick(&self) -> u64;
     fn error_message(&self) -> Option<String>;

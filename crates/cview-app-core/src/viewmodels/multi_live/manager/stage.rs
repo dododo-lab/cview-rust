@@ -26,6 +26,9 @@ impl ManagerState {
             self.set_focus_main_session_id(Some(id));
         }
         self.set_selected_session_id(Some(id));
+        if self.is_multi_audio_mode {
+            self.sync_audio_volumes();
+        }
         self.synchronize_bandwidth_selection();
         self.release_bandwidth_caps_immediately(id);
         if self.stage_session_id.is_some() {
