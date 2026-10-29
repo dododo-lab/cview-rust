@@ -269,6 +269,8 @@ pub(crate) struct State {
     /// 엔진에 전달한 현재 variant URL.
     pub(crate) current_variant_url: Option<url::Url>,
     pub(crate) last_reconnect_time: Option<tokio::time::Instant>,
+    /// 쿨다운 뒤 재시도를 예약한 쿨다운 창(그 창의 `last_reconnect_time`).
+    pub(crate) cooldown_retry_for: Option<tokio::time::Instant>,
     /// 엔진 자체 정지(hls.js `suspendLoading`) — 코디네이터 폴러 게이트.
     pub(crate) network_activity_suspended: bool,
     pub(crate) network_activity_generation: u64,
@@ -388,6 +390,7 @@ impl StreamCoordinator {
             applying_proxy_mode: false,
             current_variant_url: None,
             last_reconnect_time: None,
+            cooldown_retry_for: None,
             network_activity_suspended: false,
             network_activity_generation: 0,
             low_latency_sync_generation: 0,

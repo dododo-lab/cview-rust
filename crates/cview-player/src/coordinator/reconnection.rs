@@ -12,6 +12,38 @@ use crate::reconnection::{AttemptCallback, ExhaustedCallback};
 const RECONNECT_FIRST_FRAME_WAIT: Duration = Duration::from_secs(8);
 
 impl StreamCoordinator {
+    /// 쿨다운 중 들어온 신호(대표적으로 fatal 오류)는 버리면 엔진이 죽은 채 남는다 — 이 신호를 다시
+    /// 보내 줄 감시자가 없다. 쿨다운이 끝났을 때 그사이 다른 재연결·세션 교체가 없었고 엔진이 아직
+    /// 오류 상태면 한 번 더 시도한다. 같은 쿨다운 창의 신호 여럿은 시도 하나로 모인다.
+    fn retry_after_cooldown(&self, last: tokio::time::Instant, reason: &str) {
+        {
+            let mut s = self.st();
+            if s.cooldown_retry_for == Some(last) {
+                return;
+            }
+            s.cooldown_retry_for = Some(last);
+        }
+        let weak = self.weak();
+        let reason = reason.to_string();
+        let wake = last + Duration::from_secs_f64(RECONNECT_COOLDOWN);
+        tokio::spawn(async move {
+            tokio::time::sleep_until(wake).await;
+            let Some(this) = StreamCoordinator::from_weak(&weak) else {
+                return;
+            };
+            {
+                let mut s = this.st();
+                if s.cooldown_retry_for != Some(last) || s.last_reconnect_time != Some(last) {
+                    return;
+                }
+                s.cooldown_retry_for = None;
+            }
+            if this.engine().is_some_and(|e| e.is_in_error_state()) {
+                this.trigger_reconnect(&format!("{reason} (쿨다운 뒤 재시도)"), false);
+            }
+        });
+    }
+
     /// 재연결 트리거 — 현재 URL 로 재시도한다. 일시정지·종료·정지 의도·재연결 중·쿨다운이면 무시.
     /// `bypass_cooldown` 은 이미 재연결 루프가 끝난 뒤의 즉시 재시작(네트워크 복구)용.
     pub fn trigger_reconnect(&self, reason: &str, bypass_cooldown: bool) {
@@ -33,11 +65,12 @@ impl StreamCoordinator {
                 return;
             }
             let now = tokio::time::Instant::now();
-            if !bypass_cooldown
-                && s.last_reconnect_time
-                    .is_some_and(|last| now.duration_since(last).as_secs_f64() < RECONNECT_COOLDOWN)
-            {
-                tracing::info!("StreamCoordinator: 재연결 쿨다운 중 — 무시 ({reason})");
+            if let Some(last) = s.last_reconnect_time.filter(|last| {
+                !bypass_cooldown && now.duration_since(*last).as_secs_f64() < RECONNECT_COOLDOWN
+            }) {
+                tracing::info!("StreamCoordinator: 재연결 쿨다운 중 — 끝나면 다시 판단 ({reason})");
+                drop(s);
+                self.retry_after_cooldown(last, reason);
                 return;
             }
             s.last_reconnect_time = Some(now);
