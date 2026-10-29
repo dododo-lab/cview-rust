@@ -125,7 +125,10 @@ impl PlayerViewModel {
             coordinator.set_low_latency_sync_active(true).await;
         }
         if let Some(check) = self.callbacks().on_check_stream_ended {
-            coordinator.set_check_stream_ended_callback(check);
+            let channel_id = req.channel_id.clone();
+            coordinator.set_check_stream_ended_callback(std::sync::Arc::new(move || {
+                check(channel_id.clone())
+            }));
         }
         if let Some(manifest) = req.prefetched_manifest.clone() {
             coordinator.set_prefetched_manifest(manifest);

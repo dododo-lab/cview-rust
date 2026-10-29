@@ -26,6 +26,7 @@ use cview_chat::engine::{ChatCookie, CookieProvider};
 use cview_chat::{ChatEngineConfiguration, ChatEngineEvent};
 use cview_core::error::ApiError;
 use cview_core::models::chat::{ChatMessage, EmojiMap};
+use cview_core::models::live::LiveStatus;
 use cview_core::utils::following_poll::FollowingPollOutcome;
 use cview_networking::{ChzzkApiClient, ClientConfig, ReqwestTransport};
 use cview_persistence::settings_store::MemoryDefaults;
@@ -323,7 +324,18 @@ impl AppServices {
         player.inject_engine(engine.clone());
         player.apply_settings(&settings.player(), false);
         let player_event = sinks.player_event.clone();
+        let ended_api = api.clone();
         player.set_callbacks(PlayerCallbacks {
+            // 재연결 루프가 방송 종료를 알아야 "재연결 최대 횟수 초과" 대신 종료로 끝난다.
+            on_check_stream_ended: Some(Arc::new(move |channel_id| {
+                let api = ended_api.clone();
+                async move {
+                    api.live_status(&channel_id)
+                        .await
+                        .is_ok_and(|s| s.status != LiveStatus::Open)
+                }
+                .boxed()
+            })),
             on_stream_event: Some(Arc::new(move |event| {
                 if let Some(dto) = PlayerEventDto::from_stream_event(event) {
                     player_event(dto);

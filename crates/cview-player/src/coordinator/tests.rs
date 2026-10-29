@@ -1275,6 +1275,60 @@ async fn trigger_reconnect_runs_attempts_until_first_frame() {
 }
 
 #[tokio::test(start_paused = true)]
+async fn fatal_during_cooldown_retries_after_cooldown_if_engine_still_broken() {
+    let c = coordinator_with(config(false), MockFetcher::always(Ok(MASTER)));
+    let engine = MockEngine::new();
+    c.set_player_engine(engine.shared()).await;
+    c.start_stream(test_url()).await.unwrap();
+    c.report_engine_playing().await;
+    engine.reset();
+    c.trigger_reconnect("first", false);
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    c.report_engine_playing().await;
+    assert_eq!(engine.s().play_count, 1);
+    // 재연결 직후(쿨다운 안) 엔진이 다시 죽는다 — 바로는 무시하지만 버리지 않는다.
+    engine.s().error_state = true;
+    c.trigger_reconnect("fatal", false);
+    c.trigger_reconnect("fatal again", false);
+    assert_eq!(c.phase(), StreamPhase::Playing);
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    assert_eq!(
+        c.phase(),
+        StreamPhase::Reconnecting,
+        "쿨다운이 끝나면 다시 시도한다"
+    );
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(
+        engine.s().play_count,
+        2,
+        "같은 창의 신호 둘은 시도 하나로 모인다"
+    );
+    c.stop_stream().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn cooldown_retry_skips_when_engine_recovered() {
+    let c = coordinator_with(config(false), MockFetcher::always(Ok(MASTER)));
+    let engine = MockEngine::new();
+    c.set_player_engine(engine.shared()).await;
+    c.start_stream(test_url()).await.unwrap();
+    c.report_engine_playing().await;
+    engine.reset();
+    c.trigger_reconnect("first", false);
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    c.report_engine_playing().await;
+    c.trigger_reconnect("stall", false);
+    tokio::time::sleep(Duration::from_secs(10)).await;
+    assert_eq!(c.phase(), StreamPhase::Playing);
+    assert_eq!(
+        engine.s().play_count,
+        1,
+        "엔진이 멀쩡하면 쿨다운 뒤에도 재연결하지 않는다"
+    );
+    c.stop_stream().await;
+}
+
+#[tokio::test(start_paused = true)]
 async fn trigger_reconnect_checks_stream_ended_first() {
     let c = coordinator(false);
     let engine = MockEngine::new();

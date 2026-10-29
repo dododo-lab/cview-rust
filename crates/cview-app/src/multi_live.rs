@@ -12,7 +12,7 @@
 //! - 백엔드([`ShellBackend`]) — 라이브 상세·재생 계획·상태 조회.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use async_trait::async_trait;
@@ -75,11 +75,11 @@ pub struct PaneEngine {
     slot: u32,
     engine: Arc<WebViewHlsEngine>,
     caps: Mutex<PaneCaps>,
-    loading_suspended: AtomicBool,
-    suspend_intent: AtomicBool,
     playback_desired: AtomicBool,
-    /// 숨김 단계(`SessionTier::Hidden`)가 멈춘 로딩 — 이 단계가 멈춘 것만 되돌린다(디코드 예산 정지는 건드리지 않는다).
+    /// 정지 이유 두 가지 — 숨김 단계(`SessionTier::Hidden`)와 매니저 정지(디코드 예산·메뉴 이탈).
+    /// 둘 중 하나라도 남아 있으면 정지를 유지한다: 한쪽의 재개가 다른 쪽 정지를 풀면 숨은 패인이 다시 받아 온다.
     tier_suspended: AtomicBool,
+    manager_suspended: AtomicBool,
 }
 
 impl PaneEngine {
@@ -89,10 +89,9 @@ impl PaneEngine {
             slot,
             engine: Arc::new(WebViewHlsEngine::new(command, PLAYER_PROFILE, false)),
             caps: Mutex::new(PaneCaps::default()),
-            loading_suspended: AtomicBool::new(false),
-            suspend_intent: AtomicBool::new(false),
             playback_desired: AtomicBool::new(true),
             tier_suspended: AtomicBool::new(false),
+            manager_suspended: AtomicBool::new(false),
         }
     }
 
@@ -110,20 +109,19 @@ impl PaneEngine {
     }
 
     fn send_caps(&self, caps: PaneCaps) {
-        self.engine.send(JsCommand::SetAdaptiveCaps {
-            max_resolution: caps.max_height.max(0),
-            max_bitrate: caps.max_bitrate_kbps.max(0),
-        });
+        self.engine
+            .set_managed_quality_caps(caps.max_height, caps.max_bitrate_kbps);
     }
 
     /// 풀로 돌아올 때 — 재생을 멈추고 상한을 푼다.
     fn reset(&self) {
         PlayerEngineProtocol::stop(self.engine.as_ref());
         *lock(&self.caps) = PaneCaps::default();
-        self.loading_suspended.store(false, Ordering::SeqCst);
-        self.suspend_intent.store(false, Ordering::SeqCst);
+        self.engine.set_managed_quality_caps(0, 0);
+        self.engine.clear_suspend_intent();
         self.playback_desired.store(true, Ordering::SeqCst);
         self.tier_suspended.store(false, Ordering::SeqCst);
+        self.manager_suspended.store(false, Ordering::SeqCst);
     }
 }
 
@@ -132,28 +130,28 @@ impl MultiLiveHlsEngine for PaneEngine {
         PlayerEngineProtocol::is_playing(self.engine.as_ref())
     }
     fn is_suspend_intent_active(&self) -> bool {
-        self.suspend_intent.load(Ordering::SeqCst)
+        PlayerEngineProtocol::is_suspend_intent_active(self.engine.as_ref())
     }
     fn is_in_error_state(&self) -> bool {
         PlayerEngineProtocol::is_in_error_state(self.engine.as_ref())
     }
     fn is_loading_suspended(&self) -> bool {
-        self.loading_suspended.load(Ordering::SeqCst)
+        PlayerEngineProtocol::is_suspend_intent_active(self.engine.as_ref())
     }
     fn is_playback_desired(&self) -> bool {
         self.playback_desired.load(Ordering::SeqCst)
     }
     fn buffer_ahead_seconds(&self) -> f64 {
-        self.engine.snapshot().buffer_health
+        self.engine.snapshot().buffer_ahead_seconds
     }
     fn current_bitrate(&self) -> f64 {
-        0.0
+        self.engine.snapshot().bitrate
     }
     fn rate(&self) -> f64 {
         f64::from(self.engine.snapshot().rate)
     }
     fn transfers(&self) -> Vec<StreamTransferSample> {
-        Vec::new()
+        self.engine.snapshot().transfers
     }
     fn measured_segment_duration(&self) -> f64 {
         self.engine.snapshot().segment_duration
@@ -198,12 +196,13 @@ impl MultiLiveHlsEngine for PaneEngine {
     /// 보이는 단계로 돌아오면 그 정지만 푼다.
     fn set_gpu_render_tier(&self, tier: SessionTier) {
         if tier == SessionTier::Hidden {
-            if !self.loading_suspended.load(Ordering::SeqCst) {
-                self.tier_suspended.store(true, Ordering::SeqCst);
-                self.suspend_loading();
+            if !self.tier_suspended.swap(true, Ordering::SeqCst) {
+                self.engine.suspend_loading();
             }
-        } else if self.tier_suspended.swap(false, Ordering::SeqCst) {
-            self.resume_loading();
+        } else if self.tier_suspended.swap(false, Ordering::SeqCst)
+            && !self.manager_suspended.load(Ordering::SeqCst)
+        {
+            self.engine.resume_loading();
         }
     }
     fn set_video_surface_visible(&self, _visible: bool) {}
@@ -216,14 +215,14 @@ impl MultiLiveHlsEngine for PaneEngine {
         PlayerEngineProtocol::resume(self.engine.as_ref());
     }
     fn resume_loading(&self) {
-        self.suspend_intent.store(false, Ordering::SeqCst);
-        self.loading_suspended.store(false, Ordering::SeqCst);
-        self.engine.send(JsCommand::ResumeLoading);
+        self.manager_suspended.store(false, Ordering::SeqCst);
+        if !self.tier_suspended.load(Ordering::SeqCst) {
+            self.engine.resume_loading();
+        }
     }
     fn suspend_loading(&self) {
-        self.suspend_intent.store(true, Ordering::SeqCst);
-        self.loading_suspended.store(true, Ordering::SeqCst);
-        self.engine.send(JsCommand::SuspendLoading);
+        self.manager_suspended.store(true, Ordering::SeqCst);
+        self.engine.suspend_loading();
     }
     fn set_buffer_caps(&self, max_len: f64, max_max_len: f64, max_size: i64) {
         self.engine.send(JsCommand::SetBufferCaps {
@@ -232,7 +231,10 @@ impl MultiLiveHlsEngine for PaneEngine {
             max_size,
         });
     }
-    fn arm_surface_presented_probe(&self) {}
+    /// 페이지가 다음 한 장을 칠하면(또는 3초 뒤) `surfaceFirstFrame` 을 보낸다.
+    fn arm_surface_presented_probe(&self) {
+        self.engine.send(JsCommand::NoteSurfaceShown);
+    }
     fn reset_retries(&self) {
         PlayerEngineProtocol::reset_retries(self.engine.as_ref());
     }
@@ -243,7 +245,6 @@ impl MultiLiveHlsEngine for PaneEngine {
 /// 슬롯 엔진 풀 (`MultiLiveEnginePool`).
 pub struct PanePool {
     sink: SlotCommandSink,
-    next_slot: AtomicU32,
     max: Mutex<usize>,
     active: Mutex<Vec<Arc<PaneEngine>>>,
     idle: Mutex<Vec<Arc<PaneEngine>>>,
@@ -253,7 +254,6 @@ impl PanePool {
     pub fn new(sink: SlotCommandSink) -> Self {
         Self {
             sink,
-            next_slot: AtomicU32::new(1),
             max: Mutex::new(MultiLiveSettings::default().max_concurrent_sessions.max(1) as usize),
             active: Mutex::new(Vec::new()),
             idle: Mutex::new(Vec::new()),
@@ -288,11 +288,18 @@ impl MultiLiveEnginePool for PanePool {
         if lock(&self.active).len() >= *lock(&self.max) {
             return None;
         }
-        let engine = lock(&self.idle).pop().unwrap_or_else(|| {
-            let slot = self.next_slot.fetch_add(1, Ordering::SeqCst);
+        let mut active = lock(&self.active);
+        let mut idle = lock(&self.idle);
+        let engine = idle.pop().unwrap_or_else(|| {
+            // 버린 엔진의 슬롯 번호를 다시 쓴다 — 프런트는 슬롯마다 iframe 을 하나 두고 지우지 않으므로,
+            // 번호가 늘기만 하면 채널을 넣고 뺄 때마다 빈 플레이어 iframe 이 쌓인다.
+            let mut slot = 1;
+            while active.iter().chain(idle.iter()).any(|e| e.slot == slot) {
+                slot += 1;
+            }
             Arc::new(PaneEngine::new(slot, self.sink.clone()))
         });
-        lock(&self.active).push(engine.clone());
+        active.push(engine.clone());
         Some(engine)
     }
     async fn release(&self, engine: SharedHlsEngine) {
@@ -423,6 +430,9 @@ impl MultiLivePlayer for PanePlayer {
     }
     fn set_muted(&self, muted: bool) {
         self.vm.set_muted(muted);
+    }
+    fn set_volume(&self, volume: f32) {
+        self.vm.set_volume(volume);
     }
     fn stream_phase(&self) -> StreamPhase {
         self.vm.read().stream_phase.clone()
@@ -1123,6 +1133,47 @@ mod tests {
         pool.discard(c).await;
         pool.drain().await;
         assert_eq!(pool.total_active_count().await, 0);
+    }
+
+    #[tokio::test]
+    async fn hidden_tier_and_manager_suspend_do_not_undo_each_other() {
+        let (pool, _) = pool();
+        let engine = pool.acquire().await.unwrap();
+        let pane = pool.find_active(&engine).unwrap();
+        pane.set_gpu_render_tier(SessionTier::Hidden);
+        engine.suspend_loading();
+        engine.resume_loading();
+        assert!(
+            engine.is_loading_suspended(),
+            "숨김 단계가 남아 있으면 예산 재개로 풀리지 않는다"
+        );
+        pane.set_gpu_render_tier(SessionTier::Visible);
+        assert!(!engine.is_loading_suspended());
+        engine.suspend_loading();
+        pane.set_gpu_render_tier(SessionTier::Hidden);
+        pane.set_gpu_render_tier(SessionTier::Visible);
+        assert!(
+            engine.is_loading_suspended(),
+            "보이게 돌아와도 예산 정지는 유지한다"
+        );
+    }
+
+    #[tokio::test]
+    async fn pool_reuses_discarded_slot_numbers() {
+        let (pool, _) = pool();
+        pool.set_max_pool_size(3).await;
+        let a = pool.acquire().await.unwrap();
+        let b = pool.acquire().await.unwrap();
+        let slot_a = pool.find_active(&a).unwrap().slot();
+        pool.discard(a).await;
+        pool.trim_idle(0).await;
+        let c = pool.acquire().await.unwrap();
+        assert_eq!(
+            pool.find_active(&c).unwrap().slot(),
+            slot_a,
+            "버린 엔진의 슬롯 번호를 다시 써서 iframe 이 쌓이지 않는다"
+        );
+        assert_ne!(slot_a, pool.find_active(&b).unwrap().slot());
     }
 
     #[tokio::test]

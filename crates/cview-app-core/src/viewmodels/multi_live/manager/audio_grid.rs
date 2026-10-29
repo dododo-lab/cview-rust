@@ -20,7 +20,32 @@ impl ManagerState {
         for s in &self.sessions {
             s.set_muted(s.id() != session_id);
         }
+        self.sync_audio_volumes();
         self.reconcile_focus_quality(None);
+    }
+
+    /// 여러 소리 모드에서 선택 패인 밖의 들리는 패인은 설정의 보조 패인 볼륨(기본 볼륨에 곱하는 비율)으로 낸다.
+    pub fn sync_audio_volumes(&self) {
+        let Some(settings) = &self.settings else {
+            return;
+        };
+        let base = settings.player().volume_level;
+        let base = if base.is_finite() {
+            base.clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        let ratio = settings.multi_live().secondary_volume;
+        let ratio = if ratio.is_finite() {
+            ratio.clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
+        for s in &self.sessions {
+            let secondary = self.is_multi_audio_mode && Some(s.id()) != self.selected_session_id;
+            s.player()
+                .set_volume(if secondary { base * ratio } else { base });
+        }
     }
 
     pub fn toggle_multi_audio_mode(&mut self) {
@@ -40,6 +65,7 @@ impl ManagerState {
                 s.set_muted(Some(s.id()) != active);
             }
         }
+        self.sync_audio_volumes();
         self.reconcile_focus_quality(None);
     }
 
@@ -64,6 +90,7 @@ impl ManagerState {
             self.audio_enabled_session_ids.insert(session_id);
             session.set_muted(false);
         }
+        self.sync_audio_volumes();
         self.reconcile_focus_quality(None);
     }
 

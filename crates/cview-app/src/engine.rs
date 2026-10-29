@@ -10,7 +10,7 @@
 //! 이퀄라이저·비디오 보정·녹화는 페이지 쪽 명령이 없어 기본 no-op 이다.
 
 use std::ops::RangeInclusive;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
@@ -19,6 +19,7 @@ use cview_app_core::viewmodels::player::engine::LivePlayerEngine;
 use cview_core::models::player::PlayerError;
 use cview_core::protocols::{PlayerEngineCapabilities, PlayerEngineProtocol};
 use cview_player::coordinator::{CoordinatedEngine, HlsEngineControl};
+use cview_player::hlsjs::network_metrics::StreamTransferSample;
 use cview_player::hlsjs::{
     HlsJsForcedQualityTarget, HlsJsMatchWebV2Config, HlsJsStreamingProfile, JsCommand, JsMessage,
 };
@@ -61,6 +62,12 @@ pub struct EngineSnapshot {
     pub segment_duration: f64,
     /// 이번 재생에서 metrics 를 받았는가.
     pub has_metrics: bool,
+    /// 재생 위치 앞 버퍼(초).
+    pub buffer_ahead_seconds: f64,
+    /// 현재 재생 레벨 비트레이트(bps).
+    pub bitrate: f64,
+    /// 마지막 metrics 의 body 전송 표본(시각은 UNIX 초).
+    pub transfers: Vec<StreamTransferSample>,
 }
 
 impl EngineSnapshot {
@@ -97,6 +104,9 @@ impl EngineSnapshot {
                     .then_some((s.seekable_start, s.seekable_end));
                 self.hidden = s.hidden;
                 self.segment_duration = s.frag_duration_seconds;
+                self.buffer_ahead_seconds = s.buffer_ahead_seconds;
+                self.bitrate = s.bitrate;
+                self.transfers = s.network_metrics.transfers.clone();
                 self.has_metrics = true;
                 None
             }
@@ -129,6 +139,25 @@ struct EngineConfig {
     sharp_pixel: bool,
 }
 
+/// 화질 상한의 두 소유자 — 사용자 설정 천장과 멀티라이브 매니저 상한. 페이지에는 합친 값을 보낸다.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct QualityCaps {
+    user_height: i64,
+    managed_height: i64,
+    managed_bitrate_kbps: i64,
+}
+
+impl QualityCaps {
+    /// 0 은 상한 없음 — 둘 다 있으면 낮은 쪽.
+    fn effective_height(&self) -> i64 {
+        match (self.user_height.max(0), self.managed_height.max(0)) {
+            (0, m) => m,
+            (u, 0) => u,
+            (u, m) => u.min(m),
+        }
+    }
+}
+
 /// WebView hls.js 엔진.
 pub struct WebViewHlsEngine {
     sink: CommandSink,
@@ -137,6 +166,9 @@ pub struct WebViewHlsEngine {
     volume: Mutex<f32>,
     /// 저지연 제어 세대 토큰.
     latency_generation: AtomicU64,
+    /// 로딩 정지 의도. 페이지의 `loadSource` 가 정지를 풀므로 `play` 가 다시 건다(Swift `pendingSuspended`).
+    suspend_intent: AtomicBool,
+    quality_caps: Mutex<QualityCaps>,
 }
 
 impl std::fmt::Debug for WebViewHlsEngine {
@@ -170,6 +202,8 @@ impl WebViewHlsEngine {
             }),
             volume: Mutex::new(1.0),
             latency_generation: AtomicU64::new(0),
+            suspend_intent: AtomicBool::new(false),
+            quality_caps: Mutex::new(QualityCaps::default()),
         }
     }
 
@@ -201,6 +235,42 @@ impl WebViewHlsEngine {
     /// 다음 `play` 에 실을 볼륨만 기억한다(명령은 보내지 않는다).
     pub fn set_volume_silently(&self, volume: f32) {
         *self.volume.lock().unwrap_or_else(|e| e.into_inner()) = volume.clamp(0.0, 1.0);
+    }
+
+    /// fragment 로딩을 멈추고 의도를 기억한다 — 다음 `play` 뒤에도 유지된다.
+    pub fn suspend_loading(&self) {
+        self.suspend_intent.store(true, Ordering::SeqCst);
+        self.send(JsCommand::SuspendLoading);
+    }
+
+    pub fn resume_loading(&self) {
+        self.suspend_intent.store(false, Ordering::SeqCst);
+        self.send(JsCommand::ResumeLoading);
+    }
+
+    /// 명령 없이 정지 의도만 지운다(풀 반납 등 `stop` 직후).
+    pub fn clear_suspend_intent(&self) {
+        self.suspend_intent.store(false, Ordering::SeqCst);
+    }
+
+    /// 멀티라이브 매니저 상한(0 = 없음). 사용자 천장과 합쳐 보낸다.
+    pub fn set_managed_quality_caps(&self, max_height: i64, max_bitrate_kbps: i64) {
+        self.update_quality_caps(|c| {
+            c.managed_height = max_height.max(0);
+            c.managed_bitrate_kbps = max_bitrate_kbps.max(0);
+        });
+    }
+
+    fn update_quality_caps(&self, change: impl FnOnce(&mut QualityCaps)) {
+        let caps = {
+            let mut c = self.quality_caps.lock().unwrap_or_else(|e| e.into_inner());
+            change(&mut c);
+            *c
+        };
+        self.send(JsCommand::SetAdaptiveCaps {
+            max_resolution: caps.effective_height(),
+            max_bitrate: caps.managed_bitrate_kbps,
+        });
     }
 
     /// 명령 한 줄을 보낸다.
@@ -261,6 +331,11 @@ impl PlayerEngineProtocol for WebViewHlsEngine {
             lock_top_level: config.force_highest_quality,
             autoplay: true,
         });
+        // 페이지의 loadSource 는 정지 상태를 풀고, hls 가 없을 때 온 정지는 버린다 — 의도를 다시 건다.
+        // (매니페스트 도착 전 정지는 페이지가 MANIFEST_PARSED 에서 다시 확인한다.)
+        if self.suspend_intent.load(Ordering::SeqCst) {
+            self.send(JsCommand::SuspendLoading);
+        }
         let volume = *self.volume.lock().unwrap_or_else(|e| e.into_inner());
         self.send(JsCommand::SetVolume(volume));
         Ok(())
@@ -302,6 +377,10 @@ impl PlayerEngineProtocol for WebViewHlsEngine {
 
     fn capabilities(&self) -> PlayerEngineCapabilities {
         PlayerEngineCapabilities::SUSPEND_LOADING
+    }
+
+    fn is_suspend_intent_active(&self) -> bool {
+        self.suspend_intent.load(Ordering::SeqCst)
     }
 }
 
@@ -384,7 +463,7 @@ impl HlsEngineControl for WebViewHlsEngine {
     }
 
     fn is_loading_suspended(&self) -> bool {
-        false
+        self.suspend_intent.load(Ordering::SeqCst)
     }
 
     fn live_latency_seconds(&self) -> f64 {
@@ -443,10 +522,7 @@ impl LivePlayerEngine for WebViewHlsEngine {
     }
 
     fn set_user_quality_ceiling_height(&self, height: i64) {
-        self.send(JsCommand::SetAdaptiveCaps {
-            max_resolution: height.max(0),
-            max_bitrate: 0,
-        });
+        self.update_quality_caps(|c| c.user_height = height.max(0));
     }
 
     fn set_force_highest_quality(&self, enabled: bool) {
@@ -579,6 +655,54 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn suspend_intent_survives_load_source() {
+        let (e, sent) = engine();
+        e.suspend_loading();
+        assert!(e.is_suspend_intent_active());
+        assert!(HlsEngineControl::is_loading_suspended(&e));
+        sent.lock().unwrap().clear();
+        e.play(&Url::parse("http://127.0.0.1:1/c.m3u8").unwrap())
+            .await
+            .unwrap();
+        {
+            let sent = sent.lock().unwrap();
+            let load = sent
+                .iter()
+                .position(|s| s.starts_with("loadSource("))
+                .unwrap();
+            let suspend = sent.iter().position(|s| s == "suspendLoading()").unwrap();
+            assert!(suspend > load, "정지는 loadSource 뒤에 다시 건다: {sent:?}");
+        }
+        e.resume_loading();
+        assert!(!e.is_suspend_intent_active());
+        sent.lock().unwrap().clear();
+        e.play(&Url::parse("http://127.0.0.1:1/c.m3u8").unwrap())
+            .await
+            .unwrap();
+        assert!(!sent.lock().unwrap().iter().any(|s| s == "suspendLoading()"));
+    }
+
+    #[test]
+    fn user_ceiling_keeps_managed_caps() {
+        let (e, sent) = engine();
+        e.set_managed_quality_caps(480, 1500);
+        e.set_user_quality_ceiling_height(0);
+        e.set_user_quality_ceiling_height(1080);
+        e.set_user_quality_ceiling_height(360);
+        e.set_managed_quality_caps(0, 0);
+        assert_eq!(
+            *sent.lock().unwrap(),
+            vec![
+                "setAdaptiveCaps(480, 1500)",
+                "setAdaptiveCaps(480, 1500)",
+                "setAdaptiveCaps(480, 1500)",
+                "setAdaptiveCaps(360, 1500)",
+                "setAdaptiveCaps(360, 0)",
+            ]
+        );
+    }
+
     #[test]
     fn messages_drive_signals() {
         let (e, _) = engine();
@@ -612,6 +736,15 @@ mod tests {
         }})));
         assert_eq!(e.current_time(), 12.5);
         assert_eq!(e.seekable_range(), Some(1.0..=20.0));
+        e.handle_message(&parse(json!({"type":"metrics","data":{
+            "currentTime": 13.0, "bufferAheadSeconds": 4.5, "currentLevelBitrateBps": 6_000_000
+        }})));
+        let snap = e.snapshot();
+        assert_eq!(
+            snap.buffer_ahead_seconds, 4.5,
+            "대역폭 코디네이터는 버퍼를 초로 받는다"
+        );
+        assert_eq!(snap.bitrate, 6_000_000.0);
         let fatal = e.handle_message(&parse(
             json!({"type":"fatalError","data":{"type":"networkError","details":"manifestLoadError"}}),
         ));
