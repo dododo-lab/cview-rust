@@ -12,7 +12,7 @@
 //! - 백엔드([`ShellBackend`]) — 라이브 상세·재생 계획·상태 조회.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use async_trait::async_trait;
@@ -138,16 +138,16 @@ impl MultiLiveHlsEngine for PaneEngine {
         self.playback_desired.load(Ordering::SeqCst)
     }
     fn buffer_ahead_seconds(&self) -> f64 {
-        self.engine.snapshot().buffer_health
+        self.engine.snapshot().buffer_ahead_seconds
     }
     fn current_bitrate(&self) -> f64 {
-        0.0
+        self.engine.snapshot().bitrate
     }
     fn rate(&self) -> f64 {
         f64::from(self.engine.snapshot().rate)
     }
     fn transfers(&self) -> Vec<StreamTransferSample> {
-        Vec::new()
+        self.engine.snapshot().transfers
     }
     fn measured_segment_duration(&self) -> f64 {
         self.engine.snapshot().segment_duration
@@ -222,7 +222,10 @@ impl MultiLiveHlsEngine for PaneEngine {
             max_size,
         });
     }
-    fn arm_surface_presented_probe(&self) {}
+    /// 페이지가 다음 한 장을 칠하면(또는 3초 뒤) `surfaceFirstFrame` 을 보낸다.
+    fn arm_surface_presented_probe(&self) {
+        self.engine.send(JsCommand::NoteSurfaceShown);
+    }
     fn reset_retries(&self) {
         PlayerEngineProtocol::reset_retries(self.engine.as_ref());
     }
@@ -233,7 +236,6 @@ impl MultiLiveHlsEngine for PaneEngine {
 /// 슬롯 엔진 풀 (`MultiLiveEnginePool`).
 pub struct PanePool {
     sink: SlotCommandSink,
-    next_slot: AtomicU32,
     max: Mutex<usize>,
     active: Mutex<Vec<Arc<PaneEngine>>>,
     idle: Mutex<Vec<Arc<PaneEngine>>>,
@@ -243,7 +245,6 @@ impl PanePool {
     pub fn new(sink: SlotCommandSink) -> Self {
         Self {
             sink,
-            next_slot: AtomicU32::new(1),
             max: Mutex::new(MultiLiveSettings::default().max_concurrent_sessions.max(1) as usize),
             active: Mutex::new(Vec::new()),
             idle: Mutex::new(Vec::new()),
@@ -278,11 +279,18 @@ impl MultiLiveEnginePool for PanePool {
         if lock(&self.active).len() >= *lock(&self.max) {
             return None;
         }
-        let engine = lock(&self.idle).pop().unwrap_or_else(|| {
-            let slot = self.next_slot.fetch_add(1, Ordering::SeqCst);
+        let mut active = lock(&self.active);
+        let mut idle = lock(&self.idle);
+        let engine = idle.pop().unwrap_or_else(|| {
+            // 버린 엔진의 슬롯 번호를 다시 쓴다 — 프런트는 슬롯마다 iframe 을 하나 두고 지우지 않으므로,
+            // 번호가 늘기만 하면 채널을 넣고 뺄 때마다 빈 플레이어 iframe 이 쌓인다.
+            let mut slot = 1;
+            while active.iter().chain(idle.iter()).any(|e| e.slot == slot) {
+                slot += 1;
+            }
             Arc::new(PaneEngine::new(slot, self.sink.clone()))
         });
-        lock(&self.active).push(engine.clone());
+        active.push(engine.clone());
         Some(engine)
     }
     async fn release(&self, engine: SharedHlsEngine) {
@@ -413,6 +421,9 @@ impl MultiLivePlayer for PanePlayer {
     }
     fn set_muted(&self, muted: bool) {
         self.vm.set_muted(muted);
+    }
+    fn set_volume(&self, volume: f32) {
+        self.vm.set_volume(volume);
     }
     fn stream_phase(&self) -> StreamPhase {
         self.vm.read().stream_phase.clone()
@@ -1113,6 +1124,24 @@ mod tests {
         pool.discard(c).await;
         pool.drain().await;
         assert_eq!(pool.total_active_count().await, 0);
+    }
+
+    #[tokio::test]
+    async fn pool_reuses_discarded_slot_numbers() {
+        let (pool, _) = pool();
+        pool.set_max_pool_size(3).await;
+        let a = pool.acquire().await.unwrap();
+        let b = pool.acquire().await.unwrap();
+        let slot_a = pool.find_active(&a).unwrap().slot();
+        pool.discard(a).await;
+        pool.trim_idle(0).await;
+        let c = pool.acquire().await.unwrap();
+        assert_eq!(
+            pool.find_active(&c).unwrap().slot(),
+            slot_a,
+            "버린 엔진의 슬롯 번호를 다시 써서 iframe 이 쌓이지 않는다"
+        );
+        assert_ne!(slot_a, pool.find_active(&b).unwrap().slot());
     }
 
     #[tokio::test]

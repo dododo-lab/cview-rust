@@ -19,6 +19,7 @@ use cview_app_core::viewmodels::player::engine::LivePlayerEngine;
 use cview_core::models::player::PlayerError;
 use cview_core::protocols::{PlayerEngineCapabilities, PlayerEngineProtocol};
 use cview_player::coordinator::{CoordinatedEngine, HlsEngineControl};
+use cview_player::hlsjs::network_metrics::StreamTransferSample;
 use cview_player::hlsjs::{
     HlsJsForcedQualityTarget, HlsJsMatchWebV2Config, HlsJsStreamingProfile, JsCommand, JsMessage,
 };
@@ -61,6 +62,12 @@ pub struct EngineSnapshot {
     pub segment_duration: f64,
     /// 이번 재생에서 metrics 를 받았는가.
     pub has_metrics: bool,
+    /// 재생 위치 앞 버퍼(초).
+    pub buffer_ahead_seconds: f64,
+    /// 현재 재생 레벨 비트레이트(bps).
+    pub bitrate: f64,
+    /// 마지막 metrics 의 body 전송 표본(시각은 UNIX 초).
+    pub transfers: Vec<StreamTransferSample>,
 }
 
 impl EngineSnapshot {
@@ -97,6 +104,9 @@ impl EngineSnapshot {
                     .then_some((s.seekable_start, s.seekable_end));
                 self.hidden = s.hidden;
                 self.segment_duration = s.frag_duration_seconds;
+                self.buffer_ahead_seconds = s.buffer_ahead_seconds;
+                self.bitrate = s.bitrate;
+                self.transfers = s.network_metrics.transfers.clone();
                 self.has_metrics = true;
                 None
             }
@@ -726,6 +736,15 @@ mod tests {
         }})));
         assert_eq!(e.current_time(), 12.5);
         assert_eq!(e.seekable_range(), Some(1.0..=20.0));
+        e.handle_message(&parse(json!({"type":"metrics","data":{
+            "currentTime": 13.0, "bufferAheadSeconds": 4.5, "currentLevelBitrateBps": 6_000_000
+        }})));
+        let snap = e.snapshot();
+        assert_eq!(
+            snap.buffer_ahead_seconds, 4.5,
+            "대역폭 코디네이터는 버퍼를 초로 받는다"
+        );
+        assert_eq!(snap.bitrate, 6_000_000.0);
         let fatal = e.handle_message(&parse(
             json!({"type":"fatalError","data":{"type":"networkError","details":"manifestLoadError"}}),
         ));

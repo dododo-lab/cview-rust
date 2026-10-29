@@ -39,7 +39,9 @@ use serde::Serialize;
 use tokio::time::Instant;
 use uuid::Uuid;
 
-use cview_player::bandwidth_coordinator::MultiLiveBandwidthCoordinator;
+use cview_player::bandwidth_coordinator::{
+    BandwidthCoordinatorConfig, MultiLiveBandwidthCoordinator,
+};
 
 use super::add_session_result::MultiLiveAddSessionResult;
 use super::deps::{
@@ -603,7 +605,11 @@ impl MultiLiveManager {
     pub fn new(deps: MultiLiveDeps) -> Self {
         let core = Arc::new(ManagerCore {
             deps,
-            bandwidth: Mutex::new(MultiLiveBandwidthCoordinator::default()),
+            // 전송 표본은 UNIX 초(앱이 metrics 를 받은 벽시계)로 들어온다 — 코디네이터도 같은 축을 쓴다.
+            bandwidth: Mutex::new(MultiLiveBandwidthCoordinator::with_clock(
+                BandwidthCoordinatorConfig::default(),
+                cview_player::clock::system(),
+            )),
         });
         let shared = Arc::new_cyclic(|this: &Weak<ManagerShared>| ManagerShared {
             obs: Observed::new(ManagerState {
