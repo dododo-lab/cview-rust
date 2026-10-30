@@ -1,4 +1,5 @@
-// 홈 — 인사 헤더 / 방송 중인 팔로잉 스트립 / 추천 히어로 / 최근 시청 / 팔로잉 선반 / 카테고리 칩 + 인기 격자.
+// 홈 — 인사 헤더 / 방송 중인 팔로잉 스트립 / 앰비언트 스포트라이트(히어로 + 넘김 탭) / 최근 시청 퀵픽 /
+// 지금 인기 TOP 10 / 팔로잉 선반 / 카테고리 칩 + 발견 격자(더 보기로 펼침).
 // Swift `HomeView_v3` 의 "지금 볼 라이브를 먼저" 원칙을 따르되, 지금 Rust 명령으로 받을 수 있는
 // 데이터(팔로잉·인기 라이브)와 로컬 최근 시청 기록만으로 그린다.
 import { api } from './api.js';
@@ -12,7 +13,9 @@ const HERO_SIZE = 5;
 // 자동 넘김 — 대기열 진행 막대(CSS `queue-progress`, 7초)가 끝나면 다음 장으로. 호버 중엔 CSS 가 멈춘다.
 // 모션 줄이기(시스템·설정 "절약")면 넘기지 않는다 — 절약은 애니메이션 시간을 0 으로 만들어 끝 이벤트가 곧바로 온다.
 const POPULAR_SIZE = 48;
-const POPULAR_GRID = 24;
+const POPULAR_GRID = 36;
+const GRID_STEP = 12; // 발견 격자는 12개씩 펼친다 — 첫 화면이 끝없이 길어지지 않게
+const TOP_SIZE = 10;
 const CHIP_LIMIT = 8;
 const ALL = '';
 
@@ -22,6 +25,11 @@ function greeting(now = new Date()) {
   if (h < 11) return '좋은 아침이에요';
   if (h < 17) return '좋은 오후예요';
   return '좋은 저녁이에요';
+}
+
+const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+function dateLabel(now = new Date()) {
+  return `${now.getMonth() + 1}월 ${now.getDate()}일 ${WEEKDAYS[now.getDay()]}요일`;
 }
 
 const byViewers = (a, b) => (b.viewerCount || 0) - (a.viewerCount || 0);
@@ -38,6 +46,21 @@ function channelData(live) {
 }
 
 // ── 조각들 ─────────────────────────────────────────────
+
+/** 섹션 머리 — 제목 + 한 줄 설명 + 오른쪽 동작. */
+function sectionHead(title, sub = '', actions = '') {
+  return `
+    <div class="section-head">
+      <div class="section-titles">
+        <h2 class="section-title">${title}</h2>
+        ${sub ? `<p class="section-sub">${esc(sub)}</p>` : ''}
+      </div>
+      <div class="grow"></div>
+      ${actions}
+    </div>`;
+}
+
+const shelfNav = `<div class="shelf-nav"><button class="icon-btn round" data-shelf="-1" title="이전" aria-label="이전">${icons.chevronLeft}</button><button class="icon-btn round" data-shelf="1" title="다음" aria-label="다음">${icons.chevronRight}</button></div>`;
 
 function loginBanner() {
   return `
@@ -62,11 +85,7 @@ function followingStrip(lives) {
     </button>`).join('');
   return `
     <section class="home-section">
-      <div class="section-head">
-        <h2 class="section-title">방송 중인 팔로잉 <span class="count">${lives.length}</span></h2>
-        <div class="grow"></div>
-        <button class="link-btn" data-goto="following">전체 보기</button>
-      </div>
+      ${sectionHead(`방송 중인 팔로잉 <span class="count">${lives.length}</span>`, '', '<button class="link-btn" data-goto="following">전체 보기</button>')}
       <div class="strip">${items}</div>
     </section>`;
 }
@@ -93,23 +112,62 @@ function heroSlide(live, source) {
           ${avatarImg(live.channelImageUrl)}
           <div class="ellipsis"><strong>${esc(live.channelName)}</strong>${live.categoryName ? `<span> · ${esc(live.categoryName)}</span>` : ''}</div>
         </div>
-        <span class="btn primary lg hero-cta">${icons.play}시청하기</span>
+        <div class="hero-actions">
+          <span class="btn primary lg hero-cta">${icons.play}시청하기</span>
+          <button class="btn lg hero-ghost" data-ml-add title="멀티라이브에 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg>멀티라이브</button>
+        </div>
       </div>
     </article>`;
 }
 
+/** 히어로 아래 넘김 탭 — 위쪽 진행 막대가 다 차면 다음 장으로(자동 넘김). */
 function heroQueue(lives, active) {
   return lives.map((l, i) => {
     const thumb = safeUrl(l.thumbnailUrl);
     return `
-      <button class="queue-item${i === active ? ' active' : ''}" data-hero-index="${i}" title="${esc(l.liveTitle)}">
-        <span class="queue-thumb">${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}<span class="queue-progress"></span></span>
+      <button class="queue-item${i === active ? ' active' : ''}" data-hero-index="${i}" title="${esc(l.liveTitle)}" role="tab" aria-selected="${i === active}">
+        <span class="queue-progress" aria-hidden="true"></span>
+        <span class="queue-thumb">${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>
         <span class="queue-text">
           <span class="queue-title">${esc(l.liveTitle || '제목 없음')}</span>
           <span class="queue-meta ellipsis">${esc(l.channelName)} · ${esc(l.viewerCountText)}명</span>
         </span>
       </button>`;
   }).join('');
+}
+
+/** 히어로 뒤 앰비언트 빛 — 지금 장의 썸네일을 크게 흐려 화면에 색을 번지게 한다(정지 화면, 장이 바뀔 때만 다시 그림). */
+function heroAmbient(live) {
+  const thumb = safeUrl(live && live.thumbnailUrl);
+  return thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" referrerpolicy="no-referrer">` : '';
+}
+
+/** 지금 인기 TOP 10 — 큰 순위 숫자 + 썸네일 카드. */
+function topRail(lives) {
+  const items = lives.map((l, i) => {
+    const thumb = safeUrl(l.thumbnailUrl);
+    return `
+      <article class="top-item" tabindex="0" ${channelData(l)} title="${esc(l.liveTitle)}">
+        <span class="top-rank" aria-hidden="true">${i + 1}</span>
+        <div class="top-card">
+          <div class="thumb">
+            ${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
+            <span class="badge-live">LIVE</span>
+            <span class="badge-viewers"><i class="dot"></i>${esc(l.viewerCountText)}명</span>
+            <button class="card-ml-add" data-ml-add title="멀티라이브에 추가" aria-label="멀티라이브에 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></button>
+          </div>
+          <div class="top-text">
+            <div class="top-title">${esc(l.liveTitle || '제목 없음')}</div>
+            <div class="top-meta ellipsis">${avatarImg(l.channelImageUrl, 'avatar xs')}<span>${esc(l.channelName)}</span>${l.categoryName ? `<span class="category">· ${esc(l.categoryName)}</span>` : ''}</div>
+          </div>
+        </div>
+      </article>`;
+  }).join('');
+  return `
+    <section class="home-section">
+      ${sectionHead('지금 인기 TOP 10', '시청자 수 기준 실시간 순위', `${shelfNav}<button class="link-btn" data-goto="popular">인기 전체 보기</button>`)}
+      <div class="shelf top-shelf">${items}</div>
+    </section>`;
 }
 
 function recentShelf(recent, liveById) {
@@ -120,13 +178,14 @@ function recentShelf(recent, liveById) {
         ${avatarImg(r.channelImageUrl)}
         <span class="recent-text">
           <span class="ellipsis"><strong>${esc(r.channelName || '채널')}</strong></span>
-          <span class="recent-meta ellipsis">${live ? `<b>LIVE</b> ${esc(live.viewerCountText)}명` : '오프라인일 수 있음'}</span>
+          <span class="recent-meta ellipsis">${live ? `<b>LIVE</b> ${esc(live.viewerCountText)}명${live.categoryName ? ` · ${esc(live.categoryName)}` : ''}` : '오프라인일 수 있음'}</span>
         </span>
+        <span class="recent-play" aria-hidden="true">${icons.play}</span>
       </button>`;
   }).join('');
   return `
     <section class="home-section">
-      <div class="section-head"><h2 class="section-title">최근 시청</h2></div>
+      ${sectionHead('최근 시청', '최근에 본 채널로 바로 돌아가기')}
       <div class="recent-row">${items}</div>
     </section>`;
 }
@@ -134,12 +193,7 @@ function recentShelf(recent, liveById) {
 function followingShelf(lives) {
   return `
     <section class="home-section">
-      <div class="section-head">
-        <h2 class="section-title">팔로잉 라이브</h2>
-        <div class="grow"></div>
-        <button class="icon-btn round" data-shelf="-1" title="이전">${icons.chevronLeft}</button>
-        <button class="icon-btn round" data-shelf="1" title="다음">${icons.chevronRight}</button>
-      </div>
+      ${sectionHead('팔로잉 라이브', '시청자 많은 순', shelfNav)}
       <div class="shelf">${lives.map(liveCard).join('')}</div>
     </section>`;
 }
@@ -151,21 +205,25 @@ function categoryChips(popular, selected) {
   }
   const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, CHIP_LIMIT).map(([name]) => name);
   if (selected && !top.includes(selected)) top.push(selected);
-  const chip = (value, label) =>
-    `<button class="chip${value === selected ? ' active' : ''}" data-category="${esc(value)}">${esc(label)}</button>`;
-  return `<div class="chips" role="tablist">${chip(ALL, '전체')}${top.map((n) => chip(n, n)).join('')}</div>`;
+  const chip = (value, label, n) =>
+    `<button class="chip${value === selected ? ' active' : ''}" data-category="${esc(value)}">${esc(label)}<span class="chip-count">${n}</span></button>`;
+  return `<div class="chips home-chips" role="tablist">${chip(ALL, '전체', popular.length)}${top.map((n) => chip(n, n, counts.get(n) || 0)).join('')}</div>`;
 }
 
-function popularGrid(popular, category) {
-  const list = (category ? popular.filter((l) => l.categoryName === category) : popular).slice(0, POPULAR_GRID);
-  return list.length ? liveGrid(list) : emptyState('이 카테고리의 라이브가 없습니다');
+function popularGrid(popular, category, limit = GRID_STEP) {
+  const all = (category ? popular.filter((l) => l.categoryName === category) : popular).slice(0, POPULAR_GRID);
+  if (!all.length) return emptyState('이 카테고리의 라이브가 없습니다');
+  const more = all.length > limit
+    ? `<div class="grid-more"><button class="btn more-btn" data-grid-more>더 보기 <span>${all.length - limit}</span></button></div>`
+    : '';
+  return liveGrid(all.slice(0, limit)) + more;
 }
 
 export function homeSkeleton() {
   const card = '<div class="sk-card"><div class="sk thumb-sk"></div><div class="sk line"></div><div class="sk line short"></div></div>';
   return `
     <div class="home">
-      <div class="hero"><div class="sk hero-sk"></div><div class="hero-queue">${'<div class="sk queue-sk"></div>'.repeat(4)}</div></div>
+      <div class="hero"><div class="sk hero-sk"></div><div class="hero-queue">${'<div class="sk queue-sk"></div>'.repeat(5)}</div></div>
       <div class="sk title-sk"></div>
       <div class="grid">${card.repeat(8)}</div>
     </div>`;
@@ -178,11 +236,13 @@ export class HomePage {
     this.root = root;
     this.body = root.querySelector('.page-body');
     this.greet = root.querySelector('.home-greeting');
+    this.date = root.querySelector('.home-date');
     this.summary = root.querySelector('.home-summary');
     this.isLoggedIn = isLoggedIn;
     this.getAuth = getAuth;
     this.seq = 0;
     this.category = ALL;
+    this.gridLimit = GRID_STEP;
     this.popular = [];
     this.hero = [];
     this.heroSource = 'popular';
@@ -225,13 +285,14 @@ export class HomePage {
     const auth = this.getAuth();
     const nick = auth && auth.loggedIn && auth.nickname ? `${auth.nickname}님, ` : '';
     this.greet.textContent = `${nick}${greeting()}`;
+    if (this.date) this.date.textContent = dateLabel();
     const parts = [];
-    if (following) parts.push(`<span>팔로잉 <b>${following.length}</b>명 방송 중</span>`);
+    if (following) parts.push(`<span class="pill${following.length ? ' live' : ''}"><i class="dot"></i>팔로잉 <b>${following.length}</b>명 방송 중</span>`);
     if (popular && popular.length) {
       const total = popular.reduce((s, l) => s + (l.viewerCount || 0), 0);
-      parts.push(`<span>인기 라이브 <b>${esc(compactCount(total))}</b>명 시청 중</span>`);
+      parts.push(`<span class="pill">인기 라이브 <b>${esc(compactCount(total))}</b>명 시청 중</span>`);
     }
-    this.summary.innerHTML = parts.length ? parts.join('<i class="sep"></i>') : '지금 볼 만한 라이브를 모았어요';
+    this.summary.innerHTML = parts.length ? parts.join('') : '지금 볼 만한 라이브를 모았어요';
   }
 
   render(loggedIn, followingRes, popularRes) {
@@ -259,32 +320,33 @@ export class HomePage {
 
     if (this.hero.length) {
       html += `
-        <section class="hero">
+        <section class="hero" aria-label="${this.heroSource === 'following' ? '팔로잉 추천' : '지금 뜨는 라이브'}">
+          <div class="hero-ambient" aria-hidden="true">${heroAmbient(this.hero[this.heroIndex])}</div>
           <div class="hero-slot">${heroSlide(this.hero[this.heroIndex], this.heroSource)}</div>
-          <div class="hero-queue">
-            <div class="queue-head">${this.heroSource === 'following' ? '팔로잉 추천' : '지금 뜨는 라이브'}</div>
-            ${heroQueue(this.hero, this.heroIndex)}
-          </div>
+          <div class="hero-queue" role="tablist">${heroQueue(this.hero, this.heroIndex)}</div>
         </section>`;
     }
 
     if (recent.length) html += recentShelf(recent, liveById);
+
+    // TOP 10 — 히어로가 인기 앞쪽을 쓰고 있으면(비로그인·팔로잉 없음) 그 다음 순위부터 겹치지 않게.
+    const topFrom = following.length ? 0 : HERO_SIZE;
+    const top = popular.slice(topFrom, topFrom + TOP_SIZE);
+    if (top.length >= 3) html += topRail(top);
     html += '<section class="home-section" data-rail="continue" hidden></section>';
     if (following.length > HERO_SIZE) html += followingShelf(following);
 
     if (popularRes.status === 'fulfilled') {
       // 팔로잉이 히어로를 차지했으면 인기 격자는 팔로우 밖 채널부터(발견) — Swift popularLive 규칙.
-      const discover = following.length ? popular.filter((l) => !followIds.has(l.channelId)) : popular.slice(HERO_SIZE);
+      // 위 히어로·TOP 10 에 이미 나온 채널은 빼서 같은 카드가 두 번 보이지 않게 한다.
+      const shown = new Set([...followIds, ...(top.length >= 3 ? top : []).map((l) => l.channelId), ...this.hero.map((l) => l.channelId)]);
+      const discover = popular.filter((l) => !shown.has(l.channelId));
       this.discover = discover;
       html += `
         <section class="home-section">
-          <div class="section-head">
-            <h2 class="section-title">${following.length ? '새로운 라이브 발견' : '지금 인기 라이브'}</h2>
-            <div class="grow"></div>
-            <button class="link-btn" data-goto="popular">인기 전체 보기</button>
-          </div>
+          ${sectionHead(following.length ? '새로운 라이브 발견' : '더 많은 라이브', following.length ? '팔로우하지 않은 채널 중 지금 인기' : '카테고리로 골라 보기', '<button class="link-btn" data-goto="popular">인기 전체 보기</button>')}
           ${categoryChips(discover, this.category)}
-          <div class="popular-grid">${discover.length ? popularGrid(discover, this.category) : emptyState('추천할 라이브 채널이 없습니다')}</div>
+          <div class="popular-grid">${discover.length ? popularGrid(discover, this.category, this.gridLimit) : emptyState('추천할 라이브 채널이 없습니다')}</div>
         </section>`;
     } else {
       html += errorState('인기 라이브를 불러오지 못했습니다', popularRes.reason);
@@ -298,14 +360,14 @@ export class HomePage {
   async loadRails(seq) {
     const [cont, clips] = await Promise.allSettled([api.vodContinueList(12), api.popularClips('WITHIN_1_DAY', 'POPULAR')]);
     if (seq !== this.seq) return;
-    const fill = (name, title, html, goto) => {
+    const fill = (name, title, sub, html, goto) => {
       const box = this.body.querySelector(`[data-rail="${name}"]`);
       if (!box || !html) return;
-      box.innerHTML = `<div class="section-head"><h2 class="section-title">${title}</h2><div class="grow"></div><button class="link-btn" data-goto-lib="${goto}">전체 보기</button></div>${html}`;
+      box.innerHTML = `${sectionHead(title, sub, `${shelfNav}<button class="link-btn" data-goto-lib="${goto}">전체 보기</button>`)}${html}`;
       box.hidden = false;
     };
-    if (cont.status === 'fulfilled' && cont.value.length) fill('continue', '이어 보기', `<div class="shelf">${cont.value.map(continueCard).join('')}</div>`, 'continue');
-    if (clips.status === 'fulfilled' && clips.value.length) fill('clips', '오늘의 인기 클립', `<div class="shelf clip-shelf">${clips.value.slice(0, 16).map(clipCard).join('')}</div>`, 'clips');
+    if (cont.status === 'fulfilled' && cont.value.length) fill('continue', '이어 보기', '보던 다시보기를 멈춘 곳부터', `<div class="shelf">${cont.value.map(continueCard).join('')}</div>`, 'continue');
+    if (clips.status === 'fulfilled' && clips.value.length) fill('clips', '오늘의 인기 클립', '하루 동안 가장 많이 본 순간', `<div class="shelf clip-shelf">${clips.value.slice(0, 16).map(clipCard).join('')}</div>`, 'clips');
   }
 
   setHero(index) {
@@ -314,8 +376,12 @@ export class HomePage {
     const slot = this.body.querySelector('.hero-slot');
     if (!slot) return;
     slot.innerHTML = heroSlide(this.hero[this.heroIndex], this.heroSource);
+    const ambient = this.body.querySelector('.hero-ambient');
+    if (ambient) ambient.innerHTML = heroAmbient(this.hero[this.heroIndex]);
     for (const q of this.body.querySelectorAll('.queue-item')) {
-      q.classList.toggle('active', Number(q.dataset.heroIndex) === this.heroIndex);
+      const on = Number(q.dataset.heroIndex) === this.heroIndex;
+      q.classList.toggle('active', on);
+      q.setAttribute('aria-selected', String(on));
     }
   }
 
@@ -328,8 +394,14 @@ export class HomePage {
     const chip = e.target.closest('[data-category]');
     if (chip) {
       this.category = chip.dataset.category;
+      this.gridLimit = GRID_STEP;
       for (const c of this.body.querySelectorAll('.chip')) c.classList.toggle('active', c === chip);
-      this.body.querySelector('.popular-grid').innerHTML = popularGrid(this.discover || [], this.category);
+      this.body.querySelector('.popular-grid').innerHTML = popularGrid(this.discover || [], this.category, this.gridLimit);
+      return;
+    }
+    if (e.target.closest('[data-grid-more]')) {
+      this.gridLimit += GRID_STEP;
+      this.body.querySelector('.popular-grid').innerHTML = popularGrid(this.discover || [], this.category, this.gridLimit);
       return;
     }
     const shelfBtn = e.target.closest('[data-shelf]');
