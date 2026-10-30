@@ -1,8 +1,6 @@
-/* 나눔고딕(SIL OFL 1.1, fonts/NanumGothic-OFL.txt) — 앱 안에 넣어 macOS·Windows 어디서나 같은 글꼴로 보인다.
-   굵기는 세 가지뿐이라 500 이하는 보통, 600~700은 굵게, 750 이상은 아주 굵게로 묶는다. */
-@font-face { font-family: "NanumGothic"; src: url("../fonts/NanumGothic-Regular.woff2") format("woff2"); font-weight: 100 599; font-display: block; }
-@font-face { font-family: "NanumGothic"; src: url("../fonts/NanumGothic-Bold.woff2") format("woff2"); font-weight: 600 749; font-display: block; }
-@font-face { font-family: "NanumGothic"; src: url("../fonts/NanumGothic-ExtraBold.woff2") format("woff2"); font-weight: 750 900; font-display: block; }
+/* Pretendard(SIL OFL 1.1, fonts/Pretendard-OFL.txt) — 화면 글씨용으로 만든 한글·라틴 글꼴. 작은 글씨에서도 획이 또렷하다.
+   앱 안에 넣어 macOS·Windows 어디서나 같게 보인다. 가변 글꼴 하나로 100~900 굵기를 모두 낸다(예전 나눔고딕은 세 굵기뿐). */
+@font-face { font-family: "Pretendard"; src: url("../fonts/PretendardVariable.woff2") format("woff2-variations"), url("../fonts/PretendardVariable.woff2") format("woff2"); font-weight: 45 920; font-display: block; }
 
 /* CView — 원본 Swift DesignTokens(Sources/CViewCore/DesignSystem)를 바탕으로 한 토큰 체계. */
 /* ── 디자인 토큰 ──────────────────────────────
@@ -189,7 +187,7 @@ html, body {
   height: 100%;
   background: var(--background);
   color: var(--text-primary);
-  font: var(--fs-body) / 1.45 "NanumGothic", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo",
+  font: var(--fs-body) / 1.45 "Pretendard", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo",
     "Noto Sans KR", "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
@@ -968,7 +966,7 @@ select.select {
 
 /* ══ 2026 리프레시 — 공통 컴포넌트 ═════════════════════════════ */
 html, body {
-  font-family: "NanumGothic", -apple-system, BlinkMacSystemFont, "SF Pro Text",
+  font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "SF Pro Text",
     "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
   letter-spacing: -0.1px;
 }

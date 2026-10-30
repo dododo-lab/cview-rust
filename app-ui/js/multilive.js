@@ -178,7 +178,12 @@ export class MultiLivePage {
     this.count = this.root.querySelector('.ml-count');
     this.watchPicker = this.root.querySelector('.ml-watch-picker');
     this.watchPicker.addEventListener('scroll', () => this.syncWatchPickerFade(), { passive: true });
-    new ResizeObserver(() => this.syncWatchPickerFade()).observe(this.watchPicker);
+    // 직접 넘겨 보기 시작하면 지금 보는 칩으로 되돌리지 않는다.
+    for (const ev of ['wheel', 'pointerdown']) this.watchPicker.addEventListener(ev, () => { this.watchPickerReveal = false; }, { passive: true });
+    new ResizeObserver(() => {
+      if (this.watchPickerReveal) this.revealActiveWatchChip();
+      this.syncWatchPickerFade();
+    }).observe(this.watchPicker);
     // 세로 휠로도 가로로 넘긴다(트랙패드 가로 밀기는 그대로)
     this.watchPicker.addEventListener('wheel', (e) => {
       const p = this.watchPicker;
@@ -971,13 +976,24 @@ export class MultiLivePage {
     this.watchPickerHtml = html;
     picker.innerHTML = html;
     // 칩이 넘치면 가로로 넘겨 보는데, 새로 연 채널(지금 보는 칩)이 넘친 쪽에 숨으면 추가가 안 된 것처럼 보였다 — 보이는 자리로.
-    const active = picker.querySelector('.ml-watch-chip.active');
-    if (active) {
-      const left = active.offsetLeft - picker.offsetLeft;
-      if (left < picker.scrollLeft) picker.scrollLeft = left - 12;
-      else if (left + active.offsetWidth > picker.scrollLeft + picker.clientWidth) picker.scrollLeft = left + active.offsetWidth - picker.clientWidth + 12;
-    }
+    // 같은 알림에서 옆의 다른 방송 줄을 비웠다 다시 채우면 칩 줄이 잠깐 넘치지 않아 맞춘 자리가 0 으로 돌아갔다 —
+    // 그 프레임 끝에, 그리고 칩 줄 크기가 나중에 바뀔 때도(직접 넘겨 보기 전까지) 한 번 더 맞춘다.
+    this.watchPickerReveal = true;
+    this.revealActiveWatchChip();
     this.syncWatchPickerFade();
+    requestAnimationFrame(() => {
+      if (this.watchPickerReveal) this.revealActiveWatchChip();
+      this.syncWatchPickerFade();
+    });
+  }
+
+  revealActiveWatchChip() {
+    const picker = this.watchPicker;
+    const active = picker.querySelector('.ml-watch-chip.active');
+    if (!active) return;
+    const left = active.offsetLeft - picker.offsetLeft;
+    if (left < picker.scrollLeft) picker.scrollLeft = left - 12;
+    else if (left + active.offsetWidth > picker.scrollLeft + picker.clientWidth) picker.scrollLeft = left + active.offsetWidth - picker.clientWidth + 12;
   }
 
   /** 채널 칩 줄 끝 흐림 — 다른 방송 줄처럼 가려진 칩이 있는 쪽만. */
