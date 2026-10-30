@@ -379,11 +379,10 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
 .toast-timer { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--primary); opacity: .7; transform-origin: left center; animation: mo-timer linear both; }
 @keyframes mo-timer { from { scale: 1 1; } to { scale: 0 1; } }
 
-/* ── 라이브 단독 보기 머리줄 채널 고르기 — 올리면 살짝 뜨고, 고른 칩은 테두리가 번진다 ── */
-.ml-watch-chip { transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-3) var(--ease-out), translate var(--dur-3) var(--ease-out), scale .3s var(--ease-spring); }
-.ml-watch-chip:hover { translate: 0 -1px; }
+/* ── 라이브 단독 보기 머리줄 채널 고르기 — 칩은 한 판 안에 있어(넘치면 가로로 넘김) 뜨거나 번지면 판 끝에서 잘린다.
+   누르면 살짝 눌리고, 올리면 아바타만 커진다. 고른 칩의 떠 있는 판은 multilive.css ── */
+.ml-watch-chip { transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out), box-shadow var(--dur-3) var(--ease-out), scale .3s var(--ease-spring); }
 .ml-watch-chip:active { scale: .96; transition-duration: var(--dur-1); }
-.ml-watch-chip.active { box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent); }
 .ml-watch-chip img { transition: scale .3s var(--ease-spring); }
 .ml-watch-chip:hover img { scale: 1.08; }
 

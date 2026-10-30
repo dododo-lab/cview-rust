@@ -536,33 +536,29 @@
 .page-multilive.as-watch .ml-more, .page-multilive.as-watch .ml-count { display: none; }
 .page-multilive.as-watch .ml-watch-btn, .page-multilive.as-watch [data-ml="single"] { display: none !important; }
 /* 라이브 단독 무대 — 멀티라이브의 다른 채널로 바꿔 보기 */
-.ml-watch-picker { display: flex; align-items: center; gap: 8px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.ml-watch-picker {
+  display: flex; align-items: stretch; gap: 2px; min-width: 0; height: 30px; padding: 2px; overflow-x: auto; scrollbar-width: none;
+  border-radius: 9px; background: var(--surface-elevated); border: 1px solid var(--border-subtle);
+}
 .ml-watch-picker[hidden] { display: none; }
 .ml-watch-picker::-webkit-scrollbar { display: none; }
 /* 칩이 넘치면 가려진 쪽 끝을 흐리게(multilive.js 가 fade-* 를 단다) — 다른 방송 줄과 같다 */
 .ml-watch-picker.fade-end { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
 .ml-watch-picker.fade-start { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px); mask-image: linear-gradient(to right, transparent, #000 28px); }
 .ml-watch-picker.fade-start.fade-end { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
-/* 채널 칩 — 작고 흐린 글씨(12px·보조색)와 거의 안 보이는 테두리라 칩끼리·배경과 구분이 약했다.
-   글씨를 한 단계 키우고 본문색으로, 테두리를 또렷하게, 칩 사이를 넓혔다. 높이는 머리줄 30px 줄에 맞춘다.
-   이름이 길면 칩 너비에서 말줄임(전체 이름은 title) — 지금 보는 칩은 더 넓게 보여 준다. */
+/* 채널 칩 — 옆의 [라이브|멀티라이브] 전환과 같은 한 판(세그먼트) 안에 칩을 늘어놓는다. 칩마다 테두리·채움을 두던 것은
+   알약이 여러 개 떠 보여 어수선했다. 고른 칩만 떠 있는 판 + 아바타 초록 링, 나머지는 글자와 아바타만.
+   글씨는 13px, 이름이 길면 말줄임(전체 이름은 title) — 지금 보는 칩은 더 넓게 보여 준다. */
 .ml-watch-chip {
-  flex: none; display: inline-flex; align-items: center; gap: 7px; max-width: 136px; height: 30px; padding: 0 12px 0 4px;
-  border-radius: 15px; border: 1px solid var(--border); background: var(--surface-elevated);
-  color: var(--text-primary); font-size: var(--fs-caption); font-weight: 500; line-height: 1;
-  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+  flex: none; display: inline-flex; align-items: center; gap: 7px; max-width: 136px; padding: 0 11px 0 4px;
+  border: 0; border-radius: 7px; background: transparent;
+  color: var(--text-secondary); font-size: var(--fs-caption); font-weight: 500; line-height: 1;
 }
-.ml-watch-chip:not(.active) { color: color-mix(in srgb, var(--text-primary) 82%, transparent); }
-.ml-watch-chip:hover { color: var(--text-primary); background: var(--surface-overlay); border-color: color-mix(in srgb, var(--text-primary) 28%, transparent); }
-.ml-watch-chip:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-/* 지금 보는 채널 — 테두리만 초록이던 것을 초록 틴트 채움 + 굵은 글씨 + 아바타 링으로. 글씨는 본문색(라이트에서 초록 글씨는 대비가 낮다). */
-.ml-watch-chip.active {
-  max-width: 200px; color: var(--text-primary); font-weight: 700;
-  border-color: var(--primary); background: color-mix(in srgb, var(--primary) 16%, var(--surface-elevated));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 35%, transparent);
-}
-.ml-watch-chip img, .ml-watch-dot { width: 22px; height: 22px; border-radius: 50%; flex: none; object-fit: cover; }
-.ml-watch-chip.active img, .ml-watch-chip.active .ml-watch-dot { box-shadow: 0 0 0 1.5px var(--surface-base, #000), 0 0 0 3px var(--primary); width: 20px; height: 20px; margin: 0 1px; }
+.ml-watch-chip:hover:not(.active) { color: var(--text-primary); background: var(--hover); }
+.ml-watch-chip:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.ml-watch-chip.active { max-width: 200px; color: var(--text-primary); font-weight: 600; background: var(--surface-base); box-shadow: var(--shadow-sm); }
+.ml-watch-chip img, .ml-watch-dot { width: 20px; height: 20px; border-radius: 50%; flex: none; object-fit: cover; }
+.ml-watch-chip.active img, .ml-watch-chip.active .ml-watch-dot { box-shadow: 0 0 0 2px var(--primary); }
 .ml-watch-dot { background: var(--surface-overlay); }
 .ml-watch-chip .ellipsis { min-width: 0; padding-block: 2px; }
 /* 멀티라이브 채널 칩 ↔ 다른 방송 줄 — 두 묶음 사이에 세로 구분선. 다른 방송 줄의 링은 라이브 빨강(선택 칩의 초록 테두리와 헷갈렸다). */
