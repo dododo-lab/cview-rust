@@ -32,10 +32,14 @@ export function keyBelongsToTarget(e) {
  * 상태는 바로 숨기고(열림 판단·토글이 hidden 을 그대로 본다), 같은 자리에 겉모습만 복제해 흐려지며 사라지게 한다.
  * 복제는 원본 바로 뒤에 둔다 — 그사이 다시 열면 CSS(`:not([hidden]) + .exit-ghost`)가 복제를 감춘다.
  */
+const EXIT_GHOST_MAX_NODES = 400;
+
 export function hideWithExit(el, ms = 160) {
   if (!el || el.hidden) return;
+  // 안이 아주 큰 것(이모티콘 수백 칸·긴 검색 결과)은 복제·다시 그리기가 닫는 순간 프레임을 밀어 바로 닫는다.
+  const big = el.getElementsByTagName('*').length > EXIT_GHOST_MAX_NODES;
   el.hidden = true;
-  if (motionReduced() || !el.parentNode || !el.getClientRects) return;
+  if (big || motionReduced() || !el.parentNode || !el.getClientRects) return;
   const next = el.nextElementSibling;
   if (next && next.classList.contains('exit-ghost')) next.remove();
   const ghost = el.cloneNode(true);

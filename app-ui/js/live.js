@@ -5,6 +5,7 @@ import { esc, safeUrl, imageSrc } from './dom.js';
 import { liveGrid, emptyState, errorState, skeletonGrid, recentChannels } from './cards.js';
 import { liveIcon, liveModeSwitch } from './live-mode.js';
 import { refreshIcon } from './page-header.js';
+import { swapContent } from './motion.js';
 
 export { liveIcon };
 
@@ -78,6 +79,6 @@ export class LivePage {
     else if (follow.length) html += followTitle + liveGrid(follow.slice(0, 12));
     if (popFailed) html += `<h2 class="section-title">인기 라이브</h2>${note('인기 라이브를 불러오지 못했습니다', retry)}`;
     else if (pop.length) html += `<h2 class="section-title">인기 라이브</h2>${liveGrid(pop.slice(0, 12))}`;
-    this.body.innerHTML = html || emptyState('볼 수 있는 라이브가 없습니다');
+    swapContent(this.body, html || emptyState('볼 수 있는 라이브가 없습니다'));
   }
 }

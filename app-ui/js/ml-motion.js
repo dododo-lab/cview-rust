@@ -51,6 +51,7 @@ export function playLayoutMotion(panes, before) {
     if (!a || holding) {
       if (!holding) p.enterHoldUntil = now + ENTER_HOLD_MS;
       p.anim?.cancel();
+      p.el.style.transformOrigin = ''; // 이동 중이던 패인이면 왼쪽 위 기준점이 남아 있다 — 커지는 것은 가운데에서
       p.anim = p.el.animate([
         { opacity: 0, transform: 'scale(0.9)' },
         { opacity: 1, transform: 'none' },
@@ -62,10 +63,16 @@ export function playLayoutMotion(panes, before) {
     const dy = (a.top + a.height / 2) - (b.top + (b.height * s) / 2);
     if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(s - 1) < 0.01) continue;
     p.anim?.cancel();
-    p.anim = p.el.animate([
-      { transformOrigin: '0 0', transform: `translate(${dx}px, ${dy}px) scale(${s})` },
-      { transformOrigin: '0 0', transform: 'none' },
+    // 기준점은 인라인으로 — 키프레임에 transform-origin 이 끼면 합성할 수 없는 속성이라 애니메이션 전체가
+    // 메인 스레드로 내려간다(영상 여러 개가 재생 중이면 340ms 동안 끊긴다). 끝나거나 취소되면 되돌린다.
+    p.el.style.transformOrigin = '0 0';
+    const anim = p.el.animate([
+      { transform: `translate(${dx}px, ${dy}px) scale(${s})` },
+      { transform: 'none' },
     ], { duration: MOVE_MS, easing: EASE });
+    p.anim = anim;
+    const reset = () => { if (p.anim === anim || !p.anim) p.el.style.transformOrigin = ''; };
+    anim.finished.then(reset, reset);
   }
 }
 
@@ -80,6 +87,7 @@ export function playExit(pane, stage, rect, done) {
   pane.exiting = token;
   pane.anim?.cancel();
   const st = pane.el.style;
+  st.transformOrigin = '';
   st.position = 'absolute';
   st.left = `${rect.left - s.left - stage.clientLeft}px`;
   st.top = `${rect.top - s.top - stage.clientTop}px`;

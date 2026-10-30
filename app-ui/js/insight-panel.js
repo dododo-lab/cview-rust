@@ -5,6 +5,7 @@ import { api } from './api.js';
 import { esc, safeUrl, imageSrc } from './dom.js';
 import { compactCount } from './cards.js';
 import { categoryGroups } from './pages.js';
+import { swapContent } from './motion.js';
 
 const COLLAPSE_KEY = 'cview.insights.collapsed';
 const REFRESH_MS = 60000;
@@ -273,7 +274,8 @@ export class InsightPanel {
     const seq = ++this.seq;
     try {
       const html = await provider({ isLoggedIn: this.isLoggedIn });
-      if (seq === this.seq) this.body.innerHTML = html || empty('보여 줄 인사이트가 없어요');
+      // 60초마다 다시 불러와도 패널이 다시 떠오르지 않게 — 메뉴를 바꿔 스켈레톤 위에 채울 때만 떠오른다
+      if (seq === this.seq) swapContent(this.body, html || empty('보여 줄 인사이트가 없어요'));
     } catch (e) {
       if (seq === this.seq) this.body.innerHTML = empty(`인사이트를 불러오지 못했어요 — ${e.message || e}`);
     }
