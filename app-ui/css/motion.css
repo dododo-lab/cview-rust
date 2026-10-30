@@ -90,12 +90,14 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
   .page:not([hidden]), .viewer:not([hidden]) .viewer-main, .page-body > *, .insight-panel .ip-scroll > *,
   .splash-logo *, .splash-name, .splash-bar, .splash-step, body.app-entering .app,
   .nav-item.playing .nav-label::after, .rec-btn.recording .rec-dot, .dl-fill.indeterminate, .ml-addbar-refresh.spinning svg,
-  .queue-item.active .queue-progress { animation: none !important; }
+  .queue-item.active .queue-progress, .player-osd.fade, .update-progress-bar.indeterminate i { animation: none !important; }
 }
 :root[data-motion="reduced"] :is(.spinner, .sk, .ip-skeleton span, .ip-skeleton i, .page, .viewer-main, .page-body > *, .insight-panel .ip-scroll > *, .splash-logo *, .splash-name, .splash-bar, .splash-step, .app),
 :root[data-motion="reduced"] .spinner::before, :root[data-motion="reduced"] .spinner::after,
 :root[data-motion="reduced"] .nav-item.playing .nav-label::after,
-:root[data-motion="reduced"] :is(.rec-btn.recording .rec-dot, .dl-fill.indeterminate, .ml-addbar-refresh.spinning svg, .queue-item.active .queue-progress) { animation: none !important; }
+:root[data-motion="reduced"] :is(.rec-btn.recording .rec-dot, .dl-fill.indeterminate, .ml-addbar-refresh.spinning svg, .queue-item.active .queue-progress,
+  .player-osd.fade, .update-progress-bar.indeterminate i) { animation: none !important; }
+/* OSD — 사라지는 애니메이션이 시간 0 이 되면 나타나자마자 투명해져 아예 안 보였다. 줄이면 그대로 보였다가 JS 타이머(1.3초)가 숨긴다. */
 
 /* 카드 스켈레톤 위 작은 로더 줄 */
 .loading-row { display: flex; align-items: center; gap: 10px; margin: 0 0 var(--sp-md); color: var(--text-tertiary); font-size: var(--fs-footnote); }
@@ -151,7 +153,7 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 }
 :is(.nav-item, .side-live, .queue-item, .recent-item, .ml-addrow-open, .palette-item, .quality-item, .ml-menu-item, .design-item,
     .dense-row, .channel-row, .bookmark-row, .side-widget, .ac-item):active:not(:disabled) { scale: .985; transition-duration: var(--dur-1); }
-.btn { transition-property: background, color, border-color, box-shadow, filter, transform; transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), .3s; transition-timing-function: var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-spring); }
+/* .btn 전환은 아래 "버튼 모션"이 맡는다 */
 .btn:active:not(:disabled) { transform: scale(.965); transition-duration: var(--dur-1); }
 .btn.primary:hover:not(:disabled) { box-shadow: 0 8px 22px var(--primary-glow); }
 .btn.primary:active:not(:disabled) { box-shadow: 0 3px 10px var(--primary-glow); filter: brightness(.97); }
@@ -358,6 +360,10 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 :root[data-motion="balanced"] :is(.grid, .shelf, .category-grid) > :nth-child(7) { animation-delay: 105ms; }
 :root[data-motion="balanced"] :is(.grid, .shelf, .category-grid) > :nth-child(8) { animation-delay: 120ms; }
 
+/* ── 다시 그린 목록 — 이미 보이던 내용을 갈아 끼운 것(motion.js swapContent)은 떠오르지 않는다 ── */
+.no-enter > :is(.grid, .channel-list, section), .no-enter :is(.grid, .shelf, .category-grid) > *,
+.no-enter .empty:not(.loading), .no-enter .empty:not(.loading) > .empty-logo, .ip-scroll.no-enter > * { animation: none !important; }
+
 /* ── 명령 팔레트 — 열 때만 항목이 차례로(palette.js 가 .opening 을 잠깐 단다) ── */
 .palette-scrim.opening .palette-item { animation: mo-rise .26s var(--ease-emph) both; animation-delay: calc(var(--i, 0) * 14ms + 40ms); }
 
@@ -469,7 +475,7 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
 
 /* 설정 — 톱니가 한 칸 돈다(톱니 8개라 90° 돌면 처음 모양과 같아 끝에 튀지 않는다) */
 @keyframes hm-gear { from { rotate: 0deg; } to { rotate: 90deg; } }
-.hm:is([data-route="settings"], [data-ap-route="settings"]) svg { animation: hm-gear .7s var(--ease-spring, ease-out); }
+.hm:is([data-route="settings"], [data-ap-route="settings"]) svg { animation: hm-gear .7s var(--ease-spring); }
 
 /* 사이드바 접기 — 가운데 칸막이가 접히는 방향으로 슬쩍(접힌 레일에선 펼치는 쪽으로) */
 @keyframes hm-divider { 0%, 100% { translate: 0 0; } 45% { translate: var(--hm-dx, -3px) 0; } }
@@ -607,6 +613,13 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
 /* 사진 넘기기 — 가는 쪽으로 */
 .mwi-lb-btn.prev.hm svg { --hm-dx: -3px; animation: hm-nudge .46s var(--hm-ease); }
 .mwi-lb-btn.next.hm svg { --hm-dx: 3px; animation: hm-nudge .46s var(--hm-ease); }
+
+/* ── 모션 줄이기 — transform 으로 하는 누름·호버 크기도 없앤다(위 규칙들은 scale·translate 만 없앴다 — 시간 0 이면 크기가 뚝 바뀌었다) ── */
+@media (prefers-reduced-motion: reduce) {
+  :is(.btn, .card, .category-card):active:not(:disabled), .strip-item:active .strip-ring,
+  .card:hover .thumb img, .category-card:hover .category-art img { transform: none !important; }
+}
+:root[data-motion="reduced"] :is(.btn:active, .card:active, .category-card:active, .strip-item:active .strip-ring, .card:hover .thumb img, .category-card:hover .category-art img) { transform: none !important; }
 
 /* ── 키보드 초점 — 고리가 바깥에서 조여 들며 나타난다(outline-offset·색만, 초점이 옮겨 갈 때 한 번) ── */
 @keyframes mo-focus-ring { from { outline-color: transparent; outline-offset: 6px; } }

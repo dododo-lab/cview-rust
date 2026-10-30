@@ -136,9 +136,9 @@
   background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 5%, var(--surface-popover)) 0, var(--surface-popover) 132px);
   border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   transform: translateX(calc(100% + 16px)); opacity: 0; visibility: hidden; pointer-events: none;
-  transition: transform .3s var(--ease-emph, cubic-bezier(.2, 0, 0, 1)), opacity .2s ease, visibility 0s linear .3s;
+  transition: transform .3s var(--ease-emph), opacity .2s ease, visibility 0s linear .3s;
 }
-.ml-addbar.open { transform: none; opacity: 1; visibility: visible; pointer-events: auto; transition: transform .3s var(--ease-emph, cubic-bezier(.2, 0, 0, 1)), opacity .2s ease, visibility 0s; }
+.ml-addbar.open { transform: none; opacity: 1; visibility: visible; pointer-events: auto; transition: transform .3s var(--ease-emph), opacity .2s ease, visibility 0s; }
 @media (prefers-reduced-motion: reduce) { .ml-addbar, .ml-addbar.open { transition: none; } }
 :root[data-motion="reduced"] .ml-addbar { transition: none; }
 
@@ -151,7 +151,7 @@
 .ml-addbar-refresh:disabled { cursor: default; }
 .ml-addbar-slots { flex: none; display: flex; gap: 3px; padding: 2px 14px 10px; }
 .ml-addbar-slots:empty { display: none; }
-.ml-addbar-slots i { flex: 1; height: 4px; border-radius: 2px; background: var(--surface-overlay); transition: background var(--dur-3, .26s) var(--ease-out); }
+.ml-addbar-slots i { flex: 1; height: 4px; border-radius: 2px; background: var(--surface-overlay); transition: background var(--dur-3) var(--ease-out); }
 .ml-addbar-slots i.on { background: var(--primary); }
 .ml-addbar-slots.full i.on { background: var(--accent-orange); }
 
@@ -276,7 +276,7 @@
 /* 끌기(ml-motion.js) — 든 패인은 포인터를 따라 떠 있고, 놓을 곳 위에서는 무엇이 될지(메인으로·자리 바꾸기)를 띄운다. */
 .ml-stage.ml-dragging, .ml-stage.ml-dragging * { user-select: none; cursor: grabbing !important; }
 .ml-stage.ml-dragging iframe { pointer-events: none; }
-.ml-stage .ml-pane.ml-lifted { z-index: 5; opacity: .92; box-shadow: 0 18px 48px rgba(0, 0, 0, .45); transition: box-shadow .2s var(--ease-out, ease-out); will-change: transform; }
+.ml-stage .ml-pane.ml-lifted { z-index: 5; opacity: .92; box-shadow: 0 18px 48px rgba(0, 0, 0, .45); transition: box-shadow .2s var(--ease-out); will-change: transform; }
 .ml-drop-hint { display: none; }
 .ml-pane.ml-lifted.has-drop .ml-drop-hint {
   display: block; position: absolute; left: 50%; top: 50%; translate: -50% -50%; z-index: 6; pointer-events: none;
@@ -619,7 +619,7 @@
 @media (prefers-color-scheme: light) {
   :root[data-theme="system"] .ml-pane { --ml-sel-ring: hsl(var(--ml-hue, 158) 80% 34%); }
 }
-.ml-pane::after { content: ""; position: absolute; inset: 0; z-index: 4; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 0 2px var(--ml-sel-ring); opacity: 0; transition: opacity .15s var(--ease-out, ease-out); }
+.ml-pane::after { content: ""; position: absolute; inset: 0; z-index: 4; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 0 2px var(--ml-sel-ring); opacity: 0; transition: opacity .15s var(--ease-out); }
 .ml-pane.selected::after { opacity: 1; }
 .ml-stage.ml-n1 .ml-pane::after, .ml-stage.ml-single .ml-pane::after, .page-multilive.as-watch .ml-pane::after, .ml-pane:fullscreen::after, .ml-pane.ml-lifted::after { display: none; }
 /* 영상 위 오버레이 채팅은 그림자가 영상에 번지기만 한다. */
@@ -658,7 +658,7 @@
   min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: var(--radius-md);
   border: 0; background: var(--surface-base);
   box-shadow: 0 1px 4px var(--mc-drop), 0 3px 10px -2px color-mix(in srgb, var(--mc-glow) var(--mc-glow-a), transparent);
-  transition: box-shadow .2s var(--ease-out, ease-out);
+  transition: box-shadow .2s var(--ease-out);
 }
 /* 칸도 패인처럼 선 없이 — 채널 색 그림자만, 보내는(선택) 칸은 조금 더 짙게. */
 .ml-mc-cell.selected { box-shadow: 0 1px 4px var(--mc-drop), 0 3px 12px -1px color-mix(in srgb, var(--mc-glow) var(--mc-glow-sel), transparent); }
@@ -793,8 +793,8 @@
   position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 16px; border-radius: 999px;
   font-size: 13px; font-weight: 700; color: var(--text-primary); letter-spacing: -0.1px;
   background: color-mix(in srgb, var(--text-primary) 7%, transparent); box-shadow: inset 0 0 0 1px var(--border-subtle);
-  transition: background var(--dur-2, .16s) var(--ease-out), color var(--dur-2, .16s) var(--ease-out), box-shadow var(--dur-2, .16s) var(--ease-out),
-    translate var(--dur-3, .26s) var(--ease-out), scale .32s var(--ease-spring, ease-out);
+  transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out),
+    translate var(--dur-3) var(--ease-out), scale .32s var(--ease-spring);
 }
 .mwi-btn:hover { background: color-mix(in srgb, var(--text-primary) 12%, transparent); }
 .mwi-btn svg { width: 15px; height: 15px; flex: none; }
@@ -807,7 +807,7 @@
 .mwi-hero .mwi-btn.icon { background: transparent; box-shadow: inset 0 0 0 1px var(--border); color: var(--text-secondary); }
 .mwi-hero .mwi-btn.icon:hover { color: var(--text-primary); background: color-mix(in srgb, var(--text-primary) 7%, transparent); }
 .mwi-hero .mwi-btn:hover { translate: 0 -1px; }
-.mwi-btn:active:not(:disabled) { scale: .94; translate: 0 0; transition-duration: var(--dur-1, .12s); }
+.mwi-btn:active:not(:disabled) { scale: .94; translate: 0 0; transition-duration: var(--dur-1); }
 .mwi-btn.icon { width: 36px; padding: 0; }
 .mwi-btn.ghost { background: transparent; box-shadow: none; color: var(--text-tertiary); width: 30px; height: 30px; }
 .mwi-btn.ghost:hover { color: var(--text-primary); background: color-mix(in srgb, var(--text-primary) 8%, transparent); }
@@ -817,7 +817,7 @@
 /* 탭 — 스크롤해도 무대 칸 위에 붙어 있는 유리 막대 + 미끄러지는 알약(motion.js 세그먼트 판) */
 .mwi-tabbar {
   position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 0; margin: var(--sp-lg) -2px var(--mwi-gap); padding: 8px 2px;
-  border-bottom: 1px solid transparent; transition: border-color var(--dur-2, .16s) var(--ease-out), box-shadow var(--dur-2, .16s) var(--ease-out);
+  border-bottom: 1px solid transparent; transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
   background: color-mix(in srgb, var(--deck, var(--background)) 82%, transparent);
   backdrop-filter: saturate(160%) blur(16px); -webkit-backdrop-filter: saturate(160%) blur(16px);
 }
@@ -825,7 +825,7 @@
 /* 붙은 막대 왼쪽의 작은 채널 표시 — 카드가 지나간 뒤에만 펼쳐진다 */
 .mwi-mini {
   display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 0; overflow: hidden; opacity: 0;
-  transition: max-width .3s var(--ease-emph, ease-out), opacity .2s var(--ease-out), margin .3s var(--ease-emph, ease-out);
+  transition: max-width .3s var(--ease-emph), opacity .2s var(--ease-out), margin .3s var(--ease-emph);
 }
 .mwi-tabbar.stuck .mwi-mini { max-width: 220px; opacity: 1; margin-right: 12px; }
 .mwi-mini > img, .mwi-mini > span { flex: none; width: 26px; height: 26px; border-radius: 50%; object-fit: cover; display: grid; place-items: center; background: var(--surface-overlay); font-size: 12px; font-weight: 700; }
@@ -838,10 +838,10 @@
 .mwi-count:empty { display: none; }
 .seg.active .mwi-count { color: var(--primary-text); }
 
-.mwi-body { min-width: 0; animation: content-in .28s var(--ease-emph, ease-out) both; }
+.mwi-body { min-width: 0; animation: content-in .28s var(--ease-emph) both; }
 .mwi-tail { display: flex; justify-content: center; padding: var(--sp-xl) 0 var(--sp-sm); color: var(--text-tertiary); font-size: 12px; font-weight: 600; }
 .mwi-dots { display: inline-flex; gap: 5px; }
-.mwi-dots i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: mwi-dot 1s var(--ease-out, ease-out) infinite; }
+.mwi-dots i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: mwi-dot 1s var(--ease-out) infinite; }
 .mwi-dots i:nth-child(2) { animation-delay: .15s; }
 .mwi-dots i:nth-child(3) { animation-delay: .3s; }
 @keyframes mwi-dot { 0%, 80%, 100% { opacity: .25; translate: 0 0; } 40% { opacity: 1; translate: 0 -3px; } }
@@ -871,10 +871,10 @@
 .mwi-lightbox {
   position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 48px 72px;
   background: rgba(6, 7, 9, .86); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  animation: mo-fade .18s var(--ease-out, ease-out) both;
+  animation: mo-fade .18s var(--ease-out) both;
 }
-.mwi-lightbox.closing { animation: mo-fade-out .16s var(--ease-out, ease-out) both; }
-.mwi-lightbox > img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 12px; box-shadow: 0 30px 80px rgba(0, 0, 0, .6); animation: mo-pop .24s var(--ease-emph, ease-out) both; }
+.mwi-lightbox.closing { animation: mo-fade-out .16s var(--ease-out) both; }
+.mwi-lightbox > img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 12px; box-shadow: 0 30px 80px rgba(0, 0, 0, .6); animation: mo-pop .24s var(--ease-emph) both; }
 .mwi-lb-btn { position: absolute; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; color: #fff; background: rgba(255, 255, 255, .1); transition: background .16s; }
 .mwi-lb-btn:hover { background: rgba(255, 255, 255, .2); }
 .mwi-lb-btn svg { width: 20px; height: 20px; }
@@ -904,7 +904,7 @@
 .mwi-posts { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 380px), 1fr)); gap: var(--mwi-gap); align-items: start; }
 .mwi-post {
   padding: 16px; border-radius: 18px; background: var(--surface-base); box-shadow: inset 0 0 0 1px var(--border-subtle); min-width: 0;
-  transition: box-shadow var(--dur-2, .16s) var(--ease-out), translate var(--dur-3, .24s) var(--ease-out);
+  transition: box-shadow var(--dur-2) var(--ease-out), translate var(--dur-3) var(--ease-out);
 }
 .mwi-post:hover { box-shadow: inset 0 0 0 1px var(--border), 0 12px 28px -18px rgba(0, 0, 0, .55); translate: 0 -1px; }
 .mwi-post-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
