@@ -1696,13 +1696,13 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 /* 라이트는 흰색 계열 캔버스에 옅은 회색 말풍선(2026-10-26 사용자 요청) — 하늘색 캔버스·흰 말풍선에서 바꿨다. */
 :root[data-theme="light"] .chat-skin {
   --cs-canvas: #fafbfc; --cs-surface: #eef1f5; --cs-ink: #191919; --cs-sub: #2c3640; --cs-fill: #e2e7ee; --cs-field: #eef1f5;
-  --cs-avtext: #1c2833; --cs-time: #5d6772; --cs-hover: rgba(15, 20, 30, 0.035); --cs-shadow: 0 1px 1px rgba(15, 20, 30, 0.05); --cs-pill: rgba(15, 20, 30, 0.08);
+  --cs-avtext: #1c2833; --cs-time: #5d6772; --cs-hover: rgba(15, 20, 30, 0.035); --cs-shadow: 0 0 0 1px rgba(15, 20, 30, 0.06), 0 1px 2px rgba(15, 20, 30, 0.05); --cs-pill: rgba(15, 20, 30, 0.08);
   --cs-head-mix: 3%;
 }
 @media (prefers-color-scheme: light) {
   :root[data-theme="system"] .chat-skin {
     --cs-canvas: #fafbfc; --cs-surface: #eef1f5; --cs-ink: #191919; --cs-sub: #2c3640; --cs-fill: #e2e7ee; --cs-field: #eef1f5;
-    --cs-avtext: #1c2833; --cs-time: #5d6772; --cs-hover: rgba(15, 20, 30, 0.035); --cs-shadow: 0 1px 1px rgba(15, 20, 30, 0.05); --cs-pill: rgba(15, 20, 30, 0.08);
+    --cs-avtext: #1c2833; --cs-time: #5d6772; --cs-hover: rgba(15, 20, 30, 0.035); --cs-shadow: 0 0 0 1px rgba(15, 20, 30, 0.06), 0 1px 2px rgba(15, 20, 30, 0.05); --cs-pill: rgba(15, 20, 30, 0.08);
     --cs-head-mix: 3%;
   }
 }
@@ -1795,6 +1795,37 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 /* ── 읽기 폭 (원본 ChatReadingWidthMenu) ── */
 .chat-skin[data-read-width] .chat-list > .chat-line { max-width: var(--chat-read-width); margin-left: auto; margin-right: auto; }
 .chat-skin[data-read-width] .chat-list > .chat-line.own { margin-right: 0; }
+
+/* ── 정밀 다듬기 (2026-10-30) ──
+   - 한글은 낱말 단위로 줄을 바꾼다(keep-all) — "기/다려"처럼 낱말 가운데서 끊기지 않게. 아주 긴 낱말만 아무 데서나 끊는다.
+   - 묶음 사이는 넓게(8px), 묶음 안은 촘촘하게(2px) — 누가 말했는지 덩어리로 읽힌다.
+   - 배지는 2px 간격의 한 줄, 이름과는 4px. 시간은 말풍선 아래 기준선에 맞춘다.
+   - 스트리머·나를 언급·하이라이트 말풍선은 테두리에 같은 색 옅은 틴트를 더한다.
+   - 후원·구독 카드는 보낸 사람·본문을 제목 글자 줄에 맞춰 들여 아이콘이 한 기둥이 된다. 공지도 같은 폭의 가운데 카드. */
+.chat-skin :is(.msg-row > .text, .ev-body, .ev-extra, .notice-line .text) { word-break: keep-all; overflow-wrap: anywhere; }
+.chat-skin .msg-row > .text { letter-spacing: -0.005em; }
+.chat-skin .chat-line.msg:not(.cont) { padding-top: calc(8px + var(--chat-gap-adj, 0px)); }
+.chat-skin .chat-line.msg.cont { padding-top: calc(2px + var(--chat-gap-adj, 0px) / 2); }
+:root.compact .chat-skin .chat-line.msg:not(.cont) { padding-top: calc(4px + var(--chat-gap-adj, 0px)); }
+:root.compact .chat-skin .chat-line.msg.cont { padding-top: calc(1px + var(--chat-gap-adj, 0px) / 2); }
+.chat-skin .msg-head { gap: 4px; line-height: 1.3; }
+.chat-skin .msg-head .badges { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.chat-skin .msg-head .badge { margin: 0; vertical-align: 0; }
+.chat-skin .msg-head .nick:is(.streamer, .manager, .channelManager) { font-weight: 700; }
+.chat-skin .msg-row .chat-time { margin-bottom: 2px; letter-spacing: 0; }
+.chat-skin .chat-line[data-role="streamer"] .msg-row > .text { background: color-mix(in srgb, var(--primary) 9%, var(--cs-surface)); }
+.chat-skin .chat-line.mention .msg-row > .text { background: color-mix(in srgb, var(--accent-orange) 9%, var(--cs-surface)); }
+.chat-skin .chat-line.highlighted .msg-row > .text { background: color-mix(in srgb, var(--accent-blue) 9%, var(--cs-surface)); }
+.chat-skin .chat-line.msg.own .msg-row > .text { background: var(--cs-own); }
+.chat-skin .chat-line.ev { padding: 5px 0; }
+.chat-skin .ev-card { --ev-indent: 32px; gap: 3px; padding: 10px 12px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06); }  /* 카드는 제 테두리가 있어 말풍선의 1px 선 그림자를 겹치지 않는다 */
+.chat-skin .ev-card > :not(.ev-head) { margin-left: var(--ev-indent); }
+.chat-skin .ev-from .nick { font-weight: 700; }
+.chat-skin .ev-from .chat-time { font-variant-numeric: tabular-nums; }
+.chat-skin .ev-body { line-height: 1.45; }
+.chat-skin .ev-extra { margin-top: 3px; }
+:root.compact .chat-skin .ev-card { --ev-indent: 26px; }
+.chat-skin .chat-line.notice-line { width: min(100%, 420px); margin: 8px auto; box-sizing: border-box; }
 
 /* 영상 위·그리드 오버레이에서는 캔버스를 비운다 */
 .chat-mode-overlay .chat-skin, .chat-mode-overlay .chat-skin .chat-header, .chat-mode-overlay .chat-skin .chat-input,
