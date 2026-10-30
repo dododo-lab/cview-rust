@@ -1,6 +1,7 @@
 // 사이드바 화면들 — 팔로잉 / 인기 / 검색 / 설정. 홈은 home.js.
 import { api } from './api.js';
 import { esc, safeUrl, imageSrc } from './dom.js';
+import { swapContent } from './motion.js';
 import { liveGrid, channelRow, emptyState, loadingState, compactCount, skeletonGrid, freshnessText, errorState, friendlyError, uptimeText } from './cards.js';
 import { FOLLOW_SORTS, FOLLOW_FILTERS, arrangeFollowed, followedInsights, followBadges, followAgeText, parseFollowDate, FollowExtras } from './following-info.js';
 import { vodCard } from './channel.js';
@@ -77,7 +78,7 @@ export class PopularPage {
     // 머리 설명도 지금 정렬·필터를 따른다(예전엔 '최근 시작'을 골라도 '시청자 많은 순'으로 남았다)
     const sub = this.root.querySelector('.page-subtitle');
     if (sub) sub.textContent = popularSubtitle(this.sort, this.category);
-    this.body.innerHTML = `
+    swapContent(this.body, `
       <div class="list-toolbar">
         <div class="segmented"><button class="seg${this.sort === 'viewers' ? ' active' : ''}" data-sort="viewers">시청자순</button><button class="seg${this.sort === 'recent' ? ' active' : ''}" data-sort="recent">최근 시작</button></div>
         <span class="freshness">${esc(freshnessText(this.loadedAt))}</span>
@@ -87,7 +88,7 @@ export class PopularPage {
         </div>
       </div>
       ${list.length ? liveGrid(list) : emptyState('라이브 채널이 없습니다')}
-      ${this.lives.length >= this.limit && this.limit < POPULAR_MAX ? '<button class="btn load-more" data-more>더 보기</button>' : ''}`;
+      ${this.lives.length >= this.limit && this.limit < POPULAR_MAX ? '<button class="btn load-more" data-more>더 보기</button>' : ''}`);
   }
 }
 
@@ -163,11 +164,11 @@ export class FollowingPage {
       const body = list.length
         ? (this.dense ? `<div class="dense-list">${list.map(denseRow).join('')}</div>` : liveGrid(list))
         : emptyState('라이브 채널이 없습니다', '팔로우한 채널 중 방송 중인 채널이 없습니다');
-      this.body.innerHTML = `
+      swapContent(this.body, `
         ${followingInsights(this.lives, list)}
         <div class="list-toolbar">${tabs}${sortSeg}<button class="btn ghost" data-dense>${this.dense ? '격자 보기' : '간결 보기'}</button>
           <div class="chips"><button class="chip${this.category === '' ? ' active' : ''}" data-cat="">전체 ${this.lives.length}</button>${cats.map((c) => `<button class="chip${this.category === c.name ? ' active' : ''}" data-cat="${esc(c.name)}">${esc(c.name)} <span class="chip-count">${c.count}</span></button>`).join('')}</div>
-        </div>${body}`;
+        </div>${body}`);
       return;
     }
     const n = (id) => (id === 'all' ? this.channels.length
@@ -178,10 +179,10 @@ export class FollowingPage {
     const hasDates = this.channels.some((c) => c.followDate);
     const sortSeg = `<div class="segmented">${FOLLOW_SORTS.filter((o) => hasDates || (o.id !== 'newest' && o.id !== 'oldest')).map((o) => `<button class="seg${this.allSort === o.id ? ' active' : ''}" data-fsort="${o.id}">${o.label}</button>`).join('')}</div>`;
     const chips = `<div class="chips">${FOLLOW_FILTERS.filter((f) => hasNotify || f.id !== 'notify').map((f) => `<button class="chip${this.allFilter === f.id ? ' active' : ''}" data-ffilter="${f.id}">${f.label} <span class="chip-count">${n(f.id)}</span></button>`).join('')}</div>`;
-    this.body.innerHTML = `
+    swapContent(this.body, `
       ${followedInsights(this.channels)}
       <div class="list-toolbar">${tabs}${sortSeg}<input type="search" class="follow-find" data-fquery placeholder="채널 이름 찾기" value="${esc(this.allQuery)}" aria-label="팔로우한 채널 이름 찾기">${chips}</div>
-      <div class="follow-all"></div>`;
+      <div class="follow-all"></div>`);
     this.renderAllList();
   }
 

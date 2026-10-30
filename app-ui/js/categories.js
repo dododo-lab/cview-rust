@@ -5,6 +5,7 @@ import { esc, safeUrl, imageSrc } from './dom.js';
 import { liveGrid, emptyState, loadingState, compactCount, skeletonGrid, errorState } from './cards.js';
 import { categoryGroups, arrangeLives } from './pages.js';
 import { refreshIcon } from './page-header.js';
+import { swapContent } from './motion.js';
 
 export const categoryIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="8" height="8" rx="2.5"/><rect x="13" y="3" width="8" height="8" rx="2.5" opacity=".6"/><rect x="3" y="13" width="8" height="8" rx="2.5" opacity=".6"/><rect x="13" y="13" width="8" height="8" rx="2.5"/></svg>';
 const PIN_KEY = 'cview.pinnedCategories';
@@ -71,16 +72,20 @@ export class CategoriesPage {
   }
 
   render() {
+    // 목록 ↔ 한 카테고리를 오갈 때만 떠오르고, 같은 화면을 다시 그릴 때(자동 새로고침·고정)는 그대로
+    const view = this.category || '';
+    const enter = view !== this.view;
+    this.view = view;
     if (this.category) {
       const list = arrangeLives(this.lives, { category: this.category });
       this.sub.textContent = `${this.category} · 라이브 ${list.length}개`;
-      this.body.innerHTML = `<button class="back-btn" data-cat-back>‹ 모든 카테고리</button>${list.length ? liveGrid(list) : emptyState('지금 이 카테고리 방송이 없습니다')}`;
+      swapContent(this.body, `<button class="back-btn" data-cat-back>‹ 모든 카테고리</button>${list.length ? liveGrid(list) : emptyState('지금 이 카테고리 방송이 없습니다')}`, enter);
       return;
     }
     const pins = new Set(pinned());
     const groups = categoryGroups(this.lives).sort((a, b) => (pins.has(b.name) - pins.has(a.name)) || (b.viewers - a.viewers));
     this.sub.textContent = `지금 방송 중인 카테고리 ${groups.length}개 · 상위 라이브 ${this.lives.length}개 기준`;
-    this.body.innerHTML = groups.length ? `<div class="category-grid">${groups.map((g) => {
+    swapContent(this.body, groups.length ? `<div class="category-grid">${groups.map((g) => {
       const thumb = safeUrl(g.thumb);
       const on = pins.has(g.name);
       // 고정 별은 카드(상세로 이동)와 형제인 독립 단추 — 안에 두면 초점을 받지 못하고 Enter 가 상세로 갔다
@@ -91,6 +96,6 @@ export class CategoriesPage {
         </button>
         <button class="category-pin${on ? ' on' : ''}" data-pin="${esc(g.name)}" aria-pressed="${on}" aria-label="${esc(g.name)} ${on ? '고정 해제' : '위에 고정'}" title="${on ? '고정 해제' : '위에 고정'}">★</button>
       </div>`;
-    }).join('')}</div>` : emptyState('카테고리가 없습니다');
+    }).join('')}</div>` : emptyState('카테고리가 없습니다'), enter);
   }
 }

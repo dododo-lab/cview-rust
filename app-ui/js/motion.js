@@ -6,18 +6,24 @@
 //   다시 그릴 때 한 프레임 깜박이지 않게.
 const FADE_SCOPE = '.thumb, .queue-thumb, .hero-media, .ml-addrow-thumb, .bookmark-thumb, .category-art, .ml-pick-thumb';
 
+// 썸네일 자리 밖의 그림(채팅 이모티콘·배지·아바타)은 건드리지 않는다 — 채팅 줄마다 class 를 바꿔
+// 스타일을 다시 계산하고 다른 관찰자(세그먼트 판)까지 깨웠다.
 function mark(img) {
-  if (img.complete) img.classList.add('is-loaded');
+  if (img.complete && img.closest(FADE_SCOPE)) img.classList.add('is-loaded');
 }
 
 function scan(node) {
   if (node.nodeType !== 1) return;
   if (node.tagName === 'IMG') { mark(node); return; }
-  if (node.firstElementChild) for (const img of node.getElementsByTagName('img')) mark(img);
+  if (!node.firstElementChild || !(node.closest(FADE_SCOPE) || node.querySelector(FADE_SCOPE))) return;
+  for (const img of node.getElementsByTagName('img')) mark(img);
 }
 
 export function installImageFade(root = document) {
-  const done = (e) => { if (e.target instanceof HTMLImageElement) e.target.classList.add('is-loaded'); };
+  const done = (e) => {
+    const img = e.target;
+    if (img instanceof HTMLImageElement && img.closest(FADE_SCOPE)) img.classList.add('is-loaded');
+  };
   root.addEventListener('load', done, true);
   root.addEventListener('error', done, true);
   new MutationObserver((records) => {
@@ -32,6 +38,17 @@ export function installImageFade(root = document) {
     }
   }).observe(root.documentElement || root, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });
   for (const img of document.images) mark(img);
+}
+
+/**
+ * 목록 내용 갈아 끼우기 — 처음 불러온 내용(스켈레톤·로딩 자리 위)만 떠오르고, 이미 보이던 내용을 다시 그릴 때
+ * (자동 새로고침·정렬·필터)는 등장 모션을 끈다(.no-enter, motion.css). 1분마다 목록 전체가 다시 떠오르며 깜박였다.
+ * 다른 내용으로 들어가는 것(카테고리 → 그 카테고리 방송)은 enter 로 떠오르게 한다.
+ */
+export function swapContent(el, html, enter = false) {
+  const settled = !enter && el.childElementCount > 0 && !el.querySelector('.sk, .ip-skeleton, .empty.loading');
+  el.classList.toggle('no-enter', settled);
+  el.innerHTML = html;
 }
 
 /** 모션을 줄였는가 — 설정 "절약" 또는 시스템 설정. */
@@ -55,9 +72,13 @@ export function refreshSegmentGliders() { replaceDirtyGliders(); }
 export function installSegmentGlider() {
   const tracked = new WeakSet();
   const dirty = new Set();
+  const seen = new WeakSet();
   const ro = new ResizeObserver((entries) => {
     for (const e of entries) {
       if (!e.target.isConnected) { ro.unobserve(e.target); dirty.delete(e.target); continue; }
+      // 관찰을 시작하면 크기가 그대로여도 한 번 불린다 — track() 이 이미 놓았으니 건너뛴다
+      // (넘겨받은 판이 미끄러지는 중에 instant 로 끝 자리에 뚝 놓지 않게).
+      if (!seen.has(e.target)) { seen.add(e.target); continue; }
       place(e.target, false);
     }
   });
@@ -73,6 +94,18 @@ export function installSegmentGlider() {
       place(box, false);
     }
   };
+  // 목록을 통째로 다시 그리면(innerHTML — 인기·팔로잉의 정렬 바꾸기) 세그먼트도 새 요소라 판이 새 칸에 뚝 놓였다.
+  // 사라진 세그먼트의 판 자리를 (화면·칸 이름으로) 기억해 두고, 같은 MutationObserver 묶음에서 새로 생긴 세그먼트는 거기서 미끄러진다.
+  const handoff = new Map();
+  const sigOf = (box, page) => `${page}#${[...box.querySelectorAll(':scope > .seg')].map((b) => b.textContent.trim()).join('|')}`;
+  function remember(node, page) {
+    if (node.nodeType !== 1) return;
+    const boxes = node.classList.contains('segmented') ? [node] : node.getElementsByClassName('segmented');
+    for (const box of boxes) {
+      const g = box.querySelector(':scope > .seg-glider');
+      if (g && g.style.opacity === '1') handoff.set(sigOf(box, page), { translate: g.style.translate, width: g.style.width, height: g.style.height });
+    }
+  }
   function place(box, animate = true) {
     const active = box.querySelector(':scope > .seg.active');
     let g = box.querySelector(':scope > .seg-glider');
@@ -90,6 +123,14 @@ export function installSegmentGlider() {
       g.setAttribute('aria-hidden', 'true');
       box.prepend(g);
       animate = false;
+      const from = handoff.size ? handoff.get(sigOf(box, box.closest('[data-page]')?.dataset.page || '')) : null;
+      if (from && !motionReduced()) {
+        g.classList.add('instant');
+        Object.assign(g.style, from, { opacity: '1' });
+        void g.offsetWidth; // 옛 자리를 먼저 그려 두어야 아래 새 자리로 전환이 걸린다
+        g.classList.remove('instant');
+        animate = true;
+      }
     }
     const instant = !animate || g.style.opacity === '0' || motionReduced();
     if (instant) g.classList.add('instant');
@@ -109,6 +150,13 @@ export function installSegmentGlider() {
     for (const b of node.getElementsByClassName('segmented')) track(b);
   }
   new MutationObserver((records) => {
+    handoff.clear();
+    for (const r of records) {
+      if (r.type === 'childList' && r.removedNodes.length) {
+        const page = r.target.closest?.('[data-page]')?.dataset.page || '';
+        for (const n of r.removedNodes) remember(n, page);
+      }
+    }
     for (const r of records) {
       if (r.type === 'attributes') {
         const box = r.target.parentElement;
@@ -117,10 +165,12 @@ export function installSegmentGlider() {
         }
       } else {
         const box = r.target.classList?.contains('segmented') ? r.target : null;
-        if (box) track(box);
+        // 판을 넣은 것(place 의 prepend)은 건너뛴다 — 다시 놓으면 instant 로 넘겨받은 미끄러짐이 끊긴다
+        if (box && [...r.addedNodes, ...r.removedNodes].some((n) => !n.classList?.contains('seg-glider'))) track(box);
         for (const n of r.addedNodes) scan(n);
       }
     }
+    handoff.clear();
   }).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class'] });
   scan(document.body);
 }

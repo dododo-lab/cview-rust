@@ -6,7 +6,7 @@ import { esc, safeUrl, icons, imageSrc } from './dom.js';
 import { liveCard, emptyState, errorState, friendlyError, liveGrid, recentChannels, uptimeText, compactCount } from './cards.js';
 import { clipCard } from './channel.js';
 import { continueCard } from './media.js';
-import { motionReduced } from './motion.js';
+import { motionReduced, swapContent } from './motion.js';
 
 const HERO_SIZE = 5;
 // 자동 넘김 — 대기열 진행 막대(CSS `queue-progress`, 7초)가 끝나면 다음 장으로. 호버 중엔 CSS 가 멈춘다.
@@ -291,7 +291,7 @@ export class HomePage {
     }
     html += '<section class="home-section" data-rail="clips" hidden></section>';
     html += '</div>';
-    this.body.innerHTML = html;
+    swapContent(this.body, html);
   }
 
   /** 이어 보기·인기 클립 레일 — 첫 화면을 막지 않게 나중에 채운다 (NAV-14). */
