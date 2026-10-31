@@ -10,6 +10,7 @@ import { PlayerPanel } from './player-panel.js';
 import { ViewerExtras } from './viewer-extras.js';
 import { uptimeText, compactCount } from './cards.js';
 import { noteConnectorLimit } from './live-connector.js';
+import { playPreroll, cancelPreroll } from './ads.js';
 
 const PHASE_TEXT = {
   idle: '',
@@ -170,6 +171,7 @@ export class Viewer {
 
   async open(channelId, settings) {
     const token = ++this.startToken;
+    if (channelId !== this.channelId) this.cancelAd();
     this.channelId = channelId;
     // 성능 수집기가 player.net(채널 앞 6자)과 맞춘다
     const frame = document.getElementById('player-frame');
@@ -216,6 +218,7 @@ export class Viewer {
    */
   async close({ silent = false } = {}) {
     const token = ++this.startToken;
+    this.cancelAd();
     this.root.hidden = true;
     this.channelId = null;
     clearInterval(this.uptimeTimer);
@@ -223,6 +226,16 @@ export class Viewer {
     this.showOverlay('');
     await Promise.allSettled([api.playerStop(), this.chat.disconnect()]);
     if (!silent && token === this.startToken && this.onClose) this.onClose();
+  }
+
+  /** 새로 연 방송의 프리롤 — 영상 영역 안에만 띄우고, 그동안 이 플레이어 소리를 막는다(기다리지 않는다). */
+  playAd(channelId) {
+    const host = this.root.querySelector('.player-stage');
+    playPreroll('live', channelId, { host, player: this.player, target: 'viewer' }).catch(() => {});
+  }
+
+  cancelAd() {
+    cancelPreroll(this.root.querySelector('.player-stage'));
   }
 
   setMuted(muted) {

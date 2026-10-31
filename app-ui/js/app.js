@@ -4,7 +4,7 @@ import { toast, icons } from './dom.js';
 import { showShortcuts, showAbout, showUpdateCheck } from './app-sheets.js';
 import { installImageFade, installSegmentGlider, refreshSegmentGliders, installMicroMotion } from './motion.js';
 import { installHoverPreview } from './hover-preview.js';
-import { playPreroll, setAdAudioHooks } from './ads.js';
+import { setAdAudioHooks } from './ads.js';
 import { noteConnectorLimit } from './live-connector.js';
 import { bindCardOpen } from './cards.js';
 import { FollowingPage, PopularPage, SearchPage } from './pages.js';
@@ -107,13 +107,14 @@ function setAudioOwner(owner) {
 }
 
 // 광고가 나오는 동안은 보던 방송 소리를 잠시 끄고, 끝나면 소리 주인 규칙대로 되돌린다.
+// 광고가 나오는 영상 영역(target)의 소리는 ads.js 가 그 플레이어에서 따로 막는다 — 시청 화면 광고면 시청 화면은 건드리지 않는다.
 setAdAudioHooks({
-  hold() {
-    viewer.suspendAudio(true);
+  hold(target) {
+    if (target !== 'viewer') viewer.suspendAudio(true);
     api.multiLiveSetAudioSuspended(true).catch(() => {});
   },
-  release() {
-    viewer.suspendAudio(audioOwner === 'multilive');
+  release(target) {
+    if (target !== 'viewer') viewer.suspendAudio(audioOwner === 'multilive');
     api.multiLiveSetAudioSuspended(audioOwner === 'live').catch(() => {});
   },
 });
@@ -378,7 +379,7 @@ function oldestBrowsed() {
 }
 async function openChannel(channelId) {
   if (AUX || !pages.multilive) {
-    if (await playPreroll('live', channelId)) await openInViewer(channelId);
+    await openInViewer(channelId, { ad: true });
     return;
   }
   pendingWatch++;
@@ -388,15 +389,14 @@ async function openChannelWatch(channelId) {
   // 이미 멀티라이브에 있는 채널 — 같은 플레이어를 라이브 무대로(원본 commitExistingWatch).
   const existing = multiLiveSessionFor(channelId);
   if (existing) { await enterWatch(existing.id); return; }
-  // 새로 여는 방송 — 치트키가 없으면 치지직처럼 프리롤 광고를 먼저 본다(다른 방송을 열어 밀려나면 그만).
-  if (!(await playPreroll('live', channelId))) return;
+  // 새로 여는 방송 — 치트키가 없으면 치지직처럼 프리롤 광고를 그 영상 영역 안에서 먼저 본다(무대에 올린 뒤).
   noteConnectorLimit();
   const st = pages.multilive.state;
   // 라이브 단독 보기 상한 — 멀티라이브 상한과 따로다(지금 보기가 멀티라이브여도 라이브로 여는 추가는 이쪽).
   if ((st.canAddLive ?? st.canAdd) === false) {
     // 가득 참 — 가장 오래전에 둘러본 채널을 먼저 빼고, 없으면(모두 직접 넣은 채널) 예전 시청 화면으로
     const prev = oldestBrowsed();
-    if (!prev) { await openInViewer(channelId); return; }
+    if (!prev) { await openInViewer(channelId, { ad: true }); return; }
     browsedWatch.delete(prev);
     await pages.multilive.run(api.multiLiveRemove(prev));
   }
@@ -405,10 +405,11 @@ async function openChannelWatch(channelId) {
   if (!s) return; // 추가 실패 — run 이 이미 알렸다
   browsedWatch.set(s.id, channelId);
   await enterWatch(s.id);
+  pages.multilive.playPaneAd(channelId);
 }
 
 /** 예전 시청 화면으로 — 보조 플레이어 창, 멀티라이브가 가득 찼을 때. */
-async function openInViewer(channelId) {
+async function openInViewer(channelId, { ad = false } = {}) {
   if (isWatching()) await exitWatch();
   let player = null;
   try {
@@ -417,6 +418,8 @@ async function openInViewer(channelId) {
   viewer.open(channelId, player);
   syncLiveIndicators();
   audioOwner = null;
+  // 새로 여는 방송의 프리롤은 시청 화면 영상 영역 안에만 — 끝날 때까지 기다리지 않는다.
+  if (ad) viewer.playAd(channelId);
   await navigate('live');
 }
 
