@@ -1,0 +1,65 @@
+name: 버그 제보
+description: 앱이 예상과 다르게 동작할 때
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        제보해 주셔서 고맙습니다. 보안 문제는 이 양식 대신 SECURITY.md의 비공개 제보를 이용해 주세요.
+  - type: input
+    id: version
+    attributes:
+      label: 앱 버전
+      description: 설정 또는 메뉴의 앱 정보에서 확인할 수 있습니다.
+      placeholder: 예) 0.1.58
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: 운영체제
+      options:
+        - macOS (Apple Silicon)
+        - Windows (x64)
+    validations:
+      required: true
+  - type: input
+    id: os-version
+    attributes:
+      label: 운영체제 버전
+      placeholder: 예) macOS 15.1, Windows 11 24H2
+  - type: dropdown
+    id: area
+    attributes:
+      label: 문제가 생긴 곳
+      options:
+        - 홈·둘러보기(팔로잉·인기·카테고리·검색)
+        - 라이브 시청
+        - 멀티라이브
+        - 채팅·후원
+        - 다시보기·클립·보관함
+        - 통계·설정
+        - 로그인
+        - 업데이트·설치
+        - 기타
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 무슨 일이 있었나요?
+      description: 기대한 동작과 실제 동작을 적어 주세요. 스크린샷이나 화면 녹화가 있으면 붙여 주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 재현 순서
+      placeholder: |
+        1. 멀티라이브에 채널 3개를 추가
+        2. 포커스 배치로 전환
+        3. ...
+  - type: textarea
+    id: logs
+    attributes:
+      label: 로그 (선택)
+      description: 터미널에서 실행했다면 관련 로그를 붙여 주세요. 쿠키·토큰 같은 개인 정보는 지워 주세요.
+      render: text
