@@ -6,6 +6,8 @@
 //! 2. 라이브 상세의 `skipPreRollAd`·`liveConnecting` 이면 광고 없음.
 //! 3. 광고 노출 API(`seoraksan`)가 프리롤을 끄면 광고 없음 — 서버가 계정 혜택을 함께 본다.
 //! 4. 네이버 GFP 일정·워터폴에서 재생할 광고 후보를 받는다. 재생과 추적은 화면(`ads.js`)이 VAST 로 맡는다.
+//!
+//! 광고는 Windows 판에서만 낸다 — macOS 판은 광고 없이 바로 재생한다(`ADS_ENABLED`).
 
 use cview_networking::client_ads::{AdCandidate, AdContentKind};
 use serde::Serialize;
@@ -14,6 +16,9 @@ use tauri::State;
 use super::{CmdResult, CommandError};
 use crate::live_connector::{self, ConnectorStatus};
 use crate::state::AppServices;
+
+/// 이 판에서 프리롤 광고를 내는가 — Windows 판만.
+const ADS_ENABLED: bool = cfg!(target_os = "windows");
 
 /// 치트키 구매 안내(네이버 게임 프로필의 치트키 탭).
 pub const CHEAT_KEY_URL: &str = "https://game.naver.com/profile#cheat_key";
@@ -43,6 +48,9 @@ pub async fn ad_preroll(
     id: String,
 ) -> CmdResult<Option<AdPrerollDto>> {
     let kind = parse_kind(&kind)?;
+    if !ADS_ENABLED {
+        return Ok(None);
+    }
     let api = &services.api;
     // 셋 다 서로 기다릴 필요가 없다 — 노출 여부의 pgId 는 라이브면 채널 ID, 다시보기면 videoNo(= id).
     let (ctx, flags, viewer) = tokio::join!(
