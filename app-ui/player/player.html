@@ -202,6 +202,7 @@ const _pendingPlaybackDiagnostics = [];
 let currentProfile = 'lowLatency'; // ultraLow | lowLatency | mirror | webParity
 let _pendingVolume = 1.0;   // 자동재생 성공 후 복원할 볼륨
 let _pendingMuted = false;   // 자동재생 성공 후 복원할 음소거 상태
+let _adHold = false;         // 이 영상 영역 위에 광고가 나오는 동안 방송 소리를 막는다(앱 ads.js)
 let _wantsPlayingBeforeSuspend = false;
 let _deferredFatalRecoveryAction = null;
 
@@ -415,9 +416,9 @@ function confirmRenderedFrame(generation, ownerHls) {
     noteFirstFrameSeen();
     _wantsPlaying = true;
     _pausedWhileWantingPlayAt = 0;
-    video.muted = _pendingMuted;
+    video.muted = _adHold || _pendingMuted;
     video.volume = _pendingVolume;
-    postToSwift('playStarted', { muted: video.muted, volume: video.volume });
+    postToSwift('playStarted', { muted: _pendingMuted, volume: video.volume });
 }
 // [HIDDEN-FRAME 2026-10-29] 앱은 패인·단독 보기를 `hidden` 속성(display:none)으로 숨긴다. 그때
 //   `document.hidden` 은 거짓이지만 iframe 이 렌더되지 않아 rVFC 가 오지 않는다 — 가림과 같이 다룬다.
@@ -2433,7 +2434,12 @@ function setVolume(vol) {
 }
 function setMuted(muted) {
     _pendingMuted = !!muted;
-    video.muted = _pendingMuted;
+    video.muted = _adHold || _pendingMuted;
+}
+// 광고 동안 소리 막기 — 음소거 의도(_pendingMuted)는 그대로 두고, 풀면 그 의도로 돌아간다.
+function setAdHold(on) {
+    _adHold = !!on;
+    if (_firstPlayDone || _adHold) video.muted = _adHold || _pendingMuted;
 }
 function setRate(rate) {
     if (!Number.isFinite(rate) || !(rate > 0)) return;

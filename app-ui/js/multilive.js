@@ -6,7 +6,7 @@
 // - 슬롯 명령(`multilive://command`)은 패인 iframe 이 생기기 전에 올 수 있어 슬롯별로 줄 세운다.
 // - 패인을 누르면 선택 — 오디오·채팅·고화질이 그 패인을 따라간다.
 import { api, listen, listenHere, Events } from './api.js';
-import { playPreroll } from './ads.js';
+import { playPreroll, cancelPreroll } from './ads.js';
 import { noteConnectorLimit } from './live-connector.js';
 import { setPicture, setSharpenDefault } from './picture.js';
 import { esc, safeUrl, toast, imageSrc, streamEndedArt, dismiss, hideWithExit } from './dom.js';
@@ -365,7 +365,7 @@ export class MultiLivePage {
   reviveExiting(pane) {
     if (!pane.exiting) return;
     cancelExit(pane);
-    pane.bridge.run('try { video.muted = _pendingMuted; } catch (e) {}');
+    pane.bridge.run('try { video.muted = _adHold || _pendingMuted; } catch (e) {}');
   }
 
   ensurePane(slot) {
@@ -501,6 +501,7 @@ export class MultiLivePage {
       const pane = this.ensurePane(s.slot);
       this.reviveExiting(pane); // 사라지는 중에 같은 슬롯이 다시 쓰이면 되돌린다
       if (pane.sessionId !== s.id) {
+        if (pane.sessionId) cancelPreroll(pane.el); // 앞 채널의 광고
         const used = [...this.panes.values()].filter((p) => p !== pane && p.sessionId && p.hue != null).map((p) => p.hue);
         pane.hue = pickTintHue(used);
         pane.el.style.setProperty('--ml-hue', String(pane.hue));
@@ -520,6 +521,7 @@ export class MultiLivePage {
     for (const [slot, pane] of this.panes) {
       if (live.has(slot) || pane.exiting) continue;
       // 닫힌 패인 — 숨기기만 하면 iframe 이 MediaSource 버퍼를 계속 쥔다(모두 닫은 뒤 RSS 3GB대).
+      cancelPreroll(pane.el);
       const release = () => {
         pane.bridge.run('try { stop(); video.removeAttribute("src"); video.load(); } catch (e) {}');
         pane.el.hidden = true;
@@ -1078,9 +1080,8 @@ export class MultiLivePage {
    */
   async add(channelId, { quiet = false, select = false, live = false, ad = true } = {}) {
     if (!channelId) return false;
-    // 새 채널은 치트키가 없으면 치지직처럼 프리롤 광고를 먼저 본다(이미 연 쪽에서 봤으면 ad: false).
+    // 새 채널은 치트키가 없으면 치지직처럼 프리롤 광고를 그 패인 안에서 본다(이미 연 쪽에서 띄우면 ad: false).
     const present = (this.state?.sessions || []).some((x) => x.channelId === channelId);
-    if (ad && !present && !(await playPreroll('live', channelId))) return false;
     if (ad && !present) noteConnectorLimit();
     if (!quiet) toast('멀티라이브에 추가하는 중…', 1500);
     this.addHold = select ? channelId : null;
@@ -1092,12 +1093,24 @@ export class MultiLivePage {
       }
       this.addHold = null;
       this.render(state);
+      if (ad && !present && s) this.playPaneAd(channelId);
       return Boolean(s);
     } catch (e) {
       this.addHold = null;
       toast(e.message);
       return false;
     }
+  }
+
+  /**
+   * 새로 넣은 채널의 프리롤 — 그 패인 영상 영역 안에만 띄우고 다른 패인은 그대로 둔다. 광고 동안 이 패인 소리는 막고
+   * 끝나면 풀린다. 패인이 닫히거나 다른 채널이 그 자리를 쓰면 그만둔다(기다리지 않는다).
+   */
+  playPaneAd(channelId) {
+    const s = (this.state?.sessions || []).find((x) => x.channelId === channelId);
+    const pane = s && [...this.panes.values()].find((p) => p.sessionId === s.id);
+    if (!pane) return;
+    playPreroll('live', channelId, { host: pane.el, player: pane.bridge, target: 'pane' }).catch(() => {});
   }
 
   /** 추가하고 선택 — 포커스 배치면 메인 패인이 된다(select 가 메인으로 올린다). */

@@ -10,7 +10,6 @@ const MAX_WRAPPERS = 5;
 const VIEWABLE_SEC = 2;
 const MEDIA_TYPES = ['video/mp4', 'video/webm'];
 
-let active = null;
 let audioHooks = { hold() {}, release() {} };
 
 /** 광고 동안 보던 방송 소리를 끄고 되살리는 훅(app.js 가 소리 주인 규칙으로 건다). */
@@ -125,11 +124,12 @@ function formatRemain(sec) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-/** 광고 화면. 끝나면(완료·건너뛰기·실패·취소) resolve. */
+/** 광고 화면. */
 class AdOverlay {
-  constructor(cheatKeyUrl, onClose) {
+  /** host 가 있으면 그 영상 영역 안에만, 없으면(다시보기) 창 전체에 띄운다. */
+  constructor(cheatKeyUrl, host = null) {
     this.root = document.createElement('div');
-    this.root.className = 'ad-overlay';
+    this.root.className = host ? 'ad-overlay in-host' : 'ad-overlay';
     this.root.setAttribute('role', 'dialog');
     this.root.setAttribute('aria-label', '광고');
     this.root.innerHTML = `
@@ -138,8 +138,6 @@ class AdOverlay {
         <div class="ad-top">
           <span class="ad-badge">광고</span><span class="ad-remain"></span>
           <span class="ad-count" hidden></span>
-          <span class="grow"></span>
-          <button class="ad-close" title="광고를 닫고 재생하지 않기" aria-label="광고를 닫고 재생하지 않기">✕</button>
         </div>
         <div class="ad-bottom">
           <button class="ad-btn ad-more" hidden>자세히 보기</button>
@@ -155,12 +153,11 @@ class AdOverlay {
     this.skip = this.root.querySelector('.ad-skip');
     this.more = this.root.querySelector('.ad-more');
     this.unmute = this.root.querySelector('.ad-unmute');
-    this.root.querySelector('.ad-close').addEventListener('click', onClose);
     this.root.querySelector('.ad-cheat').addEventListener('click', (e) => {
       e.preventDefault();
       api.openExternal(cheatKeyUrl).catch(() => {});
     });
-    document.body.append(this.root);
+    (host || document.body).append(this.root);
     requestAnimationFrame(() => this.root.classList.add('shown'));
   }
 
@@ -298,14 +295,37 @@ function playOne(ui, candidate, vast, session) {
   });
 }
 
+// 광고 소리를 듣는 동안 보던 방송 소리를 끈다 — 패인 광고가 겹쳐도 한 번만 끄고, 모두 끝나면 되살린다.
+let audioHeld = 0;
+function holdAudio(target) {
+  if (audioHeld++ === 0) audioHooks.hold(target);
+}
+function releaseAudio(target) {
+  if (--audioHeld === 0) audioHooks.release(target);
+}
+
+/** 영상 영역이 지금 화면에 보이는가(다른 메뉴로 가면 숨는다). */
+function hostVisible(host) {
+  return host.isConnected && host.getClientRects().length > 0 && !document.hidden;
+}
+
+// 창 전체 광고(다시보기)는 하나만, 영상 영역 광고는 영역마다 하나씩.
+let active = null;
+const hostSessions = new Map();
+
 /**
- * 재생 전 프리롤. 광고가 끝나면(또는 없으면) true. 광고 창을 닫았거나 다른 광고 요청에 밀려나면 false —
- * 그때 호출한 쪽은 재생하지 않는다.
+ * 재생 전 프리롤. 광고가 끝나면(또는 없으면) true. 다른 광고 요청에 밀려나거나 화면을 떠나 그만두면 false.
+ *
+ * - host 없음(다시보기): 창 전체에 띄우고, 끝난 뒤 호출한 쪽이 재생을 시작한다.
+ * - host 있음(라이브·멀티라이브): 이미 재생을 시작한 그 영상 영역 안에만 띄운다. 그동안 `player`(그 영역의
+ *   플레이어 브리지)의 소리를 막아 두고, 광고가 끝나면 풀어 방송 소리가 이어진다.
  * @param {'live'|'vod'} kind
  * @param {string|number} id 라이브는 채널 ID, 다시보기는 videoNo
+ * @param {{ host?: HTMLElement|null, player?: { exec(script: string): void }|null, target?: string }} [options]
  */
-export async function playPreroll(kind, id) {
-  if (active) active.cancel();
+export async function playPreroll(kind, id, { host = null, player = null, target = 'pane' } = {}) {
+  const previous = host ? hostSessions.get(host) : active;
+  if (previous) previous.cancel();
   const session = { cancelled: false, cancel: null };
   const handle = {
     cancel() {
@@ -313,44 +333,61 @@ export async function playPreroll(kind, id) {
       if (session.cancel) session.cancel();
     },
   };
-  active = handle;
+  if (host) hostSessions.set(host, handle); else active = handle;
+  // 영상 영역 광고는 광고 계획을 받는 동안에도 방송 소리를 막는다(받고 나서 막으면 잠깐 들린다).
+  if (player) player.exec('setAdHold(true)');
+  let ui = null;
+  let watch = null;
+  let held = false;
   try {
     const plan = await fetchPlan(kind, id);
     if (session.cancelled) return false;
     const slots = (plan && plan.slots) || [];
     if (!slots.length) return true;
-    const ui = new AdOverlay(plan.cheatKeyUrl, () => handle.cancel());
-    audioHooks.hold();
-    try {
-      for (let i = 0; i < slots.length; i++) {
-        ui.setCount(i, slots.length);
-        for (const candidate of slots[i]) {
-          if (session.cancelled) return false;
-          let vast;
-          try {
-            vast = await resolveVast(candidate);
-          } catch (e) {
-            track(((e && e.errors) || []).map((u) => withMacros(u, e.error)));
-            track(candidate.tracking && candidate.tracking.loadErrors);
-            continue;
-          }
-          if (session.cancelled) return false;
-          const result = await playOne(ui, candidate, vast, session);
-          if (result === 'cancelled') return false;
-          if (result === 'done') break;
+    if (host && !host.isConnected) return false;
+    ui = new AdOverlay(plan.cheatKeyUrl, host);
+    holdAudio(host ? target : null);
+    held = true;
+    if (host) {
+      // 영역이 사라지면 그만두고, 다른 메뉴로 가서 숨으면 멈췄다가 돌아오면 이어 튼다.
+      let pausedHidden = false;
+      watch = setInterval(() => {
+        if (!host.isConnected) { handle.cancel(); return; }
+        const visible = hostVisible(host);
+        if (!visible && !ui.video.paused) { pausedHidden = true; ui.video.pause(); }
+        else if (visible && pausedHidden) { pausedHidden = false; ui.video.play().catch(() => {}); }
+      }, 500);
+    }
+    for (let i = 0; i < slots.length; i++) {
+      ui.setCount(i, slots.length);
+      for (const candidate of slots[i]) {
+        if (session.cancelled) return false;
+        let vast;
+        try {
+          vast = await resolveVast(candidate);
+        } catch (e) {
+          track(((e && e.errors) || []).map((u) => withMacros(u, e.error)));
+          track(candidate.tracking && candidate.tracking.loadErrors);
+          continue;
         }
+        if (session.cancelled) return false;
+        const result = await playOne(ui, candidate, vast, session);
+        if (result === 'cancelled') return false;
+        if (result === 'done') break;
       }
-    } finally {
-      ui.remove();
-      audioHooks.release();
     }
     return !session.cancelled;
   } finally {
-    if (active === handle) active = null;
+    if (watch) clearInterval(watch);
+    if (ui) ui.remove();
+    if (player) player.exec('setAdHold(false)');
+    if (held) releaseAudio(host ? target : null);
+    if (host) { if (hostSessions.get(host) === handle) hostSessions.delete(host); } else if (active === handle) active = null;
   }
 }
 
-/** 보고 있던 광고를 그만둔다(화면을 떠날 때). */
-export function cancelPreroll() {
-  if (active) active.cancel();
+/** 보고 있던 광고를 그만둔다 — host 를 주면 그 영상 영역의 광고, 없으면 창 전체 광고(다시보기 화면을 떠날 때). */
+export function cancelPreroll(host = null) {
+  const handle = host ? hostSessions.get(host) : active;
+  if (handle) handle.cancel();
 }
