@@ -544,7 +544,7 @@
 /* 채널 칩 줄은 머리줄 가운데(사용자 요청 2026-10-31). 양쪽 빈칸(.ml-head-gap)이 남은 폭을 똑같이 나눠 갖되, 왼쪽 묶음
    (아이콘·제목·전환)과 오른쪽 도구 폭이 달라도 머리줄 한가운데에 오도록 좁은 쪽 빈칸에 그 차이(--ml-center-shift,
    multilive.js 가 잰다)를 먼저 얹는다. 폭이 모자라면 빈칸부터 줄고, 그다음 칩 줄이 줄어 가로로 넘겨 본다. */
-.ml-head-gap { flex: 1 1 0; min-width: 0; }
+.ml-head-gap { flex: 1 100 0; min-width: 0; } /* 줄 때는 빈칸이 칩 줄보다 먼저 준다 */
 .ml-head-gap.before { flex-basis: max(0px, var(--ml-center-shift, 0px)); }
 .ml-head-gap.after { flex-basis: max(0px, calc(-1 * var(--ml-center-shift, 0px))); }
 .ml-watch-picker::-webkit-scrollbar { display: none; }
@@ -576,6 +576,22 @@
 .ml-watch-chip:not(.active)[aria-describedby] { color: var(--text-primary); background: var(--hover); }
 .ml-watch-chip.active img, .ml-watch-chip.active .ml-watch-dot { box-shadow: 0 0 0 2px var(--surface-base), 0 0 0 4px var(--primary); }
 .ml-watch-chip.active { padding-left: 6px; gap: 8px; }
+
+/* 칩은 4개씩만(multilive.js CHIP_WINDOW) — 창 밖 칩은 숨기고 양끝에 가려진 개수 "+N". 휠로 한 칸씩 넘긴다. */
+.ml-watch-chip[hidden], .ml-watch-more[hidden] { display: none; }
+.ml-watch-more {
+  flex: none; align-self: center; height: 22px; min-width: 26px; padding: 0 6px; border: 0; border-radius: 6px;
+  background: var(--hover); color: var(--text-tertiary); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; cursor: pointer;
+  transition: color .15s var(--ease-out), background-color .15s var(--ease-out);
+}
+.ml-watch-more.start { margin-right: 2px; }
+.ml-watch-more.end { margin-left: 2px; }
+.ml-watch-more:hover { color: var(--text-primary); background: var(--surface-overlay); }
+.ml-watch-chip.enter-end { animation: ml-chip-enter-end .2s var(--ease-out); }
+.ml-watch-chip.enter-start { animation: ml-chip-enter-start .2s var(--ease-out); }
+@keyframes ml-chip-enter-end { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+@keyframes ml-chip-enter-start { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+:root[data-motion="reduced"] .ml-watch-chip { animation: none !important; }
 
 /* ── 채널 칩 미리보기 말풍선(ml-chip-peek.js) — 칩 바로 아래, 꼬리가 칩 가운데를 가리킨다 ── */
 .ml-peek {

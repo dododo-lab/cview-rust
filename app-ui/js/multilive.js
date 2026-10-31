@@ -84,6 +84,10 @@ export function pickTintHue(used, rand = Math.random) {
   return best;
 }
 
+/** 라이브 머리줄에 한 번에 보이는 채널 칩 수, 휠 한 칸에 모을 delta(px). */
+const CHIP_WINDOW = 4;
+const CHIP_WHEEL_STEP = 40;
+
 export class MultiLivePage {
   /**
    * @param {{ isLoggedIn: () => boolean, onAddChannel?: (channelId: string, opts?: { quiet?: boolean }) => Promise<void>,
@@ -196,13 +200,32 @@ export class MultiLivePage {
     const centerObserver = new ResizeObserver(() => this.syncHeaderCenter());
     for (const el of this.header.children) if (!el.classList.contains('ml-head-gap') && el !== this.watchPicker) centerObserver.observe(el);
     centerObserver.observe(this.header);
-    // 세로 휠로도 가로로 넘긴다(트랙패드 가로 밀기는 그대로)
+    // 칩은 한 번에 CHIP_WINDOW 개까지만 — 나머지는 숨겨 두고 휠(세로·가로 모두)로 한 칸씩 넘겨 본다(사용자 요청 2026-10-31).
+    // 트랙패드는 작은 delta 가 잇달아 오니 모아서 CHIP_WHEEL_STEP 마다 한 칸. 창 안 칩이 좁은 머리줄에서 넘치면 예전처럼 가로로 넘긴다.
+    this.chipStart = 0;
+    this.chipWheel = 0;
     this.watchPicker.addEventListener('wheel', (e) => {
       const p = this.watchPicker;
+      const d = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+      if (this.chipCount() > CHIP_WINDOW) {
+        e.preventDefault();
+        if (Math.sign(d) !== Math.sign(this.chipWheel)) this.chipWheel = 0;
+        this.chipWheel += e.deltaMode === 1 ? d * 40 : d;
+        if (Math.abs(this.chipWheel) >= CHIP_WHEEL_STEP) {
+          this.shiftChipWindow(Math.sign(this.chipWheel));
+          this.chipWheel = 0;
+        }
+        return;
+      }
       if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || p.scrollWidth <= p.clientWidth) return;
       e.preventDefault();
       p.scrollLeft += e.deltaY;
     }, { passive: false });
+    // 양끝 "+N" — 휠이 없는 마우스·키보드로도 넘긴다.
+    this.watchPicker.addEventListener('click', (e) => {
+      const more = e.target.closest('.ml-watch-more');
+      if (more) this.shiftChipWindow(more.classList.contains('start') ? -1 : 1);
+    });
     this.focusControls = this.root.querySelector('.ml-focus-controls');
     this.ratioInput = this.root.querySelector('.ml-ratio input');
     this.ratioOutput = this.root.querySelector('.ml-ratio output');
@@ -990,7 +1013,12 @@ export class MultiLivePage {
     if (html === this.watchPickerHtml) return;
     this.watchPickerHtml = html;
     this.chipPeek.close(); // 가리키던 칩이 떨어진다
-    picker.innerHTML = html;
+    picker.innerHTML = `<button class="ml-watch-more start" tabindex="-1" hidden></button>${html}<button class="ml-watch-more end" tabindex="-1" hidden></button>`;
+    // 지금 보는 칩이 늘 창 안에 오게 맞춘다(새로 연 채널이 숨은 쪽에 있으면 추가가 안 된 것처럼 보인다).
+    const chips = [...picker.querySelectorAll('.ml-watch-chip')];
+    const at = chips.findIndex((c) => c.classList.contains('active'));
+    if (at >= 0 && (at < this.chipStart || at >= this.chipStart + CHIP_WINDOW)) this.chipStart = at < this.chipStart ? at : at - CHIP_WINDOW + 1;
+    this.applyChipWindow();
     // 칩이 넘치면 가로로 넘겨 보는데, 새로 연 채널(지금 보는 칩)이 넘친 쪽에 숨으면 추가가 안 된 것처럼 보였다 — 보이는 자리로.
     // 같은 알림에서 옆의 다른 방송 줄을 비웠다 다시 채우면 칩 줄이 잠깐 넘치지 않아 맞춘 자리가 0 으로 돌아갔다 —
     // 그 프레임 끝에, 그리고 칩 줄 크기가 나중에 바뀔 때도(직접 넘겨 보기 전까지) 한 번 더 맞춘다.
@@ -1014,6 +1042,47 @@ export class MultiLivePage {
     const right = (box.right - parseFloat(cs.paddingRight) - parseFloat(cs.borderRightWidth)) - after.getBoundingClientRect().right;
     const shift = `${Math.round(right - left)}px`;
     if (h.style.getPropertyValue('--ml-center-shift') !== shift) h.style.setProperty('--ml-center-shift', shift);
+  }
+
+  chipCount() {
+    return this.watchPicker.hidden ? 0 : this.watchPicker.querySelectorAll('.ml-watch-chip').length;
+  }
+
+  /** 칩 창을 한 칸 옮긴다(dir -1 앞, 1 뒤). 끝이면 그대로. */
+  shiftChipWindow(dir) {
+    const before = this.chipStart;
+    this.chipStart += dir;
+    this.applyChipWindow();
+    if (this.chipStart === before) return;
+    this.chipPeek.close();
+    // 새로 드러난 칩만 들어오는 쪽에서 살짝 미끄러져 나온다
+    const chips = this.watchPicker.querySelectorAll('.ml-watch-chip');
+    const shown = chips[dir > 0 ? this.chipStart + CHIP_WINDOW - 1 : this.chipStart];
+    if (shown) {
+      shown.classList.remove('enter-start', 'enter-end');
+      void shown.offsetWidth;
+      shown.classList.add(dir > 0 ? 'enter-end' : 'enter-start');
+    }
+    this.watchPicker.scrollLeft = dir > 0 ? this.watchPicker.scrollWidth : 0;
+    this.syncWatchPickerFade();
+  }
+
+  /** 창 밖 칩은 숨기고 양끝에 가려진 개수(+N)를 단다. */
+  applyChipWindow() {
+    const picker = this.watchPicker;
+    const chips = [...picker.querySelectorAll('.ml-watch-chip')];
+    const n = chips.length;
+    this.chipStart = Math.max(0, Math.min(this.chipStart, n - CHIP_WINDOW));
+    chips.forEach((c, i) => { c.hidden = i < this.chipStart || i >= this.chipStart + CHIP_WINDOW; });
+    const lead = this.chipStart;
+    const tail = Math.max(0, n - this.chipStart - CHIP_WINDOW);
+    for (const [el, count, label] of [[picker.querySelector('.ml-watch-more.start'), lead, '앞'], [picker.querySelector('.ml-watch-more.end'), tail, '뒤']]) {
+      if (!el) continue;
+      el.hidden = !count;
+      el.textContent = `+${count}`;
+      el.title = `${label} 채널 ${count}개 더 보기 (마우스 휠)`;
+      el.setAttribute('aria-label', el.title);
+    }
   }
 
   revealActiveWatchChip() {
