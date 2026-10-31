@@ -7,12 +7,13 @@ import { installImageFade, installSegmentGlider, refreshSegmentGliders, installM
 import { installHoverPreview } from './hover-preview.js';
 import { setAdAudioHooks } from './ads.js';
 import { noteConnectorLimit } from './live-connector.js';
-import { bindCardOpen } from './cards.js';
+import { bindCardOpen, recentChannels } from './cards.js';
 import { FollowingPage, PopularPage, SearchPage } from './pages.js';
 import { SettingsPage } from './settings.js';
 import { Viewer } from './viewer.js';
 import { HomePage } from './home.js';
 import { Sidebar } from './sidebar.js';
+import { buildSidebarList, sidebarListKind, sidebarListNeeds } from './sidebar-lists.js';
 import { setTheme, syncTheme, resolvedTheme } from './theme.js';
 import { loadChatPrefs, setMyNickname, chatPrefs, updateChatPrefs } from './chat-prefs.js';
 import { MultiLivePage, multiLiveIcon, bindMultiLiveAddButtons } from './multilive.js';
@@ -71,23 +72,57 @@ function renderNav() {
   sidebar = new Sidebar(document.querySelector('.sidebar'), { routes: ROUTES, onNavigate: (route) => (route === 'live' ? openLiveMenu() : navigate(route)) });
 }
 
-// 사이드바 "방송 중" 목록 — Rust FollowingStore 가 60초 안의 결과를 재사용하므로 주기 호출이 가볍다.
+// 사이드바 아래 채널 목록 — 메뉴마다 다른 목록(sidebar-lists.js). 팔로잉은 Rust FollowingStore 가 60초 안의 결과를
+// 재사용하므로 주기 호출이 가볍다. 인기·최근 본 채널은 그 목록을 쓰는 메뉴에 들어갈 때만 불러온다.
 const SIDEBAR_FOLLOWING_MS = 120000;
+const SIDEBAR_EXTRA_MS = 60000;
 let followingTimer = 0;
+const sideData = { following: null, favorites: new Set(), popular: null, popularAt: 0, recent: null, recentAt: 0 };
+let sideListSeq = 0;
+function sidebarRoute() {
+  return LIVE_MODES.includes(current) ? 'live' : current;
+}
+function paintSidebarList() {
+  const multichatIds = new Set(((pages.multichat && pages.multichat.channels) || []).map((c) => c.channelId));
+  sidebar.setList(buildSidebarList(sidebarRoute(), { ...sideData, multichatIds }));
+}
+/** 지금 메뉴의 목록을 바로 그리고, 그 목록에 필요한 인기·최근 기록이 없거나 오래됐으면 불러와 다시 그린다. */
+async function refreshSidebarList() {
+  paintSidebarList();
+  const seq = ++sideListSeq;
+  const need = sidebarListNeeds(sidebarListKind(sidebarRoute()));
+  const now = Date.now();
+  const jobs = [];
+  if (need.popular && now - sideData.popularAt > SIDEBAR_EXTRA_MS) {
+    jobs.push(api.popularLives(50, false).then((l) => { sideData.popular = l; sideData.popularAt = Date.now(); }).catch(() => {}));
+  }
+  // 최근 본 채널은 방금 본 채널이 바로 올라오게 메뉴에 들어올 때마다 다시 읽는다(로컬 DB라 가볍다).
+  if (need.recent) {
+    jobs.push(api.recentChannels(20).then((l) => { sideData.recent = l; sideData.recentAt = Date.now(); }).catch(() => {
+      if (!sideData.recent) sideData.recent = recentChannels().map((r) => ({ ...r, lastWatched: r.at }));
+    }));
+  }
+  if (!jobs.length) return;
+  await Promise.all(jobs);
+  if (seq === sideListSeq) paintSidebarList();
+}
 async function refreshSidebarFollowing() {
   clearTimeout(followingTimer);
   if (!isLoggedIn()) {
-    sidebar.setFollowing(null);
-    return;
+    sideData.following = null;
+    sidebar.setLiveCount(null);
+  } else {
+    try {
+      // 즐겨찾기 채널을 위로 (DAT-02) — 홈 등 기본 목록
+      const [lives, favs] = await Promise.all([api.followingLives(false), api.favoritesList().catch(() => [])]);
+      sideData.following = lives;
+      sideData.favorites = new Set(favs.map((f) => f.channelId));
+    } catch {
+      sideData.following = null;
+    }
+    sidebar.setLiveCount(sideData.following ? sideData.following.length : null);
   }
-  try {
-    // 즐겨찾기 채널을 위로 (DAT-02)
-    const [lives, favs] = await Promise.all([api.followingLives(false), api.favoritesList().catch(() => [])]);
-    const fav = new Set(favs.map((f) => f.channelId));
-    sidebar.setFollowing([...lives].sort((a, b) => (fav.has(b.channelId) - fav.has(a.channelId)) || ((b.viewerCount || 0) - (a.viewerCount || 0))));
-  } catch {
-    sidebar.setFollowing(null);
-  }
+  paintSidebarList();
   // 여러 호출이 겹쳐도 주기 타이머는 하나만(예전엔 겹친 호출마다 타이머가 늘었다).
   clearTimeout(followingTimer);
   followingTimer = setTimeout(refreshSidebarFollowing, SIDEBAR_FOLLOWING_MS);
@@ -254,6 +289,7 @@ async function navigate(route, params = {}, { push = true } = {}) {
   if (route === 'multilive') keepTransient(); // 멀티라이브 화면에서 본 패인은 남긴다
   if (LIVE_MODES.includes(route)) lastLiveMode = route;
   sidebar.setActive(LIVE_MODES.includes(route) ? 'live' : route);
+  refreshSidebarList();
   const watching = isWatching();
   if (insights) insights.show(route === 'live' && viewer && (viewer.isPlaying || watching) ? 'live' : route);
   if (!AUX) saveWorkspace(route, params, viewer && viewer.isPlaying ? viewer.channelId : null);
@@ -736,7 +772,20 @@ async function main() {
     const body = p.root.querySelector('.page-body');
     if (body) bindCardOpen(body, openChannel);
   }
-  bindCardOpen(document.getElementById('sidebar-live'), openChannel);
+  // 사이드바 아래 목록 — 멀티채팅 메뉴에서는 채팅 추가, 카테고리 줄은 그 카테고리로, 나머지는 방송 열기.
+  const sideList = document.getElementById('sidebar-live');
+  bindCardOpen(sideList, async (channelId, data) => {
+    if (data.sideAction === 'multichat' && pages.multichat) {
+      await pages.multichat.add(channelId);
+      paintSidebarList();
+      return;
+    }
+    openChannel(channelId);
+  });
+  sideList.addEventListener('click', (e) => {
+    const cat = e.target.closest('[data-side-category]');
+    if (cat) navigate('categories', { category: cat.dataset.sideCategory });
+  });
   document.addEventListener('click', (e) => {
     const action = e.target.closest('[data-action]');
     if (!action) return;
