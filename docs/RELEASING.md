@@ -43,7 +43,7 @@ python3 scripts/publish-update.py --version <버전> --notes-file dist/CView_<�
 - 최신 릴리스 피드: https://cv.dododo.app/releases/latest.json
 - 수동 업로드·원격 게시 방법: [업로드·게시 안내](../tools/windows-update-server/README.md), [원격 PowerShell](../tools/windows-update-server/POWERSHELL-REMOTE.md)
 - 버전별 설치 파일과 `notes.txt`를 업로드한 뒤 서버의 관리자 PowerShell에서 `C:\CViewUpdates\tools\Publish-UploadedRelease.ps1 -Version <버전>`으로 게시·다운로드 검증을 실행할 수 있다.
-- 앱의 업데이트 확인과 다운로드에는 같은 Tailscale 네트워크 연결이 필요하다.
+- 앱은 공개 피드(cv.dododo.app)로 업데이트를 확인하고 받는다. Tailscale은 게시(SSH 업로드)에만 필요하다.
 
 릴리스마다 다음 순서를 반드시 따른다.
 

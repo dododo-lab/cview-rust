@@ -541,7 +541,7 @@ mod mac {
 
     /// 실제 업데이트 서버로 끝까지 — 받기 · SHA-256 · DMG · 서명 · 공증 · 교체 · 재실행 신호.
     /// 진짜 앱은 건드리지 않는다: 임시 폴더의 가짜 `CView.app` 을 바꾸고, `open` 대신 기록 스크립트를 부른다.
-    /// Tailscale 필요 — `cargo test -p cview-app --lib -- --ignored updater_e2e_real_feed`.
+    /// 인터넷 연결 필요 — `cargo test -p cview-app --lib -- --ignored updater_e2e_real_feed`.
     #[cfg(test)]
     mod e2e {
         use std::path::Path;

@@ -53,7 +53,7 @@ ssh <관리자-계정>@<서버-Tailscale-IP> 'powershell -NoProfile -File C:\CVi
 설정 파일: `C:\ProgramData\ssh\sshd_config`
 
 
-설치 소스: `Install-TailscalePowerShell.ps1`. 서버 검증 도구: `Test-TailscalePowerShell.ps1`.
+서버 설치·검증 스크립트는 공개 저장소에 두지 않고 관리자가 따로 보관한다.
 
 
 [Microsoft의 SSH 기본 셸 설정 문서](https://learn.microsoft.com/en-us/windows-server/administration/OpenSSH/openssh-server-configuration)를 참고했다.

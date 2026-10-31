@@ -47,9 +47,8 @@ powershell -NoProfile -File C:\CViewUpdates\tools\Publish-UploadedRelease.ps1 -V
 
 도구는 양쪽 설치 파일과 설명 파일을 검사한 뒤 기존 `publish.py`를 실행한다. 이 게시기는 완성된 버전 폴더를 먼저 배치하고 `latest.json`을 마지막에 원자적으로 갱신한다. 이어서 `check_server.py --download`로 HTTPS, 다운로드 페이지, 파일 크기와 SHA-256을 확인한다. 업로드한 원본은 `incoming`에 남는다. 같은 버전 덮어쓰기나 이전 버전 게시를 허용하지 않는다.
 
-## 설치 소스와 확인 결과
+## 서버 도구 원본
 
-- `Install-RemoteUpload.ps1`: 기존 서버를 대상으로 전용 SMB 공유와 게시 보조 도구를 설치한다. `-WhatIf`로 변경 미리보기를 지원한다.
-- `Publish-UploadedRelease.ps1`: 서버에 설치된 게시 보조 도구의 원본이다.
+- `Publish-UploadedRelease.ps1`: 서버에 설치된 게시 보조 도구의 원본이다. 공유·권한을 만드는 서버 설치 스크립트는 공개 저장소에 두지 않고 관리자가 따로 보관한다.
 
 설정에 사용한 SMB 옵션의 의미는 [Microsoft New-SmbShare 문서](https://learn.microsoft.com/en-us/powershell/module/smbshare/new-smbshare?view=windowsserver2025-ps)에서 확인할 수 있다.
