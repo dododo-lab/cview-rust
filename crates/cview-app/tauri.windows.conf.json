@@ -12,7 +12,7 @@
         "backgroundColor": "#0f1012",
         "resizable": true,
         "center": true,
-        "decorations": true
+        "decorations": false
       }
     ]
   },

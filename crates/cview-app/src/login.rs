@@ -98,6 +98,9 @@ pub fn open_login_window<R: Runtime>(
     })
     .build()
     .map_err(|e| format!("로그인 창을 열지 못했습니다: {e}"))?;
+    // Windows — 앱 메뉴 막대는 로그인 페이지에 쓸모가 없다(제목 막대는 둔다 — 원격 페이지라 자체 버튼이 없다).
+    #[cfg(windows)]
+    let _ = window.hide_menu();
 
     let task = tauri::async_runtime::spawn(run_login(app.clone(), window, flow, rx));
     let mut slot = services

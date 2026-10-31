@@ -150,6 +150,7 @@ export const api = {
   updateInstall: () => invoke('update_install'),
   windowOpen: (kind, params) => invoke('window_open', { kind, params: params || null }),
   windowCloseSelf: () => invoke('window_close_self'),
+  windowMenuPopup: (x, y) => invoke('window_menu_popup', { x, y }),
   oauthStatus: () => invoke('oauth_status'),
   oauthSetCredentials: (clientId, clientSecret) => invoke('oauth_set_credentials', { clientId, clientSecret }),
   oauthClearCredentials: () => invoke('oauth_clear_credentials'),
