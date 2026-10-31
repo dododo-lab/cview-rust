@@ -3,6 +3,7 @@ import { api, listen, Events, isTauri } from './api.js';
 import { toast, icons } from './dom.js';
 import { showShortcuts, showAbout, showUpdateCheck } from './app-sheets.js';
 import { installImageFade, installSegmentGlider, refreshSegmentGliders, installMicroMotion } from './motion.js';
+import { installHoverPreview } from './hover-preview.js';
 import { bindCardOpen } from './cards.js';
 import { FollowingPage, PopularPage, SearchPage } from './pages.js';
 import { SettingsPage } from './settings.js';
@@ -664,6 +665,7 @@ async function main() {
   installImageFade(); // 첫 화면 그림보다 먼저 — 놓친 load 로 썸네일이 투명하게 남지 않게
   installSegmentGlider(); // 모든 세그먼트의 고른 칸 판이 미끄러지게
   installMicroMotion();
+  installHoverPreview(); // 재생 썸네일 위에 잠시 머물면 소리 없이 미리보기
   trackFullscreen();
   splashStep('화면 준비', 0.2);
   renderNav();

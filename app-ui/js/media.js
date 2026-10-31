@@ -7,6 +7,7 @@ import { esc, safeUrl, toast, imageSrc } from './dom.js';
 import { emptyState, loadingState, compactCount, errorState } from './cards.js';
 import { formatDuration, relativeDate, clipCard } from './channel.js';
 import { startDownload } from './downloads.js';
+import { previewAttr } from './hover-preview.js';
 
 const ICON_BACK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>';
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -221,7 +222,7 @@ export function continueCard(item) {
   const pct = item.duration > 0 ? Math.min(100, Math.round((item.position / item.duration) * 100)) : 0;
   return `
     <article class="card media-card" tabindex="0" data-vod-no="${esc(item.videoNo)}" title="${esc(item.title)}">
-      <div class="thumb">
+      <div class="thumb"${previewAttr('vod', item.videoNo)}>
         ${thumb ? `<img src="${esc(imageSrc(thumb, 'static'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
         <span class="badge-duration">${esc(formatDuration(item.duration))}</span>
         ${pct ? `<span class="progress-bar"><i style="width:${pct}%"></i></span>` : ''}

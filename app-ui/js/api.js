@@ -115,6 +115,8 @@ export const api = {
   searchVideos: (keyword, offset = 0, size = 24) => invoke('search_videos', { keyword, offset, size }),
   clipPlay: (clipUid) => invoke('clip_play', { clipUid }),
   vodDetail: (videoNo) => invoke('vod_detail', { videoNo }),
+  // 썸네일 호버 미리보기 주소 — { url, format: 'hls'|'mp4', startAt, live } 또는 null(미리보기 없음)
+  previewSource: (kind, id) => invoke('preview_source', { kind, id: String(id) }),
   channelFollow: (channelId, follow) => invoke('channel_follow', { channelId, follow }),
   favoriteSet: (channelId, favorite, channelName, channelImageUrl) => invoke('favorite_set', { channelId, favorite, channelName, channelImageUrl }),
   favoritesList: () => invoke('favorites_list'),

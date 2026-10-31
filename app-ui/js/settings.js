@@ -12,6 +12,7 @@ import { streamAlertsEnabled, setStreamAlertsEnabled, ALERT_HOME } from './donat
 import { chatPrefs, updateChatPrefs, blockedLabel, loadChatPrefs } from './chat-prefs.js';
 import { BACKGROUNDS, READING_WIDTHS } from './chat-extras.js';
 import { kbd } from './platform.js';
+import { thumbPreviewEnabled, setThumbPreviewEnabled } from './hover-preview.js';
 import { checkForUpdate, lastUpdateResult, updateSummary, downloadTarget, openDownload, currentVersionText, canInstall, installUpdate, progressHtml, renderProgress } from './update-check.js';
 
 const opt = (pairs) => pairs.map(([value, label]) => ({ value, label }));
@@ -99,6 +100,7 @@ export const SCHEMA = [
   ['general', '외관', [
     { d: 'appearance', k: 'compactMode', label: '콤팩트 모드', help: '여백과 카드를 촘촘하게 줄입니다', type: 'toggle' },
     { d: 'appearance', k: 'motionQuality', label: '모션', type: 'select', options: opt([['reduced', '절약'], ['balanced', '균형'], ['rich', '풍부']]) },
+    { local: 'thumbPreview', label: '썸네일 미리보기', help: '라이브·다시보기·클립 썸네일 위에 마우스를 잠시 올려 두면 소리 없이 미리 봅니다(모션 "절약"에서는 쉽니다)', type: 'toggle' },
     { d: 'appearance', k: 'transparencyMode', label: '투명도', type: 'select', options: opt([['system', '시스템'], ['full', '선명하게'], ['reduced', '불투명']]) },
     { d: 'appearance', k: 'frameRateMode', label: '화면 갱신', type: 'select', options: opt([['adaptive', '적응형 (최대 120Hz)'], ['fixed60', '60Hz 고정']]) },
   ]],
@@ -160,6 +162,9 @@ const CHAT_TOGGLES = [
   ['showDonationsOnly', '후원만 보기', '후원·구독 메시지만 보여 줍니다'],
 ];
 
+// 이 기기에만 두는 설정(localStorage).
+const LOCAL_GET = { streamAlerts: streamAlertsEnabled, thumbPreview: thumbPreviewEnabled };
+
 function fmt(item, v) {
   if (item.pct) return `${Math.round(Number(v) * 100)}%`;
   return String(v);
@@ -167,7 +172,7 @@ function fmt(item, v) {
 
 /** 항목 하나 HTML. */
 function itemHtml(item, values) {
-  const v = item.local === 'streamAlerts' ? streamAlertsEnabled() : (values[item.d] || {})[item.k];
+  const v = item.local ? LOCAL_GET[item.local]() : (values[item.d] || {})[item.k];
   const attrs = item.local ? `data-local="${item.local}"` : `data-domain="${item.d}" data-key="${item.k}"`;
   const label = `<span class="setting-label">${esc(item.label)}${item.help ? `<small>${esc(item.help)}</small>` : ''}</span>`;
   const search = esc(`${item.label} ${item.help || ''} ${item.k || ''}`.toLowerCase());
@@ -453,6 +458,10 @@ export class SettingsPage {
     }
     if (target.dataset.local === 'streamAlerts') {
       setStreamAlertsEnabled(target.checked);
+      return;
+    }
+    if (target.dataset.local === 'thumbPreview') {
+      setThumbPreviewEnabled(target.checked);
       return;
     }
     const { domain, key } = target.dataset;

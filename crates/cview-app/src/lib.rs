@@ -323,6 +323,7 @@ pub fn run() {
             commands::settings::network_preset,
             commands::multi_live::multilive_set_audio_suspended,
             commands::media::vod_play,
+            commands::preview::preview_source,
             commands::media::vod_progress_save,
             commands::media::vod_continue_list,
             commands::media::vod_progress_remove,

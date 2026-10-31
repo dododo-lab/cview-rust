@@ -3,6 +3,7 @@
 import { api } from './api.js';
 import { esc, safeUrl, toast, channelTone, imageSrc, dismiss } from './dom.js';
 import { emptyState, loadingState, compactCount, errorState } from './cards.js';
+import { previewAttr } from './hover-preview.js';
 
 const ICON_STAR = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></svg>';
 const ICON_STAR_LINE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></svg>';
@@ -38,7 +39,7 @@ export function vodCard(v) {
   const thumb = safeUrl(v.thumbnailImageUrl || v.videoImageUrl);
   return `
     <article class="card media-card" tabindex="0" data-vod-no="${esc(v.videoNo)}" title="${esc(v.videoTitle)}">
-      <div class="thumb">
+      <div class="thumb"${v.adult ? '' : previewAttr('vod', v.videoNo)}>
         ${thumb ? `<img src="${esc(imageSrc(thumb, 'static'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
         <span class="badge-duration">${esc(formatDuration(v.duration))}</span>
       </div>
@@ -54,7 +55,7 @@ export function clipCard(c) {
   const thumb = safeUrl(c.thumbnailImageUrl);
   return `
     <article class="card media-card clip" tabindex="0" data-clip-uid="${esc(c.clipUID || c.clipUid)}" title="${esc(c.clipTitle)}">
-      <div class="thumb">
+      <div class="thumb"${c.adult ? '' : previewAttr('clip', c.clipUID || c.clipUid)}>
         ${thumb ? `<img src="${esc(imageSrc(thumb, 'static'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
         <span class="badge-duration">${esc(formatDuration(c.duration))}</span>
       </div>

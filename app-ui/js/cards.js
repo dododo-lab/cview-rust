@@ -1,5 +1,6 @@
 // 라이브 카드 격자 / 채널 행 / 빈 상태.
 import { esc, safeUrl, imageSrc } from './dom.js';
+import { previewAttr } from './hover-preview.js';
 
 /** 라이브 카드 한 장 (LiveCardDto). */
 export function liveCard(live) {
@@ -9,7 +10,7 @@ export function liveCard(live) {
   const category = live.categoryName ? `<span class="category"> · ${esc(live.categoryName)}</span>` : '';
   return `
     <article class="card" tabindex="0" data-channel-id="${esc(live.channelId)}" data-channel-name="${esc(live.channelName)}" data-channel-image="${esc(avatar)}" title="${esc(live.liveTitle)}">
-      <div class="thumb">
+      <div class="thumb"${live.isLive && !live.adult ? previewAttr('live', live.channelId) : ''}>
         ${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
         ${live.isLive ? '<span class="badge-live">LIVE</span>' : ''}
         ${live.adult ? '<span class="badge-adult">19</span>' : ''}
