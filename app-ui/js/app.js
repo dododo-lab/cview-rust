@@ -361,6 +361,8 @@ function onAuthChanged(status) {
   if (auth.state === 'expired' && !wasExpired) toast('로그인이 만료되었습니다. 다시 로그인해 주세요', 6000);
   setMyNickname(auth.loggedIn ? auth.nickname : '');
   renderAccount();
+  // 시작 때는 닉네임 없이 홈을 먼저 그린다 — 서버 확인으로 닉네임이 오면 인사말만 고친다.
+  if (pages.home) pages.home.refreshGreetingName();
   if (wasLoggedIn !== isLoggedIn()) refreshSidebarFollowing();
   if (viewer) viewer.refreshAuth();
   if (wasLoggedIn !== isLoggedIn()) refreshChatAuth();
@@ -884,7 +886,9 @@ async function main() {
   splashStep('계정·설정 확인', 0.55);
   if (!isTauri) toast('CView 앱(cargo run -p cview-app) 안에서 실행해야 데이터가 표시됩니다', 6000);
   // 계정 상태와 설정은 서로 기다릴 필요가 없어 함께 부른다(예전엔 차례로 기다렸다).
-  const [authRes, settingsRes] = await Promise.allSettled(isTauri ? [api.authStatus(), api.settingsGet()] : []);
+  // 계정은 서버 확인 없이 저장된 로그인만 본다(quick) — 서버 확인(/users/me) 한 번을 기다린 뒤에야 홈 요청이
+  // 시작되던 것을 없앤다. 닉네임·만료 판정은 홈을 띄운 뒤 아래의 일반 확인과 auth://changed 가 채운다.
+  const [authRes, settingsRes] = await Promise.allSettled(isTauri ? [api.authStatus(true), api.settingsGet()] : []);
   if (authRes && authRes.status === 'fulfilled') onAuthChanged(authRes.value);
   const settings = settingsRes && settingsRes.status === 'fulfilled' ? settingsRes.value : null;
   syncTheme(settings && settings.appearance && settings.appearance.theme);
@@ -897,6 +901,7 @@ async function main() {
   // 작업 공간 복원 (NAV-16) — "실행 시 창 복원"이 켜져 있으면 마지막 화면으로. 방송은 자동 재생하지 않고 묻는다.
   const ws = settings?.general?.restoreWindowOnLaunch !== false ? loadWorkspace() : null;
   navigate('home', {}, { push: false });
+  if (isTauri) api.authStatus().then(onAuthChanged).catch(() => {});
   // 딥 링크 (SYS-06) — 준비 전에 온 링크가 있으면 작업 공간 복원보다 우선한다.
   listen(Events.deepLink, (p) => { api.deeplinkTakePending().catch(() => {}); openDeepLink(p); });
   let pendingLinks = [];

@@ -107,9 +107,33 @@ pub async fn broadcast_status<R: Runtime>(app: &AppHandle<R>, services: &AppServ
     let _ = app.emit(events::AUTH_CHANGED, status);
 }
 
+/// 계정 상태. `quick` 이면 서버 확인(`/users/me`) 없이 저장된 로그인 복원이 끝난 상태만 바로 돌려준다.
+///
+/// 시작 화면은 `quick` 으로 로그인 여부만 알고 곧바로 홈 데이터를 부른다 — 예전엔 서버 확인 한 번을
+/// 기다린 뒤에야 홈 요청을 시작했다. 닉네임·만료 판정은 뒤이은 일반 호출과 `auth://changed` 가 채운다.
 #[tauri::command]
-pub async fn auth_status(services: State<'_, AppServices>) -> CmdResult<AuthStatusDto> {
+pub async fn auth_status(
+    services: State<'_, AppServices>,
+    quick: Option<bool>,
+) -> CmdResult<AuthStatusDto> {
+    if quick.unwrap_or(false) {
+        wait_auth_initialized(&services).await;
+        return Ok(AuthStatusDto::from_state(&services.auth.auth_state()));
+    }
     Ok(current_status(&services).await)
+}
+
+/// 시작 때 키체인·웹뷰 쿠키 복원(`spawn_auth_tasks`)이 끝날 때까지 잠깐 기다린다 — 복원 전에 물으면
+/// 로그인한 사용자도 "로그아웃"으로 보여 홈이 손님 화면을 먼저 그렸다. 키체인이 늦으면 3초에서 멈춘다.
+async fn wait_auth_initialized(services: &AppServices) {
+    const STEP: std::time::Duration = std::time::Duration::from_millis(15);
+    const LIMIT: u32 = 200;
+    for _ in 0..LIMIT {
+        if services.app_state().is_auth_initialized {
+            return;
+        }
+        tokio::time::sleep(STEP).await;
+    }
 }
 
 /// 네이버 로그인 창을 연다. 결과는 `auth://changed` / `auth://login-failed` 로 온다.

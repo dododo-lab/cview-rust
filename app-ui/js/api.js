@@ -60,7 +60,8 @@ export const Events = Object.freeze({
 });
 
 export const api = {
-  authStatus: () => invoke('auth_status'),
+  // quick — 서버 확인 없이 저장된 로그인 상태만(시작 화면용). 닉네임은 일반 호출이 채운다.
+  authStatus: (quick = false) => invoke('auth_status', { quick }),
   login: () => invoke('auth_login'),
   logout: () => invoke('auth_logout'),
 
