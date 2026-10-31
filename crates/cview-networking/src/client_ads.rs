@@ -476,6 +476,36 @@ fn install_id() -> &'static str {
     IV.get_or_init(random_uuid_v4)
 }
 
+/// 광고 쪽(VAST 래퍼·추적) 주소가 공용 인터넷 호스트인가. VAST 는 제3자 광고망이 쓰는 문서라, 그 안의 주소로
+/// 이 PC 의 로컬 서비스(앱 스트림 프록시 등)나 사설망 기기에 요청을 보내지 않는다. 순수 함수.
+pub fn is_public_ad_url(url: &Url) -> bool {
+    fn local_v4(v4: std::net::Ipv4Addr) -> bool {
+        let [a, b, ..] = v4.octets();
+        v4.is_loopback()
+            || v4.is_private()
+            || v4.is_link_local()
+            || v4.is_unspecified()
+            || v4.is_broadcast()
+            || (a == 100 && (b & 0xC0) == 64) // 100.64.0.0/10 (CGNAT·Tailscale)
+    }
+    match url.host() {
+        Some(url::Host::Domain(d)) => {
+            let d = d.trim_end_matches('.').to_ascii_lowercase();
+            !(d == "localhost" || d.ends_with(".localhost") || d.ends_with(".local"))
+        }
+        Some(url::Host::Ipv4(v4)) => !local_v4(v4),
+        Some(url::Host::Ipv6(v6)) => {
+            let seg0 = v6.segments()[0];
+            !(v6.is_loopback()
+                || v6.is_unspecified()
+                || (seg0 & 0xfe00) == 0xfc00 // 고유 로컬
+                || (seg0 & 0xffc0) == 0xfe80 // 링크 로컬
+                || v6.to_ipv4_mapped().is_some_and(local_v4))
+        }
+        None => false,
+    }
+}
+
 impl ChzzkApiClient {
     async fn ad_get(&self, url: Url, with_cookies: bool) -> Result<Vec<u8>, ApiError> {
         let mut req = HttpRequest::new(HttpMethod::Get, url);
@@ -610,7 +640,7 @@ impl ChzzkApiClient {
     /// VAST 래퍼·구글 태그를 받는다 — https 만, 1 MiB 이하, XML 본문만.
     pub async fn ad_fetch_vast(&self, url: &str) -> Result<String, ApiError> {
         let url = Url::parse(url).map_err(|e| ApiError::NetworkError(e.to_string()))?;
-        if url.scheme() != "https" {
+        if url.scheme() != "https" || !is_public_ad_url(&url) {
             return Err(ApiError::NetworkError("https 광고 주소만 받습니다".into()));
         }
         let body = self.ad_get(url, false).await?;
@@ -624,7 +654,7 @@ impl ChzzkApiClient {
     /// 광고 노출·클릭 추적 — 응답은 보지 않는다.
     pub async fn ad_ping(&self, url: &str) {
         let Ok(url) = Url::parse(url) else { return };
-        if !matches!(url.scheme(), "https" | "http") {
+        if !matches!(url.scheme(), "https" | "http") || !is_public_ad_url(&url) {
             return;
         }
         if let Err(e) = self.ad_get(url, false).await {
@@ -758,6 +788,23 @@ mod tests {
             ads[1].tracking["ackImpressions"],
             vec!["https://tivan.naver.com/sc2/1/E2".to_string()]
         );
+    }
+
+    #[test]
+    fn ad_urls_must_be_public_hosts() {
+        let ok = |s: &str| is_public_ad_url(&Url::parse(s).unwrap());
+        assert!(ok("https://nam.veta.naver.com/vas?x=1"));
+        assert!(ok("https://8.8.8.8/t"));
+        assert!(!ok("http://127.0.0.1:52345/live/playlist.m3u8"));
+        assert!(!ok("http://localhost/t"));
+        assert!(!ok("http://192.168.0.1/admin"));
+        assert!(!ok("http://10.1.2.3/t"));
+        assert!(!ok("http://100.117.247.29/t"));
+        assert!(!ok("http://169.254.169.254/latest"));
+        assert!(!ok("http://[::1]/t"));
+        assert!(!ok("http://[::ffff:127.0.0.1]/t"));
+        assert!(!ok("http://[fd00::1]/t"));
+        assert!(!ok("http://printer.local/t"));
     }
 
     #[test]
