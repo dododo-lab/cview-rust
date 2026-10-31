@@ -2513,3 +2513,74 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 :root[data-motion="reduced"] .update-progress-bar.indeterminate i { animation: none; width: 100%; opacity: 0.5; }
 .update-row .update-progress { min-width: 180px; }
 .update-error { color: var(--error); margin: 0; }
+
+/* 치지직 프리롤 광고 — 재생 전에 창 전체를 덮는다(ads.js). */
+.ad-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.86);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+.ad-overlay.shown { opacity: 1; }
+.ad-stage {
+  position: relative;
+  width: min(100%, calc((100vh - 48px) * 16 / 9));
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #000;
+}
+.ad-stage video { width: 100%; height: 100%; object-fit: contain; display: block; }
+.ad-top, .ad-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  color: #fff;
+  font-size: 13px;
+}
+.ad-top { top: 0; background: linear-gradient(rgba(0, 0, 0, 0.55), transparent); }
+.ad-bottom { bottom: 0; background: linear-gradient(transparent, rgba(0, 0, 0, 0.6)); }
+.ad-badge {
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: #ffd400;
+  color: #111;
+  font-weight: 700;
+  font-size: 12px;
+}
+.ad-remain, .ad-count { font-variant-numeric: tabular-nums; opacity: 0.9; }
+.ad-btn {
+  padding: 7px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+.ad-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.18); }
+.ad-btn:disabled { opacity: 0.7; cursor: default; }
+.ad-skip { font-weight: 600; }
+.ad-cheat { color: #fff; opacity: 0.85; font-size: 12px; text-decoration: underline; }
+.ad-cheat:hover { opacity: 1; }
+.ad-close {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+.ad-close:hover { background: rgba(255, 255, 255, 0.2); }

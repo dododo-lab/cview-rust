@@ -73,6 +73,12 @@ pub async fn player_start(
     request.player_settings = Some(player_settings);
     request.playback_key_access = access;
 
+    let connector_limited_height =
+        crate::live_connector::policy_height(plan.p2p_general_max_height);
+    services
+        .engine
+        .set_policy_quality_ceiling_height(connector_limited_height);
+
     let mut channel = services.player_channel.lock().await;
     services.player.start_stream(request).await;
     let phase = services.player.read().stream_phase.clone();
@@ -102,6 +108,7 @@ pub async fn player_start(
         live: LiveDetailDto::from_live_info(&info, &channel_id),
         audio_only: plan.is_audio_only,
         requires_authenticated_proxy: plan.requires_authenticated_key,
+        connector_limited_height,
     })
 }
 

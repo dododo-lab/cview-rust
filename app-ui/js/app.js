@@ -4,6 +4,8 @@ import { toast, icons } from './dom.js';
 import { showShortcuts, showAbout, showUpdateCheck } from './app-sheets.js';
 import { installImageFade, installSegmentGlider, refreshSegmentGliders, installMicroMotion } from './motion.js';
 import { installHoverPreview } from './hover-preview.js';
+import { playPreroll, setAdAudioHooks } from './ads.js';
+import { noteConnectorLimit } from './live-connector.js';
 import { bindCardOpen } from './cards.js';
 import { FollowingPage, PopularPage, SearchPage } from './pages.js';
 import { SettingsPage } from './settings.js';
@@ -103,6 +105,18 @@ function setAudioOwner(owner) {
     api.multiLiveSetAudioSuspended(false).catch(() => {});
   }
 }
+
+// 광고가 나오는 동안은 보던 방송 소리를 잠시 끄고, 끝나면 소리 주인 규칙대로 되돌린다.
+setAdAudioHooks({
+  hold() {
+    viewer.suspendAudio(true);
+    api.multiLiveSetAudioSuspended(true).catch(() => {});
+  },
+  release() {
+    viewer.suspendAudio(audioOwner === 'multilive');
+    api.multiLiveSetAudioSuspended(audioOwner === 'live').catch(() => {});
+  },
+});
 
 // ── 라이브 ↔ 멀티라이브 연동 (원본 시청/멀티 허브 모드) ──────────────
 // - 멀티라이브에 있는 채널을 라이브로 보면 같은 세션(플레이어·채팅 소켓)을 무대에 올린다 — 다시 연결 없음.
@@ -363,7 +377,10 @@ function oldestBrowsed() {
   return ids.find((id) => id !== st.watchId) || ids[0] || null;
 }
 async function openChannel(channelId) {
-  if (AUX || !pages.multilive) { await openInViewer(channelId); return; }
+  if (AUX || !pages.multilive) {
+    if (await playPreroll('live', channelId)) await openInViewer(channelId);
+    return;
+  }
   pendingWatch++;
   try { await openChannelWatch(channelId); } finally { pendingWatch--; syncLiveIndicators(); }
 }
@@ -371,6 +388,9 @@ async function openChannelWatch(channelId) {
   // 이미 멀티라이브에 있는 채널 — 같은 플레이어를 라이브 무대로(원본 commitExistingWatch).
   const existing = multiLiveSessionFor(channelId);
   if (existing) { await enterWatch(existing.id); return; }
+  // 새로 여는 방송 — 치트키가 없으면 치지직처럼 프리롤 광고를 먼저 본다(다른 방송을 열어 밀려나면 그만).
+  if (!(await playPreroll('live', channelId))) return;
+  noteConnectorLimit();
   const st = pages.multilive.state;
   // 라이브 단독 보기 상한 — 멀티라이브 상한과 따로다(지금 보기가 멀티라이브여도 라이브로 여는 추가는 이쪽).
   if ((st.canAddLive ?? st.canAdd) === false) {
@@ -380,7 +400,7 @@ async function openChannelWatch(channelId) {
     browsedWatch.delete(prev);
     await pages.multilive.run(api.multiLiveRemove(prev));
   }
-  await pages.multilive.add(channelId, { quiet: true, live: true });
+  await pages.multilive.add(channelId, { quiet: true, live: true, ad: false });
   const s = multiLiveSessionFor(channelId);
   if (!s) return; // 추가 실패 — run 이 이미 알렸다
   browsedWatch.set(s.id, channelId);

@@ -9,6 +9,7 @@ import { ViewerControls } from './viewer-controls.js';
 import { PlayerPanel } from './player-panel.js';
 import { ViewerExtras } from './viewer-extras.js';
 import { uptimeText, compactCount } from './cards.js';
+import { noteConnectorLimit } from './live-connector.js';
 
 const PHASE_TEXT = {
   idle: '',
@@ -191,6 +192,7 @@ export class Viewer {
       this.loadFollowers(channelId, token);
       this.extras.loadRail(channelId);
       if (started.audioOnly) this.status.textContent = '오디오 전용 방송';
+      noteConnectorLimit(started.connectorLimitedHeight);
       this.chat.connect(started.live.chatChannelId, started.live.channelId);
     } catch (e) {
       if (token !== this.startToken) return;

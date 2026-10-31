@@ -24,6 +24,8 @@ pub struct PlaybackPlan {
     pub is_audio_only: bool,
     /// 암호화(`hls_aes`) 방송 — 키 요청이 인증 프록시를 거쳐야 한다.
     pub requires_authenticated_key: bool,
+    /// P2P 전용(`p2pPath`) 트랙이 있는 방송이면 커넥터 없이 볼 수 있는 최고 높이. 없으면 `None`.
+    pub p2p_general_max_height: Option<i64>,
 }
 
 fn decode(json: &str) -> Result<LivePlayback, PlaybackPlanError> {
@@ -74,6 +76,44 @@ pub fn requires_authenticated_key(json: Option<&str>) -> bool {
         .unwrap_or(false)
 }
 
+/// 커넥터 없이 볼 수 있는 화질 상한 — 치지직 웹 플레이어와 같은 판정이다.
+///
+/// 웹은 LLHLS media 에 `p2pPath` 트랙이 있으면 LLHLS 를, 아니면 HLS media 를 본다. 그 트랙 목록에서
+/// `p2pPath` 가 있는 트랙은 네이버 라이브 스트리밍 커넥터(P2P)로만 재생하고, 나머지 중 가장 큰 트랙이
+/// 커넥터 없는 시청자의 최고 화질이다. P2P 트랙이 없으면 제한이 없다(`None`).
+pub fn p2p_general_max_height(json: &str) -> Option<i64> {
+    let playback = decode(json).ok()?;
+    let has_p2p = |m: &MediaInfo| {
+        m.encoding_track
+            .iter()
+            .flatten()
+            .any(|t| t.p2p_path.is_some())
+    };
+    let by_id = |id: &str| {
+        playback
+            .media
+            .iter()
+            .find(|m| m.media_id.eq_ignore_ascii_case(id))
+    };
+    let media = by_id("LLHLS")
+        .filter(|m| has_p2p(m))
+        .or_else(|| by_id("HLS"))?;
+    let tracks = media.encoding_track.as_deref().unwrap_or_default();
+    if !tracks.iter().any(|t| t.p2p_path.is_some()) {
+        return None;
+    }
+    let general = tracks
+        .iter()
+        .filter(|t| t.p2p_path.is_none())
+        .filter_map(|t| match (t.video_width, t.video_height) {
+            (Some(w), Some(h)) if w > 0 && h > 0 => Some((w.min(h), h)),
+            _ => None,
+        })
+        .max_by_key(|(scanline, _)| *scanline);
+    // 일반 트랙이 하나도 없는 드문 응답은 웹의 기본 상한(720p)으로 둔다.
+    Some(general.map_or(720, |(_, h)| h))
+}
+
 /// 라이브 상세 → 재생 계획.
 pub fn resolve(info: &LiveInfo) -> Result<PlaybackPlan, PlaybackPlanError> {
     let prefer_std = info.is_watch_party();
@@ -83,6 +123,7 @@ pub fn resolve(info: &LiveInfo) -> Result<PlaybackPlan, PlaybackPlanError> {
             stream_url: media_url(&json, prefer_std)?,
             is_audio_only: false,
             requires_authenticated_key: requires_authenticated_key(Some(&json)),
+            p2p_general_max_height: p2p_general_max_height(&json),
         });
     }
     if let Some(json) = non_empty(&info.radio_mode_playback_json) {
@@ -90,6 +131,7 @@ pub fn resolve(info: &LiveInfo) -> Result<PlaybackPlan, PlaybackPlanError> {
             stream_url: media_url(&json, prefer_std)?,
             is_audio_only: true,
             requires_authenticated_key: requires_authenticated_key(Some(&json)),
+            p2p_general_max_height: None,
         });
     }
     Err(PlaybackPlanError::MissingPlaybackJson)
@@ -160,5 +202,29 @@ mod tests {
 
         let none = live(serde_json::json!({"liveId": 3, "liveTitle": "x"}));
         assert_eq!(resolve(&none), Err(PlaybackPlanError::MissingPlaybackJson));
+    }
+
+    #[test]
+    fn p2p_tracks_cap_to_general_max() {
+        let json = r#"{"media":[
+            {"mediaId":"HLS","path":"https://a/hls.m3u8","encodingTrack":[
+                {"encodingTrackId":"360p","videoWidth":640,"videoHeight":360},
+                {"encodingTrackId":"720p","videoWidth":1280,"videoHeight":720},
+                {"encodingTrackId":"1080p","videoWidth":1920,"videoHeight":1080,"p2pPath":"/p2p/1080p"}]},
+            {"mediaId":"LLHLS","path":"https://a/ll.m3u8","encodingTrack":[
+                {"encodingTrackId":"720p","videoWidth":1280,"videoHeight":720},
+                {"encodingTrackId":"1080p","videoWidth":1920,"videoHeight":1080}]}
+        ]}"#;
+        // LLHLS 에는 P2P 트랙이 없어 웹처럼 HLS 트랙 목록으로 판정한다.
+        assert_eq!(p2p_general_max_height(json), Some(720));
+        assert_eq!(p2p_general_max_height(PLAYBACK), None);
+        let vertical = r#"{"media":[{"mediaId":"HLS","path":"https://a/h.m3u8","encodingTrack":[
+            {"encodingTrackId":"720p","videoWidth":720,"videoHeight":1280},
+            {"encodingTrackId":"1080p","videoWidth":1080,"videoHeight":1920,"p2pPath":"/p"}]}]}"#;
+        assert_eq!(p2p_general_max_height(vertical), Some(1280));
+        let only_p2p = r#"{"media":[{"mediaId":"HLS","path":"https://a/h.m3u8","encodingTrack":[
+            {"encodingTrackId":"1080p","videoWidth":1920,"videoHeight":1080,"p2pPath":"/p"}]}]}"#;
+        assert_eq!(p2p_general_max_height(only_p2p), Some(720));
+        assert_eq!(p2p_general_max_height("nope"), None);
     }
 }

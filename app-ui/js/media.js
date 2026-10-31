@@ -8,6 +8,7 @@ import { emptyState, loadingState, compactCount, errorState } from './cards.js';
 import { formatDuration, relativeDate, clipCard } from './channel.js';
 import { startDownload } from './downloads.js';
 import { previewAttr } from './hover-preview.js';
+import { playPreroll, cancelPreroll } from './ads.js';
 
 const ICON_BACK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>';
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -53,6 +54,13 @@ export class MediaPage {
   }
 
   async openVod(videoNo, seq) {
+    // 치트키가 없으면 치지직처럼 재생 전에 프리롤 광고를 본다(그 사이 다른 영상을 열면 그만).
+    if (!(await playPreroll('vod', videoNo))) {
+      // 광고 창을 닫았으면 재생하지 않고 돌아간다(다른 영상에 밀려났으면 그쪽이 화면을 맡는다).
+      if (seq === this.seq && this.onBack) this.onBack();
+      return;
+    }
+    if (seq !== this.seq) return;
     const info = await api.vodPlay(videoNo);
     if (seq !== this.seq) return;
     this.info = info;
@@ -148,6 +156,7 @@ export class MediaPage {
   }
 
   leave() {
+    cancelPreroll();
     clearInterval(this.saveTimer);
     // 클립은 치지직 임베드 iframe 이라 화면을 떠나도 소리가 계속 났다 — 비운다.
     for (const f of this.root.querySelectorAll('iframe.clip-embed')) f.src = 'about:blank';
