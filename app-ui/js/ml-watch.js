@@ -3,10 +3,10 @@
 //
 // - 단축키: Space 재생/일시정지 · M 음소거 · ↑↓ 볼륨 · L 라이브로 · ←/→ 되감기(⇧ 60초) · 사용자 맨 글자 동작(F·C·P…)
 // - 막대 단추: 스크린샷 · 북마크 · 채팅 표시 방식(옆·영상 위·숨김) · 영상+채팅 전체 화면, 위쪽: 새 창으로 분리
-// - 위 정보에 인증·팔로워·카테고리, 머리줄에 다른 방송 바로 전환 줄(PLY-14) · 가운데 OSD
+// - 위 정보에 인증·팔로워·카테고리 · 가운데 OSD
 // 앱 메뉴 동작(⌘S·⇧⌘F·PiP·⌘W 등)은 app.js 가 이 도구로 넘긴다.
 import { api } from './api.js';
-import { esc, safeUrl, imageSrc, toast, keyBelongsToTarget } from './dom.js';
+import { esc, toast, keyBelongsToTarget } from './dom.js';
 import { chatPrefs, onChatPrefs, updateChatPrefs } from './chat-prefs.js';
 import { matchPlainAction } from './shortcuts.js';
 import { togglePipFor, stamp } from './viewer-controls.js';
@@ -45,11 +45,9 @@ export function watchTopHtml() {
 export class WatchTools {
   /**
    * @param {import('./multilive.js').MultiLivePage} page
-   * @param {{ isLoggedIn: () => boolean }} opts
    */
-  constructor(page, { isLoggedIn }) {
+  constructor(page) {
     this.page = page;
-    this.isLoggedIn = isLoggedIn;
     this.root = page.root;
     this.body = page.root.querySelector('.ml-body');
     this.gridChatOverlay = false; // 멀티라이브 보기의 "그리드에서 채팅 오버레이" 설정
@@ -63,25 +61,6 @@ export class WatchTools {
     this.osd.className = 'player-osd';
     this.osd.hidden = true;
     page.stage.append(this.osd);
-
-    // 머리줄 — 멀티라이브에 없는 다른 방송(팔로잉, 로그인 전엔 인기)으로 바로 넘어가는 줄
-    this.rail = document.createElement('div');
-    this.rail.className = 'viewer-rail ml-watch-rail';
-    this.rail.hidden = true;
-    page.watchPicker.after(this.rail);
-    this.rail.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-rail-channel]');
-      if (b) window.dispatchEvent(new CustomEvent('cview:play', { detail: { channelId: b.dataset.railChannel } }));
-    });
-    // 넘치면 말없이 자르지 않는다 — 가로로 넘겨 볼 수 있고(CSS), 넘친 쪽 끝을 흐리게 한다.
-    this.rail.addEventListener('scroll', () => this.syncRailFade(), { passive: true });
-    new ResizeObserver(() => this.syncRailFade()).observe(this.rail);
-    // 세로 휠로도 가로로 넘긴다(트랙패드 가로 밀기는 그대로)
-    this.rail.addEventListener('wheel', (e) => {
-      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || this.rail.scrollWidth <= this.rail.clientWidth) return;
-      e.preventDefault();
-      this.rail.scrollLeft += e.deltaY;
-    }, { passive: false });
 
     this.root.addEventListener('click', (e) => {
       const b = e.target.closest('[data-mw]');
@@ -128,12 +107,7 @@ export class WatchTools {
       this.info = null;
       for (const meta of this.root.querySelectorAll('.ml-watch-meta')) meta.remove();
       this.loadInfo(id);
-      this.loadRail(id);
-    } else if (id && this.railLives && this.railKey !== this.sessionKey()) {
-      // 같은 채널을 보는 채로 채널 추가 사이드바(+)로 담았거나 뺐다 — 머리줄 칩과 다른 방송 줄에 같은 채널이 겹치지 않게.
-      this.renderRail();
     }
-    this.rail.hidden = !id || !this.rail.childElementCount;
     this.infoPanel.show(id);
     // 위 정보 줄의 인증·팔로워·카테고리 — 지금 무대 패인에만
     for (const p of this.page.panes.values()) {
@@ -186,46 +160,6 @@ export class WatchTools {
       category ? esc(category) : '',
     ].filter(Boolean).join('<i class="sep">·</i>');
     if (meta.innerHTML !== html) meta.innerHTML = html;
-  }
-
-  async loadRail(currentId) {
-    this.rail.innerHTML = '';
-    this.rail.hidden = true;
-    this.railLives = null;
-    if (!currentId) return;
-    let lives = [];
-    try {
-      lives = this.isLoggedIn() ? await api.followingLives(false) : await api.popularLives(20, false);
-    } catch { return; }
-    if (currentId !== this.channelId) return;
-    this.railLives = lives;
-    this.renderRail();
-  }
-
-  /** 멀티라이브 세션의 채널 묶음 — 바뀌면 다른 방송 줄을 다시 거른다. */
-  sessionKey() {
-    return (this.page.state.sessions || []).map((x) => x.channelId).sort().join('\n');
-  }
-
-  renderRail() {
-    this.railKey = this.sessionKey();
-    // 멀티라이브에 이미 있는 채널은 왼쪽 채널 고르기에 있다 — 여기엔 그 밖의 방송만.
-    const have = new Set((this.page.state.sessions || []).map((x) => x.channelId));
-    const others = this.railLives.filter((l) => !have.has(l.channelId)).slice(0, 10);
-    this.rail.innerHTML = others.map((l) => {
-      const avatar = safeUrl(l.channelImageUrl);
-      return `<button class="rail-item" data-rail-channel="${esc(l.channelId)}" title="${esc(l.channelName)} · ${esc(l.liveTitle || '')} — 이 방송으로 바꿔 보기">${avatar ? `<img class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar">${esc((l.channelName || '?').slice(0, 1))}</span>`}</button>`;
-    }).join('');
-    this.rail.hidden = !others.length;
-    requestAnimationFrame(() => this.syncRailFade());
-  }
-
-  /** 다른 방송 줄 끝 흐림 — 오른쪽(왼쪽)에 가려진 항목이 있을 때만. */
-  syncRailFade() {
-    const r = this.rail;
-    const over = !r.hidden && r.scrollWidth > r.clientWidth + 1;
-    r.classList.toggle('fade-start', over && r.scrollLeft > 1);
-    r.classList.toggle('fade-end', over && r.scrollLeft + r.clientWidth < r.scrollWidth - 1);
   }
 
   // ── 채팅 표시 방식 (PLY-12) — 예전 시청 화면과 같은 설정(chat.displayMode)을 쓴다 ──

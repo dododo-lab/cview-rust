@@ -541,8 +541,14 @@
   border-radius: 9px; background: var(--surface-elevated); border: 1px solid var(--border-subtle);
 }
 .ml-watch-picker[hidden] { display: none; }
+/* 채널 칩 줄은 머리줄 가운데(사용자 요청 2026-10-31). 양쪽 빈칸(.ml-head-gap)이 남은 폭을 똑같이 나눠 갖되, 왼쪽 묶음
+   (아이콘·제목·전환)과 오른쪽 도구 폭이 달라도 머리줄 한가운데에 오도록 좁은 쪽 빈칸에 그 차이(--ml-center-shift,
+   multilive.js 가 잰다)를 먼저 얹는다. 폭이 모자라면 빈칸부터 줄고, 그다음 칩 줄이 줄어 가로로 넘겨 본다. */
+.ml-head-gap { flex: 1 1 0; min-width: 0; }
+.ml-head-gap.before { flex-basis: max(0px, var(--ml-center-shift, 0px)); }
+.ml-head-gap.after { flex-basis: max(0px, calc(-1 * var(--ml-center-shift, 0px))); }
 .ml-watch-picker::-webkit-scrollbar { display: none; }
-/* 칩이 넘치면 가려진 쪽 끝을 흐리게(multilive.js 가 fade-* 를 단다) — 다른 방송 줄과 같다 */
+/* 칩이 넘치면 가려진 쪽 끝을 흐리게(multilive.js 가 fade-* 를 단다) */
 .ml-watch-picker.fade-end { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
 .ml-watch-picker.fade-start { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px); mask-image: linear-gradient(to right, transparent, #000 28px); }
 .ml-watch-picker.fade-start.fade-end { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
@@ -561,20 +567,6 @@
 .ml-watch-chip.active img, .ml-watch-chip.active .ml-watch-dot { box-shadow: 0 0 0 2px var(--primary); }
 .ml-watch-dot { background: var(--surface-overlay); }
 .ml-watch-chip .ellipsis { min-width: 0; padding-block: 2px; }
-/* 멀티라이브 채널 칩 ↔ 다른 방송 줄 — 두 묶음 사이에 세로 구분선. 다른 방송 줄의 링은 라이브 빨강(선택 칩의 초록 테두리와 헷갈렸다). */
-.ml-watch-picker:not([hidden]) + .ml-watch-rail:not([hidden]) { margin-left: 2px; padding-left: 10px; border-left: 1px solid var(--border); border-radius: 0; }
-.ml-watch-rail .rail-item { background: var(--live-badge, #e5262b); }
-.ml-watch-rail .rail-item:hover, .ml-watch-rail .rail-item:focus-visible { background: color-mix(in srgb, var(--live-badge, #e5262b) 80%, #fff); }
-/* 다른 방송 줄이 넘치면 말없이 자르지 않고 가로로 넘겨 볼 수 있게(Tab 초점이 가면 그 자리로 굴러간다) — 넘친 쪽 끝은 흐리게(ml-watch.js 가 fade-* 를 단다). */
-/* 머리줄 높이(30px 줄 + 위아래 8px)를 넘지 않게 — 링 포함 30px(아바타 26 + 링 2×2). 레일의 위아래 2px 는 확대(hover)할
-   자리라 음수 margin 으로 레이아웃에서 뺀다. 예전 32px 링 + 2px 여백(36px)이 머리줄을 6px 키워 목록 화면과 높이가 달랐다. */
-.ml-watch-rail { margin-block: -2px; }
-.ml-watch-rail .rail-item .avatar { width: 26px; height: 26px; }
-.ml-watch-rail { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; scroll-padding-inline: 12px; }
-.ml-watch-rail::-webkit-scrollbar { display: none; }
-.ml-watch-rail.fade-end { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
-.ml-watch-rail.fade-start { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px); mask-image: linear-gradient(to right, transparent, #000 28px); }
-.ml-watch-rail.fade-start.fade-end { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
 /* 단독 무대의 오버레이 채팅(z 6)이 패인 ⚙·⋯ 메뉴를 덮었다 — 메뉴는 패인 쌓임 맥락 안이라 z 로는 못 올린다. 채팅 왼쪽으로 비켜 연다. */
 .page-multilive.as-watch .ml-body.chat-overlay .ml-pane-menu { right: min(calc(var(--overlay-w, 320px) + 28px), calc(100% - 186px)); }
 /* 좁은 단독 무대 — 막대의 채팅 표시 방식 단추가 접히면 ⋯ 메뉴에서 바꾼다(숨김에서 되돌릴 길이 C 키뿐이었다). */
@@ -705,9 +697,6 @@
 .ml-watch-meta:empty { display: none; }
 .ml-watch-meta .verified { margin: 0 2px 0 0; color: var(--ml-media-accent, #00ffa3); font-size: 11px; }
 .ml-watch-meta .sep { margin: 0 5px; font-style: normal; opacity: 0.6; }
-/* 머리줄 — 다른 방송으로 바로 바꿔 보기(멀티라이브에 없는 팔로잉 라이브) */
-.ml-watch-rail { flex: 0 1 auto; min-width: 0; } /* 넘침은 위(가로 넘김·끝 흐림) */
-.ml-watch-rail[hidden], .page-multilive:not(.as-watch) .ml-watch-rail { display: none; }
 /* 채팅 표시 방식 — 숨김 / 영상 위(예전 시청 화면과 같은 자리·너비) */
 .ml-body.chat-hidden :is(.ml-chat, .chat-splitter, .chat-reopen) { display: none !important; }
 .ml-body.chat-hidden .ml-main { margin-right: 0; }

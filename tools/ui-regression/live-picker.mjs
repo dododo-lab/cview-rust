@@ -91,7 +91,13 @@ const chips = () => page.evaluate(() => {
   const p = document.querySelector('.ml-watch-picker');
   return p.hidden ? [] : [...p.querySelectorAll('.ml-watch-chip')].map((b) => b.textContent.trim().replace('이름-', '') + (b.classList.contains('active') ? '*' : ''));
 });
-const rail = () => page.evaluate(() => [...document.querySelectorAll('.ml-watch-rail [data-rail-channel]')].map((b) => b.dataset.railChannel));
+// 칩 줄 가운데가 머리줄 가운데와 얼마나 어긋났는지(px) — 머리줄은 좌우 패딩을 뺀 안쪽 폭 기준
+const centerOffset = () => page.evaluate(() => {
+  const h = document.querySelector('.ml-header'); const cs = getComputedStyle(h);
+  const hr = h.getBoundingClientRect(); const pr = document.querySelector('.ml-watch-picker').getBoundingClientRect();
+  const mid = (hr.left + parseFloat(cs.paddingLeft) + hr.right - parseFloat(cs.paddingRight)) / 2;
+  return Math.abs((pr.left + pr.right) / 2 - mid);
+});
 const shot = process.env.SHOT_DIR;
 
 const results = [];
@@ -120,20 +126,22 @@ await check('채널 추가 사이드바 줄을 눌러 연 채널도 머리줄에
   assert.deepEqual(await chips(), ['p1', 'p2', 'p3*']);
 });
 
-await check('사이드바 + 로 담은 채널은 머리줄에 생기고 다른 방송 줄에서 빠진다', async () => {
+await check('사이드바 + 로 담은 채널은 머리줄에 생기고, 채널 줄은 머리줄 가운데에 있다', async () => {
   if (!(await page.isVisible('.ml-addrow-act[data-channel-id="p4"]'))) {
     await page.evaluate(() => [...document.querySelectorAll('[data-ml="add"]')].find((b) => b.offsetParent).click());
   }
   await page.click('.ml-addrow-act[data-channel-id="p4"]');
   await settle();
   assert.deepEqual(await chips(), ['p1', 'p2', 'p3*', 'p4']);
-  const r = await rail();
-  assert.ok(!r.includes('p4') && !r.includes('p1'), `다른 방송 줄: ${r}`);
+  assert.equal(await page.locator('.ml-watch-rail, .ml-header .rail-item').count(), 0, '머리줄에 다른 방송 줄이 없다');
+  await page.keyboard.press('Escape'); // 사이드바 닫기 — 열린 채로는 머리줄 폭이 좁다
+  await settle();
+  const off = await centerOffset();
+  assert.ok(off <= 1, `채널 줄이 가운데에서 ${off}px 어긋남`);
   if (shot) await page.screenshot({ path: path.join(shot, 'picker-4.png'), clip: { x: 0, y: 0, width: 1280, height: 120 } });
 });
 
 await check('라이브 상한이 차면 가장 오래전에 둘러본 채널을 바꿔 끼운다', async () => {
-  await page.keyboard.press('Escape'); // 사이드바 닫기
   await play('p5'); // 5 / 5
   await settle();
   await play('p6'); // 가득 — p1(가장 오래된 둘러본 채널)을 뺀다

@@ -101,8 +101,9 @@ export class MultiLivePage {
         <h1 class="page-title">라이브</h1>
         ${liveModeSwitch('multilive')}
         <span class="page-subtitle ml-count"></span>
+        <div class="ml-head-gap before" data-tauri-drag-region></div>
         <div class="ml-watch-picker" role="group" aria-label="라이브로 볼 채널" hidden></div>
-        <div class="grow" data-tauri-drag-region></div>
+        <div class="ml-head-gap after" data-tauri-drag-region></div>
         <div class="ml-toolbar">
           <div class="ml-more">
             <button class="ml-tb-icon" data-ml-more title="더 보기" aria-label="더 보기" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg></button>
@@ -186,6 +187,12 @@ export class MultiLivePage {
       if (this.watchPickerReveal) this.revealActiveWatchChip();
       this.syncWatchPickerFade();
     }).observe(this.watchPicker);
+    // 채널 칩 줄을 머리줄 한가운데로 — 왼쪽 묶음과 오른쪽 도구의 폭 차이를 재서 빈칸에 얹는다(CSS .ml-head-gap).
+    this.header = this.root.querySelector('.ml-header');
+    this.headGaps = [this.root.querySelector('.ml-head-gap.before'), this.root.querySelector('.ml-head-gap.after')];
+    const centerObserver = new ResizeObserver(() => this.syncHeaderCenter());
+    for (const el of this.header.children) if (!el.classList.contains('ml-head-gap') && el !== this.watchPicker) centerObserver.observe(el);
+    centerObserver.observe(this.header);
     // 세로 휠로도 가로로 넘긴다(트랙패드 가로 밀기는 그대로)
     this.watchPicker.addEventListener('wheel', (e) => {
       const p = this.watchPicker;
@@ -291,7 +298,7 @@ export class MultiLivePage {
       onOpen: onOpenChannel,
       addLabel: '멀티라이브에 추가',
     });
-    this.watch = new WatchTools(this, { isLoggedIn });
+    this.watch = new WatchTools(this);
 
     listenHere(Events.multiLiveCommand, (p) => p && this.dispatch(p.slot, p.script));
     listen(Events.multiLiveState, (s) => this.render(s));
@@ -989,6 +996,19 @@ export class MultiLivePage {
       if (this.watchPickerReveal) this.revealActiveWatchChip();
       this.syncWatchPickerFade();
     });
+  }
+
+  /** 머리줄 왼쪽 묶음(아이콘·제목·전환)과 오른쪽 도구의 폭 차이 — 채널 칩 줄을 한가운데 두는 데 쓴다. */
+  syncHeaderCenter() {
+    const h = this.header;
+    const [before, after] = this.headGaps;
+    if (!h || h.offsetParent === null) return;
+    const cs = getComputedStyle(h);
+    const box = h.getBoundingClientRect();
+    const left = before.getBoundingClientRect().left - (box.left + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth));
+    const right = (box.right - parseFloat(cs.paddingRight) - parseFloat(cs.borderRightWidth)) - after.getBoundingClientRect().right;
+    const shift = `${Math.round(right - left)}px`;
+    if (h.style.getPropertyValue('--ml-center-shift') !== shift) h.style.setProperty('--ml-center-shift', shift);
   }
 
   revealActiveWatchChip() {
