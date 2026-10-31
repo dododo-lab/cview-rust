@@ -66,6 +66,7 @@ function mockTauri() {
     multilive_select: ({ sessionId }) => { state.selectedId = sessionId; return sync(); },
     popular_lives: () => lives,
     following_lives: () => [],
+    preview_source: () => null, // 영상 미리보기는 hover-preview.mjs 가 본다 — 여기선 말풍선만
   };
   window.__mock = { state, handlers, calls };
   window.__TAURI__ = {
@@ -139,6 +140,38 @@ await check('사이드바 + 로 담은 채널은 머리줄에 생기고, 채널 
   const off = await centerOffset();
   assert.ok(off <= 1, `채널 줄이 가운데에서 ${off}px 어긋남`);
   if (shot) await page.screenshot({ path: path.join(shot, 'picker-4.png'), clip: { x: 0, y: 0, width: 1280, height: 120 } });
+});
+
+await check('칩에 마우스를 올리면 미리보기 말풍선이 그 칩 아래에 열리고, 벗어나면 닫힌다', async () => {
+  const peek = () => page.evaluate(() => {
+    const e = document.querySelector('.ml-peek');
+    const r = e.getBoundingClientRect();
+    return { hidden: e.hidden, mid: r.left + r.width / 2, top: r.top, title: e.querySelector('.ml-peek-title')?.textContent, described: document.querySelectorAll('.ml-watch-chip[aria-describedby]').length };
+  });
+  const chip = page.locator('.ml-watch-chip:not(.active)').first();
+  await chip.hover();
+  await page.waitForTimeout(600);
+  const box = await chip.boundingBox();
+  let p = await peek();
+  assert.ok(!p.hidden, '말풍선이 열린다');
+  assert.equal(p.title, '방송 p1');
+  assert.ok(p.top >= box.y + box.height, '칩 아래');
+  // 옆 칩으로 옮기면 기다리지 않고 바뀐다, 칩 표시는 하나만
+  await page.locator('.ml-watch-chip:not(.active)').nth(1).hover();
+  await page.waitForTimeout(150);
+  p = await peek();
+  assert.equal(p.title, '방송 p2');
+  assert.equal(p.described, 1);
+  // 지금 보는 칩에선 열지 않는다
+  await page.locator('.ml-watch-chip.active').hover();
+  await page.waitForTimeout(500);
+  assert.ok((await peek()).hidden, '보는 칩은 말풍선 없음');
+  await chip.hover();
+  await page.waitForTimeout(600);
+  await page.mouse.move(640, 600);
+  await page.waitForTimeout(300);
+  p = await peek();
+  assert.ok(p.hidden && p.described === 0, '벗어나면 닫힌다');
 });
 
 await check('라이브 상한이 차면 가장 오래전에 둘러본 채널을 바꿔 끼운다', async () => {
