@@ -81,6 +81,7 @@ function loadHls() {
 class HoverPreview {
   constructor() {
     this.host = null; // 지금 미리보기(또는 대기) 중인 썸네일 자리
+    this.manual = false; // 다른 화면 코드가 직접 연 미리보기(previewInto) — 포인터 위임·목록 화면 검사를 하지 않는다
     this.rest = null; // 끝난(시간 초과·실패·누름) 자리 — 포인터가 나갔다 들어오기 전엔 다시 시작하지 않는다
     this.seq = 0;
     this.delay = 0;
@@ -99,7 +100,8 @@ class HoverPreview {
     // 누르면 곧 재생 화면으로 넘어간다 — 미리보기 연결을 먼저 놓는다.
     root.addEventListener('pointerdown', () => this.stop(), true);
     root.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') this.stop(); }, true);
-    root.addEventListener('scroll', () => this.stop({ rest: false }), { capture: true, passive: true });
+    // 직접 연 미리보기(previewInto)는 여는 쪽이 닫는다 — 라이브 화면은 채팅이 늘 굴러가 scroll 이 끊이지 않는다.
+    root.addEventListener('scroll', () => { if (!this.manual) this.stop({ rest: false }); }, { capture: true, passive: true });
     window.addEventListener('blur', () => this.stop());
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.stop(); });
   }
@@ -107,7 +109,7 @@ class HoverPreview {
   onOver(e) {
     if (e.pointerType === 'touch') return;
     const host = e.target instanceof Element ? e.target.closest('[data-preview]') : null;
-    if (!host || host === this.host || host === this.rest) return;
+    if (!host || host === this.host || host === this.rest || this.manual) return;
     this.stop({ rest: false });
     if (!previewAllowed() || !hostAllowed(host)) return;
     const target = parsePreview(host.dataset.preview);
@@ -121,7 +123,7 @@ class HoverPreview {
     const to = e.relatedTarget;
     const inside = (el) => to instanceof Node && el.contains(to);
     if (this.rest && !inside(this.rest)) this.rest = null;
-    if (!this.host || inside(this.host)) return;
+    if (!this.host || this.manual || inside(this.host)) return;
     this.stop({ rest: false });
   }
 
@@ -212,7 +214,7 @@ class HoverPreview {
     this.cap = setTimeout(() => this.stop(), MAX_PLAY_MS[kind]);
     // 목록 자동 새로고침·화면 이동으로 카드가 떨어지거나 가려지면 정리한다.
     this.watch = setInterval(() => {
-      if (!host.isConnected || !hostAllowed(host)) this.stop();
+      if (!host.isConnected || (!this.manual && !hostAllowed(host))) this.stop();
     }, 1000);
   }
 
@@ -225,8 +227,10 @@ class HoverPreview {
     const host = this.host;
     const v = this.video;
     const hls = this.hls;
+    const manual = this.manual;
     this.host = null;
-    if (host) this.rest = rest ? host : null;
+    this.manual = false;
+    if (host && !manual) this.rest = rest ? host : null;
     this.video = null;
     this.hls = null;
     if (host) host.classList.remove('preview-loading', 'preview-on');
@@ -240,6 +244,15 @@ class HoverPreview {
       v.remove();
     }, FADE_MS);
   }
+
+  /** 화면 코드가 직접 여는 미리보기 — 지연은 부르는 쪽이 둔다. 닫기는 stop(). */
+  open(host, target) {
+    this.stop({ rest: false });
+    if (!previewAllowed() || !target) return;
+    this.host = host;
+    this.manual = true;
+    this.start(host, target, ++this.seq);
+  }
 }
 
 const controller = new HoverPreview();
@@ -252,4 +265,17 @@ export function installHoverPreview(root = document) {
 
 export function stopHoverPreview() {
   controller.stop();
+}
+
+/**
+ * 목록 카드가 아닌 자리(라이브 머리줄 채널 칩의 말풍선 등)에 미리보기를 연다. `host` 는 position 이 있는 칸 —
+ * 영상은 그 안 첫 img 바로 뒤에 깔리고 첫 장이 나오면 `preview-on` 이 붙는다. 설정 "썸네일 미리보기"·절약 모드를 따른다.
+ */
+export function previewInto(host, kind, id) {
+  controller.open(host, parsePreview(`${kind}:${id}`));
+}
+
+/** previewInto 로 연 것만 닫는다(목록 카드의 미리보기는 건드리지 않는다). */
+export function closePreviewIn(host) {
+  if (controller.host === host) controller.stop({ rest: false });
 }

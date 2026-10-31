@@ -21,6 +21,7 @@ import { uptimeText } from './cards.js';
 import { MultiLiveAddDrawer } from './ml-add-drawer.js';
 import { snapshotPanes, playLayoutMotion, playExit, cancelExit, bindPaneDrag, releaseDragged, motionEnabled } from './ml-motion.js';
 import { MultiLiveMergedChat } from './ml-multichat.js';
+import { ChipPeek } from './ml-chip-peek.js';
 import { WatchTools, watchTopHtml } from './ml-watch.js';
 import { WatchInfoPanel } from './ml-watch-info.js';
 
@@ -101,8 +102,9 @@ export class MultiLivePage {
         <h1 class="page-title">라이브</h1>
         ${liveModeSwitch('multilive')}
         <span class="page-subtitle ml-count"></span>
+        <div class="ml-head-gap before" data-tauri-drag-region></div>
         <div class="ml-watch-picker" role="group" aria-label="라이브로 볼 채널" hidden></div>
-        <div class="grow" data-tauri-drag-region></div>
+        <div class="ml-head-gap after" data-tauri-drag-region></div>
         <div class="ml-toolbar">
           <div class="ml-more">
             <button class="ml-tb-icon" data-ml-more title="더 보기" aria-label="더 보기" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg></button>
@@ -186,6 +188,14 @@ export class MultiLivePage {
       if (this.watchPickerReveal) this.revealActiveWatchChip();
       this.syncWatchPickerFade();
     }).observe(this.watchPicker);
+    // 칩에 마우스를 올리면 말풍선으로 그 채널 미리보기(썸네일·제목·시청자 + 소리 없는 영상)
+    this.chipPeek = new ChipPeek(this.watchPicker, (id) => (this.state?.sessions || []).find((x) => x.id === id));
+    // 채널 칩 줄을 머리줄 한가운데로 — 왼쪽 묶음과 오른쪽 도구의 폭 차이를 재서 빈칸에 얹는다(CSS .ml-head-gap).
+    this.header = this.root.querySelector('.ml-header');
+    this.headGaps = [this.root.querySelector('.ml-head-gap.before'), this.root.querySelector('.ml-head-gap.after')];
+    const centerObserver = new ResizeObserver(() => this.syncHeaderCenter());
+    for (const el of this.header.children) if (!el.classList.contains('ml-head-gap') && el !== this.watchPicker) centerObserver.observe(el);
+    centerObserver.observe(this.header);
     // 세로 휠로도 가로로 넘긴다(트랙패드 가로 밀기는 그대로)
     this.watchPicker.addEventListener('wheel', (e) => {
       const p = this.watchPicker;
@@ -291,7 +301,7 @@ export class MultiLivePage {
       onOpen: onOpenChannel,
       addLabel: '멀티라이브에 추가',
     });
-    this.watch = new WatchTools(this, { isLoggedIn });
+    this.watch = new WatchTools(this);
 
     listenHere(Events.multiLiveCommand, (p) => p && this.dispatch(p.slot, p.script));
     listen(Events.multiLiveState, (s) => this.render(s));
@@ -965,12 +975,13 @@ export class MultiLivePage {
     const list = watched ? sessions.filter((x) => x.slot != null) : [];
     const picker = this.watchPicker;
     picker.hidden = list.length < 2;
-    if (picker.hidden) { picker.innerHTML = ''; this.watchPickerHtml = ''; return; }
+    if (picker.hidden) { this.chipPeek.close(); picker.innerHTML = ''; this.watchPickerHtml = ''; return; }
     const html = list.map((x) => {
       const on = x.id === watched.id;
       const avatar = safeUrl(x.profileImageUrl);
       const name = x.channelName || x.channelId;
-      return `<button class="ml-watch-chip${on ? ' active' : ''}" data-ml="watch" data-session-id="${esc(x.id)}" aria-pressed="${on}" title="${esc(on ? `${name} — 지금 보는 채널` : `${name} 라이브로 보기`)}">
+      // 지금 보는 칩만 글자 툴팁 — 나머지는 미리보기 말풍선(ml-chip-peek.js)이 대신한다(둘이 겹쳐 뜨지 않게).
+      return `<button class="ml-watch-chip${on ? ' active' : ''}" data-ml="watch" data-session-id="${esc(x.id)}" aria-pressed="${on}" ${on ? `title="${esc(`${name} — 지금 보는 채널`)}"` : `aria-label="${esc(`${name} 라이브로 보기`)}"`}>
         ${avatar ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="ml-watch-dot"></span>'}
         <span class="ellipsis">${esc(name)}</span>
       </button>`;
@@ -978,6 +989,7 @@ export class MultiLivePage {
     // 상태 알림마다 다시 그리면 칩의 호버·키보드 초점이 날아간다 — 바뀐 때만.
     if (html === this.watchPickerHtml) return;
     this.watchPickerHtml = html;
+    this.chipPeek.close(); // 가리키던 칩이 떨어진다
     picker.innerHTML = html;
     // 칩이 넘치면 가로로 넘겨 보는데, 새로 연 채널(지금 보는 칩)이 넘친 쪽에 숨으면 추가가 안 된 것처럼 보였다 — 보이는 자리로.
     // 같은 알림에서 옆의 다른 방송 줄을 비웠다 다시 채우면 칩 줄이 잠깐 넘치지 않아 맞춘 자리가 0 으로 돌아갔다 —
@@ -989,6 +1001,19 @@ export class MultiLivePage {
       if (this.watchPickerReveal) this.revealActiveWatchChip();
       this.syncWatchPickerFade();
     });
+  }
+
+  /** 머리줄 왼쪽 묶음(아이콘·제목·전환)과 오른쪽 도구의 폭 차이 — 채널 칩 줄을 한가운데 두는 데 쓴다. */
+  syncHeaderCenter() {
+    const h = this.header;
+    const [before, after] = this.headGaps;
+    if (!h || h.offsetParent === null) return;
+    const cs = getComputedStyle(h);
+    const box = h.getBoundingClientRect();
+    const left = before.getBoundingClientRect().left - (box.left + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth));
+    const right = (box.right - parseFloat(cs.paddingRight) - parseFloat(cs.borderRightWidth)) - after.getBoundingClientRect().right;
+    const shift = `${Math.round(right - left)}px`;
+    if (h.style.getPropertyValue('--ml-center-shift') !== shift) h.style.setProperty('--ml-center-shift', shift);
   }
 
   revealActiveWatchChip() {

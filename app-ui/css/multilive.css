@@ -541,8 +541,14 @@
   border-radius: 9px; background: var(--surface-elevated); border: 1px solid var(--border-subtle);
 }
 .ml-watch-picker[hidden] { display: none; }
+/* 채널 칩 줄은 머리줄 가운데(사용자 요청 2026-10-31). 양쪽 빈칸(.ml-head-gap)이 남은 폭을 똑같이 나눠 갖되, 왼쪽 묶음
+   (아이콘·제목·전환)과 오른쪽 도구 폭이 달라도 머리줄 한가운데에 오도록 좁은 쪽 빈칸에 그 차이(--ml-center-shift,
+   multilive.js 가 잰다)를 먼저 얹는다. 폭이 모자라면 빈칸부터 줄고, 그다음 칩 줄이 줄어 가로로 넘겨 본다. */
+.ml-head-gap { flex: 1 1 0; min-width: 0; }
+.ml-head-gap.before { flex-basis: max(0px, var(--ml-center-shift, 0px)); }
+.ml-head-gap.after { flex-basis: max(0px, calc(-1 * var(--ml-center-shift, 0px))); }
 .ml-watch-picker::-webkit-scrollbar { display: none; }
-/* 칩이 넘치면 가려진 쪽 끝을 흐리게(multilive.js 가 fade-* 를 단다) — 다른 방송 줄과 같다 */
+/* 칩이 넘치면 가려진 쪽 끝을 흐리게(multilive.js 가 fade-* 를 단다) */
 .ml-watch-picker.fade-end { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
 .ml-watch-picker.fade-start { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px); mask-image: linear-gradient(to right, transparent, #000 28px); }
 .ml-watch-picker.fade-start.fade-end { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
@@ -561,20 +567,56 @@
 .ml-watch-chip.active img, .ml-watch-chip.active .ml-watch-dot { box-shadow: 0 0 0 2px var(--primary); }
 .ml-watch-dot { background: var(--surface-overlay); }
 .ml-watch-chip .ellipsis { min-width: 0; padding-block: 2px; }
-/* 멀티라이브 채널 칩 ↔ 다른 방송 줄 — 두 묶음 사이에 세로 구분선. 다른 방송 줄의 링은 라이브 빨강(선택 칩의 초록 테두리와 헷갈렸다). */
-.ml-watch-picker:not([hidden]) + .ml-watch-rail:not([hidden]) { margin-left: 2px; padding-left: 10px; border-left: 1px solid var(--border); border-radius: 0; }
-.ml-watch-rail .rail-item { background: var(--live-badge, #e5262b); }
-.ml-watch-rail .rail-item:hover, .ml-watch-rail .rail-item:focus-visible { background: color-mix(in srgb, var(--live-badge, #e5262b) 80%, #fff); }
-/* 다른 방송 줄이 넘치면 말없이 자르지 않고 가로로 넘겨 볼 수 있게(Tab 초점이 가면 그 자리로 굴러간다) — 넘친 쪽 끝은 흐리게(ml-watch.js 가 fade-* 를 단다). */
-/* 머리줄 높이(30px 줄 + 위아래 8px)를 넘지 않게 — 링 포함 30px(아바타 26 + 링 2×2). 레일의 위아래 2px 는 확대(hover)할
-   자리라 음수 margin 으로 레이아웃에서 뺀다. 예전 32px 링 + 2px 여백(36px)이 머리줄을 6px 키워 목록 화면과 높이가 달랐다. */
-.ml-watch-rail { margin-block: -2px; }
-.ml-watch-rail .rail-item .avatar { width: 26px; height: 26px; }
-.ml-watch-rail { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; scroll-padding-inline: 12px; }
-.ml-watch-rail::-webkit-scrollbar { display: none; }
-.ml-watch-rail.fade-end { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); }
-.ml-watch-rail.fade-start { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px); mask-image: linear-gradient(to right, transparent, #000 28px); }
-.ml-watch-rail.fade-start.fade-end { -webkit-mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, transparent, #000 28px, #000 calc(100% - 28px), transparent); }
+/* 다듬기(2026-10-31) — 고른 판이 칩 사이를 옮겨 갈 때 부드럽게, 고르지 않은 칩의 아바타는 조금 가라앉혔다가 올리면 또렷하게.
+   고른 칩의 링은 아바타에서 한 칸 띄운 초록 링(바탕색 2px + 초록 2px) — 붙은 링보다 가볍다. 아바타 20 + 링 4 = 28 로 줄(30) 안. */
+.ml-watch-chip { transition: background-color .18s var(--ease-out), color .18s var(--ease-out), box-shadow .18s var(--ease-out); }
+.ml-watch-chip img, .ml-watch-dot { transition: opacity .18s var(--ease-out), filter .18s var(--ease-out), box-shadow .18s var(--ease-out); }
+.ml-watch-chip:not(.active) img { opacity: .78; filter: saturate(.75); }
+.ml-watch-chip:not(.active):is(:hover, :focus-visible, [aria-describedby]) img { opacity: 1; filter: none; }
+.ml-watch-chip:not(.active)[aria-describedby] { color: var(--text-primary); background: var(--hover); }
+.ml-watch-chip.active img, .ml-watch-chip.active .ml-watch-dot { box-shadow: 0 0 0 2px var(--surface-base), 0 0 0 4px var(--primary); }
+.ml-watch-chip.active { padding-left: 6px; gap: 8px; }
+
+/* ── 채널 칩 미리보기 말풍선(ml-chip-peek.js) — 칩 바로 아래, 꼬리가 칩 가운데를 가리킨다 ── */
+.ml-peek {
+  position: fixed; z-index: 1000; pointer-events: none; box-sizing: border-box;
+  --peek-bg: var(--surface-overlay); --peek-line: var(--border);
+  padding: 6px; border-radius: 14px; background: var(--peek-bg); border: 1px solid var(--peek-line);
+  box-shadow: var(--shadow-lg); transform-origin: var(--tail-x, 50%) -10px;
+  transition: left .16s var(--ease-out);
+}
+.ml-peek[hidden] { display: none; }
+/* 어두운 테마는 머리줄(유리)과 구분되게 한 단 밝은 판, 밝은 테마는 흰 판 */
+:root[data-theme="light"] .ml-peek { --peek-bg: var(--surface-base); --peek-line: var(--border-subtle); }
+@media (prefers-color-scheme: light) { :root[data-theme="system"] .ml-peek { --peek-bg: var(--surface-base); --peek-line: var(--border-subtle); } }
+.ml-peek.in { animation: ml-peek-in .18s var(--ease-out); }
+@keyframes ml-peek-in { from { opacity: 0; transform: translateY(-4px) scale(.97); } to { opacity: 1; transform: none; } }
+/* 꼬리 — 말풍선과 같은 바탕·테두리의 마름모 반쪽 */
+.ml-peek::before {
+  content: ""; position: absolute; top: -6px; left: calc(var(--tail-x, 50%) - 6px); width: 11px; height: 11px;
+  background: var(--peek-bg); border-left: 1px solid var(--peek-line); border-top: 1px solid var(--peek-line);
+  border-top-left-radius: 3px; transform: rotate(45deg); transition: left .16s var(--ease-out);
+}
+.ml-peek-thumb { position: relative; aspect-ratio: 16 / 9; border-radius: 9px; overflow: hidden; background: #000; }
+.ml-peek-thumb > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ml-peek-blank { position: absolute; inset: 0; display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--primary) 22%, #111), #0b0b0d 70%); }
+.ml-peek-blank img { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; box-shadow: 0 0 0 3px rgba(255, 255, 255, .12); }
+.ml-peek-badges { position: absolute; z-index: 2; top: 7px; left: 7px; display: flex; gap: 5px; }
+.ml-peek-live, .ml-peek-viewers { height: 19px; display: inline-flex; align-items: center; gap: 4px;
+  padding: 0 6px; border-radius: 5px; font-size: 11px; font-weight: 700; line-height: 1; color: #fff; }
+.ml-peek-live { background: var(--live-badge, #e5262b); letter-spacing: .3px; }
+.ml-peek-viewers { background: rgba(0, 0, 0, .62); font-weight: 600; font-variant-numeric: tabular-nums; }
+.ml-peek-viewers svg { width: 12px; height: 12px; }
+.ml-peek-thumb.preview-loading::after { z-index: 3; }
+.ml-peek-body { padding: 9px 6px 5px; display: flex; flex-direction: column; gap: 7px; }
+.ml-peek-title { font-size: var(--fs-caption); font-weight: 650; line-height: 1.35; color: var(--text-primary);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: keep-all; overflow-wrap: anywhere; }
+.ml-peek-name { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 12px; color: var(--text-secondary); }
+.ml-peek-name img { width: 18px; height: 18px; border-radius: 50%; flex: none; object-fit: cover; }
+.ml-peek-name .ellipsis { min-width: 0; flex: 0 1 auto; }
+.ml-peek-name em { margin-left: auto; flex: none; font-style: normal; font-size: 11px; color: var(--text-tertiary); }
+:root[data-motion="reduced"] .ml-peek, :root[data-motion="reduced"] .ml-peek::before { animation: none; transition: none; }
 /* 단독 무대의 오버레이 채팅(z 6)이 패인 ⚙·⋯ 메뉴를 덮었다 — 메뉴는 패인 쌓임 맥락 안이라 z 로는 못 올린다. 채팅 왼쪽으로 비켜 연다. */
 .page-multilive.as-watch .ml-body.chat-overlay .ml-pane-menu { right: min(calc(var(--overlay-w, 320px) + 28px), calc(100% - 186px)); }
 /* 좁은 단독 무대 — 막대의 채팅 표시 방식 단추가 접히면 ⋯ 메뉴에서 바꾼다(숨김에서 되돌릴 길이 C 키뿐이었다). */
@@ -705,9 +747,6 @@
 .ml-watch-meta:empty { display: none; }
 .ml-watch-meta .verified { margin: 0 2px 0 0; color: var(--ml-media-accent, #00ffa3); font-size: 11px; }
 .ml-watch-meta .sep { margin: 0 5px; font-style: normal; opacity: 0.6; }
-/* 머리줄 — 다른 방송으로 바로 바꿔 보기(멀티라이브에 없는 팔로잉 라이브) */
-.ml-watch-rail { flex: 0 1 auto; min-width: 0; } /* 넘침은 위(가로 넘김·끝 흐림) */
-.ml-watch-rail[hidden], .page-multilive:not(.as-watch) .ml-watch-rail { display: none; }
 /* 채팅 표시 방식 — 숨김 / 영상 위(예전 시청 화면과 같은 자리·너비) */
 .ml-body.chat-hidden :is(.ml-chat, .chat-splitter, .chat-reopen) { display: none !important; }
 .ml-body.chat-hidden .ml-main { margin-right: 0; }

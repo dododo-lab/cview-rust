@@ -951,6 +951,7 @@ impl MultiLiveShell {
                     channel_id: snap.channel_id,
                     channel_name: snap.channel_name,
                     live_title: snap.live_title,
+                    thumbnail_url: snap.thumbnail_url,
                     profile_image_url: snap.profile_image_url,
                     viewer_count_text: snap.formatted_viewer_count,
                     accumulate_count: snap.accumulate_count,
@@ -1061,6 +1062,8 @@ pub struct MultiLivePaneDto {
     pub channel_id: String,
     pub channel_name: String,
     pub live_title: String,
+    /// 라이브 썸네일(`{type}` 치환됨) — 라이브 머리줄 칩의 미리보기 말풍선이 영상 전에 먼저 보여 준다.
+    pub thumbnail_url: Option<String>,
     pub profile_image_url: Option<String>,
     pub viewer_count_text: String,
     /// 누적 시청자 수 — 아직 모르면 0.
