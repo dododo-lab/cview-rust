@@ -40,7 +40,7 @@ export function vodCard(v) {
   return `
     <article class="card media-card" tabindex="0" data-vod-no="${esc(v.videoNo)}" title="${esc(v.videoTitle)}">
       <div class="thumb"${v.adult ? '' : previewAttr('vod', v.videoNo)}>
-        ${thumb ? `<img src="${esc(imageSrc(thumb, 'static'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
+        ${thumb ? `<img src="${esc(imageSrc(thumb, 'vod'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
         <span class="badge-duration">${esc(formatDuration(v.duration))}</span>
       </div>
       <div class="card-body"><div class="card-text">
@@ -56,7 +56,7 @@ export function clipCard(c) {
   return `
     <article class="card media-card clip" tabindex="0" data-clip-uid="${esc(c.clipUID || c.clipUid)}" title="${esc(c.clipTitle)}">
       <div class="thumb"${c.adult ? '' : previewAttr('clip', c.clipUID || c.clipUid)}>
-        ${thumb ? `<img src="${esc(imageSrc(thumb, 'static'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
+        ${thumb ? `<img src="${esc(imageSrc(thumb, 'clip'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
         <span class="badge-duration">${esc(formatDuration(c.duration))}</span>
       </div>
       <div class="card-body"><div class="card-text">

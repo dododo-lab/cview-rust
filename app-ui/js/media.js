@@ -234,7 +234,7 @@ export function continueCard(item) {
   return `
     <article class="card media-card" tabindex="0" data-vod-no="${esc(item.videoNo)}" title="${esc(item.title)}">
       <div class="thumb"${previewAttr('vod', item.videoNo)}>
-        ${thumb ? `<img src="${esc(imageSrc(thumb, 'static'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
+        ${thumb ? `<img src="${esc(imageSrc(thumb, 'vod'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
         <span class="badge-duration">${esc(formatDuration(item.duration))}</span>
         ${pct ? `<span class="progress-bar"><i style="width:${pct}%"></i></span>` : ''}
       </div>

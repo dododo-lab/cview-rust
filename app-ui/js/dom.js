@@ -100,7 +100,12 @@ export function safeUrl(value) {
 // - live: 라이브 썸네일 image_720(1280×720, ~150KB) → image_405(720×405, ~60KB). 카드 칸은 약 330×185.
 // - hero: 홈 큰 슬라이드 — 720 그대로.
 // - avatar / avatar-lg: 네이버 이미지 원본(최대 1344² PNG) → ?type=f120_120_na(~24KB) / f240_240_na.
-// - static: 카테고리 포스터·다시보기·이모티콘 등 — 크기는 그대로, 캐시만.
+// - vod: 다시보기 썸네일(가로) 원본 1280~1920px(~75~120KB) → ?type=w640(640×360, ~50KB). 카드 칸은 약 330×185.
+// - clip: 클립 썸네일(세로 칸 약 170×300). nng-phinf 는 늘 1080×1920(250~360KB) → ?type=w640(640×1138, ~100~130KB).
+//   video-phinf 클립은 가로·세로가 섞여 있어(가로 원본을 줄이면 세로 칸에서 흐려진다) 그대로 둔다.
+//   이미지 서버마다 받는 단계가 다르다(2026-10-31 실측: video-phinf w320·w400·w480·w640·w750, nng-phinf w640·w750).
+//   모르는 단계면 404 → Rust 이미지 서비스가 원본으로 한 번 더 받는다.
+// - static: 이모티콘·배지·사진 등 — 크기는 그대로, 캐시만.
 const IMAGE_HOSTS = /(^|\.)(pstatic\.net|akamaized\.net|naver\.net|naver\.com)$/i;
 const CVIMG_BASE = typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent)
   ? 'http://cvimg.localhost/'
@@ -110,6 +115,18 @@ const HAS_TAURI = typeof window !== 'undefined' && Boolean(window.__TAURI__);
 function sizedForBox(url, kind) {
   if (kind === 'live') {
     return url.replace(/\/image_(\d+)\.jpg(?=$|\?)/, (m, n) => (Number(n) > 405 ? '/image_405.jpg' : m));
+  }
+  if (kind === 'vod' || kind === 'clip') {
+    try {
+      const u = new URL(url);
+      const nng = /^nng-phinf\.pstatic\.net$/i.test(u.host);
+      const video = /^video-phinf\.pstatic\.net$/i.test(u.host);
+      if ((nng || (video && kind === 'vod')) && !u.search) {
+        u.searchParams.set('type', 'w640');
+        return u.toString();
+      }
+    } catch { /* 그대로 */ }
+    return url;
   }
   if (kind === 'avatar' || kind === 'avatar-lg') {
     try {

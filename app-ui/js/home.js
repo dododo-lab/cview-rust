@@ -97,7 +97,7 @@ function heroSlide(live, source) {
   return `
     <article class="hero-main card" tabindex="0" ${channelData(live)}>
       <div class="hero-media"${live.adult ? '' : previewAttr('live', live.channelId)}>
-        ${thumb ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(thumb, 'hero'))}" alt="" referrerpolicy="no-referrer">` : ''}
+        ${thumb ? `<img fetchpriority="high" decoding="async" src="${esc(imageSrc(thumb, 'hero'))}" alt="" referrerpolicy="no-referrer">` : ''}
       </div>
       <div class="hero-shade"></div>
       <div class="hero-info">
@@ -282,10 +282,15 @@ export class HomePage {
     this.loadRails(seq);
   }
 
-  renderGreeting(following = null, popular = null) {
+  /** 인사말의 닉네임만 다시 쓴다(요약 줄은 그대로). */
+  refreshGreetingName() {
     const auth = this.getAuth();
     const nick = auth && auth.loggedIn && auth.nickname ? `${auth.nickname}님, ` : '';
     this.greet.textContent = `${nick}${greeting()}`;
+  }
+
+  renderGreeting(following = null, popular = null) {
+    this.refreshGreetingName();
     if (this.date) this.date.textContent = dateLabel();
     const parts = [];
     if (following) parts.push(`<span class="pill${following.length ? ' live' : ''}"><i class="dot"></i>팔로잉 <b>${following.length}</b>명 방송 중</span>`);
@@ -355,6 +360,23 @@ export class HomePage {
     html += '<section class="home-section" data-rail="clips" hidden></section>';
     html += '</div>';
     swapContent(this.body, html);
+    this.preloadNextHero();
+  }
+
+  /** 다음 히어로 장의 큰 썸네일(720)을 미리 받아 둔다 — 자동 넘김 때 빈 칸이 잠깐 보이지 않게.
+   * 첫 화면 그림들과 다투지 않도록 조금 뒤에 한 장만. */
+  preloadNextHero() {
+    clearTimeout(this.preloadTimer);
+    if (this.hero.length < 2) return;
+    const next = this.hero[(this.heroIndex + 1) % this.hero.length];
+    const thumb = safeUrl(next && next.thumbnailUrl);
+    if (!thumb) return;
+    this.preloadTimer = setTimeout(() => {
+      const img = new Image();
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      img.src = imageSrc(thumb, 'hero');
+    }, 1200);
   }
 
   /** 이어 보기·인기 클립 레일 — 첫 화면을 막지 않게 나중에 채운다 (NAV-14). */
@@ -384,6 +406,7 @@ export class HomePage {
       q.classList.toggle('active', on);
       q.setAttribute('aria-selected', String(on));
     }
+    this.preloadNextHero();
   }
 
   onClick(e) {

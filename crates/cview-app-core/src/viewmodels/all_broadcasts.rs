@@ -290,6 +290,10 @@ fn trimmed_keyword(q: &str) -> Option<String> {
 
 impl AllBroadcastsViewModel {
     pub const PER_PAGE: usize = AllBroadcastsState::PER_PAGE;
+    /// 한 번에 받는 개수 — 치지직 `/service/v1/lives` 가 받아 주는 최대(51 이상은 400).
+    /// 화면 쪽 페이지(30개)와 따로 둔다: 30개씩 받으면 홈(48개)·사이드바(50개)가 첫 화면 전에
+    /// 요청을 두 번 차례로 기다렸다(실측 한 번 0.88초 ↔ 50개 한 번 0.95초).
+    pub const FETCH_SIZE: usize = 50;
     pub const SEARCH_DEBOUNCE: Duration = Duration::from_millis(300);
 
     pub fn new(api: Arc<dyn AllBroadcastsApi>) -> Self {
@@ -383,7 +387,7 @@ impl AllBroadcastsViewModel {
                 || s.is_loading_more
                 || s.is_refreshing
                 || !(s.state == LoadState::Loaded || s.state == LoadState::Empty)
-                || s.feed.len() > Self::PER_PAGE
+                || s.feed.len() > Self::FETCH_SIZE
             {
                 return false;
             }
@@ -426,7 +430,7 @@ impl AllBroadcastsViewModel {
         let result = self
             .shared
             .api
-            .top_lives_with_age(Self::PER_PAGE as i64)
+            .top_lives_with_age(Self::FETCH_SIZE as i64)
             .await;
         let mut s = self.lock();
         if generation != s.feed_generation {
@@ -478,7 +482,7 @@ impl AllBroadcastsViewModel {
             .shared
             .api
             .top_lives(
-                Self::PER_PAGE as i64,
+                Self::FETCH_SIZE as i64,
                 cursor.as_ref().and_then(|c| c.concurrent_user_count),
                 cursor.as_ref().and_then(|c| c.live_id),
             )

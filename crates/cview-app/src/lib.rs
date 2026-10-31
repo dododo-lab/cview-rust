@@ -27,6 +27,7 @@ pub mod windows;
 
 use std::sync::Arc;
 
+use cview_core::utils::following_poll::FollowingPollReason;
 use tauri::{AppHandle, Emitter, Manager, RunEvent, Runtime};
 
 use crate::commands::auth::broadcast_status;
@@ -52,6 +53,7 @@ fn spawn_auth_tasks<R: Runtime>(app: AppHandle<R>) {
         let mut expired = services.api.subscribe_session_expired();
         services.auth.initialize().await;
         services.sync_authentication().await;
+        prefetch_following(&app);
         // broadcast_status 는 쿠키 세션을 서버에 확인한다 — 죽은 세션이면 여기서 만료로 바뀌고 아래 루프가 다시 알린다.
         broadcast_status(&app, &services).await;
         loop {
@@ -75,6 +77,40 @@ fn spawn_auth_tasks<R: Runtime>(app: AppHandle<R>) {
             services.sync_authentication().await;
             broadcast_status(&app, &services).await;
         }
+    });
+}
+
+/// 시작 미리 받기 — 웹뷰가 뜨고 홈이 데이터를 부르기 전에 인기 라이브 첫 묶음을 받기 시작한다.
+/// 홈·사이드바의 `popular_lives` 는 같은 첫 로드를 기다려 이어 받는다(`load_initial_if_needed`).
+fn prefetch_popular<R: Runtime>(app: &AppHandle<R>) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let services = app.state::<AppServices>();
+        services.popular.load_initial_if_needed().await;
+        perf_log::emit(
+            "startup.prefetch_popular",
+            serde_json::json!({ "items": services.popular.read().feed.len() }),
+        );
+    });
+}
+
+/// 로그인 복원 직후 팔로잉 라이브도 미리 받기 시작한다 — 홈·사이드바의 화면 진입 폴은 진행 중인 폴에 붙는다.
+fn prefetch_following<R: Runtime>(app: &AppHandle<R>) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let services = app.state::<AppServices>();
+        if !services.auth.is_authenticated() {
+            return;
+        }
+        let ok = services
+            .following
+            .poll(FollowingPollReason::ScreenEntry)
+            .await
+            .is_some();
+        perf_log::emit(
+            "startup.prefetch_following",
+            serde_json::json!({ "ok": ok }),
+        );
     });
 }
 
@@ -263,6 +299,7 @@ pub fn run() {
             if let Err(e) = tray::install(&handle) {
                 tracing::warn!("메뉴 막대 아이콘을 달지 못했습니다: {e}");
             }
+            prefetch_popular(&handle);
             spawn_auth_tasks(handle);
             perf_log::emit("startup.setup_end", serde_json::json!({}));
             Ok(())
