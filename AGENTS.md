@@ -22,7 +22,7 @@ scripts/release-with-prs.sh [PR번호 ...] [-- release-macos.sh 옵션]
 - 개발용 `cargo run`, `cargo tauri build` 자체에는 게시 훅이 없다. 배포 요청을 개별 빌드 명령으로 대체하거나 `dist/` 생성만으로 완료했다고 보고하지 않는다.
 - 배포 전 변경 사항을 검토·커밋해서 작업 트리를 깨끗하게 만든다. 다른 작업자의 변경을 무단으로 되돌리거나 포함하지 않는다.
 - 먼저 `python3 scripts/publish-update.py --preflight`로 확인할 수 있다. Tailscale과 이 Mac의 전용 키가 필요하다. 비밀번호나 개인 키를 채팅·저장소·로그에 넣지 않는다.
-- 키 인증 거부 시 Proxifier의 `CView update SSH (Tailscale)` 규칙(`100.117.247.29:22`, Direct, Default보다 위)을 확인한다. iPhone 프록시를 거치면 서버가 다른 출발지로 인식해 정상 키를 거부할 수 있다. 자세한 진단은 `AUTOMATION.md`를 따른다.
+- 키 인증 거부 시 Proxifier의 `CView update SSH (Tailscale)` 규칙(업데이트 서버 SSH, Direct, Default보다 위)을 확인한다. 휴대폰 프록시를 거치면 서버가 다른 출발지로 인식해 정상 키를 거부할 수 있다. 자세한 진단은 `AUTOMATION.md`를 따른다.
 - macOS 공증 프로파일 기본값은 `cview-notarize`이며 `CVIEW_NOTARIZE_PROFILE`로 변경한다. `--no-notarize`는 사용자가 공증 생략을 명시적으로 허용한 경우에만 사용한다. 공증 실패를 피하려고 임의로 사용하지 않는다.
 - macOS와 Windows 설치 파일을 같은 버전으로 함께 게시한다. 배포에서 `CVIEW_SKIP_WINDOWS`는 금지한다. Windows 미서명/SmartScreen 안내를 설명에 유지한다.
 - 사용자에게 보여 줄 변경 사항은 UTF-8 파일로 작성하고 `CVIEW_RELEASE_NOTES_FILE=/절대/경로/notes.txt`로 전달한다. 생략하면 Git 변경 목록이 사용된다.

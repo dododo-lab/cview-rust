@@ -164,7 +164,6 @@ CView의 버전별 변경 사항이다. 모든 버전은 macOS(Apple Silicon)와
 
 - 선명한 화면: GPU 캔버스가 검은 화면만 그리면 다음 백엔드로 폴백
 - 선명한 화면: MSE(hls.js) 영상은 처음부터 WebGL 로 그린다
-- Document Proxifier routing fix for release SSH access
 
 ## [0.1.24](https://github.com/dododo-lab/cview-rust/releases/tag/v0.1.24) — 2026-10-25
 

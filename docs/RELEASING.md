@@ -40,11 +40,8 @@ python3 scripts/publish-update.py --version <버전> --notes-file dist/CView_<�
 **배포용 릴리스 빌드는 매번 업데이트 서버 게시와 검증까지 완료해야 한다.** 설치 파일을 로컬 `dist/`에 만들기만 한 상태는 릴리스 완료로 보지 않는다. 이 규칙은 macOS와 Windows 모두에 적용한다. 개발용 실행·디버그 빌드는 게시 대상이 아니다.
 
 - 업데이트 서버(공개 다운로드·릴리스 페이지): https://cv.dododo.app/
-- 최신 릴리스 피드: https://win-7sv7uak6k5b.horse-solfege.ts.net/releases/latest.json
-- 서버 게시 경로: `C:\CViewUpdates\site`
-- 서버 게시·검증 도구: `C:\CViewUpdates\tools\publish.py`, `C:\CViewUpdates\tools\check_server.py` (전용 `tools\python\python.exe`로 실행)
-- 외부 PC 업로드 공유: `\\100.117.247.29\CViewUpload$` (기존 서버 Administrator 계정, SMB 암호화 필수). macOS에서는 `smb://100.117.247.29/CViewUpload$`로 연결한다. [업로드·게시 사용 방법](../tools/windows-update-server/README.md).
-- 원격 PowerShell: Tailscale 연결 후 `ssh Administrator@100.117.247.29`로 접속한다. [접속·원격 게시 명령](../tools/windows-update-server/POWERSHELL-REMOTE.md).
+- 최신 릴리스 피드: https://cv.dododo.app/releases/latest.json
+- 수동 업로드·원격 게시 방법: [업로드·게시 안내](../tools/windows-update-server/README.md), [원격 PowerShell](../tools/windows-update-server/POWERSHELL-REMOTE.md)
 - 버전별 설치 파일과 `notes.txt`를 업로드한 뒤 서버의 관리자 PowerShell에서 `C:\CViewUpdates\tools\Publish-UploadedRelease.ps1 -Version <버전>`으로 게시·다운로드 검증을 실행할 수 있다.
 - 앱의 업데이트 확인과 다운로드에는 같은 Tailscale 네트워크 연결이 필요하다.
 
