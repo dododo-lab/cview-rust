@@ -90,6 +90,7 @@ export const SCHEMA = [
     { d: 'general', k: 'alwaysOnTop', label: '항상 위에', type: 'toggle' },
     { d: 'general', k: 'launchAtLogin', label: '로그인 시 자동 실행', type: 'toggle' },
     { d: 'general', k: 'showInMenuBar', label: '메뉴 막대에 표시', type: 'toggle' },
+    { d: 'general', k: 'autoCheckUpdates', label: '업데이트 자동 확인', help: '실행할 때와 6시간마다 새 버전을 확인해 사이드바와 알림으로 알려 줍니다', type: 'toggle' },
   ]],
   ['general', '알림', [
     { d: 'general', k: 'notificationsEnabled', label: '알림 사용', type: 'toggle' },
