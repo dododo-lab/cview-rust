@@ -81,6 +81,10 @@ await check('실행 직후엔 확인하지 않고 15초 뒤 조용히 확인 →
   assert.equal(await checks(), 1);
   assert.ok((await page.locator('#update-pill').innerText()).includes('새 버전 0.1.41'));
   assert.ok((await page.locator('.toast-stack').innerText()).includes('0.1.41'));
+  // 토스트는 창 하단 중앙 — 동작 단추가 있는 토스트가 오른쪽으로 밀리던 문제 회귀 방지
+  const pos = await page.evaluate(() => { const r = document.querySelector('.toast-stack .toast').getBoundingClientRect(); return { mid: r.left + r.width / 2, gap: innerHeight - r.bottom, w: innerWidth }; });
+  assert.ok(Math.abs(pos.mid - pos.w / 2) <= 2, `토스트 가로 중앙 아님: ${JSON.stringify(pos)}`);
+  assert.ok(pos.gap >= 8 && pos.gap <= 48, `토스트가 하단에 있지 않음: ${JSON.stringify(pos)}`);
   if (SHOTS) {
     await page.locator('.sidebar').screenshot({ path: `${SHOTS}/sidebar-expanded.png` });
     await page.screenshot({ path: `${SHOTS}/window.png` });

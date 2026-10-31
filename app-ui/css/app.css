@@ -1585,7 +1585,9 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 /* ══ 셸 (SYS-02·09·12·13·14) ═══════════════════════════════════ */
 .toast-stack { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
 .toast-stack .toast {
-  position: static; transform: none; pointer-events: auto; display: flex; align-items: center; gap: 12px;
+  /* 낱개 .toast 의 left:50%·bottom 을 지운다 — 동작 단추가 있는 토스트는 position:relative(motion.css 타이머 줄)라
+     남아 있으면 스택 너비의 절반만큼 오른쪽·24px 위로 밀려 하단 중앙에서 벗어났다. */
+  position: static; inset: auto; transform: none; pointer-events: auto; display: flex; align-items: center; gap: 12px;
   background: var(--surface-popover); color: var(--text-primary); padding: 9px 14px; border-radius: 12px;
   border: 1px solid var(--border-subtle); box-shadow: var(--shadow-lg); font-size: var(--fs-caption); max-width: min(560px, 90vw);
 }
