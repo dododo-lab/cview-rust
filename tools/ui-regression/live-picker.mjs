@@ -182,6 +182,30 @@ await check('라이브 상한이 차면 가장 오래전에 둘러본 채널을 
   assert.deepEqual(await chips(), ['p2', 'p3', 'p4', 'p5', 'p6*']);
 });
 
+await check('칩은 4개만 보이고 휠로 한 칸씩 넘긴다, 지금 보는 칩은 창 안', async () => {
+  const view = () => page.evaluate(() => {
+    const p = document.querySelector('.ml-watch-picker');
+    const shown = [...p.querySelectorAll('.ml-watch-chip')].filter((c) => !c.hidden).map((c) => c.textContent.trim().replace('이름-', '') + (c.classList.contains('active') ? '*' : ''));
+    const more = (k) => { const m = p.querySelector(`.ml-watch-more.${k}`); return m.hidden ? '' : m.textContent; };
+    return { shown, start: more('start'), end: more('end') };
+  });
+  assert.deepEqual(await view(), { shown: ['p3', 'p4', 'p5', 'p6*'], start: '+1', end: '' });
+  const box = await page.locator('.ml-watch-picker').boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, -100);
+  await page.waitForTimeout(100);
+  assert.deepEqual(await view(), { shown: ['p2', 'p3', 'p4', 'p5'], start: '', end: '+1' });
+  // 트랙패드처럼 작은 delta 는 모아서 한 칸
+  for (let i = 0; i < 3; i++) await page.mouse.wheel(0, 15);
+  await page.waitForTimeout(100);
+  assert.deepEqual((await view()).shown, ['p3', 'p4', 'p5', 'p6*']);
+  if (shot) await page.screenshot({ path: path.join(shot, 'window.png'), clip: { x: 0, y: 0, width: 1280, height: 70 } });
+  await page.click('.ml-watch-more.start');
+  assert.deepEqual(await view(), { shown: ['p2', 'p3', 'p4', 'p5'], start: '', end: '+1' });
+  await page.mouse.wheel(0, 100);
+  await page.waitForTimeout(100);
+});
+
 await check('머리줄이 넘쳐도 지금 보는 칩이 보인다', async () => {
   await page.setViewportSize({ width: 900, height: 800 });
   await settle();
