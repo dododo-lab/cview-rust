@@ -213,9 +213,39 @@ pub fn rebuild<R: Runtime>(app: &AppHandle<R>) {
             if let Err(e) = app.set_menu(menu) {
                 tracing::warn!("메뉴 갱신 실패: {e}");
             }
+            // 새 메뉴를 달면 창마다 메뉴 막대가 다시 보인다 — Windows 는 다시 숨긴다.
+            hide_menu_bars(app);
         }
         Err(e) => tracing::warn!("메뉴 만들기 실패: {e}"),
     }
+}
+
+/// Windows — 열린 창의 메뉴 막대를 모두 숨긴다. 단축키(가속기 표)는 메뉴 막대와 따로 살아 있고,
+/// 메뉴는 화면 오른쪽 위의 메뉴 버튼이 [`popup`] 으로 띄운다. macOS 는 화면 위 메뉴 막대라 그대로 둔다.
+pub fn hide_menu_bars<R: Runtime>(app: &AppHandle<R>) {
+    #[cfg(windows)]
+    for window in app.webview_windows().values() {
+        let _ = window.hide_menu();
+    }
+    #[cfg(not(windows))]
+    let _ = app;
+}
+
+/// 앱 메뉴를 창 안 (x, y)(논리 좌표)에 띄운다 — Windows 화면의 메뉴 버튼. 고른 항목은 메뉴 막대와 같은
+/// 경로([`forward`])로 화면에 간다.
+#[tauri::command]
+pub fn window_menu_popup<R: Runtime>(
+    window: tauri::WebviewWindow<R>,
+    x: f64,
+    y: f64,
+) -> crate::commands::CmdResult<()> {
+    let menu = window
+        .app_handle()
+        .menu()
+        .ok_or_else(|| crate::commands::CommandError("메뉴가 없습니다".into()))?;
+    window
+        .popup_menu_at(&menu, tauri::LogicalPosition::new(x, y))
+        .map_err(|e| crate::commands::CommandError(e.to_string()))
 }
 
 /// 메뉴를 만든다.

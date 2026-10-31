@@ -2471,10 +2471,30 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .sidebar.collapsed .brand-row { margin-bottom: 8px; }
 .sidebar.collapsed .brand-mark { width: 38px; height: 38px; }
 
-/* ══ Windows — 시스템 제목 막대가 있으므로 신호등 자리·끌기 띠를 걷는다 ══ */
+/* ══ Windows — 제목 막대·메뉴 막대 없이 창 단추(메뉴·최소화·최대화·닫기)를 오른쪽 위에 그린다(window-controls.js) ══
+   신호등이 없으니 사이드바 위 신호등 자리는 걷고, 오른쪽 위에 오는 머리줄·패널은 단추 묶음 폭(--wc-w)만큼 비킨다. */
+:root[data-platform="windows"] { --wc-w: 194px; --wc-h: 32px; }
 :root[data-platform="windows"] .titlebar-strip { height: 0; margin-top: 0; }
-:root[data-platform="windows"] .content-drag { display: none; }
-:root[data-platform="windows"][data-window] .page, :root[data-platform="windows"][data-window] .viewer { top: 0; }
+/* !important — 화면마다 머리줄 여백을 다시 정한다(라이브·멀티라이브·시청 화면). 창 단추 자리는 어느 머리줄이든 비워야 한다. */
+:root[data-platform="windows"]:not([data-window]) .page-header { padding-right: calc(var(--sp-md) + var(--wc-w)) !important; }
+:root[data-platform="windows"]:not([data-window]) .insight-panel { padding-top: var(--wc-h); }
+:root[data-platform="windows"]:not([data-window]) .ip-toggle { top: calc(var(--wc-h) + 14px); }
+/* 보조 창 — macOS 처럼 위 띠(신호등 대신 창 단추)를 두고 내용을 그 아래로 */
+:root[data-platform="windows"][data-window] .content-drag { height: var(--wc-h); }
+:root[data-platform="windows"][data-window] .page, :root[data-platform="windows"][data-window] .viewer { top: var(--wc-h); }
+.win-controls { position: fixed; top: 0; right: 0; z-index: 1100; display: flex; align-items: stretch; height: var(--wc-h);
+  -webkit-user-select: none; user-select: none; }
+:root.is-fullscreen .win-controls { display: none; }
+.wc-btn { width: 46px; height: 100%; display: grid; place-items: center; padding: 0; border: 0; border-radius: 0; background: none;
+  color: var(--text-secondary); cursor: default; transition: background .1s linear, color .1s linear; }
+.wc-btn svg { width: 10px; height: 10px; }
+.wc-btn.wc-menu svg { width: 16px; height: 16px; }
+.wc-btn:hover, .wc-btn.open { background: var(--hover); color: var(--text-primary); }
+.wc-btn:active { background: color-mix(in srgb, var(--text-primary) 14%, transparent); }
+.wc-btn.wc-close:hover { background: #c42b1c; color: #fff; }
+.wc-btn.wc-close:active { background: #b3271a; color: #fff; }
+.wc-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.wc-sep { width: 1px; margin: 9px 2px; background: var(--border-subtle); }
 :root[data-platform="windows"] .sidebar { --sb-rail: 51px; } /* 72 − 10 ×2 − 1 */
 :root[data-platform="windows"] .sidebar.collapsed { width: 72px; padding-left: 10px; padding-right: 10px; } /* 신호등이 없으니 접힌 레일을 좁게 */
 

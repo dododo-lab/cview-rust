@@ -83,15 +83,19 @@ pub async fn window_open(
         .min_inner_size(360.0, 320.0)
         .background_color(tauri::window::Color(15, 16, 18, 255));
     // 메인 창과 같은 오버레이 제목 막대 — 제목 글자 없이 신호등만 안쪽으로(원본 TrafficLightsAnimator).
-    // macOS 전용 — Windows 는 기본 제목 막대(최소화·최대화·닫기)를 쓴다.
     #[cfg(target_os = "macos")]
     let builder = builder
         .title_bar_style(tauri::TitleBarStyle::Overlay)
         .hidden_title(true)
         .traffic_light_position(tauri::LogicalPosition::new(16.0, 20.0));
+    // Windows — 메인 창처럼 제목 막대 없이 화면 위 띠에 최소화·최대화·닫기를 그린다(window-controls.js).
+    #[cfg(windows)]
+    let builder = builder.decorations(false);
     let window = builder
         .build()
         .map_err(|e| CommandError(format!("창을 열지 못했습니다: {e}")))?;
+    #[cfg(windows)]
+    let _ = window.hide_menu();
     let handle = app.clone();
     let l = label.clone();
     let is_player = kind == "player";

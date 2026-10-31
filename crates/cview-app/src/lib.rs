@@ -257,6 +257,8 @@ pub fn run() {
                 }
             }
             system::spawn_live_notifications(handle.clone());
+            // Windows — 제목 막대 없는 창(tauri.windows.conf.json)이라 메뉴 막대도 숨기고 화면 머리줄의 메뉴 버튼으로 연다.
+            menu::hide_menu_bars(&handle);
             if let Err(e) = tray::install(&handle) {
                 tracing::warn!("메뉴 막대 아이콘을 달지 못했습니다: {e}");
             }
@@ -300,6 +302,7 @@ pub fn run() {
             system::deeplink_take_pending,
             windows::window_open,
             windows::window_close_self,
+            menu::window_menu_popup,
             commands::oauth::oauth_status,
             commands::oauth::oauth_set_credentials,
             commands::oauth::oauth_clear_credentials,

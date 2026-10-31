@@ -34,6 +34,7 @@ import { installBackgroundSaver, setMenuHidden } from './background-saver.js';
 import { installPerfCollector } from './perf-collector.js';
 import { showMenu, refreshChatAuth } from './chat.js';
 import { kbd } from './platform.js';
+import { installWindowControls } from './window-controls.js';
 
 // 사이드바 — Swift `AppRouter.SidebarItem` 라벨. `sidebar: false` 는 사이드바에 없고 다른 메뉴 속에서 여는 화면
 // (멀티라이브는 라이브 메뉴의 한 보기 — 머리줄 전환 버튼으로 오간다). ⌘K 팔레트에는 그대로 나온다.
@@ -667,6 +668,7 @@ async function main() {
   installMicroMotion();
   installHoverPreview(); // 재생 썸네일 위에 잠시 머물면 소리 없이 미리보기
   trackFullscreen();
+  installWindowControls(); // Windows — 제목 막대 대신 화면 오른쪽 위의 메뉴·최소화·최대화·닫기
   splashStep('화면 준비', 0.2);
   renderNav();
   const content = document.querySelector('.content');
