@@ -335,6 +335,42 @@ a { color: var(--primary); }
 .side-empty { padding: 2px 10px; font-size: var(--fs-footnote); color: var(--text-tertiary); }
 
 .sidebar-spacer { flex: 1; min-height: 12px; }
+.update-pill[hidden] { display: none; }
+/* 새 버전 알림 줄(update-notify.js) — 계정 칸 바로 위. 누르면 업데이트 확인 시트, ✕ 는 이 버전 줄만 숨긴다. */
+.update-pill {
+  position: relative; display: flex; align-items: center; margin-bottom: 8px; border-radius: 12px;
+  background: var(--primary-dim); border: 1px solid var(--primary-ring); white-space: nowrap;
+  animation: update-pill-in 0.32s var(--ease-out, ease-out) both;
+}
+.update-pill-main {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 7px 8px; border: 0; border-radius: 11px;
+  background: none; color: var(--text-primary); text-align: left; cursor: pointer;
+  transition: background var(--dur-2, 0.15s) var(--ease-out, ease-out);
+}
+.update-pill-main:hover { background: var(--hover); }
+.update-pill-main:focus-visible, .update-pill-close:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.update-pill-icon {
+  position: relative; flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px;
+  color: var(--on-primary); background: var(--primary); box-shadow: 0 3px 10px var(--primary-glow);
+}
+.update-pill-icon svg { width: 16px; height: 16px; }
+.update-pill-dot {
+  position: absolute; top: -3px; right: -3px; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--live); border: 2px solid var(--sidebar);
+}
+.update-pill-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; font-size: var(--fs-caption); }
+.update-pill-text b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.update-pill-text small { font-size: 11px; color: var(--text-tertiary); }
+.update-pill-close {
+  flex: none; width: 24px; height: 24px; margin-right: 6px; border: 0; border-radius: 6px; background: none;
+  color: var(--text-tertiary); font-size: 11px; cursor: pointer;
+}
+.update-pill-close:hover { background: var(--hover); color: var(--text-primary); }
+.sidebar.collapsed .update-pill { background: transparent; border-color: transparent; }
+.sidebar.collapsed .update-pill-main { flex: none; padding: 4px 0 4px calc(var(--sb-rail) / 2 - 14px); }
+.sidebar.collapsed .update-pill-close, .sidebar.collapsed .update-pill-text { display: none; }
+@keyframes update-pill-in { from { opacity: 0; translate: 0 6px; } to { opacity: 1; translate: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .update-pill { animation: none; } }
 .account {
   display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 14px;
   background: var(--surface-base); border: 1px solid var(--border-subtle); white-space: nowrap;
@@ -1549,7 +1585,9 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 /* ══ 셸 (SYS-02·09·12·13·14) ═══════════════════════════════════ */
 .toast-stack { position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 200; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
 .toast-stack .toast {
-  position: static; transform: none; pointer-events: auto; display: flex; align-items: center; gap: 12px;
+  /* 낱개 .toast 의 left:50%·bottom 을 지운다 — 동작 단추가 있는 토스트는 position:relative(motion.css 타이머 줄)라
+     남아 있으면 스택 너비의 절반만큼 오른쪽·24px 위로 밀려 하단 중앙에서 벗어났다. */
+  position: static; inset: auto; transform: none; pointer-events: auto; display: flex; align-items: center; gap: 12px;
   background: var(--surface-popover); color: var(--text-primary); padding: 9px 14px; border-radius: 12px;
   border: 1px solid var(--border-subtle); box-shadow: var(--shadow-lg); font-size: var(--fs-caption); max-width: min(560px, 90vw);
 }

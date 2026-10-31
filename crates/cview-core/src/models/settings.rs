@@ -412,6 +412,8 @@ pub struct GeneralSettings {
     pub auto_refresh_enabled: bool,
     pub always_on_top: bool,
     pub restore_window_on_launch: bool,
+    /// 새 버전 자동 확인 — 실행 직후와 몇 시간마다 업데이트 서버를 조용히 확인해 앱 안에서 알린다.
+    pub auto_check_updates: bool,
 }
 
 impl Default for GeneralSettings {
@@ -427,6 +429,7 @@ impl Default for GeneralSettings {
             auto_refresh_enabled: true,
             always_on_top: false,
             restore_window_on_launch: true,
+            auto_check_updates: true,
         }
     }
 }
@@ -905,6 +908,21 @@ impl ChatMessageAlignment {
 mod tests {
     //! `SettingsForwardCompatibilityTests.swift` · `NetworkResourceSettingsTests.swift` 의 계약을 옮겼다.
     use super::*;
+
+    #[test]
+    fn auto_check_updates_defaults_on_for_older_saved_settings() {
+        // 이 항목이 생기기 전에 저장된 일반 설정에도 자동 확인이 켜져야 한다.
+        let g: GeneralSettings =
+            serde_json::from_str(r#"{"launchAtLogin":true,"alwaysOnTop":false}"#).unwrap();
+        assert!(g.auto_check_updates);
+        assert!(g.launch_at_login);
+        let off: GeneralSettings = serde_json::from_str(r#"{"autoCheckUpdates":false}"#).unwrap();
+        assert!(!off.auto_check_updates);
+        assert_eq!(
+            serde_json::to_value(GeneralSettings::default()).unwrap()["autoCheckUpdates"],
+            serde_json::json!(true)
+        );
+    }
 
     #[test]
     fn empty_json_decodes_to_defaults() {

@@ -25,6 +25,8 @@ export function lastUpdateResult() { return last; }
 /** 피드를 확인한다. 실패하면 던진다. */
 export async function checkForUpdate() {
   last = await api.updateCheck();
+  // 사이드바 "새 버전" 줄(update-notify.js)이 수동 확인 결과도 따라가게 알린다.
+  window.dispatchEvent(new CustomEvent('cview:update-result'));
   return last;
 }
 

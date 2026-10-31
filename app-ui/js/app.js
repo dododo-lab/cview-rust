@@ -2,6 +2,7 @@
 import { api, listen, Events, isTauri } from './api.js';
 import { toast, icons } from './dom.js';
 import { showShortcuts, showAbout, showUpdateCheck } from './app-sheets.js';
+import { installUpdateNotifier } from './update-notify.js';
 import { installImageFade, installSegmentGlider, refreshSegmentGliders, installMicroMotion } from './motion.js';
 import { installHoverPreview } from './hover-preview.js';
 import { setAdAudioHooks } from './ads.js';
@@ -842,6 +843,8 @@ async function main() {
   hideSplash();
   if (!AUX) showWelcome({ onLogin: login });
   if (AUX) { openAuxWindow(); return; }
+  // 새 버전 알림 — 메인 창에서만. 조용히 확인하고 사이드바 줄·토스트로 알린다(창·포커스는 건드리지 않음).
+  installUpdateNotifier(() => showUpdateCheck());
   // 작업 공간 복원 (NAV-16) — "실행 시 창 복원"이 켜져 있으면 마지막 화면으로. 방송은 자동 재생하지 않고 묻는다.
   const ws = settings?.general?.restoreWindowOnLaunch !== false ? loadWorkspace() : null;
   navigate('home', {}, { push: false });
