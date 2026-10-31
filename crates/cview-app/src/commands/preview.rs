@@ -1,7 +1,11 @@
 //! 썸네일 호버 미리보기 — 카드 위에 잠시 머물면 소리 없이 짧게 재생할 주소를 돌려준다.
 //!
-//! 미리보기는 작은 썸네일 자리에서 잠깐 보는 것이라 본 재생 경로(프록시·저지연 제어)를 타지 않고
-//! WebView `<video>` 가 바로 받는다. 그래서 가벼운 주소를 고른다:
+//! 미리보기는 작은 썸네일 자리에서 잠깐 보는 것이라 본 재생 경로(저지연 제어)를 타지 않는다. 대신
+//! 미리보기 전용 로컬 프록시([`LocalStreamProxy`])를 거친 주소를 돌려준다. Windows WebView2 는 페이지
+//! 출처(`http://tauri.localhost/`)를 Referer 로 보내 CDN 이 거절하고, HLS 를 직접 못 틀어 hls.js 로
+//! 받으면 CDN CORS 에 막혔다(macOS `tauri://` 는 Referer 를 안 보내 바로 됐다). 프록시는 치지직
+//! Referer·Origin 을 넣고 CORS·재생목록 주소 재작성·잘못된 Content-Type 교정을 해 준다.
+//! 가벼운 주소를 고른다:
 //! - 라이브: 표준 HLS(LL-HLS 보다 요청이 적다). 암호화(`hls_aes`) 방송은 인증 프록시가 있어야 해서
 //!   미리보기를 하지 않는다. 19 세 방송도 하지 않는다.
 //! - 다시보기·클립: 단일 MP4(어느 WebView 든 바로 재생·탐색)의 낮은 화질, 없으면 HLS 낮은 화질.
@@ -9,10 +13,14 @@
 //! 미리보기를 할 수 없으면 `None` — 화면은 썸네일을 그대로 둔다.
 
 use cview_core::models::live::LiveStatus;
+use std::sync::OnceLock;
+
 use cview_core::models::vod::VodQuality;
+use cview_player::proxy::LocalStreamProxy;
 use cview_player::vod::{resolve_clip_streams, VodStreamResolver};
 use serde::Serialize;
 use tauri::State;
+use url::Url;
 
 use super::CmdResult;
 use crate::playback;
@@ -79,16 +87,39 @@ pub fn vod_preview_start(duration: f64) -> f64 {
 }
 
 /// 단일 MP4 가 있으면 그것, 없으면 HLS 화질 목록, 마지막으로 마스터.
-fn pick(
-    progressive: &[VodQuality],
-    hls: &[VodQuality],
-    master: &url::Url,
-) -> (String, &'static str) {
+fn pick(progressive: &[VodQuality], hls: &[VodQuality], master: &Url) -> (Url, &'static str) {
     if let Some(q) = preview_quality(progressive) {
-        return (q.url.to_string(), "mp4");
+        return (q.url.clone(), "mp4");
     }
     let url = preview_quality(hls).map(|q| &q.url).unwrap_or(master);
-    (url.to_string(), "hls")
+    (url.clone(), "hls")
+}
+
+/// 미리보기 전용 프록시 — 앱 수명 동안 하나. 미리보기는 늘 하나라 본 재생 프록시와 따로 둔다.
+/// 암호화 방송은 미리보기를 안 하므로 로그인 쿠키는 넘기지 않는다.
+static PREVIEW_PROXY: OnceLock<LocalStreamProxy> = OnceLock::new();
+
+/// 허용 CDN 주소면 프록시 주소로. 처음 쓸 때 프록시를 띄우고, 다른 CDN 호스트는 프록시가
+/// `/_p_/HOST` 로 나눠 보낸다(다시 띄우지 않는다). 프록시를 못 띄우면 원래 주소(macOS 는 그래도 된다).
+async fn through_proxy(url: &Url) -> String {
+    if !LocalStreamProxy::needs_proxy(url) {
+        return url.to_string();
+    }
+    let proxy = PREVIEW_PROXY.get_or_init(|| {
+        let p = LocalStreamProxy::default();
+        p.set_perf_tag("preview");
+        p
+    });
+    if !proxy.is_running() {
+        let Some(host) = url.host_str() else {
+            return url.to_string();
+        };
+        if let Err(e) = proxy.start(host).await {
+            tracing::warn!("미리보기 프록시를 띄우지 못했습니다: {e}");
+            return url.to_string();
+        }
+    }
+    proxy.proxy_url(url).to_string()
 }
 
 #[tauri::command]
@@ -118,7 +149,7 @@ pub async fn preview_source(
                 return Ok(None);
             };
             Ok(Some(PreviewSourceDto {
-                url: url.to_string(),
+                url: through_proxy(&url).await,
                 format: "hls",
                 start_at: 0.0,
                 live: true,
@@ -136,7 +167,7 @@ pub async fn preview_source(
             };
             let (url, format) = pick(&s.progressive, &s.info.qualities, &s.info.stream_url);
             Ok(Some(PreviewSourceDto {
-                url,
+                url: through_proxy(&url).await,
                 format,
                 start_at: vod_preview_start(s.info.duration.as_secs_f64()),
                 live: false,
@@ -148,7 +179,7 @@ pub async fn preview_source(
             };
             let (url, format) = pick(&n.progressive, &n.hls, &n.master);
             Ok(Some(PreviewSourceDto {
-                url,
+                url: through_proxy(&url).await,
                 format,
                 start_at: 0.0,
                 live: false,
@@ -222,6 +253,26 @@ mod tests {
         assert_eq!(
             (url.as_str(), format),
             ("https://cdn.example.com/master.m3u8", "hls")
+        );
+    }
+
+    #[tokio::test]
+    async fn cdn_urls_go_through_the_preview_proxy() {
+        let other = Url::parse("https://example.com/a.mp4").unwrap();
+        assert_eq!(through_proxy(&other).await, "https://example.com/a.mp4");
+
+        let live = Url::parse("https://livecloud.pstatic.net/live/hls/playlist.m3u8?t=1").unwrap();
+        let first = through_proxy(&live).await;
+        assert!(first.starts_with("http://127.0.0.1:"), "{first}");
+        assert!(first.ends_with("/live/hls/playlist.m3u8?t=1"), "{first}");
+        // 다른 CDN 호스트는 같은 프록시가 `/_p_/HOST` 로 받는다.
+        let vod = Url::parse("https://vod.akamaized.net/v/360.mp4").unwrap();
+        let second = through_proxy(&vod).await;
+        let port = |u: &str| Url::parse(u).unwrap().port();
+        assert_eq!(port(&first), port(&second));
+        assert!(
+            second.contains("/_p_/vod.akamaized.net/v/360.mp4"),
+            "{second}"
         );
     }
 }

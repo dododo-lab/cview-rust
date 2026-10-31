@@ -211,7 +211,7 @@ await check('P06 continue-watching VOD previews from its start offset', async ()
 await p.mouse.move(5, 890);
 await p.waitForTimeout(300);
 
-await check('P07 reduced motion turns previews off', async () => {
+await check('P07 app motion setting "절약" turns previews off', async () => {
   await p.evaluate(() => { document.documentElement.dataset.motion = 'reduced'; });
   const before = (await previewCalls(p)).length;
   await hover(p, '.popular-grid .card:nth-child(3) .thumb[data-preview]');
@@ -220,6 +220,15 @@ await check('P07 reduced motion turns previews off', async () => {
   assert.equal((await previewCalls(p)).length, before);
   await p.evaluate(() => { document.documentElement.dataset.motion = 'balanced'; });
   await p.mouse.move(5, 890);
+});
+
+await check('P07b system reduced motion alone does not disable previews (Windows animation effects off)', async () => {
+  await p.emulateMedia({ reducedMotion: 'reduce' });
+  await hover(p, '.popular-grid .card:nth-child(6) .thumb[data-preview]');
+  await waitPlaying(p);
+  await p.emulateMedia({ reducedMotion: 'no-preference' });
+  await p.mouse.move(5, 890);
+  await p.waitForTimeout(300);
 });
 
 await check('P08 clicking stops the preview at once', async () => {

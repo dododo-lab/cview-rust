@@ -5,14 +5,16 @@
 // - 지연: 포인터가 DELAY_MS 머물러야 시작한다 — 목록을 훑고 지나가는 동안은 아무것도 받지 않는다.
 // - 하나만: 미리보기는 늘 하나다. 새 썸네일로 옮기면 앞의 것을 먼저 정리한다.
 // - 음소거·인라인·컨트롤 없음. 첫 장이 나오면(playing) 썸네일 위로 페이드인 — 그 전에는 썸네일이 그대로다.
-// - 끔: 설정 "썸네일 미리보기"를 껐을 때, 모션 줄이기(설정 "절약"·시스템), 데이터 절약, 터치 포인터.
+// - 끔: 설정 "썸네일 미리보기"를 껐을 때, 설정 모션 "절약", 데이터 절약, 터치 포인터.
+//   시스템 "동작 줄이기"는 따르지 않는다 — Windows 는 "애니메이션 효과"를 끈 PC(원격·저사양에서 흔하다)가
+//   모두 동작 줄이기로 잡혀 미리보기가 통째로 안 나왔다. 미리보기는 사용자가 직접 머물러야 나오고 앱에
+//   끄는 설정이 따로 있다.
 // - 정리: 포인터가 나가면, 누르면(재생 화면으로 넘어감), 스크롤·창 가림·화면 이동·카드가 다시 그려져 떨어지면,
 //   그리고 MAX_PLAY_MS 가 지나면. 정리할 때 src 를 비우고 load() 해 디코더·연결을 바로 놓는다.
 // - 주소는 Rust `preview_source` 가 고른다(라이브 표준 HLS, 다시보기·클립은 낮은 화질 MP4). 결과는 잠시
 //   기억하고(실패도), 못 하는 카드는 다시 묻지 않는다.
 import { api } from './api.js';
 import { esc } from './dom.js';
-import { motionReduced } from './motion.js';
 
 const DELAY_MS = 550;
 const MAX_PLAY_MS = { live: 30000, vod: 20000, clip: 30000 };
@@ -50,7 +52,7 @@ export function parsePreview(value) {
 
 /** 지금 미리보기를 해도 되는가. */
 export function previewAllowed() {
-  if (!thumbPreviewEnabled() || motionReduced()) return false;
+  if (!thumbPreviewEnabled() || document.documentElement.dataset.motion === 'reduced') return false;
   if (navigator.connection && navigator.connection.saveData) return false;
   return !document.hidden;
 }
