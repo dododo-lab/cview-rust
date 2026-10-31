@@ -14,6 +14,7 @@ pub mod media;
 pub mod multi_live;
 pub mod oauth;
 pub mod player;
+pub mod preview;
 pub mod recording;
 pub mod settings;
 

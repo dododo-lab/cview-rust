@@ -8,6 +8,7 @@ import { liveCard, emptyState, errorState, friendlyError, liveGrid, recentChanne
 import { clipCard } from './channel.js';
 import { continueCard } from './media.js';
 import { motionReduced, swapContent } from './motion.js';
+import { previewAttr } from './hover-preview.js';
 
 const HERO_SIZE = 5;
 // 자동 넘김 — 대기열 진행 막대(CSS `queue-progress`, 7초)가 끝나면 다음 장으로. 호버 중엔 CSS 가 멈춘다.
@@ -95,7 +96,7 @@ function heroSlide(live, source) {
   const up = uptimeText(live.openDate);
   return `
     <article class="hero-main card" tabindex="0" ${channelData(live)}>
-      <div class="hero-media">
+      <div class="hero-media"${live.adult ? '' : previewAttr('live', live.channelId)}>
         ${thumb ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(thumb, 'hero'))}" alt="" referrerpolicy="no-referrer">` : ''}
       </div>
       <div class="hero-shade"></div>
@@ -150,7 +151,7 @@ function topRail(lives) {
       <article class="top-item" tabindex="0" ${channelData(l)} title="${esc(l.liveTitle)}">
         <span class="top-rank" aria-hidden="true">${i + 1}</span>
         <div class="top-card">
-          <div class="thumb">
+          <div class="thumb"${l.adult ? '' : previewAttr('live', l.channelId)}>
             ${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
             <span class="badge-live">LIVE</span>
             <span class="badge-viewers"><i class="dot"></i>${esc(l.viewerCountText)}명</span>

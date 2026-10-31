@@ -6,6 +6,7 @@ import { liveGrid, emptyState, loadingState, compactCount, skeletonGrid, errorSt
 import { categoryGroups, arrangeLives } from './pages.js';
 import { refreshIcon } from './page-header.js';
 import { swapContent } from './motion.js';
+import { previewAttr } from './hover-preview.js';
 
 export const categoryIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="8" height="8" rx="2.5"/><rect x="13" y="3" width="8" height="8" rx="2.5" opacity=".6"/><rect x="3" y="13" width="8" height="8" rx="2.5" opacity=".6"/><rect x="13" y="13" width="8" height="8" rx="2.5"/></svg>';
 const PIN_KEY = 'cview.pinnedCategories';
@@ -91,7 +92,7 @@ export class CategoriesPage {
       // 고정 별은 카드(상세로 이동)와 형제인 독립 단추 — 안에 두면 초점을 받지 못하고 Enter 가 상세로 갔다
       return `<div class="category-item">
         <button class="category-card" data-category="${esc(g.name)}">
-          <span class="category-art">${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>
+          <span class="category-art"${g.adult ? '' : previewAttr('live', g.channelId)}>${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>
           <span class="category-info"><strong class="ellipsis">${esc(g.name)}</strong><span>라이브 ${g.count} · ${esc(compactCount(g.viewers))}명</span></span>
         </button>
         <button class="category-pin${on ? ' on' : ''}" data-pin="${esc(g.name)}" aria-pressed="${on}" aria-label="${esc(g.name)} ${on ? '고정 해제' : '위에 고정'}" title="${on ? '고정 해제' : '위에 고정'}">★</button>

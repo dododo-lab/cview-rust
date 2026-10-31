@@ -26,12 +26,12 @@ export function popularSubtitle(sort, category = '') {
   return category ? `${category} · ${order}` : order;
 }
 
-/** 카테고리별 묶음 — [{ name, count, viewers }] 시청자 많은 순. */
+/** 카테고리별 묶음 — [{ name, count, viewers, thumb, channelId, adult }] 시청자 많은 순. 썸네일·채널은 첫 라이브(미리보기 대상). */
 export function categoryGroups(lives) {
   const map = new Map();
   for (const l of lives) {
     const name = l.categoryName || '기타';
-    const g = map.get(name) || { name, count: 0, viewers: 0, thumb: l.thumbnailUrl };
+    const g = map.get(name) || { name, count: 0, viewers: 0, thumb: l.thumbnailUrl, channelId: l.channelId, adult: Boolean(l.adult) };
     g.count += 1;
     g.viewers += l.viewerCount || 0;
     map.set(name, g);
