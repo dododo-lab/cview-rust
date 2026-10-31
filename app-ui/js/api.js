@@ -116,6 +116,10 @@ export const api = {
   clipPlay: (clipUid) => invoke('clip_play', { clipUid }),
   vodDetail: (videoNo) => invoke('vod_detail', { videoNo }),
   // 썸네일 호버 미리보기 주소 — { url, format: 'hls'|'mp4', startAt, live } 또는 null(미리보기 없음)
+  adPreroll: (kind, id) => invoke('ad_preroll', { kind, id }),
+  adFetchVast: (url) => invoke('ad_fetch_vast', { url }),
+  adTrack: (urls) => invoke('ad_track', { urls }),
+  liveConnectorStatus: () => invoke('live_connector_status'),
   previewSource: (kind, id) => invoke('preview_source', { kind, id: String(id) }),
   channelFollow: (channelId, follow) => invoke('channel_follow', { channelId, follow }),
   favoriteSet: (channelId, favorite, channelName, channelImageUrl) => invoke('favorite_set', { channelId, favorite, channelName, channelImageUrl }),

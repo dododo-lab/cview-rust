@@ -4,6 +4,7 @@
 //! 대응이 없는 것(채널/라이브 상세·인증·설정)은 하위 크레이트를 직접 부른다. 결과는 [`crate::dto`]
 //! 로 바꾼다 — 명령 계층에는 화면 로직을 두지 않는다.
 
+pub mod ads;
 pub mod auth;
 pub mod chat;
 pub mod content;

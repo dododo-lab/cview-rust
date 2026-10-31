@@ -11,6 +11,7 @@ pub mod dock_icon;
 pub mod dto;
 pub mod engine;
 pub mod image_service;
+pub mod live_connector;
 pub mod login;
 pub mod menu;
 pub mod multi_live;
@@ -327,6 +328,10 @@ pub fn run() {
             commands::multi_live::multilive_set_audio_suspended,
             commands::media::vod_play,
             commands::preview::preview_source,
+            commands::ads::ad_preroll,
+            commands::ads::ad_fetch_vast,
+            commands::ads::ad_track,
+            commands::ads::live_connector_status,
             commands::media::vod_progress_save,
             commands::media::vod_continue_list,
             commands::media::vod_progress_remove,

@@ -6,6 +6,8 @@
 // - 슬롯 명령(`multilive://command`)은 패인 iframe 이 생기기 전에 올 수 있어 슬롯별로 줄 세운다.
 // - 패인을 누르면 선택 — 오디오·채팅·고화질이 그 패인을 따라간다.
 import { api, listen, listenHere, Events } from './api.js';
+import { playPreroll } from './ads.js';
+import { noteConnectorLimit } from './live-connector.js';
 import { setPicture, setSharpenDefault } from './picture.js';
 import { esc, safeUrl, toast, imageSrc, streamEndedArt, dismiss, hideWithExit } from './dom.js';
 import { PlayerBridge } from './player.js';
@@ -1074,8 +1076,12 @@ export class MultiLivePage {
    * 기본은 선택하지 않는다(라이브 단독 보기·스마트 큐·둘러보기 열기는 보던 채널·선택을 그대로 둔다).
    * live — 라이브 단독 보기에 담는 추가(카드로 열기·머리줄 채널 추가)라 멀티라이브 대신 라이브 상한을 따른다.
    */
-  async add(channelId, { quiet = false, select = false, live = false } = {}) {
+  async add(channelId, { quiet = false, select = false, live = false, ad = true } = {}) {
     if (!channelId) return false;
+    // 새 채널은 치트키가 없으면 치지직처럼 프리롤 광고를 먼저 본다(이미 연 쪽에서 봤으면 ad: false).
+    const present = (this.state?.sessions || []).some((x) => x.channelId === channelId);
+    if (ad && !present && !(await playPreroll('live', channelId))) return false;
+    if (ad && !present) noteConnectorLimit();
     if (!quiet) toast('멀티라이브에 추가하는 중…', 1500);
     this.addHold = select ? channelId : null;
     try {

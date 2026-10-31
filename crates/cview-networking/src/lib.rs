@@ -6,6 +6,7 @@
 //! - [`cache`]: 응답 캐시 (`ResponseCache.swift`)
 //! - [`gate`]: 전송 속도·동시 수 제한 (`APIRequestGate.swift`)
 //! - [`client`]: API 클라이언트 (`ChzzkAPIClient*.swift`)
+//! - [`client_ads`]: 치지직 프리롤 광고(노출 여부·GFP 일정·워터폴)
 //! - [`collector`]: 전체 라이브 커서 수집 (`ChzzkAPIClient+LiveCollection.swift`)
 //! - [`bootstrap`]: 채팅 세션 부트스트랩 (`ChatSessionBootstrap.swift`)
 //! - [`transport`]: HTTP 전송 추상화(reqwest + rustls)
@@ -15,6 +16,7 @@
 pub mod bootstrap;
 pub mod cache;
 pub mod client;
+pub mod client_ads;
 mod client_content;
 mod client_live;
 pub mod collector;
