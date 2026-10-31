@@ -9,6 +9,9 @@ const PLAN_TIMEOUT_MS = 5000;
 const MAX_WRAPPERS = 5;
 const VIEWABLE_SEC = 2;
 const MEDIA_TYPES = ['video/mp4', 'video/webm'];
+// 재생이 시작된 뒤 이만큼 진행이 없으면(네트워크 멈춤) 이 광고를 실패로 넘긴다 — 건너뛰기·닫기가 없는 광고가
+// 창(다시보기)이나 영상 영역을 끝없이 덮지 않게. 사용자가 멈춘 동안(자세히 보기·화면 숨김)은 세지 않는다.
+const STALL_MS = 12000;
 
 let audioHooks = { hold() {}, release() {} };
 
@@ -142,6 +145,7 @@ class AdOverlay {
         <div class="ad-bottom">
           <button class="ad-btn ad-more" hidden>자세히 보기</button>
           <button class="ad-btn ad-unmute" hidden>소리 켜기</button>
+          <button class="ad-btn ad-resume" hidden>광고 계속 보기</button>
           <a class="ad-cheat" href="${esc(cheatKeyUrl)}">치트키로 광고 없이 보기</a>
           <span class="grow"></span>
           <button class="ad-btn ad-skip" disabled>광고 건너뛰기</button>
@@ -153,6 +157,9 @@ class AdOverlay {
     this.skip = this.root.querySelector('.ad-skip');
     this.more = this.root.querySelector('.ad-more');
     this.unmute = this.root.querySelector('.ad-unmute');
+    this.resume = this.root.querySelector('.ad-resume');
+    // 창 전체 광고(다시보기)는 바탕을 잡아 창을 옮길 수 있게 — Windows 는 제목 막대가 없다.
+    if (!host) this.root.setAttribute('data-tauri-drag-region', '');
     this.root.querySelector('.ad-cheat').addEventListener('click', (e) => {
       e.preventDefault();
       api.openExternal(cheatKeyUrl).catch(() => {});
@@ -197,14 +204,33 @@ function playOne(ui, candidate, vast, session) {
     let watched = 0;
     let lastTime = 0;
     let finished = false;
+    // 자세히 보기로 멈춘 상태 — 광고에는 재생 단추가 없어 "광고 계속 보기"·영상 누르기·창으로 돌아오기로 이어 튼다.
+    let userPaused = false;
+    let lastProgressAt = Date.now();
     const startTimer = setTimeout(() => fail(402), candidate.timeoutMs || 10000);
+    const resumeAd = () => {
+      if (!userPaused || finished) return;
+      userPaused = false;
+      ui.resume.hidden = true;
+      lastProgressAt = Date.now();
+      video.play().catch(() => {});
+    };
+    const onWindowFocus = () => resumeAd();
+    window.addEventListener('focus', onWindowFocus);
+    const stallTimer = setInterval(() => {
+      if (!started || video.paused || userPaused) { lastProgressAt = Date.now(); return; }
+      if (Date.now() - lastProgressAt > STALL_MS) fail(402);
+    }, 1000);
     const finish = (result) => {
       if (finished) return;
       finished = true;
       clearTimeout(startTimer);
+      clearInterval(stallTimer);
+      window.removeEventListener('focus', onWindowFocus);
       video.onplaying = video.ontimeupdate = video.onended = video.onerror = video.onvolumechange = null;
-      video.onpause = null;
-      ui.skip.onclick = ui.more.onclick = ui.unmute.onclick = null;
+      video.onpause = video.onclick = null;
+      ui.skip.onclick = ui.more.onclick = ui.unmute.onclick = ui.resume.onclick = null;
+      ui.resume.hidden = true;
       session.cancel = null;
       resolve(result);
     };
@@ -220,6 +246,7 @@ function playOne(ui, candidate, vast, session) {
     ui.skip.hidden = skipAt === null;
     ui.more.hidden = !vast.clickThrough;
     ui.unmute.hidden = true;
+    ui.resume.hidden = true;
     video.muted = false;
     video.volume = 1;
     video.src = vast.media;
@@ -238,6 +265,7 @@ function playOne(ui, candidate, vast, session) {
     video.onpause = () => { if (started && !video.ended && !finished) fireEach('pause'); };
     video.ontimeupdate = () => {
       const t = video.currentTime;
+      if (t !== lastTime) lastProgressAt = Date.now();
       if (t > lastTime && t - lastTime < 1.5) watched += t - lastTime;
       lastTime = t;
       const d = video.duration || vast.duration || 0;
@@ -281,9 +309,13 @@ function playOne(ui, candidate, vast, session) {
     ui.more.onclick = () => {
       track(vast.clickTracking.map((u) => withMacros(u)));
       track(gfp.clicks);
+      userPaused = true;
+      ui.resume.hidden = false;
       video.pause();
       api.openExternal(vast.clickThrough).catch(() => {});
     };
+    ui.resume.onclick = resumeAd;
+    video.onclick = resumeAd;
     ui.unmute.onclick = () => { video.muted = false; ui.unmute.hidden = true; };
 
     video.play().catch(() => {
