@@ -56,8 +56,10 @@ export class MediaPage {
   async openVod(videoNo, seq) {
     // 치트키가 없으면 치지직처럼 재생 전에 프리롤 광고를 본다(그 사이 다른 영상을 열면 그만).
     if (!(await playPreroll('vod', videoNo))) {
-      // 광고 창을 닫았으면 재생하지 않고 돌아간다(다른 영상에 밀려났으면 그쪽이 화면을 맡는다).
-      if (seq === this.seq && this.onBack) this.onBack();
+      // 광고를 그만뒀다 — 다른 영상에 밀려났거나(그쪽이 화면을 맡는다) 광고 중에 다른 화면으로 옮겨 이 화면이
+      // 숨으며(leave) 그만둔 것이다. 이미 떠난 화면에서 뒤로 가기를 또 부르면 사용자가 고른 화면에서 한 번 더
+      // 뒤로 밀려났다 — 이 화면이 아직 보일 때만 돌아간다.
+      if (seq === this.seq && !this.root.hidden && this.onBack) this.onBack();
       return;
     }
     if (seq !== this.seq) return;
