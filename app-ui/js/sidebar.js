@@ -6,7 +6,6 @@ import { setTheme, currentTheme, onThemeChange, THEMES, THEME_LABELS } from './t
 const COLLAPSE_KEY = 'cview.sidebarCollapsed';
 const NARROW = window.matchMedia('(max-width: 1100px)');
 const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)');
-const LIVE_LIMIT = 7;
 const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 const ICON_KEYBOARD = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M7 10h.01M11 10h.01M15 10h.01M7 14h10"/></svg>';
 const ICON_INFO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>';
@@ -254,38 +253,59 @@ export class Sidebar {
     }
   }
 
-  /** 방송 중인 팔로잉. `null` 이면(비로그인·실패) 숨긴다. */
-  setFollowing(lives) {
-    // 팔로잉 폴링(2분)마다 메뉴·방송 중 목록을 다시 그린다 — Tab 으로 고르던 항목의 초점을 지킨다
-    keepFocus(this.root, () => this.paintFollowing(lives));
+  /** 팔로잉 메뉴 옆 방송 중 수. `null` 이면(비로그인·실패) 숨긴다. */
+  setLiveCount(count) {
+    if (count === this.liveCount) return;
+    const active = this.nav.querySelector('.nav-item.active')?.dataset.route;
+    keepFocus(this.root, () => {
+      this.liveCount = count;
+      this.renderNav();
+      if (active) this.setActive(active);
+    });
   }
 
-  paintFollowing(lives) {
-    const active = this.nav.querySelector('.nav-item.active')?.dataset.route;
-    this.liveCount = lives ? lives.length : null;
-    this.renderNav();
-    if (active) this.setActive(active);
-    if (!lives || !lives.length) {
-      this.liveBox.hidden = !lives;
-      this.liveBox.innerHTML = lives ? '<div class="nav-section">방송 중</div><p class="side-empty">지금 방송 중인 팔로잉 채널이 없어요</p>' : '';
+  /**
+   * 아래 채널 목록 — 메뉴마다 다른 목록(sidebar-lists.js). `null` 이면 숨긴다.
+   * 팔로잉 폴링(2분)·메뉴 이동마다 다시 그린다 — Tab 으로 고르던 항목의 초점을 지킨다.
+   * @param {{ kind, title, items: Array, empty, more } | null} list
+   */
+  setList(list) {
+    keepFocus(this.root, () => this.paintList(list));
+  }
+
+  paintList(list) {
+    const box = this.liveBox;
+    if (!list) {
+      box.hidden = true;
+      box.innerHTML = '';
+      delete box.dataset.kind;
       return;
     }
-    const sorted = [...lives].sort((a, b) => (b.viewerCount || 0) - (a.viewerCount || 0));
-    const more = sorted.length - LIVE_LIMIT;
-    this.liveBox.hidden = false;
-    this.liveBox.innerHTML = `
-      <div class="nav-section">방송 중</div>
-      ${sorted.slice(0, LIVE_LIMIT).map((l) => `
-        <button class="side-live" data-channel-id="${esc(l.channelId)}" data-channel-name="${esc(l.channelName)}" data-channel-image="${esc(safeUrl(l.channelImageUrl))}" data-tip="${esc(l.channelName)} · ${esc(l.viewerCountText)}명">
-          <span class="side-live-avatar">${avatar(l.channelImageUrl)}</span>
+    box.hidden = false;
+    box.dataset.kind = list.kind || '';
+    const head = `<div class="nav-section">${esc(list.title)}</div>`;
+    if (!list.items.length) {
+      box.innerHTML = `${head}<p class="side-empty">${esc(list.empty || '')}</p>`;
+      return;
+    }
+    const row = (it) => {
+      const attrs = it.category
+        ? `data-side-category="${esc(it.category)}"`
+        : `data-channel-id="${esc(it.channelId)}" data-channel-name="${esc(it.name)}" data-channel-image="${esc(safeUrl(it.image))}"${it.openPage ? ' data-open-channel' : ''}${it.action ? ` data-side-action="${esc(it.action)}"` : ''}`;
+      return `
+        <button class="side-live${it.live ? '' : ' off'}${it.category ? ' cat' : ''}" ${attrs} data-tip="${esc(it.tip || it.name)}">
+          <span class="side-live-avatar">${avatar(it.image)}</span>
           <span class="side-live-text">
-            <span class="side-live-name ellipsis">${esc(l.channelName)}</span>
-            <span class="side-live-cat ellipsis">${esc(l.categoryName || l.liveTitle || '')}</span>
+            <span class="side-live-name ellipsis">${esc(it.name)}${it.favorite ? '<i class="side-fav" aria-label="즐겨찾기">★</i>' : ''}</span>
+            <span class="side-live-cat ellipsis">${esc(it.sub || '')}</span>
           </span>
-          <span class="side-live-viewers"><i class="dot"></i>${esc(l.viewerCountText)}</span>
-        </button>`).join('')}
-      ${more > 0 ? `<button class="side-more" data-tip="팔로잉 ${more}명 더 보기">+${more}<span class="nav-label">명 더 보기</span></button>` : ''}`;
-    this.liveBox.querySelector('.side-more')?.addEventListener('click', () => this.onNavigate('following'));
+          <span class="side-live-viewers">${it.live && it.dot !== false ? '<i class="dot"></i>' : ''}${esc(it.meta || '')}</span>
+        </button>`;
+    };
+    const more = list.more;
+    box.innerHTML = `${head}${list.items.map(row).join('')}
+      ${more ? `<button class="side-more" data-tip="${esc(more.tip)}">+${more.count}<span class="nav-label">명 더 보기</span></button>` : ''}`;
+    if (more) box.querySelector('.side-more').addEventListener('click', () => this.onNavigate(more.route));
   }
 
   renderAccount(auth) {
