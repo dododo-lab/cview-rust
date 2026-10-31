@@ -139,22 +139,24 @@ struct EngineConfig {
     sharp_pixel: bool,
 }
 
-/// 화질 상한의 두 소유자 — 사용자 설정 천장과 멀티라이브 매니저 상한. 페이지에는 합친 값을 보낸다.
+/// 화질 상한의 세 소유자 — 사용자 설정 천장, 멀티라이브 매니저 상한, 정책 상한(커넥터 없는 Windows 의
+/// P2P 전용 트랙 제외). 페이지에는 합친 값을 보낸다.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 struct QualityCaps {
     user_height: i64,
     managed_height: i64,
     managed_bitrate_kbps: i64,
+    policy_height: i64,
 }
 
 impl QualityCaps {
-    /// 0 은 상한 없음 — 둘 다 있으면 낮은 쪽.
+    /// 0 은 상한 없음 — 여럿 있으면 가장 낮은 쪽.
     fn effective_height(&self) -> i64 {
-        match (self.user_height.max(0), self.managed_height.max(0)) {
-            (0, m) => m,
-            (u, 0) => u,
-            (u, m) => u.min(m),
-        }
+        [self.user_height, self.managed_height, self.policy_height]
+            .into_iter()
+            .filter(|h| *h > 0)
+            .min()
+            .unwrap_or(0)
     }
 }
 
@@ -261,6 +263,19 @@ impl WebViewHlsEngine {
         });
     }
 
+    /// 정책 상한(0 = 없음) — 다음 `play` 전에 건다. 사용자 화질 선택·최고 화질 고정보다 우선한다.
+    pub fn set_policy_quality_ceiling_height(&self, height: i64) {
+        self.update_quality_caps(|c| c.policy_height = height.max(0));
+    }
+
+    /// 지금 걸린 정책 상한(0 = 없음).
+    pub fn policy_quality_ceiling_height(&self) -> i64 {
+        self.quality_caps
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .policy_height
+    }
+
     fn update_quality_caps(&self, change: impl FnOnce(&mut QualityCaps)) {
         let caps = {
             let mut c = self.quality_caps.lock().unwrap_or_else(|e| e.into_inner());
@@ -324,6 +339,14 @@ impl PlayerEngineProtocol for WebViewHlsEngine {
         let config = self.cfg().clone();
         let match_web_v2 = self.match_web_v2_literal(config.match_web_v2);
         self.send(JsCommand::SetMatchWebV2Config(match_web_v2));
+        // 정책 상한은 페이지가 다시 열렸어도 첫 레벨 선택 전에 있어야 한다(같은 값은 페이지가 건너뛴다).
+        let caps = *self.quality_caps.lock().unwrap_or_else(|e| e.into_inner());
+        if caps.policy_height > 0 {
+            self.send(JsCommand::SetAdaptiveCaps {
+                max_resolution: caps.effective_height(),
+                max_bitrate: caps.managed_bitrate_kbps,
+            });
+        }
         self.send(JsCommand::LoadSource {
             url: url.to_string(),
             profile: config.profile.profile_key().to_string(),
@@ -681,6 +704,38 @@ mod tests {
             .await
             .unwrap();
         assert!(!sent.lock().unwrap().iter().any(|s| s == "suspendLoading()"));
+    }
+
+    #[tokio::test]
+    async fn policy_ceiling_wins_and_is_resent_on_play() {
+        let (e, sent) = engine();
+        e.set_user_quality_ceiling_height(1080);
+        e.set_policy_quality_ceiling_height(720);
+        e.set_managed_quality_caps(480, 0);
+        e.set_managed_quality_caps(0, 0);
+        assert_eq!(e.policy_quality_ceiling_height(), 720);
+        e.play(&Url::parse("http://127.0.0.1:1/c.m3u8").unwrap())
+            .await
+            .unwrap();
+        let sent = sent.lock().unwrap();
+        assert_eq!(
+            sent[..4],
+            [
+                "setAdaptiveCaps(1080, 0)",
+                "setAdaptiveCaps(720, 0)",
+                "setAdaptiveCaps(480, 0)",
+                "setAdaptiveCaps(720, 0)",
+            ]
+        );
+        let caps = sent
+            .iter()
+            .rposition(|s| s == "setAdaptiveCaps(720, 0)")
+            .unwrap();
+        let load = sent
+            .iter()
+            .position(|s| s.starts_with("loadSource("))
+            .unwrap();
+        assert!(caps > 3 && caps < load, "{sent:?}");
     }
 
     #[test]

@@ -63,6 +63,9 @@ pub struct EncodingTrack {
     pub video_height: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_channel: Option<i64>,
+    /// P2P 전용 경로 — 있으면 치지직 웹은 이 트랙을 네이버 라이브 스트리밍 커넥터로만 재생한다.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub p2p_path: Option<String>,
 }
 
 impl EncodingTrack {
@@ -100,6 +103,7 @@ impl<'de> Deserialize<'de> for EncodingTrack {
             video_width: o.get("videoWidth"),
             video_height: o.get("videoHeight"),
             audio_channel: o.get("audioChannel"),
+            p2p_path: o.get::<String>("p2pPath").filter(|p| !p.trim().is_empty()),
         })
     }
 }

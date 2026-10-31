@@ -595,6 +595,8 @@ pub struct PlaybackStartedDto {
     pub audio_only: bool,
     /// 암호화(hls_aes) 방송이라 인증 프록시가 필요한가.
     pub requires_authenticated_proxy: bool,
+    /// 네이버 라이브 스트리밍 커넥터가 없어 묶인 화질 상한(픽셀 높이). 제한이 없으면 0.
+    pub connector_limited_height: i64,
 }
 
 #[cfg(test)]

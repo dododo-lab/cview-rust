@@ -333,7 +333,14 @@ impl MultiLiveEnginePool for PanePool {
 // MARK: - 플레이어
 
 /// 암호화 방송 채널 — 재생 키 요청이 인증 프록시를 거쳐야 한다(백엔드가 계획을 만들 때 기록).
-type AuthKeyChannels = Arc<Mutex<HashMap<String, bool>>>;
+/// 채널별 재생 계획 플래그 — 키 인증 필요 여부와 커넥터 정책 화질 상한(0 = 없음).
+#[derive(Debug, Clone, Copy, Default)]
+struct ChannelPlaybackFlags {
+    requires_key: bool,
+    connector_limited_height: i64,
+}
+
+type AuthKeyChannels = Arc<Mutex<HashMap<String, ChannelPlaybackFlags>>>;
 
 /// 재생 상태 변화 콜백 자리(세션이 나중에 건다).
 type StateChangedSlot = Arc<Mutex<Option<Arc<dyn Fn() + Send + Sync>>>>;
@@ -495,10 +502,15 @@ impl MultiLivePlayer for PanePlayer {
             tracing::warn!("멀티라이브: 스트림 URL 해석 실패");
             return;
         };
-        let requires_key = lock(&self.auth_key_channels)
+        let flags = lock(&self.auth_key_channels)
             .get(&request.channel_id)
             .copied()
-            .unwrap_or(false);
+            .unwrap_or_default();
+        let requires_key = flags.requires_key;
+        if let Some(pane) = lock(&self.engine).as_ref() {
+            pane.engine
+                .set_policy_quality_ceiling_height(flags.connector_limited_height);
+        }
         let cookies = self.cookies.clone();
         let access = PlaybackKeyAccess::new(
             requires_key,
@@ -680,8 +692,15 @@ impl MultiLiveSessionBackend for ShellBackend {
     }
     fn build_plan(&self, live: &LiveInfo, channel_id: &str) -> Result<LaunchPlan, LaunchPlanError> {
         let plan = playback::resolve(live).map_err(|e| launch_plan_error(&e))?;
-        lock(&self.auth_key_channels)
-            .insert(channel_id.to_string(), plan.requires_authenticated_key);
+        lock(&self.auth_key_channels).insert(
+            channel_id.to_string(),
+            ChannelPlaybackFlags {
+                requires_key: plan.requires_authenticated_key,
+                connector_limited_height: crate::live_connector::policy_height(
+                    plan.p2p_general_max_height,
+                ),
+            },
+        );
         Ok(LaunchPlan {
             stream_url: plan.stream_url.to_string(),
             is_audio_only: plan.is_audio_only,
