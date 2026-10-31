@@ -338,3 +338,61 @@ async fn clear_empties_memory_and_disk() {
         "비운 뒤엔 다시 받는다"
     );
 }
+
+#[test]
+fn size_param_is_stripped_for_the_original_url() {
+    assert_eq!(
+        without_size_param("https://video-phinf.pstatic.net/a/b.jpg?type=w640").as_deref(),
+        Some("https://video-phinf.pstatic.net/a/b.jpg")
+    );
+    assert_eq!(
+        without_size_param("https://nng-phinf.pstatic.net/a.png?x=1&type=f120_120_na").as_deref(),
+        Some("https://nng-phinf.pstatic.net/a.png?x=1")
+    );
+    assert_eq!(
+        without_size_param("https://nng-phinf.pstatic.net/a.png"),
+        None
+    );
+}
+
+/// 크기 단계(`type=`)가 붙은 주소에는 404, 원본에는 그림을 주는 전송 — 단계를 모르는 이미지 서버 흉내.
+struct SizeUnknown {
+    urls: Mutex<Vec<String>>,
+}
+
+#[async_trait]
+impl HttpTransport for SizeUnknown {
+    async fn send(&self, req: HttpRequest) -> Result<HttpResponse, TransportError> {
+        let url = req.url.to_string();
+        self.urls.lock().unwrap().push(url.clone());
+        if url.contains("type=") {
+            return Ok(HttpResponse::new(404, Vec::new()));
+        }
+        let mut r = HttpResponse::new(200, b"orig".to_vec());
+        r.headers.push(("Content-Type".into(), "image/jpeg".into()));
+        Ok(r)
+    }
+}
+
+#[tokio::test]
+async fn unknown_size_step_falls_back_to_the_original_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let fake = Arc::new(SizeUnknown {
+        urls: Mutex::new(Vec::new()),
+    });
+    let cache = Arc::new(ImageCache::open(dir.path(), 10 * 1024 * 1024).unwrap());
+    let s = ImageService::with_clock(Some(cache), fake.clone(), Arc::new(|| 0));
+    let sized = "https://nng-phinf.pstatic.net/a/b.jpg?type=w400";
+    let got = s.load(sized, ImageKind::Static).await.unwrap();
+    assert_eq!(got.bytes.as_slice(), b"orig");
+    assert_eq!(
+        *fake.urls.lock().unwrap(),
+        vec![
+            sized.to_string(),
+            "https://nng-phinf.pstatic.net/a/b.jpg".to_string()
+        ]
+    );
+    // 부른 주소(크기 단계 포함)로 저장돼 다음엔 받지 않는다.
+    s.load(sized, ImageKind::Static).await.unwrap();
+    assert_eq!(fake.urls.lock().unwrap().len(), 2);
+}

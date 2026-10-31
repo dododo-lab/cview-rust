@@ -204,6 +204,25 @@ pub fn redirect_policy() -> reqwest::redirect::Policy {
     redirect_policy_with(|u| is_allowed_image_url(u.as_str()))
 }
 
+/// 네이버 이미지 서버의 크기 단계 쿼리(`type=`)를 뺀 원본 주소. 없으면 `None`.
+pub fn without_size_param(url: &str) -> Option<String> {
+    let mut u = Url::parse(url).ok()?;
+    if !u.query_pairs().any(|(k, _)| k == "type") {
+        return None;
+    }
+    let rest: Vec<(String, String)> = u
+        .query_pairs()
+        .filter(|(k, _)| k != "type")
+        .map(|(k, v)| (k.into_owned(), v.into_owned()))
+        .collect();
+    if rest.is_empty() {
+        u.set_query(None);
+    } else {
+        u.query_pairs_mut().clear().extend_pairs(rest);
+    }
+    Some(u.to_string())
+}
+
 /// `cvimg:` 요청 경로(`/<종류>%2F<원본 URL>` 또는 이미 풀린 `/<종류>/<원본 URL>`)를 나눈다.
 pub fn parse_request_path(path: &str) -> Option<(ImageKind, String)> {
     let decoded = percent_encoding::percent_decode_str(path.trim_start_matches('/'))
@@ -340,23 +359,14 @@ impl ImageService {
             .acquire_owned()
             .await
             .map_err(|_| ImageError::Unavailable("closed".into()))?;
-        let parsed = Url::parse(url).map_err(|_| ImageError::Forbidden)?;
-        let mut req = HttpRequest::new(cview_core::protocols::HttpMethod::Get, parsed);
-        req.timeout = Some(FETCH_TIMEOUT);
-        req.set_header(
-            "Accept",
-            Some("image/avif,image/webp,image/png,image/*;q=0.8"),
-        );
-        req.set_header("Referer", Some("https://chzzk.naver.com/"));
-        if let Some(p) = &prev {
-            req.set_header("If-None-Match", p.etag.as_deref());
-            req.set_header("If-Modified-Since", p.last_modified.as_deref());
+        let mut response = self.send(url, prev.as_ref()).await?;
+        // 화면이 붙인 크기 단계(`?type=w640` 등)를 그 이미지 서버가 모르면 404 다 — 원본 주소로 한 번 더 받는다.
+        // (캐시 키는 화면이 부른 주소 그대로라 다음부터는 바로 나온다.)
+        if response.status == 404 && prev.is_none() {
+            if let Some(original) = without_size_param(url) {
+                response = self.send(&original, None).await?;
+            }
         }
-        let response = self
-            .transport
-            .send(req)
-            .await
-            .map_err(|e| ImageError::Unavailable(e.to_string()))?;
         let now = (self.now_ms)();
         if response.status == 304 {
             if let Some(mut p) = prev {
@@ -414,6 +424,29 @@ impl ImageService {
             });
         }
         Ok(entry)
+    }
+
+    async fn send(
+        &self,
+        url: &str,
+        prev: Option<&HotEntry>,
+    ) -> Result<cview_networking::HttpResponse, ImageError> {
+        let parsed = Url::parse(url).map_err(|_| ImageError::Forbidden)?;
+        let mut req = HttpRequest::new(cview_core::protocols::HttpMethod::Get, parsed);
+        req.timeout = Some(FETCH_TIMEOUT);
+        req.set_header(
+            "Accept",
+            Some("image/avif,image/webp,image/png,image/*;q=0.8"),
+        );
+        req.set_header("Referer", Some("https://chzzk.naver.com/"));
+        if let Some(p) = prev {
+            req.set_header("If-None-Match", p.etag.as_deref());
+            req.set_header("If-Modified-Since", p.last_modified.as_deref());
+        }
+        self.transport
+            .send(req)
+            .await
+            .map_err(|e| ImageError::Unavailable(e.to_string()))
     }
 
     pub fn stats(&self) -> CacheStats {
