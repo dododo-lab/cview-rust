@@ -110,13 +110,24 @@ async fn through_proxy(url: &Url) -> String {
         p.set_perf_tag("preview");
         p
     });
+    through(proxy, url).await
+}
+
+/// `url` 을 `proxy` 경유 주소로 — 꺼져 있으면 먼저 띄운다.
+async fn through(proxy: &LocalStreamProxy, url: &Url) -> String {
     if !proxy.is_running() {
-        let Some(host) = url.host_str() else {
-            return url.to_string();
-        };
-        if let Err(e) = proxy.start(host).await {
-            tracing::warn!("미리보기 프록시를 띄우지 못했습니다: {e}");
-            return url.to_string();
+        // 첫 기동은 한 번에 하나 — 카드를 빠르게 옮기면 두 요청이 함께 여기 온다. `start` 는 다른 호스트로
+        // 부르면 돌던 프록시를 멈추고 새 포트로 다시 띄워, 먼저 돌려준 주소(앞 포트)가 바로 끊겼다.
+        static START: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+        let _guard = START.lock().await;
+        if !proxy.is_running() {
+            let Some(host) = url.host_str() else {
+                return url.to_string();
+            };
+            if let Err(e) = proxy.start(host).await {
+                tracing::warn!("미리보기 프록시를 띄우지 못했습니다: {e}");
+                return url.to_string();
+            }
         }
     }
     proxy.proxy_url(url).to_string()
@@ -274,5 +285,25 @@ mod tests {
             second.contains("/_p_/vod.akamaized.net/v/360.mp4"),
             "{second}"
         );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn concurrent_first_use_keeps_one_listener() {
+        // Tauri 명령은 여러 작업 스레드에서 함께 돈다. 처음 쓰는 두 요청이 서로 다른 CDN 이어도 같은 포트를
+        // 돌려줘야 한다(뒤 요청이 앞 프록시를 다른 호스트로 다시 띄우면 먼저 돌려준 주소가 끊긴다).
+        let a = Url::parse("https://livecloud.pstatic.net/a/playlist.m3u8").unwrap();
+        let b = Url::parse("https://vod.akamaized.net/b/360.mp4").unwrap();
+        let port = |u: &str| Url::parse(u).unwrap().port();
+        for _ in 0..50 {
+            let proxy = LocalStreamProxy::default();
+            let (pa, pb) = (proxy.clone(), proxy.clone());
+            let (ua, ub) = (a.clone(), b.clone());
+            let x = tokio::spawn(async move { through(&pa, &ua).await });
+            let y = tokio::spawn(async move { through(&pb, &ub).await });
+            let (x, y) = (x.await.unwrap(), y.await.unwrap());
+            assert_eq!(port(&x), port(&y), "{x} {y}");
+            assert_eq!(port(&x), Some(proxy.port()), "{x}");
+            proxy.stop();
+        }
     }
 }
