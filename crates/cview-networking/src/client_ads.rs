@@ -151,6 +151,22 @@ impl AdRequestContext {
         }
     }
 
+    /// 라이브 프리롤 자리 — 웹 `w1(…)` 과 같은 광고 단위·일정 ID·요청 ID.
+    fn live_preroll_slot(&self) -> AdBreakSlot {
+        let event = self.schedule_id() == "LIVE_CHZZK_NDP_SCH_EVENT";
+        AdBreakSlot {
+            ad_unit_id: if event {
+                "event_w_live_chzzk_naver_va"
+            } else {
+                "w_live_chzzk_naver_va"
+            }
+            .into(),
+            schedule_id: self.schedule_id().into(),
+            request_id: format!("vas-{}", random_uuid_v4()),
+            with_remind_ad: 0,
+        }
+    }
+
     /// 웹 플레이어 주소(`c`·`description_url`).
     fn page_url(&self) -> String {
         match self.kind {
@@ -437,24 +453,27 @@ pub fn parse_waterfall(body: &Value, ctx: &AdRequestContext) -> Vec<AdCandidate>
         .collect()
 }
 
+/// 무작위 UUID v4 문자열.
+fn random_uuid_v4() -> String {
+    let mut b = [0u8; 16];
+    rand::thread_rng().fill(&mut b);
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
+    format!(
+        "{}-{}-{}-{}-{}",
+        &h[0..8],
+        &h[8..12],
+        &h[12..16],
+        &h[16..20],
+        &h[20..32]
+    )
+}
+
 /// 이 실행 동안 쓰는 GFP 광고 식별자(`iv`) — 웹 SDK 가 브라우저에 두는 무작위 UUID 와 같은 역할.
 fn install_id() -> &'static str {
     static IV: OnceLock<String> = OnceLock::new();
-    IV.get_or_init(|| {
-        let mut b = [0u8; 16];
-        rand::thread_rng().fill(&mut b);
-        b[6] = (b[6] & 0x0f) | 0x40;
-        b[8] = (b[8] & 0x3f) | 0x80;
-        let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
-        format!(
-            "{}-{}-{}-{}-{}",
-            &h[0..8],
-            &h[8..12],
-            &h[12..16],
-            &h[16..20],
-            &h[20..32]
-        )
-    })
+    IV.get_or_init(random_uuid_v4)
 }
 
 impl ChzzkApiClient {
@@ -538,16 +557,22 @@ impl ChzzkApiClient {
         &self,
         ctx: &AdRequestContext,
     ) -> Result<Vec<Vec<AdCandidate>>, ApiError> {
-        let mut vas = Url::parse(&format!("{GFP_BASE}/vas"))
-            .map_err(|e| ApiError::NetworkError(e.to_string()))?;
-        vas.query_pairs_mut()
-            .append_pair("vsi", ctx.schedule_id())
-            .append_pair("vcl", &ctx.content_duration.to_string())
-            .append_pair("so", "0")
-            .append_pair("rl", "pre:1,mid:0,post:0")
-            .append_pair("ct", "web");
-        let schedule = self.ad_get_json(vas, false).await?;
-        let slots = parse_preroll_schedule(&schedule);
+        let slots = match ctx.kind {
+            // 라이브 프리롤은 웹도 /vas 를 부르지 않고 고정 광고 단위 하나로 일정을 만든다(`w1`).
+            // 라이브 일정 ID 로 /vas 를 부르면 빈 일정이 와서 광고가 나오지 않았다.
+            AdContentKind::Live => vec![ctx.live_preroll_slot()],
+            AdContentKind::Vod => {
+                let mut vas = Url::parse(&format!("{GFP_BASE}/vas"))
+                    .map_err(|e| ApiError::NetworkError(e.to_string()))?;
+                vas.query_pairs_mut()
+                    .append_pair("vsi", ctx.schedule_id())
+                    .append_pair("vcl", &ctx.content_duration.to_string())
+                    .append_pair("so", "0")
+                    .append_pair("rl", "pre:1,mid:0,post:0")
+                    .append_pair("ct", "web");
+                parse_preroll_schedule(&self.ad_get_json(vas, false).await?)
+            }
+        };
         let custom = gfp_custom_param(&ctx.custom_params());
         let mut out = Vec::new();
         for (seq, slot) in slots.iter().enumerate().take(3) {
@@ -741,5 +766,21 @@ mod tests {
         assert_eq!(id.len(), 36);
         assert_eq!(&id[14..15], "4");
         assert_eq!(id, install_id());
+    }
+
+    #[test]
+    fn live_preroll_uses_fixed_web_ad_unit() {
+        let slot = live_ctx().live_preroll_slot();
+        assert_eq!(slot.ad_unit_id, "w_live_chzzk_naver_va");
+        assert_eq!(slot.schedule_id, "LIVE_CHZZK_NDP_SCH");
+        assert!(slot.request_id.starts_with("vas-"));
+        assert_eq!(slot.request_id.len(), 40);
+        assert_eq!(slot.with_remind_ad, 0);
+
+        let mut event = live_ctx();
+        event.ad_parameter.push(("tag".into(), "asiangames".into()));
+        let slot = event.live_preroll_slot();
+        assert_eq!(slot.ad_unit_id, "event_w_live_chzzk_naver_va");
+        assert_eq!(slot.schedule_id, "LIVE_CHZZK_NDP_SCH_EVENT");
     }
 }
