@@ -271,9 +271,8 @@ fn validated_update_url(value: &str) -> Result<url::Url, CommandError> {
     Ok(parsed)
 }
 
-/// 기본 업데이트 피드(자체 HTTPS 서버). 빌드 환경 변수를 빠뜨려도 이 주소를 쓴다.
-const DEFAULT_UPDATE_FEED: &str =
-    "https://win-7sv7uak6k5b.horse-solfege.ts.net/releases/latest.json";
+/// 기본 업데이트 피드(공개 다운로드 사이트). 빌드 환경 변수를 빠뜨려도 이 주소를 쓴다.
+const DEFAULT_UPDATE_FEED: &str = "https://cv.dododo.app/releases/latest.json";
 
 /// 실행 시 환경 변수 → 빌드 시 값 → 기본 피드 순. 빈 값은 설정 안 한 것으로 본다.
 fn configured(v: Option<&str>) -> Option<&str> {
@@ -443,7 +442,7 @@ mod tests {
 
     #[test]
     fn update_endpoint_configuration() {
-        let embedded = "https://win-7sv7uak6k5b.horse-solfege.ts.net/releases/latest.json";
+        let embedded = "https://updates.example.com/releases/latest.json";
         assert_eq!(
             update_feed_url(None, Some(embedded)).unwrap().as_str(),
             embedded
@@ -472,7 +471,7 @@ mod tests {
         }
     }
 
-    /// 실제 업데이트 서버(Tailscale 필요) — `cargo test -p cview-app -- --ignored live_update_feed`.
+    /// 실제 업데이트 서버(인터넷 연결 필요) — `cargo test -p cview-app -- --ignored live_update_feed`.
     #[tokio::test]
     #[ignore]
     async fn live_update_feed() {

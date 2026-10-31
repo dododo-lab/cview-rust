@@ -17,7 +17,34 @@ sys.path.insert(0, str(REPO / 'tools' / 'windows-update-server'))
 from release_gateway import BASE, PROTOCOL, describe, filenames, same_release, version_tuple
 
 
-def ssh_command():
+# Server address, host name and pinned host key live outside the public repository.
+# Default: ~/.config/cview-release/{server.json,known_hosts}; environment variables override.
+CONFIG_DIR = Path(os.environ.get('CVIEW_RELEASE_CONFIG_DIR', '~/.config/cview-release')).expanduser()
+SETUP_HINT = 'See tools/windows-update-server/AUTOMATION.md (local release server settings)'
+
+
+def server_settings():
+    path = CONFIG_DIR / 'server.json'
+    try:
+        data = json.loads(path.read_text(encoding='utf-8'))
+    except FileNotFoundError:
+        data = {}
+    except (ValueError, UnicodeError) as error:
+        raise ValueError(f'Invalid release server settings {path}: {error}') from None
+    target = os.environ.get('CVIEW_RELEASE_SSH_TARGET') or data.get('ssh_target')
+    name = os.environ.get('CVIEW_RELEASE_SERVER_NAME') or data.get('server_name')
+    known_hosts = Path(os.environ.get('CVIEW_RELEASE_KNOWN_HOSTS') or CONFIG_DIR / 'known_hosts').expanduser()
+    if not target or not name:
+        raise ValueError(f'Release server is not configured: {path} needs ssh_target and server_name. {SETUP_HINT}')
+    if target.startswith('-') or any(c.isspace() for c in target):
+        raise ValueError('Invalid release SSH target')
+    if not known_hosts.is_file():
+        raise ValueError(f'Pinned release host key is missing: {known_hosts}. {SETUP_HINT}')
+    return {'ssh_target': target, 'server_name': name, 'known_hosts': known_hosts}
+
+
+def ssh_command(settings=None):
+    settings = settings or server_settings()
     key = Path(os.environ.get('CVIEW_RELEASE_SSH_KEY', '~/.ssh/cview_release_ed25519')).expanduser()
     if not key.is_file():
         raise ValueError(f'Release key is missing: {key}. See tools/windows-update-server/AUTOMATION.md')
@@ -27,10 +54,10 @@ def ssh_command():
     return ['ssh', '-F', null, '-T', '-i', str(key),
             '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes', '-o', 'PreferredAuthentications=publickey',
             '-o', 'ControlMaster=no', '-o', 'ControlPath=none', '-o', 'StrictHostKeyChecking=yes',
-            '-o', 'UserKnownHostsFile=' + str(REPO / 'tools/windows-update-server/known_hosts'),
+            '-o', 'UserKnownHostsFile=' + str(settings['known_hosts']),
             '-o', 'GlobalKnownHostsFile=' + null, '-o', 'HostKeyAlgorithms=ssh-ed25519',
             '-o', 'ConnectTimeout=10', '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3',
-            'Administrator@100.117.247.29', PROTOCOL]
+            '--', settings['ssh_target'], PROTOCOL]
 
 
 def rpc(request, body=None):
@@ -111,8 +138,9 @@ def main():
     parser.add_argument('--allow-unnotarized', action='store_true', help='Only with explicit user authorization; adds disclosure')
     args = parser.parse_args()
     try:
+        expected_server = server_settings()['server_name']
         state = rpc({'action': 'preflight'})
-        if state['protocol'] != PROTOCOL or state['hostname'].upper() != 'WIN-7SV7UAK6K5B':
+        if state['protocol'] != PROTOCOL or state['hostname'].upper() != expected_server.upper():
             raise ValueError('Unexpected release server')
         current = verify_https()
         if current != state['latest']:

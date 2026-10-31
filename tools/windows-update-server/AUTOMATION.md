@@ -56,21 +56,20 @@ python3 scripts/publish-update.py --version <버전> --notes-file dist/CView_<�
 
 ### SSH 키가 맞는데 인증이 거부되는 경우
 
-2026-10-25에는 Mac의 Proxifier가 서버 SSH 연결까지 iPhone SOCKS5 프록시(`172.20.10.1:8443`)로 보내는 문제가 있었다. Mac의 Tailscale 주소와 키 지문은 정상이어도 서버가 본 출발지는 iOS 장치의 `100.123.134.100`이었다. 서버 OpenSSH 로그에는 `correct key but not from a permitted host`와 `required=100.70.172.3`이 기록됐다.
+Mac의 프록시 도구가 서버 SSH 연결을 다른 기기(예: 휴대폰 핫스팟 프록시)로 보내면, 키가 맞아도 서버가 다른 출발지로 보고 거부한다. 서버 OpenSSH 로그에는 `correct key but not from a permitted host`가 남는다.
 
-현재 Mac의 Proxifier `iossocks-simple` 프로필에는 다음 규칙을 Default 규칙보다 위에 적용했다.
+Mac에서 Proxifier 같은 프록시 도구를 쓰면 다음 규칙을 Default 규칙보다 위에 둔다.
 
 | 항목 | 값 |
 | --- | --- |
 | 이름 | `CView update SSH (Tailscale)` |
 | Applications | Any |
-| Target Hosts | `100.117.247.29` |
+| Target Hosts | 업데이트 서버의 Tailscale 주소(로컬 설정 `server.json`의 SSH 대상) |
 | Target Ports | `22` |
 | Action | Direct |
 
 이 규칙은 SSH를 Mac의 Tailscale 연결로 전달한다. 기존 배포 키와 서버의 Mac 출발지 제한을 유지한다. Proxifier 프로필을 바꾸거나 가져온 뒤에는 이 규칙과 순서를 확인하고 `--preflight`, `--probe`를 실행한다. `tailscale status`에 표시된 Mac 주소만으로 서버가 관측한 출발지까지 확인한 것으로 판단하지 않는다.
 
-수정 후 비대화형 키 인증, 실제 1 MiB 전송·재읽기·SHA-256·정리, v0.1.24의 두 설치 파일 전체 HTTPS 다운로드 검증을 통과했다. 새 릴리스는 게시하지 않았다. 검증 기록: `access-verification-2026-10-25.json`.
 
 ### 게시 작업 재시도
 
@@ -95,41 +94,42 @@ git push origin v<버전>
 
 ## 인증과 서버 구성
 
-- 서버: `Administrator@100.117.247.29:22`, Tailscale 연결 필요.
-- 현재 자동화 키 허용 출발지: 이 Mac의 `100.70.172.3`.
+- 서버 주소·이름·호스트 키는 저장소에 두지 않고 각 Mac의 로컬 설정에 둔다(아래 "로컬 서버 설정"). Tailscale 연결 필요.
+- 자동화 키는 등록된 Mac의 Tailscale 주소에서만 쓸 수 있다.
 - 개인 키: `~/.ssh/cview_release_ed25519`, 소유자만 읽기·쓰기(0600). 암호 없는 자동화 전용 키이며 저장소에는 포함하지 않는다.
 - 다른 키 위치: `CVIEW_RELEASE_SSH_KEY=/절대/경로/key`.
-- 서버 키는 저장소의 `known_hosts`로 고정한다. 지문: `SHA256:wOg0YZCPhtyxDl/5zsDFaLaj8rbIyNztDYEJTZa0TqA`.
+- 서버 호스트 키는 로컬 설정의 `known_hosts`로 고정한다(`StrictHostKeyChecking=yes`).
 - 서버 `administrators_authorized_keys`의 이 키에는 `restrict`, 출발지 제한, 고정 게시 명령을 적용했다. 일반 PowerShell 명령·SFTP·PTY·포트 전달에 사용할 수 없다. 키를 가진 이 Mac 사용자는 새 업데이트를 게시할 수 있으므로 키를 공유하지 않는다.
 - 서버 명령: `C:\CViewUpdates\tools\release_gateway.py`. 허용 작업은 사전 점검, 전송 시험, 지정된 버전의 두 설치 파일·설명 전송, 검증, 게시뿐이다.
 - 이 클라이언트는 기존 관리자 SSH 연결을 재사용하지 않고 항상 전용 키를 새로 인증한다. 다른 관리자 비밀번호 접속은 그대로 유지된다.
 - Python: `C:\CViewUpdates\tools\python\python.exe`. 공식 Python 3.13.12 embeddable amd64를 전용 폴더에 배치하고 ZIP SHA-256 및 Python Software Foundation Authenticode 서명을 확인했다. 시스템 PATH나 Windows Python 앱 실행 별칭에 의존하지 않는다.
 - Python ZIP SHA-256: `76f238f606250c87c6beac75dccd35ee99070a13490555936abb6cb64ecce3d0`.
 
+## 로컬 서버 설정
+
+`scripts/publish-update.py`는 서버 정보를 `~/.config/cview-release/`에서 읽는다(`CVIEW_RELEASE_CONFIG_DIR`로 폴더 변경). 이 폴더는 저장소 밖에 있어 커밋되지 않는다.
+
+```text
+~/.config/cview-release/
+  server.json    {"ssh_target": "<관리자-계정>@<서버-Tailscale-IP>", "server_name": "<서버 hostname>"}
+  known_hosts    <서버-Tailscale-IP> ssh-ed25519 <서버 호스트 공개 키>
+```
+
+- `ssh_target`: 게시 전용 키로 접속할 SSH 대상. `server_name`: 사전 점검 때 서버가 돌려주는 hostname과 비교한다.
+- `known_hosts`의 호스트 키는 서버 관리자 PowerShell에서 `Get-Content C:\ProgramData\ssh\ssh_host_ed25519_key.pub`로 읽은 값과 맞춰 넣는다. 네트워크로 받은 키를 그대로 믿지 않는다.
+- 환경 변수 `CVIEW_RELEASE_SSH_TARGET`, `CVIEW_RELEASE_SERVER_NAME`, `CVIEW_RELEASE_KNOWN_HOSTS`가 있으면 파일보다 우선한다.
+- 설정이 없으면 `--preflight`가 무엇이 빠졌는지 알려 주고 멈춘다.
+
 ## 다른 PC 1회 등록
 
-새 PC의 SSH 키를 별도로 생성하고 그 공개 키만 서버 관리자가 등록한다. 현재 Mac의 개인 키를 복사하지 않는다. 해당 PC는 같은 Tailscale 네트워크와 macOS 빌드·서명·공증 환경이 필요하다.
+새 PC의 SSH 키를 별도로 생성하고 그 공개 키만 서버 관리자가 등록한다. 현재 Mac의 개인 키를 복사하지 않는다. 해당 PC는 같은 Tailscale 네트워크, macOS 빌드·서명·공증 환경, 위 로컬 서버 설정이 필요하다.
 
 ```sh
 ssh-keygen -t ed25519 -N '' -C cview-release-automation -f ~/.ssh/cview_release_ed25519
 chmod 600 ~/.ssh/cview_release_ed25519
 ```
 
-관리자 전용 설치 폴더에 이 디렉터리의 `Install-ReleaseAutomation.ps1`, `release_gateway.py`, `publish.py`, `check_server.py`, `Publish-UploadedRelease.ps1`, 새 공개 키와 검증한 Python ZIP을 준비한다. 서버 관리자 PowerShell에서 실제 파일 경로와 새 PC의 Tailscale 주소로 실행한다.
-
-```powershell
-.\Install-ReleaseAutomation.ps1 -PublicKeyPath .\cview_release_ed25519.pub -PythonZip .\python-3.13.12-embed-amd64.zip -ClientAddress <새-PC의-Tailscale-IP>
-```
-
-설치기는 기존 다른 키를 유지하고 관리자 전용 백업을 남긴다. `-WhatIf`로 변경을 미리 볼 수 있다. 설치 후 새 PC에서 `--preflight`와 `--probe`를 확인한다. 현재 키의 출발지 주소를 바꿀 때는 기존 키 줄을 관리자에게 확인받아 수정해야 한다. 키를 폐기할 때는 `C:\ProgramData\ssh\administrators_authorized_keys`에서 해당 공개 키 줄만 제거한다.
+서버 관리자는 새 공개 키를 `C:\ProgramData\ssh\administrators_authorized_keys`에 `restrict`, 새 PC의 Tailscale 주소로 출발지 제한(`from=`), 고정 게시 명령(`command=`로 `release_gateway.py` 실행)을 붙여 등록한다. 서버 쪽 설치 스크립트는 공개 저장소에 두지 않고 관리자가 따로 보관한다. 설치 후 새 PC에서 `--preflight`와 `--probe`를 확인한다. 현재 키의 출발지 주소를 바꿀 때는 기존 키 줄을 관리자에게 확인받아 수정해야 한다. 키를 폐기할 때는 `C:\ProgramData\ssh\administrators_authorized_keys`에서 해당 공개 키 줄만 제거한다.
 
 공식 참고: [Windows OpenSSH 키 관리](https://learn.microsoft.com/en-us/windows-server/administration/openssh/openssh_keymanagement), [OpenSSH 공개 키 제한 옵션](https://man.openbsd.org/sshd.8), [Python 3.13.12 배포 파일](https://www.python.org/downloads/release/python-31312/).
 
-## 이번 설정의 검증 범위
-
-- 전용 키를 사용한 비대화형 접속과 HTTPS 사전 점검 성공.
-- 실제 서버에 1 MiB 업로드·디스크 재읽기·SHA-256 일치·임시 파일 정리 성공.
-- 전용 키로 `hostname` 등 임의 명령 실행 거부, 경로 이탈 요청 거부 확인.
-- 서버와 Mac 양쪽에서 기존 v0.1.20의 macOS/Windows 설치 파일 전체 다운로드·SHA-256 검사 성공.
-- 격리된 임시 디렉터리에서 게시·원자적 피드·충돌·재시도·실패 처리 테스트 통과.
-- 이 설정 작업에서는 새 버전을 빌드하거나 운영 서버에 새 릴리스를 게시하지 않았다. 새 릴리스의 전체 흐름은 다음 배포 실행 때 검증 영수증으로 확인한다.

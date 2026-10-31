@@ -2,6 +2,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -139,11 +140,33 @@ class GatewayTests(unittest.TestCase):
 
 class ClientTests(unittest.TestCase):
     def test_ssh_does_not_reuse_unrestricted_master_or_password(self):
-        with tempfile.NamedTemporaryFile() as key, patch.dict('os.environ', {'CVIEW_RELEASE_SSH_KEY': key.name}):
+        with tempfile.NamedTemporaryFile() as key, tempfile.NamedTemporaryFile() as hosts, patch.dict('os.environ', {
+                'CVIEW_RELEASE_SSH_KEY': key.name, 'CVIEW_RELEASE_KNOWN_HOSTS': hosts.name,
+                'CVIEW_RELEASE_SSH_TARGET': 'user@release.example', 'CVIEW_RELEASE_SERVER_NAME': 'SERVER'}):
+            os.chmod(key.name, 0o600)
             command = client.ssh_command()
-        for option in ['BatchMode=yes', 'ControlPath=none', 'StrictHostKeyChecking=yes', 'PreferredAuthentications=publickey']:
+        for option in ['BatchMode=yes', 'ControlPath=none', 'StrictHostKeyChecking=yes', 'PreferredAuthentications=publickey',
+                       'UserKnownHostsFile=' + hosts.name]:
             self.assertIn(option, command)
-        self.assertEqual(command[-1], gateway.PROTOCOL)
+        self.assertEqual(command[-3:], ['--', 'user@release.example', gateway.PROTOCOL])
+
+    def test_server_settings_come_from_local_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config = Path(tmp)
+            (config / 'server.json').write_text(json.dumps({'ssh_target': 'user@release.example', 'server_name': 'SERVER'}), encoding='utf-8')
+            (config / 'known_hosts').write_text('release.example ssh-ed25519 AAAA\n', encoding='utf-8')
+            clean = {k: v for k, v in os.environ.items() if not k.startswith('CVIEW_RELEASE_')}
+            with patch.object(client, 'CONFIG_DIR', config), patch.dict('os.environ', clean, clear=True):
+                settings = client.server_settings()
+            self.assertEqual(settings['ssh_target'], 'user@release.example')
+            self.assertEqual(settings['known_hosts'], config / 'known_hosts')
+
+    def test_missing_server_settings_fail_clearly(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            clean = {k: v for k, v in os.environ.items() if not k.startswith('CVIEW_RELEASE_')}
+            with patch.object(client, 'CONFIG_DIR', Path(tmp)), patch.dict('os.environ', clean, clear=True):
+                with self.assertRaisesRegex(ValueError, 'not configured'):
+                    client.server_settings()
 
     def test_ssh_failure_exits_nonzero(self):
         with patch.object(sys, 'argv', ['publish-update.py', '--preflight']), patch.object(client, 'rpc', side_effect=RuntimeError('offline')):
