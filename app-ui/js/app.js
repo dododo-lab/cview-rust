@@ -883,7 +883,7 @@ async function main() {
   listen(Events.loginFailed, (p) => p && p.message && toast(p.message));
 
   renderAccount();
-  splashStep('계정·설정 확인', 0.55);
+  splashStep('계정·설정 확인', 0.35);
   if (!isTauri) toast('CView 앱(cargo run -p cview-app) 안에서 실행해야 데이터가 표시됩니다', 6000);
   // 계정 상태와 설정은 서로 기다릴 필요가 없어 함께 부른다(예전엔 차례로 기다렸다).
   // 계정은 서버 확인 없이 저장된 로그인만 본다(quick) — 서버 확인(/users/me) 한 번을 기다린 뒤에야 홈 요청이
@@ -892,16 +892,18 @@ async function main() {
   if (authRes && authRes.status === 'fulfilled') onAuthChanged(authRes.value);
   const settings = settingsRes && settingsRes.status === 'fulfilled' ? settingsRes.value : null;
   syncTheme(settings && settings.appearance && settings.appearance.theme);
-  // 스플래시는 hideSplash 가 최소 0.4초를 지킨다 — 따로 더 기다리지 않는다.
-  hideSplash();
-  if (!AUX) showWelcome({ onLogin: login });
-  if (AUX) { openAuxWindow(); return; }
-  // 새 버전 알림 — 메인 창에서만. 조용히 확인하고 사이드바 줄·토스트로 알린다(창·포커스는 건드리지 않음).
-  installUpdateNotifier(() => showUpdateCheck());
+  // 보조 창은 홈이 없다 — 스플래시(최소 0.4초)만 걷고 제 화면으로.
+  if (AUX) { hideSplash(); openAuxWindow(); return; }
   // 작업 공간 복원 (NAV-16) — "실행 시 창 복원"이 켜져 있으면 마지막 화면으로. 방송은 자동 재생하지 않고 묻는다.
   const ws = settings?.general?.restoreWindowOnLaunch !== false ? loadWorkspace() : null;
+  // 홈은 로딩 화면 뒤에서 먼저 불러 둔다 — 스켈레톤이 아니라 채워진 홈이 바로 보이게.
   navigate('home', {}, { push: false });
   if (isTauri) api.authStatus().then(onAuthChanged).catch(() => {});
+  await loadHomeBehindSplash();
+  hideSplash();
+  showWelcome({ onLogin: login });
+  // 새 버전 알림 — 메인 창에서만. 조용히 확인하고 사이드바 줄·토스트로 알린다(창·포커스는 건드리지 않음).
+  installUpdateNotifier(() => showUpdateCheck());
   // 딥 링크 (SYS-06) — 준비 전에 온 링크가 있으면 작업 공간 복원보다 우선한다.
   listen(Events.deepLink, (p) => { api.deeplinkTakePending().catch(() => {}); openDeepLink(p); });
   let pendingLinks = [];
@@ -911,6 +913,46 @@ async function main() {
   if (ws && ws.channelId) {
     toast('지난번에 보던 방송이 있어요', 8000, { label: '이어 보기', run: () => openChannel(ws.channelId) });
   }
+}
+
+// 시작 로딩 화면이 홈 데이터를 기다리는 한도 — 네트워크가 느려도 이만큼 지나면 홈(스켈레톤)을 먼저 보여 주고
+// 나머지는 홈이 스스로 채운다. 첫 화면 그림은 데이터가 온 뒤 조금만 더 기다린다(늦는 그림은 홈에서 떠오른다).
+const STARTUP_DATA_MAX_MS = 8000;
+const STARTUP_SLOW_MS = 3500;
+const STARTUP_IMAGES_MAX_MS = 1500;
+const STARTUP_LABELS = { following: '팔로잉 방송', popular: '인기 라이브', recent: '최근 시청' };
+
+/** 앱 시작 — 홈의 첫 데이터(팔로잉·인기·최근 시청)와 첫 화면 썸네일이 준비될 때까지 로딩 화면에 진행을 보여 준다. */
+async function loadHomeBehindSplash() {
+  const home = pages.home;
+  // 오프라인이면 기다릴 것이 없다 — 오프라인 배너와 홈의 실패 안내가 바로 보이게.
+  if (!home || !isTauri || navigator.onLine === false) return;
+  const pending = new Set(isLoggedIn() ? ['following', 'popular', 'recent'] : ['popular', 'recent']);
+  const total = pending.size;
+  let slow = false;
+  const label = () => `${[...pending].map((k) => STARTUP_LABELS[k]).join(' · ')} 불러오는 중…`;
+  const progress = () => 0.45 + 0.4 * ((total - pending.size) / total);
+  home.onLoadStep = (name) => {
+    if (!pending.delete(name)) return;
+    if (pending.size) splashStep(slow ? '네트워크가 느려요 — 조금만 기다려 주세요' : label(), progress());
+  };
+  splashStep(label(), progress());
+  const slowTimer = setTimeout(() => { slow = true; splashStep('네트워크가 느려요 — 조금만 기다려 주세요', progress()); }, STARTUP_SLOW_MS);
+  const timeout = (ms) => new Promise((resolve) => setTimeout(() => resolve('timeout'), ms));
+  const dataResult = await Promise.race([home.firstRender, timeout(STARTUP_DATA_MAX_MS)]);
+  clearTimeout(slowTimer);
+  home.onLoadStep = null;
+  if (dataResult === 'timeout') return;
+  // 첫 화면에 보이는 썸네일 — 막 그린 홈 위에서 그림이 하나씩 떠오르지 않게 잠깐 더 기다린다.
+  splashStep('화면 그리는 중…', 0.9);
+  await new Promise((r) => requestAnimationFrame(() => r())); // 배치(크기·위치)가 정해진 뒤 고른다
+  const images = home.aboveFoldImages().filter((img) => !img.complete);
+  if (!images.length) return;
+  const loaded = images.map((img) => new Promise((resolve) => {
+    img.addEventListener('load', resolve, { once: true });
+    img.addEventListener('error', resolve, { once: true });
+  }));
+  await Promise.race([Promise.all(loaded), timeout(STARTUP_IMAGES_MAX_MS)]);
 }
 
 /** 보조 창 첫 화면 (PLY-18·CHT-23·MUL-05·DAT-05). */
