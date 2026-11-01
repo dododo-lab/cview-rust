@@ -175,9 +175,8 @@ export class MultiChatPage {
     const session = `mc:${channelId}`;
     const panel = new ChatPanel(el.querySelector('.chat'), { isLoggedIn: this.isLoggedIn, session });
     // 패널 머리 버튼들이 생긴 뒤 맨 끝에 닫기를 둔다.
-    // 좁은 칸(그리드)에서는 자주 쓰지 않는 도구(읽기 폭·통계·내보내기·지우기)를 "⋯" 뒤로 접는다 — 채널명·연결 상태 자리를 남긴다(CSS 컨테이너 쿼리)
-    el.querySelector('.chat-header').insertAdjacentHTML('beforeend', `<button class="icon-btn chat-hbtn mc-tools-more" data-mc="tools" title="도구 더 보기" aria-expanded="false"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg></button>
-      <button class="icon-btn chat-hbtn" data-mc="remove" title="이 채널 닫기">✕</button>`);
+    // 도구 아이콘은 ChatPanel 이 '⋯' 서랍에 접어 두므로, 닫기만 그 뒤에 둔다.
+    el.querySelector('.chat-header').insertAdjacentHTML('beforeend', '<button class="icon-btn chat-hbtn" data-mc="remove" title="이 채널 닫기">✕</button>');
     el.querySelector('.mc-name').title = live.channelName || channelId;
     const entry = { channelId, name: live.channelName || channelId, image: live.channelImageUrl, color, chatChannelId: live.chatChannelId, panel, el, session, rate: [], isLive: live.isLive };
     panel.appendHooks.push((msgs) => {
@@ -363,10 +362,6 @@ export class MultiChatPage {
     if (a.dataset.mc === 'add') this.addBar.toggle();
     if (a.dataset.mc === 'clear-search') { this.search.value = ''; this.applySearch(); this.search.focus(); }
     if (a.dataset.mc === 'remove') this.remove(a.closest('.mc-pane').dataset.channelId);
-    if (a.dataset.mc === 'tools') {
-      const head = a.closest('.chat-header');
-      a.setAttribute('aria-expanded', String(head.classList.toggle('tools-open')));
-    }
     if (a.dataset.mc === 'close-all') for (const c of [...this.channels]) await this.remove(c.channelId);
   }
 }

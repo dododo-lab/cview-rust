@@ -235,7 +235,7 @@ await check('F10 settings no result', async () => {
   assert.equal(await page.inputValue('.settings-search'), '');
 });
 
-// F08·F09·F12 — 멀티채팅(비로그인): 통합 입력이 꺼지고, 검색 0건은 결과 없음으로, 좁은 칸은 도구를 접는다.
+// F08·F09·F12 — 멀티채팅(비로그인): 통합 입력이 꺼지고, 검색 0건은 결과 없음으로, 도구는 '⋯' 서랍에 접힌다.
 // 앱의 화면 객체는 밖에서 닿지 않아, 같은 모듈로 시험용 화면을 하나 더 만들어 채널 2개를 붙인다.
 await check('F08 F09 F12 multichat', async () => {
   await setHandler('live_detail', '({ channelId }) => ({ channelId, channelName: channelId === "m" ? "마뫄" : "다주", chatChannelId: "cc" + channelId, isLive: true })');
@@ -258,21 +258,31 @@ await check('F08 F09 F12 multichat', async () => {
     window.__mc = mc;
   });
   await settle();
-  // F12 — 좁은 칸: 드문 도구는 접히고 '⋯' 가 보인다. 채널명은 줄지 않는다
+  // F12 — 도구는 '⋯' 서랍에 접혀 있다(모든 채팅 패널 공통). 채널명은 줄지 않는다
   const head = await page.$eval('#mc-test .mc-pane', (p) => ({
-    extraShown: [...p.querySelectorAll('.chat-tool-extra')].some((b) => getComputedStyle(b).display !== 'none'),
-    more: getComputedStyle(p.querySelector('.mc-tools-more')).display,
+    toolsWidth: p.querySelector('.chat-tools').getBoundingClientRect().width,
+    toolsInert: p.querySelector('.chat-tools').inert,
+    more: getComputedStyle(p.querySelector('.chat-tools-toggle')).display,
     nameClipped: p.querySelector('.mc-name').scrollWidth > p.querySelector('.mc-name').clientWidth,
     stateLines: Math.round(p.querySelector('.chat-state').getBoundingClientRect().height / (parseFloat(getComputedStyle(p.querySelector('.chat-state')).lineHeight) || 14)),
   }));
-  assert.equal(head.extraShown, false, '좁은 칸에서 도구가 그대로');
+  assert.equal(head.toolsWidth, 0, '접힌 도구가 자리를 차지');
+  assert.equal(head.toolsInert, true, '접힌 도구에 초점이 감');
   assert.notEqual(head.more, 'none');
   assert.equal(head.nameClipped, false, '짧은 채널명이 잘림');
   assert.equal(head.stateLines, 1, '연결 상태가 두 줄');
   await shot('f12-grid');
-  await page.click('#mc-test .mc-pane .mc-tools-more');
+  await page.click('#mc-test .mc-pane .chat-tools-toggle');
+  await page.waitForTimeout(450);
   await shot('f12-grid-tools-open');
-  assert.equal(await page.$eval('#mc-test .mc-pane', (p) => getComputedStyle(p.querySelector('.chat-tool-extra')).display !== 'none'), true, '펼쳐도 안 보임');
+  const open = await page.$eval('#mc-test .mc-pane', (p) => {
+    const r = p.querySelector('.chat-header').getBoundingClientRect();
+    return [...p.querySelectorAll('.chat-tools-inner > *')].map((b) => {
+      const br = b.getBoundingClientRect();
+      return br.width > 0 && br.left >= r.left - 1 && br.right <= r.right + 1 && getComputedStyle(b).opacity === '1';
+    });
+  });
+  assert.equal(open.length >= 5 && open.every(Boolean), true, `펼친 도구가 머리 안에 다 보이지 않음 ${JSON.stringify(open)}`);
   // F08 — 통합: 비로그인이면 입력·보내기가 꺼지고 로그인 안내
   await page.evaluate(() => { const mc = window.__mc; mc.layout = 'merged'; mc.mergedList.innerHTML = '<div class="empty">새 메시지를 기다리는 중…</div>'; mc.render(); });
   const merged = await page.$eval('#mc-test .mc-merged', (m) => ({

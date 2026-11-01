@@ -86,7 +86,9 @@ export class MultiLiveMergedChat {
     wrap.className = 'ml-mc-view';
     wrap.innerHTML = `<button type="button" class="icon-btn chat-hbtn ml-merge-btn" aria-haspopup="menu" aria-expanded="false">${ICON}</button>
       <div class="ml-more-menu ml-mc-menu" role="menu" hidden>${MODES.map((m) => `<button type="button" class="ml-menu-item" role="menuitemradio" data-mc-view="${m.id}">${esc(m.label)}</button>`).join('')}</div>`;
-    header.insertBefore(wrap, header.querySelector('.chat-hbtn') || null);
+    // 채팅 패널의 도구 서랍('⋯') 맨 앞에 둔다 — 다른 머리 아이콘과 함께 접힌다.
+    const tools = header.querySelector('.chat-tools-inner');
+    if (tools) tools.prepend(wrap); else header.append(wrap);
     this.button = wrap.querySelector('.ml-merge-btn');
     this.menu = wrap.querySelector('.ml-mc-menu');
     // 키보드 — 키보드로 열면 지금 보기(없으면 첫 항목)로, ↑↓ 이동, 고르거나 Esc 로 닫으면 연 버튼으로 초점을 돌려준다.
