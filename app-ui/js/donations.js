@@ -8,6 +8,7 @@
 //   떠 있는 알림을 끌면 그 자리로 옮기고(영상 크기 대비 비율로 저장), 더블클릭하면 기본 위치로 돌린다.
 import { api, invoke } from './api.js';
 import { esc, safeUrl, imageSrc, toast, renderContent } from './dom.js';
+import { verifiedBadge } from './verified-badge.js';
 
 const ALERT_KEY = 'cview.streamAlerts';
 const ALERT_MS = 6500;
@@ -199,7 +200,7 @@ export class DonationRanking {
         return `<span class="rank-chip ${r.rank === 1 ? 'top1' : ''}" title="${esc(r.nickname)} · ${esc(formatCheese(r.amount))}">
           <span class="rank-no">${esc(r.rank)}</span>
           ${avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}
-          <span class="rank-name">${esc(r.nickname)}</span>
+          <span class="rank-name">${esc(r.nickname)}</span>${verifiedBadge(r, 'sm')}
           <span class="rank-amount">${esc((r.amount || 0).toLocaleString('ko-KR'))}</span>
         </span>`;
       }).join('')}</div>`;

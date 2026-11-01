@@ -76,6 +76,8 @@ pub struct PostUser {
     pub title: Option<PostUserTitle>,
     #[serde(default)]
     pub verified_mark: bool,
+    #[serde(default)]
+    pub verified_mark_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -111,6 +113,8 @@ pub struct ChannelPost {
     pub author_title: Option<String>,
     pub author_title_color: Option<String>,
     pub author_verified: bool,
+    /// 작성자 인증 마크 종류(`"partner"` · `"challenger"` · `"official"`).
+    pub author_badge: Option<String>,
 }
 
 impl ChannelPostItem {
@@ -140,6 +144,11 @@ impl ChannelPostItem {
             author_title: title.name.filter(|n| !n.is_empty()),
             author_title_color: title.color.filter(|c| !c.is_empty()),
             author_verified: user.verified_mark,
+            author_badge: super::verified_badge(
+                user.verified_mark,
+                user.verified_mark_type.as_deref(),
+            )
+            .map(str::to_string),
         })
     }
 }

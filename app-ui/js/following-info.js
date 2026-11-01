@@ -5,6 +5,7 @@
 import { api } from './api.js';
 import { esc } from './dom.js';
 import { compactCount } from './cards.js';
+import { verifiedBadge } from './verified-badge.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -88,12 +89,11 @@ export function followedSummary(channels, now = Date.now()) {
   };
 }
 
-const ICON_VERIFIED = '<svg class="fx-verified" viewBox="0 0 24 24" aria-label="인증된 채널"><path fill="currentColor" d="M12 2.5l2.4 1.8 3-.2.9 2.9 2.5 1.7-1 2.8 1 2.8-2.5 1.7-.9 2.9-3-.2L12 21.5l-2.4-1.8-3 .2-.9-2.9-2.5-1.7 1-2.8-1-2.8 2.5-1.7.9-2.9 3 .2z"/><path d="M8.3 12.2l2.5 2.5 4.9-5" fill="none" stroke="var(--fx-check, #fff)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const ICON_BELL = '<svg class="fx-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="라이브 알림 켬"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>';
 
-/** 이름 옆 표시 — 인증 배지·알림 종. */
+/** 이름 옆 표시 — 인증 마크(파트너·챌린저)·알림 종. */
 export function followBadges(c) {
-  return `${c.verified ? ICON_VERIFIED : ''}${c.notification === true ? `<span title="라이브 알림을 켠 채널">${ICON_BELL}</span>` : ''}`;
+  return `${verifiedBadge(c)}${c.notification === true ? `<span title="라이브 알림을 켠 채널">${ICON_BELL}</span>` : ''}`;
 }
 
 /** 요약 레일 HTML. */

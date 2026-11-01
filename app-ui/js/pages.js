@@ -5,6 +5,7 @@ import { swapContent } from './motion.js';
 import { liveGrid, channelRow, emptyState, loadingState, compactCount, skeletonGrid, freshnessText, errorState, friendlyError, uptimeText } from './cards.js';
 import { FOLLOW_SORTS, FOLLOW_FILTERS, arrangeFollowed, followedInsights, followBadges, followAgeText, parseFollowDate, FollowExtras } from './following-info.js';
 import { vodCard } from './channel.js';
+import { verifiedBadge } from './verified-badge.js';
 
 const loginAction = '<button class="btn primary" data-action="login">로그인</button>';
 
@@ -221,7 +222,7 @@ function denseRow(l) {
   const avatar = safeUrl(l.channelImageUrl);
   return `<div class="dense-row live-dense card" tabindex="0" data-channel-id="${esc(l.channelId)}" data-channel-name="${esc(l.channelName)}" data-channel-image="${esc(avatar)}">
     <span class="card-avatar" data-open-channel>${avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}</span>
-    <span class="dense-name ellipsis"><b>${esc(l.channelName)}</b> <span>${esc(l.categoryName || '')}</span></span>
+    <span class="dense-name ellipsis"><b>${esc(l.channelName)}</b>${verifiedBadge(l)} <span>${esc(l.categoryName || '')}</span></span>
     <span class="dense-title ellipsis">${esc(l.liveTitle || '')}</span>
     ${l.openDate ? `<span class="dense-uptime" title="방송 경과 시간">${esc(uptimeText(l.openDate))}</span>` : '<span></span>'}
     <span class="dense-viewers"><i class="dot"></i>${esc(l.viewerCountText)}</span>
@@ -333,7 +334,7 @@ export class SearchPage {
       ${d.cats.length ? `<div class="section-head"><h2 class="section-title">지금 많이 보는 카테고리</h2></div>
         <div class="chips">${d.cats.map((c) => `<button class="chip" data-discover-cat="${esc(c.name)}">${esc(c.name)} <span class="chip-count">${compactCount(c.viewers)}</span></button>`).join('')}</div>` : ''}
       ${d.top.length ? `<div class="section-head"><h2 class="section-title">인기 채널</h2></div>
-        <div class="discover-rail">${d.top.map((l) => { const a = safeUrl(l.channelImageUrl); return `<button class="discover-item" data-recent="${esc(l.channelName)}" title="${esc(l.liveTitle || '')}">${a ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(a, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}<span class="ellipsis">${esc(l.channelName)}</span><small>${esc(l.viewerCountText)}</small></button>`; }).join('')}</div>` : ''}`;
+        <div class="discover-rail">${d.top.map((l) => { const a = safeUrl(l.channelImageUrl); return `<button class="discover-item" data-recent="${esc(l.channelName)}" title="${esc(l.liveTitle || '')}">${a ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(a, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}<span class="ellipsis">${esc(l.channelName)}${verifiedBadge(l, 'sm')}</span><small>${esc(l.viewerCountText)}</small></button>`; }).join('')}</div>` : ''}`;
   }
 
   renderIdle() {

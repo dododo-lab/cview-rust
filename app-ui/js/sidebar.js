@@ -2,6 +2,7 @@
 // 접힘 상태는 로컬에 기억하고, 좁은 창(<1100px)에서는 사용자가 펼치지 않은 한 아이콘 레일로 접는다.
 import { esc, safeUrl, icons, imageSrc, keepFocus } from './dom.js';
 import { setTheme, currentTheme, onThemeChange, THEMES, THEME_LABELS } from './theme.js';
+import { verifiedBadge } from './verified-badge.js';
 
 const COLLAPSE_KEY = 'cview.sidebarCollapsed';
 const NARROW = window.matchMedia('(max-width: 1100px)');
@@ -296,7 +297,7 @@ export class Sidebar {
         <button class="side-live${it.live ? '' : ' off'}${it.category ? ' cat' : ''}" ${attrs} data-tip="${esc(it.tip || it.name)}">
           <span class="side-live-avatar">${avatar(it.image)}</span>
           <span class="side-live-text">
-            <span class="side-live-name ellipsis">${esc(it.name)}${it.favorite ? '<i class="side-fav" aria-label="즐겨찾기">★</i>' : ''}</span>
+            <span class="side-live-name ellipsis">${esc(it.name)}${verifiedBadge(it.badge, 'sm')}${it.favorite ? '<i class="side-fav" aria-label="즐겨찾기">★</i>' : ''}</span>
             <span class="side-live-cat ellipsis">${esc(it.sub || '')}</span>
           </span>
           <span class="side-live-viewers">${it.live && it.dot !== false ? '<i class="dot"></i>' : ''}${esc(it.meta || '')}</span>

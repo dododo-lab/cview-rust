@@ -88,6 +88,7 @@ impl FollowingPublishItem for MergedFollowingItem {
             && self.channel_image_url == o.channel_image_url
             && self.thumbnail_url == o.thumbnail_url
             && self.open_date == o.open_date
+            && self.verified_badge == o.verified_badge
     }
 }
 
@@ -327,6 +328,7 @@ mod tests {
             channel_id: id.into(),
             is_live: true,
             open_date: None,
+            verified_badge: None,
         }
     }
 

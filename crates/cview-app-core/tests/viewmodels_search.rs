@@ -412,6 +412,7 @@ fn item(id: &str, name: &str) -> LiveChannelItem {
         channel_id: id.into(),
         is_live: true,
         open_date: None,
+        verified_badge: None,
     }
 }
 

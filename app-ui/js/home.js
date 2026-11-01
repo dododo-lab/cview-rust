@@ -9,6 +9,7 @@ import { clipCard } from './channel.js';
 import { continueCard } from './media.js';
 import { motionReduced, swapContent } from './motion.js';
 import { previewAttr } from './hover-preview.js';
+import { verifiedBadge } from './verified-badge.js';
 
 const HERO_SIZE = 5;
 // 자동 넘김 — 대기열 진행 막대(CSS `queue-progress`, 7초)가 끝나면 다음 장으로. 호버 중엔 CSS 가 멈춘다.
@@ -81,7 +82,7 @@ function followingStrip(lives) {
     <button class="strip-item" ${channelData(l)} title="${esc(l.liveTitle)}">
       <span class="strip-ring">${avatarImg(l.channelImageUrl)}</span>
       <span class="strip-live">LIVE</span>
-      <span class="strip-name ellipsis">${esc(l.channelName)}</span>
+      <span class="strip-name ellipsis">${esc(l.channelName)}${verifiedBadge(l, 'sm')}</span>
       <span class="strip-meta ellipsis">${esc(l.categoryName || `${l.viewerCountText}명`)}</span>
     </button>`).join('');
   return `
@@ -111,7 +112,7 @@ function heroSlide(live, source) {
         <h3 class="hero-title">${esc(live.liveTitle || '제목 없음')}</h3>
         <div class="hero-channel">
           ${avatarImg(live.channelImageUrl)}
-          <div class="ellipsis"><strong>${esc(live.channelName)}</strong>${live.categoryName ? `<span> · ${esc(live.categoryName)}</span>` : ''}</div>
+          <div class="ellipsis"><strong>${esc(live.channelName)}</strong>${verifiedBadge(live)}${live.categoryName ? `<span> · ${esc(live.categoryName)}</span>` : ''}</div>
         </div>
         <div class="hero-actions">
           <span class="btn primary lg hero-cta">${icons.play}시청하기</span>
@@ -131,7 +132,7 @@ function heroQueue(lives, active) {
         <span class="queue-thumb">${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>
         <span class="queue-text">
           <span class="queue-title">${esc(l.liveTitle || '제목 없음')}</span>
-          <span class="queue-meta ellipsis">${esc(l.channelName)} · ${esc(l.viewerCountText)}명</span>
+          <span class="queue-meta ellipsis">${esc(l.channelName)}${verifiedBadge(l, 'sm')} · ${esc(l.viewerCountText)}명</span>
         </span>
       </button>`;
   }).join('');
@@ -159,7 +160,7 @@ function topRail(lives) {
           </div>
           <div class="top-text">
             <div class="top-title">${esc(l.liveTitle || '제목 없음')}</div>
-            <div class="top-meta ellipsis">${avatarImg(l.channelImageUrl, 'avatar xs')}<span>${esc(l.channelName)}</span>${l.categoryName ? `<span class="category">· ${esc(l.categoryName)}</span>` : ''}</div>
+            <div class="top-meta ellipsis">${avatarImg(l.channelImageUrl, 'avatar xs')}<span>${esc(l.channelName)}</span>${verifiedBadge(l, 'sm')}${l.categoryName ? `<span class="category">· ${esc(l.categoryName)}</span>` : ''}</div>
           </div>
         </div>
       </article>`;
@@ -178,7 +179,7 @@ function recentShelf(recent, liveById) {
       <button class="recent-item${live ? ' is-live' : ''}" data-channel-id="${esc(r.channelId)}" data-channel-name="${esc(r.channelName)}" data-channel-image="${esc(r.channelImageUrl)}">
         ${avatarImg(r.channelImageUrl)}
         <span class="recent-text">
-          <span class="ellipsis"><strong>${esc(r.channelName || '채널')}</strong></span>
+          <span class="ellipsis"><strong>${esc(r.channelName || '채널')}</strong>${verifiedBadge(live)}</span>
           <span class="recent-meta ellipsis">${live ? `<b>LIVE</b> ${esc(live.viewerCountText)}명${live.categoryName ? ` · ${esc(live.categoryName)}` : ''}` : '오프라인일 수 있음'}</span>
         </span>
         <span class="recent-play" aria-hidden="true">${icons.play}</span>

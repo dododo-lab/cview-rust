@@ -82,6 +82,7 @@ fn item(id: &str, live: bool, viewers: i64) -> LiveChannelItem {
         channel_id: id.into(),
         is_live: live,
         open_date: None,
+        verified_badge: None,
     }
 }
 
@@ -276,4 +277,28 @@ fn tagged_chat_event_carries_chat_channel_id() {
         serde_json::to_value(&ev).unwrap(),
         json!({"type": "connected", "chatChannelId": "chat-b"})
     );
+}
+
+#[test]
+fn verified_badge_follows_mark_type() {
+    // 종류 없이 verifiedMark 만 참이면(챌린저 제도 이전 응답) 파트너.
+    let card = LiveCardDto::from_live_info(&popular_live()).unwrap();
+    assert_eq!(card.badge, Some("partner"));
+
+    let challenger = live_info(json!({
+        "liveId": 1, "liveTitle": "t", "status": "OPEN", "concurrentUserCount": 1,
+        "channel": {"channelId": "c", "channelName": "n", "verifiedMark": true, "verifiedMarkType": "CHALLENGER"}
+    }));
+    let card = LiveCardDto::from_live_info(&challenger).unwrap();
+    assert_eq!(card.badge, Some("challenger"));
+    let detail = LiveDetailDto::from_live_info(&challenger, "c");
+    assert_eq!(detail.badge, Some("challenger"));
+    let json = serde_json::to_value(&card).unwrap();
+    assert_eq!(json["badge"], "challenger");
+
+    let plain = live_info(json!({
+        "liveId": 2, "liveTitle": "t", "status": "OPEN", "concurrentUserCount": 1,
+        "channel": {"channelId": "d", "channelName": "n", "verifiedMark": false, "verifiedMarkType": null}
+    }));
+    assert_eq!(LiveCardDto::from_live_info(&plain).unwrap().badge, None);
 }

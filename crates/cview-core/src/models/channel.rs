@@ -18,6 +18,9 @@ pub struct ChannelInfo {
     #[serde(rename = "channelImageUrl", skip_serializing_if = "Option::is_none")]
     pub channel_image_url: Option<Url>,
     pub verified_mark: bool,
+    /// 인증 마크 종류(`verifiedMarkType` — `PARTNER` / `CHALLENGER` / `OFFICIAL`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub verified_mark_type: Option<String>,
     pub follower_count: i64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub channel_description: Option<String>,
@@ -33,6 +36,7 @@ impl ChannelInfo {
             channel_name: channel_name.into(),
             channel_image_url: None,
             verified_mark: false,
+            verified_mark_type: None,
             follower_count: 0,
             channel_description: None,
             open_live: false,
@@ -42,6 +46,11 @@ impl ChannelInfo {
     /// `Identifiable.id`
     pub fn id(&self) -> &str {
         &self.channel_id
+    }
+
+    /// 인증 마크 종류(`"partner"` · `"challenger"` · `"official"`) — [`super::verified_badge`].
+    pub fn verified_badge(&self) -> Option<&'static str> {
+        super::verified_badge(self.verified_mark, self.verified_mark_type.as_deref())
     }
 }
 
@@ -53,6 +62,9 @@ impl<'de> Deserialize<'de> for ChannelInfo {
             channel_name: o.required::<_, D::Error>("channelName")?,
             channel_image_url: o.url("channelImageUrl"),
             verified_mark: o.get("verifiedMark").unwrap_or(false),
+            verified_mark_type: o
+                .get::<String>("verifiedMarkType")
+                .filter(|t| !t.trim().is_empty()),
             follower_count: o.get("followerCount").unwrap_or(0),
             channel_description: o.get("channelDescription"),
             open_live: o.get("openLive").unwrap_or(false),

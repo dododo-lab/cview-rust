@@ -22,6 +22,7 @@ pub mod settings;
 pub mod settings_ui;
 pub mod stream_alert;
 pub mod stream_proxy;
+pub mod verified_mark;
 pub mod vod;
 
 pub use channel::{ChannelInfo, FollowingChannel, StreamerInfo};
@@ -36,4 +37,5 @@ pub use search::{
     ChannelSearchItem, ClipInfo, LiveSearchItem, SearchResult, VideoSearchItem, VodInfo,
 };
 pub use stream_proxy::StreamProxyMode;
+pub use verified_mark::verified_badge;
 pub use vod::{VodDetail, VodStreamInfo};

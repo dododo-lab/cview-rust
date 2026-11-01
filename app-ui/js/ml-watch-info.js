@@ -9,6 +9,7 @@ import { api } from './api.js';
 import { esc, safeUrl, imageSrc, toast, channelTone } from './dom.js';
 import { compactCount } from './cards.js';
 import { vodCard, clipCard, relativeDate } from './channel.js';
+import { verifiedBadge } from './verified-badge.js';
 
 const TABS = [['info', '정보'], ['vod', '다시보기'], ['clip', '클립'], ['community', '커뮤니티']];
 const svg = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
@@ -28,7 +29,6 @@ const ICON = {
   prev: svg('<path d="M15 5l-7 7 7 7"/>'),
   next: svg('<path d="M9 5l7 7-7 7"/>'),
 };
-const ICON_VERIFIED = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="m12 2 2.4 1.8 3-.1 1 2.8 2.4 1.8-.9 2.9.9 2.9-2.4 1.8-1 2.8-3-.1L12 22l-2.4-1.8-3 .1-1-2.8-2.4-1.8.9-2.9-.9-2.9 2.4-1.8 1-2.8 3 .1Z"/><path fill="none" stroke="var(--mwi-check, #fff)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="m8.5 12.2 2.3 2.3 4.7-4.8"/></svg>';
 const EMPTY = {
   vod: [ICON.film, '아직 다시보기가 없어요', '방송이 끝나면 여기에 다시보기가 올라옵니다'],
   clip: [ICON.clip, '아직 클립이 없어요', '시청자가 만든 클립이 여기에 모입니다'],
@@ -154,7 +154,7 @@ export class WatchInfoPanel {
         <div class="mwi-id">
           <div class="mwi-name">
             <h2 class="ellipsis" title="${esc(c.channelName)}">${esc(c.channelName)}</h2>
-            ${c.verifiedMark ? `<span class="mwi-verified" title="인증된 채널">${ICON_VERIFIED}</span>` : ''}
+            ${verifiedBadge(c, 'mwi-vb')}
             <span class="mwi-followers">팔로워 <b>${esc(compactCount(c.followerCount || 0))}</b></span>
           </div>
           ${live ? `<p class="mwi-title" title="${esc(live.liveTitle || '')}">${esc(live.liveTitle || '')}</p>` : ''}
@@ -352,7 +352,7 @@ export class WatchInfoPanel {
           <div class="mwi-post-who">
             <div class="mwi-post-name">
               <strong class="ellipsis">${esc(p.authorName || '알 수 없음')}</strong>
-              ${p.authorVerified ? `<span class="mwi-verified sm">${ICON_VERIFIED}</span>` : ''}
+              ${verifiedBadge(p.authorBadge || (p.authorVerified ? 'partner' : null), 'sm')}
               ${p.authorTitle ? `<span class="mwi-post-title"${color ? ` style="--title-color: ${color}"` : ''}>${esc(p.authorTitle)}</span>` : ''}
             </div>
             <time datetime="${esc(p.createdAt || '')}" title="${esc(absoluteTime(Date.parse(p.createdAt || '')))}">${esc(relativeDate(p.createdAt))}</time>

@@ -272,6 +272,8 @@ pub struct FollowedChannelDto {
     pub viewer_count: Option<i64>,
     pub category_name: Option<String>,
     pub verified: bool,
+    /// 인증 마크 종류(`"partner"` · `"challenger"` · `"official"`).
+    pub badge: Option<&'static str>,
     /// 팔로우한 날짜 원문(`2024-02-19 23:28:11`, KST) — 응답에 없으면 None.
     pub follow_date: Option<String>,
     /// 라이브 알림을 켰는가 — 응답에 없으면 None.
@@ -305,6 +307,7 @@ pub async fn following_channels_all(
                 viewer_count: live.and_then(|l| l.concurrent_user_count),
                 category_name: live.and_then(|l| l.live_category_value.clone()),
                 verified: r.verified,
+                badge: r.verified_badge.as_deref().and_then(crate::dto::badge_kind),
                 follow_date: r.follow.follow_date.clone(),
                 notification: r.follow.notification,
             }

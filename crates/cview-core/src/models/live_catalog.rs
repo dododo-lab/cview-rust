@@ -9,6 +9,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use super::channel::ChannelInfo;
 use super::decode::{chzzk_date, chzzk_date_opt};
 use super::live::LiveInfo;
 use super::live_channel_item::LiveChannelItem;
@@ -49,6 +50,9 @@ pub struct LiveCatalogRow {
         skip_serializing_if = "Option::is_none"
     )]
     pub open_date: Option<DateTime<Utc>>,
+    /// 인증 마크 종류(`"partner"` · `"challenger"` · `"official"`).
+    #[serde(rename = "b", default, skip_serializing_if = "Option::is_none")]
+    pub verified_badge: Option<String>,
 }
 
 impl From<&LiveInfo> for LiveCatalogRow {
@@ -77,6 +81,11 @@ impl From<&LiveInfo> for LiveCatalogRow {
             category_type: info.category_type.clone(),
             thumbnail_url: info.live_image_url.as_ref().map(|u| u.to_string()),
             open_date: info.open_date,
+            verified_badge: info
+                .channel
+                .as_ref()
+                .and_then(ChannelInfo::verified_badge)
+                .map(str::to_string),
         }
     }
 }
@@ -110,6 +119,7 @@ impl LiveCatalogRow {
             channel_id: self.channel_id.clone(),
             is_live: true,
             open_date: self.open_date,
+            verified_badge: self.verified_badge.clone(),
         }
     }
 }

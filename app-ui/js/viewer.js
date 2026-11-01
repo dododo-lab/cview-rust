@@ -11,6 +11,7 @@ import { ViewerExtras } from './viewer-extras.js';
 import { uptimeText, compactCount } from './cards.js';
 import { noteConnectorLimit } from './live-connector.js';
 import { playPreroll, cancelPreroll } from './ads.js';
+import { verifiedBadge } from './verified-badge.js';
 
 const PHASE_TEXT = {
   idle: '',
@@ -143,7 +144,7 @@ export class Viewer {
       return;
     }
     const channel = [
-      `<b class="ch-name">${esc(live.channelName || '')}</b>${live.verified ? '<span class="verified" title="인증된 채널">✔</span>' : ''}`,
+      `<b class="ch-name">${esc(live.channelName || '')}</b>${verifiedBadge(live)}`,
       this.followerCount != null ? `팔로워 ${esc(compactCount(this.followerCount))}명` : '',
       live.categoryName ? esc(live.categoryName) : '',
     ].filter(Boolean).join('<i class="sep">·</i>');

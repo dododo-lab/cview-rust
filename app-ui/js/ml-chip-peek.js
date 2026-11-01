@@ -8,6 +8,7 @@
 // - 말풍선은 body 에 position: fixed — 칩 줄이 가로로 넘기는(overflow) 칸이라 그 안에 두면 잘린다.
 import { esc, safeUrl, imageSrc } from './dom.js';
 import { previewInto, closePreviewIn } from './hover-preview.js';
+import { verifiedBadge } from './verified-badge.js';
 
 const OPEN_MS = 350;
 const CLOSE_MS = 90; // 칩 사이 틈(2px)을 지나는 동안 닫혔다 열리며 깜박이지 않게
@@ -90,7 +91,7 @@ export class ChipPeek {
       </div>
       <div class="ml-peek-body">
         <div class="ml-peek-title">${esc(title || name)}</div>
-        <div class="ml-peek-name">${avatar ? `<img src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : ''}<span class="ellipsis">${esc(name)}</span><em>클릭해서 크게 보기</em></div>
+        <div class="ml-peek-name">${avatar ? `<img src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : ''}<span class="ellipsis">${esc(name)}</span>${verifiedBadge(s.verifiedBadge, 'sm')}<em>클릭해서 크게 보기</em></div>
       </div>`;
     chip.setAttribute('aria-describedby', this.el.id);
     const wasHidden = this.el.hidden;

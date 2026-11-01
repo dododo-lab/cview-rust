@@ -30,6 +30,16 @@ fn category(raw: Option<&str>) -> Option<String> {
         .map(str::to_string)
 }
 
+/// 저장된 마크 문자열 → 정적 값. 모르는 값은 버린다.
+pub fn badge_kind(raw: &str) -> Option<&'static str> {
+    match raw {
+        "partner" => Some("partner"),
+        "challenger" => Some("challenger"),
+        "official" => Some("official"),
+        _ => None,
+    }
+}
+
 // MARK: - 라이브 카드
 
 /// 라이브 격자 카드 한 장.
@@ -48,6 +58,8 @@ pub struct LiveCardDto {
     pub is_live: bool,
     pub open_date: Option<String>,
     pub adult: bool,
+    /// 인증 마크 종류(`"partner"` · `"challenger"` · `"official"`) — 없으면 `None`.
+    pub badge: Option<&'static str>,
 }
 
 impl LiveCardDto {
@@ -66,6 +78,7 @@ impl LiveCardDto {
             is_live: info.status == LiveStatus::Open,
             open_date: rfc3339(info.open_date),
             adult: info.adult,
+            badge: channel.verified_badge(),
         })
     }
 
@@ -83,6 +96,7 @@ impl LiveCardDto {
             is_live: item.is_live,
             open_date: rfc3339(item.open_date),
             adult: false,
+            badge: item.verified_badge.as_deref().and_then(badge_kind),
         }
     }
 }
@@ -117,6 +131,8 @@ pub struct ChannelDto {
     pub channel_name: String,
     pub channel_image_url: Option<String>,
     pub verified: bool,
+    /// 인증 마크 종류(`"partner"` · `"challenger"` · `"official"`) — 없으면 `None`.
+    pub badge: Option<&'static str>,
     pub follower_count: i64,
     pub follower_count_text: String,
     pub description: Option<String>,
@@ -130,6 +146,7 @@ impl From<&ChannelInfo> for ChannelDto {
             channel_name: c.channel_name.clone(),
             channel_image_url: url_string(c.channel_image_url.as_ref()),
             verified: c.verified_mark,
+            badge: c.verified_badge(),
             follower_count: c.follower_count,
             follower_count_text: format_viewer_count(c.follower_count),
             description: c.channel_description.clone().filter(|d| !d.is_empty()),
@@ -147,6 +164,8 @@ pub struct LiveDetailDto {
     pub channel_name: String,
     pub channel_image_url: Option<String>,
     pub verified: bool,
+    /// 인증 마크 종류(`"partner"` · `"challenger"` · `"official"`) — 없으면 `None`.
+    pub badge: Option<&'static str>,
     pub live_title: String,
     /// `OPEN` / `CLOSE`.
     pub status: String,
@@ -179,6 +198,7 @@ impl LiveDetailDto {
             channel_name: channel.map(|c| c.channel_name.clone()).unwrap_or_default(),
             channel_image_url: channel.and_then(|c| url_string(c.channel_image_url.as_ref())),
             verified: channel.is_some_and(|c| c.verified_mark),
+            badge: channel.and_then(ChannelInfo::verified_badge),
             live_title: info.live_title.clone(),
             status: info.status.raw_value().to_string(),
             is_live: info.status == LiveStatus::Open,
@@ -364,6 +384,8 @@ pub struct DonationRankDto {
     pub amount: i64,
     pub profile_image_url: Option<String>,
     pub verified: bool,
+    /// 인증 마크 종류(`"partner"` · `"challenger"` · `"official"`) — 없으면 `None`.
+    pub badge: Option<&'static str>,
 }
 
 impl DonationRankDto {
@@ -374,6 +396,10 @@ impl DonationRankDto {
             amount: item.donation_amount,
             profile_image_url: item.profile_image_url.clone().filter(|u| !u.is_empty()),
             verified: item.verified_mark.unwrap_or(false),
+            badge: cview_core::models::verified_badge(
+                item.verified_mark.unwrap_or(false),
+                item.verified_mark_type.as_deref(),
+            ),
         }
     }
 }

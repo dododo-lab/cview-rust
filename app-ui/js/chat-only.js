@@ -3,6 +3,7 @@ import { api } from './api.js';
 import { esc, safeUrl, toast, imageSrc } from './dom.js';
 import { ChatPanel } from './chat.js';
 import { kbd } from './platform.js';
+import { verifiedBadge } from './verified-badge.js';
 
 export class ChatOnlyPage {
   constructor(content, { isLoggedIn, onBack, onPlay, session = null, standalone = false }) {
@@ -56,7 +57,7 @@ export class ChatOnlyPage {
     try { lives = this.isLoggedIn() ? await api.followingLives(false) : await api.popularLives(30, false); } catch (e) { toast(e.message); }
     box.innerHTML = `<h3 class="section-title">채팅을 볼 채널</h3><div class="picker-list">${lives.map((l) => {
       const a = safeUrl(l.channelImageUrl);
-      return `<button class="picker-row" data-co="pick-channel" data-channel-id="${esc(l.channelId)}">${a ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(a, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}<span class="ellipsis"><b>${esc(l.channelName)}</b> ${esc(l.categoryName || '')}</span><small>${esc(l.viewerCountText)}</small></button>`;
+      return `<button class="picker-row" data-co="pick-channel" data-channel-id="${esc(l.channelId)}">${a ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(a, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}<span class="ellipsis"><b>${esc(l.channelName)}</b>${verifiedBadge(l, 'sm')} ${esc(l.categoryName || '')}</span><small>${esc(l.viewerCountText)}</small></button>`;
     }).join('') || '<p class="muted">방송 중인 채널이 없습니다</p>'}</div>`;
   }
 

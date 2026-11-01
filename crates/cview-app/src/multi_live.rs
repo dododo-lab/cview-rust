@@ -953,6 +953,7 @@ impl MultiLiveShell {
                     live_title: snap.live_title,
                     thumbnail_url: snap.thumbnail_url,
                     profile_image_url: snap.profile_image_url,
+                    verified_badge: snap.verified_badge,
                     viewer_count_text: snap.formatted_viewer_count,
                     accumulate_count: snap.accumulate_count,
                     accumulate_count_text: snap.formatted_accumulate_count,
@@ -1065,6 +1066,8 @@ pub struct MultiLivePaneDto {
     /// 라이브 썸네일(`{type}` 치환됨) — 라이브 머리줄 칩의 미리보기 말풍선이 영상 전에 먼저 보여 준다.
     pub thumbnail_url: Option<String>,
     pub profile_image_url: Option<String>,
+    /// 인증 마크 종류(`"partner"` · `"challenger"` · `"official"`).
+    pub verified_badge: Option<String>,
     pub viewer_count_text: String,
     /// 누적 시청자 수 — 아직 모르면 0.
     pub accumulate_count: i64,

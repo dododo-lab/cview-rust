@@ -12,6 +12,7 @@ import { chatPrefs, onChatPrefs, passesFilters } from './chat-prefs.js';
 import { kbd } from './platform.js';
 import { chatFollower } from './chat-follow.js';
 import { MultiLiveAddDrawer } from './ml-add-drawer.js';
+import { verifiedBadge } from './verified-badge.js';
 
 export const multiChatIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H8l-4 3V5Z"/><path d="M18 8h1a2 2 0 0 1 2 2v10l-3.5-2.6H11a2 2 0 0 1-2-2V15h5a4 4 0 0 0 4-4V8Z" opacity=".6"/></svg>';
 const COLORS = ['#00c77f', '#5ba3ff', '#ff8a3d', '#c77dff', '#ff5d8f', '#2ec4b6', '#f4c430', '#8d99ae'];
@@ -172,6 +173,7 @@ export class MultiChatPage {
     el.innerHTML = chatMarkup;
     this.panesBox.append(el);
     el.querySelector('.mc-name').textContent = live.channelName || channelId;
+    el.querySelector('.mc-name').insertAdjacentHTML('afterend', verifiedBadge(live, 'sm'));
     const session = `mc:${channelId}`;
     const panel = new ChatPanel(el.querySelector('.chat'), { isLoggedIn: this.isLoggedIn, session });
     // 패널 머리 버튼들이 생긴 뒤 맨 끝에 닫기를 둔다.

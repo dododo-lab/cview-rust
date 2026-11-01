@@ -27,6 +27,7 @@ import { WatchInfoPanel } from './ml-watch-info.js';
 
 import { liveIcon, multiLiveIcon, liveModeSwitch, setLiveModeActive } from './live-mode.js';
 import { decoratePageHeader } from './page-header.js';
+import { verifiedBadge } from './verified-badge.js';
 
 export { multiLiveIcon };
 
@@ -417,7 +418,7 @@ export class MultiLivePage {
         <div class="ml-pane-avatar" data-ml="info" title="채널 정보"></div>
         <div class="ml-pane-text">
           <div class="ml-pane-title ellipsis"></div>
-          <div class="ml-pane-line"><span class="ml-pane-name ellipsis"></span></div>
+          <div class="ml-pane-line"><span class="ml-pane-name ellipsis"></span><span class="ml-pane-vb"></span></div>
           <div class="ml-pane-stats"></div>
         </div>
         <div class="grow"></div>
@@ -623,6 +624,11 @@ export class MultiLivePage {
     pane.controls.sync(s.isAudible);
     const name = s.channelName || s.channelId;
     el.querySelector('.ml-pane-name').textContent = name;
+    const badgeHtml = verifiedBadge(s.verifiedBadge);
+    if (pane.badgeHtml !== badgeHtml) {
+      pane.badgeHtml = badgeHtml;
+      el.querySelector('.ml-pane-vb').innerHTML = badgeHtml;
+    }
     el.querySelector('.ml-pane-title').textContent = s.liveTitle || '';
     this.renderPaneStats(el, s);
     const avatar = safeUrl(s.profileImageUrl);
@@ -1006,7 +1012,7 @@ export class MultiLivePage {
       // 지금 보는 칩만 글자 툴팁 — 나머지는 미리보기 말풍선(ml-chip-peek.js)이 대신한다(둘이 겹쳐 뜨지 않게).
       return `<button class="ml-watch-chip${on ? ' active' : ''}" data-ml="watch" data-session-id="${esc(x.id)}" aria-pressed="${on}" ${on ? `title="${esc(`${name} — 지금 보는 채널`)}"` : `aria-label="${esc(`${name} 라이브로 보기`)}"`}>
         ${avatar ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="ml-watch-dot"></span>'}
-        <span class="ellipsis">${esc(name)}</span>
+        <span class="ellipsis">${esc(name)}</span>${verifiedBadge(x.verifiedBadge, 'sm')}
       </button>`;
     }).join('');
     // 상태 알림마다 다시 그리면 칩의 호버·키보드 초점이 날아간다 — 바뀐 때만.

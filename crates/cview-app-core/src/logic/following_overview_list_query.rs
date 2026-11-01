@@ -112,6 +112,7 @@ mod tests {
             channel_id: id.into(),
             is_live: live,
             open_date: None,
+            verified_badge: None,
         }
     }
 

@@ -406,6 +406,8 @@ pub struct FollowingRow {
     pub list_live_info: Option<FollowingListLiveInfo>,
     /// 인증 배지(`channel.verifiedMark`).
     pub verified: bool,
+    /// 인증 마크 종류(`"partner"` · `"challenger"` · `"official"`).
+    pub verified_badge: Option<String>,
     /// 팔로우 날짜·라이브 알림(`channel.personalData.following`) — 응답에 없으면 비어 있다.
     pub follow: FollowState,
 }
@@ -430,6 +432,7 @@ impl FollowingRow {
             channel_id: self.channel_id.clone(),
             is_live: self.is_live,
             open_date: None,
+            verified_badge: self.verified_badge.clone(),
         }
     }
 }
@@ -481,6 +484,9 @@ pub struct FollowingChannelData {
     pub channel_image_url: Option<String>,
     #[serde(default)]
     pub verified_mark: Option<bool>,
+    /// 인증 마크 종류(`PARTNER` / `CHALLENGER` / `OFFICIAL`).
+    #[serde(default)]
+    pub verified_mark_type: Option<String>,
     /// 로그인 사용자 기준 값(`personalData.following` — 팔로우 날짜·라이브 알림). 형식이 어긋나도
     /// 채널 항목을 버리지 않게 원시 JSON 으로 받아 [`Self::follow_state`] 가 꺼낸다.
     #[serde(default)]
@@ -644,6 +650,7 @@ mod tests {
             }),
             verified: false,
             follow: FollowState::default(),
+            verified_badge: None,
         };
         let item = row.list_channel_item();
         assert_eq!(item.live_title, "t");

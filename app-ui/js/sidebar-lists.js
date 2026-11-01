@@ -10,6 +10,7 @@
 //   보관함                 최근 본 채널      최근 시청 기록(로그인 없이도) — 방송 중이면 시청자 수, 아니면 본 때
 import { compactCount } from './cards.js';
 import { categoryGroups } from './pages.js';
+import { badgeKind } from './verified-badge.js';
 
 export const SIDEBAR_LIST_LIMIT = 7;
 
@@ -56,6 +57,7 @@ function liveItem(l, extra = {}) {
     channelId: l.channelId,
     name: l.channelName,
     image: l.channelImageUrl,
+    badge: badgeKind(l),
     sub: l.categoryName || l.liveTitle || '',
     meta: l.viewerCountText || compactCount(l.viewerCount || 0),
     live: true,

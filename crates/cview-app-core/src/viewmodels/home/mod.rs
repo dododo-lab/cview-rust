@@ -416,6 +416,7 @@ pub fn live_channel_item_from(info: &LiveInfo) -> LiveChannelItem {
         channel_id: channel.map(|c| c.channel_id.clone()).unwrap_or_default(),
         is_live: true,
         open_date: None,
+        verified_badge: channel.and_then(|c| c.verified_badge()).map(str::to_string),
     }
 }
 
