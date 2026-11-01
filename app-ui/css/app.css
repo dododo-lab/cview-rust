@@ -1422,6 +1422,53 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .read-divider::before, .read-divider::after { content: ""; flex: 1; height: 1px; background: currentColor; opacity: 0.5; }
 .chat-hbtn { width: 28px; height: 28px; position: relative; color: var(--text-tertiary); }
 .chat-hbtn svg { width: 16px; height: 16px; }
+/* 머리줄 도구 서랍 — 평소 '⋯' 하나만 보이고, 누르면 아이콘들이 그 왼쪽으로 미끄러져 나온다.
+   폭은 0fr→1fr 격자 전환으로 늘이고, 아이콘은 오른쪽에서 왼쪽 순서로 살짝 늦게 떠오른다. */
+.chat-header .icon-btn { flex: none; }
+.chat-tools {
+  display: grid; grid-template-columns: 0fr; flex: none; overflow: hidden;
+  transition: grid-template-columns .28s cubic-bezier(.2, .8, .2, 1);
+}
+.chat-tools.open { grid-template-columns: 1fr; }
+.chat-tools.settled { overflow: visible; }
+.chat-tools-inner { display: flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; }
+.chat-tools-inner > * { flex: none; }
+.chat-tools.settled .chat-tools-inner { overflow: visible; }
+.chat-tools-inner > * {
+  opacity: 0; transform: translateX(14px);
+  transition: opacity .16s ease, transform .22s cubic-bezier(.2, .8, .2, 1);
+}
+.chat-tools.open .chat-tools-inner > * { opacity: 1; transform: none; transition-duration: .22s, .3s; }
+.chat-tools.open .chat-tools-inner > :nth-last-child(1) { transition-delay: .02s; }
+.chat-tools.open .chat-tools-inner > :nth-last-child(2) { transition-delay: .04s; }
+.chat-tools.open .chat-tools-inner > :nth-last-child(3) { transition-delay: .06s; }
+.chat-tools.open .chat-tools-inner > :nth-last-child(4) { transition-delay: .08s; }
+.chat-tools.open .chat-tools-inner > :nth-last-child(5) { transition-delay: .10s; }
+.chat-tools.open .chat-tools-inner > :nth-last-child(n+6) { transition-delay: .12s; }
+/* 펼친 동안에는 연결 상태 글자를 비켜 아이콘 자리를 내고, 그래도 좁으면 제목이 말줄임으로 줄어든다. */
+.chat-header .chat-state { transition: max-width .28s cubic-bezier(.2, .8, .2, 1), opacity .18s ease, margin .28s cubic-bezier(.2, .8, .2, 1); max-width: 160px; }
+.chat-header.tools-open .chat-state { max-width: 0; opacity: 0; margin-left: calc(-1 * var(--sp-sm)); overflow: hidden; }
+.chat-header.tools-open strong { flex: 0 1 auto; }
+/* 좁은 채팅(최소 폭 가까이)에서는 펼친 도구가 제목 줄에 다 들어가지 않는다 — 머리 아래 둘째 줄에 오른쪽 맞춤으로 꺼낸다. */
+.chat { container: chatpanel / inline-size; }
+@container chatpanel (max-width: 339px) {
+  .chat-header.tools-open { flex-wrap: wrap; row-gap: 2px; padding-top: 6px; padding-bottom: 6px; }
+  .chat-header.tools-open .chat-state { max-width: 160px; opacity: 1; margin-left: 0; }
+  .chat-header.tools-open .chat-tools { order: 2; flex-basis: 100%; }
+  .chat-header.tools-open .chat-tools-inner { justify-content: flex-end; }
+}
+.chat-tools-toggle svg { transition: transform .28s cubic-bezier(.2, .8, .2, 1); }
+.chat-tools-toggle[aria-expanded="true"] { color: var(--primary-text); background: var(--primary-dim); }
+.chat-tools-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
+.chat-tools-dot {
+  position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--primary); box-shadow: 0 0 0 2px var(--surface-base);
+}
+.chat-tools-dot[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .chat-tools, .chat-tools-inner > *, .chat-tools-toggle svg, .chat-header .chat-state { transition: none !important; }
+}
+:root[data-motion="reduced"] :is(.chat-tools, .chat-tools-inner > *, .chat-tools-toggle svg, .chat-header .chat-state) { transition: none !important; }
 .mention-count {
   position: absolute; top: -2px; right: -2px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px;
   background: var(--primary); color: var(--on-primary); font-size: 9px; font-weight: 800; display: grid; place-items: center;
@@ -1926,20 +1973,10 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .mc-search-note .link-btn { margin-left: auto; color: var(--primary-text); font-weight: 700; white-space: nowrap; }
 .mc-searching .mc-merged-list > .empty { display: none; }
 .mc-merged-banner { margin-top: 8px; }
-/* 그리드 칸 머리 — 짧은 채널명·연결 상태는 줄이지 않는다. 좁은 칸에서는 드문 도구를 '⋯' 뒤로 (F12) */
-.mc-pane { container-type: inline-size; }
+/* 그리드 칸 머리 — 짧은 채널명·연결 상태는 줄이지 않는다. 도구는 ChatPanel 의 '⋯' 서랍에 접혀 있다 (F12) */
 .mc-pane .chat-header .mc-name { flex: 0 0 auto; max-width: 45%; }
 .mc-pane .chat-header .chat-state { flex: none; white-space: nowrap; }
-.mc-tools-more { display: none; }
-@container (max-width: 520px) {
-  .mc-pane .mc-tools-more { display: inline-grid; place-items: center; }
-  .mc-pane .chat-header:not(.tools-open) .chat-tool-extra { display: none; }
-  /* 펼치면 접었던 도구를 둘째 줄에 */
-  .mc-pane .chat-header.tools-open { flex-wrap: wrap; row-gap: 2px; padding-top: 6px; padding-bottom: 6px; }
-  .mc-pane .chat-header.tools-open::after { content: ""; order: 1; flex-basis: 100%; }
-  .mc-pane .chat-header.tools-open .chat-tool-extra { order: 2; }
-  .mc-pane .chat-header .mc-tools-more[aria-expanded="true"] { color: var(--primary-text); }
-}
+.mc-pane .chat-header.tools-open .mc-name { flex: 0 1 auto; }
 .chat-line.search-hidden { display: none !important; }
 .chat-line.search-hit .text { background: color-mix(in srgb, var(--warning) 22%, transparent); border-radius: 4px; }
 

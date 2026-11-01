@@ -594,10 +594,10 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
 .btn:hover:not(:disabled):not(:active) { translate: 0 -1px; }
 .btn:not(.ghost):hover:not(:disabled):not(:active) { box-shadow: var(--shadow-sm), 0 6px 16px -10px rgba(0, 0, 0, .35); }
 .btn.primary:hover:not(:disabled):not(:active) { box-shadow: 0 8px 22px var(--primary-glow); }
-:is(.icon-btn, .ml-tb-icon, .chat-hbtn, .ml-pane-btn, .ml-pane-close, .mc-tools-more, .ml-watch-btn, .ip-toggle, .mwi-btn, .side-quick-btn, .back-btn) svg {
+:is(.icon-btn, .ml-tb-icon, .chat-hbtn, .ml-pane-btn, .ml-pane-close, .ml-watch-btn, .ip-toggle, .mwi-btn, .side-quick-btn, .back-btn) svg {
   transition: scale .32s var(--ease-spring), rotate .32s var(--ease-spring);
 }
-:is(.icon-btn, .ml-tb-icon, .chat-hbtn, .ml-pane-btn, .ml-pane-close, .mc-tools-more, .ml-watch-btn, .ip-toggle, .mwi-btn.icon, .side-quick-btn):hover:not(:disabled) svg { scale: 1.1; }
+:is(.icon-btn, .ml-tb-icon, .chat-hbtn, .ml-pane-btn, .ml-pane-close, .ml-watch-btn, .ip-toggle, .mwi-btn.icon, .side-quick-btn):hover:not(:disabled) svg { scale: 1.1; }
 .back-btn:hover svg { translate: -2px 0; transition: translate .32s var(--ease-spring); }
 
 /* ── 아이콘 한 번 움직임(motion.js installIconHover, 위 "아이콘 호버"와 같은 .hm 방식) ── */
@@ -627,10 +627,10 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
 /* ── 모션 줄이기 — 호버로 더한 크기·이동만 없앤다(색 변화는 남는다) ── */
 @media (prefers-reduced-motion: reduce) {
   .btn:hover, .mwi-hero .mwi-btn:hover,
-  :is(.icon-btn, .ml-tb-icon, .chat-hbtn, .ml-pane-btn, .ml-pane-close, .mc-tools-more, .ml-watch-btn, .ip-toggle, .mwi-btn, .side-quick-btn, .back-btn):hover svg { scale: none !important; translate: none !important; }
+  :is(.icon-btn, .ml-tb-icon, .chat-hbtn, .ml-pane-btn, .ml-pane-close, .ml-watch-btn, .ip-toggle, .mwi-btn, .side-quick-btn, .back-btn):hover svg { scale: none !important; translate: none !important; }
 }
 :root[data-motion="reduced"] :is(.btn:hover, .mwi-hero .mwi-btn:hover,
-  :is(.icon-btn, .ml-tb-icon, .chat-hbtn, .ml-pane-btn, .ml-pane-close, .mc-tools-more, .ml-watch-btn, .ip-toggle, .mwi-btn, .side-quick-btn, .back-btn):hover svg) { scale: none !important; translate: none !important; }
+  :is(.icon-btn, .ml-tb-icon, .chat-hbtn, .ml-pane-btn, .ml-pane-close, .ml-watch-btn, .ip-toggle, .mwi-btn, .side-quick-btn, .back-btn):hover svg) { scale: none !important; translate: none !important; }
 
 /* ── 썸네일 호버 미리보기(hover-preview.js) — 첫 장이 나오면 썸네일 위로 페이드인, 배지는 그 위에 ── */
 .thumb-preview {

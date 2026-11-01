@@ -22,6 +22,7 @@ const ICON = {
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>',
   refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>',
   down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
+  more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg>',
   pin: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 3l6 6-3 1-4 4 1 5-2 2-4-5-5 5-1-1 5-5-5-4 2-2 5 1 4-4z"/></svg>',
 };
 
@@ -185,12 +186,26 @@ export class ChatPanel {
     const header = this.root.querySelector('.chat-header');
     header.insertAdjacentHTML('beforeend', `
       <div class="grow"></div>
-      <button class="icon-btn chat-hbtn mention-btn" title="나를 부른 메시지" aria-label="멘션">${ICON.at}<span class="mention-count" hidden></span></button>
-      <button class="icon-btn chat-hbtn chat-tool-extra" data-chat="clear" title="${kbd('채팅 지우기 (⇧⌘K)')}" aria-label="채팅 지우기">${ICON.trash}</button>
-      <button class="icon-btn chat-hbtn" data-chat="reconnect" title="다시 연결" aria-label="다시 연결">${ICON.refresh}</button>`);
+      <div class="chat-tools" inert>
+        <div class="chat-tools-inner">
+          <button class="icon-btn chat-hbtn mention-btn" title="나를 부른 메시지" aria-label="멘션">${ICON.at}<span class="mention-count" hidden></span></button>
+          <button class="icon-btn chat-hbtn chat-tool-extra" data-chat="clear" title="${kbd('채팅 지우기 (⇧⌘K)')}" aria-label="채팅 지우기">${ICON.trash}</button>
+          <button class="icon-btn chat-hbtn" data-chat="reconnect" title="다시 연결" aria-label="다시 연결">${ICON.refresh}</button>
+        </div>
+      </div>
+      <button class="icon-btn chat-hbtn chat-tools-toggle" data-chat="tools" title="채팅 도구" aria-label="채팅 도구 펼치기" aria-expanded="false">${ICON.more}<span class="chat-tools-dot" hidden></span></button>`);
+    // 기능 아이콘(멘션·읽기 폭·통계·내보내기·지우기·다시 연결)은 평소 '⋯' 뒤에 접어 두고, 누르면 왼쪽으로 미끄러져 나온다.
+    this.tools = header.querySelector('.chat-tools');
+    this.toolsToggle = header.querySelector('.chat-tools-toggle');
+    this.toolsDot = header.querySelector('.chat-tools-dot');
+    // 다 펼쳐진 뒤에만 넘침을 풀어 서랍 안 버튼의 메뉴(멀티채팅 보기 등)가 잘리지 않게 한다.
+    this.tools.addEventListener('transitionend', (e) => {
+      if (e.target === this.tools && this.tools.classList.contains('open')) this.tools.classList.add('settled');
+    });
     header.addEventListener('click', (e) => {
       const b = e.target.closest('[data-chat], .mention-btn');
       if (!b) return;
+      if (b.dataset.chat === 'tools') { this.setToolsOpen(!this.tools.classList.contains('open')); return; }
       if (b.classList.contains('mention-btn')) this.toggleMentionTray();
       else if (b.dataset.chat === 'clear') this.clear(true);
       else if (b.dataset.chat === 'reconnect') this.reconnect();
@@ -591,6 +606,23 @@ export class ChatPanel {
     const n = this.mentions.length;
     this.mentionCount.hidden = n === 0;
     this.mentionCount.textContent = n > 99 ? '99+' : String(n);
+    // 도구를 접어 두었을 때도 새 멘션은 '⋯' 위 점으로 알린다.
+    this.toolsDot.hidden = n === 0 || this.tools.classList.contains('open');
+  }
+
+  /** 머리줄 도구 서랍 — 펼치면 아이콘이 '⋯' 왼쪽으로 미끄러져 나오고, 접으면 다시 숨는다. */
+  setToolsOpen(open) {
+    this.tools.classList.toggle('open', open);
+    this.header.classList.toggle('tools-open', open);
+    clearTimeout(this.toolsSettle);
+    if (!open) this.tools.classList.remove('settled');
+    // 모션 줄이기 등으로 transitionend 가 오지 않아도 펼친 뒤에는 넘침을 푼다.
+    else this.toolsSettle = setTimeout(() => { if (this.tools.classList.contains('open')) this.tools.classList.add('settled'); }, 360);
+    // 접힌 동안에는 탭 이동·스크린리더에서 빠진다.
+    this.tools.inert = !open;
+    this.toolsToggle.setAttribute('aria-expanded', String(open));
+    this.toolsToggle.setAttribute('aria-label', open ? '채팅 도구 접기' : '채팅 도구 펼치기');
+    this.renderMentionCount();
   }
 
   toggleMentionTray() {
