@@ -278,6 +278,9 @@ pub struct DonationRankItem {
     pub profile_image_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub verified_mark: Option<bool>,
+    /// 인증 마크 종류(`PARTNER` / `CHALLENGER` / `OFFICIAL`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verified_mark_type: Option<String>,
     pub donation_amount: i64,
     pub ranking: i64,
 }

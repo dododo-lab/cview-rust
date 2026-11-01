@@ -590,6 +590,12 @@ a { color: var(--primary); }
 .channel-row .avatar { width: 44px; height: 44px; }
 .channel-list { display: grid; gap: var(--sp-sm); grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
 .verified { color: var(--primary-text); font-size: var(--fs-footnote); margin-left: 4px; }
+/* 치지직 인증 마크(파트너·챌린저·공식) — 이름 글자 크기를 따라간다.
+   아바타용 `… img` 규칙(원형·고정 크기·그림자)이 붙은 칸 안에도 들어가므로 크기·모양은 !important 로 지킨다. */
+.vbadge { display: inline-block; flex: none; width: 1.05em !important; height: 1.05em !important; min-width: 0; margin-left: 0.25em; vertical-align: -0.17em; object-fit: contain !important; border-radius: 0 !important; box-shadow: none !important; background: none !important; user-select: none; -webkit-user-drag: none; }
+.vbadge.sm { width: 0.95em !important; height: 0.95em !important; vertical-align: -0.12em; }
+.vbadge.lg { width: 0.8em !important; height: 0.8em !important; margin-left: 0.3em; vertical-align: -0.04em; }
+.vbadge[hidden] { display: none; }
 .live-dot { color: var(--live); font-weight: 700; font-size: var(--fs-micro); margin-left: 6px; }
 
 /* ── 상태 ─────────────────────────────────── */
@@ -682,6 +688,7 @@ select.select {
   border-bottom: 1px solid var(--border-subtle);
 }
 .chat-header strong { font-size: var(--fs-body); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-header strong + .vbadge { margin-left: calc(3px - var(--sp-sm)); font-size: var(--fs-body); }
 .chat-state { font-size: var(--fs-micro); color: var(--text-tertiary); }
 .chat-state.ok { color: var(--primary-text); }
 .chat-state.warn { color: var(--warning); }
@@ -925,6 +932,7 @@ select.select {
 .top-title { font-weight: 600; font-size: var(--fs-caption); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
 .top-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: var(--fs-footnote); color: var(--text-secondary); }
 .top-meta .category { color: var(--text-tertiary); }
+.top-meta .vbadge { margin-left: -3px; }
 .avatar.xs { width: 18px; height: 18px; }
 
 /* 최근 시청 */
@@ -1538,7 +1546,6 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .follow-meta { display: inline-flex; align-items: center; gap: 10px; }
 .follow-meta > span:empty { display: none; }
 .dense-title.fx-last { color: var(--text-tertiary); }
-.fx-verified { width: 14px; height: 14px; margin-left: 4px; vertical-align: -2px; color: var(--primary); --fx-check: var(--on-primary); }
 .fx-bell { width: 13px; height: 13px; margin-left: 4px; vertical-align: -2px; color: var(--warning); }
 .follow-find { width: 180px; padding: 6px 10px; }
 @media (max-width: 900px) { .dense-row.follow-row { grid-template-columns: auto minmax(140px, 1fr) auto; } .follow-row .dense-title, .follow-row .follow-meta { display: none; } }

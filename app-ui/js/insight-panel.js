@@ -6,6 +6,7 @@ import { esc, safeUrl, imageSrc } from './dom.js';
 import { compactCount } from './cards.js';
 import { categoryGroups } from './pages.js';
 import { swapContent } from './motion.js';
+import { verifiedBadge } from './verified-badge.js';
 
 const COLLAPSE_KEY = 'cview.insights.collapsed';
 const REFRESH_MS = 60000;
@@ -96,7 +97,7 @@ function liveRows(lives, meta) {
   if (!lives.length) return '';
   return `<div class="ip-lives">${lives.map((l) => {
     const a = safeUrl(l.channelImageUrl);
-    return `<button class="ip-live" data-ip-play="${esc(l.channelId)}" title="${esc(l.liveTitle || '')}">${a ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(a, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}<span class="ip-live-text"><b class="ellipsis">${esc(l.channelName)}</b><small class="ellipsis">${esc(meta(l))}</small></span></button>`;
+    return `<button class="ip-live" data-ip-play="${esc(l.channelId)}" title="${esc(l.liveTitle || '')}">${a ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(a, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}<span class="ip-live-text"><b class="ellipsis">${esc(l.channelName)}${verifiedBadge(l, 'sm')}</b><small class="ellipsis">${esc(meta(l))}</small></span></button>`;
   }).join('')}</div>`;
 }
 function columns(values, labels) {

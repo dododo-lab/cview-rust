@@ -16,6 +16,7 @@ import { applyChatSkin } from './chat-extras.js';
 import { onChatPrefs } from './chat-prefs.js';
 import { chatFollower, followAppend } from './chat-follow.js';
 import { bindMenuKeys, focusFirstMenuItem } from './ml-pane-controls.js';
+import { verifiedBadge } from './verified-badge.js';
 
 const STORE_KEY = 'cview.ml.chatView';
 const MODES = [
@@ -177,6 +178,12 @@ export class MultiLiveMergedChat {
       c.cell.style.setProperty('--lh', String(Number(c.hue) || 0));
       const label = c.cell.querySelector('.ml-mc-cell-head span');
       if (label.textContent !== name) label.textContent = name;
+      const badge = s.verifiedBadge || '';
+      if (c.badge !== badge) {
+        c.badge = badge;
+        label.nextElementSibling?.classList.contains('vbadge') && label.nextElementSibling.remove();
+        label.insertAdjacentHTML('afterend', verifiedBadge(badge, 'sm'));
+      }
     }
     for (const [id, c] of this.conns) if (!keep.has(id)) this.drop(id, c);
     this.layoutCells(sessions, state.selectedId);

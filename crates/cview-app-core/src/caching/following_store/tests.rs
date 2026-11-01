@@ -105,6 +105,7 @@ fn row(id: &str, live: bool) -> FollowingRow {
         list_live_info: None,
         verified: false,
         follow: Default::default(),
+        verified_badge: None,
     }
 }
 

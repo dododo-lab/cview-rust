@@ -407,6 +407,11 @@ impl ChzzkApiClient {
                 rows.push(FollowingRow {
                     channel_id,
                     verified: channel.verified_mark.unwrap_or(false),
+                    verified_badge: cview_core::models::verified_badge(
+                        channel.verified_mark.unwrap_or(false),
+                        channel.verified_mark_type.as_deref(),
+                    )
+                    .map(str::to_string),
                     follow,
                     channel_name: channel.channel_name.unwrap_or_else(|| "Unknown".into()),
                     channel_image_url: channel.channel_image_url,
@@ -495,6 +500,7 @@ impl ChzzkApiClient {
                             channel_id: base.channel_id.clone(),
                             is_live: actually_live,
                             open_date: if actually_live { info.open_date } else { None },
+                            verified_badge: base.verified_badge.clone(),
                         };
                         (index, item)
                     }

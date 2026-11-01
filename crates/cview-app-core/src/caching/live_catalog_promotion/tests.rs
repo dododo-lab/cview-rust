@@ -256,6 +256,7 @@ fn row(live_id: i64, channel: &str) -> LiveCatalogRow {
         category_type: None,
         thumbnail_url: None,
         open_date: None,
+        verified_badge: None,
     }
 }
 

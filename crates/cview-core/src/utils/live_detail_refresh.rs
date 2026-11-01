@@ -41,6 +41,8 @@ pub struct FollowingRowSnapshot {
     pub list_title: Option<String>,
     pub list_viewers: Option<i64>,
     pub list_category: Option<String>,
+    /// 인증 마크 종류(`"partner"` · `"challenger"` · `"official"`).
+    pub verified_badge: Option<String>,
 }
 
 /// 채널별 마지막 liveDetail 결과. 한 방송(liveId) 동안만 유효하다.
@@ -174,6 +176,8 @@ pub struct MergedFollowingItem {
     pub channel_id: String,
     pub is_live: bool,
     pub open_date: Option<Date>,
+    /// 인증 마크 종류(`"partner"` · `"challenger"` · `"official"`).
+    pub verified_badge: Option<String>,
 }
 
 /// 병합 결과 — 화면 행과, 다음 폴에 넘길 meta(`None` 이면 지운다).
@@ -291,6 +295,7 @@ pub fn merge(
             channel_name: row.channel_name.clone(),
             channel_image_url: row.channel_image_url.clone(),
             channel_id: row.channel_id.clone(),
+            verified_badge: row.verified_badge.clone(),
             ..MergedFollowingItem::default()
         };
         return LiveDetailMergeResult {
@@ -350,6 +355,7 @@ pub fn merge(
         } else {
             None
         },
+        verified_badge: row.verified_badge.clone(),
     };
     LiveDetailMergeResult { item, meta: source }
 }

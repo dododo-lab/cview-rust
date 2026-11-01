@@ -34,6 +34,9 @@ pub struct LiveChannelItem {
         skip_serializing_if = "Option::is_none"
     )]
     pub open_date: Option<DateTime<Utc>>,
+    /// 인증 마크 종류(`"partner"` · `"challenger"` · `"official"`) — [`super::verified_badge`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verified_badge: Option<String>,
 }
 
 impl LiveChannelItem {
@@ -200,6 +203,7 @@ mod tests {
             channel_id: "x".into(),
             is_live: true,
             open_date: None,
+            verified_badge: None,
         }
     }
 

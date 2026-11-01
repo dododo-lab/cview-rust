@@ -57,6 +57,7 @@ pub fn to_live_channel_item(item: &MergedFollowingItem) -> LiveChannelItem {
         channel_id: item.channel_id.clone(),
         is_live: item.is_live,
         open_date: item.open_date,
+        verified_badge: item.verified_badge.clone(),
     }
 }
 
@@ -85,6 +86,7 @@ pub fn row_snapshot(row: &FollowingRow) -> FollowingRowSnapshot {
         list_title: info.and_then(|i| i.live_title.clone()),
         list_viewers: info.and_then(|i| i.concurrent_user_count),
         list_category: info.and_then(|i| i.live_category_value.clone()),
+        verified_badge: row.verified_badge.clone(),
     }
 }
 

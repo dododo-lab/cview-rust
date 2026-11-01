@@ -1,6 +1,7 @@
 // 라이브 카드 격자 / 채널 행 / 빈 상태.
 import { esc, safeUrl, imageSrc } from './dom.js';
 import { previewAttr } from './hover-preview.js';
+import { verifiedBadge } from './verified-badge.js';
 
 /** 라이브 카드 한 장 (LiveCardDto). */
 export function liveCard(live) {
@@ -22,7 +23,7 @@ export function liveCard(live) {
         <span class="card-avatar" data-open-channel title="채널 정보">${avatar ? `<img class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<div class="avatar"></div>'}</span>
         <div class="card-text">
           <div class="card-title">${esc(live.liveTitle || '제목 없음')}</div>
-          <div class="card-meta ellipsis">${esc(live.channelName)}${category}</div>
+          <div class="card-meta ellipsis">${esc(live.channelName)}${verifiedBadge(live)}${category}</div>
         </div>
       </div>
     </article>`;
@@ -39,7 +40,7 @@ export function channelRow(channel) {
     <div class="channel-row card" tabindex="0" data-channel-id="${esc(channel.channelId)}" data-channel-name="${esc(channel.channelName)}" data-channel-image="${esc(avatar)}" data-open-live="${channel.openLive ? '1' : ''}">
       ${avatar ? `<img class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<div class="avatar"></div>'}
       <div class="card-text">
-        <div class="ellipsis"><strong>${esc(channel.channelName)}</strong>${channel.verified ? '<span class="verified">✔</span>' : ''}${channel.openLive ? '<span class="live-dot">LIVE</span>' : ''}</div>
+        <div class="ellipsis"><strong>${esc(channel.channelName)}</strong>${verifiedBadge(channel)}${channel.openLive ? '<span class="live-dot">LIVE</span>' : ''}</div>
         <div class="card-meta">팔로워 ${esc(channel.followerCountText)}명</div>
       </div>
     </div>`;

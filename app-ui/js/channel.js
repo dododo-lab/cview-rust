@@ -4,6 +4,7 @@ import { api } from './api.js';
 import { esc, safeUrl, toast, channelTone, imageSrc, dismiss } from './dom.js';
 import { emptyState, loadingState, compactCount, errorState } from './cards.js';
 import { previewAttr } from './hover-preview.js';
+import { verifiedBadge } from './verified-badge.js';
 
 const ICON_STAR = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></svg>';
 const ICON_STAR_LINE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></svg>';
@@ -120,7 +121,7 @@ export class ChannelPage {
             ${live ? '<span class="strip-live">LIVE</span>' : ''}
           </div>
           <div class="channel-id">
-            <h1>${esc(c.channelName)}${c.verifiedMark ? '<span class="verified">✔</span>' : ''}</h1>
+            <h1>${esc(c.channelName)}${verifiedBadge(c, 'lg')}</h1>
             <p>팔로워 ${esc(compactCount(c.followerCount || 0))}명${live ? ` · <b>${esc(live.viewerCountText)}명 시청 중</b>` : ''}</p>
           </div>
           <div class="grow"></div>

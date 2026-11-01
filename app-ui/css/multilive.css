@@ -417,6 +417,9 @@
 .ml-pane-line { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .ml-pane-title { font-size: 13.5px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; color: var(--text-on-media, #fff); }
 .ml-pane-name { min-width: 0; font-size: 12px; font-weight: 700; line-height: 1.3; color: var(--text-on-media, #fff); }
+.ml-pane-vb { display: inline-flex; flex: none; margin-left: -5px; font-size: 12px; }
+.ml-pane-vb:empty { display: none; }
+.ml-pane-vb .vbadge { margin-left: 0; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6)); }
 .ml-pane-title:empty { display: none; }
 .ml-pane-stats { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; max-height: 20px; overflow: hidden; text-shadow: none; }
 .ml-pane-stats:empty { display: none; }
@@ -563,6 +566,7 @@
 .ml-watch-chip:hover:not(.active) { color: var(--text-primary); background: var(--hover); }
 .ml-watch-chip:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
 .ml-watch-chip.active { max-width: 200px; color: var(--text-primary); font-weight: 600; background: var(--surface-base); box-shadow: var(--shadow-sm); }
+.ml-watch-chip .vbadge { margin-left: -3px; }
 .ml-watch-chip img, .ml-watch-dot { width: 20px; height: 20px; border-radius: 50%; flex: none; object-fit: cover; }
 .ml-watch-chip.active img, .ml-watch-chip.active .ml-watch-dot { box-shadow: 0 0 0 2px var(--primary); }
 .ml-watch-dot { background: var(--surface-overlay); }
@@ -742,6 +746,7 @@
 }
 .ml-mc-cell-head:hover { background: color-mix(in srgb, var(--mc-color) 15%, transparent); }
 .ml-mc-cell-head i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--mc-color); }
+.ml-mc-cell-head .vbadge { margin-left: -3px; }
 .ml-mc-cell-head span { flex: 1; min-width: 0; }
 .ml-mc-cell-send { display: none; flex: none; padding: 1px 6px; border-radius: 999px; font-size: var(--fs-micro); font-weight: 600; color: var(--mc-color); background: color-mix(in srgb, var(--mc-color) 12%, transparent); }
 .ml-mc-cell.selected .ml-mc-cell-send { display: inline; }
@@ -761,7 +766,6 @@
 /* 위 정보 — 채널 이름 옆에 인증·팔로워·카테고리 */
 .ml-watch-meta { min-width: 0; font-size: 12px; font-weight: 600; color: var(--text-on-media-muted, rgba(255, 255, 255, 0.72)); }
 .ml-watch-meta:empty { display: none; }
-.ml-watch-meta .verified { margin: 0 2px 0 0; color: var(--ml-media-accent, #00ffa3); font-size: 11px; }
 .ml-watch-meta .sep { margin: 0 5px; font-style: normal; opacity: 0.6; }
 /* 채팅 표시 방식 — 숨김 / 영상 위(예전 시청 화면과 같은 자리·너비) */
 .ml-body.chat-hidden :is(.ml-chat, .chat-splitter, .chat-reopen) { display: none !important; }
@@ -824,9 +828,9 @@
 .mwi-id { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .mwi-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .mwi-name h2 { font-size: 17px; font-weight: 800; letter-spacing: -0.4px; line-height: 1.25; min-width: 0; }
-.mwi-verified { flex: none; display: inline-grid; width: 16px; height: 16px; color: var(--primary); --mwi-check: var(--on-primary, #000); }
-.mwi-verified.sm { width: 13px; height: 13px; }
-.mwi-verified svg { width: 100%; height: 100%; }
+.mwi-name .vbadge.mwi-vb { width: 17px !important; height: 17px !important; margin-left: -2px; vertical-align: 0; }
+.mwi-post-name .vbadge { margin-left: -2px; }
+.ml-addrow-name .vbadge { margin-left: -3px; }
 .mwi-followers { flex: none; display: inline-flex; align-items: center; gap: 4px; margin-left: 2px; font-size: 12px; line-height: 14px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
 .mwi-followers::before { content: ""; width: 3px; height: 3px; margin-right: 4px; border-radius: 50%; background: currentColor; opacity: .7; }
 .mwi-followers b { color: var(--text-secondary); font-weight: 700; }

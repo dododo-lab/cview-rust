@@ -7,6 +7,7 @@
 import { api } from './api.js';
 import { esc, safeUrl, toast, imageSrc } from './dom.js';
 import { uptimeText } from './cards.js';
+import { verifiedBadge } from './verified-badge.js';
 
 const ICON_CLOSE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
 const ICON_REFRESH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11.5a8 8 0 1 0-2.4 5.9"/><path d="M20 4.5v7h-7"/></svg>';
@@ -384,7 +385,7 @@ export class MultiLiveAddDrawer {
             ${uptime ? `<span class="ml-addrow-uptime">${esc(uptime)}</span>` : ''}
             ${l.adult ? '<span class="ml-addrow-adult">19</span>' : ''}</span>
           <span class="ml-addrow-text">
-            <span class="ml-addrow-name">${avatar ? `<img class="ml-addrow-avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="ml-addrow-avatar"></span>'}<span class="ellipsis">${esc(l.channelName)}</span>${tag}</span>
+            <span class="ml-addrow-name">${avatar ? `<img class="ml-addrow-avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="ml-addrow-avatar"></span>'}<span class="ellipsis">${esc(l.channelName)}</span>${verifiedBadge(l, 'sm')}${tag}</span>
             <span class="ml-addrow-title">${esc(l.liveTitle || '제목 없음')}</span>
             ${l.categoryName ? `<span class="ml-addrow-cat ellipsis">${esc(l.categoryName)}</span>` : ''}
           </span>

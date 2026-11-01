@@ -49,6 +49,7 @@ fn channel(id: &str, viewers: i64, is_live: bool) -> LiveChannelItem {
         channel_id: id.into(),
         is_live,
         open_date: None,
+        verified_badge: None,
     }
 }
 

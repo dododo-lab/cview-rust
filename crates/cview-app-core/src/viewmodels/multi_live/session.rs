@@ -61,6 +61,8 @@ pub struct SessionState {
     pub live_title: String,
     pub thumbnail_url: Option<Url>,
     pub profile_image_url: Option<Url>,
+    /// 인증 마크 종류(`"partner"` · `"challenger"` · `"official"`).
+    pub verified_badge: Option<String>,
     viewer_count: i64,
     formatted_viewer_count: String,
     pub accumulate_count: i64,
@@ -156,6 +158,14 @@ impl SessionState {
     }
 }
 
+/// 라이브 응답의 채널 인증 마크 종류.
+fn live_badge(live: &LiveInfo) -> Option<String> {
+    live.channel
+        .as_ref()
+        .and_then(|c| c.verified_badge())
+        .map(str::to_string)
+}
+
 /// 직렬화 스냅샷.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -166,6 +176,8 @@ pub struct MultiLiveSessionSnapshot {
     pub live_title: String,
     pub thumbnail_url: Option<String>,
     pub profile_image_url: Option<String>,
+    /// 인증 마크 종류(`"partner"` · `"challenger"` · `"official"`).
+    pub verified_badge: Option<String>,
     pub viewer_count: i64,
     pub formatted_viewer_count: String,
     pub accumulate_count: i64,
@@ -236,6 +248,7 @@ impl MultiLiveSession {
             st.channel_name = channel_name.into();
             st.profile_image_url = profile_image_url;
             st.live_title = live_info.live_title.clone();
+            st.verified_badge = live_badge(&live_info);
             st.thumbnail_url = live_info.live_image_url.clone();
             st.prefetched_live_info = Some(live_info);
         }
@@ -320,6 +333,7 @@ impl MultiLiveSession {
             live_title: st.live_title.clone(),
             thumbnail_url: st.thumbnail_url.as_ref().map(|u| u.to_string()),
             profile_image_url: st.profile_image_url.as_ref().map(|u| u.to_string()),
+            verified_badge: st.verified_badge.clone(),
             viewer_count: st.viewer_count,
             formatted_viewer_count: st.formatted_viewer_count().to_string(),
             accumulate_count: st.accumulate_count,
@@ -517,6 +531,9 @@ impl MultiLiveSession {
                 plan.channel_name.clone()
             };
             st.live_title = plan.live_title.clone();
+            if let Some(badge) = live_badge(&live) {
+                st.verified_badge = Some(badge);
+            }
             st.thumbnail_url = live.live_image_url.clone();
             (
                 st.channel_name.clone(),

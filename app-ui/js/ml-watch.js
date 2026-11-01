@@ -52,7 +52,7 @@ export class WatchTools {
     this.body = page.root.querySelector('.ml-body');
     this.gridChatOverlay = false; // 멀티라이브 보기의 "그리드에서 채팅 오버레이" 설정
     this.channelId = null;
-    this.info = null; // { channelId, verified, followers, category }
+    this.info = null; // { channelId, followers, category } — 인증 마크는 패인 이름 옆(.ml-pane-vb)
     this.hooked = new WeakSet(); // 스크린샷 응답을 듣는 패인 브리지
     // 영상 아래 채널 정보·다시보기·클립·커뮤니티
     this.infoPanel = new WatchInfoPanel(page.root.querySelector('.ml-watch-info'));
@@ -136,7 +136,6 @@ export class WatchTools {
     const c = ch.status === 'fulfilled' ? ch.value : null;
     const l = live.status === 'fulfilled' ? live.value : null;
     this.info = {
-      verified: Boolean((c && c.verified) || (l && l.verified)),
       followers: c && typeof c.followerCount === 'number' ? c.followerCount : null,
       category: (l && l.categoryName) || '',
     };
@@ -153,9 +152,8 @@ export class WatchTools {
       meta.className = 'ml-watch-meta ellipsis';
       line.append(meta);
     }
-    const { verified, followers, category } = this.info;
+    const { followers, category } = this.info;
     const html = [
-      verified ? '<span class="verified" title="인증된 채널">✔</span>' : '',
       followers != null ? `팔로워 ${esc(compactCount(followers))}명` : '',
       category ? esc(category) : '',
     ].filter(Boolean).join('<i class="sep">·</i>');
