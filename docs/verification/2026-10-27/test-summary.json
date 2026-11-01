@@ -1,0 +1,295 @@
+{
+  "totals": {
+    "passed": 1883,
+    "failed": 0,
+    "ignored": 3
+  },
+  "groups": [
+    {
+      "target": "Running unittests src/lib.rs (target/verification-2026-10-27/debug/deps/cview_app-820655175cb5fec8)",
+      "passed": 94,
+      "failed": 0,
+      "ignored": 2
+    },
+    {
+      "target": "Running unittests src/main.rs (target/verification-2026-10-27/debug/deps/cview_app-2b086fd474c52db2)",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/verification-2026-10-27/debug/deps/cview_app_core-71aab9b7ba932ab7)",
+      "passed": 252,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/app_state_flow.rs (target/verification-2026-10-27/debug/deps/app_state_flow-5b94f3fd5740b69d)",
+      "passed": 1,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/viewmodels_all_broadcasts.rs (target/verification-2026-10-27/debug/deps/viewmodels_all_broadcasts-980b5e46b10427e2)",
+      "passed": 5,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/viewmodels_channel_detail.rs (target/verification-2026-10-27/debug/deps/viewmodels_channel_detail-cdc4f9694bd0e3a9)",
+      "passed": 18,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/viewmodels_chat.rs (target/verification-2026-10-27/debug/deps/viewmodels_chat-1f2bc214798a4b3f)",
+      "passed": 38,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/viewmodels_clip.rs (target/verification-2026-10-27/debug/deps/viewmodels_clip-82a4306d0429292b)",
+      "passed": 20,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/viewmodels_following.rs (target/verification-2026-10-27/debug/deps/viewmodels_following-600afc9e14dd4667)",
+      "passed": 17,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/viewmodels_home.rs (target/verification-2026-10-27/debug/deps/viewmodels_home-975f5215c20a0151)",
+      "passed": 29,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/viewmodels_multi_live.rs (target/verification-2026-10-27/debug/deps/viewmodels_multi_live-6f3ce875c8a92947)",
+      "passed": 51,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/viewmodels_player.rs (target/verification-2026-10-27/debug/deps/viewmodels_player-9dca3683a4d7a490)",
+      "passed": 38,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/viewmodels_search.rs (target/verification-2026-10-27/debug/deps/viewmodels_search-72b4a7e992fc813f)",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/viewmodels_vod.rs (target/verification-2026-10-27/debug/deps/viewmodels_vod-31b594dcf7f90488)",
+      "passed": 20,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/viewmodels_vod_library.rs (target/verification-2026-10-27/debug/deps/viewmodels_vod_library-c42699347ff2265d)",
+      "passed": 8,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/verification-2026-10-27/debug/deps/cview_auth-ed89f0b527f9043f)",
+      "passed": 59,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/auth_manager.rs (target/verification-2026-10-27/debug/deps/auth_manager-5f8ee18ffcd47313)",
+      "passed": 34,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/oauth_service.rs (target/verification-2026-10-27/debug/deps/oauth_service-b8eb0163026882fa)",
+      "passed": 12,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/secret_store.rs (target/verification-2026-10-27/debug/deps/secret_store-12c52f3318a40693)",
+      "passed": 13,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/verification-2026-10-27/debug/deps/cview_chat-f19d7d667e8fc76e)",
+      "passed": 157,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/verification-2026-10-27/debug/deps/cview_core-95ceb119121c60dd)",
+      "passed": 372,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/verification-2026-10-27/debug/deps/cview_networking-90c765979a7dbf82)",
+      "passed": 42,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/client_behavior.rs (target/verification-2026-10-27/debug/deps/client_behavior-ae28643d70f87d6b)",
+      "passed": 33,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/verification-2026-10-27/debug/deps/cview_persistence-6b178b081d5e97ab)",
+      "passed": 11,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/datastore_core.rs (target/verification-2026-10-27/debug/deps/datastore_core-fe67d816aa7b82ad)",
+      "passed": 19,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/favorites_and_live_cache.rs (target/verification-2026-10-27/debug/deps/favorites_and_live_cache-085449a9d0d19a16)",
+      "passed": 24,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/image_cache_and_snapshots.rs (target/verification-2026-10-27/debug/deps/image_cache_and_snapshots-f943306b4da057e0)",
+      "passed": 17,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/insights_and_legacy.rs (target/verification-2026-10-27/debug/deps/insights_and_legacy-4f1ce389a04afe62)",
+      "passed": 15,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/maintenance_records_rollback.rs (target/verification-2026-10-27/debug/deps/maintenance_records_rollback-848decc6714893df)",
+      "passed": 10,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/precision_caches.rs (target/verification-2026-10-27/debug/deps/precision_caches-b21eda4fcbcfd56e)",
+      "passed": 22,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/precision_watch_history.rs (target/verification-2026-10-27/debug/deps/precision_watch_history-b49c9cf190be823c)",
+      "passed": 26,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/retention_offmain_dto.rs (target/verification-2026-10-27/debug/deps/retention_offmain_dto-acfe242625eee607)",
+      "passed": 14,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/schema.rs (target/verification-2026-10-27/debug/deps/schema-50ccd1e85cf9d86c)",
+      "passed": 15,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/settings.rs (target/verification-2026-10-27/debug/deps/settings-403dcc09509e54af)",
+      "passed": 26,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/store_backup_and_health.rs (target/verification-2026-10-27/debug/deps/store_backup_and_health-af81603841985c9c)",
+      "passed": 15,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/vod_stores.rs (target/verification-2026-10-27/debug/deps/vod_stores-7250dc6e363038dc)",
+      "passed": 28,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running tests/watch_math.rs (target/verification-2026-10-27/debug/deps/watch_math-aa5f093e1f96cc80)",
+      "passed": 19,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Running unittests src/lib.rs (target/verification-2026-10-27/debug/deps/cview_player-d9ed2bac58013cd4)",
+      "passed": 296,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests cview_app",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests cview_app_core",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests cview_auth",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests cview_chat",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests cview_core",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests cview_networking",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    },
+    {
+      "target": "Doc-tests cview_persistence",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 1
+    },
+    {
+      "target": "Doc-tests cview_player",
+      "passed": 0,
+      "failed": 0,
+      "ignored": 0
+    }
+  ],
+  "additional_live_tests": {
+    "passed": 2,
+    "failed": 0,
+    "source": "live-update-tests.log"
+  },
+  "combined_totals": {
+    "passed": 1885,
+    "failed": 0,
+    "ignored_not_executed": 1
+  }
+}
