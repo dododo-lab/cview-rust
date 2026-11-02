@@ -27,10 +27,15 @@
 #   3) 버전 patch+1(--minor/--major 면 그 자리 +1, 아래 자리 0)·빌드 번호 +1.
 #   4) 빌드 → DMG 서명 → 공증(Accepted 확인) → 스테이플 → 확인.
 #      여기서 하나라도 실패하면 올린 파일을 git 으로 되돌리고 끝낸다(trap).
-#   4b) 같은 버전의 Windows 설치 파일(NSIS, x64)을 이 Mac 에서 교차 빌드한다(x86_64-pc-windows-gnu · mingw-w64 · makensis).
-#       → dist/CView_X.Y.Z_x64-setup.exe. 코드 서명 인증서가 없어 서명되지 않는다(SmartScreen 경고).
-#       도구가 없으면(rustup target add x86_64-pc-windows-gnu · brew install mingw-w64 nsis) 실패로 보고 되돌린다.
-#       배포에서는 CVIEW_SKIP_WINDOWS를 허용하지 않는다.
+#   4b) 같은 버전의 Windows 설치 파일(NSIS) 두 개를 이 Mac 에서 교차 빌드한다. 둘 다 있어야 게시한다.
+#       x64  : x86_64-pc-windows-gnu · Homebrew mingw-w64 · makensis   → dist/CView_X.Y.Z_x64-setup.exe
+#       arm64: aarch64-pc-windows-gnullvm · llvm-mingw(clang·lld·llvm-windres·aarch64 CRT) · makensis
+#                                                                        → dist/CView_X.Y.Z_arm64-setup.exe
+#       NSIS 설치 프로그램 자체는 두 판 모두 x86 실행 파일이고, 안에 든 CView.exe 가 x64/ARM64 다(빌드 후 PE 헤더로 확인).
+#       코드 서명 인증서가 없어 서명되지 않는다(SmartScreen 경고).
+#       도구(rustup target add x86_64-pc-windows-gnu aarch64-pc-windows-gnullvm · brew install mingw-w64 nsis ·
+#       llvm-mingw 를 ~/.local/opt/llvm-mingw 또는 CVIEW_LLVM_MINGW 에)가 없으면 버전을 올리기 전에 멈춘다.
+#       배포에서는 CVIEW_SKIP_WINDOWS를 허용하지 않는다. arm64 만 건너뛰는 길도 없다.
 #   5) 커밋·태그 생성 → 양쪽 파일 SSH 전송 → 서버 원자적 게시 → 서버/클라이언트 전체 다운로드 검증 → Git 푸시.
 #      게시 중 실패하면 버전·산출물·설명을 보존하고 같은 버전으로 게시를 재시도한다.
 #      --no-notarize를 주면 공증만 건너뛰며 릴리스 설명에 명시한다.
@@ -41,6 +46,46 @@ export LANG="${LANG:-en_US.UTF-8}" LC_ALL="${LC_ALL:-en_US.UTF-8}"
 [[ "$LANG" == "C" || -z "$LANG" ]] && export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
 CONF=crates/cview-app/tauri.conf.json
+# Windows arm64 교차 빌드 도구. Homebrew mingw-w64 는 x86 만 있어 llvm-mingw 를 쓴다.
+# PATH 앞에 넣으면 macOS 빌드의 clang 을 가리므로 타깃별 환경 변수로 절대 경로만 넘긴다.
+LLVM_MINGW="${CVIEW_LLVM_MINGW:-$HOME/.local/opt/llvm-mingw}"
+export CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_LINKER="$LLVM_MINGW/bin/aarch64-w64-mingw32-clang"
+export CC_aarch64_pc_windows_gnullvm="$LLVM_MINGW/bin/aarch64-w64-mingw32-clang"
+export CXX_aarch64_pc_windows_gnullvm="$LLVM_MINGW/bin/aarch64-w64-mingw32-clang++"
+export AR_aarch64_pc_windows_gnullvm="$LLVM_MINGW/bin/llvm-ar"
+export RC_aarch64_pc_windows_gnullvm="$LLVM_MINGW/bin/aarch64-w64-mingw32-windres"
+# gnullvm 은 기본으로 libunwind.dll 을 동적으로 불러오는데 Windows 에는 없다 — 정적으로 넣는다(빌드 후 가져오기 목록으로 확인).
+export CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_RUSTFLAGS="-C target-feature=+crt-static"
+WIN_TARGETS=(x86_64-pc-windows-gnu aarch64-pc-windows-gnullvm)
+# 교차 빌드 도구가 모두 있는지 — 없으면 무엇을 설치할지 알려 주고 실패한다.
+check_windows_tools() {
+  local installed missing=()
+  installed=$(rustup target list --installed 2>/dev/null)
+  for t in $WIN_TARGETS; do
+    print -r -- "$installed" | grep -qx "$t" || missing+=("rustup target add $t")
+  done
+  command -v x86_64-w64-mingw32-gcc >/dev/null || missing+=("brew install mingw-w64")
+  command -v makensis >/dev/null || missing+=("brew install nsis")
+  for tool in $CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_LINKER $RC_aarch64_pc_windows_gnullvm $AR_aarch64_pc_windows_gnullvm "$LLVM_MINGW/bin/llvm-objdump"; do
+    [[ -x "$tool" ]] || { missing+=("llvm-mingw → $LLVM_MINGW (CVIEW_LLVM_MINGW): ${tool:t} 없음"); break; }
+  done
+  if (( ${#missing} )); then
+    echo "✗ Windows 설치 파일(x64·arm64) 교차 빌드 도구가 없습니다:"; printf '   %s\n' $missing; return 1
+  fi
+}
+# PE 헤더의 Machine 값 — x64 0x8664, ARM64 0xaa64.
+pe_machine() {
+  python3 - "$1" <<'PY'
+import struct, sys
+data = open(sys.argv[1], 'rb').read(4096)
+if data[:2] != b'MZ':
+    sys.exit('not a PE file: ' + sys.argv[1])
+offset = struct.unpack_from('<I', data, 0x3C)[0]
+if data[offset:offset + 4] != b'PE\0\0':
+    sys.exit('PE signature missing: ' + sys.argv[1])
+print(hex(struct.unpack_from('<H', data, offset + 4)[0]))
+PY
+}
 # 빌드 산출물 폴더는 cargo 에게 묻는다 — .cargo/config.toml 의 build.target-dir · CARGO_TARGET_DIR 을 따른다(기본 ./target).
 TARGET=$(cargo metadata --format-version 1 --no-deps | python3 -c 'import json,sys;print(json.load(sys.stdin)["target_directory"])')
 [[ -d "${TARGET:h}" ]] || { echo "✗ 빌드 폴더의 상위 경로가 없습니다(외장 볼륨이 붙어 있나요?): $TARGET"; exit 1; }
@@ -100,6 +145,7 @@ else: patch += 1
 print(f'{major}.{minor}.{patch}')
 PY
 )
+  check_windows_tools
   python3 scripts/publish-update.py --preflight --version "$next_version"
   if (( ! no_notarize )); then
     xcrun notarytool history --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --output-format json >/dev/null
@@ -110,10 +156,10 @@ PY
   echo "── 검사(올리기 전에)"
   cargo fmt --all --check
   cargo clippy --workspace --all-targets -q -- -D warnings
-  # Windows 판도 만들므로 Windows 타깃 clippy 도(타깃이 있을 때).
-  if [[ -z "${CVIEW_SKIP_WINDOWS:-}" ]] && rustup target list --installed 2>/dev/null | grep -q x86_64-pc-windows-gnu; then
-    cargo clippy -p cview-app --target x86_64-pc-windows-gnu -q -- -D warnings
-  fi
+  # Windows 판(x64·arm64)도 만들므로 Windows 타깃 clippy 도.
+  for t in $WIN_TARGETS; do
+    cargo clippy -p cview-app --target "$t" -q -- -D warnings
+  done
   cargo test --workspace -q 2>&1 | grep -E "^test result|FAILED|panicked" \
     | awk '{p+=$4; f+=$6} /FAILED|panicked/ {print} END {print "   테스트 통과", p, "실패", f; exit (f > 0)}'
   for f in app-ui/js/*.js; do node --check "$f"; done
@@ -252,17 +298,32 @@ print(max(subs, key=lambda s: s["createdDate"])["id"] if subs else "")' "$(basen
     stat -f "   %z bytes" "$out"
     notarize_note="공증 제출 $sub_id — Accepted."
   fi
-  if [[ -z "${CVIEW_SKIP_WINDOWS:-}" ]]; then
-    echo "── Windows 설치 파일(x64, 교차 빌드)"
-    win_out="dist/CView_${version}_x64-setup.exe"
-    rm -f "$TARGET"/x86_64-pc-windows-gnu/release/bundle/nsis/*.exe(N) "$win_out"
-    (cd crates/cview-app && cargo tauri build --target x86_64-pc-windows-gnu --bundles nsis)
-    win_exe=$(ls -t "$TARGET"/x86_64-pc-windows-gnu/release/bundle/nsis/*.exe(N) | head -1)
-    [[ -n "$win_exe" ]] || { echo "✗ Windows 설치 파일을 찾지 못했습니다"; exit 1; }
+  # x64·arm64 둘 다 만든다(CVIEW_SKIP_WINDOWS 는 위에서 거부). 하나라도 실패하면 버전을 되돌린다.
+  for t in $WIN_TARGETS; do
+    case "$t" in
+      x86_64-*) win_arch=x64 win_machine=0x8664 ;;
+      aarch64-*) win_arch=arm64 win_machine=0xaa64 ;;
+    esac
+    echo "── Windows 설치 파일($win_arch, 교차 빌드 $t)"
+    win_out="dist/CView_${version}_${win_arch}-setup.exe"
+    rm -f "$TARGET"/$t/release/bundle/nsis/*.exe(N) "$win_out"
+    (cd crates/cview-app && cargo tauri build --target "$t" --bundles nsis)
+    win_bin="$TARGET/$t/release/cview-app.exe"
+    machine=$(pe_machine "$win_bin")
+    [[ "$machine" == "$win_machine" ]] || { echo "✗ $win_bin 의 PE Machine 이 $machine 입니다($win_arch 는 $win_machine)"; exit 1; }
+    echo "   CView.exe PE Machine $machine ($win_arch)"
+    # 설치 파일에 없는 MinGW 런타임 DLL(libunwind·libc++·libwinpthread·libgcc_s 등)을 부르면 Windows 에서 실행되지 않는다.
+    # objdump 실패는 그대로 멈추고(set -e), 가져오기 목록을 못 읽었으면 검사를 통과로 보지 않는다.
+    win_imports=$("$LLVM_MINGW/bin/llvm-objdump" -p "$win_bin")
+    print -r -- "$win_imports" | grep -q 'DLL Name:' || { echo "✗ $win_arch CView.exe 의 가져오기 목록을 읽지 못했습니다"; exit 1; }
+    runtime_dlls=$(print -r -- "$win_imports" | awk '/DLL Name:/ {print $3}' | grep -i '^lib' || true)
+    [[ -z "$runtime_dlls" ]] || { echo "✗ $win_arch CView.exe 가 함께 배포하지 않는 DLL 을 부릅니다: ${(f)runtime_dlls}"; exit 1; }
+    win_exe=$(ls -t "$TARGET"/$t/release/bundle/nsis/*.exe(N) | head -1)
+    [[ -n "$win_exe" ]] || { echo "✗ Windows $win_arch 설치 파일을 찾지 못했습니다"; exit 1; }
     cp "$win_exe" "$win_out"
     shasum -a 256 "$win_out"
     stat -f "   %z bytes" "$win_out"
-  fi
+  done
   notes_out="dist/CView_${version}_notes.txt"
   python3 - "$version" "$build" "$notes_out" "${CVIEW_RELEASE_NOTES_FILE:-}" "$no_notarize" <<'PY'
 from pathlib import Path
@@ -277,7 +338,7 @@ else:
     body = body or '새 배포 빌드입니다.'
 mac = '공증 안 함(--no-notarize), Developer ID 서명만 적용.' if unnotarized == '1' else 'Developer ID 서명 및 Apple 공증·스테이플 완료.'
 notes = (f'CView {version} (빌드 {build})\n\n{body}\n\nmacOS: Apple Silicon(arm64), {mac}\n'
-         'Windows: x64 NSIS 설치 파일. 코드 서명 인증서가 없어 미서명이며 SmartScreen 경고가 표시될 수 있습니다.\n'
+         'Windows: x64·arm64 NSIS 설치 파일. 코드 서명 인증서가 없어 둘 다 미서명이며 SmartScreen 경고가 표시될 수 있습니다.\n'
          '업데이트 확인과 다운로드는 인터넷 연결만 있으면 됩니다(Tailscale 불필요).\n')
 Path(output).write_text(notes, encoding='utf-8')
 PY

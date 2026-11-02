@@ -16,12 +16,12 @@ scripts/release-with-prs.sh [PR번호 ...] [-- release-macos.sh 옵션]
 
 1. 검사(fmt·clippy·테스트·JS 문법)와 버전·macOS 빌드 번호 증가
 2. macOS DMG(Apple Silicon) — Developer ID 서명, Apple 공증, 티켓 첨부·검증
-3. Windows x64 NSIS 설치 파일 — 같은 Mac에서 교차 빌드(미서명)
+3. Windows x64·arm64 NSIS 설치 파일 — 같은 Mac에서 교차 빌드(미서명, arm64는 llvm-mingw)
 4. 업데이트 서버 업로드·게시(`latest.json`은 마지막에 원자적으로 갱신)
 5. 서버와 Mac 양쪽에서 전체 다운로드·SHA-256 검증
 6. 릴리스 커밋·`v<버전>` 태그 푸시
 
-macOS와 Windows 설치 파일은 늘 같은 버전으로 함께 게시한다. 사용자에게 보일 변경 사항은 UTF-8 파일로 써서 `CVIEW_RELEASE_NOTES_FILE=/절대/경로/notes.txt`로 넘긴다(생략하면 Git 변경 목록을 쓴다). 배포 후 [`CHANGELOG.md`](../CHANGELOG.md)에 항목을 더한다.
+macOS와 Windows(x64·arm64) 설치 파일은 늘 같은 버전으로 함께 게시한다. 사용자에게 보일 변경 사항은 UTF-8 파일로 써서 `CVIEW_RELEASE_NOTES_FILE=/절대/경로/notes.txt`로 넘긴다(생략하면 Git 변경 목록을 쓴다). 배포 후 [`CHANGELOG.md`](../CHANGELOG.md)에 항목을 더한다.
 
 게시가 실패하면 버전을 다시 올리지 않고 보존된 파일로 재게시한다.
 

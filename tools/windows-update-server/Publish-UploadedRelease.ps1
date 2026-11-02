@@ -14,7 +14,8 @@ $baseUrl = 'https://cv.dododo.app'
 $folder = Join-Path (Join-Path $root 'incoming') $Version
 $artifacts = @(
     (Join-Path $folder "CView_${Version}_arm64.dmg"),
-    (Join-Path $folder "CView_${Version}_x64-setup.exe")
+    (Join-Path $folder "CView_${Version}_x64-setup.exe"),
+    (Join-Path $folder "CView_${Version}_arm64-setup.exe")
 )
 $notes = Join-Path $folder 'notes.txt'
 foreach ($path in @($folder) + $artifacts + @($notes)) {
@@ -33,10 +34,10 @@ if ($ValidateOnly) {
     Write-Host 'Upload files and version validated. Nothing was published. Signing/notarization must be checked during the build.'
     return
 }
-if ($PSCmdlet.ShouldProcess("$baseUrl/releases/latest.json", "Publish CView $Version with both platform installers")) {
+if ($PSCmdlet.ShouldProcess("$baseUrl/releases/latest.json", "Publish CView $Version with the macOS and Windows x64/arm64 installers")) {
     $python = Join-Path $root 'tools\python\python.exe'
     if (-not (Test-Path $python)) { throw 'Run Install-ReleaseAutomation.ps1 to install the publishing runtime.' }
-    & $python -I -B (Join-Path $root 'tools\publish.py') --root (Join-Path $root 'site') --base-url $baseUrl --version $Version --artifact $artifacts[0] --artifact $artifacts[1] --notes-file $notes
+    & $python -I -B (Join-Path $root 'tools\publish.py') --root (Join-Path $root 'site') --base-url $baseUrl --version $Version --artifact $artifacts[0] --artifact $artifacts[1] --artifact $artifacts[2] --notes-file $notes
     if ($LASTEXITCODE -ne 0) { throw 'Publishing failed. Inspect the publisher output; do not report a completed release.' }
     & $python -I -B (Join-Path $root 'tools\check_server.py') --base-url $baseUrl --download
     if ($LASTEXITCODE -ne 0) { throw 'Release was published, but download verification failed. Investigate before reporting completion.' }

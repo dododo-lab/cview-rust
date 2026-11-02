@@ -24,7 +24,8 @@ scripts/release-with-prs.sh [PR번호 ...] [-- release-macos.sh 옵션]
 - 먼저 `python3 scripts/publish-update.py --preflight`로 확인할 수 있다. Tailscale, 이 Mac의 전용 키(`~/.ssh/cview_release_ed25519`), 로컬 서버 설정(`~/.config/cview-release/server.json`, `known_hosts`)이 필요하다. 서버 주소·계정·호스트 키는 공개 저장소에 커밋하지 않는다. 비밀번호나 개인 키를 채팅·저장소·로그에 넣지 않는다.
 - 키 인증 거부 시 Proxifier의 `CView update SSH (Tailscale)` 규칙(업데이트 서버 SSH, Direct, Default보다 위)을 확인한다. 휴대폰 프록시를 거치면 서버가 다른 출발지로 인식해 정상 키를 거부할 수 있다. 자세한 진단은 `AUTOMATION.md`를 따른다.
 - macOS 공증 프로파일 기본값은 `cview-notarize`이며 `CVIEW_NOTARIZE_PROFILE`로 변경한다. `--no-notarize`는 사용자가 공증 생략을 명시적으로 허용한 경우에만 사용한다. 공증 실패를 피하려고 임의로 사용하지 않는다.
-- macOS와 Windows 설치 파일을 같은 버전으로 함께 게시한다. 배포에서 `CVIEW_SKIP_WINDOWS`는 금지한다. Windows 미서명/SmartScreen 안내를 설명에 유지한다.
+- macOS(arm64)와 Windows(x64·arm64) 설치 파일 세 개를 같은 버전으로 함께 게시한다. 배포에서 `CVIEW_SKIP_WINDOWS`는 금지하고, arm64만 빼고 게시하는 경로도 없다. Windows 미서명/SmartScreen 안내를 설명에 유지한다.
+- Windows arm64 교차 빌드에는 llvm-mingw(`~/.local/opt/llvm-mingw`, 또는 `CVIEW_LLVM_MINGW`)와 `rustup target add aarch64-pc-windows-gnullvm`이 필요하다. 없으면 버전을 올리기 전에 멈춘다.
 - 사용자에게 보여 줄 변경 사항은 UTF-8 파일로 작성하고 `CVIEW_RELEASE_NOTES_FILE=/절대/경로/notes.txt`로 전달한다. 생략하면 Git 변경 목록이 사용된다.
 - 게시 실패 시 버전을 다시 올리지 않는다. 보존된 파일과 `dist/CView_<버전>_notes.txt`로 다음 명령을 재실행한다.
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Upload both CView installers, publish atomically, and verify HTTPS downloads."""
+"""Upload the CView installers (macOS arm64, Windows x64 and arm64), publish atomically, and verify HTTPS downloads."""
 import argparse
 import base64
 from datetime import datetime, timezone
@@ -16,7 +16,7 @@ import urllib.request
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / 'tools' / 'windows-update-server'))
-from release_gateway import (BASE, PROTOCOL, checked_signature, describe, filenames, same_release,
+from release_gateway import (BASE, PROTOCOL, checked_signature, describe, filenames, installers, same_release,
                              signed_payload, version_tuple)
 
 
@@ -49,7 +49,8 @@ def server_settings():
 # 피드 서명 키(ed25519). 개인 키는 이 Mac에만 있고, 앱은 저장소의 공개 키 목록만 믿는다.
 SIGNING_KEY = Path(os.environ.get('CVIEW_UPDATE_SIGNING_KEY') or CONFIG_DIR / 'update_signing_ed25519.pem').expanduser()
 TRUSTED_KEYS = REPO / 'crates' / 'cview-app' / 'update-signing-keys.txt'
-FEATURE = 'signed-feed-v1'
+# 게이트웨이가 알려야 하는 기능 — 피드 서명, Windows arm64 설치 파일 게시.
+FEATURES = ['signed-feed-v1', 'windows-arm64-v1']
 # Ed25519 SubjectPublicKeyInfo DER 머리(RFC 8410) + 공개 키 32바이트.
 SPKI_PREFIX = bytes.fromhex('302a300506032b6570032100')
 
@@ -151,7 +152,7 @@ def planned_manifest(version, notes, expected):
     release_url = f'{BASE}/releases/{version}/'
     return {'tag_name': 'v' + version, 'html_url': release_url, 'body': notes,
             'assets': [{'name': name, 'browser_download_url': release_url + urllib.parse.quote(name), **expected[name]}
-                       for name in filenames(version)[:2]]}
+                       for name in installers(version)]}
 
 
 def ssh_command(settings=None):
@@ -221,9 +222,8 @@ def verify_https(version=None, expected=None, download=False, signed=False):
             raise ValueError('Release page is unavailable')
     if signed:
         verify_signature(manifest)
-    names = filenames(public_version)[:2]
-    if sorted(a['name'] for a in manifest['assets']) != sorted(names):
-        raise ValueError('The feed must contain exactly the two platform installers')
+    if sorted(a['name'] for a in manifest['assets']) not in published_installer_sets(public_version, version is None):
+        raise ValueError('The feed must contain exactly the platform installers')
     if download:
         for asset in manifest['assets']:
             url = f'{BASE}/releases/{public_version}/{asset["name"]}'
@@ -238,6 +238,28 @@ def verify_https(version=None, expected=None, download=False, signed=False):
             if size != asset['size'] or digest.hexdigest() != asset['sha256']:
                 raise ValueError('HTTPS download mismatch: ' + asset['name'])
     return manifest
+
+
+def published_installer_sets(version, allow_legacy):
+    """피드에 있어야 할 설치 파일 이름. arm64 이전 릴리스(macOS·Windows x64 두 개)는 이미 게시된 피드를 볼 때만 받는다."""
+    sets = [sorted(installers(version))]
+    if allow_legacy:
+        sets.append(sorted(installers(version)[:2]))
+    return sets
+
+
+def check_installers(paths):
+    """Windows 설치 파일 기본 확인: PE 실행 파일이고, x64·arm64가 같은 파일을 복사한 것이 아니다."""
+    windows = [path for name, path in paths.items() if name.endswith('-setup.exe')]
+    for path in windows:
+        with Path(path).open('rb') as stream:
+            header = stream.read(4096)
+        # MZ 머리만으로는 잘린 파일도 통과한다 — e_lfanew 가 가리키는 PE 서명과 COFF 머리까지 있어야 한다.
+        offset = int.from_bytes(header[0x3C:0x40], 'little') if len(header) >= 0x40 else -1
+        if header[:2] != b'MZ' or not 0x40 <= offset <= len(header) - 24 or header[offset:offset + 4] != b'PE\0\0':
+            raise ValueError('Not a Windows installer: ' + Path(path).name)
+    if len({describe(Path(path))['sha256'] for path in windows}) != len(windows):
+        raise ValueError('Windows x64 and arm64 installers are identical; rebuild both')
 
 
 def check_notes(notes, allow_unnotarized=False):
@@ -272,8 +294,10 @@ def main():
         if state['protocol'] != PROTOCOL or state['hostname'].upper() != expected_server.upper():
             raise ValueError('Unexpected release server')
         if not args.probe:
-            if FEATURE not in state.get('features', []):
-                raise ValueError('Update server gateway does not publish feed signatures; redeploy release_gateway.py and publish.py')
+            missing = [f for f in FEATURES if f not in state.get('features', [])]
+            if missing:
+                raise ValueError('Update server gateway lacks ' + ', '.join(missing) +
+                                 '; redeploy release_gateway.py and publish.py (AUTOMATION.md)')
             signing_public_key()
         current = verify_https()
         if current != state['latest']:
@@ -297,10 +321,11 @@ def main():
         if not args.version or not args.notes_file:
             parser.error('--version and --notes-file are required for upload/publish')
         names = filenames(args.version)
-        paths = {name: args.dist / name for name in names[:2]}
+        paths = {name: args.dist / name for name in installers(args.version)}
         paths['notes.txt'] = args.notes_file
         notes = args.notes_file.read_bytes().decode('utf-8')
         check_notes(notes, args.allow_unnotarized)
+        check_installers(paths)
         # Verify the actual DMG; bypassing the build wrapper must not bypass distribution checks.
         dmg = str(paths[names[0]])
         subprocess.run(['codesign', '--verify', '--strict', dmg], check=True)

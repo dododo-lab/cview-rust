@@ -17,7 +17,8 @@ BASE = 'https://cv.dododo.app'
 PROTOCOL = 'cview-release-v1'
 # 앱이 검증하는 피드 서명. 게이트웨이가 이 기능을 알리지 않으면 클라이언트는 게시하지 않는다.
 SIGNATURE_FORMAT = 'cview-update-signature-v1'
-FEATURES = ['signed-feed-v1']
+# windows-arm64-v1: 게시에 Windows arm64 설치 파일이 반드시 들어간다(옛 게이트웨이는 받지 않으므로 클라이언트가 멈춘다).
+FEATURES = ['signed-feed-v1', 'windows-arm64-v1']
 
 
 def version_tuple(version):
@@ -42,9 +43,14 @@ def describe(path):
     return {'size': path.stat().st_size, 'sha256': digest.hexdigest()}
 
 
-def filenames(version):
+def installers(version):
+    """한 버전에 함께 게시할 설치 파일 — macOS arm64 DMG, Windows x64·arm64 NSIS. 하나라도 빠지면 게시하지 않는다."""
     version_tuple(version)
-    return [f'CView_{version}_arm64.dmg', f'CView_{version}_x64-setup.exe', 'notes.txt']
+    return [f'CView_{version}_arm64.dmg', f'CView_{version}_x64-setup.exe', f'CView_{version}_arm64-setup.exe']
+
+
+def filenames(version):
+    return installers(version) + ['notes.txt']
 
 
 def latest(root):
@@ -108,7 +114,7 @@ def expected_files(request):
     names = filenames(request['version'])
     expected = request['files']
     if not isinstance(expected, dict) or set(expected) != set(names):
-        raise ValueError('Both installers and notes.txt are required')
+        raise ValueError('All installers (macOS, Windows x64 and arm64) and notes.txt are required')
     for name, item in expected.items():
         if (not isinstance(item, dict) or set(item) != {'size', 'sha256'}
                 or type(item['size']) is not int or not 0 < item['size'] <= 2 * 1024**3
@@ -218,7 +224,7 @@ def dispatch(request, stream, root=ROOT):
             # Fixed, administrator-owned module; no client-supplied code or paths.
             sys.path.insert(0, str(root / 'tools'))
             from publish import publish
-            current = publish(root / 'site', BASE, version, [folder / n for n in names[:2]], notes, signature)
+            current = publish(root / 'site', BASE, version, [folder / n for n in installers(version)], notes, signature)
             if not same_release(current, version, expected) or current.get('signature') != signature:
                 raise ValueError('Published manifest mismatch')
         if action == 'validate':

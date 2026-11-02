@@ -225,17 +225,23 @@ pub struct UpdateCheckDto {
     pub auto_install: bool,
 }
 
-/// 릴리스 자산 중 이 OS·아키텍처에 맞는 설치 파일. 아키텍처 표기가 맞는 것을 먼저 고른다. 순수 함수.
+/// 설치 파일 이름에 붙는 아키텍처 표기(CView_<버전>_arm64.dmg · _x64-setup.exe · _arm64-setup.exe).
+fn arch_tags(arch: &str) -> &'static [&'static str] {
+    match arch {
+        "aarch64" => &["arm64", "aarch64"],
+        "x86_64" => &["x64", "x86_64", "amd64"],
+        _ => &[],
+    }
+}
+
+/// 릴리스 자산 중 이 OS·아키텍처에 맞는 설치 파일. 순수 함수.
+/// 아키텍처 표기가 맞는 것 → (ARM64 만) x64 판 — Windows 11 ARM 은 x64 를 에뮬레이션으로, macOS 는 Rosetta 로 돌린다
+/// → 표기가 없는 설치 파일 순으로 고른다. x64 기기에 arm64 판은 돌지 않으므로 대신 고르지 않는다.
 fn platform_asset<'a>(assets: &'a [GitHubAsset], os: &str, arch: &str) -> Option<&'a GitHubAsset> {
     let exts: &[&str] = match os {
         "macos" => &[".dmg"],
         "windows" => &[".exe", ".msi"],
         _ => return None,
-    };
-    let arch_tags: &[&str] = match arch {
-        "aarch64" => &["arm64", "aarch64"],
-        "x86_64" => &["x64", "x86_64", "amd64"],
-        _ => &[],
     };
     let installers: Vec<&GitHubAsset> = exts
         .iter()
@@ -245,14 +251,34 @@ fn platform_asset<'a>(assets: &'a [GitHubAsset], os: &str, arch: &str) -> Option
                 .filter(move |a| a.name.to_lowercase().ends_with(ext))
         })
         .collect();
-    installers
+    let tagged = |tags: &[&str]| {
+        installers
+            .iter()
+            .find(|a| {
+                let n = a.name.to_lowercase();
+                tags.iter().any(|t| n.contains(t))
+            })
+            .copied()
+    };
+    let emulated: &[&str] = match arch {
+        "aarch64" => arch_tags("x86_64"),
+        _ => &[],
+    };
+    let known: Vec<&str> = ["aarch64", "x86_64"]
         .iter()
-        .find(|a| {
-            let n = a.name.to_lowercase();
-            arch_tags.iter().any(|t| n.contains(t))
+        .flat_map(|a| arch_tags(a).iter().copied())
+        .collect();
+    tagged(arch_tags(arch))
+        .or_else(|| tagged(emulated))
+        .or_else(|| {
+            installers
+                .iter()
+                .find(|a| {
+                    let n = a.name.to_lowercase();
+                    !known.iter().any(|t| n.contains(t))
+                })
+                .copied()
         })
-        .or_else(|| installers.first())
-        .copied()
 }
 
 fn validated_update_url(value: &str) -> Result<url::Url, CommandError> {
@@ -439,6 +465,38 @@ mod tests {
             Some("CView.dmg")
         );
         assert!(platform_asset(&[], "macos", "aarch64").is_none());
+    }
+
+    #[test]
+    fn windows_arm64_installer_selection() {
+        let assets = vec![
+            asset("CView_0.1.71_arm64.dmg"),
+            asset("CView_0.1.71_x64-setup.exe"),
+            asset("CView_0.1.71_arm64-setup.exe"),
+            asset("notes.txt"),
+        ];
+        let name = |os, arch| platform_asset(&assets, os, arch).map(|a| a.name.as_str());
+        assert_eq!(
+            name("windows", "aarch64"),
+            Some("CView_0.1.71_arm64-setup.exe")
+        );
+        assert_eq!(
+            name("windows", "x86_64"),
+            Some("CView_0.1.71_x64-setup.exe")
+        );
+        assert_eq!(name("macos", "aarch64"), Some("CView_0.1.71_arm64.dmg"));
+        // arm64 판이 없는 예전 피드: ARM64 기기는 x64 판(에뮬레이션)으로 대신한다.
+        let legacy = vec![
+            asset("CView_0.1.70_arm64.dmg"),
+            asset("CView_0.1.70_x64-setup.exe"),
+        ];
+        assert_eq!(
+            platform_asset(&legacy, "windows", "aarch64").map(|a| a.name.as_str()),
+            Some("CView_0.1.70_x64-setup.exe")
+        );
+        // x64 기기에는 arm64 판을 대신 고르지 않는다(돌지 않는다).
+        let arm_only = vec![asset("CView_0.1.71_arm64-setup.exe")];
+        assert!(platform_asset(&arm_only, "windows", "x86_64").is_none());
     }
 
     #[test]
