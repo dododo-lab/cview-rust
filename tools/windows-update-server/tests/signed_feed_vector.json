@@ -1,0 +1,31 @@
+{
+  "_comment": "테스트 전용 키로 만든 서명 벡터. Python(signed_payload)과 Rust(updater.rs)가 같은 바이트를 서명 대상으로 쓰는지 확인한다. 운영 키가 아니다.",
+  "public_key": "jeB4/WNiQgPqUwTpQKnoeymcTCwTWVf5jna39YkIWuM=",
+  "payload": "cview-update-signature-v1\nversion 0.1.69\nrelease https://cv.dododo.app/releases/0.1.69/\nnotes b516c6cd4deb7df82f6c283c46fca15973c875d2357792d55dd308523201e754\nasset CView_0.1.69_arm64.dmg 10 76f238f606250c87c6beac75dccd35ee99070a13490555936abb6cb64ecce3d0 https://cv.dododo.app/releases/0.1.69/CView_0.1.69_arm64.dmg\nasset CView_0.1.69_x64-setup.exe 20 1111111111111111111111111111111111111111111111111111111111111111 https://cv.dododo.app/releases/0.1.69/CView_0.1.69_x64-setup.exe\n",
+  "manifest": {
+    "tag_name": "v0.1.69",
+    "name": "CView 0.1.69",
+    "body": "CView 0.1.69\n\n변경 사항\n",
+    "html_url": "https://cv.dododo.app/releases/0.1.69/",
+    "published_at": "2026-11-03T00:00:00+00:00",
+    "assets": [
+      {
+        "name": "CView_0.1.69_arm64.dmg",
+        "size": 10,
+        "browser_download_url": "https://cv.dododo.app/releases/0.1.69/CView_0.1.69_arm64.dmg",
+        "sha256": "76f238f606250c87c6beac75dccd35ee99070a13490555936abb6cb64ecce3d0"
+      },
+      {
+        "name": "CView_0.1.69_x64-setup.exe",
+        "size": 20,
+        "browser_download_url": "https://cv.dododo.app/releases/0.1.69/CView_0.1.69_x64-setup.exe",
+        "sha256": "1111111111111111111111111111111111111111111111111111111111111111"
+      }
+    ],
+    "signature": {
+      "alg": "ed25519",
+      "key_id": "e32a55191bb9b49e",
+      "value": "d7umepQK+jKG+iKqhT4QSUr1bwFmvOPvO9z2YRu2NvePi4Z2TrrtO8HrwTZMfcLKwpC5FT/Wa+lk2UKt3vHsDw=="
+    }
+  }
+}

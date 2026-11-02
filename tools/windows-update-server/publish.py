@@ -35,7 +35,7 @@ def atomic_write(path, data):
         Path(temporary).unlink(missing_ok=True)
 
 
-def _publish(root, base_url, version, artifacts, notes=''):
+def _publish(root, base_url, version, artifacts, notes='', signature=None):
     base_url = public_base(base_url)
     if not re.fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version):
         raise ValueError('Use a stable version such as 0.1.1')
@@ -79,6 +79,9 @@ def _publish(root, base_url, version, artifacts, notes=''):
         manifest = {'tag_name': 'v' + version, 'name': f'CView {version}', 'body': notes,
                     'html_url': release_url, 'published_at': datetime.now(timezone.utc).isoformat(),
                     'assets': assets}
+        if signature:
+            # 릴리스 Mac이 서명한 값(release_gateway.signed_payload). 앱은 이것 없이 자동 설치하지 않는다.
+            manifest['signature'] = signature
         encoded = (json.dumps(manifest, ensure_ascii=False, indent=2) + '\n').encode('utf-8')
         (stage / 'manifest.json').write_bytes(encoded)
         links = ''.join(f'<li><a href="{html.escape(asset["browser_download_url"], quote=True)}">'
@@ -107,7 +110,7 @@ def _publish(root, base_url, version, artifacts, notes=''):
     return manifest
 
 
-def publish(root, base_url, version, artifacts, notes=''):
+def publish(root, base_url, version, artifacts, notes='', signature=None):
     root = Path(root).resolve()
     root.parent.mkdir(parents=True, exist_ok=True)
     lock = root.parent / f'.{root.name}-publish.lock'
@@ -115,7 +118,7 @@ def publish(root, base_url, version, artifacts, notes=''):
     try:
         with os.fdopen(descriptor, 'w') as out:
             out.write(str(os.getpid()))
-        return _publish(root, base_url, version, artifacts, notes)
+        return _publish(root, base_url, version, artifacts, notes, signature)
     finally:
         lock.unlink(missing_ok=True)
 

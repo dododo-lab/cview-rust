@@ -31,11 +31,34 @@ CVIEW_RELEASE_NOTES_FILE=/절대/경로/notes.txt scripts/release-macos.sh --dmg
 
 ## 앱 안 자동 설치와 피드
 
-앱의 "업데이트 설치"는 `latest.json`의 이 OS 설치 파일(`.dmg`, `-setup.exe`)을 받아 피드의 `size`·`sha256`과 비교한 뒤 설치한다. `publish.py`가 자산마다 `sha256`을 적으므로 피드 형식 변경은 필요 없다. `sha256`이 없는 피드면 앱은 자동 설치 대신 다운로드 단추를 보인다.
+앱의 "업데이트 설치"는 `latest.json`의 서명을 먼저 확인하고, 이 OS 설치 파일(`.dmg`, `-setup.exe`)을 받아 피드의 `size`·`sha256`과 비교한 뒤 설치한다. 서명이 없거나 맞지 않는 피드, `sha256`이 없는 피드면 앱은 자동 설치 대신 다운로드 단추를 보인다.
 
 - macOS: DMG를 화면에 띄우지 않고 붙여 `CView.app`을 복사하고, Developer ID 팀 `MZ8NB937SB`·번들 `app.cview.rust` 서명(`codesign --test-requirement`), Apple 공증(`spctl`), 버전을 확인한 뒤 교체·재실행한다. `--no-notarize`로 만든 릴리스는 공증 검사에서 멈추므로 자동 설치되지 않는다.
 - Windows: NSIS 설치 파일을 `/P /R /UPDATE`로 실행한다(진행 창만 표시, 앱 종료·설치·재실행). 설치 파일 미서명이라 SHA-256만 확인한다.
 - 이 기능은 이를 포함한 버전부터 동작한다. 그 이전 버전 사용자는 한 번은 직접 설치해야 한다.
+
+### 피드 서명
+
+Windows 설치 파일이 미서명이므로, 업데이트 서버가 침해돼도 설치 파일을 바꿔치기하지 못하게 피드에 ed25519 서명을 싣는다.
+
+- 개인 키: 릴리스 Mac의 `~/.config/cview-release/update_signing_ed25519.pem`(권한 600, `CVIEW_UPDATE_SIGNING_KEY`로 변경). 업데이트 서버에는 두지 않는다. 오프라인 백업을 따로 보관한다.
+- 공개 키: 저장소 `crates/cview-app/update-signing-keys.txt`. 앱은 빌드 때 이 목록을 넣고, 목록의 키로 서명된 피드만 자동 설치한다.
+- 서명 대상(`release_gateway.signed_payload`, 앱 `updater::signed_payload`와 같은 형식): 버전, 릴리스 페이지 주소, 노트 SHA-256, 자산마다 이름·크기·SHA-256·다운로드 주소.
+- `publish-update.py`가 게시 전에 서명하고 게이트웨이에 `signature`로 넘긴다. `publish.py`는 이를 `latest.json`의 `signature`에 그대로 적는다. 게시 후 HTTPS 피드의 서명을 저장소 공개 키로 다시 검증한다.
+- 서명에는 OpenSSL 3 이상이 필요하다(`brew install openssl`, 또는 `CVIEW_OPENSSL`). macOS 기본 LibreSSL은 쓰지 않는다.
+- `--preflight`는 게이트웨이가 `signed-feed-v1`을 지원하는지, 서명 키가 있고 저장소 공개 키 목록에 있는지 확인한다. 하나라도 빠지면 릴리스를 시작하지 않는다.
+
+처음 한 번(키 생성):
+
+```sh
+python3 scripts/publish-update.py --init-signing-key
+```
+
+출력된 공개 키 줄을 `update-signing-keys.txt`에 추가해 커밋한다. 기존 키는 덮어쓰지 않는다.
+
+키 교체: 새 공개 키를 목록에 추가한 버전을 먼저 배포하고, 대부분이 업데이트한 뒤 서명 키를 바꾸고, 그다음 옛 키 줄을 지운다. 개인 키가 유출되면 즉시 새 키를 추가하고 옛 키를 지운 버전을 배포한다(옛 키를 믿는 기존 앱은 그 버전을 받을 때까지 위험하다).
+
+예전 앱(서명 검증 전 버전)은 `signature`를 무시하고 SHA-256만 확인한다. 서명 검증을 넣은 첫 버전으로 한 번 업데이트한 뒤부터 보호된다.
 
 ## 공개 다운로드 경로
 
@@ -47,7 +70,7 @@ CVIEW_RELEASE_NOTES_FILE=/절대/경로/notes.txt scripts/release-macos.sh --dmg
 | 설치 파일·릴리스 페이지 | `https://cv.dododo.app/releases/<버전>/` | 위와 같음 |
 | 업로드·게시(SSH) | 로컬 설정 `server.json`의 Tailscale 주소 | tailnet만(방화벽 `100.64.0.0/10`, 키 출발지 제한) |
 
-무결성: 피드는 HTTPS로만 받고(앱이 `https_only`, 인증 정보 없는 HTTPS 주소만 허용), 설치 파일은 피드의 `size`·`sha256`과 비교한다. macOS는 그 위에 Developer ID 팀 서명과 Apple 공증(`spctl`)을 확인한다. Windows 설치 파일은 미서명이라 HTTPS 피드의 SHA-256이 유일한 검증이다.
+무결성: 피드는 HTTPS로만 받고(앱이 `https_only`, 인증 정보 없는 HTTPS 주소만 허용), 설치 파일은 피드의 `size`·`sha256`과 비교한다. macOS는 그 위에 Developer ID 팀 서명과 Apple 공증(`spctl`)을 확인한다. Windows 설치 파일은 미서명이라 피드의 SHA-256과 위 "피드 서명"(ed25519)으로 확인한다. 공개 경로를 쓰더라도 서명 키는 업데이트 서버에 두지 않으므로 서버 침해만으로는 설치 파일을 바꿔치기할 수 없다.
 
 릴리스 Mac은 서버와 같은 공유기 뒤에 있어(같은 공인 IP, 헤어핀 NAT) `publish-update.py`의 다운로드 검증은 외부 공개 여부를 증명하지 않는다. 공유기·방화벽·DNS를 바꾼 뒤나 사용자 보고가 있을 때는 Tailscale을 끈 외부 네트워크에서 확인한다.
 

@@ -378,8 +378,9 @@ async fn fetch_update(url: url::Url, current: String) -> CmdResult<UpdateCheckDt
     let latest = release.version_string().to_string();
     let newer = compare_versions(&latest, &current) == std::cmp::Ordering::Greater;
     let asset = release_installer(&release);
-    let auto_install =
-        newer && asset.is_some_and(|a| crate::updater::can_auto_install(a, std::env::consts::OS));
+    let auto_install = newer
+        && asset.is_some_and(|a| crate::updater::can_auto_install(a, std::env::consts::OS))
+        && crate::updater::release_is_signed(&release);
     let (download_url, download_name, download_size) = match asset {
         Some(a) => (
             Some(a.browser_download_url.to_string()),
