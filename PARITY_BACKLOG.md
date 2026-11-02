@@ -105,6 +105,7 @@
 | CHT-22 | ✅ 채팅만 보기 화면(영상 없이) | `ChatOnlyView`, 라우트 `chatOnly` | 없음 | S |
 | CHT-23 | ✅ 독립 채팅 창(`⇧⌘C`, 채널 피커) | `IndependentChatWindow`, `ChatChannelPickerView` | 없음 | M |
 | CHT-24 | ✅ 채팅 통계(분당 메시지·참여자) | `ChatViewModel+Stats`, `Statistics/Tabs/ChatStatsView` | `stats.rs` | S |
+| CHT-25 | ✅ 닉네임 말풍선(프로필 카드·팔로우·이 사람 채팅만 보기) | 치지직 웹 채팅 프로필 카드(원본에 없음) | `chat_user_card`, `chat-user-pop.js` | S |
 
 ## 5. 멀티채팅·멀티라이브 (MUL)
 

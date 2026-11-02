@@ -30,6 +30,10 @@ pub enum ChzzkEndpoint {
     ChannelViewerInfo {
         channel_id: String,
     },
+    /// 채널 정보와 같은 경로를 로그인 쿠키로 다시 받아 `personalData`(팔로우 상태)만 읽는다.
+    ChannelFollowStatus {
+        channel_id: String,
+    },
     LiveDetail {
         channel_id: String,
     },
@@ -143,7 +147,9 @@ impl EndpointProtocol for ChzzkEndpoint {
     fn path(&self) -> String {
         use ChzzkEndpoint::*;
         match self {
-            ChannelInfo { channel_id } => format!("/service/v1/channels/{channel_id}"),
+            ChannelInfo { channel_id } | ChannelFollowStatus { channel_id } => {
+                format!("/service/v1/channels/{channel_id}")
+            }
             ChannelViewerInfo { channel_id } => {
                 format!("/service/v1.1/channels/{channel_id}/my-info")
             }
@@ -291,6 +297,7 @@ impl EndpointProtocol for ChzzkEndpoint {
         match self {
             ChannelInfo { .. } => "channelInfo",
             ChannelViewerInfo { .. } => "channelViewerInfo",
+            ChannelFollowStatus { .. } => "channelFollowStatus",
             LiveDetail { .. } => "liveDetail",
             TimeMachinePlayback { .. } => "timeMachinePlayback",
             LiveStatus { .. } => "liveStatus",
@@ -328,6 +335,7 @@ impl EndpointProtocol for ChzzkEndpoint {
                 | ChzzkEndpoint::Unfollow { .. }
                 | ChzzkEndpoint::ClipInkey { .. }
                 | ChzzkEndpoint::UserEmoticons
+                | ChzzkEndpoint::ChannelFollowStatus { .. }
         )
     }
 
@@ -335,6 +343,7 @@ impl EndpointProtocol for ChzzkEndpoint {
         use ChzzkEndpoint::*;
         match self {
             ChannelViewerInfo { .. }
+            | ChannelFollowStatus { .. }
             | TimeMachinePlayback { .. }
             | LiveStatus { .. }
             | ChatAccessToken { .. } => CachePolicy::ReloadIgnoringCache,

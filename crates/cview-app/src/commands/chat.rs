@@ -249,3 +249,70 @@ pub async fn chat_emoticons(
         .filter(|p| p.emoticons.as_ref().is_some_and(|e| !e.is_empty()))
         .collect())
 }
+
+/// 채팅 닉네임 말풍선 — 프로필 카드·채널 정보·내 팔로우 상태.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChatUserCardDto {
+    /// 채팅 프로필 카드(칭호·배지·이 채널 팔로우 날짜·구독 개월) — 못 받으면 None.
+    pub profile: Option<cview_core::models::chat::ChatProfileCard>,
+    /// 이 사용자의 채널(userIdHash = channelId) — 채널이 없거나 못 받으면 None.
+    pub channel: Option<crate::dto::ChannelDto>,
+    /// 내가 이 사용자 채널을 팔로우하는가 — 비로그인이거나 응답이 알려 주지 않으면 None.
+    pub following: Option<bool>,
+    pub logged_in: bool,
+    /// 로그인한 나 자신인가.
+    pub is_self: bool,
+}
+
+#[tauri::command]
+pub async fn chat_user_card(
+    services: State<'_, AppServices>,
+    user_id: String,
+    chat_channel_id: Option<String>,
+) -> CmdResult<ChatUserCardDto> {
+    let user_id = user_id.trim().to_string();
+    if user_id.is_empty() {
+        return Err(CommandError("사용자 정보가 없습니다".into()));
+    }
+    let logged_in = services.auth.is_authenticated();
+    let api = &services.api;
+    let chat_channel_id = chat_channel_id.filter(|c| !c.trim().is_empty());
+    let profile = async {
+        match &chat_channel_id {
+            Some(cc) => api.chat_profile_card(cc, &user_id).await.ok(),
+            None => None,
+        }
+    };
+    let channel = api.channel_info(&user_id);
+    let follow = async {
+        if logged_in {
+            api.channel_follow_status(&user_id)
+                .await
+                .ok()
+                .and_then(|s| s.following)
+        } else {
+            None
+        }
+    };
+    let me = async {
+        if logged_in {
+            api.user_status().await.ok().and_then(|s| s.user_id_hash)
+        } else {
+            None
+        }
+    };
+    let (profile, channel, following, me) = tokio::join!(profile, channel, follow, me);
+    let channel = match (channel, &profile) {
+        (Ok(c), _) => Some(crate::dto::ChannelDto::from(&c)),
+        (Err(_), Some(_)) => None,
+        (Err(e), None) => return Err(e.into()),
+    };
+    Ok(ChatUserCardDto {
+        profile,
+        channel,
+        following,
+        logged_in,
+        is_self: me.as_deref() == Some(user_id.as_str()),
+    })
+}

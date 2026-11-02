@@ -2,7 +2,7 @@
 // CHT-01 이모티콘 선택기, CHT-02 자동완성(:이모티콘·@멘션), CHT-03 컨텍스트 메뉴, CHT-04 프로필 시트,
 // CHT-05 차단, CHT-06 금지어 필터, CHT-08 멘션 강조·트레이, CHT-09 하이라이트, CHT-10 메시지 고정·공지 숨기기,
 // CHT-11 자동 스크롤·"새 메시지" 버튼·읽음 구분선(⌘J), CHT-12 지우기(⇧⌘K)·재연결, CHT-14 표시 옵션,
-// CHT-16 후원 필터, CHT-20 입력 상태 배너.
+// CHT-16 후원 필터, CHT-20 입력 상태 배너, CHT-25 닉네임 말풍선(chat-user-pop.js)·이 사람 채팅만 보기.
 import { api, listen, Events } from './api.js';
 import { esc, safeUrl, toast, imageSrc, dismiss, hideWithExit, renderContent } from './dom.js';
 
@@ -12,6 +12,7 @@ import { installChatExtras } from './chat-extras.js';
 import { nickColorClass } from './nick-color.js';
 import { kbd } from './platform.js';
 import { chatFollower } from './chat-follow.js';
+import { openUserPop, closeUserPop } from './chat-user-pop.js';
 import {
   chatPrefs, onChatPrefs, updateChatPrefs, passesFilters, mentionsMe, getMyNickname,
 } from './chat-prefs.js';
@@ -217,6 +218,14 @@ export class ChatPanel {
     this.pinBar.hidden = true;
     this.notice.after(this.pinBar);
     this.pinBar.addEventListener('click', (e) => { if (e.target.closest('[data-unpin]')) this.pinBar.hidden = true; });
+
+    // 이 사람 채팅만 보기(CHT-25) — 고정 줄 아래에 무엇을 거르는지와 풀기 버튼.
+    this.soloUid = null;
+    this.soloBar = document.createElement('div');
+    this.soloBar.className = 'chat-solo';
+    this.soloBar.hidden = true;
+    this.pinBar.after(this.soloBar);
+    this.soloBar.addEventListener('click', (e) => { if (e.target.closest('[data-solo-off]')) this.setSolo(null); });
     this.notice.addEventListener('click', (e) => {
       if (e.target.closest('[data-hide-notice]')) { this.notice.hidden = true; this.noticeDismissed = true; }
     });
@@ -283,9 +292,18 @@ export class ChatPanel {
     this.list.addEventListener('contextmenu', (e) => this.onContextMenu(e));
     this.header = header;
     this.list.addEventListener('dblclick', (e) => {
+      if (e.target.closest('.nick, .chat-avatar')) return; // 닉네임은 말풍선이 맡는다
       const line = e.target.closest('.chat-line[data-uid]');
       if (line && line.dataset.uid) this.showProfile(line.dataset.uid, line.dataset.nick);
     });
+    // 닉네임·아바타를 누르면 그 사람 말풍선(CHT-25). 고정 줄 복제본은 data-uid 를 지워 두어 걸리지 않는다.
+    this.list.addEventListener('click', (e) => {
+      const anchor = e.target.closest('.nick, .chat-avatar');
+      const line = anchor && anchor.closest('.chat-line[data-uid]');
+      if (!line || !line.dataset.uid || !this.list.contains(line)) return;
+      openUserPop(this, anchor, line);
+    });
+    this.cleanups.push(() => closeUserPop(this));
     const onDocKey = (e) => {
       if (!this.active || !this.root.offsetParent) return;
       // 보이는 패널이 여럿이면(멀티채팅 격자) 한 패널만 받는다 — 초점이 든 패널, 없으면 첫 패널.
@@ -325,7 +343,7 @@ export class ChatPanel {
     if (!this.session) for (const p of PANELS) if (p !== this && !p.session) p.active = false;
     this.clear();
     this.active = true;
-    if (this.channelId !== channelId) this.seenEmoji.clear();
+    if (this.channelId !== channelId) { this.seenEmoji.clear(); this.setSolo(null); closeUserPop(this); }
     this.chatChannelId = chatChannelId;
     this.channelId = channelId;
     this.mentions = [];
@@ -475,6 +493,7 @@ export class ChatPanel {
     if (cont[0]) this.list.lastElementChild?.classList.add('has-next');
     this.lastGroup = keys[keys.length - 1];
     this.list.insertAdjacentHTML('beforeend', shown.map((m, i) => lineHtml(m, prefs, { cont: cont[i], next: cont[i + 1] })).join(''));
+    if (this.soloUid) this.markSolo();
     if (globalThis.__cviewPerf) globalThis.__cviewPerf.chatLines += shown.length;
     this.renderMentionCount();
     for (const fn of this.appendHooks) {
@@ -697,12 +716,32 @@ export class ChatPanel {
     for (const el of this.list.querySelectorAll(`.chat-line[data-uid="${CSS.escape(uid)}"]`)) el.classList.toggle('highlighted', list.has(uid));
   }
 
+  /** 이 사람 채팅만 보기(CHT-25) — 다른 사람 줄은 CSS(.chat-list.solo)로 감춘다. uid 가 null 이면 모두 보기. */
+  setSolo(uid, nick = '') {
+    if (!this.soloBar || (this.soloUid || null) === (uid || null)) return;
+    this.soloUid = uid || null;
+    this.list.classList.toggle('solo', Boolean(this.soloUid));
+    for (const el of this.list.querySelectorAll('.solo-match')) el.classList.remove('solo-match');
+    if (this.soloUid) {
+      this.markSolo();
+      this.soloBar.innerHTML = `<span class="solo-body"><b>${esc(nick)}</b> 님 채팅만 보는 중</span><button class="link-btn" data-solo-off>모두 보기</button>`;
+    }
+    this.soloBar.hidden = !this.soloUid;
+    // 걸러 보이는 줄 수가 확 바뀌므로 맨 아래에 붙어 있던 중이면 다시 붙인다.
+    if (this.follower.stuck) this.follower.snap();
+  }
+
+  markSolo() {
+    for (const el of this.list.querySelectorAll(`.chat-line[data-uid="${CSS.escape(this.soloUid)}"]:not(.solo-match)`)) el.classList.add('solo-match');
+  }
+
   block(uid, nick) {
     if (!uid) return;
     const p = chatPrefs();
     const blocked = [...new Set([...(p.blockedUsers || []), uid])];
     updateChatPrefs({ blockedUsers: blocked, blockedUserNames: { ...(p.blockedUserNames || {}), [uid]: nick } });
     for (const el of this.list.querySelectorAll(`.chat-line[data-uid="${CSS.escape(uid)}"]`)) el.remove();
+    if (this.soloUid === uid) this.setSolo(null);
     toast(`${nick} 님을 차단했습니다 — 설정 > 채팅에서 풀 수 있어요`, 2500);
   }
 
