@@ -4,12 +4,14 @@
 //! 필드 이름은 JS 관례(camelCase)를 따른다. 나중에 `cview-app-core` 의 뷰모델로 바꿔 끼울 때도
 //! 이 DTO 계약은 그대로 둔다.
 
+use std::collections::BTreeMap;
+
 use chrono::{DateTime, Utc};
 use cview_core::models::chat::{
     ChatConnectionState, ChatMessage, ChatMessageItem, EmojiMap, MessageType, UserRole,
 };
 use cview_core::models::live::LiveStatus;
-use cview_core::models::{format_viewer_count, ChannelInfo, LiveChannelItem, LiveInfo};
+use cview_core::models::{format_viewer_count, ChannelInfo, ClipInfo, LiveChannelItem, LiveInfo};
 use cview_core::protocols::AuthState;
 use cview_player::coordinator::{StreamEvent, StreamPhase};
 use serde::Serialize;
@@ -223,7 +225,22 @@ impl LiveDetailDto {
 pub struct SearchResultsDto {
     pub keyword: String,
     pub channels: Vec<ChannelDto>,
+    /// 방송 중인 검색 채널이 먼저, 그다음 라이브 검색 결과(시청자 많은순). 채널당 하나.
     pub lives: Vec<LiveCardDto>,
+    /// 검색한 채널(이름이 같은 채널)의 클립 전부 + 비슷한 채널 클립 중 제목이 맞는 것.
+    pub clips: Vec<ClipInfo>,
+    pub has_more_clips: bool,
+    /// 실패한 구역 — `channel` / `live` / `clip` → 오류 문구. 빈 결과와 구분해 보인다.
+    pub errors: BTreeMap<String, String>,
+}
+
+/// 검색 클립 더 보기 결과.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchClipsDto {
+    pub clips: Vec<ClipInfo>,
+    pub has_more: bool,
+    pub error: Option<String>,
 }
 
 // MARK: - 인증

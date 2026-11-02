@@ -68,6 +68,7 @@ export const api = {
   followingLives: (refresh = false) => invoke('following_lives', { refresh }),
   popularLives: (size = 50, refresh = false) => invoke('popular_lives', { size, refresh }),
   search: (keyword) => invoke('search', { keyword }),
+  searchMoreClips: (keyword) => invoke('search_more_clips', { keyword }),
   channelInfo: (channelId) => invoke('channel_info', { channelId }),
   liveDetail: (channelId, refresh = false) => invoke('live_detail', { channelId, refresh }),
 

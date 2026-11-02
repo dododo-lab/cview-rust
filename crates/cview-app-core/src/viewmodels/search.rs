@@ -21,11 +21,11 @@ use tokio::time::Instant;
 use cview_core::logic::search_scoring::{self, AutocompleteSources, SuggestionSource};
 use cview_core::models::live_catalog::LiveCatalogSummary;
 use cview_core::models::search::{
-    AutocompleteSuggestion, AutocompleteSuggestionKind, ClipInfo, LiveSortOption, SearchResult,
-    SearchType, VodInfo,
+    AutocompleteSuggestion, AutocompleteSuggestionKind, ClipInfo, ClipListPage, LiveSortOption,
+    SearchResult, SearchType, VodInfo,
 };
-use cview_core::models::{ChannelInfo, LiveChannelItem, LiveInfo};
-use cview_networking::{ChzzkApiClient, PagedContent};
+use cview_core::models::{ChannelInfo, LiveChannelItem, LiveInfo, LiveStatus};
+use cview_networking::ChzzkApiClient;
 
 use super::support::{cancel_slot, slot_is, Observed, ObservedGuard, TaskSlot};
 
@@ -121,12 +121,20 @@ pub trait SearchApi: Send + Sync {
         offset: i64,
         size: i64,
     ) -> Result<SearchResult<VodInfo>, String>;
+    /// 채널 클립 한 쪽 — `cursor` 는 앞 쪽의 `next_clip_uid`, 첫 쪽은 `None`.
     async fn clip_list(
         &self,
         channel_id: &str,
-        page: i64,
+        cursor: Option<&str>,
         size: i64,
-    ) -> Result<PagedContent<ClipInfo>, String>;
+    ) -> Result<ClipListPage, String>;
+    /// 채널의 지금 방송. 방송 중이 아니면 `None`.
+    ///
+    /// [SEARCH 2026-11-03] 라이브 검색 API 는 제목·태그로만 찾아 채널 이름이 맞는 방송을 놓친다 —
+    /// 채널 검색에서 `openLive` 인 채널은 이것으로 라이브를 받아 라이브 결과에 합친다.
+    async fn channel_live(&self, _channel_id: &str) -> Result<Option<LiveInfo>, String> {
+        Ok(None)
+    }
 }
 
 #[async_trait]
@@ -164,12 +172,18 @@ impl SearchApi for ChzzkApiClient {
     async fn clip_list(
         &self,
         channel_id: &str,
-        page: i64,
+        cursor: Option<&str>,
         size: i64,
-    ) -> Result<PagedContent<ClipInfo>, String> {
-        ChzzkApiClient::clip_list(self, channel_id, page, size)
+    ) -> Result<ClipListPage, String> {
+        ChzzkApiClient::clip_list_page(self, channel_id, cursor, size)
             .await
             .map_err(|e| e.to_string())
+    }
+    async fn channel_live(&self, channel_id: &str) -> Result<Option<LiveInfo>, String> {
+        let live = ChzzkApiClient::live_detail(self, channel_id, false)
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok((live.status == LiveStatus::Open).then_some(live))
     }
 }
 
@@ -255,6 +269,7 @@ impl<V: Clone> ResultCache<V> {
 pub struct Snapshot {
     channels: Vec<ChannelInfo>,
     lives: Vec<LiveInfo>,
+    channel_lives: Vec<LiveInfo>,
     videos: Vec<VodInfo>,
     clips: Vec<ClipInfo>,
     offsets: [i64; 4],
@@ -265,7 +280,9 @@ pub struct Snapshot {
     clip_source_channel_ids: Vec<String>,
     clip_source_keyword: Option<String>,
     clip_next_page: HashMap<String, i64>,
+    clip_cursor: HashMap<String, String>,
     clip_exhausted: HashSet<String>,
+    clip_full_channel_ids: HashSet<String>,
 }
 
 /// 랜딩(검색어 없음) 화면 입력.
@@ -284,6 +301,8 @@ pub const MAX_RECENT_SEARCHES: usize = 10;
 pub const RECENT_SEARCHES_KEY: &str = "CView.recentSearches";
 pub const CLIP_SOURCE_CHANNEL_COUNT: usize = 3;
 pub const CLIP_FIRST_WAVE_CHANNELS: usize = 1;
+/// 채널 검색 첫 쪽에서 라이브를 받아 합칠 방송 중 채널 수 상한.
+pub const CHANNEL_LIVE_LIMIT: usize = 6;
 pub const LANDING_RECOMPUTE_LIMIT: usize = 3;
 pub const ACTIVATION_REUSE_WINDOW: f64 = 300.0;
 pub const SNAPSHOT_MAX_AGE: f64 = 300.0;
@@ -300,7 +319,10 @@ pub struct SearchState {
     pub selected_scope: SearchScope,
     pub selected_channel_id: Option<String>,
     pub channel_results: Vec<ChannelInfo>,
+    /// 라이브 검색 결과(키워드가 제목·태그에 맞는 방송).
     pub live_results: Vec<LiveInfo>,
+    /// 채널 검색에서 방송 중인 채널의 라이브(채널 관련도 순). 화면은 [`SearchState::merged_live_results`].
+    pub channel_lives: Vec<LiveInfo>,
     pub video_results: Vec<VodInfo>,
     pub clip_results: Vec<ClipInfo>,
     pub is_searching_channels: bool,
@@ -333,7 +355,10 @@ pub struct SearchState {
     clip_source_channel_ids: Vec<String>,
     clip_source_keyword: Option<String>,
     clip_next_page: HashMap<String, i64>,
+    clip_cursor: HashMap<String, String>,
     clip_exhausted: HashSet<String>,
+    /// 이름이 검색어와 같은 소스 채널 — 이 채널의 클립은 제목과 관계없이 모두 보인다.
+    clip_full_channel_ids: HashSet<String>,
     landing_snapshot: Option<SearchLandingSnapshot>,
     landing_source_revision: Option<i64>,
 }
@@ -378,6 +403,15 @@ impl SearchState {
 
     pub fn completed_search_query(&self) -> Option<&str> {
         self.completed_search_query.as_deref()
+    }
+
+    /// 화면에 보일 라이브 — [`merge_search_lives`] 규칙(방송 중인 검색 채널 먼저, 중복 제거).
+    pub fn merged_live_results(&self) -> Vec<LiveInfo> {
+        merge_search_lives(&self.channel_lives, &self.live_results)
+    }
+
+    pub fn clip_full_channel_ids(&self) -> &HashSet<String> {
+        &self.clip_full_channel_ids
     }
 
     pub fn clip_source_channel_ids(&self) -> &[String] {
@@ -434,6 +468,7 @@ impl SearchState {
         }
         let has_results = !self.channel_results.is_empty()
             || !self.live_results.is_empty()
+            || !self.channel_lives.is_empty()
             || !self.video_results.is_empty()
             || !self.clip_results.is_empty();
         !has_results && !self.is_any_bucket_searching()
@@ -524,6 +559,33 @@ pub fn sort_lives(lives: &mut [LiveInfo], option: LiveSortOption) {
     }
 }
 
+/// 검색 라이브 합치기 — 채널 검색에서 방송 중인 채널(채널 관련도 순)이 먼저, 그다음 라이브 검색 결과
+/// (선택한 정렬 그대로). 같은 채널·같은 방송은 앞쪽 하나만 남긴다.
+pub fn merge_search_lives(channel_lives: &[LiveInfo], keyword_lives: &[LiveInfo]) -> Vec<LiveInfo> {
+    let mut channels = HashSet::new();
+    let mut lives = HashSet::new();
+    channel_lives
+        .iter()
+        .chain(keyword_lives)
+        .filter(|l| {
+            let channel_new = l
+                .channel
+                .as_ref()
+                .is_none_or(|c| channels.insert(c.channel_id.clone()));
+            lives.insert(l.live_id) && channel_new
+        })
+        .cloned()
+        .collect()
+}
+
+/// 채널 이름 비교 키 — 대소문자·공백 무시.
+pub fn channel_name_key(name: &str) -> String {
+    name.chars()
+        .filter(|c| !c.is_whitespace())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
 /// 채널 관련도 정렬.
 pub fn sort_channels(channels: &mut [ChannelInfo], query: &str) {
     channels.sort_by(|a, b| {
@@ -591,6 +653,7 @@ impl SearchViewModel {
                 selected_channel_id: None,
                 channel_results: Vec::new(),
                 live_results: Vec::new(),
+                channel_lives: Vec::new(),
                 video_results: Vec::new(),
                 clip_results: Vec::new(),
                 is_searching_channels: false,
@@ -623,7 +686,9 @@ impl SearchViewModel {
                 clip_source_channel_ids: Vec::new(),
                 clip_source_keyword: None,
                 clip_next_page: HashMap::new(),
+                clip_cursor: HashMap::new(),
                 clip_exhausted: HashSet::new(),
+                clip_full_channel_ids: HashSet::new(),
                 landing_snapshot: None,
                 landing_source_revision: None,
             }),
@@ -659,7 +724,7 @@ impl SearchViewModel {
             query: st.query.clone(),
             selected_scope: st.selected_scope,
             channel_results: st.channel_results.clone(),
-            live_results: st.live_results.clone(),
+            live_results: st.merged_live_results(),
             video_results: st.video_results.clone(),
             clip_results: st.clip_results.clone(),
             is_searching: st.is_searching(),
@@ -759,6 +824,7 @@ impl SearchViewModel {
             if st.rendered_query != t {
                 st.channel_results.clear();
                 st.live_results.clear();
+                st.channel_lives.clear();
                 st.video_results.clear();
                 st.clip_results.clear();
             }

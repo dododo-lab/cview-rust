@@ -34,7 +34,8 @@ pub use live_channel_item::{format_compact_count, format_viewer_count, LiveChann
 pub use media::{EncodingTrack, LivePlaybackDetail, MediaInfo};
 pub use player::{PlayerError, PlayerPhase, PlayerState};
 pub use search::{
-    ChannelSearchItem, ClipInfo, LiveSearchItem, SearchResult, VideoSearchItem, VodInfo,
+    ChannelSearchItem, ClipInfo, ClipListPage, LiveSearchItem, SearchResult, VideoSearchItem,
+    VodInfo,
 };
 pub use stream_proxy::StreamProxyMode;
 pub use verified_mark::verified_badge;

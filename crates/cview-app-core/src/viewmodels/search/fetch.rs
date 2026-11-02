@@ -3,12 +3,12 @@
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
 
-use cview_core::models::search::{ClipInfo, SearchType};
+use cview_core::models::search::{ClipListPage, SearchType};
 use cview_core::models::{ChannelInfo, LiveInfo};
 
 use super::{
-    bucket_fields, sort_channels, sort_lives, trimmed, SearchScope, SearchState, SearchViewModel,
-    CLIP_SOURCE_CHANNEL_COUNT, PAGE_SIZE,
+    bucket_fields, channel_name_key, sort_channels, sort_lives, trimmed, SearchScope, SearchState,
+    SearchViewModel, CHANNEL_LIVE_LIMIT, CLIP_SOURCE_CHANNEL_COUNT, PAGE_SIZE,
 };
 
 impl SearchViewModel {
@@ -111,6 +111,7 @@ impl SearchViewModel {
     }
 
     pub(super) async fn fetch_channels(&self, keyword: &str, reset: bool, token: u64) {
+        let first_page = reset || self.read().channel_offset == 0;
         let api = self.shared.api.clone();
         let kw = keyword.to_string();
         self.run_bucket(
@@ -143,6 +144,55 @@ impl SearchViewModel {
             },
         )
         .await;
+        if first_page {
+            self.fetch_channel_lives(token).await;
+        }
+    }
+
+    /// 채널 검색 첫 쪽에서 방송 중인 채널의 라이브를 받아 라이브 결과에 합칠 몫으로 둔다.
+    /// 한 채널이 실패해도 나머지는 남기고, 라이브 버킷 오류로 치지 않는다.
+    async fn fetch_channel_lives(&self, token: u64) {
+        let targets: Vec<ChannelInfo> = {
+            let st = self.read();
+            if st.active_search_id != token || st.bucket_errors.contains_key(&SearchType::Channel) {
+                return;
+            }
+            st.channel_results
+                .iter()
+                .filter(|c| c.open_live)
+                .take(CHANNEL_LIVE_LIMIT)
+                .cloned()
+                .collect()
+        };
+        let api = self.shared.api.clone();
+        let results = futures_util::future::join_all(targets.into_iter().map(|channel| {
+            let api = api.clone();
+            async move {
+                let r = api.channel_live(&channel.channel_id).await;
+                (channel, r)
+            }
+        }))
+        .await;
+        let lives: Vec<LiveInfo> = results
+            .into_iter()
+            .filter_map(|(channel, r)| match r {
+                Ok(Some(mut live)) => {
+                    if live.channel.is_none() {
+                        live.channel = Some(channel);
+                    }
+                    Some(live)
+                }
+                Ok(None) => None,
+                Err(e) => {
+                    tracing::warn!("검색 채널 라이브 받기 실패({}): {e}", channel.channel_id);
+                    None
+                }
+            })
+            .collect();
+        let mut st = self.lock();
+        if st.active_search_id == token {
+            st.channel_lives = lives;
+        }
     }
 
     pub(super) async fn fetch_lives(&self, keyword: &str, reset: bool, token: u64) {
@@ -250,28 +300,34 @@ impl SearchViewModel {
             if st.active_search_id != token {
                 return Ok(());
             }
-            st.clip_source_channel_ids = result
-                .data
+            // 관련도 순(이름이 같은 채널이 맨 앞) — 첫 물결은 맨 앞 채널만 받으므로 검색한 채널이 먼저 온다.
+            let mut sources = result.data;
+            sort_channels(&mut sources, keyword);
+            sources.truncate(CLIP_SOURCE_CHANNEL_COUNT);
+            let key = channel_name_key(keyword);
+            st.clip_full_channel_ids = sources
                 .iter()
-                .take(CLIP_SOURCE_CHANNEL_COUNT)
+                .filter(|c| channel_name_key(&c.channel_name) == key)
                 .map(|c| c.channel_id.clone())
                 .collect();
+            st.clip_source_channel_ids = sources.into_iter().map(|c| c.channel_id).collect();
             st.clip_source_keyword = Some(keyword.to_string());
             st.clip_next_page.clear();
+            st.clip_cursor.clear();
             st.clip_exhausted.clear();
         }
         let targets = self.read().clip_fetch_targets(channel_limit);
-        let mut fetched: HashMap<String, Vec<ClipInfo>> = HashMap::new();
+        let mut fetched: HashMap<String, ClipListPage> = HashMap::new();
         if !targets.is_empty() {
             let api = self.shared.api.clone();
-            let futures = targets.iter().map(|(id, page)| {
+            let futures = targets.iter().map(|(id, _, cursor)| {
                 let api = api.clone();
                 let id = id.clone();
-                let page = *page;
+                let cursor = cursor.clone();
                 async move {
-                    api.clip_list(&id, page, PAGE_SIZE)
+                    api.clip_list(&id, cursor.as_deref(), PAGE_SIZE)
                         .await
-                        .map(|p| (id, p.data))
+                        .map(|p| (id, p))
                 }
             });
             for r in futures_util::future::join_all(futures).await {
