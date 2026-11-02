@@ -8,11 +8,11 @@
 #   CVIEW_NOTARIZE_PROFILE · CVIEW_RELEASE_NOTES_FILE 은 그대로 release-macos.sh 에 넘어간다.
 #
 # 순서:
-#   1) main 브랜치인지 확인. .idea/ 는 .git/info/exclude 에 넣어(로컬 전용) IDE 가 다시 만들어도 깨끗함 검사를 막지 않게 한다.
+#   1) main 브랜치인지 확인. .idea/ 는 info/exclude(워크트리면 공용 저장소의 것)에 넣어(로컬 전용) IDE 가 다시 만들어도 깨끗함 검사를 막지 않게 한다.
 #   2) 각 PR: 열려 있는 PR 만 draft 해제 → squash 병합(이미 병합된 PR 은 건너뜀).
 #   3) 커밋 안 된 작업(추적 안 된 파일 포함)을 stash 로 보관 → git pull --ff-only origin main.
 #   4) scripts/release-macos.sh --dmg 실행.
-#   5) 성공·실패와 관계없이 보관한 작업을 되돌린다. 릴리스가 작업 트리를 더럽힌 채 끝났으면 되돌리지 않고 안내만 한다.
+#   5) 성공·실패와 관계없이 보관한 작업을 (SHA 로 집어) 되돌린다. 릴리스가 작업 트리를 더럽힌 채 끝났으면 되돌리지 않고 안내만 한다.
 # 스크립트 전체를 함수로 감싸 둔다 — 실행 중 stash·pull 로 이 파일이 바뀌어도 이미 읽은 내용으로 끝까지 돈다.
 set -euo pipefail
 
@@ -30,7 +30,10 @@ main() {
   done
 
   [[ "$(git rev-parse --abbrev-ref HEAD)" == main ]] || { echo "✗ main 브랜치에서 실행하세요."; exit 1; }
-  local exclude=.git/info/exclude
+  # 워크트리에서는 .git 이 파일이므로 git 에 실제 경로를 묻는다(info/ 는 공용 저장소 쪽).
+  local exclude
+  exclude=$(git rev-parse --git-path info/exclude)
+  mkdir -p "${exclude:h}"
   grep -qxF '.idea/' "$exclude" 2>/dev/null || echo '.idea/' >> "$exclude"
 
   local state draft
@@ -46,11 +49,15 @@ main() {
     esac
   done
 
-  local stashed=0
+  # stash 스택은 모든 워크트리가 함께 쓴다 — 맨 위를 꺼내지 말고 이 실행이 만든 항목을 SHA 로 집어 되돌린다.
+  local stashed=0 stash_sha=""
   if [[ -n "$(git status --porcelain)" ]]; then
     echo "── 커밋 안 된 작업 보관"
     git status --short
-    git stash push -u -m "release-with-prs $(date +%Y%m%d-%H%M%S)"
+    local tag="release-with-prs $(date +%Y%m%d-%H%M%S)-$$"
+    git stash push -u -m "$tag"
+    stash_sha=$(git stash list --format='%H %gs' | awk -v t="$tag" 'index($0, t) { print $1; exit }')
+    [[ -n "$stash_sha" ]] || { echo "✗ 보관한 작업을 stash 목록에서 찾지 못했습니다: $tag"; exit 1; }
     stashed=1
   fi
 
@@ -59,9 +66,13 @@ main() {
     stashed=0
     if [[ -z "$(git status --porcelain)" ]]; then
       echo "── 보관한 작업 되돌리기"
-      git stash pop || { echo "⚠︎ stash pop 충돌 — 'git stash list'의 맨 위 항목을 직접 확인하세요."; return 1; }
+      git stash apply "$stash_sha" || { echo "⚠︎ stash 적용 충돌 — 'git stash apply $stash_sha'를 직접 확인하세요."; return 1; }
+      # 적용에 성공했을 때만 그 항목을 지운다(지금 위치를 다시 찾는다 — 그사이 다른 항목이 쌓였을 수 있다).
+      local ref
+      ref=$(git stash list --format='%H %gd' | awk -v h="$stash_sha" '$1 == h { print $2; exit }')
+      [[ -n "$ref" ]] && git stash drop -q "$ref"
     else
-      echo "⚠︎ 작업 트리가 깨끗하지 않아 보관한 작업을 되돌리지 않았습니다. 정리 후 'git stash pop'을 실행하세요."
+      echo "⚠︎ 작업 트리가 깨끗하지 않아 보관한 작업을 되돌리지 않았습니다. 정리 후 'git stash apply $stash_sha'를 실행하세요."
       git status --short
     fi
   }
