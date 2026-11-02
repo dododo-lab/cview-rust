@@ -1,7 +1,7 @@
 # CView
 
 **치지직(CHZZK) 라이브를 위한 데스크톱 뷰어.** 여러 방송을 한 창에서 동시에 보는 멀티라이브, 저지연 재생, 채팅·후원 알림,
-다시보기·클립까지 한 앱에 담았다. macOS(Apple Silicon)와 Windows(x64)를 지원하며, Rust와 [Tauri 2](https://tauri.app/)로 만들었다.
+다시보기·클립까지 한 앱에 담았다. macOS(Apple Silicon)와 Windows(x64·ARM64)를 지원하며, Rust와 [Tauri 2](https://tauri.app/)로 만들었다.
 
 > CView는 개인이 만든 비공식 클라이언트이며 NAVER·치지직과 관련이 없다.
 
@@ -33,6 +33,7 @@
 |---|---|---|
 | macOS 13 이상, Apple Silicon | `CView_<버전>_arm64.dmg` | Developer ID 서명, Apple 공증 완료 |
 | Windows 10/11, x64 | `CView_<버전>_x64-setup.exe` | 사용자 단위 설치. 코드 서명 인증서가 없어 **미서명**이라 SmartScreen 경고가 뜰 수 있다(추가 정보 → 실행) |
+| Windows 10/11, ARM64 | `CView_<버전>_arm64-setup.exe` | arm64 판을 함께 게시한 릴리스부터. x64 판과 같이 **미서명**(SmartScreen 경고). 그 이전 릴리스는 x64 판을 에뮬레이션으로 쓴다 |
 
 v0.1.27부터 앱 안에서 새 버전을 확인하고 받아 검증한 뒤 바꿔 다시 연다(메뉴 또는 설정의 **업데이트 확인**). 그보다 오래된 버전은 한 번만 직접 설치하면 된다.
 

@@ -91,14 +91,21 @@ class GatewayTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'Links'):
             self.upload(gateway.filenames(self.version)[0])
 
-    def test_validation_requires_both_platforms_and_matching_files(self):
+    def test_validation_requires_every_installer_and_matching_files(self):
         files = self.stage()
         request = {'action': 'validate', 'version': self.version, 'files': files, 'signature': SIGNATURE}
         self.assertFalse(self.call(request)['published'])
         self.assertFalse((self.root / 'site').exists())
-        files.pop(gateway.filenames(self.version)[1])
-        with self.assertRaisesRegex(ValueError, 'Both installers'):
-            self.call(request)
+        # Windows x64만 있고 arm64가 빠진 게시도 받지 않는다(조용히 건너뛰지 않음).
+        for name in gateway.installers(self.version):
+            partial = {k: v for k, v in files.items() if k != name}
+            with self.assertRaisesRegex(ValueError, 'All installers'):
+                self.call({**request, 'files': partial})
+
+    def test_release_contains_windows_arm64_installer(self):
+        self.assertEqual(gateway.installers('0.1.71'), ['CView_0.1.71_arm64.dmg', 'CView_0.1.71_x64-setup.exe',
+                                                        'CView_0.1.71_arm64-setup.exe'])
+        self.assertEqual(gateway.filenames('0.1.71')[-1], 'notes.txt')
 
     def test_tampering_after_upload_blocks_publication(self):
         files = self.stage()
@@ -150,8 +157,17 @@ class GatewayTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'signature differs'):
                 self.call({**request, 'signature': other})
 
-    def test_preflight_announces_signed_feed(self):
-        self.assertIn('signed-feed-v1', self.call({'action': 'preflight'})['features'])
+    def test_preflight_announces_signed_feed_and_arm64(self):
+        features = self.call({'action': 'preflight'})['features']
+        self.assertIn('signed-feed-v1', features)
+        self.assertIn('windows-arm64-v1', features)
+
+    def test_published_feed_lists_all_installers(self):
+        files = self.stage()
+        with patch.object(gateway.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, b'', b'')):
+            result = self.call({'action': 'publish', 'version': self.version, 'files': files, 'signature': SIGNATURE})
+        self.assertEqual(sorted(a['name'] for a in result['manifest']['assets']),
+                         sorted(gateway.installers(self.version)))
 
     def test_probe_readback_and_cleanup(self):
         data = b'P' * (1024 * 1024)
@@ -230,6 +246,39 @@ class ClientTests(unittest.TestCase):
             self.assertEqual(client.main(), 1)
         self.assertIn('redeploy', stderr.getvalue())
 
+    def test_gateway_without_arm64_blocks_publishing(self):
+        settings = {'ssh_target': 'user@release.example', 'server_name': 'SERVER', 'known_hosts': Path('/dev/null')}
+        state = {'protocol': gateway.PROTOCOL, 'hostname': 'server', 'latest': None, 'free_bytes': 1,
+                 'features': ['signed-feed-v1']}
+        with patch.object(sys, 'argv', ['publish-update.py', '--preflight']), \
+                patch.object(client, 'server_settings', return_value=settings), \
+                patch.object(client, 'rpc', return_value=state), \
+                patch.object(client, 'verify_https', side_effect=AssertionError('must stop before HTTPS')), \
+                patch('sys.stderr', new_callable=io.StringIO) as stderr:
+            self.assertEqual(client.main(), 1)
+        self.assertIn('windows-arm64-v1', stderr.getvalue())
+
+    def test_legacy_two_installer_feed_only_accepted_as_current(self):
+        legacy = sorted(gateway.installers('0.1.70')[:2])
+        self.assertIn(legacy, client.published_installer_sets('0.1.70', allow_legacy=True))
+        self.assertNotIn(legacy, client.published_installer_sets('0.1.71', allow_legacy=False))
+        self.assertIn(sorted(gateway.installers('0.1.71')), client.published_installer_sets('0.1.71', allow_legacy=False))
+
+    def test_windows_installers_must_be_distinct_pe_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = {}
+            for name in gateway.installers('0.1.71'):
+                paths[name] = Path(tmp) / name
+                paths[name].write_bytes(b'MZ' + name.encode())
+            client.check_installers(paths)
+            x64, arm64 = gateway.installers('0.1.71')[1:]
+            paths[arm64].write_bytes(paths[x64].read_bytes())
+            with self.assertRaisesRegex(ValueError, 'identical'):
+                client.check_installers(paths)
+            paths[arm64].write_bytes(b'not an exe')
+            with self.assertRaisesRegex(ValueError, 'Not a Windows installer'):
+                client.check_installers(paths)
+
     def test_cross_origin_redirect_rejected(self):
         with self.assertRaisesRegex(ValueError, 'redirect'):
             client.SameOriginRedirect().redirect_request(None, None, 302, '', {}, 'http://example.org/file')
@@ -260,7 +309,7 @@ class SignatureTests(unittest.TestCase):
         # 클라이언트가 서명한 내용과 서버 publish.py 가 실제로 쓰는 피드가 같은 서명 대상을 만들어야 한다.
         version = '0.1.69'
         sources = []
-        for name in gateway.filenames(version)[:2]:
+        for name in gateway.installers(version):
             path = self.dir / name
             path.write_bytes(b'artifact ' + name.encode())
             sources.append(path)

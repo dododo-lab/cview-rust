@@ -18,12 +18,13 @@
 
 ## 업로드
 
-실제 릴리스 버전으로 폴더를 만들고, 완성된 양쪽 운영체제 설치 파일과 UTF-8 릴리스 설명을 넣는다. 아래 `0.1.21`은 예시이며 현재 게시 버전보다 높아야 한다.
+실제 릴리스 버전으로 폴더를 만들고, 완성된 설치 파일 세 개(macOS arm64, Windows x64·arm64)와 UTF-8 릴리스 설명을 넣는다. 아래 `0.1.21`은 예시이며 현재 게시 버전보다 높아야 한다.
 
 ```text
 \\<서버-Tailscale-IP>\CViewUpload$\0.1.21\
   CView_0.1.21_arm64.dmg
   CView_0.1.21_x64-setup.exe
+  CView_0.1.21_arm64-setup.exe
   notes.txt
 ```
 
@@ -45,7 +46,7 @@ powershell -NoProfile -File C:\CViewUpdates\tools\Publish-UploadedRelease.ps1 -V
 powershell -NoProfile -File C:\CViewUpdates\tools\Publish-UploadedRelease.ps1 -Version 0.1.21
 ```
 
-도구는 양쪽 설치 파일과 설명 파일을 검사한 뒤 기존 `publish.py`를 실행한다. 이 게시기는 완성된 버전 폴더를 먼저 배치하고 `latest.json`을 마지막에 원자적으로 갱신한다. 이어서 `check_server.py --download`로 HTTPS, 다운로드 페이지, 파일 크기와 SHA-256을 확인한다. 업로드한 원본은 `incoming`에 남는다. 같은 버전 덮어쓰기나 이전 버전 게시를 허용하지 않는다.
+도구는 세 설치 파일과 설명 파일을 검사한 뒤 기존 `publish.py`를 실행한다. 이 게시기는 완성된 버전 폴더를 먼저 배치하고 `latest.json`을 마지막에 원자적으로 갱신한다. 이어서 `check_server.py --download`로 HTTPS, 다운로드 페이지, 파일 크기와 SHA-256을 확인한다. 업로드한 원본은 `incoming`에 남는다. 같은 버전 덮어쓰기나 이전 버전 게시를 허용하지 않는다.
 
 ## 서버 도구 원본
 

@@ -14,9 +14,9 @@ scripts/release-macos.sh --dmg
 
 1. 업데이트 서버의 전용 키 인증·HTTPS·버전을 확인하고 Apple 공증 프로파일을 확인한다.
 2. 프로젝트 검사와 테스트 후 버전·빌드 번호를 올린다.
-3. macOS DMG 서명·공증·스테이플 및 Windows x64 NSIS 설치 파일을 만든다.
+3. macOS DMG 서명·공증·스테이플 및 Windows x64·arm64 NSIS 설치 파일을 만든다.
 4. UTF-8 릴리스 설명을 저장하고 로컬 릴리스 커밋·태그를 만든다.
-5. 양쪽 설치 파일과 설명을 SSH로 전송하고 서버에서 저장된 파일을 재읽어 SHA-256을 비교한다.
+5. 세 설치 파일과 설명을 SSH로 전송하고 서버에서 저장된 파일을 재읽어 SHA-256을 비교한다.
 6. 서버가 완성된 버전 폴더를 배치한 뒤 `latest.json`을 원자적으로 변경한다.
 7. 서버와 이 Mac에서 HTTPS 설치 파일 전체를 다운로드해 크기·SHA-256을 확인한다.
 8. 검증 영수증을 저장하고 Git 커밋·태그를 원격에 푸시한다.
@@ -27,7 +27,18 @@ scripts/release-macos.sh --dmg
 CVIEW_RELEASE_NOTES_FILE=/절대/경로/notes.txt scripts/release-macos.sh --dmg
 ```
 
-설명을 생략하면 이전 태그 이후 Git 변경 목록을 사용한다. Windows 설치 파일은 현재 미서명이며 SmartScreen 안내를 자동 추가한다. `--no-notarize`는 사용자가 명시적으로 공증 생략을 허용할 때만 사용한다. `CVIEW_SKIP_WINDOWS`는 배포에서 거부한다. 개발용 빌드에는 자동 게시를 적용하지 않는다.
+설명을 생략하면 이전 태그 이후 Git 변경 목록을 사용한다. Windows 설치 파일은 현재 미서명이며 SmartScreen 안내를 자동 추가한다. `--no-notarize`는 사용자가 명시적으로 공증 생략을 허용할 때만 사용한다. `CVIEW_SKIP_WINDOWS`는 배포에서 거부하고, Windows arm64만 빼고 게시하는 경로도 없다. 개발용 빌드에는 자동 게시를 적용하지 않는다.
+
+### Windows 교차 빌드 도구
+
+| 설치 파일 | Rust 타깃 | 도구 |
+| --- | --- | --- |
+| `CView_<버전>_x64-setup.exe` | `x86_64-pc-windows-gnu` | Homebrew `mingw-w64`, `nsis` |
+| `CView_<버전>_arm64-setup.exe` | `aarch64-pc-windows-gnullvm` | [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)(clang·lld·llvm-windres·aarch64 CRT), `nsis` |
+
+Homebrew `mingw-w64`에는 aarch64가 없어 arm64는 llvm-mingw를 쓴다. 기본 위치는 `~/.local/opt/llvm-mingw`(macOS universal 릴리스를 풀고 이 이름으로 링크)이며 `CVIEW_LLVM_MINGW`로 바꾼다. 스크립트는 PATH를 바꾸지 않고 `CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_LINKER`, `CC_`·`AR_`·`RC_aarch64_pc_windows_gnullvm`으로 절대 경로만 넘긴다(macOS 빌드의 clang을 가리지 않게). 도구가 하나라도 없으면 버전을 올리기 전에 무엇을 설치할지 알려 주고 멈춘다.
+
+NSIS 설치 프로그램은 두 판 모두 x86 실행 파일이다. 스크립트는 번들 전 `cview-app.exe`의 PE Machine(x64 `0x8664`, ARM64 `0xaa64`)을 확인하고, `publish-update.py`는 두 Windows 설치 파일이 PE이고 서로 다른지 확인한다. arm64 판 WebView2 로더는 `webview2-com-sys`의 arm64 정적 라이브러리를 쓴다. gnullvm 타깃은 기본으로 `libunwind.dll`을 동적으로 부르는데 Windows에는 없으므로 `-C target-feature=+crt-static`로 정적 링크하고, 빌드 후 `llvm-objdump`로 `lib*.dll`(MinGW 런타임) 가져오기가 없는지 확인한다.
 
 ## 앱 안 자동 설치와 피드
 
@@ -35,6 +46,7 @@ CVIEW_RELEASE_NOTES_FILE=/절대/경로/notes.txt scripts/release-macos.sh --dmg
 
 - macOS: DMG를 화면에 띄우지 않고 붙여 `CView.app`을 복사하고, Developer ID 팀 `MZ8NB937SB`·번들 `app.cview.rust` 서명(`codesign --test-requirement`), Apple 공증(`spctl`), 버전을 확인한 뒤 교체·재실행한다. `--no-notarize`로 만든 릴리스는 공증 검사에서 멈추므로 자동 설치되지 않는다.
 - Windows: NSIS 설치 파일을 `/P /R /UPDATE`로 실행한다(진행 창만 표시, 앱 종료·설치·재실행). 설치 파일 미서명이라 SHA-256만 확인한다.
+- Windows 아키텍처: 앱은 자기 빌드 아키텍처에 맞는 `_arm64-setup.exe`·`_x64-setup.exe`를 고른다. ARM64 앱은 피드에 arm64 판이 없으면 x64 판(에뮬레이션)으로 대신한다. x64 앱은 arm64 판을 고르지 않는다. ARM 기기에서 에뮬레이션으로 도는 기존 x64 앱은 x64로 보고하므로 계속 x64 판을 받는다(자동으로 arm64로 옮기지 않는다).
 - 이 기능은 이를 포함한 버전부터 동작한다. 그 이전 버전 사용자는 한 번은 직접 설치해야 한다.
 
 ### 피드 서명
@@ -46,7 +58,7 @@ Windows 설치 파일이 미서명이므로, 업데이트 서버가 침해돼도
 - 서명 대상(`release_gateway.signed_payload`, 앱 `updater::signed_payload`와 같은 형식): 버전, 릴리스 페이지 주소, 노트 SHA-256, 자산마다 이름·크기·SHA-256·다운로드 주소.
 - `publish-update.py`가 게시 전에 서명하고 게이트웨이에 `signature`로 넘긴다. `publish.py`는 이를 `latest.json`의 `signature`에 그대로 적는다. 게시 후 HTTPS 피드의 서명을 저장소 공개 키로 다시 검증한다.
 - 서명에는 OpenSSL 3 이상이 필요하다(`brew install openssl`, 또는 `CVIEW_OPENSSL`). macOS 기본 LibreSSL은 쓰지 않는다.
-- `--preflight`는 게이트웨이가 `signed-feed-v1`을 지원하는지, 서명 키가 있고 저장소 공개 키 목록에 있는지 확인한다. 하나라도 빠지면 릴리스를 시작하지 않는다.
+- `--preflight`는 게이트웨이가 `signed-feed-v1`·`windows-arm64-v1`을 지원하는지, 서명 키가 있고 저장소 공개 키 목록에 있는지 확인한다. 하나라도 빠지면 릴리스를 시작하지 않는다.
 
 처음 한 번(키 생성):
 
@@ -88,7 +100,7 @@ python3 scripts/publish-update.py --preflight
 python3 scripts/publish-update.py --probe
 ```
 
-`--probe`는 1 MiB 임시 파일을 실제 업로드·재읽기·해시 검사 후 삭제하고, 현재 게시된 두 설치 파일을 HTTPS로 다운로드해 검증한다. 최신 버전이나 공개 파일을 변경하지 않는다.
+`--probe`는 1 MiB 임시 파일을 실제 업로드·재읽기·해시 검사 후 삭제하고, 현재 게시된 설치 파일(arm64 추가 전 릴리스는 두 개, 이후는 세 개)을 HTTPS로 다운로드해 검증한다. 최신 버전이나 공개 파일을 변경하지 않는다.
 
 빌드된 실제 파일을 업로드·검사만 하려면:
 
@@ -144,7 +156,8 @@ git push origin v<버전>
 - 다른 키 위치: `CVIEW_RELEASE_SSH_KEY=/절대/경로/key`.
 - 서버 호스트 키는 로컬 설정의 `known_hosts`로 고정한다(`StrictHostKeyChecking=yes`).
 - 서버 `administrators_authorized_keys`의 이 키에는 `restrict`, 출발지 제한, 고정 게시 명령을 적용했다. 일반 PowerShell 명령·SFTP·PTY·포트 전달에 사용할 수 없다. 키를 가진 이 Mac 사용자는 새 업데이트를 게시할 수 있으므로 키를 공유하지 않는다.
-- 서버 명령: `C:\CViewUpdates\tools\release_gateway.py`. 허용 작업은 사전 점검, 전송 시험, 지정된 버전의 두 설치 파일·설명 전송, 검증, 게시뿐이다.
+- 서버 명령: `C:\CViewUpdates\tools\release_gateway.py`. 허용 작업은 사전 점검, 전송 시험, 지정된 버전의 세 설치 파일(macOS arm64, Windows x64·arm64)·설명 전송, 검증, 게시뿐이다.
+- 게이트웨이 갱신: 저장소의 `release_gateway.py`·`publish.py`·`check_server.py`·`Publish-UploadedRelease.ps1`을 관리자가 `C:\CViewUpdates\tools\`에 복사한다. 클라이언트는 사전 점검에서 게이트웨이가 알리는 기능(`signed-feed-v1`, `windows-arm64-v1`)을 확인하고, 빠졌으면 `redeploy`를 안내하며 릴리스를 시작하지 않는다. Windows arm64를 넣은 뒤 첫 릴리스 전에 갱신이 필요하다.
 - 이 클라이언트는 기존 관리자 SSH 연결을 재사용하지 않고 항상 전용 키를 새로 인증한다. 다른 관리자 비밀번호 접속은 그대로 유지된다.
 - Python: `C:\CViewUpdates\tools\python\python.exe`. 공식 Python 3.13.12 embeddable amd64를 전용 폴더에 배치하고 ZIP SHA-256 및 Python Software Foundation Authenticode 서명을 확인했다. 시스템 PATH나 Windows Python 앱 실행 별칭에 의존하지 않는다.
 - Python ZIP SHA-256: `76f238f606250c87c6beac75dccd35ee99070a13490555936abb6cb64ecce3d0`.
