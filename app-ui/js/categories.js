@@ -7,6 +7,7 @@ import { categoryGroups, arrangeLives } from './pages.js';
 import { refreshIcon } from './page-header.js';
 import { swapContent } from './motion.js';
 import { previewAttr } from './hover-preview.js';
+import { withRefreshVeil, refreshVeiled } from './refresh-veil.js';
 
 export const categoryIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="8" height="8" rx="2.5"/><rect x="13" y="3" width="8" height="8" rx="2.5" opacity=".6"/><rect x="3" y="13" width="8" height="8" rx="2.5" opacity=".6"/><rect x="13" y="13" width="8" height="8" rx="2.5"/></svg>';
 const PIN_KEY = 'cview.pinnedCategories';
@@ -36,7 +37,7 @@ export class CategoriesPage {
     this.lives = [];
     this.category = '';
     this.seq = 0;
-    this.root.querySelector('[data-action="refresh"]').addEventListener('click', () => this.show({ refresh: true }));
+    this.root.querySelector('[data-action="refresh"]').addEventListener('click', () => withRefreshVeil(this.root, () => this.show({ refresh: true })));
     this.body.addEventListener('click', (e) => {
       const pin = e.target.closest('[data-pin]');
       if (pin) {
@@ -61,7 +62,7 @@ export class CategoriesPage {
   async show(params = {}) {
     if (params.category !== undefined) this.category = params.category;
     const seq = ++this.seq;
-    if (!this.lives.length || params.refresh) this.body.innerHTML = skeletonGrid(12);
+    if (!this.lives.length || (params.refresh && !refreshVeiled(this.root))) this.body.innerHTML = skeletonGrid(12);
     try {
       const lives = await api.popularLives(300, Boolean(params.refresh));
       if (seq !== this.seq) return;

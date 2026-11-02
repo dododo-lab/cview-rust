@@ -6,6 +6,7 @@ import { esc, safeUrl, toast, imageSrc, dismiss } from './dom.js';
 import { emptyState, loadingState, errorState } from './cards.js';
 import { relativeDate } from './channel.js';
 import { syncTabs, bindTabKeys } from './a11y.js';
+import { refreshVeiled } from './refresh-veil.js';
 
 export const statsIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>';
 
@@ -139,12 +140,13 @@ export class StatsPage {
   show(params = {}) {
     if (params.tab) this.tab = params.tab;
     syncTabs(this.tabs, this.tab, this.body, 'stats');
-    this.load();
+    // 직접 새로고침(덮개 아래)이면 보던 내용을 흐리게 둔 채 바꾼다.
+    return this.load({ keep: refreshVeiled(this.root) });
   }
 
-  async load() {
+  async load({ keep = false } = {}) {
     const seq = ++this.seq;
-    this.body.innerHTML = loadingState();
+    if (!keep) this.body.innerHTML = loadingState();
     try {
       if (this.tab === 'data') {
         const h = await api.dataHealth();

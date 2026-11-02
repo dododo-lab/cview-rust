@@ -6,6 +6,7 @@ import { liveGrid, emptyState, errorState, skeletonGrid, recentChannels } from '
 import { liveIcon, liveModeSwitch } from './live-mode.js';
 import { refreshIcon } from './page-header.js';
 import { swapContent } from './motion.js';
+import { withRefreshVeil } from './refresh-veil.js';
 
 export { liveIcon };
 
@@ -30,7 +31,7 @@ export class LivePage {
       </div>`;
     content.append(this.root);
     this.body = this.root.querySelector('.page-body');
-    this.root.querySelector('[data-action="refresh"]').addEventListener('click', () => this.show(true));
+    this.root.querySelector('[data-action="refresh"]').addEventListener('click', () => withRefreshVeil(this.root, () => this.show(true)));
     this.seq = 0;
     this.loaded = false;
   }

@@ -6,6 +6,7 @@ import { liveGrid, lacksThumbs, THUMB_FILL_DELAY_MS, THUMB_FILL_TRIES, channelRo
 import { FOLLOW_SORTS, FOLLOW_FILTERS, arrangeFollowed, followedInsights, followBadges, followAgeText, parseFollowDate, FollowExtras } from './following-info.js';
 import { vodCard } from './channel.js';
 import { verifiedBadge } from './verified-badge.js';
+import { withRefreshVeil, refreshVeiled } from './refresh-veil.js';
 
 const loginAction = '<button class="btn primary" data-action="login">로그인</button>';
 
@@ -49,7 +50,7 @@ export class PopularPage {
     this.category = '';
     this.lives = [];
     this.seq = 0;
-    root.querySelector('[data-action="refresh"]')?.addEventListener('click', () => this.show(true));
+    root.querySelector('[data-action="refresh"]')?.addEventListener('click', () => withRefreshVeil(root, () => this.show(true)));
     this.body.addEventListener('click', (e) => {
       const s = e.target.closest('[data-sort]');
       if (s) { this.sort = s.dataset.sort; this.render(); return; }
@@ -61,7 +62,7 @@ export class PopularPage {
 
   async show(refresh = false) {
     const seq = ++this.seq;
-    if (!this.lives.length || refresh) this.body.innerHTML = skeletonGrid(12);
+    if (!this.lives.length || (refresh && !refreshVeiled(this.root))) this.body.innerHTML = skeletonGrid(12);
     try {
       const lives = await api.popularLives(this.limit, refresh);
       if (seq !== this.seq) return;
@@ -110,7 +111,7 @@ export class FollowingPage {
     this.allQuery = '';
     this.extras = new FollowExtras();
     this.seq = 0;
-    root.querySelector('[data-action="refresh"]')?.addEventListener('click', () => this.show(true));
+    root.querySelector('[data-action="refresh"]')?.addEventListener('click', () => withRefreshVeil(root, () => this.show(true)));
     this.body.addEventListener('click', (e) => {
       const t = e.target.closest('[data-ftab]');
       if (t) { this.tab = t.dataset.ftab; this.show(); return; }
@@ -146,7 +147,7 @@ export class FollowingPage {
     }
     const seq = ++this.seq;
     const hasData = this.tab === 'live' ? this.lives.length : this.channels.length;
-    if (!hasData || refresh) this.body.innerHTML = this.tab === 'live' ? skeletonGrid(8) : loadingState();
+    if (!hasData || (refresh && !refreshVeiled(this.root))) this.body.innerHTML = this.tab === 'live' ? skeletonGrid(8) : loadingState();
     try {
       if (this.tab === 'live') this.lives = await api.followingLives(refresh);
       else this.channels = await api.followingChannelsAll(refresh);
@@ -318,16 +319,19 @@ export class SearchPage {
   }
 
   show(params = {}) {
-    if (params && params.query) { this.input.value = params.query; this.run(params.query); }
     this.input.focus();
+    if (params && params.query) { this.input.value = params.query; return this.run(params.query); }
+    // ⌘R — 경로에 검색어가 없어도 마지막 검색을 다시 한다.
+    if (params && params.refresh && this.lastQuery) return this.retry();
+    return undefined;
   }
 
   /** 오류 화면의 "다시 시도"(app.js) — 경로 매개변수가 없어도 마지막으로 제출한 검색어로 다시 찾는다. */
   retry() {
     const q = this.lastQuery;
-    if (!q) { this.show(); return; }
+    if (!q) { this.show(); return undefined; }
     this.input.value = q;
-    this.run(q);
+    return this.run(q);
   }
 
   async loadDiscovery() {
@@ -375,7 +379,7 @@ export class SearchPage {
     this.lastQuery = q;
     this.idle = false;
     saveRecentSearch(q);
-    this.body.innerHTML = loadingState();
+    if (!refreshVeiled(this.root)) this.body.innerHTML = loadingState();
     const [main, vods] = await Promise.allSettled([api.search(q), api.searchVideos(q, 0, VOD_PAGE)]);
     if (seq !== this.seq) return;
     if (main.status === 'rejected' && vods.status === 'rejected') {
