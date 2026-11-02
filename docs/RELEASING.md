@@ -51,7 +51,7 @@ python3 scripts/publish-update.py --version <버전> --notes-file dist/CView_<�
 2. **macOS와 Windows 모두** 릴리스 설치 파일을 빌드한다. 위 최신 릴리스 피드 주소는 앱에 기본값으로 들어 있으며, 다른 서버를 쓸 때만 빌드 환경 변수 `CVIEW_UPDATE_URL`로 바꾼다(실행 시 같은 이름의 환경 변수가 있으면 그 값이 우선한다). macOS는 Developer ID 서명·Apple 공증·티켓 첨부 및 검증을 완료한다. Windows는 코드 서명을 적용하며, 인증서가 없어 미서명으로 배포할 때에는 다운로드 페이지의 릴리스 설명에 이를 명시한다.
 3. 같은 버전의 완성된 macOS·Windows 설치 파일과 릴리스 설명을 서버에 준비한다. `_local` 빌드, 소스 압축 파일, 테스트용 가짜 설치 파일은 게시하지 않는다.
 4. 서버의 관리자 PowerShell에서 `publish.py`로 게시한다. 여러 설치 파일은 `--artifact`를 반복해 한 릴리스에 함께 등록한다. 버전 폴더와 설치 파일을 먼저 배치하고 `latest.json`을 마지막에 원자적으로 갱신하는 게시 도구를 사용한다.
-5. `check_server.py --download`로 HTTPS·릴리스 페이지·설치 파일 크기·SHA-256을 검사하고, 별도 Tailscale 클라이언트에서도 접속과 다운로드를 확인한다.
+5. `check_server.py --download`로 HTTPS·릴리스 페이지·설치 파일 크기·SHA-256을 검사하고, Tailscale을 끈 외부 네트워크(휴대폰 데이터 등)에서도 접속과 다운로드를 확인한다. 릴리스 Mac은 서버와 같은 공유기 안에 있어 Mac의 검증만으로는 외부 공개 여부까지 확인되지 않는다([공개 다운로드 경로](../tools/windows-update-server/AUTOMATION.md#공개-다운로드-경로)).
 6. 게시 주소·버전·검증 결과를 확인한 뒤에만 릴리스 완료로 보고한다. 빌드나 게시가 실패하면 완료로 처리하지 않고 원인과 미완료 단계를 기록한다.
 
 서버 게시 예시(버전·파일 경로는 실제 빌드 결과로 바꾼다):
