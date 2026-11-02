@@ -204,6 +204,21 @@ class ClientTests(unittest.TestCase):
         with patch.object(sys, 'argv', ['publish-update.py', '--preflight']), patch.object(client, 'rpc', side_effect=RuntimeError('offline')):
             self.assertEqual(client.main(), 1)
 
+    def test_notes_must_not_require_tailscale_for_users(self):
+        base = 'CView 0.1.1\nWindows: 미서명, SmartScreen 경고\n'
+        client.check_notes(base)
+        with self.assertRaisesRegex(ValueError, 'Tailscale'):
+            client.check_notes(base + '업데이트 확인과 다운로드에는 Tailscale 연결이 필요합니다.\n')
+        with self.assertRaisesRegex(ValueError, 'SmartScreen'):
+            client.check_notes('CView 0.1.1\n')
+        with self.assertRaisesRegex(ValueError, '공증 안 함'):
+            client.check_notes(base, allow_unnotarized=True)
+
+    def test_generated_notes_say_updates_are_public(self):
+        script = (TOOLS.parents[1] / 'scripts/release-macos.sh').read_text(encoding='utf-8')
+        self.assertNotIn('Tailscale 연결이 필요', script)
+        self.assertIn('Tailscale 불필요', script)
+
     def test_outdated_gateway_blocks_publishing(self):
         settings = {'ssh_target': 'user@release.example', 'server_name': 'SERVER', 'known_hosts': Path('/dev/null')}
         state = {'protocol': gateway.PROTOCOL, 'hostname': 'server', 'latest': None, 'free_bytes': 1}

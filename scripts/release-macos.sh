@@ -278,7 +278,7 @@ else:
 mac = '공증 안 함(--no-notarize), Developer ID 서명만 적용.' if unnotarized == '1' else 'Developer ID 서명 및 Apple 공증·스테이플 완료.'
 notes = (f'CView {version} (빌드 {build})\n\n{body}\n\nmacOS: Apple Silicon(arm64), {mac}\n'
          'Windows: x64 NSIS 설치 파일. 코드 서명 인증서가 없어 미서명이며 SmartScreen 경고가 표시될 수 있습니다.\n'
-         '업데이트 확인과 다운로드에는 Tailscale 연결이 필요합니다.\n')
+         '업데이트 확인과 다운로드는 인터넷 연결만 있으면 됩니다(Tailscale 불필요).\n')
 Path(output).write_text(notes, encoding='utf-8')
 PY
   echo "── 커밋·태그 v$version (빌드 $build)"

@@ -60,6 +60,27 @@ python3 scripts/publish-update.py --init-signing-key
 
 예전 앱(서명 검증 전 버전)은 `signature`를 무시하고 SHA-256만 확인한다. 서명 검증을 넣은 첫 버전으로 한 번 업데이트한 뒤부터 보호된다.
 
+## 공개 다운로드 경로
+
+앱의 업데이트 확인·다운로드는 Tailscale 없이 공개 인터넷으로 동작한다. Tailscale은 이 Mac에서 서버로 올리는 SSH 업로드·게시에만 쓴다.
+
+| 경로 | 주소 | 공개 범위 |
+| --- | --- | --- |
+| 피드 | `https://cv.dododo.app/releases/latest.json` | 공개 DNS(A 레코드)·공유기 443 포워딩·Let's Encrypt 인증서 |
+| 설치 파일·릴리스 페이지 | `https://cv.dododo.app/releases/<버전>/` | 위와 같음 |
+| 업로드·게시(SSH) | 로컬 설정 `server.json`의 Tailscale 주소 | tailnet만(방화벽 `100.64.0.0/10`, 키 출발지 제한) |
+
+무결성: 피드는 HTTPS로만 받고(앱이 `https_only`, 인증 정보 없는 HTTPS 주소만 허용), 설치 파일은 피드의 `size`·`sha256`과 비교한다. macOS는 그 위에 Developer ID 팀 서명과 Apple 공증(`spctl`)을 확인한다. Windows 설치 파일은 미서명이라 피드의 SHA-256과 위 "피드 서명"(ed25519)으로 확인한다. 공개 경로를 쓰더라도 서명 키는 업데이트 서버에 두지 않으므로 서버 침해만으로는 설치 파일을 바꿔치기할 수 없다.
+
+릴리스 Mac은 서버와 같은 공유기 뒤에 있어(같은 공인 IP, 헤어핀 NAT) `publish-update.py`의 다운로드 검증은 외부 공개 여부를 증명하지 않는다. 공유기·방화벽·DNS를 바꾼 뒤나 사용자 보고가 있을 때는 Tailscale을 끈 외부 네트워크에서 확인한다.
+
+```sh
+curl -fsS https://cv.dododo.app/health.json
+curl -fsS https://cv.dododo.app/releases/latest.json | python3 -m json.tool
+```
+
+앱에서는 설정의 업데이트 확인이 최신 버전을 보여 주고, 새 버전이 있을 때 "업데이트 설치"가 다운로드·검증까지 진행되면 된다. 공인 IP가 바뀌면 DNS A 레코드도 바뀌어야 외부 사용자가 접속할 수 있다.
+
 ## 사전 점검과 전송 시험
 
 ```sh
@@ -117,7 +138,7 @@ git push origin v<버전>
 
 ## 인증과 서버 구성
 
-- 서버 주소·이름·호스트 키는 저장소에 두지 않고 각 Mac의 로컬 설정에 둔다(아래 "로컬 서버 설정"). Tailscale 연결 필요.
+- 서버 주소·이름·호스트 키는 저장소에 두지 않고 각 Mac의 로컬 설정에 둔다(아래 "로컬 서버 설정"). 업로드에는 Tailscale 연결 필요(사용자 다운로드에는 불필요).
 - 자동화 키는 등록된 Mac의 Tailscale 주소에서만 쓸 수 있다.
 - 개인 키: `~/.ssh/cview_release_ed25519`, 소유자만 읽기·쓰기(0600). 암호 없는 자동화 전용 키이며 저장소에는 포함하지 않는다.
 - 다른 키 위치: `CVIEW_RELEASE_SSH_KEY=/절대/경로/key`.

@@ -240,6 +240,18 @@ def verify_https(version=None, expected=None, download=False, signed=False):
     return manifest
 
 
+def check_notes(notes, allow_unnotarized=False):
+    """User-facing disclosures. Tailscale is only for the SSH upload path, never for users."""
+    if not notes.strip() or len(notes.encode('utf-8')) > 65536:
+        raise ValueError('Provide nonempty UTF-8 notes up to 64 KiB')
+    if allow_unnotarized and '공증 안 함' not in notes:
+        raise ValueError('Release notes must disclose: 공증 안 함')
+    if 'SmartScreen' not in notes:
+        raise ValueError('Release notes must disclose unsigned Windows installer / SmartScreen')
+    if 'Tailscale 연결이 필요' in notes:
+        raise ValueError('Release notes must not tell users that updates need Tailscale (the HTTPS feed is public)')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--preflight', action='store_true', help='Check key authentication and HTTPS without uploading')
@@ -288,19 +300,13 @@ def main():
         paths = {name: args.dist / name for name in names[:2]}
         paths['notes.txt'] = args.notes_file
         notes = args.notes_file.read_bytes().decode('utf-8')
-        if not notes.strip() or len(notes.encode('utf-8')) > 65536:
-            raise ValueError('Provide nonempty UTF-8 notes up to 64 KiB')
+        check_notes(notes, args.allow_unnotarized)
         # Verify the actual DMG; bypassing the build wrapper must not bypass distribution checks.
         dmg = str(paths[names[0]])
         subprocess.run(['codesign', '--verify', '--strict', dmg], check=True)
-        if args.allow_unnotarized:
-            if '공증 안 함' not in notes:
-                raise ValueError('Release notes must disclose: 공증 안 함')
-        else:
+        if not args.allow_unnotarized:
             subprocess.run(['xcrun', 'stapler', 'validate', dmg], check=True)
             subprocess.run(['spctl', '-a', '-vv', '-t', 'install', dmg], check=True)
-        if 'SmartScreen' not in notes:
-            raise ValueError('Release notes must disclose unsigned Windows installer / SmartScreen')
         expected = {name: describe(path) for name, path in paths.items()}
         if any(item['size'] <= 0 for item in expected.values()):
             raise ValueError('Empty release file')
