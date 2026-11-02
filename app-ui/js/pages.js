@@ -4,7 +4,7 @@ import { esc, safeUrl, imageSrc } from './dom.js';
 import { swapContent } from './motion.js';
 import { liveGrid, lacksThumbs, THUMB_FILL_DELAY_MS, THUMB_FILL_TRIES, channelRow, emptyState, loadingState, compactCount, skeletonGrid, freshnessText, errorState, friendlyError, uptimeText } from './cards.js';
 import { FOLLOW_SORTS, FOLLOW_FILTERS, arrangeFollowed, followedInsights, followBadges, followAgeText, parseFollowDate, FollowExtras } from './following-info.js';
-import { vodCard } from './channel.js';
+import { vodCard, clipCard } from './channel.js';
 import { verifiedBadge } from './verified-badge.js';
 
 const loginAction = '<button class="btn primary" data-action="login">로그인</button>';
@@ -256,7 +256,8 @@ function followedRow(c) {
   </div>`;
 }
 
-// 통합 검색 — 원본 SearchViews: 라이브·채널·다시보기, 탭, 최근 검색어 (NAV-06).
+// 통합 검색 — 원본 SearchViews: 라이브·채널·다시보기·클립, 탭, 최근 검색어 (NAV-06).
+// 라이브 탭은 방송 중인 검색 채널이 먼저(Rust `merge_search_lives`), 클립은 검색한 채널의 것이다.
 const RECENT_SEARCH_KEY = 'cview.recentSearches';
 function recentSearches() {
   try { return JSON.parse(localStorage.getItem(RECENT_SEARCH_KEY) || '[]').slice(0, 12); } catch { return []; }
@@ -273,13 +274,14 @@ export class SearchPage {
     this.root = root;
     this.body = root.querySelector('.page-body');
     this.input = root.querySelector('input[type=search]');
-    this.input.placeholder = '채널, 라이브, 다시보기 검색…';
+    this.input.placeholder = '채널, 라이브, 다시보기, 클립 검색…';
     this.acceptsParams = true;
     this.seq = 0;
     this.tab = 'all';
     this.query = '';
     this.lastQuery = ''; // 마지막으로 제출한 검색어 — 오류 화면의 "다시 시도"가 이것으로 다시 찾는다
-    this.result = null; // { lives, channels } — 채널·라이브 검색이 실패했으면 null
+    this.result = null; // { lives, channels, clips, errors } — 채널·라이브 검색이 둘 다 실패했으면 null
+    this.clips = null; // { items, hasMore, loading, error } — 더 보기로 늘어난다
     this.mainError = null;
     this.videos = null; // { items, hasMore, loading, error } — 다시보기 검색이 실패했으면 null
     this.videosError = null;
@@ -307,6 +309,9 @@ export class SearchPage {
       const rs = e.target.closest('[data-search-retry]');
       if (rs) { e.stopPropagation(); this.retrySource(rs.dataset.searchRetry); return; }
       if (e.target.closest('[data-vod-more]')) { e.stopPropagation(); this.loadMoreVideos(); return; }
+      if (e.target.closest('[data-clip-more]')) { e.stopPropagation(); this.loadMoreClips(); return; }
+      const clip = e.target.closest('[data-clip-uid]');
+      if (clip) { e.stopPropagation(); window.dispatchEvent(new CustomEvent('cview:open-clip', { detail: { clipUid: clip.dataset.clipUid } })); return; }
       const t = e.target.closest('[data-stab]');
       if (t) { this.tab = t.dataset.stab; this.renderResults(); return; }
       const vod = e.target.closest('[data-vod-no]');
@@ -368,6 +373,7 @@ export class SearchPage {
     if (!q) {
       this.query = '';
       this.result = null;
+      this.clips = null;
       this.videos = null;
       this.renderIdle();
       return;
@@ -381,6 +387,7 @@ export class SearchPage {
     if (main.status === 'rejected' && vods.status === 'rejected') {
       this.query = '';
       this.result = null;
+      this.clips = null;
       this.videos = null;
       this.body.innerHTML = errorState('검색하지 못했습니다', main.reason);
       return;
@@ -394,6 +401,31 @@ export class SearchPage {
   setMain(res) {
     this.result = res.status === 'fulfilled' ? res.value : null;
     this.mainError = res.status === 'rejected' ? res.reason : null;
+    const r = this.result;
+    this.clips = r ? { items: r.clips || [], hasMore: Boolean(r.hasMoreClips), loading: false, error: null } : null;
+  }
+
+  /** 클립 더 보기 — 처음엔 비슷한 채널까지 넓히고, 그다음 각 채널의 다음 쪽. 실패하면 받은 목록은 둔다. */
+  async loadMoreClips() {
+    const c = this.clips;
+    if (!c || c.loading || !c.hasMore) return;
+    const q = this.query;
+    const seq = this.seq;
+    c.loading = true;
+    c.error = null;
+    this.renderResults();
+    try {
+      const res = await api.searchMoreClips(q);
+      if (seq !== this.seq || q !== this.query || c !== this.clips) return;
+      if (res.clips && res.clips.length >= c.items.length) c.items = res.clips;
+      c.hasMore = Boolean(res.hasMore);
+      if (res.error) c.error = new Error(res.error);
+    } catch (e) {
+      if (seq !== this.seq || q !== this.query || c !== this.clips) return;
+      c.error = e;
+    }
+    c.loading = false;
+    this.renderResults();
   }
 
   setVideos(res) {
@@ -443,10 +475,19 @@ export class SearchPage {
     const mainFailed = !this.result;
     const vodFailed = !this.videos;
     const { lives, channels } = this.result || { lives: [], channels: [] };
+    const errs = (this.result && this.result.errors) || {};
     const v = this.videos || { items: [], hasMore: false };
+    const c = this.clips || { items: [], hasMore: false };
     const videos = v.items;
+    const clips = c.items;
     const n = (failed, count, more = false) => (failed ? '실패' : `${count}${more ? '+' : ''}`);
-    const tabs = [['all', '전체'], ['lives', `라이브 ${n(mainFailed, lives.length)}`], ['channels', `채널 ${n(mainFailed, channels.length)}`], ['videos', `다시보기 ${n(vodFailed, videos.length, v.hasMore)}`]];
+    const tabs = [
+      ['all', '전체'],
+      ['lives', `라이브 ${n(mainFailed || (errs.live && !lives.length), lives.length)}`],
+      ['channels', `채널 ${n(mainFailed || (errs.channel && !channels.length), channels.length)}`],
+      ['videos', `다시보기 ${n(vodFailed, videos.length, v.hasMore)}`],
+      ['clips', `클립 ${n(mainFailed || (errs.clip && !clips.length), clips.length, c.hasMore)}`],
+    ];
     const tabBar = `<div class="segmented search-tabs">${tabs.map(([id, l]) => `<button class="seg${this.tab === id ? ' active' : ''}" data-stab="${id}">${l}</button>`).join('')}</div>`;
     const sec = (id, title, items, html, limit, more = false) => {
       if (!items.length) return '';
@@ -458,24 +499,39 @@ export class SearchPage {
     const failBox = (kind, label, err, retrying) => (retrying
       ? `<div class="search-source-error" role="status">${esc(label)} 다시 찾는 중…</div>`
       : `<div class="search-source-error" role="alert"><span><strong>${esc(label)} 검색에 실패했습니다</strong><small>${esc(friendlyError(err))}</small></span><button class="btn" data-search-retry="${kind}">다시 시도</button></div>`);
-    const showMain = this.tab === 'all' || this.tab === 'lives' || this.tab === 'channels';
-    const showVod = this.tab === 'all' || this.tab === 'videos';
+    const on = (...ids) => this.tab === 'all' || ids.includes(this.tab);
     const errors = [
-      showMain && mainFailed ? failBox('main', '라이브·채널', this.mainError, this.mainRetrying) : '',
-      showVod && vodFailed ? failBox('videos', '다시보기', this.videosError, this.videosRetrying) : '',
+      on('lives', 'channels', 'clips') && mainFailed ? failBox('main', '라이브·채널', this.mainError, this.mainRetrying) : '',
+      // 한 구역만 실패 — 받은 다른 구역은 그대로 보인다
+      !mainFailed && errs.live && on('lives') ? failBox('main', '라이브', errs.live, this.mainRetrying) : '',
+      !mainFailed && errs.channel && on('channels') ? failBox('main', '채널', errs.channel, this.mainRetrying) : '',
+      !mainFailed && errs.clip && !clips.length && on('clips') ? failBox('main', '클립', errs.clip, this.mainRetrying) : '',
+      on('videos') && vodFailed ? failBox('videos', '다시보기', this.videosError, this.videosRetrying) : '',
     ].join('');
-    let vodMore = '';
-    if (this.tab === 'videos' && this.videos) {
-      if (v.loading) vodMore = '<button class="btn load-more" disabled>불러오는 중…</button>';
-      else if (v.error) vodMore = `<div class="search-source-error" role="alert"><span><strong>다시보기를 더 불러오지 못했습니다</strong><small>${esc(friendlyError(v.error))}</small></span><button class="btn" data-vod-more>다시 시도</button></div>`;
-      else if (v.hasMore) vodMore = '<button class="btn load-more" data-vod-more>더 보기</button>';
-    }
+    const moreBox = (state, label, attr) => {
+      if (state.loading) return '<button class="btn load-more" disabled>불러오는 중…</button>';
+      if (state.error) return `<div class="search-source-error" role="alert"><span><strong>${label}를 더 불러오지 못했습니다</strong><small>${esc(friendlyError(state.error))}</small></span><button class="btn" ${attr}>다시 시도</button></div>`;
+      if (state.hasMore) return `<button class="btn load-more" ${attr}>더 보기</button>`;
+      return '';
+    };
+    let more = '';
+    if (this.tab === 'videos' && this.videos) more = moreBox(v, '다시보기', 'data-vod-more');
+    if (this.tab === 'clips' && this.clips) more = moreBox(c, '클립', 'data-clip-more');
     const html = [
       sec('lives', '라이브', lives, (l) => liveGrid(l), 8),
-      sec('channels', '채널', channels, (c) => `<div class="channel-list">${c.map(channelRow).join('')}</div>`, 6),
+      sec('channels', '채널', channels, (x) => `<div class="channel-list">${x.map(channelRow).join('')}</div>`, 6),
       sec('videos', '다시보기', videos, (x) => `<div class="grid">${x.map(vodCard).join('')}</div>`, 8, v.hasMore),
+      sec('clips', '클립', clips, (x) => `<div class="grid clip-grid">${x.map(clipCard).join('')}</div>`, 8, c.hasMore),
     ].join('');
-    const empty = !html && !errors ? emptyState('검색 결과가 없습니다', `"${this.query}"`) : '';
-    this.body.innerHTML = tabBar + errors + html + vodMore + empty;
+    // 빈 상태 — 탭마다 무엇이 없는지 말한다. 클립은 더 보기로 비슷한 채널까지 넓힐 수 있다.
+    const emptyText = {
+      all: '검색 결과가 없습니다',
+      lives: '지금 방송 중인 채널이 없습니다',
+      channels: '채널을 찾지 못했습니다',
+      videos: '다시보기가 없습니다',
+      clips: c.hasMore ? '검색한 채널에 맞는 클립이 아직 없습니다' : '클립이 없습니다',
+    };
+    const empty = !html && !errors ? emptyState(emptyText[this.tab] || emptyText.all, `"${this.query}"`) : '';
+    this.body.innerHTML = tabBar + errors + html + empty + more;
   }
 }

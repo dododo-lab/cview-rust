@@ -314,6 +314,33 @@ impl Serialize for ClipInfo {
     }
 }
 
+/// 채널 클립 목록 한 쪽 (`/channels/{id}/clips`).
+///
+/// [SEARCH 2026-11-03] 이 API 는 `page` 를 무시하고 `page.next.clipUID` 커서로만 넘긴다 —
+/// 다음 쪽은 그 값을 `clipUID` 로 보내야 받는다. 커서가 없으면 마지막 쪽이다.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ClipListPage {
+    pub data: Vec<ClipInfo>,
+    pub next_clip_uid: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for ClipListPage {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let o = LenientObject::from_deserializer(d)?;
+        let next_clip_uid = o
+            .raw("page")
+            .and_then(|p| p.get("next"))
+            .and_then(|n| n.get("clipUID"))
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
+        Ok(Self {
+            data: o.array("data"),
+            next_clip_uid,
+        })
+    }
+}
+
 /// 검색 자동완성 제안 종류.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AutocompleteSuggestionKind {
@@ -396,6 +423,26 @@ impl LiveSortOption {
 mod tests {
     //! `Tests/CViewCoreTests/SearchModelsTests.swift` 의 디코딩 계약을 옮겼다.
     use super::*;
+
+    #[test]
+    fn clip_list_page_reads_clip_uid_cursor() {
+        // 실제 응답 모양 — `page` 를 무시하고 `page.next.clipUID` 로만 넘긴다.
+        let json = r#"{"size":2,"page":{"next":{"clipUID":"XNkbif0uJm"},"prev":null},
+            "data":[{"clipUID":"a","clipTitle":"A"},{"clipUID":"b","clipTitle":"B"}],
+            "hasStreamerClips":true}"#;
+        let p: ClipListPage = serde_json::from_str(json).unwrap();
+        assert_eq!(p.data.len(), 2);
+        assert_eq!(p.next_clip_uid.as_deref(), Some("XNkbif0uJm"));
+        // 마지막 쪽: next 가 null 이거나 비어 있거나 page 자체가 없다.
+        for last in [
+            r#"{"page":{"next":null},"data":[]}"#,
+            r#"{"page":{"next":{"clipUID":""}},"data":[]}"#,
+            r#"{"data":[]}"#,
+        ] {
+            let p: ClipListPage = serde_json::from_str(last).unwrap();
+            assert_eq!(p.next_clip_uid, None, "{last}");
+        }
+    }
 
     #[test]
     fn search_result_isolates_bad_elements() {

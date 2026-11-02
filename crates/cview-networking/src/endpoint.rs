@@ -88,6 +88,8 @@ pub enum ChzzkEndpoint {
         channel_id: String,
         page: i64,
         size: i64,
+        /// 다음 쪽 커서(`page.next.clipUID`). 서버는 `page` 를 무시하고 이것으로만 넘긴다.
+        cursor: Option<String>,
     },
     ClipDetail {
         clip_uid: String,
@@ -239,7 +241,15 @@ impl EndpointProtocol for ChzzkEndpoint {
                 q("size", size),
                 q("sortType", "LATEST"),
             ]),
-            ClipList { page, size, .. } => Some(vec![q("page", page), q("size", size)]),
+            ClipList {
+                page, size, cursor, ..
+            } => {
+                let mut items = vec![q("page", page), q("size", size)];
+                if let Some(c) = cursor.as_deref().filter(|c| !c.is_empty()) {
+                    items.push(q("clipUID", c));
+                }
+                Some(items)
+            }
             ClipDetail { .. } => Some(
                 [
                     "COMMENT",
@@ -457,6 +467,24 @@ mod tests {
         assert_eq!(
             query_string(&ChzzkEndpoint::Following { size: 50, page: 2 }),
             "size=50&sortType=FOLLOW&page=2"
+        );
+        assert_eq!(
+            query_string(&ChzzkEndpoint::ClipList {
+                channel_id: "c".into(),
+                page: 0,
+                size: 20,
+                cursor: Some("XNkbif0uJm".into()),
+            }),
+            "page=0&size=20&clipUID=XNkbif0uJm"
+        );
+        assert_eq!(
+            query_string(&ChzzkEndpoint::ClipList {
+                channel_id: "c".into(),
+                page: 0,
+                size: 20,
+                cursor: None,
+            }),
+            "page=0&size=20"
         );
         assert_eq!(
             query_string(&ChzzkEndpoint::SearchLive {

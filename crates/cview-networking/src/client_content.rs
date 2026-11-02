@@ -11,8 +11,8 @@ use cview_core::models::clip::{ClipInkeyContent, NaverVodPlayResponse};
 use cview_core::models::community::ChannelPostsContent;
 use cview_core::models::{
     ChannelFollowStatus, ChannelInfo, ChannelSearchItem, ChannelViewerInfo, ClipDetail, ClipInfo,
-    LiveInfo, LiveSearchItem, SearchResult, TimeMachinePlaybackInfo, VideoSearchItem, VodDetail,
-    VodInfo,
+    ClipListPage, LiveInfo, LiveSearchItem, SearchResult, TimeMachinePlaybackInfo, VideoSearchItem,
+    VodDetail, VodInfo,
 };
 use cview_core::protocols::{HttpCookie, HttpMethod, QueryItem};
 use url::Url;
@@ -212,6 +212,23 @@ impl ChzzkApiClient {
             channel_id: channel_id.into(),
             page,
             size,
+            cursor: None,
+        })
+        .await
+    }
+
+    /// 클립 목록 한 쪽 — `cursor` 는 앞 쪽의 [`ClipListPage::next_clip_uid`]. `None` 이면 첫 쪽.
+    pub async fn clip_list_page(
+        &self,
+        channel_id: &str,
+        cursor: Option<&str>,
+        size: i64,
+    ) -> Result<ClipListPage, ApiError> {
+        self.request(&ChzzkEndpoint::ClipList {
+            channel_id: channel_id.into(),
+            page: 0,
+            size,
+            cursor: cursor.map(str::to_string),
         })
         .await
     }

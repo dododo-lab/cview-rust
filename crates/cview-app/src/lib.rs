@@ -311,6 +311,7 @@ pub fn run() {
             commands::live::following_lives,
             commands::live::popular_lives,
             commands::live::search,
+            commands::live::search_more_clips,
             commands::live::channel_info,
             commands::live::live_detail,
             commands::player::player_start,

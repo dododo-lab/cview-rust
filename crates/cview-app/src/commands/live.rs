@@ -1,15 +1,19 @@
 //! 라이브 목록·검색·채널/라이브 상세 명령.
 
 use cview_app_core::caching::following_store::to_live_channel_item;
+use std::collections::{BTreeMap, HashMap};
+
 use cview_app_core::viewmodels::all_broadcasts::LoadState;
+use cview_app_core::viewmodels::search::SearchScope;
 use cview_core::models::search::SearchType;
-use cview_core::models::LiveChannelItem;
+use cview_core::models::{LiveChannelItem, LiveInfo};
 use cview_core::utils::following_poll::FollowingPollReason;
 use tauri::State;
 
 use super::{CmdResult, CommandError};
 use crate::dto::{
-    following_live_cards, live_cards, ChannelDto, LiveCardDto, LiveDetailDto, SearchResultsDto,
+    following_live_cards, live_cards, ChannelDto, LiveCardDto, LiveDetailDto, SearchClipsDto,
+    SearchResultsDto,
 };
 use crate::state::AppServices;
 
@@ -93,7 +97,10 @@ pub async fn popular_lives(
     Ok(live_cards(&s.feed[..take]))
 }
 
-/// 채널 + 라이브 통합 검색 — app-core `SearchViewModel`(15초 결과 캐시·최근 검색어 포함).
+/// 채널 + 라이브 + 클립 통합 검색 — app-core `SearchViewModel`(15초 결과 캐시·최근 검색어 포함).
+///
+/// 라이브는 방송 중인 검색 채널이 먼저(라이브 검색 API 가 채널 이름으로는 찾지 못한다), 클립은 검색한
+/// 채널의 것이다. 구역별 실패는 `errors` 로 알리고, 채널·라이브가 둘 다 실패해야 명령이 실패한다.
 #[tauri::command]
 pub async fn search(
     services: State<'_, AppServices>,
@@ -104,13 +111,15 @@ pub async fn search(
             keyword: String::new(),
             channels: Vec::new(),
             lives: Vec::new(),
+            clips: Vec::new(),
+            has_more_clips: false,
+            errors: BTreeMap::new(),
         });
     };
     let vm = &services.search;
     vm.set_query(keyword.clone());
     vm.perform_search(false).await;
     let st = vm.read();
-    // 한쪽만 실패하면 다른 쪽 결과는 보여준다. 둘 다 실패하면 오류.
     let channel_error = st.bucket_errors.get(&SearchType::Channel);
     let live_error = st.bucket_errors.get(&SearchType::Live);
     if let (Some(e), Some(_)) = (channel_error, live_error) {
@@ -124,8 +133,53 @@ pub async fn search(
             .take(SEARCH_PAGE_SIZE)
             .map(ChannelDto::from)
             .collect(),
-        lives: live_cards(&st.live_results[..st.live_results.len().min(SEARCH_PAGE_SIZE)]),
+        lives: search_live_cards(&st.merged_live_results()),
+        clips: st.clip_results.clone(),
+        has_more_clips: st.has_more_clips,
+        errors: bucket_errors(&st.bucket_errors),
     })
+}
+
+/// 검색 클립 더 보기 — 처음엔 비슷한 채널까지 넓히고, 그다음은 각 채널의 다음 쪽(커서)을 받는다.
+#[tauri::command]
+pub async fn search_more_clips(
+    services: State<'_, AppServices>,
+    keyword: String,
+) -> CmdResult<SearchClipsDto> {
+    let Some(keyword) = normalize_keyword(&keyword) else {
+        return Err(CommandError("검색어가 없습니다".into()));
+    };
+    let vm = &services.search;
+    if vm.read().completed_search_query() != Some(keyword.as_str()) {
+        // 그사이 다른 검색어로 바뀌었다 — 그 결과에 이 검색어 클립을 섞지 않는다.
+        return Err(CommandError("검색어가 바뀌었습니다".into()));
+    }
+    let before = vm.read().clip_results.len();
+    vm.on_scope_changed(SearchScope::Clip).await;
+    if vm.read().clip_results.len() == before {
+        vm.load_more().await;
+    }
+    let st = vm.read();
+    Ok(SearchClipsDto {
+        clips: st.clip_results.clone(),
+        has_more: st.has_more_clips,
+        error: st.bucket_errors.get(&SearchType::Clip).cloned(),
+    })
+}
+
+/// 검색 라이브 카드 — 합친 순서를 지키고 [`SEARCH_PAGE_SIZE`] 개까지.
+fn search_live_cards(lives: &[LiveInfo]) -> Vec<LiveCardDto> {
+    let mut cards = live_cards(lives);
+    cards.truncate(SEARCH_PAGE_SIZE);
+    cards
+}
+
+/// 버킷 오류 → `{ "channel" | "live" | "video" | "clip": 문구 }`.
+fn bucket_errors(errors: &HashMap<SearchType, String>) -> BTreeMap<String, String> {
+    errors
+        .iter()
+        .map(|(ty, e)| (SearchScope::from_search_type(*ty).raw_value().to_string(), e.clone()))
+        .collect()
 }
 
 #[tauri::command]

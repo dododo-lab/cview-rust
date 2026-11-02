@@ -12,14 +12,13 @@ use std::time::Duration;
 use async_trait::async_trait;
 
 use cview_app_core::viewmodels::search::{
-    MemoryRecentSearchStore, RecentSearchStore, ResultCache, SearchApi, SearchLandingSnapshot,
-    SearchScope, SearchViewModel,
+    channel_name_key, merge_search_lives, MemoryRecentSearchStore, RecentSearchStore, ResultCache,
+    SearchApi, SearchLandingSnapshot, SearchScope, SearchViewModel,
 };
 use cview_core::models::search::{
-    AutocompleteSuggestionKind, ClipInfo, LiveSortOption, SearchResult, VodInfo,
+    AutocompleteSuggestionKind, ClipInfo, ClipListPage, LiveSortOption, SearchResult, VodInfo,
 };
 use cview_core::models::{ChannelInfo, LiveChannelItem, LiveInfo};
-use cview_networking::PagedContent;
 
 #[derive(Default)]
 struct FakeApi {
@@ -28,6 +27,7 @@ struct FakeApi {
     lives: AtomicUsize,
     videos: AtomicUsize,
     clip_requests: Mutex<Vec<(String, i64)>>,
+    channel_live_requests: Mutex<Vec<String>>,
 }
 
 impl FakeApi {
@@ -42,6 +42,7 @@ impl FakeApi {
             + self.lives.load(Ordering::SeqCst)
             + self.videos.load(Ordering::SeqCst)
             + self.clip_requests.lock().unwrap().len()
+            + self.channel_live_requests.lock().unwrap().len()
     }
     /// API 응답 캐시 만료 (Swift `apiClock.advance(120)`).
     fn expire_cache(&self) {
@@ -64,6 +65,13 @@ fn channel(id: &str, name: &str, followers: i64) -> ChannelInfo {
     c
 }
 
+fn live(id: i64, channel_id: &str, viewers: i64) -> LiveInfo {
+    let mut l = LiveInfo::new(id, format!("방송 {id}"));
+    l.concurrent_user_count = viewers;
+    l.channel = Some(ChannelInfo::new(channel_id, channel_id));
+    l
+}
+
 #[async_trait]
 impl SearchApi for FakeApi {
     async fn search_channels(
@@ -77,9 +85,12 @@ impl SearchApi for FakeApi {
             .lock()
             .unwrap()
             .insert((keyword.to_string(), offset, epoch));
+        // c1 은 검색어와 이름이 같고 방송 중 — 라이브 검색(제목·태그)에는 안 나온다.
+        let mut exact = channel("c1", "리그", 1_000);
+        exact.open_live = true;
         Ok(result(vec![
             channel("c3", "전설의 리그 팬", 10),
-            channel("c1", "리그", 1_000),
+            exact,
             channel("c2", "리그 방송", 5),
         ]))
     }
@@ -90,11 +101,7 @@ impl SearchApi for FakeApi {
         _s: i64,
     ) -> Result<SearchResult<LiveInfo>, String> {
         self.lives.fetch_add(1, Ordering::SeqCst);
-        let mut a = LiveInfo::new(1, "a");
-        a.concurrent_user_count = 5;
-        let mut b = LiveInfo::new(2, "b");
-        b.concurrent_user_count = 50;
-        Ok(result(vec![a, b]))
+        Ok(result(vec![live(1, "x1", 5), live(2, "x2", 50)]))
     }
     async fn search_videos(
         &self,
@@ -108,23 +115,45 @@ impl SearchApi for FakeApi {
     async fn clip_list(
         &self,
         channel_id: &str,
-        page: i64,
+        cursor: Option<&str>,
         size: i64,
-    ) -> Result<PagedContent<ClipInfo>, String> {
+    ) -> Result<ClipListPage, String> {
+        // 커서는 "{채널}#{쪽}" — 서버처럼 쪽 번호 대신 앞 쪽이 준 커서로만 넘긴다.
+        let page = cursor
+            .and_then(|c| c.strip_prefix(&format!("{channel_id}#")))
+            .and_then(|n| n.parse().ok())
+            .unwrap_or(0);
         self.clip_requests
             .lock()
             .unwrap()
             .push((channel_id.to_string(), page));
-        let count = if channel_id == "c3" { size } else { 5 };
+        // 검색한 채널(c1)은 쪽이 꽉 차고, 제목에 검색어가 없는 클립도 섞여 있다.
+        let full = channel_id == "c1";
+        let count = if full { size } else { 5 };
         let data: Vec<ClipInfo> = (0..count)
             .map(|i| {
-                ClipInfo::new(
-                    format!("{channel_id}-p{page}-{i}"),
-                    format!("리그 하이라이트 {i}"),
-                )
+                let title = if full && i % 2 == 0 {
+                    format!("명장면 {i}")
+                } else {
+                    format!("리그 하이라이트 {i}")
+                };
+                ClipInfo::new(format!("{channel_id}-p{page}-{i}"), title)
             })
             .collect();
-        Ok(PagedContent::new(data.len() as i64, None, data, None))
+        let next_clip_uid = full.then(|| format!("{channel_id}#{}", page + 1));
+        Ok(ClipListPage {
+            data,
+            next_clip_uid,
+        })
+    }
+    async fn channel_live(&self, channel_id: &str) -> Result<Option<LiveInfo>, String> {
+        self.channel_live_requests
+            .lock()
+            .unwrap()
+            .push(channel_id.to_string());
+        let mut l = LiveInfo::new(100, "검색 채널 방송");
+        l.concurrent_user_count = 1;
+        Ok((channel_id == "c1").then_some(l))
     }
 }
 
@@ -166,7 +195,7 @@ fn req(id: &str, page: i64) -> (String, i64) {
 }
 
 #[tokio::test]
-async fn cold_search_is_four_requests() {
+async fn cold_search_request_budget() {
     let h = harness();
     search(&h, KEYWORD).await;
     assert_eq!(
@@ -174,10 +203,15 @@ async fn cold_search_is_four_requests() {
         1,
         "클립 소스 조회가 채널 검색과 병합되지 않았다"
     );
-    assert_eq!(h.api.clip_set(), [req("c3", 0)].into_iter().collect());
-    assert!(h.api.total() <= 4);
+    assert_eq!(h.api.clip_set(), [req("c1", 0)].into_iter().collect());
+    assert_eq!(
+        *h.api.channel_live_requests.lock().unwrap(),
+        ["c1"],
+        "방송 중인 채널만 라이브를 받는다"
+    );
+    assert!(h.api.total() <= 5);
     let st = h.vm.read();
-    assert_eq!(st.clip_source_channel_ids(), ["c3", "c1", "c2"]);
+    assert_eq!(st.clip_source_channel_ids(), ["c1", "c2", "c3"]);
     assert_eq!(st.channel_results[0].channel_id, "c1");
     assert_eq!(st.clip_results.len(), 20);
     assert!(st.has_more_clips);
@@ -200,19 +234,19 @@ async fn clip_tab_catches_up_remaining_sources() {
     );
     assert_eq!(
         h.api.clip_set(),
-        [req("c3", 0), req("c1", 0), req("c2", 0)]
+        [req("c1", 0), req("c2", 0), req("c3", 0)]
             .into_iter()
             .collect()
     );
     {
         let st = h.vm.read();
         assert_eq!(st.clip_results.len(), 30);
-        let exhausted: HashSet<String> = ["c1".to_string(), "c2".to_string()].into_iter().collect();
+        let exhausted: HashSet<String> = ["c2".to_string(), "c3".to_string()].into_iter().collect();
         assert_eq!(st.clip_exhausted(), &exhausted);
     }
     h.vm.on_scope_changed(SearchScope::All).await;
     h.vm.on_scope_changed(SearchScope::Clip).await;
-    assert_eq!(h.api.total(), 6);
+    assert_eq!(h.api.total(), 7);
 }
 
 #[tokio::test]
@@ -224,10 +258,15 @@ async fn load_more_fetches_only_unexhausted_next_page() {
     let before = h.api.clip_set();
     h.vm.load_more().await;
     let added: HashSet<_> = h.api.clip_set().difference(&before).cloned().collect();
-    assert_eq!(added, [req("c3", 1)].into_iter().collect());
+    assert_eq!(added, [req("c1", 1)].into_iter().collect());
     assert_eq!(h.api.channel_searches(), 1);
     let st = h.vm.read();
-    assert_eq!(st.clip_next_page().get("c3"), Some(&2));
+    assert_eq!(st.clip_next_page().get("c1"), Some(&2));
+    assert_eq!(
+        st.clip_results.len(),
+        50,
+        "다음 쪽은 커서로 받아 새 클립이 붙는다"
+    );
     assert!(st.has_more_clips);
 }
 
@@ -239,7 +278,7 @@ async fn load_more_catches_up_before_paging() {
     h.vm.load_more().await;
     assert_eq!(
         h.api.clip_set(),
-        [req("c3", 0), req("c1", 0), req("c2", 0)]
+        [req("c1", 0), req("c2", 0), req("c3", 0)]
             .into_iter()
             .collect()
     );
@@ -271,15 +310,80 @@ async fn snapshot_restore_keeps_clip_sources() {
     leave_and_return(&h);
     {
         let st = h.vm.read();
-        assert_eq!(st.clip_source_channel_ids(), ["c3", "c1", "c2"]);
+        assert_eq!(st.clip_source_channel_ids(), ["c1", "c2", "c3"]);
         assert_eq!(st.clip_results.len(), 30);
+        assert_eq!(
+            st.merged_live_results()[0].live_id,
+            100,
+            "복원도 채널 라이브를 둔다"
+        );
     }
     h.vm.lock().selected_scope = SearchScope::Clip;
     let before = h.api.clip_set();
     h.vm.load_more().await;
     assert_eq!(h.api.channel_searches(), 1);
     let added: HashSet<_> = h.api.clip_set().difference(&before).cloned().collect();
-    assert_eq!(added, [req("c3", 1)].into_iter().collect());
+    assert_eq!(added, [req("c1", 1)].into_iter().collect());
+}
+
+#[tokio::test]
+async fn live_channel_from_channel_search_joins_live_tab() {
+    let h = harness();
+    search(&h, KEYWORD).await;
+    let st = h.vm.read();
+    // 라이브 검색만으로는 c1 방송이 없다 — 채널 검색의 openLive 로 받아 맨 앞에 둔다.
+    assert!(st.live_results.iter().all(|l| l.live_id != 100));
+    let merged: Vec<i64> = st.merged_live_results().iter().map(|l| l.live_id).collect();
+    assert_eq!(
+        merged,
+        [100, 2, 1],
+        "검색 채널 라이브 먼저, 그다음 시청자 많은순"
+    );
+    let c = st.merged_live_results()[0].channel.clone().unwrap();
+    assert_eq!(
+        c.channel_id, "c1",
+        "채널 정보가 없는 라이브에는 검색한 채널을 넣는다"
+    );
+    drop(st);
+    assert_eq!(h.vm.snapshot().live_results.len(), 3);
+}
+
+#[tokio::test]
+async fn searched_channel_clips_ignore_title_filter() {
+    let h = harness();
+    search(&h, KEYWORD).await;
+    let st = h.vm.read();
+    // c1 은 이름이 검색어와 같아 제목에 "리그" 가 없는 클립("명장면")도 보인다.
+    assert!(st.clip_full_channel_ids().contains("c1"));
+    assert_eq!(st.clip_results.len(), 20);
+    assert!(st
+        .clip_results
+        .iter()
+        .any(|c| c.clip_title.starts_with("명장면")));
+}
+
+#[test]
+fn merge_search_lives_dedups_by_channel_and_live() {
+    let pinned = vec![live(100, "c1", 1)];
+    // 키워드 결과에도 c1 의 같은 방송(다른 표본)과 같은 live_id 가 섞여 온다.
+    let keyword = vec![
+        live(2, "x2", 50),
+        live(100, "c1", 9),
+        live(7, "c1", 3),
+        live(1, "x1", 5),
+    ];
+    let ids: Vec<i64> = merge_search_lives(&pinned, &keyword)
+        .iter()
+        .map(|l| l.live_id)
+        .collect();
+    assert_eq!(ids, [100, 2, 1]);
+    assert_eq!(
+        merge_search_lives(&[], &keyword).len(),
+        3,
+        "채널 라이브가 없어도 중복 채널은 하나"
+    );
+    assert_eq!(channel_name_key(" 풍 월량 "), channel_name_key("풍월량"));
+    assert_eq!(channel_name_key("Faker"), channel_name_key("faker"));
 }
 
 #[tokio::test]

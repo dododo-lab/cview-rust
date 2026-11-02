@@ -2,11 +2,11 @@
 
 use std::collections::{HashMap, HashSet};
 
-use cview_core::models::search::{ClipInfo, SearchType};
+use cview_core::models::search::{ClipListPage, SearchType};
 
 use super::{
-    new_search_id, sort_lives, SearchState, Snapshot, CLIP_SOURCE_CHANNEL_COUNT, PAGE_SIZE,
-    SNAPSHOT_MAX_AGE, SNAPSHOT_MAX_ROWS,
+    new_search_id, sort_lives, SearchState, Snapshot, CLIP_SOURCE_CHANNEL_COUNT, SNAPSHOT_MAX_AGE,
+    SNAPSHOT_MAX_ROWS,
 };
 
 impl SearchState {
@@ -19,7 +19,7 @@ impl SearchState {
         }
         let counts = [
             self.channel_results.len(),
-            self.live_results.len(),
+            self.live_results.len() + self.channel_lives.len(),
             self.video_results.len(),
             self.clip_results.len(),
         ];
@@ -31,6 +31,7 @@ impl SearchState {
         let snapshot = Snapshot {
             channels: self.channel_results.clone(),
             lives: self.live_results.clone(),
+            channel_lives: self.channel_lives.clone(),
             videos: self.video_results.clone(),
             clips: self.clip_results.clone(),
             offsets: [
@@ -51,7 +52,9 @@ impl SearchState {
             clip_source_channel_ids: self.clip_source_channel_ids.clone(),
             clip_source_keyword: self.clip_source_keyword.clone(),
             clip_next_page: self.clip_next_page.clone(),
+            clip_cursor: self.clip_cursor.clone(),
             clip_exhausted: self.clip_exhausted.clone(),
+            clip_full_channel_ids: self.clip_full_channel_ids.clone(),
         };
         self.result_cache.insert(snapshot, &key);
     }
@@ -68,6 +71,7 @@ impl SearchState {
         };
         self.channel_results = s.channels;
         self.live_results = s.lives;
+        self.channel_lives = s.channel_lives;
         self.video_results = s.videos;
         self.clip_results = s.clips;
         [
@@ -89,7 +93,9 @@ impl SearchState {
         self.clip_source_channel_ids = s.clip_source_channel_ids;
         self.clip_source_keyword = s.clip_source_keyword;
         self.clip_next_page = s.clip_next_page;
+        self.clip_cursor = s.clip_cursor;
         self.clip_exhausted = s.clip_exhausted;
+        self.clip_full_channel_ids = s.clip_full_channel_ids;
         self.sort_live_results();
         true
     }
@@ -100,13 +106,16 @@ impl SearchState {
         self.clip_source_channel_ids.clear();
         self.clip_source_keyword = None;
         self.clip_next_page.clear();
+        self.clip_cursor.clear();
         self.clip_exhausted.clear();
+        self.clip_full_channel_ids.clear();
     }
 
     pub fn clear_results(&mut self) {
         self.active_search_id = new_search_id();
         self.channel_results.clear();
         self.live_results.clear();
+        self.channel_lives.clear();
         self.video_results.clear();
         self.clip_results.clear();
         self.channel_offset = 0;
@@ -140,7 +149,11 @@ impl SearchState {
             < CLIP_SOURCE_CHANNEL_COUNT.min(self.clip_source_channel_ids.len())
     }
 
-    pub(super) fn clip_fetch_targets(&self, channel_limit: usize) -> Vec<(String, i64)> {
+    /// 받을 (채널, 쪽 번호, 커서). 아직 시작 안 한 채널이 있으면 그것들만, 없으면 소진 안 된 채널의 다음 쪽.
+    pub(super) fn clip_fetch_targets(
+        &self,
+        channel_limit: usize,
+    ) -> Vec<(String, i64, Option<String>)> {
         let window: Vec<&String> = self
             .clip_source_channel_ids
             .iter()
@@ -163,6 +176,7 @@ impl SearchState {
                 (
                     id.clone(),
                     self.clip_next_page.get(id).copied().unwrap_or(0),
+                    self.clip_cursor.get(id).cloned(),
                 )
             })
             .collect()
@@ -170,24 +184,33 @@ impl SearchState {
 
     pub(super) fn apply_clip_pages(
         &mut self,
-        fetched: &HashMap<String, Vec<ClipInfo>>,
-        targets: &[(String, i64)],
+        fetched: &HashMap<String, ClipListPage>,
+        targets: &[(String, i64, Option<String>)],
         keyword: &str,
     ) {
-        let mut clips = Vec::new();
-        for (id, page) in targets {
+        let keyword_lower = keyword.to_lowercase();
+        let mut filtered = Vec::new();
+        for (id, page, _) in targets {
             let rows = fetched.get(id).cloned().unwrap_or_default();
             self.clip_next_page.insert(id.clone(), page + 1);
-            if (rows.len() as i64) < PAGE_SIZE {
-                self.clip_exhausted.insert(id.clone());
+            // 다음 쪽은 커서로만 받는다 — 커서가 없거나 빈 쪽이면 그 채널은 끝.
+            match rows.next_clip_uid.filter(|_| !rows.data.is_empty()) {
+                Some(cursor) => {
+                    self.clip_cursor.insert(id.clone(), cursor);
+                }
+                None => {
+                    self.clip_cursor.remove(id);
+                    self.clip_exhausted.insert(id.clone());
+                }
             }
-            clips.extend(rows);
+            // 검색한 채널(이름이 같은 채널)의 클립은 모두, 다른 소스 채널은 제목에 검색어가 있는 것만.
+            let full = self.clip_full_channel_ids.contains(id);
+            filtered.extend(
+                rows.data
+                    .into_iter()
+                    .filter(|c| full || c.clip_title.to_lowercase().contains(&keyword_lower)),
+            );
         }
-        let keyword_lower = keyword.to_lowercase();
-        let filtered: Vec<ClipInfo> = clips
-            .into_iter()
-            .filter(|c| c.clip_title.to_lowercase().contains(&keyword_lower))
-            .collect();
         if self.clip_page == 0 {
             self.clip_results = filtered;
         } else {
