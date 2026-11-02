@@ -7,15 +7,20 @@
 //!    Developer ID 팀 [`TEAM_ID`]·번들 [`BUNDLE_ID`] 로 서명됐는지(`codesign -R`), Apple 공증을 통과하는지
 //!    (`spctl`), 버전이 피드와 같은지 본다. 통과하면 지금 번들과 이름을 맞바꾸고, 앱이 끝나면 새 번들을 연다.
 //!    Windows: NSIS 설치 파일을 수동 조작 없는 모드(`/P /R /UPDATE`)로 실행한다 — 설치 파일이 앱을 닫고
-//!    설치한 뒤 다시 연다. 설치 파일은 아직 코드 서명이 없어 SHA-256(HTTPS 피드)만 확인한다.
+//!    설치한 뒤 다시 연다. 설치 파일은 아직 코드 서명이 없으므로 아래 피드 서명이 유일한 출처 증명이다.
 //!
-//! 피드 형식은 바꾸지 않는다 — `publish.py` 가 이미 자산마다 `sha256` 을 적는다. 예전 앱은 이 필드를 무시한다.
+//! 피드 서명: 릴리스 Mac 만 가진 ed25519 키가 {버전, 릴리스 페이지, 노트 해시, 자산 이름·크기·SHA-256·주소}
+//! 에 서명해 `latest.json` 의 `signature` 로 싣는다([`signed_payload`]). 앱은 [`TRUSTED_KEYS`] 의 키로
+//! 검증된 피드만 자동 설치한다 — 업데이트 서버가 털려도 설치 파일을 바꿔치기할 수 없다.
+//! 서명이 없거나 틀린 피드(예전 피드 포함)는 자동 설치하지 않고 다운로드 단추만 보인다.
+//! 예전 앱(서명 검증 전)은 `signature` 필드를 무시하고 SHA-256 만 본다.
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use cview_app_core::services::update_service::{compare_versions, GitHubAsset};
+use base64::Engine;
+use cview_app_core::services::update_service::{compare_versions, GitHubAsset, GitHubRelease};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, Manager};
@@ -89,6 +94,90 @@ pub fn can_auto_install(asset: &GitHubAsset, os: &str) -> bool {
         && asset.sha256.as_deref().and_then(parse_sha256).is_some()
 }
 
+/// 피드 서명 공개 키 목록(저장소 `update-signing-keys.txt`). 비어 있으면 어떤 피드도 자동 설치하지 않는다.
+pub const TRUSTED_KEYS: &str = include_str!("../update-signing-keys.txt");
+
+/// 서명 대상 첫 줄 — `release_gateway.SIGNATURE_FORMAT` 과 같아야 한다.
+const SIGNATURE_FORMAT: &str = "cview-update-signature-v1";
+
+/// 서명 대상 바이트 — `release_gateway.signed_payload` 와 같은 형식. 공백이 든 필드는 거부한다. 순수 함수.
+pub fn signed_payload(release: &GitHubRelease) -> Option<Vec<u8>> {
+    let mut rows: Vec<Vec<String>> = vec![
+        vec![SIGNATURE_FORMAT.into()],
+        vec!["version".into(), release.version_string().into()],
+        vec!["release".into(), release.html_url.as_ref()?.to_string()],
+        vec![
+            "notes".into(),
+            hex(&Sha256::digest(
+                release.body.as_deref().unwrap_or("").as_bytes(),
+            )),
+        ],
+    ];
+    let mut assets: Vec<&GitHubAsset> = release.assets.iter().collect();
+    assets.sort_by(|a, b| a.name.cmp(&b.name));
+    for a in assets {
+        if a.size <= 0 {
+            return None;
+        }
+        rows.push(vec![
+            "asset".into(),
+            a.name.clone(),
+            a.size.to_string(),
+            a.sha256.clone()?,
+            a.browser_download_url.to_string(),
+        ]);
+    }
+    // 필드 안의 공백·제어 문자는 줄·필드 경계를 흐리므로 받지 않는다(서버 쪽도 같은 규칙).
+    let clean = rows
+        .iter()
+        .flatten()
+        .all(|f| !f.is_empty() && !f.chars().any(|c| c.is_whitespace() || c.is_control()));
+    let text: String = rows.iter().map(|r| r.join(" ") + "\n").collect();
+    clean.then(|| text.into_bytes())
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// 공개 키 ID — SHA-256 앞 8바이트 16진수.
+fn key_id(key: &[u8]) -> String {
+    hex(&Sha256::digest(key)[..8])
+}
+
+/// `keys`(한 줄에 base64 공개 키 하나, `#` 주석) 중 하나로 피드 서명이 맞는가. 순수 함수.
+pub fn verify_release_signature(release: &GitHubRelease, keys: &str) -> Result<(), &'static str> {
+    let b64 = base64::engine::general_purpose::STANDARD;
+    let sig = release.signature.as_ref().ok_or("서명 없는 피드")?;
+    if sig.alg != "ed25519" {
+        return Err("지원하지 않는 서명 방식");
+    }
+    let key = keys
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .filter_map(|l| b64.decode(l).ok())
+        .filter(|k| k.len() == 32)
+        .find(|k| key_id(k) == sig.key_id)
+        .ok_or("신뢰하지 않는 서명 키")?;
+    let value = b64.decode(&sig.value).map_err(|_| "서명 형식 오류")?;
+    let payload = signed_payload(release).ok_or("서명 대상 형식 오류")?;
+    ring::signature::UnparsedPublicKey::new(&ring::signature::ED25519, key)
+        .verify(&payload, &value)
+        .map_err(|_| "서명 불일치")
+}
+
+/// 이 앱에 넣은 키로 피드 서명을 확인한다.
+pub fn release_is_signed(release: &GitHubRelease) -> bool {
+    match verify_release_signature(release, TRUSTED_KEYS) {
+        Ok(()) => true,
+        Err(why) => {
+            tracing::warn!("업데이트 피드 서명 확인 실패: {why}");
+            false
+        }
+    }
+}
+
 /// 경로에 쓰는 버전은 `1.2.3` 꼴만. 순수 함수.
 fn plain_version(v: &str) -> bool {
     let parts: Vec<&str> = v.split('.').collect();
@@ -146,6 +235,11 @@ async fn install(app: &AppHandle) -> CmdResult<()> {
     if !can_auto_install(asset, os) {
         return Err(err(
             "이 릴리스에는 자동 설치에 필요한 검증 정보(SHA-256)가 없습니다 — 다운로드해서 직접 설치해 주세요",
+        ));
+    }
+    if !release_is_signed(&release) {
+        return Err(err(
+            "릴리스 서명을 확인하지 못해 자동 설치하지 않습니다 — 다운로드해서 직접 설치해 주세요",
         ));
     }
     let expected = asset
@@ -755,6 +849,84 @@ mod tests {
             serde_json::from_str(&json).unwrap();
         assert_eq!(r.assets[0].sha256.as_deref(), Some(SHA));
         assert_eq!(r.assets[1].sha256, None);
+    }
+
+    /// Python 게시 스크립트와 같은 서명 벡터(테스트 전용 키).
+    const VECTOR: &str =
+        include_str!("../../../tools/windows-update-server/tests/signed_feed_vector.json");
+
+    fn vector() -> (serde_json::Value, String) {
+        let v: serde_json::Value = serde_json::from_str(VECTOR).unwrap();
+        let keys = format!("# 테스트\n{}\n", v["public_key"].as_str().unwrap());
+        (v, keys)
+    }
+
+    fn vector_release(v: &serde_json::Value) -> GitHubRelease {
+        serde_json::from_value(v["manifest"].clone()).unwrap()
+    }
+
+    #[test]
+    fn signed_payload_matches_python() {
+        let (v, _) = vector();
+        let payload = signed_payload(&vector_release(&v)).unwrap();
+        assert_eq!(
+            String::from_utf8(payload).unwrap(),
+            v["payload"].as_str().unwrap()
+        );
+    }
+
+    #[test]
+    fn feed_signature_is_verified() {
+        let (v, keys) = vector();
+        let good = vector_release(&v);
+        assert_eq!(verify_release_signature(&good, &keys), Ok(()));
+        // 키 목록이 비었거나 다른 키뿐이면 거부.
+        assert!(verify_release_signature(&good, "").is_err());
+        assert!(verify_release_signature(
+            &good,
+            TRUSTED_KEYS
+                .lines()
+                .filter(|l| l.starts_with('#'))
+                .collect::<Vec<_>>()
+                .join("\n")
+                .as_str()
+        )
+        .is_err());
+
+        // 서명 없음(예전 피드) · 해시 · 크기 · 주소 · 노트 · 버전을 바꾼 피드는 모두 거부.
+        let mut tampered = Vec::new();
+        let mut r = good.clone();
+        r.signature = None;
+        tampered.push(r);
+        let mut r = good.clone();
+        r.assets[1].sha256 = Some("2".repeat(64));
+        tampered.push(r);
+        let mut r = good.clone();
+        r.assets[0].size += 1;
+        tampered.push(r);
+        let mut r = good.clone();
+        r.assets[1].browser_download_url =
+            url::Url::parse("https://evil.example/CView_0.1.69_x64-setup.exe").unwrap();
+        tampered.push(r);
+        let mut r = good.clone();
+        r.body = Some("다른 노트".into());
+        tampered.push(r);
+        let mut r = good.clone();
+        r.tag_name = "v0.1.70".into();
+        tampered.push(r);
+        let mut r = good.clone();
+        r.assets.pop();
+        tampered.push(r);
+        let mut r = good.clone();
+        r.assets[0].name = "CView 0.1.69_arm64.dmg".into();
+        assert!(signed_payload(&r).is_none());
+        tampered.push(r);
+        let mut r = good.clone();
+        r.signature.as_mut().unwrap().alg = "rsa".into();
+        tampered.push(r);
+        for r in &tampered {
+            assert!(verify_release_signature(r, &keys).is_err(), "{r:?}");
+        }
     }
 
     #[test]

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Upload both CView installers, publish atomically, and verify HTTPS downloads."""
 import argparse
+import base64
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -10,11 +11,13 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.parse
 import urllib.request
 
 REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / 'tools' / 'windows-update-server'))
-from release_gateway import BASE, PROTOCOL, describe, filenames, same_release, version_tuple
+from release_gateway import (BASE, PROTOCOL, checked_signature, describe, filenames, same_release,
+                             signed_payload, version_tuple)
 
 
 # Server address, host name and pinned host key live outside the public repository.
@@ -41,6 +44,114 @@ def server_settings():
     if not known_hosts.is_file():
         raise ValueError(f'Pinned release host key is missing: {known_hosts}. {SETUP_HINT}')
     return {'ssh_target': target, 'server_name': name, 'known_hosts': known_hosts}
+
+
+# 피드 서명 키(ed25519). 개인 키는 이 Mac에만 있고, 앱은 저장소의 공개 키 목록만 믿는다.
+SIGNING_KEY = Path(os.environ.get('CVIEW_UPDATE_SIGNING_KEY') or CONFIG_DIR / 'update_signing_ed25519.pem').expanduser()
+TRUSTED_KEYS = REPO / 'crates' / 'cview-app' / 'update-signing-keys.txt'
+FEATURE = 'signed-feed-v1'
+# Ed25519 SubjectPublicKeyInfo DER 머리(RFC 8410) + 공개 키 32바이트.
+SPKI_PREFIX = bytes.fromhex('302a300506032b6570032100')
+
+
+def key_id(raw):
+    return hashlib.sha256(raw).hexdigest()[:16]
+
+
+def trusted_keys():
+    keys = {}
+    for line in TRUSTED_KEYS.read_text(encoding='utf-8').splitlines():
+        line = line.strip()
+        if line and not line.startswith('#'):
+            raw = base64.b64decode(line, validate=True)
+            if len(raw) != 32:
+                raise ValueError('Trusted update keys must be raw 32-byte ed25519 keys')
+            keys[key_id(raw)] = raw
+    return keys
+
+
+def openssl():
+    # macOS 기본 LibreSSL은 ed25519 pkeyutl을 지원하지 않을 수 있어 OpenSSL 3 이상만 쓴다.
+    explicit = os.environ.get('CVIEW_OPENSSL')
+    candidates = [explicit] if explicit else ['/opt/homebrew/bin/openssl', '/usr/local/bin/openssl', shutil.which('openssl')]
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            version = subprocess.run([candidate, 'version'], capture_output=True, text=True).stdout.split()
+            if len(version) > 1 and version[0] == 'OpenSSL' and int(version[1].split('.')[0]) >= 3:
+                return candidate
+    raise ValueError('OpenSSL 3+ is required for update signing (brew install openssl, or set CVIEW_OPENSSL)')
+
+
+def signing_public_key():
+    if not SIGNING_KEY.is_file():
+        raise ValueError(f'Update signing key is missing: {SIGNING_KEY}. Run --init-signing-key once. {SETUP_HINT}')
+    if os.name != 'nt' and SIGNING_KEY.stat().st_mode & 0o077:
+        raise ValueError(f'Update signing key must be private (chmod 600): {SIGNING_KEY}')
+    der = subprocess.run([openssl(), 'pkey', '-in', str(SIGNING_KEY), '-pubout', '-outform', 'DER'],
+                         capture_output=True, check=True).stdout
+    if len(der) != 44 or not der.startswith(SPKI_PREFIX):
+        raise ValueError('Update signing key is not ed25519')
+    raw = der[len(SPKI_PREFIX):]
+    if key_id(raw) not in trusted_keys():
+        raise ValueError(f'The signing key is not in {TRUSTED_KEYS}; apps would reject the feed')
+    return raw
+
+
+def sign_manifest(manifest):
+    raw = signing_public_key()
+    with tempfile.TemporaryDirectory(prefix='cview-sign-') as tmp:
+        payload = Path(tmp) / 'payload'
+        payload.write_bytes(signed_payload(manifest))
+        signature = subprocess.run([openssl(), 'pkeyutl', '-sign', '-inkey', str(SIGNING_KEY), '-rawin',
+                                    '-in', str(payload)], capture_output=True, check=True).stdout
+    if len(signature) != 64:
+        raise ValueError('Unexpected ed25519 signature length')
+    result = {'alg': 'ed25519', 'key_id': key_id(raw), 'value': base64.b64encode(signature).decode('ascii')}
+    verify_signature({**manifest, 'signature': result})
+    return result
+
+
+def verify_signature(manifest):
+    """앱과 같은 규칙: 저장소에 있는 공개 키로 서명된 피드만 통과."""
+    signature = checked_signature(manifest.get('signature'))
+    raw = trusted_keys().get(signature['key_id'])
+    if raw is None:
+        raise ValueError('Feed is signed by an untrusted key')
+    with tempfile.TemporaryDirectory(prefix='cview-verify-') as tmp:
+        files = {'payload': signed_payload(manifest), 'key.der': SPKI_PREFIX + raw,
+                 'sig': base64.b64decode(signature['value'], validate=True)}
+        for name, data in files.items():
+            (Path(tmp) / name).write_bytes(data)
+        result = subprocess.run([openssl(), 'pkeyutl', '-verify', '-pubin', '-keyform', 'DER',
+                                 '-inkey', str(Path(tmp) / 'key.der'), '-rawin', '-in', str(Path(tmp) / 'payload'),
+                                 '-sigfile', str(Path(tmp) / 'sig')], capture_output=True)
+    if result.returncode:
+        raise ValueError('Feed signature verification failed')
+
+
+def init_signing_key():
+    """한 번만: 이 Mac에 서명 키를 만들고, 저장소에 넣을 공개 키 줄을 보여 준다. 덮어쓰지 않는다."""
+    if SIGNING_KEY.exists():
+        raise ValueError(f'Signing key already exists; never overwrite it: {SIGNING_KEY}')
+    pem = subprocess.run([openssl(), 'genpkey', '-algorithm', 'ed25519'], capture_output=True, check=True).stdout
+    SIGNING_KEY.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    descriptor = os.open(SIGNING_KEY, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    with os.fdopen(descriptor, 'wb') as out:
+        out.write(pem)
+    der = subprocess.run([openssl(), 'pkey', '-in', str(SIGNING_KEY), '-pubout', '-outform', 'DER'],
+                         capture_output=True, check=True).stdout
+    raw = der[len(SPKI_PREFIX):]
+    print(f'Created {SIGNING_KEY} (key id {key_id(raw)}). Back it up offline; add this line to '
+          f'{TRUSTED_KEYS} and commit before the next release:')
+    print(base64.b64encode(raw).decode('ascii'))
+
+
+def planned_manifest(version, notes, expected):
+    """publish.py가 만들 피드 중 서명 대상 부분(주소 규칙이 같아야 한다)."""
+    release_url = f'{BASE}/releases/{version}/'
+    return {'tag_name': 'v' + version, 'html_url': release_url, 'body': notes,
+            'assets': [{'name': name, 'browser_download_url': release_url + urllib.parse.quote(name), **expected[name]}
+                       for name in filenames(version)[:2]]}
 
 
 def ssh_command(settings=None):
@@ -93,7 +204,7 @@ def get(url):
                        'User-Agent': 'CView-Release-Automation'}), timeout=60)
 
 
-def verify_https(version=None, expected=None, download=False):
+def verify_https(version=None, expected=None, download=False, signed=False):
     with get(BASE + '/health.json') as response:
         if json.load(response).get('status') != 'ok':
             raise ValueError('HTTPS health check failed')
@@ -108,6 +219,8 @@ def verify_https(version=None, expected=None, download=False):
     with get(manifest['html_url']) as response:
         if response.status != 200:
             raise ValueError('Release page is unavailable')
+    if signed:
+        verify_signature(manifest)
     names = filenames(public_version)[:2]
     if sorted(a['name'] for a in manifest['assets']) != sorted(names):
         raise ValueError('The feed must contain exactly the two platform installers')
@@ -135,20 +248,28 @@ def main():
     parser.add_argument('--notes-file', type=Path, help='UTF-8 release notes, preserved for retries')
     parser.add_argument('--dist', type=Path, default=REPO / 'dist')
     parser.add_argument('--validate-only', action='store_true', help='Upload and hash-check the real artifacts without publishing')
+    parser.add_argument('--init-signing-key', action='store_true', help='Create the local feed signing key once and print its public key')
     parser.add_argument('--allow-unnotarized', action='store_true', help='Only with explicit user authorization; adds disclosure')
     args = parser.parse_args()
     try:
+        if args.init_signing_key:
+            init_signing_key()
+            return 0
         expected_server = server_settings()['server_name']
         state = rpc({'action': 'preflight'})
         if state['protocol'] != PROTOCOL or state['hostname'].upper() != expected_server.upper():
             raise ValueError('Unexpected release server')
+        if not args.probe:
+            if FEATURE not in state.get('features', []):
+                raise ValueError('Update server gateway does not publish feed signatures; redeploy release_gateway.py and publish.py')
+            signing_public_key()
         current = verify_https()
         if current != state['latest']:
             raise ValueError('SSH and HTTPS manifests disagree; retry after concurrent publishing finishes')
         if args.preflight and not args.probe:
             if args.version and version_tuple(args.version) <= version_tuple(current['tag_name'].lstrip('v')):
                 raise ValueError('The new version must exceed ' + current['tag_name'])
-            print('Ready: restricted SSH key + HTTPS; current ' + current['tag_name'])
+            print('Ready: restricted SSH key + HTTPS + feed signing key; current ' + current['tag_name'])
             return 0
         if args.probe:
             with tempfile.TemporaryDirectory(prefix='cview-release-probe-') as tmp:
@@ -193,12 +314,13 @@ def main():
                 received = rpc({'action': 'upload', 'version': args.version, 'name': name, **expected[name]}, path)
                 if any(received[k] != expected[name][k] for k in ('size', 'sha256')):
                     raise ValueError('Server upload acknowledgment differs')
+        signature = sign_manifest(planned_manifest(args.version, notes, expected))
         result = rpc({'action': 'validate' if args.validate_only else 'publish',
-                      'version': args.version, 'files': expected})
+                      'version': args.version, 'files': expected, 'signature': signature})
         if args.validate_only:
             print('Uploaded and validated; publish was not requested. Already published: ' + str(result['published']))
             return 0
-        manifest = verify_https(args.version, expected, download=True)
+        manifest = verify_https(args.version, expected, download=True, signed=True)
         receipt = args.dist / f'CView_{args.version}_publish-receipt.json'
         receipt.write_text(json.dumps({'verified_at': datetime.now(timezone.utc).isoformat(),
                            'server_verified': result['server_verified'], 'client_download_verified': True,

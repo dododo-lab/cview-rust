@@ -71,6 +71,18 @@ pub struct GitHubRelease {
     #[serde(default)]
     pub published_at: Option<DateTime<Utc>>,
     pub assets: Vec<GitHubAsset>,
+    /// 자체 업데이트 서버 피드의 ed25519 서명(릴리스 Mac이 서명). GitHub 응답·예전 피드에는 없다.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<Box<ReleaseSignature>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReleaseSignature {
+    pub alg: String,
+    /// 공개 키 SHA-256 앞 8바이트(16진수 16자).
+    pub key_id: String,
+    /// 서명 64바이트, 표준 base64.
+    pub value: String,
 }
 
 impl GitHubRelease {
@@ -424,6 +436,7 @@ mod tests {
                 browser_download_url: Url::parse("https://example.com/a").unwrap(),
                 sha256: None,
             }],
+            signature: None,
         }
     }
 

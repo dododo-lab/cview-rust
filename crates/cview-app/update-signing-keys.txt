@@ -1,0 +1,5 @@
+# 업데이트 피드 서명 공개 키(ed25519, 원시 32바이트 base64) — 한 줄에 하나.
+# 앱(updater.rs)은 이 목록의 키로 서명된 피드만 자동 설치한다. 비어 있으면 자동 설치를 하지 않는다.
+# 개인 키는 릴리스 Mac의 ~/.config/cview-release/update_signing_ed25519.pem 에만 둔다.
+# 새 키: python3 scripts/publish-update.py --init-signing-key → 출력된 줄을 여기에 추가.
+# 키 교체: 새 키를 추가한 앱을 먼저 배포한 뒤 서명 키를 바꾸고, 그다음 옛 키 줄을 지운다.
