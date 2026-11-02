@@ -4,7 +4,7 @@
 // 데이터(팔로잉·인기 라이브)와 로컬 최근 시청 기록만으로 그린다.
 import { api } from './api.js';
 import { esc, safeUrl, icons, imageSrc } from './dom.js';
-import { liveCard, emptyState, errorState, friendlyError, liveGrid, recentChannels, uptimeText, compactCount } from './cards.js';
+import { liveCard, lacksThumbs, THUMB_FILL_DELAY_MS, THUMB_FILL_TRIES, emptyState, errorState, friendlyError, liveGrid, recentChannels, uptimeText, compactCount } from './cards.js';
 import { clipCard } from './channel.js';
 import { continueCard } from './media.js';
 import { motionReduced, swapContent } from './motion.js';
@@ -287,6 +287,18 @@ export class HomePage {
     this.render(loggedIn, following, popular);
     this.resolveFirstRender();
     this.loadRails(seq);
+    this.fillThumbsLater(refresh, following.status === 'fulfilled' ? following.value : []);
+  }
+
+  /** 팔로잉 카드에 썸네일이 빈 칸이 남았으면 조금 뒤 다시 불러 채운다(횟수 제한) — FollowingPage 와 같은 규칙. */
+  fillThumbsLater(refresh, following) {
+    clearTimeout(this.fillTimer);
+    if (refresh || !lacksThumbs(following)) this.fillTries = 0;
+    if (!lacksThumbs(following) || (this.fillTries || 0) >= THUMB_FILL_TRIES) return;
+    this.fillTries = (this.fillTries || 0) + 1;
+    this.fillTimer = setTimeout(() => {
+      if (!this.root.hidden) this.show(false);
+    }, THUMB_FILL_DELAY_MS);
   }
 
   /** 첫 화면에 바로 보이는 그림(히어로·팔로잉 줄·첫 줄 카드)들 — 시작 로딩 화면이 이것들이 그려질 때까지 기다린다. */

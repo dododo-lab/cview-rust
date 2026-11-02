@@ -29,6 +29,18 @@ export function liveCard(live) {
     </article>`;
 }
 
+/**
+ * 썸네일이 아직 없는 라이브 카드가 있는가. 팔로잉 첫 폴은 채널 상세(썸네일·시작 시각)를 상한(24)만큼만 받는다 —
+ * 화면이 조금 뒤 다시 부르면 Rust 가 나머지를 받아 채운다(FollowingStore::unrequested_missing_details).
+ */
+export function lacksThumbs(lives) {
+  return (lives || []).some((l) => l.isLive && !l.thumbnailUrl);
+}
+
+/** 빈 썸네일을 채우러 다시 부를 때까지 기다리는 시간·최대 횟수. */
+export const THUMB_FILL_DELAY_MS = 1500;
+export const THUMB_FILL_TRIES = 4;
+
 export function liveGrid(lives) {
   return `<div class="grid">${lives.map(liveCard).join('')}</div>`;
 }

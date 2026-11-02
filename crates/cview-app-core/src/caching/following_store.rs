@@ -346,6 +346,27 @@ impl FollowingStore {
         }
     }
 
+    /// 마지막 결과에서 상세(썸네일·시작 시각)가 없는 라이브 채널 중, 그 폴이 상한 때문에 묻지도 않은 수.
+    /// 물었는데 실패한 채널은 세지 않는다 — 실패가 이어지는 채널 하나 때문에 화면 진입마다 목록을 다시 받지 않게.
+    pub fn unrequested_missing_details(&self) -> usize {
+        let inner = lock(&self.inner);
+        let Some(result) = inner.last_result.as_ref() else {
+            return 0;
+        };
+        let requested: HashSet<&str> = result
+            .detail_requests
+            .iter()
+            .map(|r| r.channel_id.as_str())
+            .collect();
+        result
+            .channels
+            .iter()
+            .filter(|c| c.is_live)
+            .filter(|c| !inner.meta.contains_key(&c.channel_id))
+            .filter(|c| !requested.contains(c.channel_id.as_str()))
+            .count()
+    }
+
     /// 마지막 성공 결과가 `max_age` 초 안이면 돌려준다.
     pub fn fresh_result(&self, max_age: TimeInterval) -> Option<PollResult> {
         let inner = lock(&self.inner);
@@ -359,7 +380,12 @@ impl FollowingStore {
     pub fn poll(&self, reason: FollowingPollReason) -> BoxFuture<'static, Option<PollResult>> {
         let this = self.clone();
         async move {
-            if reason == FollowingPollReason::ScreenEntry && this.last_failure_at().is_none() {
+            // 상세 상한(폴당 MissingMeta) 때문에 아직 묻지 못한 라이브 채널이 있으면 재사용하지 않는다 —
+            // 그 결과는 썸네일·시작 시각이 빈 카드를 담고 있어, 재사용 창(최대 180초) 동안 빈칸이 그대로 남았다.
+            if reason == FollowingPollReason::ScreenEntry
+                && this.last_failure_at().is_none()
+                && this.unrequested_missing_details() == 0
+            {
                 if let Some(reused) = this.fresh_result(this.screen_entry_reuse_age()) {
                     return Some(reused);
                 }

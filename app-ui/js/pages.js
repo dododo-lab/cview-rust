@@ -2,7 +2,7 @@
 import { api } from './api.js';
 import { esc, safeUrl, imageSrc } from './dom.js';
 import { swapContent } from './motion.js';
-import { liveGrid, channelRow, emptyState, loadingState, compactCount, skeletonGrid, freshnessText, errorState, friendlyError, uptimeText } from './cards.js';
+import { liveGrid, lacksThumbs, THUMB_FILL_DELAY_MS, THUMB_FILL_TRIES, channelRow, emptyState, loadingState, compactCount, skeletonGrid, freshnessText, errorState, friendlyError, uptimeText } from './cards.js';
 import { FOLLOW_SORTS, FOLLOW_FILTERS, arrangeFollowed, followedInsights, followBadges, followAgeText, parseFollowDate, FollowExtras } from './following-info.js';
 import { vodCard } from './channel.js';
 import { verifiedBadge } from './verified-badge.js';
@@ -150,10 +150,24 @@ export class FollowingPage {
     try {
       if (this.tab === 'live') this.lives = await api.followingLives(refresh);
       else this.channels = await api.followingChannelsAll(refresh);
-      if (seq === this.seq) this.render();
+      if (seq === this.seq) {
+        this.render();
+        this.fillThumbsLater(refresh);
+      }
     } catch (e) {
       if (seq === this.seq) this.body.innerHTML = errorState('불러오지 못했습니다', e);
     }
+  }
+
+  /** 썸네일이 빈 카드가 남았으면 조금 뒤 다시 불러 채운다(횟수 제한). 다 채우거나 새로고침하면 횟수를 되돌린다. */
+  fillThumbsLater(refresh) {
+    clearTimeout(this.fillTimer);
+    if (refresh || !lacksThumbs(this.lives)) this.fillTries = 0;
+    if (this.tab !== 'live' || !lacksThumbs(this.lives) || (this.fillTries || 0) >= THUMB_FILL_TRIES) return;
+    this.fillTries = (this.fillTries || 0) + 1;
+    this.fillTimer = setTimeout(() => {
+      if (!this.root.hidden && this.tab === 'live') this.show(false);
+    }, THUMB_FILL_DELAY_MS);
   }
 
   render() {

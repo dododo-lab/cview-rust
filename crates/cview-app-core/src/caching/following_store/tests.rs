@@ -388,3 +388,28 @@ async fn poll_finished_reports_success_flag() {
     s.poll(FollowingPollReason::Scheduled).await;
     assert_eq!(*lock(&seen), vec![true, false]);
 }
+
+/// 라이브가 상세 상한(24)보다 많으면 첫 폴은 일부만 상세를 받는다 — 그 결과를 화면 진입이 재사용하면
+/// 나머지 카드는 썸네일 없이 재사용 창 내내 빈칸이었다. 묻지 못한 채널이 남아 있으면 다시 받아 채운다.
+#[tokio::test]
+async fn screen_entry_does_not_reuse_result_with_unrequested_details() {
+    let rows: Vec<FollowingRow> = (0..40).map(|i| row(&format!("c{i}"), true)).collect();
+    let fake = Fake::new(rows);
+    let clock = ManualClock::new(from_unix(0.0));
+    let s = store(&fake, &clock);
+    let cap = LiveDetailRefreshConfig::default().missing_meta_cap_per_poll;
+
+    s.poll(FollowingPollReason::ScreenEntry).await;
+    assert_eq!(fake.details().len(), cap);
+    assert_eq!(s.unrequested_missing_details(), 40 - cap);
+
+    clock.advance(1.0);
+    s.poll(FollowingPollReason::ScreenEntry).await;
+    assert_eq!(fake.page_requests(), 2, "빈 카드가 남은 결과를 재사용했다");
+    assert_eq!(s.unrequested_missing_details(), 0);
+    assert_eq!(s.meta().len(), 40);
+
+    clock.advance(1.0);
+    s.poll(FollowingPollReason::ScreenEntry).await;
+    assert_eq!(fake.page_requests(), 2, "다 채운 뒤에는 재사용해야 한다");
+}

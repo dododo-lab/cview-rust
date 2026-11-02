@@ -122,7 +122,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
+    #[should_panic(expected = "Alpha must be in (0, 1]")]
     fn rejects_zero_alpha() {
         let _ = EwmaCalculator::new(0.0);
     }
