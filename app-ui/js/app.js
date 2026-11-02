@@ -39,6 +39,7 @@ import { installPerfCollector } from './perf-collector.js';
 import { showMenu, refreshChatAuth } from './chat.js';
 import { kbd } from './platform.js';
 import { installWindowControls } from './window-controls.js';
+import { withRefreshVeil, cancelRefreshVeil } from './refresh-veil.js';
 
 // 사이드바 — Swift `AppRouter.SidebarItem` 라벨. `sidebar: false` 는 사이드바에 없고 다른 메뉴 속에서 여는 화면
 // (멀티라이브는 라이브 메뉴의 한 보기 — 머리줄 전환 버튼으로 오간다). ⌘K 팔레트에는 그대로 나온다.
@@ -280,6 +281,7 @@ const BACK_MAX = 50;
 
 async function navigate(route, params = {}, { push = true } = {}) {
   if (!pages[route]) return;
+  cancelRefreshVeil(); // 새로고침 덮개는 그 화면 것 — 옮기면 바로 걷는다
   if (push && current && !(current === route && JSON.stringify(currentParams) === JSON.stringify(params))) {
     backStack.push({ route: current, params: currentParams });
     if (backStack.length > BACK_MAX) backStack.shift();
@@ -578,7 +580,7 @@ function installPalette() {
       { group: '동작', label: resolvedTheme() === 'dark' ? '라이트 테마로 전환' : '다크 테마로 전환', hint: '테마', run: () => setTheme(resolvedTheme() === 'dark' ? 'light' : 'dark') },
       { group: '동작', label: '뒤로 가기', hint: kbd('⌘['), run: goBack },
       { group: '동작', label: '사이드바 접기/펼치기', hint: kbd('⌘\\'), run: () => sidebar.toggle() },
-      { group: '동작', label: '현재 화면 새로고침', hint: kbd('⌘R'), run: () => pages[current] && (pages[current].acceptsParams ? pages[current].show(currentParams) : pages[current].show(true)) },
+      { group: '동작', label: '현재 화면 새로고침', hint: kbd('⌘R'), run: () => reloadCurrent({ veil: true }) },
       ...(isLoggedIn() ? [{ group: '동작', label: '로그아웃', hint: '계정', run: logout }] : [{ group: '동작', label: '네이버 로그인', hint: '계정', run: login }]),
     ],
   });
@@ -617,6 +619,17 @@ function activeChat() {
   return null;
 }
 
+// 영상이 주인공인 화면은 새로고침 덮개로 흐리지 않는다(다시 불러올 목록이 없고 영상 흐림은 무겁다).
+const NO_REFRESH_VEIL = new Set(['multilive', 'multichat', 'media', 'chat']);
+/** 지금 화면을 다시 불러온다. `veil` 은 사용자가 직접 고른 새로고침(⌘R·메뉴·팔레트) — 로고 덮개(refresh-veil.js)를 띄운다. */
+function reloadCurrent({ veil = false } = {}) {
+  const page = pages[current];
+  // 라이브 메뉴에서 무대·시청 화면이 앞에 있으면 뒤에 숨은 목록은 다시 불러오지 않는다.
+  if (!page || liveListHidden()) return undefined;
+  const run = () => (page.acceptsParams ? page.show({ ...currentParams, refresh: true }) : page.show(true));
+  return veil && !NO_REFRESH_VEIL.has(current) ? withRefreshVeil(page.root, run) : run();
+}
+
 const MENU_ACTIONS = {
   'nav-home': () => navigate('home'),
   'nav-following': () => navigate('following'),
@@ -628,8 +641,7 @@ const MENU_ACTIONS = {
   search: () => navigate('search'),
   palette: () => (palette.isOpen ? palette.close() : palette.open()),
   back: () => goBack(),
-  // 라이브 메뉴에서 무대·시청 화면이 앞에 있으면 뒤에 숨은 목록은 다시 불러오지 않는다.
-  refresh: () => pages[current] && !liveListHidden() && (pages[current].acceptsParams ? pages[current].show({ ...currentParams, refresh: true }) : pages[current].show(true)),
+  refresh: () => reloadCurrent({ veil: true }),
   'toggle-sidebar': () => sidebar.toggle(),
   'theme-toggle': () => setTheme(resolvedTheme() === 'dark' ? 'light' : 'dark'),
   settings: () => navigate('settings'),
@@ -712,7 +724,7 @@ function installMenuAndShortcuts() {
     banner.hidden = true;
     if (isTauri) api.playerNetworkPath(true).catch(() => {});
     toast('다시 연결되었습니다', 1500);
-    if (pages[current] && !viewer.isOpen) MENU_ACTIONS.refresh();
+    if (pages[current] && !viewer.isOpen) reloadCurrent(); // 자동 복구 — 덮개 없이
   });
 }
 

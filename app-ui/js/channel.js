@@ -5,6 +5,7 @@ import { esc, safeUrl, toast, channelTone, imageSrc, dismiss } from './dom.js';
 import { emptyState, loadingState, compactCount, errorState } from './cards.js';
 import { previewAttr } from './hover-preview.js';
 import { verifiedBadge } from './verified-badge.js';
+import { refreshVeiled } from './refresh-veil.js';
 
 const ICON_STAR = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></svg>';
 const ICON_STAR_LINE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></svg>';
@@ -94,7 +95,7 @@ export class ChannelPage {
     this.channelId = params.channelId;
     if (changed) this.tab = params.tab || 'info';
     const seq = ++this.seq;
-    this.body.innerHTML = loadingState();
+    if (!(params.refresh && !changed && refreshVeiled(this.root))) this.body.innerHTML = loadingState();
     try {
       const detail = await api.channelDetail(this.channelId);
       if (seq !== this.seq) return;

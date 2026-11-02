@@ -100,6 +100,39 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
   .player-osd.fade, .update-progress-bar.indeterminate i) { animation: none !important; }
 /* OSD — 사라지는 애니메이션이 시간 0 이 되면 나타나자마자 투명해져 아예 안 보였다. 줄이면 그대로 보였다가 JS 타이머(1.3초)가 숨긴다. */
 
+/* ── 직접 새로고침(refresh-veil.js) — 시작 로딩 화면의 로고가 가운데 뜨고, 본문은 흐리고 약간 어둡게 ── */
+:root { --refresh-dim: .84; }
+:root[data-theme="light"] { --refresh-dim: .95; }
+@media (prefers-color-scheme: light) { :root[data-theme="system"] { --refresh-dim: .95; } }
+.page-body { transition: filter .22s cubic-bezier(.2, .8, .2, 1); }
+/* 머리줄은 그대로 — 흐린 본문은 누르거나 고를 수 없게 */
+.page-body.is-refreshing { filter: blur(6px) brightness(var(--refresh-dim)); pointer-events: none; user-select: none; will-change: filter; }
+.refresh-veil { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; pointer-events: none; }
+.refresh-veil[hidden] { display: none; }
+.content.with-insights > .refresh-veil { right: var(--insight-w); }
+.rv-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 26px 16px; border-radius: 22px;
+  background: var(--surface-popover); border: 1px solid var(--border-subtle); box-shadow: var(--shadow-lg);
+  animation: rv-in .32s cubic-bezier(.34, 1.56, .64, 1) both; }
+.refresh-veil.leaving .rv-card { transition: opacity .2s ease, scale .2s cubic-bezier(.4, 0, .2, 1); opacity: 0; scale: .94; }
+.rv-logo { width: 60px; height: 56px; overflow: visible; }
+.rv-logo .rv-bubble, .rv-logo .rv-play, .rv-logo .rv-dot, .rv-logo .rv-dot-ring, .rv-logo .rv-ping { transform-box: fill-box; transform-origin: center; }
+.rv-logo .rv-bubble { animation: rv-bob 1.4s cubic-bezier(.45, 0, .55, 1) infinite; }
+.rv-logo .rv-play { animation: rv-beat 1.4s cubic-bezier(.45, 0, .55, 1) infinite; }
+.rv-logo .rv-dot-ring { fill: var(--surface-popover); }
+.rv-logo .rv-ping { opacity: 0; animation: sp-ping 1.4s cubic-bezier(.2, .7, .3, 1) .2s infinite; }
+.rv-logo .rv-sheen { transform-box: fill-box; animation: sp-sheen 1.8s cubic-bezier(.45, 0, .2, 1) infinite; transform: translateX(-120%) skewX(-18deg); }
+.rv-label { font-size: var(--fs-footnote); font-weight: 600; color: var(--text-secondary); }
+@keyframes rv-in { from { opacity: 0; scale: .9; } to { opacity: 1; scale: 1; } }
+@keyframes rv-bob { 0%, 100% { transform: none; } 50% { transform: translateY(-4%) scale(1.03); } }
+@keyframes rv-beat { 0%, 100% { transform: none; } 50% { transform: scale(.88); } }
+/* 움직임 줄이기 — 로고는 멈춰 있고, 덮개·흐림은 바로 바뀐다 */
+@media (prefers-reduced-motion: reduce) {
+  .rv-card, .rv-logo * { animation: none !important; }
+  .page-body, .refresh-veil.leaving .rv-card { transition: none !important; }
+}
+:root[data-motion="reduced"] :is(.rv-card, .rv-logo *) { animation: none !important; }
+:root[data-motion="reduced"] :is(.page-body, .refresh-veil.leaving .rv-card) { transition: none !important; }
+
 /* 카드 스켈레톤 위 작은 로더 줄 */
 .loading-row { display: flex; align-items: center; gap: 10px; margin: 0 0 var(--sp-md); color: var(--text-tertiary); font-size: var(--fs-footnote); }
 .loading-row .spinner { --s: 26px; }

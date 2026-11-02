@@ -10,6 +10,7 @@ import { continueCard } from './media.js';
 import { motionReduced, swapContent } from './motion.js';
 import { previewAttr } from './hover-preview.js';
 import { verifiedBadge } from './verified-badge.js';
+import { withRefreshVeil, refreshVeiled } from './refresh-veil.js';
 
 const HERO_SIZE = 5;
 // 자동 넘김 — 대기열 진행 막대(CSS `queue-progress`, 7초)가 끝나면 다음 장으로. 호버 중엔 CSS 가 멈춘다.
@@ -252,7 +253,7 @@ export class HomePage {
     // 첫 내용이 그려지면 풀린다 — 시작 로딩 화면이 이걸 기다렸다가 걷힌다(app.js).
     this.firstRender = new Promise((resolve) => { this.resolveFirstRender = resolve; });
 
-    root.querySelector('[data-action="refresh"]').addEventListener('click', () => this.show(true));
+    root.querySelector('[data-action="refresh"]').addEventListener('click', () => withRefreshVeil(root, () => this.show(true)));
     root.querySelector('.home-search').addEventListener('submit', (e) => {
       e.preventDefault();
       const input = e.currentTarget.querySelector('input');
@@ -271,7 +272,8 @@ export class HomePage {
   async show(refresh = false) {
     const seq = ++this.seq;
     this.renderGreeting();
-    if (!this.body.querySelector('.home') || refresh) this.body.innerHTML = homeSkeleton();
+    // 직접 새로고침(덮개 아래)이면 보던 홈을 흐리게 둔 채 바꾼다 — 스켈레톤으로 비우지 않는다.
+    if (!this.body.querySelector('.home') || (refresh && !refreshVeiled(this.root))) this.body.innerHTML = homeSkeleton();
     const loggedIn = this.isLoggedIn();
     // 시작 로딩 화면(app.js)이 단계마다 진행을 보여 줄 수 있게 요청 하나가 끝날 때마다 알린다.
     const step = (name) => (v) => { if (this.onLoadStep) this.onLoadStep(name); return v; };

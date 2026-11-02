@@ -8,6 +8,7 @@ import { vodCard, clipCard, relativeDate, formatDuration } from './channel.js';
 import { continueCard } from './media.js';
 import { mountDownloads } from './downloads.js';
 import { syncTabs, bindTabKeys } from './a11y.js';
+import { refreshVeiled } from './refresh-veil.js';
 
 export const libraryIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h4v16H4zM10 4h4v16h-4zM16.2 4.4l3.8-1 4 15.5-3.8 1z" transform="scale(.92) translate(1 1)"/></svg>';
 
@@ -80,7 +81,8 @@ export class LibraryPage {
   show(params = {}) {
     if (params.tab) this.tab = params.tab;
     syncTabs(this.tabs, this.tab, this.body, 'lib');
-    this.load();
+    // 직접 새로고침(덮개 아래)이면 보던 내용을 흐리게 둔 채 바꾼다.
+    return this.load({ keep: refreshVeiled(this.root) });
   }
 
   renderFilters() {
@@ -94,11 +96,11 @@ export class LibraryPage {
       <div class="segmented">${CLIP_ORDERS.map(([v, l]) => `<button class="seg${v === this.clipOrder ? ' active' : ''}" data-clip-order="${v}">${l}</button>`).join('')}</div>`;
   }
 
-  async load() {
+  async load({ keep = false } = {}) {
     const seq = ++this.seq;
     if (this.unmountDownloads) { this.unmountDownloads(); this.unmountDownloads = null; }
     this.renderFilters();
-    this.body.innerHTML = loadingState();
+    if (!keep) this.body.innerHTML = loadingState();
     const needsLogin = this.tab === 'vods';
     if (needsLogin && !this.isLoggedIn()) {
       this.body.innerHTML = emptyState('로그인이 필요합니다', '팔로우한 채널의 다시보기를 모아 보여 드립니다', '<button class="btn primary" data-action="login">로그인</button>');
