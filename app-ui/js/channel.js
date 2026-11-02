@@ -86,6 +86,8 @@ export class ChannelPage {
     this.detail = null;
     this.seq = 0;
     this.pages = { vod: 0, clip: 0 };
+    this.clipCursor = null; // 클립 다음 쪽 커서(앞 응답의 nextCursor)
+    this.clipSeen = new Set(); // 받은 clipUID — 쪽이 겹쳐도 같은 카드를 두 번 붙이지 않게
     this.body.addEventListener('click', (e) => this.onClick(e));
   }
 
@@ -163,14 +165,19 @@ export class ChannelPage {
     const kind = this.tab;
     if (!append) {
       this.pages[kind] = 0;
+      if (kind === 'clip') { this.clipCursor = null; this.clipSeen.clear(); }
       box.innerHTML = loadingState();
     }
     const seq = this.seq;
     try {
       const page = kind === 'vod'
         ? await api.channelVods(this.channelId, this.pages[kind], 24)
-        : await api.channelClips(this.channelId, this.pages[kind], 24);
+        : await api.channelClips(this.channelId, append ? this.clipCursor : null, 24);
       if (seq !== this.seq || this.tab !== kind) return;
+      if (kind === 'clip') {
+        this.clipCursor = page.nextCursor;
+        page.items = page.items.filter((c) => !this.clipSeen.has(c.clipUID) && this.clipSeen.add(c.clipUID));
+      }
       const cards = page.items.map(kind === 'vod' ? vodCard : clipCard).join('');
       if (!append) {
         box.innerHTML = page.items.length

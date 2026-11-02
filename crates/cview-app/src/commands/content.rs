@@ -12,7 +12,7 @@ use chrono::Utc;
 use cview_core::models::clip::ClipDetail;
 use cview_core::models::community::{ChannelPost, ChannelPostItem};
 use cview_core::models::live::LiveStatus;
-use cview_core::models::search::{ClipInfo, VodInfo};
+use cview_core::models::search::{ClipInfo, ClipListPage, VodInfo};
 use cview_core::models::ChannelInfo;
 use serde::Serialize;
 use tauri::State;
@@ -120,22 +120,42 @@ pub async fn channel_vods(
     ))
 }
 
+/// 커서로 넘기는 페이지 응답 — 다음 쪽은 `next_cursor` 로 요청하고, 없으면 마지막 쪽이다.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CursorPageDto<T> {
+    pub items: Vec<T>,
+    pub next_cursor: Option<String>,
+    pub has_more: bool,
+}
+
+impl From<ClipListPage> for CursorPageDto<ClipInfo> {
+    fn from(p: ClipListPage) -> Self {
+        // 빈 쪽이면 커서가 남아 있어도 멈춘다(같은 빈 요청을 되풀이하지 않게).
+        let next_cursor = p.next_clip_uid.filter(|_| !p.data.is_empty());
+        Self {
+            has_more: next_cursor.is_some(),
+            items: p.data,
+            next_cursor,
+        }
+    }
+}
+
+/// 채널 클립 — 서버가 `page` 를 무시하므로 앞 쪽 응답의 `nextCursor`(clipUID)로 넘긴다. `None` 이면 첫 쪽.
 #[tauri::command]
 pub async fn channel_clips(
     services: State<'_, AppServices>,
     channel_id: String,
-    page: Option<i64>,
+    cursor: Option<String>,
     size: Option<i64>,
-) -> CmdResult<PageDto<ClipInfo>> {
+) -> CmdResult<CursorPageDto<ClipInfo>> {
     let size = size.unwrap_or(24).clamp(1, 50);
-    let page = page.unwrap_or(0).max(0);
-    let res = services.api.clip_list(&channel_id, page, size).await?;
-    Ok(PageDto::new(
-        res.data,
-        res.total_count,
-        page_start(page, size),
-        size,
-    ))
+    let cursor = cursor.filter(|c| !c.is_empty());
+    let res = services
+        .api
+        .clip_list_page(&channel_id, cursor.as_deref(), size)
+        .await?;
+    Ok(res.into())
 }
 
 /// 채널 커뮤니티 글 — `page` 는 0부터, 한 쪽 10개(서버 고정). 커뮤니티를 닫은 채널은 빈 목록.
@@ -763,6 +783,40 @@ pub async fn open_external(url: String) -> CmdResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clip_cursor_page_follows_next_clip_uid() {
+        let clip: ClipInfo = serde_json::from_str(r#"{"clipUID":"a"}"#).unwrap();
+        let p = ClipListPage {
+            data: vec![clip.clone()],
+            next_clip_uid: Some("b".into()),
+        };
+        let dto = CursorPageDto::from(p);
+        assert_eq!(
+            (dto.next_cursor.as_deref(), dto.has_more),
+            (Some("b"), true)
+        );
+        // 마지막 쪽(next 없음), 커서만 남은 빈 쪽은 더 보기 없음.
+        for p in [
+            ClipListPage {
+                data: vec![clip],
+                next_clip_uid: None,
+            },
+            ClipListPage {
+                data: vec![],
+                next_clip_uid: Some("c".into()),
+            },
+        ] {
+            let dto = CursorPageDto::from(p);
+            assert_eq!((dto.next_cursor, dto.has_more), (None, false));
+        }
+        let json = serde_json::to_value(CursorPageDto::<ClipInfo>::from(ClipListPage {
+            data: vec![],
+            next_clip_uid: None,
+        }))
+        .unwrap();
+        assert!(json.get("nextCursor").is_some() && json.get("hasMore").is_some());
+    }
 
     #[test]
     fn openable_files_only_media_regular_files() {
