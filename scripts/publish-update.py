@@ -253,8 +253,11 @@ def check_installers(paths):
     windows = [path for name, path in paths.items() if name.endswith('-setup.exe')]
     for path in windows:
         with Path(path).open('rb') as stream:
-            if stream.read(2) != b'MZ':
-                raise ValueError('Not a Windows installer: ' + Path(path).name)
+            header = stream.read(4096)
+        # MZ 머리만으로는 잘린 파일도 통과한다 — e_lfanew 가 가리키는 PE 서명과 COFF 머리까지 있어야 한다.
+        offset = int.from_bytes(header[0x3C:0x40], 'little') if len(header) >= 0x40 else -1
+        if header[:2] != b'MZ' or not 0x40 <= offset <= len(header) - 24 or header[offset:offset + 4] != b'PE\0\0':
+            raise ValueError('Not a Windows installer: ' + Path(path).name)
     if len({describe(Path(path))['sha256'] for path in windows}) != len(windows):
         raise ValueError('Windows x64 and arm64 installers are identical; rebuild both')
 

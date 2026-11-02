@@ -25,6 +25,11 @@ VECTOR = json.loads((Path(__file__).with_name('signed_feed_vector.json')).read_t
 SIGNATURE = VECTOR['manifest']['signature']
 
 
+def pe_image(tag):
+    """검사에 통과하는 최소 PE 머리(DOS 머리 + e_lfanew → 'PE\\0\\0' + COFF 머리 20바이트) 뒤에 구분용 바이트."""
+    return b'MZ' + bytes(0x3A) + (0x80).to_bytes(4, 'little') + bytes(0x40) + b'PE\0\0' + bytes(20) + tag
+
+
 def has_openssl():
     try:
         client.openssl()
@@ -269,15 +274,19 @@ class ClientTests(unittest.TestCase):
             paths = {}
             for name in gateway.installers('0.1.71'):
                 paths[name] = Path(tmp) / name
-                paths[name].write_bytes(b'MZ' + name.encode())
+                paths[name].write_bytes(pe_image(name.encode()))
             client.check_installers(paths)
             x64, arm64 = gateway.installers('0.1.71')[1:]
             paths[arm64].write_bytes(paths[x64].read_bytes())
             with self.assertRaisesRegex(ValueError, 'identical'):
                 client.check_installers(paths)
-            paths[arm64].write_bytes(b'not an exe')
-            with self.assertRaisesRegex(ValueError, 'Not a Windows installer'):
-                client.check_installers(paths)
+            # MZ 머리만 있는 잘린 파일, PE 서명이 없거나 범위를 벗어난 e_lfanew 는 받지 않는다.
+            broken = [b'not an exe', b'MZarm64', pe_image(b'arm64')[:0x80], b'MZ' + bytes(0x3A) + (0x40).to_bytes(4, 'little') + b'XX\0\0' + bytes(20),
+                      b'MZ' + bytes(0x3A) + (0xFFFF).to_bytes(4, 'little') + bytes(64)]
+            for data in broken:
+                paths[arm64].write_bytes(data)
+                with self.assertRaisesRegex(ValueError, 'Not a Windows installer'):
+                    client.check_installers(paths)
 
     def test_cross_origin_redirect_rejected(self):
         with self.assertRaisesRegex(ValueError, 'redirect'):

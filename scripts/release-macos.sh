@@ -313,7 +313,10 @@ print(max(subs, key=lambda s: s["createdDate"])["id"] if subs else "")' "$(basen
     [[ "$machine" == "$win_machine" ]] || { echo "✗ $win_bin 의 PE Machine 이 $machine 입니다($win_arch 는 $win_machine)"; exit 1; }
     echo "   CView.exe PE Machine $machine ($win_arch)"
     # 설치 파일에 없는 MinGW 런타임 DLL(libunwind·libc++·libwinpthread·libgcc_s 등)을 부르면 Windows 에서 실행되지 않는다.
-    runtime_dlls=$("$LLVM_MINGW/bin/llvm-objdump" -p "$win_bin" | awk '/DLL Name:/ {print $3}' | grep -i '^lib' || true)
+    # objdump 실패는 그대로 멈추고(set -e), 가져오기 목록을 못 읽었으면 검사를 통과로 보지 않는다.
+    win_imports=$("$LLVM_MINGW/bin/llvm-objdump" -p "$win_bin")
+    print -r -- "$win_imports" | grep -q 'DLL Name:' || { echo "✗ $win_arch CView.exe 의 가져오기 목록을 읽지 못했습니다"; exit 1; }
+    runtime_dlls=$(print -r -- "$win_imports" | awk '/DLL Name:/ {print $3}' | grep -i '^lib' || true)
     [[ -z "$runtime_dlls" ]] || { echo "✗ $win_arch CView.exe 가 함께 배포하지 않는 DLL 을 부릅니다: ${(f)runtime_dlls}"; exit 1; }
     win_exe=$(ls -t "$TARGET"/$t/release/bundle/nsis/*.exe(N) | head -1)
     [[ -n "$win_exe" ]] || { echo "✗ Windows $win_arch 설치 파일을 찾지 못했습니다"; exit 1; }
