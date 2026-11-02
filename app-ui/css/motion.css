@@ -62,7 +62,8 @@
 
 /* ── 스플래시 — 말풍선이 튀어 오르고, 재생 삼각형이 터지고, LIVE 점이 울리고, 광택이 지나간다 ── */
 .splash-mark { width: 112px; height: 105px; animation: none; background: none; box-shadow: none; }
-.splash-logo { width: 100%; height: 100%; overflow: visible; }
+/* app.css 의 `.splash-mark svg`(30px)보다 구체적으로 — 예전엔 로고가 112px 자리 안에서 30px 로 작게 그려졌다 */
+.splash-mark .splash-logo { width: 100%; height: 100%; overflow: visible; }
 .splash-logo .sp-bubble, .splash-logo .sp-play, .splash-logo .sp-dot, .splash-logo .sp-dot-ring, .splash-logo .sp-ping { transform-box: fill-box; transform-origin: center; }
 .splash-logo .sp-bubble { animation: sp-bubble-in .7s cubic-bezier(.34, 1.56, .64, 1) both; }
 .splash-logo .sp-play { animation: sp-pop .45s cubic-bezier(.34, 1.7, .64, 1) .32s both; }

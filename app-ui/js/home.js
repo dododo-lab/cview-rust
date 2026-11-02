@@ -249,6 +249,8 @@ export class HomePage {
     this.hero = [];
     this.heroSource = 'popular';
     this.heroIndex = 0;
+    // 첫 내용이 그려지면 풀린다 — 시작 로딩 화면이 이걸 기다렸다가 걷힌다(app.js).
+    this.firstRender = new Promise((resolve) => { this.resolveFirstRender = resolve; });
 
     root.querySelector('[data-action="refresh"]').addEventListener('click', () => this.show(true));
     root.querySelector('.home-search').addEventListener('submit', (e) => {
@@ -271,16 +273,30 @@ export class HomePage {
     this.renderGreeting();
     if (!this.body.querySelector('.home') || refresh) this.body.innerHTML = homeSkeleton();
     const loggedIn = this.isLoggedIn();
+    // 시작 로딩 화면(app.js)이 단계마다 진행을 보여 줄 수 있게 요청 하나가 끝날 때마다 알린다.
+    const step = (name) => (v) => { if (this.onLoadStep) this.onLoadStep(name); return v; };
+    const tracked = (name, p) => p.then(step(name), (e) => { step(name)(); throw e; });
     const [following, popular, recent] = await Promise.allSettled([
-      loggedIn ? api.followingLives(refresh) : Promise.resolve([]),
-      api.popularLives(POPULAR_SIZE, refresh),
-      api.recentChannels(8),
+      loggedIn ? tracked('following', api.followingLives(refresh)) : Promise.resolve([]),
+      tracked('popular', api.popularLives(POPULAR_SIZE, refresh)),
+      tracked('recent', api.recentChannels(8)),
     ]);
     if (seq !== this.seq) return;
     // 최근 시청은 DB(재생할 때 기록)가 원본 — 비어 있으면 예전 localStorage 기록을 쓴다.
     this.dbRecent = recent.status === 'fulfilled' ? recent.value : [];
     this.render(loggedIn, following, popular);
+    this.resolveFirstRender();
     this.loadRails(seq);
+  }
+
+  /** 첫 화면에 바로 보이는 그림(히어로·팔로잉 줄·첫 줄 카드)들 — 시작 로딩 화면이 이것들이 그려질 때까지 기다린다. */
+  aboveFoldImages() {
+    const limit = (this.root.closest('.content') || document.documentElement).getBoundingClientRect().bottom || window.innerHeight;
+    return [...this.body.querySelectorAll('img')].filter((img) => {
+      if (!img.getAttribute('src')) return false;
+      const r = img.getBoundingClientRect();
+      return r.width > 0 && r.top < limit;
+    });
   }
 
   /** 인사말의 닉네임만 다시 쓴다(요약 줄은 그대로). */
