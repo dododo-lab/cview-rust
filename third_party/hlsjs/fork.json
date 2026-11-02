@@ -1,0 +1,18 @@
+{
+  "upstreamRepository": "https://github.com/video-dev/hls.js",
+  "upstreamTag": "v1.7.4",
+  "upstreamVersion": "1.7.4",
+  "upstreamTarballSHA256": "ef4407762f3c971ec4edc097e8d2b8255e786fe3be7fcad01023647b54468b43",
+  "forkRevision": 2,
+  "configType": "fullMin",
+  "features": {
+    "USE_SUBTITLES": false,
+    "USE_ALT_AUDIO": false,
+    "USE_EME_DRM": false,
+    "USE_CMCD": false,
+    "USE_CONTENT_STEERING": false,
+    "USE_VARIABLE_SUBSTITUTION": false,
+    "USE_INTERSTITIALS": false,
+    "USE_IFRAMES": false
+  }
+}

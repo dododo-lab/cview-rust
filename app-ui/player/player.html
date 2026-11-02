@@ -767,7 +767,7 @@ function reloadManifestSource() {
 //   liveSyncPosition 도 edge−targetduration(10s) 플로어에 걸렸다 — 앱이 웹보다 항상
 //   10~30s 뒤에서 시작·복귀하던 근본 원인. 초 단위 liveSyncDuration/liveMaxLatencyDuration
 //   으로 전환해 TARGETDURATION 값에 면역이 되게 한다.
-//   [hls.js 포크 2026-10-05] 포크(1.7.3-cview, 패치 0001 liveSyncReference 'segment')에서는 이 플로어가
+//   [hls.js 포크 2026-10-05] 포크(1.7.x-cview, 패치 0001 liveSyncReference 'segment')에서는 이 플로어가
 //     실제 세그먼트(≈2s) 기준이다. 아래 로직은 일반 방어로 그대로 둔다.
 //   ⚠ hls.js 는 count 계열과 duration 계열 키 혼용 시 new Hls() 에서 throw ("Illegal
 //     hls.js config: don't mix up ...") — count 키는 완전히 제거해야 한다.
@@ -1331,7 +1331,7 @@ function loadSource(url, profile, preserveRecoveryBudget, preferSourceQuality, l
         // 1.7부터 MMS 선택지가 생겼다. 기존 MSE 재생 경로를 명시해 업그레이드 자체가
         // 버퍼/seek 백엔드 변경까지 동반하지 않게 한다.
         preferManagedMediaSource: false,
-        // ─── [hls.js 포크 2026-10-04] CView 패치 옵션 (ThirdParty/hls.js-patches/CHANGES.md) ───
+        // ─── [hls.js 포크 2026-10-04] CView 패치 옵션 (third_party/hlsjs/patches/CHANGES.md) ───
         //   업스트림 기본값에서는 아래 네 키가 아무 일도 하지 않는다 — 포크 번들에서만 동작한다.
         //   · 0001 liveSyncReference 'segment': 지연 목표·liveSyncPosition 상한·멈춤 증가 상한을 TARGETDURATION(10s)
         //     대신 실제 세그먼트(2s) 단위로 계산한다. 시작 위치가 끝 − 10s 에 묶이던 원인 수정.

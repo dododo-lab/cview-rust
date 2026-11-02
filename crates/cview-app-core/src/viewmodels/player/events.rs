@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use chrono::Utc;
 use cview_core::models::player::{PlayerEngineType, PlayerPhase};
-use cview_player::coordinator::{StreamCoordinator, StreamEvent, StreamPhase};
+use cview_player::coordinator::{InterfaceType, StreamCoordinator, StreamEvent, StreamPhase};
 use cview_player::policy::RecoverySignal;
 
 use super::{upcast, PlayerState, PlayerViewModel, MAX_LATENCY_HISTORY};
@@ -197,6 +197,13 @@ impl PlayerViewModel {
 
     fn current_coordinator(&self) -> Option<StreamCoordinator> {
         self.state.read().coordinator.clone()
+    }
+
+    /// 앱의 네트워크 경로 감시 — 오프라인 ↔ 온라인 전이를 코디네이터의 재연결 판정에 넘긴다.
+    pub fn network_path_changed(&self, interface: InterfaceType) {
+        if let Some(c) = self.current_coordinator() {
+            c.handle_transport_path_change(interface);
+        }
     }
 
     /// `onStateChange`.

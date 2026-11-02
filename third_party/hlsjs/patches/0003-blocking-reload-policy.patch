@@ -1,0 +1,153 @@
+diff --git a/src/config.ts b/src/config.ts
+index ff773c3..b0773e5 100644
+--- a/src/config.ts
++++ b/src/config.ts
+@@ -313,6 +313,15 @@ export type PlaylistControllerConfig = {
+    * CView 수정(0002): 라이브 재생목록 재요청 간격의 기준. 'targetduration'(업스트림 기본) 또는 'segment'.
+    */
+   liveReloadReference?: 'targetduration' | 'segment';
++  /**
++   * CView 수정(0003): false 이면 lowLatencyMode 가 아닐 때 블로킹 재요청 지시자(_HLS_msn/_HLS_part)를 붙이지 않는다.
++   */
++  blockingReloadOutsideLowLatency?: boolean;
++  /**
++   * CView 수정(0003): true 이면 지시자가 붙은 재생목록 요청의 HTTP 400 을 지시자 없이 즉시 다시 요청한다.
++   * 이런 거절이 BLOCKING_RELOAD_REJECTION_LIMIT 번 쌓이면 그 인스턴스는 블로킹 재요청을 끈다.
++   */
++  blockingReloadFallback?: boolean;
+ };
+ 
+ export type MetadataControllerConfig = {
+@@ -481,6 +490,8 @@ export const hlsDefaultConfig: HlsConfig = {
+   liveMaxLatencyDurationCount: Infinity, // used by latency-controller
+   liveMaxUnchangedPlaylistRefresh: Infinity, // used by base-playlist-controller
+   liveReloadReference: 'targetduration', // CView 수정(0002): used by base-playlist-controller, playlist-loader
++  blockingReloadOutsideLowLatency: true, // CView 수정(0003): used by base-playlist-controller
++  blockingReloadFallback: false, // CView 수정(0003): used by error-controller, base-playlist-controller
+   liveSyncDuration: undefined, // used by latency-controller
+   liveMaxLatencyDuration: undefined, // used by latency-controller
+   maxLiveSyncPlaybackRate: 1, // used by latency-controller
+diff --git a/src/controller/base-playlist-controller.ts b/src/controller/base-playlist-controller.ts
+index 926b3eb..a41129c 100644
+--- a/src/controller/base-playlist-controller.ts
++++ b/src/controller/base-playlist-controller.ts
+@@ -11,6 +11,7 @@ import {
+   getRetryDelay,
+   isTimeoutError,
+   offlineHttpStatus,
++  isRejectedDeliveryDirective, // CView 수정(0003)
+ } from '../utils/error-helper';
+ import { computeReloadInterval, mergeDetails } from '../utils/level-helper';
+ import { Logger } from '../utils/logger';
+@@ -29,6 +30,20 @@ export default class BasePlaylistController
+   extends Logger
+   implements NetworkComponentAPI
+ {
++  // CView 수정(0003): 이 인스턴스에서 서버가 블로킹 지시자를 거절한 횟수.
++  protected blockingReloadRejections: number = 0;
++  static readonly BLOCKING_RELOAD_REJECTION_LIMIT = 3;
++  protected get blockingReloadAllowed(): boolean {
++    const config = this.hls.config;
++    if (
++      this.blockingReloadRejections >=
++      BasePlaylistController.BLOCKING_RELOAD_REJECTION_LIMIT
++    ) {
++      return false;
++    }
++    return config.lowLatencyMode || config.blockingReloadOutsideLowLatency !== false;
++  }
++
+   protected hls: Hls;
+   protected canLoad: boolean = false;
+   private timer: number = -1;
+@@ -265,7 +280,9 @@ export default class BasePlaylistController
+       let deliveryDirectives: HlsUrlParameters | undefined;
+       let msn: number | undefined = undefined;
+       let part: number | undefined = undefined;
+-      if (details.canBlockReload && details.advanced) {
++      // CView 수정(0003): 블로킹 재요청을 쓸지 — 저지연 밖 금지 설정과 반복 거절을 본다.
++      const blockingAllowed = this.blockingReloadAllowed;
++      if (details.canBlockReload && details.advanced && blockingAllowed) {
+         // Load level with LL-HLS delivery directives
+         const lowLatencyMode = this.hls.config.lowLatencyMode;
+         const lastPartSn = details.lastPartSn;
+@@ -343,7 +360,10 @@ export default class BasePlaylistController
+           this.loadingPlaylist(levelOrTrack, deliveryDirectives);
+           return;
+         }
+-      } else if (details.canBlockReload || details.canSkipUntil) {
++      } else if (
++        (details.canBlockReload && blockingAllowed) ||
++        details.canSkipUntil
++      ) {
+         deliveryDirectives = this.getDeliveryDirectives(
+           details,
+           data.deliveryDirectives,
+@@ -425,7 +445,17 @@ export default class BasePlaylistController
+       if (retryCount >= retryConfig.maxNumRetry) {
+         return false;
+       }
+-      if (isTimeout && errorEvent.context?.deliveryDirectives) {
++      // CView 수정(0003): 거절된 블로킹 지시자(400)도 시간 초과와 같이 지시자 없이 즉시 다시 묻는다.
++      const rejectedDirective =
++        !!this.hls.config.blockingReloadFallback &&
++        isRejectedDeliveryDirective(errorEvent);
++      if (rejectedDirective) {
++        this.blockingReloadRejections++;
++      }
++      if (
++        (isTimeout || rejectedDirective) &&
++        errorEvent.context?.deliveryDirectives
++      ) {
+         // The LL-HLS request already timed out so retry immediately
+         this.warn(
+           `Retrying playlist loading ${retryCount + 1}/${
+diff --git a/src/controller/error-controller.ts b/src/controller/error-controller.ts
+index bdcb0c5..a25328c 100644
+--- a/src/controller/error-controller.ts
++++ b/src/controller/error-controller.ts
+@@ -11,6 +11,7 @@ import {
+   isTimeoutError,
+   isUnusableKeyError,
+   shouldRetry,
++  isRejectedDeliveryDirective, // CView 수정(0003)
+ } from '../utils/error-helper';
+ import { arrayToHex } from '../utils/hex';
+ import { Logger } from '../utils/logger';
+@@ -282,12 +283,15 @@ export default class ErrorController
+     const hls = this.hls;
+     const retryConfig = getRetryConfig(hls.config.playlistLoadPolicy, data);
+     const retryCount = this.playlistError++;
+-    const retry = shouldRetry(
+-      retryConfig,
+-      retryCount,
+-      isTimeoutError(data),
+-      data.response,
+-    );
++    // CView 수정(0003): 거절된 블로킹 지시자는 지시자 없이 다시 물을 수 있으므로 재시도로 본다.
++    const rejectedDirective =
++      !!hls.config.blockingReloadFallback &&
++      isRejectedDeliveryDirective(data) &&
++      !!retryConfig &&
++      retryCount < retryConfig.maxNumRetry;
++    const retry =
++      rejectedDirective ||
++      shouldRetry(retryConfig, retryCount, isTimeoutError(data), data.response);
+     if (retry) {
+       return {
+         action: NetworkErrorAction.RetryRequest,
+diff --git a/src/utils/error-helper.ts b/src/utils/error-helper.ts
+index 69e5446..a86d945 100644
+--- a/src/utils/error-helper.ts
++++ b/src/utils/error-helper.ts
+@@ -108,3 +108,10 @@ export function isPenaltyExpired(level: Level, expireMs: number): boolean {
+     self.performance.now() - level.loadErrorTime > expireMs
+   );
+ }
++
++// CView 수정(0003): 블로킹 재요청 지시자가 붙은 재생목록 요청을 서버가 400 으로 거절했는가.
++//   치지직 CDN 은 세션에 따라 _HLS_msn/_HLS_part 를 400 으로 거절한다. 업스트림은 4xx 를 재시도하지 않아
++//   레벨 전환·페널티 박스로 가고, 레벨이 하나면 치명 오류가 된다.
++export function isRejectedDeliveryDirective(error: ErrorData): boolean {
++  return !!error.context?.deliveryDirectives && error.response?.code === 400;
++}

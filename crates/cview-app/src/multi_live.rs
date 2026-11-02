@@ -610,6 +610,11 @@ pub struct PaneRegistry {
 }
 
 impl PaneRegistry {
+    /// 등록된 패인 플레이어 전부(잠금 밖에서 쓰도록 복사본).
+    pub fn players(&self) -> Vec<Arc<PanePlayer>> {
+        lock(&self.players).clone()
+    }
+
     pub fn player_for_slot(&self, slot: u32) -> Option<Arc<PanePlayer>> {
         lock(&self.players)
             .iter()

@@ -1,0 +1,76 @@
+diff --git a/src/config.ts b/src/config.ts
+index 80dd41f..ff773c3 100644
+--- a/src/config.ts
++++ b/src/config.ts
+@@ -309,6 +309,10 @@ export type LatencyControllerConfig = {
+ 
+ export type PlaylistControllerConfig = {
+   liveMaxUnchangedPlaylistRefresh: number;
++  /**
++   * CView 수정(0002): 라이브 재생목록 재요청 간격의 기준. 'targetduration'(업스트림 기본) 또는 'segment'.
++   */
++  liveReloadReference?: 'targetduration' | 'segment';
+ };
+ 
+ export type MetadataControllerConfig = {
+@@ -476,6 +480,7 @@ export const hlsDefaultConfig: HlsConfig = {
+   liveSyncOnStallIncrease: 1, // used by latency-controller
+   liveMaxLatencyDurationCount: Infinity, // used by latency-controller
+   liveMaxUnchangedPlaylistRefresh: Infinity, // used by base-playlist-controller
++  liveReloadReference: 'targetduration', // CView 수정(0002): used by base-playlist-controller, playlist-loader
+   liveSyncDuration: undefined, // used by latency-controller
+   liveMaxLatencyDuration: undefined, // used by latency-controller
+   maxLiveSyncPlaybackRate: 1, // used by latency-controller
+diff --git a/src/controller/base-playlist-controller.ts b/src/controller/base-playlist-controller.ts
+index c40ae6c..926b3eb 100644
+--- a/src/controller/base-playlist-controller.ts
++++ b/src/controller/base-playlist-controller.ts
+@@ -238,6 +238,7 @@ export default class BasePlaylistController
+       const reloadInterval = computeReloadInterval(
+         details,
+         distanceToLiveEdgeMs,
++        this.hls.config.liveReloadReference, // CView 수정(0002)
+       );
+       if (details.requestScheduled + reloadInterval < now) {
+         details.requestScheduled = now;
+diff --git a/src/loader/playlist-loader.ts b/src/loader/playlist-loader.ts
+index 2c980ef..74a7847 100644
+--- a/src/loader/playlist-loader.ts
++++ b/src/loader/playlist-loader.ts
+@@ -568,7 +568,8 @@ class PlaylistLoader implements NetworkComponentAPI {
+         url,
+       };
+       levelDetails.requestScheduled =
+-        stats.loading.start + computeReloadInterval(levelDetails, 0);
++        stats.loading.start +
++        computeReloadInterval(levelDetails, 0, hls.config.liveReloadReference); // CView 수정(0002)
+ 
+       hls.trigger(Events.MANIFEST_LOADED, {
+         levels: [singleLevel],
+diff --git a/src/utils/level-helper.ts b/src/utils/level-helper.ts
+index 449dd76..3798e9f 100644
+--- a/src/utils/level-helper.ts
++++ b/src/utils/level-helper.ts
+@@ -2,6 +2,8 @@
+  * Provides methods dealing with playlist sliding and drift
+  */
+ 
++import { liveSyncUnit } from './live-sync-reference'; // CView 수정(0002)
++import type { LiveSyncReference } from './live-sync-reference';
+ import { stringify } from './safe-json-stringify';
+ import { DateRange } from '../loader/date-range';
+ import { assignProgramDateTime, mapDateRanges } from '../loader/m3u8-parser';
+@@ -521,8 +523,12 @@ export function addSliding(details: LevelDetails, sliding: number) {
+ export function computeReloadInterval(
+   newDetails: LevelDetails,
+   distanceToLiveEdgeMs: number = Infinity,
++  // CView 수정(0002): 'segment' 이면 재요청 간격의 기준을 TARGETDURATION 대신 실제 평균 세그먼트 길이로 한다.
++  //   치지직(TARGETDURATION 10, 세그먼트 2초)에서 재생목록이 안 바뀐 뒤의 재요청이 5초 → 약 1초가 된다.
++  reloadReference?: LiveSyncReference,
+ ): number {
+-  let reloadInterval = 1000 * newDetails.targetduration;
++  let reloadInterval =
++    1000 * liveSyncUnit(newDetails, { liveSyncReference: reloadReference });
+ 
+   if (newDetails.updated) {
+     // Use last segment duration when shorter than target duration and near live edge
