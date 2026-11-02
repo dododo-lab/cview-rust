@@ -72,6 +72,41 @@ impl<'de> Deserialize<'de> for ChannelInfo {
     }
 }
 
+/// 로그인한 시청자 기준 채널 팔로우 상태 — 채널 정보 응답의 `personalData.following`.
+///
+/// 비로그인이거나 응답에 `personalData` 가 없으면 `following` 이 `None`(모름)이다.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelFollowStatus {
+    pub following: Option<bool>,
+    pub notification: Option<bool>,
+    /// 팔로우한 날짜 원문(`2024-02-19 23:28:11`, KST).
+    pub follow_date: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for ChannelFollowStatus {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let o = LenientObject::from_deserializer(d)?;
+        let f = o
+            .raw("personalData")
+            .and_then(|p| p.get("following"))
+            .filter(|f| f.is_object());
+        let Some(f) = f else {
+            return Ok(Self::default());
+        };
+        Ok(Self {
+            following: f.get("following").and_then(|v| v.as_bool()),
+            notification: f.get("notification").and_then(|v| v.as_bool()),
+            follow_date: f
+                .get("followDate")
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(String::from),
+        })
+    }
+}
+
 /// 팔로잉 채널 (라이브 상태 포함).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -120,6 +155,22 @@ pub struct StreamerInfo {
 mod tests {
     //! `Tests/CViewCoreTests/ChannelInfoTests.swift` 포팅.
     use super::*;
+
+    #[test]
+    fn follow_status_from_personal_data() {
+        let st: ChannelFollowStatus = serde_json::from_str(
+            r#"{"channelId":"a","personalData":{"following":{"following":true,"notification":false,"followDate":"2024-02-19 23:28:11"},"privateUserBlock":false}}"#,
+        )
+        .unwrap();
+        assert_eq!(st.following, Some(true));
+        assert_eq!(st.notification, Some(false));
+        assert_eq!(st.follow_date.as_deref(), Some("2024-02-19 23:28:11"));
+        let none: ChannelFollowStatus = serde_json::from_str(r#"{"channelId":"a"}"#).unwrap();
+        assert_eq!(none, ChannelFollowStatus::default());
+        let odd: ChannelFollowStatus =
+            serde_json::from_str(r#"{"personalData":{"following":"x"}}"#).unwrap();
+        assert_eq!(odd.following, None);
+    }
 
     #[test]
     fn memberwise_init() {

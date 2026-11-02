@@ -15,6 +15,7 @@ pub mod emoticon;
 pub mod item;
 pub mod messages;
 pub mod notice_kind;
+pub mod profile_card;
 
 mod ident;
 
@@ -29,3 +30,4 @@ pub use messages::{
     SubscriptionInfo, TemporaryRestrict, UserRole,
 };
 pub use notice_kind::ChatSystemNoticeKind;
+pub use profile_card::{ChatProfileCard, ProfileBadge};

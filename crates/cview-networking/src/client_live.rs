@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use cview_core::error::ApiError;
-use cview_core::models::chat::ChatAccessToken;
+use cview_core::models::chat::{ChatAccessToken, ChatProfileCard};
 use cview_core::models::live::LiveStatus;
 use cview_core::models::{LiveChannelItem, LiveInfo};
 use cview_core::protocols::{HttpCookie, HttpMethod, QueryItem};
@@ -69,6 +69,46 @@ impl Drop for UserStatusLoadGuard {
 }
 
 impl ChzzkApiClient {
+    // MARK: - 채팅 프로필 카드
+
+    /// 채팅 닉네임을 눌렀을 때의 프로필 카드(game API). 로그인 없이도 받는다.
+    pub async fn chat_profile_card(
+        &self,
+        chat_channel_id: &str,
+        user_id_hash: &str,
+    ) -> Result<ChatProfileCard, ApiError> {
+        // 두 값 모두 영숫자 해시 — 경로를 바꿀 수 있는 글자가 섞이면 보내지 않는다.
+        let plain = |s: &str| {
+            !s.is_empty()
+                && s.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        };
+        if !plain(chat_channel_id) || !plain(user_id_hash) {
+            return Err(ApiError::http(404));
+        }
+        let path = format!("/v1/chats/{chat_channel_id}/users/{user_id_hash}/profile-card");
+        let query = [QueryItem::new("chatType", "STREAMING")];
+        let url = build_url(&self.inner.game_api_base_url, &path, Some(&query))?;
+        let mut request = HttpRequest::new(HttpMethod::Get, url);
+        request.timeout = Some(Duration::from_secs(10));
+        request.set_header("User-Agent", Some(headers::CHROME_USER_AGENT));
+        request.set_header("Origin", Some(headers::CHZZK_ORIGIN));
+        request.set_header("Referer", Some(headers::CHZZK_REFERER));
+        if let Some(cookies) = self.auth_cookies().await {
+            request.set_header("Cookie", HttpCookie::header_value(&cookies).as_deref());
+        }
+        let response = self
+            .send(request, None)
+            .await
+            .map_err(transport_to_api_error)?;
+        if !(200..=299).contains(&response.status) {
+            return Err(ApiError::http(response.status as i64));
+        }
+        let parsed: ChzzkResponse<ChatProfileCard> = serde_json::from_slice(&response.body)
+            .map_err(|e| ApiError::DecodingFailed(e.to_string()))?;
+        parsed.content.ok_or(ApiError::EmptyContent)
+    }
+
     // MARK: - 채팅 토큰
 
     /// 채팅 접속 토큰 (game API). 쿠키가 있으면 SEND 권한, 없으면 READ 토큰.

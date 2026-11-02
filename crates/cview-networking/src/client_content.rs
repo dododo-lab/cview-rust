@@ -10,8 +10,9 @@ use cview_core::models::chat::{DonationRankResponse, EmoticonDeploy, EmoticonPac
 use cview_core::models::clip::{ClipInkeyContent, NaverVodPlayResponse};
 use cview_core::models::community::ChannelPostsContent;
 use cview_core::models::{
-    ChannelInfo, ChannelSearchItem, ChannelViewerInfo, ClipDetail, ClipInfo, LiveInfo,
-    LiveSearchItem, SearchResult, TimeMachinePlaybackInfo, VideoSearchItem, VodDetail, VodInfo,
+    ChannelFollowStatus, ChannelInfo, ChannelSearchItem, ChannelViewerInfo, ClipDetail, ClipInfo,
+    LiveInfo, LiveSearchItem, SearchResult, TimeMachinePlaybackInfo, VideoSearchItem, VodDetail,
+    VodInfo,
 };
 use cview_core::protocols::{HttpCookie, HttpMethod, QueryItem};
 use url::Url;
@@ -41,6 +42,17 @@ impl ChzzkApiClient {
     /// 채널 정보 조회.
     pub async fn channel_info(&self, channel_id: &str) -> Result<ChannelInfo, ApiError> {
         self.request(&ChzzkEndpoint::ChannelInfo {
+            channel_id: channel_id.into(),
+        })
+        .await
+    }
+
+    /// 로그인한 시청자가 이 채널을 팔로우하는가(`personalData.following`). 캐시를 쓰지 않는다.
+    pub async fn channel_follow_status(
+        &self,
+        channel_id: &str,
+    ) -> Result<ChannelFollowStatus, ApiError> {
+        self.request(&ChzzkEndpoint::ChannelFollowStatus {
             channel_id: channel_id.into(),
         })
         .await

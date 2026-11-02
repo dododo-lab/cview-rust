@@ -142,6 +142,8 @@ export const api = {
   openExternal: (url) => invoke('open_external', { url }),
 
   chatEmoticons: (channelId) => invoke('chat_emoticons', { channelId }),
+  // 채팅 닉네임 말풍선 — { profile, channel, following, loggedIn, isSelf }
+  chatUserCard: (userId, chatChannelId = null) => invoke('chat_user_card', { userId, chatChannelId }),
   chatConnect: (chatChannelId, channelId, session = null) => invoke('chat_connect', { chatChannelId, channelId, session, op: nextChatOp() }),
   chatDisconnect: (session = null) => invoke('chat_disconnect', { session, op: nextChatOp() }),
   chatSend: (text, session = null) => invoke('chat_send', { text, session }),

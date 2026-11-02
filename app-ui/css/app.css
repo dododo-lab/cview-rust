@@ -1547,6 +1547,76 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .ctx-item.danger:hover { background: var(--error); color: #fff; }
 .ctx-sep { height: 1px; background: var(--border-subtle); margin: 4px 6px; }
 
+/* 채팅 닉네임 말풍선(CHT-25) — chat-user-pop.js 가 위치(left/top)·꼬리(--tail)·붙은 쪽(data-side)을 잡는다.
+   data-side="bottom": 닉네임 아래, 꼬리는 위 / "top": 닉네임 위, 꼬리는 아래. 모양은 계정 말풍선(.account-pop)과 같다. */
+.user-pop {
+  position: fixed; z-index: 120; width: 264px; padding: 6px; border-radius: 16px; --tail: 24px;
+  background: var(--surface-popover); border: 1px solid var(--border-subtle); box-shadow: var(--shadow-lg);
+  display: flex; flex-direction: column; gap: 2px; outline: none;
+}
+.user-pop[hidden] { display: none; }
+.user-pop::after {
+  content: ''; position: absolute; width: 12px; height: 12px; left: calc(var(--tail) - 6px); background: var(--surface-popover);
+  border: 1px solid var(--border-subtle); border-top: 0; border-left: 0; border-bottom-right-radius: 3px;
+}
+.user-pop[data-side="bottom"]::after { top: -7px; rotate: 225deg; }
+.user-pop[data-side="top"]::after { bottom: -7px; rotate: 45deg; }
+/* 닉네임이 연 자리를 떠나면(채팅이 흘러감) 꼬리를 감춘다 — 말풍선은 그 자리에 남는다 */
+.user-pop.detached::after { opacity: 0; transition: opacity var(--dur-2, .18s) ease; }
+.up-head { display: flex; align-items: center; gap: 10px; padding: 8px 8px 4px; }
+.up-avatar { width: 42px; height: 42px; flex: none; border-radius: 50%; object-fit: cover; background: var(--surface-overlay); }
+.up-avatar-text { display: grid; place-items: center; font-weight: 700; color: var(--text-secondary); }
+.up-who { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.up-name { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.up-name b { font-size: var(--fs-body); font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; user-select: text; }
+.up-name .vbadge { flex: none; }
+.up-sub-line { display: flex; align-items: center; gap: 4px; min-width: 0; flex-wrap: wrap; }
+.up-title {
+  font-size: var(--fs-micro); font-weight: 700; padding: 1px 7px; border-radius: 999px;
+  color: var(--up-title, var(--primary-text)); background: color-mix(in srgb, var(--up-title, var(--primary)) 16%, transparent);
+}
+.up-badges { display: inline-flex; flex-wrap: wrap; gap: 2px; }
+.up-badges img { width: 18px; height: 18px; display: block; }
+.up-badge:not(.on) { opacity: .55; }
+.up-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 2px 8px 8px; color: var(--text-tertiary); font-size: var(--fs-footnote); min-height: 22px; }
+.up-facts i { font-style: normal; opacity: .6; }
+.up-facts.loading { color: var(--text-tertiary); }
+.up-live { color: var(--live); font-weight: 700; }
+.up-sub { color: var(--subscription); font-weight: 600; }
+.up-main { display: flex; gap: 6px; padding: 0 6px 6px; }
+.up-main:empty { display: none; }
+.up-btn {
+  flex: 1; min-width: 0; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--border-subtle); background: var(--surface-elevated);
+  color: var(--text-primary); font-size: var(--fs-caption); font-weight: 600; white-space: nowrap;
+}
+.up-btn:hover:not(:disabled) { background: var(--surface-overlay); border-color: var(--border); }
+.up-btn.primary { background: var(--primary); color: var(--on-primary); border-color: transparent; }
+.up-btn.primary:hover:not(:disabled) { background: var(--primary); filter: brightness(1.08); }
+.up-btn:disabled { opacity: .55; cursor: default; }
+.up-following .up-off, .up-following:hover:not(:disabled) .up-on { display: none; }
+.up-following:hover:not(:disabled) .up-off { display: inline; }
+.up-following:hover:not(:disabled) { color: var(--error); border-color: color-mix(in srgb, var(--error) 45%, transparent); }
+.up-list { display: flex; flex-direction: column; border-top: 1px solid var(--border-subtle); padding-top: 4px; }
+.up-item { border: 0; background: transparent; text-align: left; padding: 7px 10px; border-radius: 8px; font-size: var(--fs-caption); color: var(--text-primary); }
+.up-item:hover:not(:disabled) { background: var(--hover); }
+.up-item:focus-visible, .up-btn:focus-visible { box-shadow: var(--focus-ring); outline: none; }
+.up-item.on { color: var(--primary-text); font-weight: 600; }
+.up-item.danger { color: var(--error); }
+.up-item:disabled { color: var(--text-tertiary); cursor: default; }
+/* 닉네임·아바타는 누를 수 있다 — 말풍선이 떠 있는 동안 누른 닉네임에 밑줄 */
+.chat-list .chat-line[data-uid] :is(.nick, .chat-avatar) { cursor: pointer; }
+.chat-list .chat-line[data-uid] .nick:hover, .chat-list .nick.up-anchor { text-decoration: underline; text-underline-offset: 2px; }
+/* 이 사람 채팅만 보기 — 다른 줄과 읽음 구분선을 감춘다(시스템 알림은 남긴다) */
+.chat-list.solo > :is(.chat-line:not(.solo-match, .system), .read-divider) { display: none; }
+.chat-solo {
+  display: flex; align-items: center; gap: 6px; margin: 0 var(--sp-sm) var(--sp-sm); padding: 4px 4px 4px 10px; border-radius: 10px;
+  background: var(--primary-dim); color: var(--text-secondary); font-size: var(--fs-footnote);
+}
+.chat-solo[hidden] { display: none; }
+.chat-solo .solo-body { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-solo b { color: var(--text-primary); }
+.chat-solo .link-btn { color: var(--primary-text); font-weight: 700; white-space: nowrap; }
+
 /* 프로필 시트 */
 .profile-head { display: flex; align-items: center; gap: 8px; }
 .role-pill { font-size: var(--fs-micro); font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--primary-dim); color: var(--primary-text); }
