@@ -223,6 +223,8 @@ pub struct UpdateCheckDto {
     pub download_size: Option<i64>,
     /// 앱 안에서 받아 검증·설치할 수 있는가(새 버전 · 지원 OS · 피드에 SHA-256 이 있다).
     pub auto_install: bool,
+    /// 새 버전 피드의 서명을 이 앱에 넣은 키로 확인했는가. 아니면 화면이 수동 다운로드 전에 경고한다.
+    pub signed: bool,
 }
 
 /// 설치 파일 이름에 붙는 아키텍처 표기(CView_<버전>_arm64.dmg · _x64-setup.exe · _arm64-setup.exe).
@@ -399,14 +401,15 @@ async fn fetch_update(url: url::Url, current: String) -> CmdResult<UpdateCheckDt
             download_name: None,
             download_size: None,
             auto_install: false,
+            signed: false,
         });
     };
     let latest = release.version_string().to_string();
     let newer = compare_versions(&latest, &current) == std::cmp::Ordering::Greater;
     let asset = release_installer(&release);
-    let auto_install = newer
-        && asset.is_some_and(|a| crate::updater::can_auto_install(a, std::env::consts::OS))
-        && crate::updater::release_is_signed(&release);
+    let signed = newer && crate::updater::release_is_signed(&release);
+    let auto_install =
+        signed && asset.is_some_and(|a| crate::updater::can_auto_install(a, std::env::consts::OS));
     let (download_url, download_name, download_size) = match asset {
         Some(a) => (
             Some(a.browser_download_url.to_string()),
@@ -426,6 +429,7 @@ async fn fetch_update(url: url::Url, current: String) -> CmdResult<UpdateCheckDt
         download_name,
         download_size,
         auto_install,
+        signed,
     })
 }
 

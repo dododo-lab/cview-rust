@@ -625,6 +625,29 @@ pub(crate) fn create_unique_file(
     ))
 }
 
+/// 저장 종류별로 쓸 수 있는 확장자. 웹뷰가 넘긴 이름으로 실행되는 파일(`.command`·`.plist`·`.app`·`.lnk` 등)을
+/// 만들지 못하게 한다 — 스크린샷 폴더는 설정으로 아무 곳이나 될 수 있어서(예: LaunchAgents) 특히 필요하다.
+/// 모르는 종류는 `None`. 순수 함수.
+pub fn save_extensions(kind: &str) -> Option<&'static [&'static str]> {
+    match kind {
+        "screenshot" => Some(&["png", "jpg", "jpeg", "webp"]),
+        "chat" => Some(&["txt", "json", "csv"]),
+        "settings" => Some(&["json"]),
+        _ => None,
+    }
+}
+
+/// 이 종류로 이 이름(정리한 뒤)을 저장해도 되는가. 순수 함수.
+pub fn save_allowed(kind: &str, file_name: &str) -> bool {
+    let Some(allowed) = save_extensions(kind) else {
+        return false;
+    };
+    file_name
+        .rsplit_once('.')
+        .map(|(_, ext)| ext.to_ascii_lowercase())
+        .is_some_and(|ext| allowed.contains(&ext.as_str()))
+}
+
 /// 파일 저장 — `data` 는 base64(바이너리) 또는 `text`(문자열) 중 하나. 저장한 경로를 돌려준다.
 #[tauri::command]
 pub async fn save_file(
@@ -634,6 +657,12 @@ pub async fn save_file(
     data_base64: Option<String>,
     text: Option<String>,
 ) -> CmdResult<String> {
+    let file_name = sanitize_file_name(&file_name);
+    if !save_allowed(&kind, &file_name) {
+        return Err(CommandError(
+            "이 종류·형식의 파일은 저장할 수 없습니다".into(),
+        ));
+    }
     let bytes = match (data_base64, text) {
         (Some(b64), _) => {
             let raw = b64.split_once(',').map(|(_, d)| d).unwrap_or(&b64);
@@ -654,7 +683,7 @@ pub async fn save_file(
     let dir = configured.unwrap_or_else(|| default_save_dir(&home, &kind));
     std::fs::create_dir_all(&dir)
         .map_err(|e| CommandError(format!("폴더를 만들 수 없습니다: {e}")))?;
-    let (path, mut file) = create_unique_file(&dir, &sanitize_file_name(&file_name))
+    let (path, mut file) = create_unique_file(&dir, &file_name)
         .map_err(|e| CommandError(format!("저장하지 못했습니다: {e}")))?;
     if let Err(e) = std::io::Write::write_all(&mut file, &bytes) {
         drop(file);
@@ -783,6 +812,33 @@ pub async fn open_external(url: String) -> CmdResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn save_file_only_allows_known_kinds_and_extensions() {
+        assert!(save_allowed("screenshot", "방송_20261103.png"));
+        assert!(save_allowed("screenshot", "a.JPG"));
+        assert!(save_allowed("chat", "채팅_123.txt"));
+        assert!(save_allowed("settings", "CView-설정.json"));
+        // 실행·자동 로드되는 형식, 종류와 맞지 않는 형식, 확장자 없음, 모르는 종류
+        for (kind, name) in [
+            ("screenshot", "x.plist"),
+            ("screenshot", "x.command"),
+            ("screenshot", "x.png.app"),
+            ("chat", "x.sh"),
+            ("chat", "x.lnk"),
+            ("settings", "x.txt"),
+            ("screenshot", "png"),
+            ("recording", "x.mp4"),
+            ("", "x.png"),
+        ] {
+            assert!(!save_allowed(kind, name), "{kind} {name}");
+        }
+        // 정리 뒤 이름 기준 — 경로 구분자는 `_` 가 되어 확장자를 바꾸지 못한다.
+        assert!(!save_allowed(
+            "screenshot",
+            &sanitize_file_name("a.png/../../x.plist")
+        ));
+    }
 
     #[test]
     fn clip_cursor_page_follows_next_clip_uid() {
