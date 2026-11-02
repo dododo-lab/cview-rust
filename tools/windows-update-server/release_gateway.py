@@ -15,6 +15,9 @@ from contextlib import contextmanager
 ROOT = Path(r'C:\CViewUpdates')
 BASE = 'https://cv.dododo.app'
 PROTOCOL = 'cview-release-v1'
+# 앱이 검증하는 피드 서명. 게이트웨이가 이 기능을 알리지 않으면 클라이언트는 게시하지 않는다.
+SIGNATURE_FORMAT = 'cview-update-signature-v1'
+FEATURES = ['signed-feed-v1']
 
 
 def version_tuple(version):
@@ -127,6 +130,34 @@ def same_release(manifest, version, expected):
     return True
 
 
+def signed_payload(manifest):
+    """서명 대상: 버전·릴리스 페이지·노트 해시·자산(이름·크기·SHA-256·주소). 앱(updater.rs)과 같은 형식."""
+    version = manifest['tag_name'].removeprefix('v')
+    version_tuple(version)
+    body = (manifest.get('body') or '').encode('utf-8')
+    rows = [[SIGNATURE_FORMAT], ['version', version], ['release', manifest['html_url']],
+            ['notes', hashlib.sha256(body).hexdigest()]]
+    for asset in sorted(manifest['assets'], key=lambda a: a['name']):
+        if type(asset['size']) is not int or asset['size'] <= 0:
+            raise ValueError('Invalid asset size')
+        rows.append(['asset', asset['name'], str(asset['size']), asset['sha256'], asset['browser_download_url']])
+    # 필드 안의 공백·제어 문자는 줄·필드 경계를 흐리므로 받지 않는다(앱도 같은 규칙).
+    if any(not isinstance(f, str) or not f or not f.isprintable() or any(c.isspace() for c in f)
+           for row in rows for f in row):
+        raise ValueError('Signed fields must be nonempty without whitespace')
+    lines = [' '.join(row) for row in rows]
+    return ('\n'.join(lines) + '\n').encode('utf-8')
+
+
+def checked_signature(value):
+    """서명 형식만 본다(서버에는 비밀 키도 검증 라이브러리도 없다). 검증은 클라이언트와 앱이 한다."""
+    if (not isinstance(value, dict) or set(value) != {'alg', 'key_id', 'value'} or value['alg'] != 'ed25519'
+            or not isinstance(value['key_id'], str) or not re.fullmatch('[0-9a-f]{16}', value['key_id'])
+            or not isinstance(value['value'], str) or not re.fullmatch('[A-Za-z0-9+/]{86}==', value['value'])):
+        raise ValueError('A valid ed25519 feed signature is required')
+    return {'alg': 'ed25519', 'key_id': value['key_id'], 'value': value['value']}
+
+
 def dispatch(request, stream, root=ROOT):
     action = request.get('action')
     if action not in {'preflight', 'probe', 'upload', 'validate', 'publish'}:
@@ -140,8 +171,8 @@ def dispatch(request, stream, root=ROOT):
             raise ValueError('Missing server tool: ' + name)
     with locked(root):
         if action == 'preflight':
-            return {'protocol': PROTOCOL, 'hostname': socket.gethostname(), 'latest': latest(root),
-                    'free_bytes': shutil.disk_usage(incoming).free}
+            return {'protocol': PROTOCOL, 'features': FEATURES, 'hostname': socket.gethostname(),
+                    'latest': latest(root), 'free_bytes': shutil.disk_usage(incoming).free}
         if action == 'probe':
             if request.get('size') != 1024 * 1024:
                 raise ValueError('Probe must contain exactly 1 MiB')
@@ -170,8 +201,11 @@ def dispatch(request, stream, root=ROOT):
                     os.replace(temporary, destination)
             return {'uploaded': name, **info}
         expected = expected_files(request)
+        signature = checked_signature(request.get('signature'))
         current = latest(root)
         reused = bool(current and same_release(current, version, expected))
+        if reused and current.get('signature') != signature:
+            raise ValueError('Published signature differs; never overwrite it')
         if not reused:
             require_new(root, version)
             folder = safe(incoming / version)
@@ -184,8 +218,8 @@ def dispatch(request, stream, root=ROOT):
             # Fixed, administrator-owned module; no client-supplied code or paths.
             sys.path.insert(0, str(root / 'tools'))
             from publish import publish
-            current = publish(root / 'site', BASE, version, [folder / n for n in names[:2]], notes)
-            if not same_release(current, version, expected):
+            current = publish(root / 'site', BASE, version, [folder / n for n in names[:2]], notes, signature)
+            if not same_release(current, version, expected) or current.get('signature') != signature:
                 raise ValueError('Published manifest mismatch')
         if action == 'validate':
             return {'validated': version, 'published': True, 'reused': True}

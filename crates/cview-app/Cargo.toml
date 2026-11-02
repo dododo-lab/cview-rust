@@ -39,6 +39,8 @@ async-trait.workspace = true
 futures-util.workspace = true
 percent-encoding = "2"
 sha2 = "0.10"
+# 업데이트 피드 ed25519 서명 검증. rustls 가 이미 쓰는 크레이트라 새로 받는 것은 없다.
+ring = "0.17"
 reqwest.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 sysinfo = { version = "0.39", default-features = false, features = ["system"] }
