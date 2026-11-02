@@ -79,6 +79,8 @@ export class WatchInfoPanel {
     this.tab = 'info';
     this.seq = 0;
     this.pages = { vod: 0, clip: 0, community: 0 };
+    this.clipCursor = null; // 클립 다음 쪽 커서(앞 응답의 nextCursor)
+    this.clipSeen = new Set(); // 받은 clipUID — 쪽이 겹쳐도 같은 카드를 두 번 붙이지 않게
     this.loading = false;
     this.postImages = new Map();
     this.observers = [];
@@ -234,6 +236,7 @@ export class WatchInfoPanel {
     if (!append) {
       this.pages[kind] = 0;
       if (kind === 'community') this.postImages.clear();
+      if (kind === 'clip') { this.clipCursor = null; this.clipSeen.clear(); }
       box.innerHTML = this.skeletonHtml(kind);
     }
     const seq = this.seq;
@@ -242,9 +245,13 @@ export class WatchInfoPanel {
     this.loading = true;
     try {
       const res = kind === 'vod' ? await api.channelVods(id, page, 24)
-        : kind === 'clip' ? await api.channelClips(id, page, 24)
+        : kind === 'clip' ? await api.channelClips(id, append ? this.clipCursor : null, 24)
         : await api.channelPosts(id, page);
       if (seq !== this.seq || this.tab !== kind) return;
+      if (kind === 'clip') {
+        this.clipCursor = res.nextCursor;
+        res.items = res.items.filter((c) => !this.clipSeen.has(c.clipUID) && this.clipSeen.add(c.clipUID));
+      }
       const badge = this.el.querySelector(`[data-count="${kind}"]`);
       if (badge && res.totalCount > 0) badge.textContent = compactCount(res.totalCount);
       const html = kind === 'community' ? res.items.map((p) => this.postHtml(p)).join('')

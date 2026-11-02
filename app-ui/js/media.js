@@ -139,7 +139,7 @@ export class MediaPage {
     const dock = this.body.querySelector('.media-dock');
     try {
       const list = channelId
-        ? (await api.channelClips(channelId, 0, 20)).items
+        ? (await api.channelClips(channelId, null, 20)).items
         : await api.popularClips('WITHIN_7_DAYS', 'POPULAR');
       if (seq !== this.seq || !dock) return;
       const others = list.filter((c) => c.clipUID !== currentUid).slice(0, 16);
