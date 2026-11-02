@@ -3,3 +3,4 @@
 # 개인 키는 릴리스 Mac의 ~/.config/cview-release/update_signing_ed25519.pem 에만 둔다.
 # 새 키: python3 scripts/publish-update.py --init-signing-key → 출력된 줄을 여기에 추가.
 # 키 교체: 새 키를 추가한 앱을 먼저 배포한 뒤 서명 키를 바꾸고, 그다음 옛 키 줄을 지운다.
+CNq62ArRz/HsWbw6ndx/LU+6Chexg2FFsPxXLhHPb7c=
