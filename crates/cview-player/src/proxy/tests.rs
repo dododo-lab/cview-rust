@@ -323,6 +323,21 @@ async fn proxy_url_rewrites_only_while_running() {
 
 // MARK: - 보안
 
+/// DNS 리바인딩 흉내 — 루프백으로 들어와도 Host 가 다른 도메인이면 상류로 보내지 않는다.
+#[tokio::test]
+async fn rebinding_host_header_is_forbidden() {
+    let proxy = LocalStreamProxy::default();
+    let port = proxy.start(HOST).await.unwrap();
+    let mut s = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
+    s.write_all(b"GET /a.m3u8 HTTP/1.1\r\nHost: rebind.evil.example\r\nConnection: close\r\n\r\n")
+        .await
+        .unwrap();
+    let mut buf = Vec::new();
+    s.read_to_end(&mut buf).await.unwrap();
+    assert!(String::from_utf8_lossy(&buf).starts_with("HTTP/1.1 403"));
+    proxy.stop();
+}
+
 #[tokio::test]
 async fn loopback_request_to_untrusted_destination_returns_403() {
     let proxy = LocalStreamProxy::default();
@@ -344,7 +359,7 @@ async fn other_methods_get_400_and_absolute_form_is_forbidden() {
     let proxy = LocalStreamProxy::default();
     let port = proxy.start(HOST).await.unwrap();
     let mut s = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
-    s.write_all(b"POST /a.m4s HTTP/1.1\r\nHost: x\r\nContent-Length: 0\r\n\r\n")
+    s.write_all(b"POST /a.m4s HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 0\r\n\r\n")
         .await
         .unwrap();
     let (status, headers, _) = read_response(&mut s).await;
@@ -352,7 +367,7 @@ async fn other_methods_get_400_and_absolute_form_is_forbidden() {
     assert_eq!(h(&headers, "connection"), Some("close"));
 
     let mut s = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
-    s.write_all(b"GET http://video.pstatic.net/a.m4s HTTP/1.1\r\nHost: x\r\n\r\n")
+    s.write_all(b"GET http://video.pstatic.net/a.m4s HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
         .await
         .unwrap();
     let (status, _, _) = read_response(&mut s).await;
@@ -669,7 +684,7 @@ async fn ignored_range_is_sliced_and_connection_reused() {
     let port = proxy.start(HOST).await.unwrap();
     let body = range_body();
     let mut s = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
-    s.write_all(b"GET /ignore/a.m4s HTTP/1.1\r\nHost: x\r\nRange: bytes=100-399\r\n\r\n")
+    s.write_all(b"GET /ignore/a.m4s HTTP/1.1\r\nHost: 127.0.0.1\r\nRange: bytes=100-399\r\n\r\n")
         .await
         .unwrap();
     let (status, headers, data) = read_response(&mut s).await;
@@ -679,7 +694,7 @@ async fn ignored_range_is_sliced_and_connection_reused() {
     assert_eq!(data, &body[100..400]);
 
     // 같은 연결로 다음 요청 — 만족 불가 구간은 416 으로.
-    s.write_all(b"GET /ignore/a.m4s HTTP/1.1\r\nHost: x\r\nRange: bytes=1000-\r\n\r\n")
+    s.write_all(b"GET /ignore/a.m4s HTTP/1.1\r\nHost: 127.0.0.1\r\nRange: bytes=1000-\r\n\r\n")
         .await
         .unwrap();
     let (status, headers, data) = read_response(&mut s).await;
@@ -688,7 +703,7 @@ async fn ignored_range_is_sliced_and_connection_reused() {
     assert_eq!(h(&headers, "content-length"), Some("0"));
     assert!(data.is_empty());
 
-    s.write_all(b"GET /ignore/a.m4s HTTP/1.1\r\nHost: x\r\nRange: bytes=900-\r\n\r\n")
+    s.write_all(b"GET /ignore/a.m4s HTTP/1.1\r\nHost: 127.0.0.1\r\nRange: bytes=900-\r\n\r\n")
         .await
         .unwrap();
     let (status, _, data) = read_response(&mut s).await;
@@ -725,7 +740,7 @@ async fn preflight_answers_204_then_ranged_get_on_same_connection() {
     let port = proxy.start(HOST).await.unwrap();
     let mut s = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
     s.write_all(
-        b"OPTIONS /r/a.m4s HTTP/1.1\r\nHost: x\r\nOrigin: tauri://localhost\r\nAccess-Control-Request-Method: GET\r\nAccess-Control-Request-Headers: range, x-evil\r\n\r\n",
+        b"OPTIONS /r/a.m4s HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: tauri://localhost\r\nAccess-Control-Request-Method: GET\r\nAccess-Control-Request-Headers: range, x-evil\r\n\r\n",
     )
     .await
     .unwrap();
@@ -742,7 +757,7 @@ async fn preflight_answers_204_then_ranged_get_on_same_connection() {
     assert!(body.is_empty());
     assert!(mock.seen().is_empty(), "사전 요청이 상류로 나갔다");
 
-    s.write_all(b"GET /r/a.m4s HTTP/1.1\r\nHost: x\r\nRange: bytes=0-399\r\n\r\n")
+    s.write_all(b"GET /r/a.m4s HTTP/1.1\r\nHost: 127.0.0.1\r\nRange: bytes=0-399\r\n\r\n")
         .await
         .unwrap();
     let (status, headers, body) = read_response(&mut s).await;
@@ -757,7 +772,7 @@ async fn preflight_answers_204_then_ranged_get_on_same_connection() {
         ("/_ts/abc/seg/x.m4v", 403),
     ] {
         let mut s = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
-        s.write_all(format!("OPTIONS {target} HTTP/1.1\r\nHost: x\r\n\r\n").as_bytes())
+        s.write_all(format!("OPTIONS {target} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n").as_bytes())
             .await
             .unwrap();
         let (status, headers, _) = read_response(&mut s).await;
@@ -919,7 +934,7 @@ async fn client_leaving_mid_body_counts_abort() {
     let proxy = proxy_for(&mock);
     let port = proxy.start(HOST).await.unwrap();
     let mut s = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
-    s.write_all(b"GET /stall.m4s HTTP/1.1\r\nHost: x\r\n\r\n")
+    s.write_all(b"GET /stall.m4s HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
         .await
         .unwrap();
     let mut buf = [0u8; 256];
@@ -1108,9 +1123,11 @@ async fn foreign_origin_is_refused() {
     let proxy = proxy_for(&mock);
     let port = proxy.start(HOST).await.unwrap();
     let mut s = TcpStream::connect(("127.0.0.1", port)).await.unwrap();
-    s.write_all(b"GET /r/a.m4s HTTP/1.1\r\nHost: x\r\nOrigin: https://evil.example\r\n\r\n")
-        .await
-        .unwrap();
+    s.write_all(
+        b"GET /r/a.m4s HTTP/1.1\r\nHost: 127.0.0.1\r\nOrigin: https://evil.example\r\n\r\n",
+    )
+    .await
+    .unwrap();
     let (status, _, _) = read_response(&mut s).await;
     assert!(status.starts_with("HTTP/1.1 403"), "{status}");
     proxy.stop();

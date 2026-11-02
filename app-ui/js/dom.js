@@ -152,6 +152,16 @@ export function imageSrc(value, kind = 'static') {
   return `${CVIMG_BASE}${encodeURIComponent(`${kind}/${sized}`)}`;
 }
 
+/**
+ * 이모티콘 주소 — 네이버 이미지 서버(https)만. 이모티콘 표는 채팅 메시지에 실려 오므로, 다른 호스트를 받으면
+ * 보낸 사람이 정한 서버로 시청자 모두의 IP·시청 시각이 새는 추적 픽셀이 된다. 나머지는 ''.
+ */
+export function emojiUrl(value) {
+  const url = safeUrl(value);
+  if (!url.startsWith('https://')) return '';
+  try { return IMAGE_HOSTS.test(new URL(url).hostname) ? url : ''; } catch { return ''; }
+}
+
 /** `{:name:}` 이모티콘 치환 (치지직 채팅 본문 규칙). 나머지는 이스케이프. 채팅·후원 알림이 함께 쓴다. */
 export function renderContent(content, emojis, showEmoji = true) {
   const map = emojis || {};
@@ -159,7 +169,7 @@ export function renderContent(content, emojis, showEmoji = true) {
     .split(/(\{:[^{}:]+:\})/g)
     .map((part) => {
       const m = /^\{:([^{}:]+):\}$/.exec(part);
-      const url = m && safeUrl(map[m[1]]);
+      const url = m && Object.hasOwn(map, m[1]) && emojiUrl(map[m[1]]);
       if (!url) return esc(part);
       return showEmoji ? `<img decoding="async" class="emoji" src="${esc(imageSrc(url, 'static'))}" alt="${esc(m[1])}" referrerpolicy="no-referrer">` : `<span class="emoji-text">:${esc(m[1])}:</span>`;
     })

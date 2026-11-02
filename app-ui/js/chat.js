@@ -4,7 +4,7 @@
 // CHT-11 자동 스크롤·"새 메시지" 버튼·읽음 구분선(⌘J), CHT-12 지우기(⇧⌘K)·재연결, CHT-14 표시 옵션,
 // CHT-16 후원 필터, CHT-20 입력 상태 배너, CHT-25 닉네임 말풍선(chat-user-pop.js)·이 사람 채팅만 보기.
 import { api, listen, Events } from './api.js';
-import { esc, safeUrl, toast, imageSrc, dismiss, hideWithExit, renderContent } from './dom.js';
+import { esc, safeUrl, toast, imageSrc, dismiss, hideWithExit, renderContent, emojiUrl } from './dom.js';
 
 export { renderContent };
 import { DonationRanking, eventCardHtml, eventClasses, EVENT_ICONS } from './donations.js';
@@ -46,7 +46,7 @@ function timeText(ms) {
 export function isEmoteOnly(content, emojis) {
   const map = emojis || {};
   let found = false;
-  const rest = String(content ?? '').replace(/\{:([^{}:]+):\}/g, (all, key) => { if (map[key]) { found = true; return ''; } return all; });
+  const rest = String(content ?? '').replace(/\{:([^{}:]+):\}/g, (all, key) => { if (Object.hasOwn(map, key) && emojiUrl(map[key])) { found = true; return ''; } return all; });
   return found && !rest.trim();
 }
 
@@ -446,7 +446,7 @@ export class ChatPanel {
     for (const m of shown) {
       if (m.nickname && m.kind !== 'system') this.recentNicks.set(m.nickname, Date.now());
       for (const [id, url] of Object.entries(m.emojis || {})) {
-        if (url && !this.seenEmoji.has(id)) this.seenEmoji.set(id, url);
+        if (emojiUrl(url) && !this.seenEmoji.has(id)) this.seenEmoji.set(id, url);
       }
       if (prefs.highlightMentions && mentionsMe(m)) {
         this.mentions.push(m);

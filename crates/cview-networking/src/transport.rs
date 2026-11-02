@@ -152,6 +152,16 @@ impl ReqwestTransport {
             .connect_timeout(Duration::from_secs_f64(api_defaults::REQUEST_TIMEOUT))
             .timeout(Duration::from_secs_f64(api_defaults::RESOURCE_TIMEOUT))
             .pool_max_idle_per_host(6)
+            .redirect(reqwest::redirect::Policy::custom(|attempt| {
+                if attempt.previous().len() >= MAX_REDIRECTS {
+                    attempt.error("리다이렉트가 너무 많습니다")
+                } else if redirect_allowed(attempt.url()) {
+                    attempt.follow()
+                } else {
+                    tracing::warn!("공개 주소가 아닌 곳으로 가는 리다이렉트를 따르지 않음");
+                    attempt.stop()
+                }
+            }))
             .build()?;
         Ok(Self { client })
     }
@@ -159,6 +169,15 @@ impl ReqwestTransport {
     pub fn with_client(client: reqwest::Client) -> Self {
         Self { client }
     }
+}
+
+/// 리다이렉트 최대 횟수(reqwest 기본값과 같다).
+const MAX_REDIRECTS: usize = 10;
+
+/// 따라가도 되는 리다이렉트 대상 — http(s) 이고 루프백·사설·링크 로컬 주소가 아닌 곳. 광고 서버처럼 외부가 정한
+/// 주소를 받을 때 공개 서버가 내부망(공유기 관리 화면·로컬 프록시 등)으로 돌려보내지 못하게. 순수 함수.
+pub fn redirect_allowed(url: &Url) -> bool {
+    matches!(url.scheme(), "http" | "https") && crate::client_ads::is_public_ad_url(url)
 }
 
 fn to_reqwest_method(method: HttpMethod) -> reqwest::Method {
@@ -217,6 +236,21 @@ impl HttpTransport for ReqwestTransport {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn redirects_only_to_public_http_hosts() {
+        let ok = |s: &str| super::redirect_allowed(&url::Url::parse(s).unwrap());
+        assert!(ok("https://ssl.pstatic.net/a"));
+        assert!(ok("http://ad.example.com/t"));
+        assert!(ok("https://8.8.8.8/x"));
+        assert!(!ok("http://127.0.0.1:52345/key"));
+        assert!(!ok("http://192.168.0.1/"));
+        assert!(!ok("http://10.0.0.5/"));
+        assert!(!ok("http://169.254.169.254/latest/meta-data"));
+        assert!(!ok("http://[::1]/"));
+        assert!(!ok("http://localhost/"));
+        assert!(!ok("file:///etc/passwd"));
+    }
+
     use super::*;
 
     #[test]

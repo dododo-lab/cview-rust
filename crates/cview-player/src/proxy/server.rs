@@ -290,9 +290,33 @@ pub fn origin_allowed(origin: Option<&str>) -> bool {
     }
 }
 
+/// 프록시가 받는 `Host` 머리인지 — 루프백 이름(`127.0.0.1`·`localhost`·`[::1]`, 포트는 무관)만.
+/// DNS 리바인딩(공격자 도메인을 127.0.0.1 로 다시 풀어 같은 출처로 부르기)은 출처 머리 없이 들어오므로
+/// 출처 검사로는 막지 못한다. 그때도 `Host` 는 공격자 도메인이라 여기서 거른다.
+/// 머리가 없는 요청(브라우저가 아닌 로컬 도구)은 받는다. 순수 함수.
+pub fn host_allowed(host: Option<&str>) -> bool {
+    let Some(host) = host else { return true };
+    let host = host.trim().to_ascii_lowercase();
+    // `이름` 또는 `이름:포트`(포트는 숫자만). IPv6 는 `[::1]` 꼴이라 마지막 `]` 뒤의 `:` 만 포트로 본다.
+    let (name, port) = match host.rsplit_once(':') {
+        Some((n, p)) if !n.is_empty() && (!n.starts_with('[') || n.ends_with(']')) => (n, Some(p)),
+        _ => (host.as_str(), None),
+    };
+    port.is_none_or(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
+        && matches!(name, "127.0.0.1" | "localhost" | "[::1]")
+}
+
 impl LocalStreamProxy {
     /// 요청 하나 처리.
     pub(crate) async fn handle(&self, req: Request<Incoming>) -> Response<Body> {
+        let host = req
+            .headers()
+            .get(http::header::HOST)
+            .map(|v| v.to_str().unwrap_or(""));
+        if !host_allowed(host) {
+            tracing::warn!(host = ?host, "프록시: 루프백이 아닌 Host 머리의 요청을 거절");
+            return error_response(403, "Forbidden", false);
+        }
         let origin = req.headers().get("origin").and_then(|v| v.to_str().ok());
         if !origin_allowed(origin) {
             tracing::warn!(origin = ?origin, "프록시: 앱이 아닌 출처의 요청을 거절");
@@ -831,7 +855,26 @@ impl Drop for MediaStream {
 
 #[cfg(test)]
 mod origin_tests {
-    use super::origin_allowed;
+    use super::{host_allowed, origin_allowed};
+
+    #[test]
+    fn only_loopback_host_names() {
+        assert!(host_allowed(None));
+        assert!(host_allowed(Some("127.0.0.1:52345")));
+        assert!(host_allowed(Some("127.0.0.1")));
+        assert!(host_allowed(Some("LOCALHOST:8080")));
+        assert!(host_allowed(Some("[::1]:9000")));
+        // DNS 리바인딩 — 공격자 도메인이 127.0.0.1 로 풀려도 Host 는 그 도메인이다.
+        assert!(!host_allowed(Some("rebind.evil.example:52345")));
+        assert!(!host_allowed(Some("127.0.0.1.evil.example")));
+        assert!(!host_allowed(Some("localhost.evil.example:1")));
+        assert!(!host_allowed(Some("[::1].evil")));
+        assert!(!host_allowed(Some("")));
+        assert!(!host_allowed(Some("x")));
+        assert!(!host_allowed(Some("[::1")));
+        assert!(!host_allowed(Some("127.0.0.1:")));
+        assert!(!host_allowed(Some("127.0.0.1:80:80")));
+    }
 
     #[test]
     fn only_app_origins_or_none() {

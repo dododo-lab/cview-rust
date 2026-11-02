@@ -103,7 +103,7 @@ export function openUserPop(panel, anchor, line) {
     if (since) facts.push(`${since}부터 팔로우`);
     if (prof && prof.subscriptionMonths) facts.push(`<span class="up-sub">구독 ${esc(String(prof.subscriptionMonths))}개월</span>`);
     let factLine = facts.join('<i aria-hidden="true">·</i>');
-    if (!factLine) factLine = state.loading ? '불러오는 중…' : (state.error || (ch ? '' : '채널을 만들지 않은 사용자'));
+    if (!factLine) factLine = state.loading ? '불러오는 중…' : (esc(state.error) || (ch ? '' : '채널을 만들지 않은 사용자'));
 
     // 팔로우 — 로그인했고, 내가 아니고, 채널이 있을 때만. 상태를 모르면(응답에 없음) 팔로우 버튼으로.
     let followBtn = '';

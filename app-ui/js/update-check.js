@@ -66,7 +66,11 @@ export function updateDetailHtml(u, currentText = null) {
   if (date) rows.push(['게시일', date]);
   if (u.newer && u.downloadName) rows.push(['설치 파일', `${u.downloadName}${u.downloadSize ? ` · ${sizeText(u.downloadSize)}` : ''}`]);
   const notes = u.newer && u.notes && u.notes.trim() ? `<pre class="update-notes">${esc(u.notes.trim())}</pre>` : '';
-  return `<p class="update-summary${u.newer ? ' is-new' : ''}">${esc(updateSummary(u))}</p>
+  // 서명을 확인하지 못한 피드 — 업데이트 서버가 바뀌었을 수 있어 직접 받기 전에 알린다(자동 설치는 이미 막혀 있다).
+  const unsigned = u.newer && u.signed === false
+    ? '<p class="update-unsigned muted small">이 릴리스의 서명을 확인하지 못했습니다. 받은 파일이 CView 공식 릴리스인지 확인한 뒤 설치해 주세요.</p>'
+    : '';
+  return `<p class="update-summary${u.newer ? ' is-new' : ''}">${esc(updateSummary(u))}</p>${unsigned}
     <dl class="update-facts">${rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${notes}`;
 }
 
