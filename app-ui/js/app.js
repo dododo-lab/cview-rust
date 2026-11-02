@@ -704,9 +704,13 @@ function installMenuAndShortcuts() {
   banner.innerHTML = '<span>오프라인입니다 — 네트워크가 돌아오면 자동으로 다시 불러옵니다</span>';
   banner.hidden = navigator.onLine !== false;
   document.querySelector('.content').prepend(banner);
-  window.addEventListener('offline', () => { banner.hidden = false; });
+  window.addEventListener('offline', () => {
+    banner.hidden = false;
+    if (isTauri) api.playerNetworkPath(false).catch(() => {});
+  });
   window.addEventListener('online', () => {
     banner.hidden = true;
+    if (isTauri) api.playerNetworkPath(true).catch(() => {});
     toast('다시 연결되었습니다', 1500);
     if (pages[current] && !viewer.isOpen) MENU_ACTIONS.refresh();
   });

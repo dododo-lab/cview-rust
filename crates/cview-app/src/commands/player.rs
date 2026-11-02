@@ -12,7 +12,7 @@ use std::sync::Arc;
 use cview_app_core::viewmodels::player::{PlayerViewModel, StartStreamRequest};
 use cview_core::models::live::LiveStatus;
 use cview_core::models::player::{PlayerError, PlayerPhase};
-use cview_player::coordinator::StreamPhase;
+use cview_player::coordinator::{InterfaceType, StreamPhase};
 use cview_player::hlsjs::JsMessage;
 use cview_player::policy::{PlaybackCookie, PlaybackKeyAccess};
 use serde_json::Value;
@@ -144,6 +144,31 @@ pub async fn player_message(services: State<'_, AppServices>, message: Value) ->
         });
     }
     apply_engine_signal(&services.player, signal).await;
+    Ok(())
+}
+
+/// 웹뷰의 `online`/`offline` — 단일 시청 화면과 멀티라이브 패인의 코디네이터에 경로 변화를 알린다.
+///
+/// 이 신호가 없으면 오프라인 → 온라인 복구를 코디네이터가 모른다. 그래서 재연결 중이면 남은 백오프
+/// (최대 15초)를 다 기다렸고, 오래 끊겨 재연결이 소진(`Error`)됐으면 네트워크가 돌아와도 오류 카드에
+/// 그대로 머물렀다. 경로 종류는 웹뷰가 알려 주지 않으므로 온라인은 `Other` 로 넘긴다 — 판정
+/// ([`cview_player::coordinator::network_recovery_decision`])은 오프라인 ↔ 온라인 전이만 본다.
+#[tauri::command]
+pub async fn player_network_path(
+    services: State<'_, AppServices>,
+    shell: State<'_, crate::multi_live::MultiLiveShell>,
+    online: bool,
+) -> CmdResult<()> {
+    let interface = if online {
+        InterfaceType::Other
+    } else {
+        InterfaceType::Offline
+    };
+    tracing::info!(online, "네트워크 경로 변화");
+    services.player.network_path_changed(interface);
+    for pane in shell.registry.players() {
+        pane.view_model().network_path_changed(interface);
+    }
     Ok(())
 }
 

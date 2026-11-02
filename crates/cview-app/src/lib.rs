@@ -317,6 +317,7 @@ pub fn run() {
             commands::player::player_stop,
             commands::player::player_set_volume,
             commands::player::player_message,
+            commands::player::player_network_path,
             commands::multi_live::multilive_state,
             commands::multi_live::multilive_add,
             commands::multi_live::multilive_remove,

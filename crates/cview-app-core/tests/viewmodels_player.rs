@@ -20,9 +20,11 @@ use cview_core::models::settings::{PlayerSettings, ScreenshotFormat};
 use cview_core::models::stream_proxy::StreamProxyMode;
 use cview_core::protocols::{CapturedFrame, PlayerEngineCapabilities, PlayerEngineProtocol};
 use cview_player::coordinator::{
-    BufferHealth, CoordinatedEngine, LatencyInfo, StreamEvent, StreamPhase, StreamQualityInfo,
+    BufferHealth, CoordinatedEngine, InterfaceType, LatencyInfo, StreamEvent, StreamPhase,
+    StreamQualityInfo,
 };
 use cview_player::hlsjs::HlsJsForcedQualityTarget;
+use cview_player::reconnection::ReconnectionConfig;
 
 // MARK: - 가짜 엔진
 
@@ -41,6 +43,7 @@ struct EngineState {
     recording: bool,
     recording_failure: Option<String>,
     fail_play: bool,
+    play_calls: usize,
 }
 
 struct FakeEngine {
@@ -92,6 +95,7 @@ impl PlayerEngineProtocol for FakeEngine {
         1.0
     }
     async fn play(&self, _url: &Url) -> Result<(), PlayerError> {
+        self.st().play_calls += 1;
         if self.st().fail_play {
             return Err(PlayerError::ConnectionLost);
         }
@@ -934,5 +938,52 @@ async fn stream_event_tap_sees_current_session_events() {
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
     assert!(seen.lock().unwrap().contains(&StreamPhase::Playing));
+    vm.stop_stream().await;
+}
+
+/// 앱의 오프라인 → 온라인 신호가 재연결 백오프를 끊고 바로 다시 시도하게 한다(뷰모델 → 코디네이터 배선).
+#[tokio::test]
+async fn network_recovery_skips_reconnect_backoff() {
+    let engine = FakeEngine::new(true);
+    let factory_engine = engine.clone();
+    let vm = PlayerViewModel::new(Some(Arc::new(move || {
+        factory_engine.clone() as SharedLiveEngine
+    })));
+    let mut req =
+        StartStreamRequest::new("ch1", Url::parse("http://127.0.0.1:9/live.m3u8").unwrap());
+    req.player_settings = Some(PlayerSettings {
+        stream_proxy_mode: StreamProxyMode::None,
+        ..Default::default()
+    });
+    vm.start_stream(req).await;
+    vm.engine_state_changed(&cview_core::models::player::PlayerPhase::Playing)
+        .await;
+    let coordinator = vm.read().coordinator().cloned().unwrap();
+    let handler = coordinator.reconnection_handler().clone();
+    handler.set_config(ReconnectionConfig::new(3, 30.0, 30.0, 1.0));
+    // 첫 경로 신호는 기준만 기록한다.
+    vm.network_path_changed(InterfaceType::Offline);
+    let plays_before = engine.st().play_calls;
+    vm.engine_state_changed(&cview_core::models::player::PlayerPhase::Error(
+        PlayerError::ConnectionLost,
+    ))
+    .await;
+    for _ in 0..200 {
+        if handler.is_reconnecting() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    assert!(handler.is_reconnecting());
+    let started = std::time::Instant::now();
+    vm.network_path_changed(InterfaceType::Other);
+    for _ in 0..200 {
+        if engine.st().play_calls > plays_before {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    }
+    assert!(engine.st().play_calls > plays_before);
+    assert!(started.elapsed() < std::time::Duration::from_secs(5));
     vm.stop_stream().await;
 }

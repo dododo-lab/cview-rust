@@ -1,0 +1,96 @@
+diff --git a/src/config.ts b/src/config.ts
+index b0773e5..f366a01 100644
+--- a/src/config.ts
++++ b/src/config.ts
+@@ -305,6 +305,12 @@ export type LatencyControllerConfig = {
+    * CView 수정(0001): 라이브 기준 단위. 'targetduration'(업스트림 기본) 또는 'segment'(실제 평균 세그먼트 길이).
+    */
+   liveSyncReference?: 'targetduration' | 'segment';
++  /**
++   * CView 수정(0004): 멈춤으로 늘어난 지연 목표를 되돌리는 시간(ms). 마지막 멈춤 뒤 이만큼 멈춤 없이 지나면
++   * 멈춤 횟수를 하나 줄인다. 설정하면 targetLatency 대입은 값이 실제로 바뀔 때만 멈춤 횟수를 초기화한다.
++   * 없으면(기본) 업스트림과 같다 — 멈춤 횟수는 줄지 않고, 같은 값 대입도 초기화한다.
++   */
++  liveSyncStallDecayMs?: number;
+ };
+ 
+ export type PlaylistControllerConfig = {
+@@ -496,6 +502,7 @@ export const hlsDefaultConfig: HlsConfig = {
+   liveMaxLatencyDuration: undefined, // used by latency-controller
+   maxLiveSyncPlaybackRate: 1, // used by latency-controller
+   liveSyncReference: 'targetduration', // CView 수정(0001): used by latency-controller, stream-controller
++  liveSyncStallDecayMs: undefined, // CView 수정(0004): used by latency-controller
+   liveDurationInfinity: false, // used by buffer-controller
+   /**
+    * @deprecated use backBufferLength
+diff --git a/src/controller/latency-controller.ts b/src/controller/latency-controller.ts
+index 7aef814..133f8e9 100644
+--- a/src/controller/latency-controller.ts
++++ b/src/controller/latency-controller.ts
+@@ -18,6 +18,8 @@ export default class LatencyController implements ComponentAPI {
+   private media: HTMLMediaElement | null = null;
+   private currentTime: number = 0;
+   private stallCount: number = 0;
++  // CView 수정(0004): 마지막 멈춤(또는 마지막 감쇠) 시각 — liveSyncStallDecayMs 기준점.
++  private lastStallAt: number = 0;
+   private _latency: number | null = null;
+   private _targetLatencyUpdated = false;
+ 
+@@ -71,6 +73,7 @@ export default class LatencyController implements ComponentAPI {
+           : liveSyncDurationCount * targetduration;
+     }
+     const maxLiveSyncOnStallIncrease = targetduration;
++    this.decayStallCount(); // CView 수정(0004)
+     return (
+       targetLatency +
+       Math.min(
+@@ -84,11 +87,39 @@ export default class LatencyController implements ComponentAPI {
+     if (!this.hls) {
+       return;
+     }
++    // CView 수정(0004): 감쇠를 쓰면 같은 목표의 재대입이 멈춤 이력을 지우지 않는다.
++    if (
++      this.stallDecayMs > 0 &&
++      this._targetLatencyUpdated &&
++      this.hls.config.liveSyncDuration === latency
++    ) {
++      return;
++    }
+     this.stallCount = 0;
+     this.hls.config.liveSyncDuration = latency;
+     this._targetLatencyUpdated = true;
+   }
+ 
++  // CView 수정(0004)
++  private get stallDecayMs(): number {
++    const decay = this.hls?.config.liveSyncStallDecayMs;
++    return decay !== undefined && Number.isFinite(decay) && decay > 0 ? decay : 0;
++  }
++
++  // CView 수정(0004): 마지막 멈춤 뒤 decay 마다 멈춤 횟수를 하나씩 줄인다.
++  private decayStallCount() {
++    const decay = this.stallDecayMs;
++    if (decay === 0 || this.stallCount === 0) {
++      return;
++    }
++    const now = self.performance.now();
++    const steps = Math.floor((now - this.lastStallAt) / decay);
++    if (steps > 0) {
++      this.stallCount = Math.max(0, this.stallCount - steps);
++      this.lastStallAt += steps * decay;
++    }
++  }
++
+   get liveSyncPosition(): number | null {
+     const liveEdge = this.estimateLiveEdge();
+     const targetLatency = this.targetLatency;
+@@ -232,7 +263,9 @@ export default class LatencyController implements ComponentAPI {
+     if (data.details !== ErrorDetails.BUFFER_STALLED_ERROR) {
+       return;
+     }
++    this.decayStallCount(); // CView 수정(0004)
+     this.stallCount++;
++    this.lastStallAt = self.performance.now(); // CView 수정(0004)
+     if (this.hls && this.levelDetails?.live) {
+       this.hls.logger.warn(
+         '[latency-controller]: Stall detected, adjusting target latency',
