@@ -178,7 +178,12 @@ fn search_live_cards(lives: &[LiveInfo]) -> Vec<LiveCardDto> {
 fn bucket_errors(errors: &HashMap<SearchType, String>) -> BTreeMap<String, String> {
     errors
         .iter()
-        .map(|(ty, e)| (SearchScope::from_search_type(*ty).raw_value().to_string(), e.clone()))
+        .map(|(ty, e)| {
+            (
+                SearchScope::from_search_type(*ty).raw_value().to_string(),
+                e.clone(),
+            )
+        })
         .collect()
 }
 
