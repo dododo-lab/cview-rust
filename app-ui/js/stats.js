@@ -495,6 +495,14 @@ export class StatsPage {
       e.preventDefault();
       this.activate(chart, Math.max(0, Math.min(meta.count - 1, next)), true);
     });
+    // 마우스로 띄운 풍선도 초점 위치와 상관없이 Esc 로 닫는다(WCAG 1.4.13). 풍선이 떠 있을 때만 가로챈다.
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || this.tip.hidden || this.root.hidden) return;
+      if (e.target.closest?.('[data-chart]')) return; // 초점 있는 차트는 위 처리기가 맡는다
+      e.preventDefault();
+      e.stopPropagation();
+      this.hideTip();
+    }, true);
     // 스크롤하면 풍선이 엉뚱한 곳에 떠 있지 않게 — 키보드 초점이 있는 차트(초점 이동으로 자동 스크롤된 경우 포함)는
     // 다음 프레임에 자리를 다시 잡고, 마우스로 연 풍선은 닫는다.
     this.root.addEventListener('scroll', () => {
