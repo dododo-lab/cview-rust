@@ -555,8 +555,12 @@ impl AppServices {
 
     /// 종료 정리 — 재생·채팅을 멈추고 대기 중인 설정 저장을 마친다.
     pub async fn shutdown(&self) {
-        // 화면을 정리하기 전에 남은 시청 세션의 `WATCH_ENDED` 를 보낸다(정지 경로는 기다리지 않는다).
-        self.watch_events.end_all().await;
+        // 남은 시청 세션의 `WATCH_ENDED` 전송은 로컬 정리와 함께 돈다 — 네트워크가 늦어도 플레이어 정지·
+        // 시청 기록 종료·설정 저장이 밀리지 않는다(보고자는 바깥 종료 상한보다 짧게 기다린다).
+        tokio::join!(self.watch_events.end_all(), self.shutdown_local());
+    }
+
+    async fn shutdown_local(&self) {
         self.stop_player().await;
         self.chat.disconnect().await;
         let sessions: Vec<_> = self

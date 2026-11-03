@@ -11,18 +11,19 @@
 //! `watchActivity` 로 알린다. 같은 채널을 여러 화면(단독 시청·멀티라이브 패인)이 동시에 재생해도 채널마다
 //! 시청 세션은 하나다(중복 세션을 만들지 않는다).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use async_trait::async_trait;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use cview_core::error::ApiError;
 use cview_networking::client_watch::{
     new_watch_session_id, LiveWatchEvent, LiveWatchStatus, WatchEventType,
 };
 use cview_networking::ChzzkApiClient;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
 use super::support::lock;
@@ -33,8 +34,10 @@ pub const WATCH_EVENT_PERIOD: Duration = Duration::from_secs(30);
 const PERIOD_SLACK: Duration = Duration::from_secs(1);
 /// `liveTokenList` 를 다시 읽는 최소 간격(웹은 live-status 를 10초마다 다시 읽는다).
 const STATUS_MAX_AGE: Duration = Duration::from_secs(10);
-/// 종료 시 `WATCH_ENDED` 전송을 기다리는 상한.
-const END_FLUSH_TIMEOUT: Duration = Duration::from_secs(3);
+/// 종료 시 `WATCH_ENDED` 전송을 기다리는 상한 — 앱 종료 정리 전체 상한(3초)보다 짧다.
+const END_FLUSH_TIMEOUT: Duration = Duration::from_secs(2);
+/// 보내지 못하고 쌓아 두는 이벤트 상한.
+const MAX_PENDING: usize = 8;
 
 /// 한 시청 세션의 이벤트 순서와 누적 재생 시간 — 네트워크 없는 순수 상태기계.
 #[derive(Debug, Clone, Default)]
@@ -146,9 +149,25 @@ impl WatchEventApi for ChzzkApiClient {
     }
 }
 
+/// 화면에서 상태가 바뀐 시각 — 앞 전송이 늦어 작업이 늦게 처리해도 재생 시간은 이 시각으로 센다.
+#[derive(Debug, Clone, Copy)]
+struct Stamp {
+    at: Instant,
+    wall: DateTime<Utc>,
+}
+
+impl Stamp {
+    fn now() -> Self {
+        Self {
+            at: Instant::now(),
+            wall: Utc::now(),
+        }
+    }
+}
+
 enum Command {
-    Active(bool),
-    End(Option<oneshot::Sender<()>>),
+    Active(bool, Stamp),
+    End(Stamp),
 }
 
 struct Source {
@@ -158,6 +177,7 @@ struct Source {
 
 struct ChannelEntry {
     tx: mpsc::UnboundedSender<Command>,
+    task: JoinHandle<()>,
     active: bool,
 }
 
@@ -166,6 +186,8 @@ struct Inner {
     /// 화면(단독 시청 `viewer`, 멀티라이브 패인 등) → 그 화면이 보는 채널.
     sources: HashMap<String, Source>,
     channels: HashMap<String, ChannelEntry>,
+    /// 종료를 보냈지만 아직 `WATCH_ENDED` 를 전송 중인 작업 — 앱 종료가 함께 기다린다.
+    finishing: Vec<JoinHandle<()>>,
 }
 
 /// 시청 이벤트 보고자. `Clone` 은 같은 보고자를 가리킨다.
@@ -197,7 +219,7 @@ impl LiveWatchReporter {
         {
             return;
         }
-        self.detach_locked(&mut inner, source);
+        Self::detach_locked(&mut inner, source);
         inner.sources.insert(
             source.to_string(),
             Source {
@@ -214,11 +236,17 @@ impl LiveWatchReporter {
                 session_id: new_watch_session_id(),
                 tracker: WatchEventTracker::default(),
                 status: None,
+                pending: VecDeque::new(),
             };
-            tokio::spawn(worker.run(rx));
-            inner
-                .channels
-                .insert(channel_id.to_string(), ChannelEntry { tx, active: false });
+            let task = tokio::spawn(worker.run(rx));
+            inner.channels.insert(
+                channel_id.to_string(),
+                ChannelEntry {
+                    tx,
+                    task,
+                    active: false,
+                },
+            );
         }
     }
 
@@ -233,27 +261,28 @@ impl LiveWatchReporter {
         Self::sync_channel(&mut inner, &channel_id);
     }
 
-    /// 화면이 재생을 멈췄다(정지·채널 전환·창 닫힘).
+    /// 화면이 재생을 멈췄다(정지·채널 전환·창 닫힘·방송 영상 끝).
     pub fn end(&self, source: &str) {
         let mut inner = lock(&self.inner);
-        self.detach_locked(&mut inner, source);
+        Self::detach_locked(&mut inner, source);
     }
 
-    /// 앱 종료 — 모든 시청 세션에 `WATCH_ENDED` 를 보내고 잠시 기다린다.
+    /// 앱 종료 — 모든 시청 세션에 `WATCH_ENDED` 를 보내고, 이미 종료 중인 세션까지 잠시 기다린다.
     pub async fn end_all(&self) {
-        let acks: Vec<oneshot::Receiver<()>> = {
+        let tasks: Vec<JoinHandle<()>> = {
             let mut inner = lock(&self.inner);
             inner.sources.clear();
-            inner
-                .channels
-                .drain()
-                .filter_map(|(_, entry)| {
-                    let (tx, rx) = oneshot::channel();
-                    entry.tx.send(Command::End(Some(tx))).ok().map(|_| rx)
-                })
-                .collect()
+            let stamp = Stamp::now();
+            let channels: Vec<_> = inner.channels.drain().map(|(_, e)| e).collect();
+            let mut tasks = std::mem::take(&mut inner.finishing);
+            for entry in channels {
+                let _ = entry.tx.send(Command::End(stamp));
+                tasks.push(entry.task);
+            }
+            tasks
         };
-        let _ = tokio::time::timeout(END_FLUSH_TIMEOUT, futures_util::future::join_all(acks)).await;
+        let _ =
+            tokio::time::timeout(END_FLUSH_TIMEOUT, futures_util::future::join_all(tasks)).await;
     }
 
     /// 열린 시청 세션 수(채널 단위).
@@ -261,7 +290,7 @@ impl LiveWatchReporter {
         lock(&self.inner).channels.len()
     }
 
-    fn detach_locked(&self, inner: &mut Inner, source: &str) {
+    fn detach_locked(inner: &mut Inner, source: &str) {
         let Some(old) = inner.sources.remove(source) else {
             return;
         };
@@ -272,7 +301,9 @@ impl LiveWatchReporter {
         if still_used {
             Self::sync_channel(inner, &old.channel_id);
         } else if let Some(entry) = inner.channels.remove(&old.channel_id) {
-            let _ = entry.tx.send(Command::End(None));
+            let _ = entry.tx.send(Command::End(Stamp::now()));
+            inner.finishing.retain(|t| !t.is_finished());
+            inner.finishing.push(entry.task);
         }
     }
 
@@ -285,10 +316,18 @@ impl LiveWatchReporter {
         if let Some(entry) = inner.channels.get_mut(channel_id) {
             if entry.active != active {
                 entry.active = active;
-                let _ = entry.tx.send(Command::Active(active));
+                let _ = entry.tx.send(Command::Active(active, Stamp::now()));
             }
         }
     }
+}
+
+/// 보낼 이벤트 — 종류·누적 재생 시간·시각은 상태가 바뀐 그때 정한다.
+#[derive(Debug, Clone, Copy)]
+struct PendingEvent {
+    kind: WatchEventType,
+    awt: i64,
+    wall: DateTime<Utc>,
 }
 
 /// 채널 하나의 시청 세션 — 이벤트를 순서대로 보낸다.
@@ -299,6 +338,8 @@ struct Worker {
     session_id: String,
     tracker: WatchEventTracker,
     status: Option<(Instant, LiveWatchStatus)>,
+    /// 방송 상태·라이브 ID 를 아직 못 읽어 보내지 못한 이벤트(시작 이벤트를 잃지 않게 순서대로 둔다).
+    pending: VecDeque<PendingEvent>,
 }
 
 impl Worker {
@@ -307,40 +348,58 @@ impl Worker {
             let due = self.tracker.next_due();
             let command = match due {
                 Some(at) => tokio::select! {
+                    // 밀린 명령이 주기보다 먼저다 — 그 사이 일시정지했으면 주기 이벤트가 없다.
+                    biased;
                     c = rx.recv() => c,
                     _ = tokio::time::sleep_until(at) => {
-                        if let Some(kind) = self.tracker.tick(Instant::now()) {
-                            self.send(kind).await;
+                        let stamp = Stamp::now();
+                        if let Some(kind) = self.tracker.tick(stamp.at) {
+                            self.queue(kind, stamp);
                         }
+                        self.flush().await;
                         continue;
                     }
                 },
                 None => rx.recv().await,
             };
-            let now = Instant::now();
             match command {
-                Some(Command::Active(active)) => {
-                    if let Some(kind) = self.tracker.set_active(active, now) {
-                        self.send(kind).await;
+                Some(Command::Active(active, stamp)) => {
+                    if let Some(kind) = self.tracker.set_active(active, stamp.at) {
+                        self.queue(kind, stamp);
                     }
+                    self.flush().await;
                 }
-                Some(Command::End(ack)) => {
-                    if let Some(kind) = self.tracker.end(now) {
-                        self.send(kind).await;
-                    }
-                    if let Some(ack) = ack {
-                        let _ = ack.send(());
-                    }
+                Some(Command::End(stamp)) => {
+                    self.finish(stamp).await;
                     return;
                 }
                 None => {
-                    if let Some(kind) = self.tracker.end(now) {
-                        self.send(kind).await;
-                    }
+                    self.finish(Stamp::now()).await;
                     return;
                 }
             }
         }
+    }
+
+    async fn finish(&mut self, stamp: Stamp) {
+        if let Some(kind) = self.tracker.end(stamp.at) {
+            self.queue(kind, stamp);
+        }
+        self.flush().await;
+    }
+
+    fn queue(&mut self, kind: WatchEventType, stamp: Stamp) {
+        // 계속 실패하는 동안 쌓이지 않게 상한을 둔다(시작 이벤트는 남긴다).
+        if self.pending.len() >= MAX_PENDING {
+            let drop_at =
+                usize::from(self.pending.front().map(|e| e.kind) == Some(WatchEventType::Started));
+            self.pending.remove(drop_at);
+        }
+        self.pending.push_back(PendingEvent {
+            kind,
+            awt: self.tracker.accumulated_secs(stamp.at),
+            wall: stamp.wall,
+        });
     }
 
     async fn fresh_status(&mut self) -> Option<LiveWatchStatus> {
@@ -362,14 +421,14 @@ impl Worker {
         }
     }
 
-    async fn send(&mut self, kind: WatchEventType) {
+    /// 밀린 이벤트를 순서대로 보낸다. 방송 상태나 라이브 ID 를 못 읽으면 다음 기회까지 남겨 둔다.
+    async fn flush(&mut self) {
+        if self.pending.is_empty() {
+            return;
+        }
         let Some(status) = self.fresh_status().await else {
             return;
         };
-        // 방송이 끝났으면 집계할 시청이 없다(종료 알림은 남은 세션을 닫으려고 그대로 보낸다).
-        if !status.is_open && kind != WatchEventType::Ended {
-            return;
-        }
         let live_id = match self.live_id {
             Some(id) => id,
             None => match self.api.current_live_id(&self.channel_id).await {
@@ -380,9 +439,20 @@ impl Worker {
                 }
             },
         };
+        while let Some(pending) = self.pending.pop_front() {
+            // 방송이 끝났으면 집계할 시청이 없다(종료 알림은 남은 세션을 닫으려고 그대로 보낸다).
+            if !status.is_open && pending.kind != WatchEventType::Ended {
+                continue;
+            }
+            self.post(pending, live_id, &status).await;
+        }
+    }
+
+    async fn post(&self, pending: PendingEvent, live_id: i64, status: &LiveWatchStatus) {
+        let kind = pending.kind;
         let position_at = status
             .open_date
-            .map(|d| (Utc::now() - d).num_seconds().max(0))
+            .map(|d| (pending.wall - d).num_seconds().max(0))
             .unwrap_or(0);
         let event = LiveWatchEvent {
             channel_id: self.channel_id.clone(),
@@ -391,10 +461,11 @@ impl Worker {
             session_id: self.session_id.clone(),
             duration_sec: WATCH_EVENT_PERIOD.as_secs() as i64,
             position_at,
-            accumulated_watch_sec: self.tracker.accumulated_secs(Instant::now()),
-            live_tokens: status.live_tokens,
+            accumulated_watch_sec: pending.awt,
+            live_tokens: status.live_tokens.clone(),
         };
         // 시작·종료·실패는 진단 로그에서 확인할 수 있게 info, 30초 주기는 debug.
+        // 전송 실패는 다시 보내지 않는다(서버가 받았는데 응답만 잃었으면 중복이 된다).
         match self.api.post_live_watch_event(&event).await {
             Ok(()) if kind == WatchEventType::Continued => tracing::debug!(
                 "시청 이벤트 {} {} awt={}",
@@ -460,6 +531,10 @@ mod tests {
     struct FakeApi {
         events: Mutex<Vec<LiveWatchEvent>>,
         open: Mutex<bool>,
+        /// 남은 상태 조회 실패 횟수.
+        status_failures: Mutex<u32>,
+        /// 상태 조회·전송 지연.
+        delay: Mutex<Duration>,
     }
 
     impl FakeApi {
@@ -481,6 +556,15 @@ mod tests {
     #[async_trait]
     impl WatchEventApi for FakeApi {
         async fn live_watch_status(&self, _: &str) -> Result<LiveWatchStatus, ApiError> {
+            let delay = *self.delay.lock().unwrap();
+            tokio::time::sleep(delay).await;
+            {
+                let mut failures = self.status_failures.lock().unwrap();
+                if *failures > 0 {
+                    *failures -= 1;
+                    return Err(ApiError::InvalidResponse);
+                }
+            }
             Ok(LiveWatchStatus {
                 is_open: *self.open.lock().unwrap(),
                 open_date: Some(Utc::now() - chrono::Duration::seconds(600)),
@@ -491,6 +575,8 @@ mod tests {
             Ok(99)
         }
         async fn post_live_watch_event(&self, event: &LiveWatchEvent) -> Result<(), ApiError> {
+            let delay = *self.delay.lock().unwrap();
+            tokio::time::sleep(delay).await;
             self.events.lock().unwrap().push(event.clone());
             Ok(())
         }
@@ -539,7 +625,7 @@ mod tests {
             .all(|e| e.live_id == 7 && e.live_tokens == ["tok"]));
         assert!(events.iter().all(|e| e.session_id == events[0].session_id));
         assert_eq!(events[3].accumulated_watch_sec, 61);
-        assert!(events[0].position_at >= 600);
+        assert!(events[0].position_at >= 599, "방송 시작부터 약 600초");
         assert_eq!(reporter.session_count(), 0);
     }
 
@@ -590,6 +676,66 @@ mod tests {
                 ("b".to_string(), Started),
                 ("b".to_string(), Ended),
             ]
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn awt_uses_transition_time_not_processing_time() {
+        let api = FakeApi::opened();
+        *api.delay.lock().unwrap() = Duration::from_secs(5);
+        let reporter = LiveWatchReporter::new(api.clone());
+        reporter.begin("viewer", "ch", Some(1));
+        reporter.set_active("viewer", true);
+        settle().await;
+        tokio::time::advance(Duration::from_secs(1)).await;
+        reporter.set_active("viewer", false);
+        // 시작 이벤트 전송(조회 5초 + 전송 5초)이 끝나야 일시정지를 처리한다.
+        for _ in 0..4 {
+            tokio::time::advance(Duration::from_secs(5)).await;
+            settle().await;
+        }
+        let events = api.events.lock().unwrap().clone();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[1].event, WatchEventType::Paused);
+        assert_eq!(
+            events[1].accumulated_watch_sec, 1,
+            "늦게 처리해도 1초만 봤다"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn start_event_survives_failed_first_status() {
+        use WatchEventType::*;
+        let api = FakeApi::opened();
+        *api.status_failures.lock().unwrap() = 1;
+        let reporter = LiveWatchReporter::new(api.clone());
+        reporter.begin("viewer", "ch", Some(1));
+        reporter.set_active("viewer", true);
+        settle().await;
+        assert!(api.kinds().is_empty());
+        tokio::time::advance(Duration::from_secs(30)).await;
+        settle().await;
+        assert_eq!(
+            api.kinds().iter().map(|k| k.1).collect::<Vec<_>>(),
+            vec![Started, Continued],
+            "다음 기회에 시작 이벤트를 먼저 보낸다"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn end_all_waits_for_sessions_already_ending() {
+        use WatchEventType::*;
+        let api = FakeApi::opened();
+        let reporter = LiveWatchReporter::new(api.clone());
+        reporter.begin("viewer", "ch", Some(1));
+        reporter.set_active("viewer", true);
+        settle().await;
+        *api.delay.lock().unwrap() = Duration::from_millis(500);
+        reporter.end("viewer");
+        reporter.end_all().await;
+        assert_eq!(
+            api.kinds().iter().map(|k| k.1).collect::<Vec<_>>(),
+            vec![Started, Ended]
         );
     }
 

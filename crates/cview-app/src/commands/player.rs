@@ -145,10 +145,14 @@ pub async fn player_message(services: State<'_, AppServices>, message: Value) ->
     if matches!(parsed, JsMessage::SurfaceFirstFrame { .. }) {
         services.player.engine_surface_presented();
     }
-    if let JsMessage::WatchActivity { active } = parsed {
-        services
-            .watch_events
-            .set_active(crate::state::VIEWER_WATCH_SOURCE, active);
+    if let JsMessage::WatchActivity { active, ended } = parsed {
+        let source = crate::state::VIEWER_WATCH_SOURCE;
+        if ended {
+            // 방송 종료 화면에 머물러도 시청은 끝났다 — 다음 재생(`player_start`)이 새 세션을 연다.
+            services.watch_events.end(source);
+        } else {
+            services.watch_events.set_active(source, active);
+        }
     }
     if let Some(EngineSignal::Fatal(message)) = &signal {
         (services.sinks.player_event)(PlayerEventDto::Error {

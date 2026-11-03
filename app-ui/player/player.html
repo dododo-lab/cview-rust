@@ -1056,7 +1056,7 @@ function reportWatchActivity() {
     const active = _watchHasPlayed && !video.paused && !video.ended && visible;
     if (active === _watchActive) return;
     _watchActive = active;
-    postToSwift('watchActivity', { active });
+    postToSwift('watchActivity', { active, ended: false });
 }
 function scheduleWatchHidden() {
     clearTimeout(_watchHiddenTimer);
@@ -1074,7 +1074,14 @@ function scheduleWatchHidden() {
 document.addEventListener('visibilitychange', scheduleWatchHidden);
 video.addEventListener('playing', function() { _watchHasPlayed = true; reportWatchActivity(); });
 video.addEventListener('emptied', function() { _watchHasPlayed = false; reportWatchActivity(); });
-for (const event of ['pause', 'ended', 'enterpictureinpicture', 'leavepictureinpicture',
+// 영상 끝(방송 종료)은 일시정지가 아니라 시청 끝이다 — 네이티브가 `WATCH_ENDED` 로 세션을 닫는다.
+video.addEventListener('ended', function() {
+    if (!_watchHasPlayed) return;
+    _watchHasPlayed = false;
+    _watchActive = false;
+    postToSwift('watchActivity', { active: false, ended: true });
+});
+for (const event of ['pause', 'enterpictureinpicture', 'leavepictureinpicture',
                      'webkitpresentationmodechanged']) {
     video.addEventListener(event, reportWatchActivity);
 }

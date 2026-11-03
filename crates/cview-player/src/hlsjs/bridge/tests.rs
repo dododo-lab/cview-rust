@@ -243,11 +243,19 @@ fn parses_envelopes_of_every_type() {
     );
     assert_eq!(
         msg("watchActivity", json!({"active": true})).unwrap().1,
-        JsMessage::WatchActivity { active: true }
+        JsMessage::WatchActivity {
+            active: true,
+            ended: false
+        }
     );
     assert_eq!(
-        msg("watchActivity", json!({})).unwrap().1,
-        JsMessage::WatchActivity { active: false }
+        msg("watchActivity", json!({"active": false, "ended": true}))
+            .unwrap()
+            .1,
+        JsMessage::WatchActivity {
+            active: false,
+            ended: true
+        }
     );
     match msg(
             "error",

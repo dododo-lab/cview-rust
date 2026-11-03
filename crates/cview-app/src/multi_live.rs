@@ -431,8 +431,12 @@ impl PanePlayer {
             self.vm.engine_surface_presented();
         }
         crate::commands::player::apply_engine_signal(&self.vm, signal).await;
-        if let cview_player::hlsjs::JsMessage::WatchActivity { active } = message {
-            self.watch_events.set_active(&self.watch_source, *active);
+        if let cview_player::hlsjs::JsMessage::WatchActivity { active, ended } = message {
+            if *ended {
+                self.watch_events.end(&self.watch_source);
+            } else {
+                self.watch_events.set_active(&self.watch_source, *active);
+            }
         }
         if matches!(message, cview_player::hlsjs::JsMessage::PlayStarted { .. }) {
             self.presented_ticks.fetch_add(1, Ordering::SeqCst);

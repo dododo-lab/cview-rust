@@ -505,6 +505,8 @@ pub enum JsMessage {
     /// 지연(디바운스)해 판단했다. 치지직 시청 이벤트(`live_watch_events`)의 재생·일시정지 신호.
     WatchActivity {
         active: bool,
+        /// 영상이 끝났다(방송 종료) — 일시정지가 아니라 시청 끝(`WATCH_ENDED`)이다.
+        ended: bool,
     },
     MatchWebV2(MatchWebV2Envelope),
 }
@@ -645,6 +647,7 @@ impl JsMessage {
             },
             JsMessageType::WatchActivity => JsMessage::WatchActivity {
                 active: b("active"),
+                ended: b("ended"),
             },
             JsMessageType::V2SeekTokenRequest | JsMessageType::V2Event => {
                 JsMessage::MatchWebV2(parse_match_web_v2_message(message_type, data)?)
