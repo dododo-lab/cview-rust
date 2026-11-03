@@ -22,7 +22,7 @@ export function setMenuHidden(iframe, on) {
   if (on) menuHidden.add(iframe); else menuHidden.delete(iframe);
   const cap = on && !inPip(iframe) ? BACKGROUND_HEIGHT : 0;
   try { iframe.contentWindow?.setBackgroundSaver?.(cap); } catch { /* 준비 전 */ }
-  // 치지직 시청 집계도 화면에서 빠진 플레이어는 멈춘다(PiP 여부는 페이지가 본다).
+  // 치지직 시청 집계 — 페이지가 화면 표시가 끝난 뒤 숨김 여부를 다시 본다(PiP 여부도 페이지가 본다).
   try { iframe.contentWindow?.setWatchSurfaceHidden?.(on); } catch { /* 준비 전 */ }
 }
 

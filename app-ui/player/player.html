@@ -1043,14 +1043,17 @@ for (const event of ['error', 'stalled', 'waiting', 'playing', 'pause', 'seeking
 //   치지직 웹은 영상 `playing` 에 시작·재개, `pause` 에 일시정지, 끝나면 종료를 보낸다(재버퍼링은 일시정지가
 //   아니다). 앱은 여기에 화면 가림을 더한다: 창이 가려지거나(최소화·⌘H·완전히 가려짐) 다른 메뉴로 옮겨 이
 //   플레이어가 화면에서 빠진 채 WATCH_HIDDEN_DELAY_MS 가 지나면 PiP 가 아닌 한 안 보는 것으로 알린다.
-//   메뉴 이동은 iframe 의 `document.hidden` 을 바꾸지 않아 부모가 `setWatchSurfaceHidden` 으로 알린다.
+//   메뉴 이동·멀티라이브 레이아웃(한 채널 크게 등)의 CSS 숨김은 `visibilitychange` 를 내지 않아, 화면에서
+//   빠졌는지(`isSurfaceHidden`: 창 가림 또는 iframe 이 그려지지 않음)를 WATCH_SURFACE_POLL_MS 마다 직접 본다.
+//   부모의 메뉴 전환 통지(`setWatchSurfaceHidden`)는 다시 보는 시점만 당긴다 — 화면 표시가 끝난 뒤 본다.
 //   ⌘Tab·잠깐의 메뉴 이동 같은 짧은 전환은 무시한다. 전송·주기는 네이티브가 맡는다.
 const WATCH_HIDDEN_DELAY_MS = 15000;
+const WATCH_SURFACE_POLL_MS = 2000;
 let _watchActive = null;
 let _watchHasPlayed = false;
 let _watchHiddenLong = false;
 let _watchHiddenTimer = null;
-let _watchMenuHidden = false;
+let _watchSurfaceHidden = false;
 function watchInPip() {
     return video.webkitPresentationMode === 'picture-in-picture' || document.pictureInPictureElement === video;
 }
@@ -1061,10 +1064,14 @@ function reportWatchActivity() {
     _watchActive = active;
     postToSwift('watchActivity', { active, ended: false });
 }
-function scheduleWatchHidden() {
+/** 화면에서 빠짐·복귀가 바뀌었을 때만 15초 타이머를 걸거나 푼다. */
+function refreshWatchSurface() {
+    const hidden = isSurfaceHidden();
+    if (hidden === _watchSurfaceHidden) return;
+    _watchSurfaceHidden = hidden;
     clearTimeout(_watchHiddenTimer);
     _watchHiddenTimer = null;
-    if (_watchMenuHidden || isSurfaceHidden()) {
+    if (hidden) {
         _watchHiddenTimer = setTimeout(function() {
             _watchHiddenLong = true;
             reportWatchActivity();
@@ -1074,11 +1081,11 @@ function scheduleWatchHidden() {
         reportWatchActivity();
     }
 }
-document.addEventListener('visibilitychange', scheduleWatchHidden);
-/** 부모: 메뉴 이동으로 이 플레이어가 화면에서 빠졌다(`true`)/돌아왔다(`false`). */
-window.setWatchSurfaceHidden = function(on) {
-    _watchMenuHidden = Boolean(on);
-    scheduleWatchHidden();
+document.addEventListener('visibilitychange', refreshWatchSurface);
+setInterval(refreshWatchSurface, WATCH_SURFACE_POLL_MS);
+/** 부모: 메뉴 이동으로 이 플레이어가 화면에서 빠졌다/돌아왔다 — 부모가 화면을 다 바꾼 뒤 다시 본다. */
+window.setWatchSurfaceHidden = function() {
+    setTimeout(refreshWatchSurface, 0);
 };
 video.addEventListener('playing', function() { _watchHasPlayed = true; reportWatchActivity(); });
 video.addEventListener('emptied', function() { _watchHasPlayed = false; reportWatchActivity(); });
@@ -1093,7 +1100,7 @@ for (const event of ['pause', 'enterpictureinpicture', 'leavepictureinpicture',
                      'webkitpresentationmodechanged']) {
     video.addEventListener(event, reportWatchActivity);
 }
-if (isSurfaceHidden()) scheduleWatchHidden();
+refreshWatchSurface();
 
 // [지연 정합 2026-08-11] **목표 지연의 단일 소유자는 Swift 다.**
 //   종전에는 목표가 두 곳에 따로 있었다 — Swift `LowLatencyController.Configuration.targetLatency`
