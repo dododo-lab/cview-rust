@@ -495,8 +495,16 @@ export class StatsPage {
       e.preventDefault();
       this.activate(chart, Math.max(0, Math.min(meta.count - 1, next)), true);
     });
-    // 스크롤하면 풍선이 엉뚱한 곳에 떠 있지 않게 닫는다.
-    this.root.addEventListener('scroll', () => this.hideTip(), { capture: true, passive: true });
+    // 스크롤하면 풍선이 엉뚱한 곳에 떠 있지 않게 — 키보드 초점이 있는 차트(초점 이동으로 자동 스크롤된 경우 포함)는
+    // 다음 프레임에 자리를 다시 잡고, 마우스로 연 풍선은 닫는다.
+    this.root.addEventListener('scroll', () => {
+      const chart = this.tipChart;
+      if (!chart || document.activeElement !== chart) { this.hideTip(); return; }
+      cancelAnimationFrame(this.tipFrame);
+      this.tipFrame = requestAnimationFrame(() => {
+        if (this.tipChart === chart && document.activeElement === chart) this.activate(chart, Number(chart.dataset.active ?? 0), false);
+      });
+    }, { capture: true, passive: true });
   }
 
   activate(chart, i, announce) {

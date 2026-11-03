@@ -352,6 +352,16 @@ for (const width of [900, 700]) {
     await p.locator(`${S} [role="tab"][data-tab="ranking"]`).click();
     await waitReport(p);
     if (width === 700) assert.equal(await p.locator(`${S} .rt-opt`).first().isVisible(), false);
+    // 화면 아래 차트로 초점이 가며 자동 스크롤돼도 풍선은 닫히지 않고 그 차트 곁으로 옮겨진다
+    await p.evaluate(() => { document.querySelector('[data-page="stats"]').scrollTop = 0; });
+    await p.focus(`${S} [data-chart="cats"]`);
+    await p.waitForTimeout(250);
+    const tip = p.locator(`${S} .chart-tip`);
+    assert.equal(await tip.isVisible(), true, 'tip stays open after focus scroll');
+    const [tb, cb] = [await tip.boundingBox(), await p.locator(`${S} [data-chart="cats"] [data-i].is-active`).first().boundingBox()];
+    assert.ok(tb.y >= 0 && tb.y + tb.height <= p.viewportSize().height, JSON.stringify(tb));
+    assert.ok(Math.abs(tb.x + tb.width / 2 - (cb.x + cb.width / 2)) <= Math.max(12, tb.width / 2), `tip ${JSON.stringify(tb)} cell ${JSON.stringify(cb)}`);
+    await p.evaluate(() => document.activeElement?.blur());
     assert.deepEqual(narrow.errors, []);
   });
   if (width === 700) {
