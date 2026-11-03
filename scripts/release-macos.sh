@@ -28,6 +28,8 @@
 #   4) 빌드 → DMG 서명 → 공증(Accepted 확인) → 스테이플 → 확인.
 #      여기서 하나라도 실패하면 올린 파일을 git 으로 되돌리고 끝낸다(trap).
 #   4b) 같은 버전의 Windows 설치 파일(NSIS) 두 개를 이 Mac 에서 교차 빌드한다. 둘 다 있어야 게시한다.
+#       DMG 를 만든 직후 백그라운드로 시작해 공증을 기다리는 동안 빌드하고(로그 $TARGET/windows-build-<버전>.log), 공증 뒤 결과를 확인한다.
+#       x64·arm64 끼리는 같은 target 폴더 잠금 때문에 동시에 돌려도 빨라지지 않아 차례로 만든다.
 #       x64  : x86_64-pc-windows-gnu · Homebrew mingw-w64 · makensis   → dist/CView_X.Y.Z_x64-setup.exe
 #       arm64: aarch64-pc-windows-gnullvm · llvm-mingw(clang·lld·llvm-windres·aarch64 CRT) · makensis
 #                                                                        → dist/CView_X.Y.Z_arm64-setup.exe
@@ -125,7 +127,22 @@ fi
 
 BUMPED_FILES=($CONF Cargo.toml Cargo.lock)
 bumped=0
+# 공증을 기다리는 동안 백그라운드로 도는 Windows 빌드(build_windows_installers). 중간에 끝나면 프로세스 트리째 멈춘다.
+win_pid=""
+kill_tree() {
+  local child
+  for child in $(pgrep -P "$1" 2>/dev/null); do kill_tree "$child"; done
+  kill "$1" 2>/dev/null || true
+}
+stop_windows_build() {
+  if [[ -n "$win_pid" ]]; then
+    kill_tree "$win_pid"
+    wait "$win_pid" 2>/dev/null || true
+    win_pid=""
+  fi
+}
 revert_bump() {
+  stop_windows_build
   if (( bumped )); then
     echo "↩︎ 배포 빌드가 끝나지 않아 버전·빌드 번호를 되돌립니다."
     git restore --source=HEAD --staged --worktree -- $BUMPED_FILES
@@ -160,10 +177,8 @@ PY
   echo "── 검사(올리기 전에)"
   cargo fmt --all --check
   cargo clippy --workspace --all-targets -q -- -D warnings
-  # Windows 판(x64·arm64)도 만들므로 Windows 타깃 clippy 도.
-  for t in $WIN_TARGETS; do
-    cargo clippy -p cview-app --target "$t" -q -- -D warnings
-  done
+  # Windows 판(x64·arm64)도 만들므로 Windows 타깃 clippy 도 — 한 번에 넘겨 호스트용 매크로·빌드 스크립트를 함께 쓰고 두 타깃을 나란히 검사한다.
+  cargo clippy -p cview-app ${WIN_TARGETS/#/--target=} -q -- -D warnings
   cargo test --workspace -q 2>&1 | grep -E "^test result|FAILED|panicked" \
     | awk '{p+=$4; f+=$6} /FAILED|panicked/ {print} END {print "   테스트 통과", p, "실패", f; exit (f > 0)}'
   for f in app-ui/js/*.js; do node --check "$f"; done
@@ -222,6 +237,44 @@ for img in plistlib.loads(sys.stdin.buffer.read()).get("images", []):
     sleep 5
   done
   (( dmg_ok )) || { echo "✗ DMG 를 만들지 못했습니다"; exit 1; }
+  # x64·arm64 둘 다 만든다(CVIEW_SKIP_WINDOWS 는 위에서 거부). 하나라도 실패하면 버전을 되돌린다.
+  # 공증은 애플 서버를 기다리기만 하므로 그동안 교차 빌드를 백그라운드로 돌린다(산출물·검사는 그대로, 순서만 겹친다).
+  # macOS 빌드가 끝난 뒤라 같은 target 폴더 잠금과 겹치지 않는다. 출력은 로그에 모았다가 공증 뒤에 보여 준다.
+  build_windows_installers() {
+    trap - EXIT INT TERM
+    local t win_arch win_machine win_out win_bin machine win_imports runtime_dlls win_exe
+    for t in $WIN_TARGETS; do
+      case "$t" in
+        x86_64-*) win_arch=x64 win_machine=0x8664 ;;
+        aarch64-*) win_arch=arm64 win_machine=0xaa64 ;;
+      esac
+      echo "── Windows 설치 파일($win_arch, 교차 빌드 $t)"
+      win_out="dist/CView_${version}_${win_arch}-setup.exe"
+      rm -f "$TARGET"/$t/release/bundle/nsis/*.exe(N) "$win_out"
+      (cd crates/cview-app && cargo tauri build --target "$t" --bundles nsis)
+      win_bin="$TARGET/$t/release/cview-app.exe"
+      machine=$(pe_machine "$win_bin")
+      [[ "$machine" == "$win_machine" ]] || { echo "✗ $win_bin 의 PE Machine 이 $machine 입니다($win_arch 는 $win_machine)"; exit 1; }
+      echo "   CView.exe PE Machine $machine ($win_arch)"
+      # 설치 파일에 없는 MinGW 런타임 DLL(libunwind·libc++·libwinpthread·libgcc_s 등)을 부르면 Windows 에서 실행되지 않는다.
+      # objdump 실패는 그대로 멈추고(set -e), 가져오기 목록을 못 읽었으면 검사를 통과로 보지 않는다.
+      win_imports=$("$LLVM_MINGW/bin/llvm-objdump" -p "$win_bin")
+      print -r -- "$win_imports" | grep -q 'DLL Name:' || { echo "✗ $win_arch CView.exe 의 가져오기 목록을 읽지 못했습니다"; exit 1; }
+      runtime_dlls=$(print -r -- "$win_imports" | awk '/DLL Name:/ {print $3}' | grep -i '^lib' || true)
+      [[ -z "$runtime_dlls" ]] || { echo "✗ $win_arch CView.exe 가 함께 배포하지 않는 DLL 을 부릅니다: ${(f)runtime_dlls}"; exit 1; }
+      win_exe=$(ls -t "$TARGET"/$t/release/bundle/nsis/*.exe(N) | head -1)
+      [[ -n "$win_exe" ]] || { echo "✗ Windows $win_arch 설치 파일을 찾지 못했습니다"; exit 1; }
+      cp "$win_exe" "$win_out"
+      shasum -a 256 "$win_out"
+      stat -f "   %z bytes" "$win_out"
+    done
+  }
+  win_log="$TARGET/windows-build-$version.log"
+  echo "── Windows 설치 파일(x64·arm64) 교차 빌드를 백그라운드로 시작 — 로그: $win_log"
+  # 설치 파일 복사(dist/)가 아래 macOS DMG 복사보다 먼저 끝나도 되게 미리 만든다.
+  mkdir -p dist
+  build_windows_installers >"$win_log" 2>&1 &
+  win_pid=$!
 fi
 
 app="$TARGET/release/bundle/macos/CView.app"
@@ -302,32 +355,12 @@ print(max(subs, key=lambda s: s["createdDate"])["id"] if subs else "")' "$(basen
     stat -f "   %z bytes" "$out"
     notarize_note="공증 제출 $sub_id — Accepted."
   fi
-  # x64·arm64 둘 다 만든다(CVIEW_SKIP_WINDOWS 는 위에서 거부). 하나라도 실패하면 버전을 되돌린다.
-  for t in $WIN_TARGETS; do
-    case "$t" in
-      x86_64-*) win_arch=x64 win_machine=0x8664 ;;
-      aarch64-*) win_arch=arm64 win_machine=0xaa64 ;;
-    esac
-    echo "── Windows 설치 파일($win_arch, 교차 빌드 $t)"
-    win_out="dist/CView_${version}_${win_arch}-setup.exe"
-    rm -f "$TARGET"/$t/release/bundle/nsis/*.exe(N) "$win_out"
-    (cd crates/cview-app && cargo tauri build --target "$t" --bundles nsis)
-    win_bin="$TARGET/$t/release/cview-app.exe"
-    machine=$(pe_machine "$win_bin")
-    [[ "$machine" == "$win_machine" ]] || { echo "✗ $win_bin 의 PE Machine 이 $machine 입니다($win_arch 는 $win_machine)"; exit 1; }
-    echo "   CView.exe PE Machine $machine ($win_arch)"
-    # 설치 파일에 없는 MinGW 런타임 DLL(libunwind·libc++·libwinpthread·libgcc_s 등)을 부르면 Windows 에서 실행되지 않는다.
-    # objdump 실패는 그대로 멈추고(set -e), 가져오기 목록을 못 읽었으면 검사를 통과로 보지 않는다.
-    win_imports=$("$LLVM_MINGW/bin/llvm-objdump" -p "$win_bin")
-    print -r -- "$win_imports" | grep -q 'DLL Name:' || { echo "✗ $win_arch CView.exe 의 가져오기 목록을 읽지 못했습니다"; exit 1; }
-    runtime_dlls=$(print -r -- "$win_imports" | awk '/DLL Name:/ {print $3}' | grep -i '^lib' || true)
-    [[ -z "$runtime_dlls" ]] || { echo "✗ $win_arch CView.exe 가 함께 배포하지 않는 DLL 을 부릅니다: ${(f)runtime_dlls}"; exit 1; }
-    win_exe=$(ls -t "$TARGET"/$t/release/bundle/nsis/*.exe(N) | head -1)
-    [[ -n "$win_exe" ]] || { echo "✗ Windows $win_arch 설치 파일을 찾지 못했습니다"; exit 1; }
-    cp "$win_exe" "$win_out"
-    shasum -a 256 "$win_out"
-    stat -f "   %z bytes" "$win_out"
-  done
+  echo "── Windows 설치 파일(x64·arm64) — 백그라운드 빌드 결과"
+  win_rc=0
+  wait "$win_pid" || win_rc=$?
+  win_pid=""
+  cat "$win_log"
+  (( win_rc == 0 )) || { echo "✗ Windows 설치 파일을 만들지 못했습니다(종료 코드 $win_rc) — 로그: $win_log"; exit 1; }
   notes_out="dist/CView_${version}_notes.txt"
   python3 - "$version" "$build" "$notes_out" "${CVIEW_RELEASE_NOTES_FILE:-}" "$no_notarize" <<'PY'
 from pathlib import Path

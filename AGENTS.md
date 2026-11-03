@@ -19,6 +19,7 @@ scripts/release-with-prs.sh [PR번호 ...] [-- release-macos.sh 옵션]
 - main 브랜치에서만 실행한다. 되돌리기에 실패하면 안내대로 `git stash list` 맨 위 항목을 직접 확인한다.
 
 - `release-macos.sh --dmg`는 검사, 버전·빌드 번호 증가, macOS 서명·공증, Windows 설치 파일 생성, 업데이트 서버 업로드·게시, 서버와 Mac의 전체 다운로드·SHA-256 검증, Git 푸시, GitHub 릴리스 사본 업로드·검증까지 실행한다.
+- Windows 설치 파일 두 개는 DMG를 만든 직후 백그라운드로 교차 빌드해 공증 대기와 겹친다. 출력은 `<target>/windows-build-<버전>.log`에 모았다가 공증 뒤 보여 주며, 실패하면 다른 단계처럼 버전을 되돌린다.
 - GitHub 릴리스 사본은 업데이트 서버 게시·푸시가 끝난 뒤 `scripts/github-release.py --version <버전>`이 만든다. 서명된 서버 manifest(`releases/<버전>/manifest.json`)와 같은 설치 파일 세 개, `CView_<버전>_SHA256SUMS.txt`, GitHub 주소로 바꿔 이 Mac의 피드 서명 키로 서명한 `latest.json`을 `v<버전>` 초안 릴리스에 올리고, 다시 받아 확인한 뒤 게시한다. 게시되면 Actions `github-release` 워크플로가 GitHub 자산을 서버 manifest와 다시 대조한다. 서명·공증 비밀값은 GitHub에 올리지 않는다. `gh auth` 인증이 필요하며 사전 확인에서 검사한다.
 - GitHub 단계가 실패해도 업데이트 서버 게시는 되돌리지 않고 버전도 다시 올리지 않는다. 같은 명령을 재실행한다. 이미 있는 GitHub 자산은 덮어쓰지 않으며(다르면 실패), `dist/`에 파일이 없으면 업데이트 서버에서 받아 해시를 확인해 쓴다. 결과는 `dist/CView_<버전>_github-receipt.json`. `--draft`는 초안으로 남기고, `--verify-only`는 올리지 않고 검사만 한다.
 - 앱의 기본 업데이트 피드는 `https://github.com/dododo-lab/cview-rust/releases/latest/download/latest.json`이고, 받지 못하면(404 포함) `https://cv.dododo.app/releases/latest.json`으로 넘어간다. 이 기능 이전 버전 앱은 자체 서버 피드만 보므로 업데이트 서버 게시를 계속한다. GitHub "Latest"는 업데이트 서버 최신 버전일 때만 표시한다.
