@@ -1,8 +1,8 @@
 // 사이드바 화면들 — 팔로잉 / 인기 / 검색 / 설정. 홈은 home.js.
 import { api } from './api.js';
-import { esc, safeUrl, imageSrc } from './dom.js';
+import { esc, safeUrl, imageSrc, icons } from './dom.js';
 import { swapContent } from './motion.js';
-import { liveGrid, lacksThumbs, THUMB_FILL_DELAY_MS, THUMB_FILL_TRIES, channelRow, emptyState, loadingState, compactCount, skeletonGrid, freshnessText, errorState, friendlyError, uptimeText } from './cards.js';
+import { liveGrid, liveCard, lacksThumbs, THUMB_FILL_DELAY_MS, THUMB_FILL_TRIES, channelRow, fallbackAvatar, emptyState, loadingState, compactCount, skeletonGrid, freshnessText, errorState, friendlyError, uptimeText } from './cards.js';
 import { FOLLOW_SORTS, FOLLOW_FILTERS, arrangeFollowed, followedInsights, followBadges, followAgeText, parseFollowDate, FollowExtras } from './following-info.js';
 import { vodCard, clipCard } from './channel.js';
 import { verifiedBadge } from './verified-badge.js';
@@ -269,6 +269,9 @@ function saveRecentSearch(q) {
 }
 
 const VOD_PAGE = 24;
+// 전체 탭 미리보기 — 구역마다 한 줄 가로 선반에 이만큼까지. 넘치면 '전체 보기'로 그 탭을 연다.
+const PREVIEW = { lives: 8, channels: 8, videos: 12, clips: 16 };
+const shelfNav = `<div class="shelf-nav" hidden><button class="icon-btn round" data-shelf="-1" title="이전" aria-label="이전">${icons.chevronLeft}</button><button class="icon-btn round" data-shelf="1" title="다음" aria-label="다음">${icons.chevronRight}</button></div>`;
 
 export class SearchPage {
   constructor(root) {
@@ -294,7 +297,18 @@ export class SearchPage {
     this.input.addEventListener('input', () => {
       if (!this.input.value.trim() && !this.idle) this.run('');
     });
+    this.body.addEventListener('error', fallbackAvatar, true);
+    // 선반이 넘칠 때만 화살표·끝 흐림 — 창 폭이 바뀌거나 옆으로 넘기면 다시 잰다
+    this.body.addEventListener('scroll', (e) => { if (e.target.classList && e.target.classList.contains('search-preview')) this.fitShelves(); }, true);
+    window.addEventListener('resize', () => { if (!this.root.hidden) this.fitShelves(); });
     this.body.addEventListener('click', (e) => {
+      const sh = e.target.closest('[data-shelf]');
+      if (sh) {
+        e.stopPropagation();
+        const shelf = sh.closest('.search-section').querySelector('.search-preview');
+        shelf.scrollBy({ left: Number(sh.dataset.shelf) * shelf.clientWidth * 0.9, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+        return;
+      }
       const r = e.target.closest('[data-recent]');
       if (r) { this.input.value = r.dataset.recent; this.run(r.dataset.recent); return; }
       const x = e.target.closest('[data-recent-remove]');
@@ -486,18 +500,21 @@ export class SearchPage {
     const clips = c.items;
     const n = (failed, count, more = false) => (failed ? '실패' : `${count}${more ? '+' : ''}`);
     const tabs = [
-      ['all', '전체'],
-      ['lives', `라이브 ${n(mainFailed || (errs.live && !lives.length), lives.length)}`],
-      ['channels', `채널 ${n(mainFailed || (errs.channel && !channels.length), channels.length)}`],
-      ['videos', `다시보기 ${n(vodFailed, videos.length, v.hasMore)}`],
-      ['clips', `클립 ${n(mainFailed || (errs.clip && !clips.length), clips.length, c.hasMore)}`],
+      ['all', '전체', ''],
+      ['lives', '라이브', n(mainFailed || (errs.live && !lives.length), lives.length)],
+      ['channels', '채널', n(mainFailed || (errs.channel && !channels.length), channels.length)],
+      ['videos', '다시보기', n(vodFailed, videos.length, v.hasMore)],
+      ['clips', '클립', n(mainFailed || (errs.clip && !clips.length), clips.length, c.hasMore)],
     ];
-    const tabBar = `<div class="segmented search-tabs">${tabs.map(([id, l]) => `<button class="seg${this.tab === id ? ' active' : ''}" data-stab="${id}">${l}</button>`).join('')}</div>`;
-    const sec = (id, title, items, html, limit, more = false) => {
+    const tabBar = `<div class="segmented search-tabs" role="tablist">${tabs.map(([id, l, cnt]) => `<button class="seg${this.tab === id ? ' active' : ''}${cnt === '실패' ? ' failed' : ''}" role="tab" aria-selected="${this.tab === id}" data-stab="${id}">${l}${cnt ? ` <span class="seg-count">${cnt}</span>` : ''}</button>`).join('')}</div>`;
+    // 구역 — 전체 탭은 한 줄 선반(preview), 자기 탭은 줄바꿈 격자(full). 제목 옆 개수는 탭과 같은 값.
+    const sec = (id, title, items, preview, full, more = false) => {
       if (!items.length) return '';
-      const full = this.tab === id;
-      if (this.tab !== 'all' && !full) return '';
-      return `<div class="section-head"><h2 class="section-title">${title}</h2><div class="grow"></div>${!full && (items.length > limit || more) ? `<button class="link-btn" data-stab="${id}">전체 보기</button>` : ''}</div>${html(full ? items : items.slice(0, limit))}`;
+      const own = this.tab === id;
+      if (this.tab !== 'all' && !own) return '';
+      const limit = PREVIEW[id];
+      const seeAll = !own && (items.length > limit || more) ? `<button class="link-btn see-all" data-stab="${id}">전체 보기${icons.chevronRight}</button>` : '';
+      return `<section class="search-section" data-section="${id}"><div class="section-head"><h2 class="section-title">${title}<span class="count">${items.length}${more ? '+' : ''}</span></h2><div class="grow"></div>${own ? '' : shelfNav}${seeAll}</div>${own ? full(items) : preview(items.slice(0, limit))}</section>`;
     };
     // 실패한 쪽 — "결과 없음"과 구분해 알리고 그쪽만 다시 받는다
     const failBox = (kind, label, err, retrying) => (retrying
@@ -522,10 +539,10 @@ export class SearchPage {
     if (this.tab === 'videos' && this.videos) more = moreBox(v, '다시보기', 'data-vod-more');
     if (this.tab === 'clips' && this.clips) more = moreBox(c, '클립', 'data-clip-more');
     const html = [
-      sec('lives', '라이브', lives, (l) => liveGrid(l), 8),
-      sec('channels', '채널', channels, (x) => `<div class="channel-list">${x.map(channelRow).join('')}</div>`, 6),
-      sec('videos', '다시보기', videos, (x) => `<div class="grid">${x.map(vodCard).join('')}</div>`, 8, v.hasMore),
-      sec('clips', '클립', clips, (x) => `<div class="grid clip-grid">${x.map(clipCard).join('')}</div>`, 8, c.hasMore),
+      sec('lives', '라이브', lives, (x) => `<div class="shelf search-preview">${x.map(liveCard).join('')}</div>`, liveGrid),
+      sec('channels', '채널', channels, (x) => `<div class="shelf search-preview channel-shelf">${x.map(channelRow).join('')}</div>`, (x) => `<div class="channel-list">${x.map(channelRow).join('')}</div>`),
+      sec('videos', '다시보기', videos, (x) => `<div class="shelf search-preview">${x.map(vodCard).join('')}</div>`, (x) => `<div class="grid">${x.map(vodCard).join('')}</div>`, v.hasMore),
+      sec('clips', '클립', clips, (x) => `<div class="shelf search-preview clip-preview">${x.map(clipCard).join('')}</div>`, (x) => `<div class="grid clip-grid">${x.map(clipCard).join('')}</div>`, c.hasMore),
     ].join('');
     // 빈 상태 — 탭마다 무엇이 없는지 말한다. 클립은 더 보기로 비슷한 채널까지 넓힐 수 있다.
     const emptyText = {
@@ -536,6 +553,17 @@ export class SearchPage {
       clips: c.hasMore ? '검색한 채널에 맞는 클립이 아직 없습니다' : '클립이 없습니다',
     };
     const empty = !html && !errors ? emptyState(emptyText[this.tab] || emptyText.all, `"${this.query}"`) : '';
-    this.body.innerHTML = tabBar + errors + html + empty + more;
+    this.body.innerHTML = `<div class="search-results">${tabBar}${errors}${html}${empty}${more}</div>`;
+    this.fitShelves();
+  }
+
+  /** 넘치는 선반에만 화살표를 보이고, 오른쪽에 더 있으면 끝을 흐린다. */
+  fitShelves() {
+    for (const shelf of this.body.querySelectorAll('.search-preview')) {
+      const over = shelf.scrollWidth - shelf.clientWidth > 1;
+      shelf.classList.toggle('has-more', over && shelf.scrollLeft < shelf.scrollWidth - shelf.clientWidth - 1);
+      const nav = shelf.closest('.search-section').querySelector('.shelf-nav');
+      if (nav) nav.hidden = !over;
+    }
   }
 }
