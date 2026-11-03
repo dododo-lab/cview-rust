@@ -37,6 +37,8 @@
 #       llvm-mingw 를 ~/.local/opt/llvm-mingw 또는 CVIEW_LLVM_MINGW 에)가 없으면 버전을 올리기 전에 멈춘다.
 #       배포에서는 CVIEW_SKIP_WINDOWS를 허용하지 않는다. arm64 만 건너뛰는 길도 없다.
 #   5) 커밋·태그 생성 → 양쪽 파일 SSH 전송 → 서버 원자적 게시 → 서버/클라이언트 전체 다운로드 검증 → Git 푸시.
+#   6) GitHub 릴리스 사본(scripts/github-release.py): 서명된 서버 manifest 와 같은 파일·SHA256SUMS 를 v<버전> 릴리스에
+#      올리고 다시 받아 확인한다. 실패해도 이미 끝난 게시는 그대로 두고 이 단계만 재실행한다.
 #      게시 중 실패하면 버전·산출물·설명을 보존하고 같은 버전으로 게시를 재시도한다.
 #      --no-notarize를 주면 공증만 건너뛰며 릴리스 설명에 명시한다.
 set -euo pipefail
@@ -147,6 +149,8 @@ PY
 )
   check_windows_tools
   python3 scripts/publish-update.py --preflight --version "$next_version"
+  # 게시 뒤 GitHub 릴리스 사본을 올린다 — gh 인증이 없으면 버전을 올리기 전에 멈춘다.
+  gh auth status >/dev/null 2>&1 || { echo "✗ gh 인증이 필요합니다(GitHub 릴리스 사본): gh auth login"; exit 1; }
   if (( ! no_notarize )); then
     xcrun notarytool history --keychain-profile "$CVIEW_NOTARIZE_PROFILE" --output-format json >/dev/null
   fi
@@ -363,6 +367,13 @@ PY
     git push -q origin HEAD
     git push -q origin "v$version"
     echo "   푸시: $(git rev-parse --short HEAD) + 태그 v$version"
+    # 업데이트 서버 게시·검증·푸시가 끝난 뒤의 사본이다. 실패해도 게시는 그대로 두고 이 단계만 재실행한다.
+    echo "── GitHub 릴리스 사본(설치 파일·SHA256SUMS 업로드·다운로드 검증)"
+    if ! python3 scripts/github-release.py --version "$version"; then
+      echo "✗ 업데이트 서버 게시·검증·푸시는 끝났고 GitHub 릴리스 사본만 미완료입니다. 새 버전을 만들지 말고 재실행하세요:"
+      echo "python3 scripts/github-release.py --version $version"
+      exit 1
+    fi
   fi
 fi
 echo "완료: $app"

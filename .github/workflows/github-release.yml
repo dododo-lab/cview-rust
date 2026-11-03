@@ -1,0 +1,53 @@
+# GitHub 릴리스 사본 검증 — 빌드·서명·공증은 하지 않으므로 비밀값이 필요 없다.
+# 로컬 scripts/release-macos.sh --dmg 가 업데이트 서버 게시를 끝낸 뒤 scripts/github-release.py 로 초안 릴리스에
+# 설치 파일 세 개와 SHA256SUMS 를 올리고 게시하면(release: published) 이 작업이 GitHub 자산을 모두 다시 받아
+# 업데이트 서버의 서명된 manifest(https://cv.dododo.app/releases/<버전>/manifest.json)와 대조한다.
+# 이 저장소는 액션을 커밋 SHA 로 고정해야 실행된다(sha_pinning_required) — 태그(@v4)만 쓰면 startup_failure.
+name: github-release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 검증할 릴리스 태그(예 v0.1.73)
+        required: true
+  pull_request:
+    paths:
+      - scripts/github-release.py
+      - scripts/publish-update.py
+      - tools/windows-update-server/**
+      - .github/workflows/github-release.yml
+
+permissions:
+  contents: read
+
+jobs:
+  selftest:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: 릴리스 자동화 테스트
+        run: python3 -B -m unittest discover -s tools/windows-update-server/tests -v
+
+  verify:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # 검증 스크립트와 신뢰 공개 키 목록은 기본 브랜치 최신본을 쓴다(예전 태그에는 스크립트가 없을 수 있다).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: GitHub 자산 ↔ 업데이트 서버 서명 manifest 대조
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: python3 -B scripts/github-release.py --verify-only --version "$TAG"

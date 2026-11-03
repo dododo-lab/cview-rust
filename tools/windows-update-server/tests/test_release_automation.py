@@ -19,6 +19,9 @@ import publish
 spec = importlib.util.spec_from_file_location('publish_update', TOOLS.parents[1] / 'scripts/publish-update.py')
 client = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(client)
+mirror_spec = importlib.util.spec_from_file_location('github_release', TOOLS.parents[1] / 'scripts/github-release.py')
+mirror = importlib.util.module_from_spec(mirror_spec)
+mirror_spec.loader.exec_module(mirror)
 
 VECTOR = json.loads((Path(__file__).with_name('signed_feed_vector.json')).read_text(encoding='utf-8'))
 # 서버는 형식만 보므로 게이트웨이 테스트에는 테스트 벡터 서명을 그대로 쓴다.
@@ -366,6 +369,69 @@ class SignatureTests(unittest.TestCase):
     def test_repository_key_list_is_well_formed(self):
         with patch.object(client, 'TRUSTED_KEYS', client.REPO / 'crates/cview-app/update-signing-keys.txt'):
             client.trusted_keys()
+
+
+class GitHubMirrorTests(unittest.TestCase):
+    def setUp(self):
+        self.manifest = {'tag_name': 'v0.1.1', 'name': 'CView 0.1.1', 'body': 'CView 0.1.1\n',
+                         'html_url': f'{gateway.BASE}/releases/0.1.1/',
+                         'assets': [{'name': n, 'size': i + 1, 'sha256': f'{i}' * 64}
+                                    for i, n in enumerate(gateway.installers('0.1.1'))]}
+        self.expected = mirror.expected_assets(self.manifest)
+
+    def test_expected_assets_add_checksum_file(self):
+        sums = mirror.sums_name('0.1.1')
+        self.assertEqual(sorted(self.expected), sorted(gateway.installers('0.1.1') + [sums]))
+        text = mirror.sums_text(self.manifest['assets'])
+        # shasum -c 형식: "<sha256>  <이름>"
+        self.assertEqual(text.splitlines()[0], '0' * 64 + '  CView_0.1.1_arm64.dmg')
+        self.assertEqual(self.expected[sums]['sha256'], hashlib.sha256(text.encode()).hexdigest())
+        self.assertIn(text, mirror.release_notes(self.manifest))
+
+    def asset(self, name, **override):
+        want = self.expected[name]
+        return {'name': name, 'size': want['size'], 'digest': 'sha256:' + want['sha256'], 'state': 'uploaded', **override}
+
+    def test_compare_reports_missing_and_accepts_matching(self):
+        first = gateway.installers('0.1.1')[0]
+        missing = mirror.compare_assets({'assets': [self.asset(first)]}, self.expected)
+        self.assertEqual(missing, sorted(set(self.expected) - {first}))
+        self.assertEqual(mirror.compare_assets({'assets': [self.asset(n) for n in self.expected]}, self.expected), [])
+
+    def test_compare_never_accepts_different_or_extra_assets(self):
+        first = gateway.installers('0.1.1')[0]
+        for bad in [self.asset(first, size=999), self.asset(first, digest='sha256:' + 'f' * 64),
+                    self.asset(first, state='starter'), {'name': 'other.zip', 'size': 1}]:
+            with self.assertRaises(ValueError):
+                mirror.compare_assets({'assets': [bad]}, self.expected)
+
+    def test_github_feed_keeps_files_and_points_at_github(self):
+        feed = mirror.github_feed({**self.manifest, 'signature': {'alg': 'ed25519'}})
+        self.assertNotIn('signature', feed)
+        self.assertEqual(feed['html_url'], mirror.GITHUB + '/releases/tag/v0.1.1')
+        for asset, source in zip(feed['assets'], self.manifest['assets']):
+            self.assertEqual({k: asset[k] for k in ('name', 'size', 'sha256')},
+                             {k: source[k] for k in ('name', 'size', 'sha256')})
+            self.assertEqual(asset['browser_download_url'],
+                             f'{mirror.GITHUB}/releases/download/v0.1.1/{asset["name"]}')
+        # 서명 대상 형식(공백 없는 필드)을 그대로 만족해야 앱이 검증할 수 있다.
+        gateway.signed_payload(feed)
+
+    def test_github_feed_must_match_server_release(self):
+        feed = mirror.github_feed(self.manifest)
+        tampered = {**feed, 'assets': [{**feed['assets'][0], 'browser_download_url': 'https://evil.example/x'}]
+                    + feed['assets'][1:]}
+        for bad in [tampered, {**feed, 'body': 'other notes'}, {**feed, 'html_url': gateway.BASE + '/'}]:
+            with self.assertRaisesRegex(ValueError, 'differs'):
+                mirror.check_github_feed(bad, self.manifest)
+
+    def test_collect_refuses_local_file_that_differs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dist = Path(tmp)
+            name = self.manifest['assets'][0]['name']
+            (dist / name).write_bytes(b'not the published file')
+            with self.assertRaisesRegex(ValueError, 'differs'):
+                mirror.collect(self.manifest, dist, dist)
 
 
 if __name__ == '__main__':

@@ -20,6 +20,7 @@ scripts/release-with-prs.sh [PR번호 ...] [-- release-macos.sh 옵션]
 4. 업데이트 서버 업로드·게시(`latest.json`은 마지막에 원자적으로 갱신)
 5. 서버와 Mac 양쪽에서 전체 다운로드·SHA-256 검증
 6. 릴리스 커밋·`v<버전>` 태그 푸시
+7. GitHub 릴리스 — 같은 설치 파일 세 개, `CView_<버전>_SHA256SUMS.txt`, 앱 자동 업데이트용 서명 피드 `latest.json`을 `v<버전>` 릴리스에 올리고 다시 받아 확인(`scripts/github-release.py`), 게시 후 Actions `github-release`가 업데이트 서버의 서명된 manifest와 재대조
 
 macOS와 Windows(x64·arm64) 설치 파일은 늘 같은 버전으로 함께 게시한다. 사용자에게 보일 변경 사항은 UTF-8 파일로 써서 `CVIEW_RELEASE_NOTES_FILE=/절대/경로/notes.txt`로 넘긴다(생략하면 Git 변경 목록을 쓴다). 배포 후 [`CHANGELOG.md`](../CHANGELOG.md)에 항목을 더한다.
 
@@ -27,6 +28,12 @@ macOS와 Windows(x64·arm64) 설치 파일은 늘 같은 버전으로 함께 게
 
 ```sh
 python3 scripts/publish-update.py --version <버전> --notes-file dist/CView_<버전>_notes.txt
+```
+
+GitHub 릴리스 사본만 실패했으면(업데이트 서버 게시·푸시는 끝남) 같은 버전으로 재실행한다. 이미 올라간 파일은 덮어쓰지 않고, `dist/`에 파일이 없으면 업데이트 서버에서 받아 해시를 확인해 쓴다.
+
+```sh
+python3 scripts/github-release.py --version <버전>
 ```
 
 ## 더 자세한 안내
@@ -43,7 +50,7 @@ python3 scripts/publish-update.py --version <버전> --notes-file dist/CView_<�
 - 최신 릴리스 피드: https://cv.dododo.app/releases/latest.json
 - 수동 업로드·원격 게시 방법: [업로드·게시 안내](../tools/windows-update-server/README.md), [원격 PowerShell](../tools/windows-update-server/POWERSHELL-REMOTE.md)
 - 버전별 설치 파일과 `notes.txt`를 업로드한 뒤 서버의 관리자 PowerShell에서 `C:\CViewUpdates\tools\Publish-UploadedRelease.ps1 -Version <버전>`으로 게시·다운로드 검증을 실행할 수 있다.
-- 앱은 공개 피드(cv.dododo.app)로 업데이트를 확인하고 받는다. Tailscale은 게시(SSH 업로드)에만 필요하다.
+- 앱은 GitHub 릴리스 피드(`https://github.com/dododo-lab/cview-rust/releases/latest/download/latest.json`)로 업데이트를 확인하고 받으며, 받지 못하면 cv.dododo.app 피드를 쓴다. 이전 버전 앱은 cv.dododo.app만 보므로 서버 게시를 계속한다. Tailscale은 게시(SSH 업로드)에만 필요하다.
 
 릴리스마다 다음 순서를 반드시 따른다.
 

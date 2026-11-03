@@ -20,6 +20,7 @@ scripts/release-macos.sh --dmg
 6. 서버가 완성된 버전 폴더를 배치한 뒤 `latest.json`을 원자적으로 변경한다.
 7. 서버와 이 Mac에서 HTTPS 설치 파일 전체를 다운로드해 크기·SHA-256을 확인한다.
 8. 검증 영수증을 저장하고 Git 커밋·태그를 원격에 푸시한다.
+9. GitHub 릴리스 사본을 만든다(아래 "GitHub 릴리스 사본").
 
 공증 프로파일은 기본 `cview-notarize`이다. 다른 프로파일은 `CVIEW_NOTARIZE_PROFILE`로 지정한다. 사용자용 변경 설명을 따로 준비한 경우:
 
@@ -39,6 +40,35 @@ CVIEW_RELEASE_NOTES_FILE=/절대/경로/notes.txt scripts/release-macos.sh --dmg
 Homebrew `mingw-w64`에는 aarch64가 없어 arm64는 llvm-mingw를 쓴다. 기본 위치는 `~/.local/opt/llvm-mingw`(macOS universal 릴리스를 풀고 이 이름으로 링크)이며 `CVIEW_LLVM_MINGW`로 바꾼다. 스크립트는 PATH를 바꾸지 않고 `CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_LINKER`, `CC_`·`AR_`·`RC_aarch64_pc_windows_gnullvm`으로 절대 경로만 넘긴다(macOS 빌드의 clang을 가리지 않게). 도구가 하나라도 없으면 버전을 올리기 전에 무엇을 설치할지 알려 주고 멈춘다.
 
 NSIS 설치 프로그램은 두 판 모두 x86 실행 파일이다. 스크립트는 번들 전 `cview-app.exe`의 PE Machine(x64 `0x8664`, ARM64 `0xaa64`)을 확인하고, `publish-update.py`는 두 Windows 설치 파일이 PE이고 서로 다른지 확인한다. arm64 판 WebView2 로더는 `webview2-com-sys`의 arm64 정적 라이브러리를 쓴다. gnullvm 타깃은 기본으로 `libunwind.dll`을 동적으로 부르는데 Windows에는 없으므로 `-C target-feature=+crt-static`로 정적 링크하고, 빌드 후 `llvm-objdump`로 `lib*.dll`(MinGW 런타임) 가져오기가 없는지 확인한다.
+
+## GitHub 릴리스 사본
+
+설치 파일의 원본은 업데이트 서버이고, GitHub 릴리스에는 같은 파일을 올린다. 앱의 자동 업데이트는 GitHub 피드를 먼저 쓴다.
+
+| 순서 | 피드 | 설치 파일 |
+| --- | --- | --- |
+| 1 | `https://github.com/dododo-lab/cview-rust/releases/latest/download/latest.json` | `https://github.com/dododo-lab/cview-rust/releases/download/v<버전>/…` |
+| 2 (1을 받지 못하거나 404) | `https://cv.dododo.app/releases/latest.json` | `https://cv.dododo.app/releases/<버전>/…` |
+
+`CVIEW_UPDATE_URL`(실행 시 또는 빌드 시)을 정하면 그 주소 하나만 쓴다. GitHub 다운로드는 `release-assets.githubusercontent.com`으로 리다이렉트되며 앱은 HTTPS 리다이렉트만 따른다. 이 기능 이전 버전 앱은 자체 서버 피드만 보므로 업데이트 서버 게시를 계속한다.
+
+```sh
+python3 scripts/github-release.py --version <버전>            # release-macos.sh --dmg 마지막 단계
+python3 scripts/github-release.py --version <버전> --draft    # 초안으로만 올리고 확인
+python3 scripts/github-release.py --version <버전> --verify-only
+```
+
+1. `https://cv.dododo.app/releases/<버전>/manifest.json`을 받아 저장소 공개 키로 ed25519 서명을 확인한다. 이 manifest의 이름·크기·SHA-256이 기준이다.
+2. `v<버전>` 태그가 origin에 있어야 한다(새 태그를 만들지 않는다).
+3. `dist/`의 파일이 manifest와 같으면 쓰고, 없으면 업데이트 서버에서 받아 확인한다. `dist/` 파일이 다르면 멈춘다.
+4. 서버 manifest와 버전·노트·크기·SHA-256이 같고 주소만 GitHub인 `latest.json`을 만들어 이 Mac의 피드 서명 키로 서명한다(Ed25519는 결정적이라 재실행해도 같은 바이트). 초안 릴리스를 만들고 설치 파일 세 개, `CView_<버전>_SHA256SUMS.txt`(`shasum -a 256 -c` 형식), `latest.json`을 올린다. 이미 있는 자산은 덮어쓰지 않으며 크기·digest가 다르면 실패한다.
+5. GitHub에서 전체를 다시 받아 크기·SHA-256을 확인한 뒤 게시한다. 업데이트 서버의 최신 버전일 때만 GitHub "Latest"로 표시하고, 그때는 앱이 받는 `releases/latest/download/latest.json`이 이 릴리스 피드인지 확인한다.
+   - 저장소에 immutable releases가 켜져 있어 게시 뒤에는 파일을 더하거나 바꿀 수 없다. 게시된 릴리스에 파일이 빠졌으면 다음 버전으로 배포한다(v0.1.73은 `latest.json` 없이 게시되어 그동안 앱은 자체 서버 피드를 쓴다).
+6. 게시(`release: published`)되면 Actions `github-release` 워크플로가 `--verify-only`로 GitHub 자산을 서버 manifest와 다시 대조하고 결과를 요약에 남긴다. 예전 태그는 Actions에서 `workflow_dispatch`(태그 입력)로 검사한다.
+
+빌드·서명·공증은 이 Mac에서만 하므로 Apple 인증서·공증 자격·피드 서명 키·SSH 키를 GitHub Secrets에 두지 않는다. GitHub 단계가 실패해도 이미 끝난 서버 게시와 푸시는 그대로이며 같은 명령을 재실행하면 된다. 결과는 `dist/CView_<버전>_github-receipt.json`.
+
+이 저장소의 Actions 설정은 `sha_pinning_required`라 액션을 커밋 SHA로 고정해야 한다. 태그(`@v4`)만 쓰면 작업이 시작되지 않고 startup_failure로 끝난다.
 
 ## 앱 안 자동 설치와 피드
 
@@ -78,7 +108,7 @@ python3 scripts/publish-update.py --init-signing-key
 
 | 경로 | 주소 | 공개 범위 |
 | --- | --- | --- |
-| 피드 | `https://cv.dododo.app/releases/latest.json` | 공개 DNS(A 레코드)·공유기 443 포워딩·Let's Encrypt 인증서 |
+| 피드(예비, 이전 버전 앱의 기본) | `https://cv.dododo.app/releases/latest.json` | 공개 DNS(A 레코드)·공유기 443 포워딩·Let's Encrypt 인증서 |
 | 설치 파일·릴리스 페이지 | `https://cv.dododo.app/releases/<버전>/` | 위와 같음 |
 | 업로드·게시(SSH) | 로컬 설정 `server.json`의 Tailscale 주소 | tailnet만(방화벽 `100.64.0.0/10`, 키 출발지 제한) |
 
