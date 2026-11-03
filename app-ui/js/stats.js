@@ -517,7 +517,10 @@ export class StatsPage {
     const x = Math.max(8, Math.min(window.innerWidth - tw - 8, anchor.left + anchor.width / 2 - tw / 2));
     const above = anchor.top - th - 10;
     const y = above >= 8 ? above : Math.min(window.innerHeight - th - 8, anchor.bottom + 10);
-    this.tip.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px)`;
+    // 페이지 전환 애니메이션(transform)이 걸린 조상이 fixed 의 기준이 될 수 있어, 풍선의 실제 원점을 재서 뺀다.
+    this.tip.style.transform = 'none';
+    const origin = this.tip.getBoundingClientRect();
+    this.tip.style.transform = `translate(${Math.round(x - origin.left)}px, ${Math.round(y - origin.top)}px)`;
     if (announce) {
       const parts = (d.rows || []).map(([, n, v]) => `${n} ${durationText(v)}`).join(', ');
       this.live.textContent = `${d.title}, ${d.total > 0 ? durationText(d.total) : '기록 없음'}${parts ? `, ${parts}` : ''}${d.note && d.total > 0 ? `, ${d.note}` : ''}`;

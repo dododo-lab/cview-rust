@@ -78,3 +78,37 @@ fn store_report_matches_records_and_ignores_zero_rows() {
         1e-6
     ));
 }
+
+#[test]
+fn chatham_off_hour_offset_change_splits_at_the_transition() {
+    // 2026-09-27 02:45(+12:45) → 03:45(+13:45). 02:00 부터 실제 1시간이면 2시 칸 45분, 3시 칸 15분.
+    let tz = chrono_tz::Pacific::Chatham;
+    let s = store();
+    s.set_calendar(Arc::new(tz));
+    let start = local(tz, 2026, 9, 27, 2, 0);
+    s.insert_watch_history_rows(&[row("a", "게임", start, 3600.0)])
+        .unwrap();
+    let now = local(tz, 2026, 9, 27, 12, 0);
+    let r = s.watch_report(ReportPeriod::Today, now).unwrap();
+    assert_eq!(r.total, 3600.0);
+    assert_eq!(r.heatmap[6][2], 2700.0);
+    assert_eq!(r.heatmap[6][3], 900.0);
+    assert_eq!(r.heatmap[6][4], 0.0);
+}
+
+#[test]
+fn streak_survives_a_day_without_midnight() {
+    // America/Havana 2026-03-08 은 0시가 없어 하루가 01:00 에 시작한다. 오늘 아직 안 봤어도 어제까지 이어진다.
+    let tz = chrono_tz::America::Havana;
+    let s = store();
+    s.set_calendar(Arc::new(tz));
+    s.insert_watch_history_rows(&[
+        row("a", "게임", local(tz, 2026, 3, 6, 20, 0), 600.0),
+        row("a", "게임", local(tz, 2026, 3, 7, 20, 0), 600.0),
+    ])
+    .unwrap();
+    let now = local(tz, 2026, 3, 8, 12, 0);
+    let r = s.watch_report(ReportPeriod::Days7, now).unwrap();
+    assert_eq!(r.current_streak, 2);
+    assert_eq!(r.best_streak, 2);
+}

@@ -66,11 +66,24 @@ where
     }
 
     fn next_hour(&self, date: Date) -> Date {
-        // 현지 분·초를 덜어 그 시의 정시를 구한다. 오프셋은 정시에만 바뀌므로 한 시간 안에서는 같다.
+        // 현지 분·초를 덜어 한 시간 뒤(절대 시각)를 구하고, 다음 현지 정시의 벽시계를 직접 푼 값과 견줘
+        // 이른 쪽을 쓴다. 정시가 아닌 때 오프셋이 바뀌는 곳(Pacific/Chatham 02:45→03:45)에서도
+        // 전환 시각에서 끊겨 시 칸이 섞이지 않는다.
         let local = date.with_timezone(self);
         let into_hour = Duration::seconds(i64::from(local.minute() * 60 + local.second()))
             + Duration::nanoseconds(i64::from(local.nanosecond()));
-        date - into_hour + Duration::hours(1)
+        let elapsed = date - into_hour + Duration::hours(1);
+        let wall = local
+            .naive_local()
+            .with_minute(0)
+            .and_then(|t| t.with_second(0))
+            .and_then(|t| t.with_nanosecond(0))
+            .and_then(|t| t.checked_add_signed(Duration::hours(1)))
+            .and_then(|t| resolve(self, t));
+        match wall {
+            Some(w) if w > date && w < elapsed => w,
+            _ => elapsed,
+        }
     }
 
     fn start_of_month(&self, date: Date) -> Date {

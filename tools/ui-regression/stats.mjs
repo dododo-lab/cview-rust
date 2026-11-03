@@ -221,6 +221,9 @@ await check('T03 hovering a column shows a tooltip with date, total and series',
   const vp = p.viewportSize();
   assert.ok(box.x >= 0 && box.y >= 0 && box.x + box.width <= vp.width && box.y + box.height <= vp.height, JSON.stringify(box));
   assert.equal(await col.evaluate((el) => el.classList.contains('is-active')), true);
+  // 페이지에 transform 이 걸려 있어도 풍선은 고른 칸 바로 위에 뜬다
+  const cb = await col.locator('.chart-stack').boundingBox();
+  assert.ok(Math.abs(box.x + box.width / 2 - (cb.x + cb.width / 2)) <= 2 && box.y + box.height <= cb.y, `tip ${JSON.stringify(box)} col ${JSON.stringify(cb)}`);
   await p.mouse.move(2, 2);
   await p.waitForTimeout(100);
   assert.equal(await tip.isVisible(), false, 'tooltip hides when the pointer leaves');
@@ -256,7 +259,8 @@ await check('T05 period buttons refetch, mark pressed and remember the choice', 
   await p.locator(`${S} [data-period="all"]`).click();
   await waitReport(p);
   assert.equal(await p.locator(`${S} [data-chart="trend"] .chart-col`).count(), 14);
-  assert.match(await p.locator(`${S} [data-chart="trend"] .chart-x`).textContent(), /\d{2}년 1월/);
+  // 칸 글자는 두 칸마다라 1월(연도 표기)이 빠지는 달도 있다 — 달 글자만 확인한다.
+  assert.match(await p.locator(`${S} [data-chart="trend"] .chart-x`).textContent(), /\d+월/);
   assert.deepEqual((await reportCalls(p)).slice(-3), ['7d', 'today', 'all']);
 });
 await shotFull(wide.page, 'stats-overview-all');

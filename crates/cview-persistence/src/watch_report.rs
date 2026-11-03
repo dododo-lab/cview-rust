@@ -289,7 +289,11 @@ fn streaks(days: &BTreeSet<Date>, today: Date, calendar: &dyn Calendar) -> (i64,
     let mut current = 0i64;
     let mut cursor = today;
     if !days.contains(&cursor) {
-        cursor = calendar.add_days(-1, cursor).unwrap_or(cursor);
+        // 자정이 없는 날(서머타임 시작)은 하루 시작이 01:00 이라 어제도 하루 시작으로 맞춘다.
+        cursor = calendar
+            .add_days(-1, cursor)
+            .map(|d| calendar.start_of_day(d))
+            .unwrap_or(cursor);
     }
     while days.contains(&cursor) {
         current += 1;
