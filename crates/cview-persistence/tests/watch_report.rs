@@ -112,3 +112,33 @@ fn streak_survives_a_day_without_midnight() {
     assert_eq!(r.current_streak, 2);
     assert_eq!(r.best_streak, 2);
 }
+
+#[test]
+fn chatham_backward_offset_change_splits_at_the_transition() {
+    // 2026-04-05 03:45(+13:45) → 02:45(+12:45). 첫 03:00 부터 실제 1시간이면 3시 칸 45분, 2시 칸 15분.
+    let tz = chrono_tz::Pacific::Chatham;
+    let s = store();
+    s.set_calendar(Arc::new(tz));
+    let start = local(tz, 2026, 4, 5, 3, 0);
+    s.insert_watch_history_rows(&[row("a", "게임", start, 3600.0)])
+        .unwrap();
+    let now = local(tz, 2026, 4, 5, 12, 0);
+    let r = s.watch_report(ReportPeriod::Today, now).unwrap();
+    let hour = |h: usize| r.heatmap.iter().map(|row| row[h]).sum::<f64>();
+    assert_eq!(r.total, 3600.0);
+    assert_eq!(hour(3), 2700.0);
+    assert_eq!(hour(2), 900.0);
+}
+
+#[test]
+fn previous_period_starts_at_the_shifted_day_start() {
+    // Havana 3/8 은 01:00 에 시작한다 — 어제(3/7) 00:30 시청도 "어제 이 시각" 비교에 들어간다.
+    let tz = chrono_tz::America::Havana;
+    let s = store();
+    s.set_calendar(Arc::new(tz));
+    s.insert_watch_history_rows(&[row("a", "게임", local(tz, 2026, 3, 7, 0, 30), 1200.0)])
+        .unwrap();
+    let now = local(tz, 2026, 3, 8, 12, 0);
+    let r = s.watch_report(ReportPeriod::Today, now).unwrap();
+    assert_eq!(r.previous_total, Some(1200.0));
+}

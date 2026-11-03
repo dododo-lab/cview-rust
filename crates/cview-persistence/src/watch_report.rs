@@ -494,7 +494,11 @@ pub fn build_report(
     }
 
     let previous_total = period.days().map(|n| {
-        let lo = calendar.add_days(-n, range_start).unwrap_or(range_start);
+        // 자정이 없는 날(하루가 01:00 시작)도 앞 구간은 그날의 하루 시작부터 센다.
+        let lo = calendar
+            .add_days(-n, range_start)
+            .map(|d| calendar.start_of_day(d))
+            .unwrap_or(range_start);
         let hi = calendar.add_days(-n, now).unwrap_or(range_start);
         clipped_seconds(records, lo, hi, now)
     });

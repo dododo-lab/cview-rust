@@ -5,7 +5,9 @@
 //! `DataStore+WatchHistorySync.swift` 가 달력을 주입받던 자리를 [`Calendar`] trait 로 옮겼다.
 //! 날짜는 SQLite 에 Unix epoch 나노초 정수로 저장해 왕복이 정확히 같다.
 
-use chrono::{DateTime, Datelike, Duration, LocalResult, NaiveDateTime, TimeZone, Timelike, Utc};
+use chrono::{
+    DateTime, Datelike, Duration, LocalResult, NaiveDateTime, Offset, TimeZone, Timelike, Utc,
+};
 pub use cview_core::utils::time::{adding, from_unix, interval_since, Date, TimeInterval};
 
 /// Foundation `Calendar` 가운데 이 크레이트가 쓰는 부분.
@@ -66,24 +68,28 @@ where
     }
 
     fn next_hour(&self, date: Date) -> Date {
-        // 현지 분·초를 덜어 한 시간 뒤(절대 시각)를 구하고, 다음 현지 정시의 벽시계를 직접 푼 값과 견줘
-        // 이른 쪽을 쓴다. 정시가 아닌 때 오프셋이 바뀌는 곳(Pacific/Chatham 02:45→03:45)에서도
-        // 전환 시각에서 끊겨 시 칸이 섞이지 않는다.
+        // 현지 분·초를 덜어 한 시간 뒤(절대 시각)를 구한다. 그 사이에 오프셋이 바뀌면(서머타임, 또는
+        // Pacific/Chatham 처럼 정시가 아닌 02:45·03:45 전환) 바뀌는 순간에서 끊어 시 칸이 섞이지 않게 한다.
         let local = date.with_timezone(self);
         let into_hour = Duration::seconds(i64::from(local.minute() * 60 + local.second()))
             + Duration::nanoseconds(i64::from(local.nanosecond()));
         let elapsed = date - into_hour + Duration::hours(1);
-        let wall = local
-            .naive_local()
-            .with_minute(0)
-            .and_then(|t| t.with_second(0))
-            .and_then(|t| t.with_nanosecond(0))
-            .and_then(|t| t.checked_add_signed(Duration::hours(1)))
-            .and_then(|t| resolve(self, t));
-        match wall {
-            Some(w) if w > date && w < elapsed => w,
-            _ => elapsed,
+        let offset = |d: Date| d.with_timezone(self).offset().fix();
+        let before = offset(date);
+        if offset(elapsed) == before {
+            return elapsed;
         }
+        // 오프셋이 바뀌는 첫 순간을 초 단위로 좁힌다(한 시간 안에 전환은 한 번뿐).
+        let (mut lo, mut hi) = (date, elapsed);
+        while hi - lo > Duration::seconds(1) {
+            let mid = lo + (hi - lo) / 2;
+            if offset(mid) == before {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        hi
     }
 
     fn start_of_month(&self, date: Date) -> Date {
