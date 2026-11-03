@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use cview_app_core::app_state::AppState;
 use cview_app_core::caching::following_store::{FollowingPollSinkSlot, FollowingStore};
+use cview_app_core::services::live_watch_events::LiveWatchReporter;
 use cview_app_core::services::support::MemoryKeyValueStore;
 use cview_app_core::viewmodels::all_broadcasts::AllBroadcastsViewModel;
 use cview_app_core::viewmodels::chat::{
@@ -45,6 +46,8 @@ pub const SETTINGS_SNAPSHOT_FILE_NAME: &str = "settings.json";
 
 /// 플레이어 페이지 hls.js 기본 프로필(뷰모델이 설정의 지연 프리셋으로 덮어쓴다).
 pub const PLAYER_PROFILE: HlsJsStreamingProfile = HlsJsStreamingProfile::LowLatency;
+/// 단독 시청 화면의 시청 이벤트 화면 키(멀티라이브 패인은 `pane-<번호>`).
+pub const VIEWER_WATCH_SOURCE: &str = "viewer";
 
 /// 셸이 프런트엔드로 내보내는 통로 — `lib.rs` 가 `AppHandle` 로 만든다.
 #[derive(Clone)]
@@ -226,6 +229,8 @@ pub struct AppServices {
     pub recorder: cview_player::recording::StreamRecordingService,
     /// 진행 중인 시청 기록 — (채널, 시작 시각). 정지할 때 끝낸다(원본 WatchHeartbeatCenter).
     pub watch_record: Mutex<Option<(String, chrono::DateTime<chrono::Utc>)>>,
+    /// 치지직 시청 이벤트(시청자 수·계정 시청 기록 반영). 멀티라이브 패인과 같은 보고자를 쓴다.
+    pub watch_events: LiveWatchReporter,
     pub sinks: ShellSinks,
     /// 열린 로그인 창 작업.
     pub login_task: Mutex<Option<JoinHandle<()>>>,
@@ -324,6 +329,7 @@ impl AppServices {
         player.inject_engine(engine.clone());
         player.apply_settings(&settings.player(), false);
         let player_event = sinks.player_event.clone();
+        let watch_events = LiveWatchReporter::new(Arc::new(api.clone()));
         let ended_api = api.clone();
         player.set_callbacks(PlayerCallbacks {
             // 재연결 루프가 방송 종료를 알아야 "재연결 최대 횟수 초과" 대신 종료로 끝난다.
@@ -364,6 +370,7 @@ impl AppServices {
             engine,
             player_channel: tokio::sync::Mutex::new(None),
             watch_record: Mutex::new(None),
+            watch_events,
             playing_stream: Mutex::new(None),
             recorder: cview_player::recording::StreamRecordingService::new(),
             sinks,
@@ -406,6 +413,7 @@ impl AppServices {
         if channel.take().is_some() {
             self.player.stop_stream().await;
         }
+        self.watch_events.end(VIEWER_WATCH_SOURCE);
         self.recorder.stop_recording();
         *self
             .playing_stream
@@ -547,6 +555,12 @@ impl AppServices {
 
     /// 종료 정리 — 재생·채팅을 멈추고 대기 중인 설정 저장을 마친다.
     pub async fn shutdown(&self) {
+        // 남은 시청 세션의 `WATCH_ENDED` 전송은 로컬 정리와 함께 돈다 — 네트워크가 늦어도 플레이어 정지·
+        // 시청 기록 종료·설정 저장이 밀리지 않는다(보고자는 바깥 종료 상한보다 짧게 기다린다).
+        tokio::join!(self.watch_events.end_all(), self.shutdown_local());
+    }
+
+    async fn shutdown_local(&self) {
         self.stop_player().await;
         self.chat.disconnect().await;
         let sessions: Vec<_> = self

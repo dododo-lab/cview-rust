@@ -80,10 +80,17 @@ pub async fn player_start(
         .set_policy_quality_ceiling_height(connector_limited_height);
 
     let mut channel = services.player_channel.lock().await;
+    // 재생 시작 전에 등록해 둔다 — 첫 `watchActivity` 가 시작 명령보다 먼저 올 수 있다.
+    services.watch_events.begin(
+        crate::state::VIEWER_WATCH_SOURCE,
+        &channel_id,
+        Some(info.live_id),
+    );
     services.player.start_stream(request).await;
     let phase = services.player.read().stream_phase.clone();
     if let StreamPhase::Error(message) = phase {
         drop(channel);
+        services.watch_events.end(crate::state::VIEWER_WATCH_SOURCE);
         services.player.stop_stream().await;
         return Err(CommandError(format!(
             "재생을 시작하지 못했습니다: {message}"
@@ -137,6 +144,15 @@ pub async fn player_message(services: State<'_, AppServices>, message: Value) ->
     let signal = services.engine.handle_message(&parsed);
     if matches!(parsed, JsMessage::SurfaceFirstFrame { .. }) {
         services.player.engine_surface_presented();
+    }
+    if let JsMessage::WatchActivity { active, ended } = parsed {
+        let source = crate::state::VIEWER_WATCH_SOURCE;
+        if ended {
+            // 방송 종료 화면에 머물러도 시청은 끝났다 — 다음 재생(`player_start`)이 새 세션을 연다.
+            services.watch_events.end(source);
+        } else {
+            services.watch_events.set_active(source, active);
+        }
     }
     if let Some(EngineSignal::Fatal(message)) = &signal {
         (services.sinks.player_event)(PlayerEventDto::Error {

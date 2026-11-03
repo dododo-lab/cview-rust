@@ -1039,6 +1039,77 @@ for (const event of ['error', 'stalled', 'waiting', 'playing', 'pause', 'seeking
     });
 }
 
+// [시청 집계 2026-11-04] 치지직 시청 이벤트용 "실제로 보고 있는가" 신호 — `watchActivity { active, ended }`.
+//   치지직 웹은 영상 `playing` 에 시작·재개, `pause` 에 일시정지, 끝나면 종료를 보낸다(재버퍼링은 일시정지가
+//   아니다). 앱은 일시정지를 **사용자 의도**(`_wantsPlaying`, 정지 중엔 정지 전 값)로 본다 — 사용자가 멈추면
+//   바로 알린다. 앱 내부 사정으로 영상이 멈춘 것(멀티라이브 디코드 예산·창 가림의 `suspendLoading`, WebKit 의
+//   자동 정지)과 화면에서 빠진 것(창 가림, 메뉴 이동·한 채널 크게 같은 CSS 숨김 — PiP 는 예외)은 재버퍼링처럼
+//   WATCH_INTERRUPT_GRACE_MS 동안은 시청으로 두고, 그보다 길면 안 보는 것으로 알린다.
+//   CSS 숨김은 `visibilitychange` 를 내지 않아 WATCH_POLL_MS 마다 직접 본다. 부모의 메뉴 전환 통지
+//   (`setWatchSurfaceHidden`)는 화면 표시가 끝난 뒤 다시 보게만 한다. 전송·주기는 네이티브가 맡는다.
+const WATCH_INTERRUPT_GRACE_MS = 15000;
+const WATCH_POLL_MS = 2000;
+let _watchActive = null;
+let _watchHasPlayed = false;
+let _watchInterrupted = false;
+let _watchInterruptedLong = false;
+let _watchInterruptTimer = null;
+function watchInPip() {
+    return video.webkitPresentationMode === 'picture-in-picture' || document.pictureInPictureElement === video;
+}
+/** 사용자가 재생을 원하는가 — 내부 정지(`suspendLoading`)는 의도를 정지 전 값으로 남긴다. */
+function watchIntendsPlay() {
+    return _suspended ? _wantsPlayingBeforeSuspend : _wantsPlaying;
+}
+/** 사용자 의도와 무관하게 지금 보이거나 재생되지 않는가. */
+function watchInterrupted() {
+    return (isSurfaceHidden() && !watchInPip()) || _suspended || video.paused;
+}
+function reportWatchActivity() {
+    const active = _watchHasPlayed && !video.ended && watchIntendsPlay() && !_watchInterruptedLong;
+    if (active === _watchActive) return;
+    _watchActive = active;
+    postToSwift('watchActivity', { active, ended: false });
+}
+/** 중단이 시작·해제될 때만 유예 타이머를 걸거나 풀고, 지금 상태를 알린다. */
+function refreshWatchActivity() {
+    const interrupted = watchInterrupted();
+    if (interrupted !== _watchInterrupted) {
+        _watchInterrupted = interrupted;
+        clearTimeout(_watchInterruptTimer);
+        _watchInterruptTimer = null;
+        _watchInterruptedLong = false;
+        if (interrupted) {
+            _watchInterruptTimer = setTimeout(function() {
+                _watchInterruptedLong = true;
+                reportWatchActivity();
+            }, WATCH_INTERRUPT_GRACE_MS);
+        }
+    }
+    reportWatchActivity();
+}
+document.addEventListener('visibilitychange', refreshWatchActivity);
+setInterval(refreshWatchActivity, WATCH_POLL_MS);
+/** 부모: 메뉴 이동으로 이 플레이어가 화면에서 빠졌다/돌아왔다 — 부모가 화면을 다 바꾼 뒤 다시 본다. */
+window.setWatchSurfaceHidden = function() {
+    setTimeout(refreshWatchActivity, 0);
+};
+video.addEventListener('playing', function() { _watchHasPlayed = true; refreshWatchActivity(); });
+video.addEventListener('emptied', function() { _watchHasPlayed = false; refreshWatchActivity(); });
+// 영상 끝(방송 종료)은 일시정지가 아니라 시청 끝이다 — 네이티브가 `WATCH_ENDED` 로 세션을 닫는다.
+video.addEventListener('ended', function() {
+    if (!_watchHasPlayed) return;
+    _watchHasPlayed = false;
+    _watchActive = false;
+    postToSwift('watchActivity', { active: false, ended: true });
+});
+for (const event of ['pause', 'enterpictureinpicture', 'leavepictureinpicture',
+                     'webkitpresentationmodechanged']) {
+    video.addEventListener(event, refreshWatchActivity);
+}
+// 첫 확인은 스크립트가 다 뜬 뒤 — `_suspended` 는 이 아래(let)에서 선언된다.
+setTimeout(refreshWatchActivity, 0);
+
 // [지연 정합 2026-08-11] **목표 지연의 단일 소유자는 Swift 다.**
 //   종전에는 목표가 두 곳에 따로 있었다 — Swift `LowLatencyController.Configuration.targetLatency`
 //   (PID 가 겨냥) 와 여기 `PROFILES[...].liveSyncDuration`(리싱크/seek 이 겨냥). 프리셋에 따라
