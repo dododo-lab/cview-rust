@@ -20,6 +20,7 @@ scripts/release-with-prs.sh [PR번호 ...] [-- release-macos.sh 옵션]
 4. 업데이트 서버 업로드·게시(`latest.json`은 마지막에 원자적으로 갱신)
 5. 서버와 Mac 양쪽에서 전체 다운로드·SHA-256 검증
 6. 릴리스 커밋·`v<버전>` 태그 푸시
+7. GitHub 릴리스 사본 — 같은 설치 파일 세 개와 `CView_<버전>_SHA256SUMS.txt`를 `v<버전>` 릴리스에 올리고 다시 받아 확인(`scripts/github-release.py`), 게시 후 Actions `github-release`가 업데이트 서버의 서명된 manifest와 재대조
 
 macOS와 Windows(x64·arm64) 설치 파일은 늘 같은 버전으로 함께 게시한다. 사용자에게 보일 변경 사항은 UTF-8 파일로 써서 `CVIEW_RELEASE_NOTES_FILE=/절대/경로/notes.txt`로 넘긴다(생략하면 Git 변경 목록을 쓴다). 배포 후 [`CHANGELOG.md`](../CHANGELOG.md)에 항목을 더한다.
 
@@ -27,6 +28,12 @@ macOS와 Windows(x64·arm64) 설치 파일은 늘 같은 버전으로 함께 게
 
 ```sh
 python3 scripts/publish-update.py --version <버전> --notes-file dist/CView_<버전>_notes.txt
+```
+
+GitHub 릴리스 사본만 실패했으면(업데이트 서버 게시·푸시는 끝남) 같은 버전으로 재실행한다. 이미 올라간 파일은 덮어쓰지 않고, `dist/`에 파일이 없으면 업데이트 서버에서 받아 해시를 확인해 쓴다.
+
+```sh
+python3 scripts/github-release.py --version <버전>
 ```
 
 ## 더 자세한 안내

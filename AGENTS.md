@@ -18,7 +18,10 @@ scripts/release-with-prs.sh [PR번호 ...] [-- release-macos.sh 옵션]
 - `.idea/`는 `.git/info/exclude`에 넣어 IDE가 다시 만들어도 깨끗함 검사를 막지 않게 한다. `--no-notarize`는 넘기지 않는다.
 - main 브랜치에서만 실행한다. 되돌리기에 실패하면 안내대로 `git stash list` 맨 위 항목을 직접 확인한다.
 
-- `release-macos.sh --dmg`는 검사, 버전·빌드 번호 증가, macOS 서명·공증, Windows 설치 파일 생성, 업데이트 서버 업로드·게시, 서버와 Mac의 전체 다운로드·SHA-256 검증, Git 푸시까지 실행한다.
+- `release-macos.sh --dmg`는 검사, 버전·빌드 번호 증가, macOS 서명·공증, Windows 설치 파일 생성, 업데이트 서버 업로드·게시, 서버와 Mac의 전체 다운로드·SHA-256 검증, Git 푸시, GitHub 릴리스 사본 업로드·검증까지 실행한다.
+- GitHub 릴리스 사본은 업데이트 서버 게시·푸시가 끝난 뒤 `scripts/github-release.py --version <버전>`이 만든다. 서명된 서버 manifest(`releases/<버전>/manifest.json`)와 같은 설치 파일 세 개와 `CView_<버전>_SHA256SUMS.txt`를 `v<버전>` 초안 릴리스에 올리고, 다시 받아 확인한 뒤 게시한다. 게시되면 Actions `github-release` 워크플로가 GitHub 자산을 서버 manifest와 다시 대조한다. 서명·공증 비밀값은 GitHub에 올리지 않는다. `gh auth` 인증이 필요하며 사전 확인에서 검사한다.
+- GitHub 단계가 실패해도 업데이트 서버 게시는 되돌리지 않고 버전도 다시 올리지 않는다. 같은 명령을 재실행한다. 이미 있는 GitHub 자산은 덮어쓰지 않으며(다르면 실패), `dist/`에 파일이 없으면 업데이트 서버에서 받아 해시를 확인해 쓴다. 결과는 `dist/CView_<버전>_github-receipt.json`. `--draft`는 초안으로 남기고, `--verify-only`는 올리지 않고 검사만 한다.
+- 이 저장소의 Actions는 액션을 커밋 SHA로 고정해야 실행된다(`sha_pinning_required`). 태그(`@v4`)로만 쓰면 startup_failure가 난다.
 - 개발용 `cargo run`, `cargo tauri build` 자체에는 게시 훅이 없다. 배포 요청을 개별 빌드 명령으로 대체하거나 `dist/` 생성만으로 완료했다고 보고하지 않는다.
 - 배포 전 변경 사항을 검토·커밋해서 작업 트리를 깨끗하게 만든다. 다른 작업자의 변경을 무단으로 되돌리거나 포함하지 않는다.
 - 먼저 `python3 scripts/publish-update.py --preflight`로 확인할 수 있다. Tailscale, 이 Mac의 전용 키(`~/.ssh/cview_release_ed25519`), 로컬 서버 설정(`~/.config/cview-release/server.json`, `known_hosts`)이 필요하다. 서버 주소·계정·호스트 키는 공개 저장소에 커밋하지 않는다. 비밀번호나 개인 키를 채팅·저장소·로그에 넣지 않는다.
