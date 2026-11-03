@@ -19,6 +19,7 @@ pub mod client;
 pub mod client_ads;
 mod client_content;
 mod client_live;
+pub mod client_watch;
 pub mod collector;
 pub mod constants;
 pub mod endpoint;

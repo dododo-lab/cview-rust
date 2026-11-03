@@ -241,6 +241,14 @@ fn parses_envelopes_of_every_type() {
         msg("playbackState", json!({"state": "playing"})).unwrap().1,
         JsMessage::PlaybackState { stalled: false }
     );
+    assert_eq!(
+        msg("watchActivity", json!({"active": true})).unwrap().1,
+        JsMessage::WatchActivity { active: true }
+    );
+    assert_eq!(
+        msg("watchActivity", json!({})).unwrap().1,
+        JsMessage::WatchActivity { active: false }
+    );
     match msg(
             "error",
             json!({"fatal": true, "recoverable": false, "type": "NOT_SUPPORTED", "details": "MSE not supported"}),

@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use cview_app_core::services::live_watch_events::LiveWatchReporter;
 use cview_app_core::viewmodels::multi_live::deps::{
     ChatConnectionKind, LaunchPlan, LaunchPlanError, LiveStatusSnapshot, MultiLiveBackendError,
     MultiLiveChat, MultiLiveEnginePool, MultiLiveHlsEngine, MultiLivePlayer,
@@ -353,6 +354,15 @@ pub struct PanePlayer {
     auth_key_channels: AuthKeyChannels,
     on_state_changed: StateChangedSlot,
     presented_ticks: AtomicU64,
+    watch_events: LiveWatchReporter,
+    /// 시청 이벤트 화면 키(`pane-<번호>`) — 슬롯은 재사용되므로 플레이어마다 따로 붙인다.
+    watch_source: String,
+}
+
+impl Drop for PanePlayer {
+    fn drop(&mut self) {
+        self.watch_events.end(&self.watch_source);
+    }
 }
 
 impl PanePlayer {
@@ -361,7 +371,9 @@ impl PanePlayer {
         cookies: Arc<CookieManager>,
         auth_key_channels: AuthKeyChannels,
         settings: &PlayerSettings,
+        watch_events: LiveWatchReporter,
     ) -> Arc<Self> {
+        static NEXT_WATCH_SOURCE: AtomicU64 = AtomicU64::new(1);
         let vm = PlayerViewModel::new(None);
         // 패인은 멀티라이브 플레이어다 — 빠뜨리면 모든 패인이 단독 시청처럼 각자 3초를 쫓는 PID 를 돌리고
         // (Automatic), 비선택 안정성 목표(10.5초)·선택 전환·역할별 화질 목표가 하나도 걸리지 않았다.
@@ -388,6 +400,8 @@ impl PanePlayer {
             auth_key_channels,
             on_state_changed,
             presented_ticks: AtomicU64::new(0),
+            watch_events,
+            watch_source: format!("pane-{}", NEXT_WATCH_SOURCE.fetch_add(1, Ordering::Relaxed)),
         })
     }
 
@@ -417,6 +431,9 @@ impl PanePlayer {
             self.vm.engine_surface_presented();
         }
         crate::commands::player::apply_engine_signal(&self.vm, signal).await;
+        if let cview_player::hlsjs::JsMessage::WatchActivity { active } = message {
+            self.watch_events.set_active(&self.watch_source, *active);
+        }
         if matches!(message, cview_player::hlsjs::JsMessage::PlayStarted { .. }) {
             self.presented_ticks.fetch_add(1, Ordering::SeqCst);
         }
@@ -533,9 +550,12 @@ impl MultiLivePlayer for PanePlayer {
         start.live_title = request.live_title;
         start.playback_key_access = access;
         start.match_web_v2_source_eligible = request.match_web_v2_source_eligible;
+        self.watch_events
+            .begin(&self.watch_source, &request.channel_id, None);
         self.vm.start_stream(start).await;
     }
     async fn stop_stream(&self) {
+        self.watch_events.end(&self.watch_source);
         self.vm.stop_stream().await;
     }
     async fn toggle_play_pause(&self) {
@@ -650,6 +670,7 @@ pub struct ShellSessionFactory {
     cookies: Arc<CookieManager>,
     settings: SettingsStore,
     auth_key_channels: AuthKeyChannels,
+    watch_events: LiveWatchReporter,
 }
 
 impl MultiLiveSessionFactory for ShellSessionFactory {
@@ -660,6 +681,7 @@ impl MultiLiveSessionFactory for ShellSessionFactory {
             self.cookies.clone(),
             self.auth_key_channels.clone(),
             &self.settings.player(),
+            self.watch_events.clone(),
         );
         lock(&self.registry.players).push(player.clone());
         player
@@ -830,6 +852,7 @@ impl MultiLiveShell {
         settings: SettingsStore,
         sink: SlotCommandSink,
         data_dir: &std::path::Path,
+        watch_events: LiveWatchReporter,
     ) -> Self {
         let pool = Arc::new(PanePool::new(sink));
         let registry = Arc::new(PaneRegistry::default());
@@ -840,6 +863,7 @@ impl MultiLiveShell {
             cookies,
             settings: settings.clone(),
             auth_key_channels: auth_key_channels.clone(),
+            watch_events,
         });
         let mut deps = MultiLiveDeps::new(pool.clone(), factory);
         deps.layout_prefs = Arc::new(FileLayoutPrefsStore::new(data_dir));

@@ -81,10 +81,11 @@ pub enum JsMessageType {
     SurfaceFirstFrame,
     V2SeekTokenRequest,
     V2Event,
+    WatchActivity,
 }
 
 impl JsMessageType {
-    pub const ALL: [JsMessageType; 17] = [
+    pub const ALL: [JsMessageType; 18] = [
         Self::Ready,
         Self::Metrics,
         Self::Error,
@@ -102,6 +103,7 @@ impl JsMessageType {
         Self::SurfaceFirstFrame,
         Self::V2SeekTokenRequest,
         Self::V2Event,
+        Self::WatchActivity,
     ];
 
     pub fn raw_value(self) -> &'static str {
@@ -123,6 +125,7 @@ impl JsMessageType {
             Self::SurfaceFirstFrame => "surfaceFirstFrame",
             Self::V2SeekTokenRequest => "v2SeekTokenRequest",
             Self::V2Event => "v2Event",
+            Self::WatchActivity => "watchActivity",
         }
     }
 
@@ -498,6 +501,11 @@ pub enum JsMessage {
         timed_out: bool,
         fallback: bool,
     },
+    /// 사용자가 실제로 보고 있는가 — 영상이 재생 중이고 창이 보이거나 PiP 다. 페이지가 창 가림을 이미
+    /// 지연(디바운스)해 판단했다. 치지직 시청 이벤트(`live_watch_events`)의 재생·일시정지 신호.
+    WatchActivity {
+        active: bool,
+    },
     MatchWebV2(MatchWebV2Envelope),
 }
 
@@ -634,6 +642,9 @@ impl JsMessage {
             JsMessageType::SurfaceFirstFrame => JsMessage::SurfaceFirstFrame {
                 timed_out: b("timedOut"),
                 fallback: b("fallback"),
+            },
+            JsMessageType::WatchActivity => JsMessage::WatchActivity {
+                active: b("active"),
             },
             JsMessageType::V2SeekTokenRequest | JsMessageType::V2Event => {
                 JsMessage::MatchWebV2(parse_match_web_v2_message(message_type, data)?)

@@ -454,7 +454,7 @@ pub fn parse_waterfall(body: &Value, ctx: &AdRequestContext) -> Vec<AdCandidate>
 }
 
 /// 무작위 UUID v4 문자열.
-fn random_uuid_v4() -> String {
+pub(crate) fn random_uuid_v4() -> String {
     let mut b = [0u8; 16];
     rand::thread_rng().fill(&mut b);
     b[6] = (b[6] & 0x0f) | 0x40;
