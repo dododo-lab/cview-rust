@@ -271,6 +271,8 @@ for img in plistlib.loads(sys.stdin.buffer.read()).get("images", []):
   }
   win_log="$TARGET/windows-build-$version.log"
   echo "── Windows 설치 파일(x64·arm64) 교차 빌드를 백그라운드로 시작 — 로그: $win_log"
+  # 설치 파일 복사(dist/)가 아래 macOS DMG 복사보다 먼저 끝나도 되게 미리 만든다.
+  mkdir -p dist
   build_windows_installers >"$win_log" 2>&1 &
   win_pid=$!
 fi
