@@ -405,6 +405,26 @@ class GitHubMirrorTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 mirror.compare_assets({'assets': [bad]}, self.expected)
 
+    def test_github_feed_keeps_files_and_points_at_github(self):
+        feed = mirror.github_feed({**self.manifest, 'signature': {'alg': 'ed25519'}})
+        self.assertNotIn('signature', feed)
+        self.assertEqual(feed['html_url'], mirror.GITHUB + '/releases/tag/v0.1.1')
+        for asset, source in zip(feed['assets'], self.manifest['assets']):
+            self.assertEqual({k: asset[k] for k in ('name', 'size', 'sha256')},
+                             {k: source[k] for k in ('name', 'size', 'sha256')})
+            self.assertEqual(asset['browser_download_url'],
+                             f'{mirror.GITHUB}/releases/download/v0.1.1/{asset["name"]}')
+        # 서명 대상 형식(공백 없는 필드)을 그대로 만족해야 앱이 검증할 수 있다.
+        gateway.signed_payload(feed)
+
+    def test_github_feed_must_match_server_release(self):
+        feed = mirror.github_feed(self.manifest)
+        tampered = {**feed, 'assets': [{**feed['assets'][0], 'browser_download_url': 'https://evil.example/x'}]
+                    + feed['assets'][1:]}
+        for bad in [tampered, {**feed, 'body': 'other notes'}, {**feed, 'html_url': gateway.BASE + '/'}]:
+            with self.assertRaisesRegex(ValueError, 'differs'):
+                mirror.check_github_feed(bad, self.manifest)
+
     def test_collect_refuses_local_file_that_differs(self):
         with tempfile.TemporaryDirectory() as tmp:
             dist = Path(tmp)

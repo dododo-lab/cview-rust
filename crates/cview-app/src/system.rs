@@ -299,36 +299,55 @@ fn validated_update_url(value: &str) -> Result<url::Url, CommandError> {
     Ok(parsed)
 }
 
-/// 기본 업데이트 피드(공개 다운로드 사이트). 빌드 환경 변수를 빠뜨려도 이 주소를 쓴다.
-const DEFAULT_UPDATE_FEED: &str = "https://cv.dododo.app/releases/latest.json";
+/// 기본 업데이트 피드 — GitHub 의 "Latest" 릴리스에 첨부한 서명된 `latest.json`(scripts/github-release.py).
+/// 빌드 환경 변수를 빠뜨려도 이 주소를 쓴다. 설치 파일도 같은 릴리스에서 받는다.
+const DEFAULT_UPDATE_FEED: &str =
+    "https://github.com/dododo-lab/cview-rust/releases/latest/download/latest.json";
+/// 기본 피드를 받지 못하면(연결 실패·HTTP 오류·`latest.json` 없음) 쓰는 예비 피드 — 자체 업데이트 서버.
+const FALLBACK_UPDATE_FEED: &str = "https://cv.dododo.app/releases/latest.json";
 
 /// 실행 시 환경 변수 → 빌드 시 값 → 기본 피드 순. 빈 값은 설정 안 한 것으로 본다.
 fn configured(v: Option<&str>) -> Option<&str> {
     v.map(str::trim).filter(|v| !v.is_empty())
 }
 
-fn update_feed_url(
+/// 차례로 시도할 피드 주소. 주소를 정했으면 그것만, 아니면 GitHub → 자체 서버.
+fn update_feed_urls(
     runtime: Option<&str>,
     embedded: Option<&str>,
-) -> Result<url::Url, CommandError> {
-    validated_update_url(
-        configured(runtime)
-            .or(configured(embedded))
-            .unwrap_or(DEFAULT_UPDATE_FEED),
-    )
+) -> Result<Vec<url::Url>, CommandError> {
+    match configured(runtime).or(configured(embedded)) {
+        Some(url) => Ok(vec![validated_update_url(url)?]),
+        None => [DEFAULT_UPDATE_FEED, FALLBACK_UPDATE_FEED]
+            .into_iter()
+            .map(validated_update_url)
+            .collect(),
+    }
 }
 
-/// 지금 설정된 업데이트 피드 주소(실행 시 환경 변수 → 빌드 시 값 → 기본 피드).
-pub(crate) fn current_feed_url() -> Result<url::Url, CommandError> {
+/// 지금 설정된 피드에서 최신 릴리스를 받는다(실행 시 환경 변수 → 빌드 시 값 → GitHub → 자체 서버).
+/// 앞 피드가 실패하거나 비어 있으면 다음 피드를 쓴다. 모두 안 되면 마지막 결과.
+pub(crate) async fn fetch_current_release() -> CmdResult<Option<GitHubRelease>> {
     let runtime_url = std::env::var("CVIEW_UPDATE_URL").ok();
-    update_feed_url(runtime_url.as_deref(), option_env!("CVIEW_UPDATE_URL"))
+    let urls = update_feed_urls(runtime_url.as_deref(), option_env!("CVIEW_UPDATE_URL"))?;
+    let mut last = Ok(None);
+    for url in urls {
+        match fetch_release(url.clone()).await {
+            Ok(Some(release)) => return Ok(Some(release)),
+            other => {
+                tracing::warn!("업데이트 피드 {url} 를 쓰지 못했습니다 — 다음 피드를 시도합니다");
+                last = other;
+            }
+        }
+    }
+    last
 }
 
-/// 설정된 HTTPS 서버의 최신 릴리스 확인.
+/// 최신 릴리스 확인(GitHub, 안 되면 자체 HTTPS 서버).
 #[tauri::command]
 pub async fn update_check(app: AppHandle) -> CmdResult<UpdateCheckDto> {
     let current = app.package_info().version.to_string();
-    fetch_update(current_feed_url()?, current).await
+    update_dto(fetch_current_release().await?, current)
 }
 
 /// 피드를 받는다. 공개된 릴리스가 없으면(404) `None`.
@@ -387,9 +406,9 @@ pub(crate) fn release_installer(release: &GitHubRelease) -> Option<&GitHubAsset>
     .filter(|a| validated_update_url(a.browser_download_url.as_str()).is_ok())
 }
 
-/// 피드를 받아 현재 버전과 비교한다.
-async fn fetch_update(url: url::Url, current: String) -> CmdResult<UpdateCheckDto> {
-    let Some(release) = fetch_release(url).await? else {
+/// 받은 피드를 현재 버전과 비교한다.
+fn update_dto(release: Option<GitHubRelease>, current: String) -> CmdResult<UpdateCheckDto> {
+    let Some(release) = release else {
         return Ok(UpdateCheckDto {
             current,
             latest: None,
@@ -506,44 +525,48 @@ mod tests {
     #[test]
     fn update_endpoint_configuration() {
         let embedded = "https://updates.example.com/releases/latest.json";
-        assert_eq!(
-            update_feed_url(None, Some(embedded)).unwrap().as_str(),
-            embedded
-        );
-        assert_eq!(
-            update_feed_url(Some("https://example.com/feed"), Some(embedded))
+        let urls = |runtime, embedded| -> Vec<String> {
+            update_feed_urls(runtime, embedded)
                 .unwrap()
-                .host_str(),
-            Some("example.com")
-        );
-        // 빌드 환경 변수를 빠뜨렸거나 비어 있어도 자체 서버 피드
+                .iter()
+                .map(|u| u.to_string())
+                .collect()
+        };
+        assert_eq!(urls(None, Some(embedded)), [embedded]);
         assert_eq!(
-            update_feed_url(None, None).unwrap().as_str(),
-            DEFAULT_UPDATE_FEED
+            urls(Some("https://example.com/feed"), Some(embedded)),
+            ["https://example.com/feed"]
         );
-        assert_eq!(
-            update_feed_url(Some(""), Some(" ")).unwrap().as_str(),
-            DEFAULT_UPDATE_FEED
-        );
+        // 빌드 환경 변수를 빠뜨렸거나 비어 있으면 GitHub 피드, 그다음 자체 서버 피드
+        let defaults = [DEFAULT_UPDATE_FEED, FALLBACK_UPDATE_FEED];
+        assert_eq!(urls(None, None), defaults);
+        assert_eq!(urls(Some(""), Some(" ")), defaults);
         for bad in [
             "http://example.com/feed",
             "https://user:secret@example.com/feed",
             "invalid",
         ] {
-            assert!(update_feed_url(Some(bad), Some(embedded)).is_err());
+            assert!(update_feed_urls(Some(bad), Some(embedded)).is_err());
         }
     }
 
-    /// 실제 업데이트 서버(인터넷 연결 필요) — `cargo test -p cview-app -- --ignored live_update_feed`.
+    /// 실제 피드(인터넷 연결 필요) — `cargo test -p cview-app -- --ignored live_update_feed`.
+    /// GitHub 피드(리다이렉트 포함)와 자체 서버 피드 모두 서명이 맞아야 한다.
     #[tokio::test]
     #[ignore]
     async fn live_update_feed() {
-        let url = update_feed_url(None, None).unwrap();
-        let u = fetch_update(url, "0.0.1".into()).await.unwrap();
-        assert!(u.newer, "{u:?}");
-        assert!(u.latest.is_some() && u.url.is_some(), "{u:?}");
-        if std::env::consts::OS == "macos" {
-            assert!(u.download_name.unwrap().ends_with(".dmg"));
+        for feed in [DEFAULT_UPDATE_FEED, FALLBACK_UPDATE_FEED] {
+            let release = fetch_release(validated_update_url(feed).unwrap())
+                .await
+                .unwrap()
+                .expect(feed);
+            assert!(crate::updater::release_is_signed(&release), "{feed}");
+            let u = update_dto(Some(release), "0.0.1".into()).unwrap();
+            assert!(u.newer && u.signed, "{feed}: {u:?}");
+            assert!(u.latest.is_some() && u.url.is_some(), "{u:?}");
+            if std::env::consts::OS == "macos" {
+                assert!(u.download_name.unwrap().ends_with(".dmg"));
+            }
         }
     }
 

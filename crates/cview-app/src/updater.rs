@@ -27,7 +27,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::AsyncWriteExt;
 
 use crate::commands::{CmdResult, CommandError};
-use crate::system::{current_feed_url, fetch_release, release_installer};
+use crate::system::{fetch_current_release, release_installer};
 
 /// 진행 이벤트 — `{ phase, received, total }`. phase: download · verify · install · restart.
 pub const UPDATE_PROGRESS: &str = "update://progress";
@@ -218,7 +218,7 @@ async fn install(app: &AppHandle) -> CmdResult<()> {
         return Err(err("이 운영체제에서는 자동 업데이트를 지원하지 않습니다"));
     }
     let current = app.package_info().version.to_string();
-    let release = fetch_release(current_feed_url()?)
+    let release = fetch_current_release()
         .await?
         .ok_or_else(|| err("공개된 릴리스가 없습니다"))?;
     let version = release.version_string().to_string();
@@ -641,7 +641,7 @@ mod mac {
         use std::path::Path;
         use std::time::Duration;
 
-        use crate::system::{current_feed_url, fetch_release, release_installer};
+        use crate::system::{fetch_current_release, release_installer};
         use crate::updater::{can_auto_install, download, parse_sha256};
 
         fn plist_version(app: &Path) -> String {
@@ -656,7 +656,7 @@ mod mac {
         #[tokio::test]
         #[ignore]
         async fn updater_e2e_real_feed() {
-            let release = fetch_release(current_feed_url().unwrap())
+            let release = fetch_current_release()
                 .await
                 .unwrap()
                 .expect("공개된 릴리스");
