@@ -211,6 +211,22 @@ impl DataStore {
         Ok(aggregate(&records, now, calendar.as_ref()))
     }
 
+    /// 통계 화면 기간 리포트 — [`crate::watch_report::build_report`].
+    pub fn watch_report(
+        &self,
+        period: crate::watch_report::ReportPeriod,
+        now: Date,
+    ) -> Result<crate::watch_report::WatchReport> {
+        let calendar = self.calendar();
+        let records = self.read(Self::all_watch_rows)?;
+        Ok(crate::watch_report::build_report(
+            &records,
+            period,
+            now,
+            calendar.as_ref(),
+        ))
+    }
+
     /// 앱 시작 시 남은 열린 레코드를 마지막 체크포인트 duration 까지만 보존해 닫는다.
     pub fn recover_interrupted_watch_records(&self, now: Date) -> Result<usize> {
         let n = self.write(|tx| {

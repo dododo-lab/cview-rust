@@ -338,6 +338,7 @@ pub fn run() {
             commands::multi_live::preset_save,
             commands::multi_live::preset_delete,
             commands::insights::insights_overview,
+            commands::insights::insights_report,
             commands::download::download_list,
             system::deeplink_take_pending,
             windows::window_open,

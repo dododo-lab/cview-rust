@@ -5,7 +5,9 @@
 //! `DataStore+WatchHistorySync.swift` 가 달력을 주입받던 자리를 [`Calendar`] trait 로 옮겼다.
 //! 날짜는 SQLite 에 Unix epoch 나노초 정수로 저장해 왕복이 정확히 같다.
 
-use chrono::{DateTime, Duration, LocalResult, NaiveDateTime, TimeZone, Timelike, Utc};
+use chrono::{
+    DateTime, Datelike, Duration, LocalResult, NaiveDateTime, Offset, TimeZone, Timelike, Utc,
+};
 pub use cview_core::utils::time::{adding, from_unix, interval_since, Date, TimeInterval};
 
 /// Foundation `Calendar` 가운데 이 크레이트가 쓰는 부분.
@@ -16,6 +18,12 @@ pub trait Calendar: Send + Sync {
     fn add_days(&self, days: i64, date: Date) -> Option<Date>;
     /// 현지 시(0…23).
     fn hour(&self, date: Date) -> u32;
+    /// 현지 요일 — 월요일 0 … 일요일 6.
+    fn weekday(&self, date: Date) -> u32;
+    /// `date` 뒤의 첫 현지 정시(정시 자체면 한 시간 뒤).
+    fn next_hour(&self, date: Date) -> Date;
+    /// 그달 1일 0시(현지).
+    fn start_of_month(&self, date: Date) -> Date;
 }
 
 fn resolve<Tz: TimeZone>(tz: &Tz, naive: NaiveDateTime) -> Option<Date> {
@@ -53,6 +61,45 @@ where
 
     fn hour(&self, date: Date) -> u32 {
         date.with_timezone(self).hour()
+    }
+
+    fn weekday(&self, date: Date) -> u32 {
+        date.with_timezone(self).weekday().num_days_from_monday()
+    }
+
+    fn next_hour(&self, date: Date) -> Date {
+        // 현지 분·초를 덜어 한 시간 뒤(절대 시각)를 구한다. 그 사이에 오프셋이 바뀌면(서머타임, 또는
+        // Pacific/Chatham 처럼 정시가 아닌 02:45·03:45 전환) 바뀌는 순간에서 끊어 시 칸이 섞이지 않게 한다.
+        let local = date.with_timezone(self);
+        let into_hour = Duration::seconds(i64::from(local.minute() * 60 + local.second()))
+            + Duration::nanoseconds(i64::from(local.nanosecond()));
+        let elapsed = date - into_hour + Duration::hours(1);
+        let offset = |d: Date| d.with_timezone(self).offset().fix();
+        let before = offset(date);
+        if offset(elapsed) == before {
+            return elapsed;
+        }
+        // 오프셋이 바뀌는 첫 순간을 초 단위로 좁힌다(한 시간 안에 전환은 한 번뿐).
+        let (mut lo, mut hi) = (date, elapsed);
+        while hi - lo > Duration::seconds(1) {
+            let mid = lo + (hi - lo) / 2;
+            if offset(mid) == before {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        hi
+    }
+
+    fn start_of_month(&self, date: Date) -> Date {
+        let local = date.with_timezone(self);
+        let first = local
+            .date_naive()
+            .with_day(1)
+            .and_then(|d| d.and_hms_opt(0, 0, 0))
+            .expect("1일 자정");
+        resolve(self, first).unwrap_or(date)
     }
 }
 

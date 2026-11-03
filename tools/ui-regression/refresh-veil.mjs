@@ -59,6 +59,7 @@ function mockTauri(origin) {
     search: () => ({ lives: popular.slice(0, 4), channels: [] }),
     search_videos: () => ({ items: [], hasMore: false }),
     insights_overview: () => ({ sessionCount: 0, daily: [] }),
+    insights_report: () => ({ total: 0, firstWatchedAt: null }),
   };
   window.__delay = {};
   window.__listeners = {};
@@ -135,7 +136,7 @@ const MENUS = [
   ['categories', {}, ['popular_lives']],
   ['live', {}, ['following_lives', 'popular_lives']],
   ['library', {}, ['popular_clips']],
-  ['stats', {}, ['insights_overview']],
+  ['stats', {}, ['insights_report']],
   ['search', { query: '릴카' }, ['search', 'search_videos']],
   ['settings', {}, ['settings_get'], 600],
 ];

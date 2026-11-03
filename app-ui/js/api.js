@@ -95,6 +95,7 @@ export const api = {
   multiLiveAudio: (sessionId, toggleMode) => invoke('multilive_audio', { sessionId, toggleMode }),
   multiLiveSetRatios: (horizontal, vertical) => invoke('multilive_set_ratios', { horizontal, vertical }),
   insightsOverview: () => invoke('insights_overview'),
+  insightsReport: (period) => invoke('insights_report', { period }),
   dataHealth: () => invoke('data_health'),
   dataBackupNow: () => invoke('data_backup_now'),
   dataCleanup: (kind) => invoke('data_cleanup', { kind }),
