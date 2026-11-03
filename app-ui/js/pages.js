@@ -1,7 +1,7 @@
 // 사이드바 화면들 — 팔로잉 / 인기 / 검색 / 설정. 홈은 home.js.
 import { api } from './api.js';
 import { esc, safeUrl, imageSrc, icons } from './dom.js';
-import { swapContent } from './motion.js';
+import { motionReduced, swapContent } from './motion.js';
 import { liveGrid, liveCard, lacksThumbs, THUMB_FILL_DELAY_MS, THUMB_FILL_TRIES, channelRow, fallbackAvatar, emptyState, loadingState, compactCount, skeletonGrid, freshnessText, errorState, friendlyError, uptimeText } from './cards.js';
 import { FOLLOW_SORTS, FOLLOW_FILTERS, arrangeFollowed, followedInsights, followBadges, followAgeText, parseFollowDate, FollowExtras } from './following-info.js';
 import { vodCard, clipCard } from './channel.js';
@@ -298,15 +298,15 @@ export class SearchPage {
       if (!this.input.value.trim() && !this.idle) this.run('');
     });
     this.body.addEventListener('error', fallbackAvatar, true);
-    // 선반이 넘칠 때만 화살표·끝 흐림 — 창 폭이 바뀌거나 옆으로 넘기면 다시 잰다
+    // 선반이 넘칠 때만 화살표·끝 흐림 — 본문 폭이 바뀌거나(창·사이드바·인사이트 패널, 숨김 뒤 재표시) 옆으로 넘기면 다시 잰다
     this.body.addEventListener('scroll', (e) => { if (e.target.classList && e.target.classList.contains('search-preview')) this.fitShelves(); }, true);
-    window.addEventListener('resize', () => { if (!this.root.hidden) this.fitShelves(); });
+    new ResizeObserver(() => this.fitShelves()).observe(this.body);
     this.body.addEventListener('click', (e) => {
       const sh = e.target.closest('[data-shelf]');
       if (sh) {
         e.stopPropagation();
         const shelf = sh.closest('.search-section').querySelector('.search-preview');
-        shelf.scrollBy({ left: Number(sh.dataset.shelf) * shelf.clientWidth * 0.9, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+        shelf.scrollBy({ left: Number(sh.dataset.shelf) * shelf.clientWidth * 0.9, behavior: motionReduced() ? 'auto' : 'smooth' });
         return;
       }
       const r = e.target.closest('[data-recent]');
@@ -506,7 +506,7 @@ export class SearchPage {
       ['videos', '다시보기', n(vodFailed, videos.length, v.hasMore)],
       ['clips', '클립', n(mainFailed || (errs.clip && !clips.length), clips.length, c.hasMore)],
     ];
-    const tabBar = `<div class="segmented search-tabs" role="tablist">${tabs.map(([id, l, cnt]) => `<button class="seg${this.tab === id ? ' active' : ''}${cnt === '실패' ? ' failed' : ''}" role="tab" aria-selected="${this.tab === id}" data-stab="${id}">${l}${cnt ? ` <span class="seg-count">${cnt}</span>` : ''}</button>`).join('')}</div>`;
+    const tabBar = `<div class="segmented search-tabs" role="group" aria-label="검색 결과 종류">${tabs.map(([id, l, cnt]) => `<button class="seg${this.tab === id ? ' active' : ''}${cnt === '실패' ? ' failed' : ''}" aria-pressed="${this.tab === id}" data-stab="${id}">${l}${cnt ? ` <span class="seg-count">${cnt}</span>` : ''}</button>`).join('')}</div>`;
     // 구역 — 전체 탭은 한 줄 선반(preview), 자기 탭은 줄바꿈 격자(full). 제목 옆 개수는 탭과 같은 값.
     const sec = (id, title, items, preview, full, more = false) => {
       if (!items.length) return '';

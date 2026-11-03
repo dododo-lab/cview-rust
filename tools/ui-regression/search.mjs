@@ -157,6 +157,20 @@ await check('S07 shelf arrows scroll the preview', async () => {
   await shelf.evaluate((el) => { el.scrollLeft = 0; });
 });
 await shotFull(wide.page, 'search-all');
+await check('S10 shelves re-measure when the body narrows without a window resize', async () => {
+  const nav = wide.page.locator('[data-section="lives"] .shelf-nav');
+  assert.equal(await nav.isVisible(), false, 'two lives fit at full width');
+  await wide.page.evaluate(() => { document.querySelector('[data-page="search"] .page-body').style.width = '420px'; });
+  await wide.page.waitForTimeout(200);
+  assert.equal(await nav.isVisible(), true, 'arrows after the body narrows');
+  await wide.page.evaluate(() => { document.querySelector('[data-page="search"] .page-body').style.width = ''; });
+  await wide.page.waitForTimeout(200);
+  assert.equal(await nav.isVisible(), false);
+});
+await check('S11 filter buttons expose the pressed state', async () => {
+  assert.equal(await wide.page.locator('[data-stab="all"]').first().getAttribute('aria-pressed'), 'true');
+  assert.equal(await wide.page.locator('[data-page="search"] [role="tab"]').count(), 0);
+});
 await check('S08 videos tab shows the full grid', async () => {
   await wide.page.locator('[data-stab="videos"]').first().click();
   assert.equal(await wide.page.locator('[data-page="search"] .search-section[data-section="videos"] .grid > .card').count(), 24);
