@@ -1,5 +1,5 @@
 // 라이브 카드 격자 / 채널 행 / 빈 상태.
-import { esc, safeUrl, imageSrc } from './dom.js';
+import { esc, safeUrl, imageSrc, icons } from './dom.js';
 import { previewAttr } from './hover-preview.js';
 import { verifiedBadge } from './verified-badge.js';
 
@@ -45,17 +45,31 @@ export function liveGrid(lives) {
   return `<div class="grid">${lives.map(liveCard).join('')}</div>`;
 }
 
-/** 채널 행 (ChannelDto). */
+/**
+ * 채널 행 (ChannelDto). 아바타가 없거나 못 받으면 이름 첫 글자를 보인다 — 깨진 그림 대신
+ * (`img` 의 error 는 거품이 일지 않으므로 그리는 쪽이 `fallbackAvatar` 를 캡처 단계에 건다).
+ */
 export function channelRow(channel) {
   const avatar = safeUrl(channel.channelImageUrl);
+  const initial = Array.from(String(channel.channelName || '').trim())[0] || '?';
   return `
-    <div class="channel-row card" tabindex="0" data-channel-id="${esc(channel.channelId)}" data-channel-name="${esc(channel.channelName)}" data-channel-image="${esc(avatar)}" data-open-live="${channel.openLive ? '1' : ''}">
-      ${avatar ? `<img class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<div class="avatar"></div>'}
+    <div class="channel-row card${channel.openLive ? ' is-live' : ''}" tabindex="0" data-channel-id="${esc(channel.channelId)}" data-channel-name="${esc(channel.channelName)}" data-channel-image="${esc(avatar)}" data-open-live="${channel.openLive ? '1' : ''}">
+      <span class="cr-avatar${avatar ? '' : ' fallback'}">${avatar ? `<img class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}<span class="cr-initial" aria-hidden="true">${esc(initial.toUpperCase())}</span></span>
       <div class="card-text">
-        <div class="ellipsis"><strong>${esc(channel.channelName)}</strong>${verifiedBadge(channel)}${channel.openLive ? '<span class="live-dot">LIVE</span>' : ''}</div>
-        <div class="card-meta">팔로워 ${esc(channel.followerCountText)}명</div>
+        <div class="cr-name"><strong class="ellipsis">${esc(channel.channelName)}</strong>${verifiedBadge(channel)}${channel.openLive ? '<span class="cr-live">LIVE</span>' : ''}</div>
+        <div class="card-meta">팔로워 <span class="cr-followers">${esc(channel.followerCountText)}</span>명</div>
       </div>
+      <span class="cr-go" aria-hidden="true">${icons.chevronRight}</span>
     </div>`;
+}
+
+/** 채널 행 아바타를 못 받으면 첫 글자로 — 목록 컨테이너에 `addEventListener('error', fallbackAvatar, true)`. */
+export function fallbackAvatar(e) {
+  const img = e.target;
+  const box = img && img.tagName === 'IMG' ? img.parentElement : null;
+  if (!box || !box.classList.contains('cr-avatar')) return;
+  img.hidden = true;
+  box.classList.add('fallback');
 }
 
 export function emptyState(title, detail = '', action = '') {
