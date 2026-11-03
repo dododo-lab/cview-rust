@@ -224,6 +224,14 @@ await check('T03 hovering a column shows a tooltip with date, total and series',
   // 페이지에 transform 이 걸려 있어도 풍선은 고른 칸 바로 위에 뜬다
   const cb = await col.locator('.chart-stack').boundingBox();
   assert.ok(Math.abs(box.x + box.width / 2 - (cb.x + cb.width / 2)) <= 2 && box.y + box.height <= cb.y, `tip ${JSON.stringify(box)} col ${JSON.stringify(cb)}`);
+  // 창 크기가 바뀌면 옛 자리에 남은 풍선을 닫는다
+  const vp0 = p.viewportSize();
+  await p.setViewportSize({ width: vp0.width - 40, height: vp0.height });
+  await p.waitForTimeout(100);
+  assert.equal(await tip.isVisible(), false, 'resize hides the tooltip');
+  await p.setViewportSize(vp0);
+  await col.hover();
+  await tip.waitFor({ state: 'visible' });
   // 초점이 차트 밖이어도 마우스로 띄운 풍선은 Esc 로 닫힌다
   await p.evaluate(() => document.activeElement?.blur());
   await p.keyboard.press('Escape');

@@ -495,6 +495,8 @@ export class StatsPage {
       e.preventDefault();
       this.activate(chart, Math.max(0, Math.min(meta.count - 1, next)), true);
     });
+    // 창 크기가 바뀌면 칸 자리가 달라진다 — 옛 자리에 풍선을 남기지 않는다.
+    window.addEventListener('resize', () => this.hideTip(), { passive: true });
     // 마우스로 띄운 풍선도 초점 위치와 상관없이 Esc 로 닫는다(WCAG 1.4.13). 풍선이 떠 있을 때만 가로챈다.
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape' || this.tip.hidden || this.root.hidden) return;
