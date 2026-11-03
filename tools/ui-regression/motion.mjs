@@ -32,6 +32,7 @@ function mockTauri() {
     data_cleanup: () => health,
     data_backup_now: () => health,
     insights_overview: () => ({ sessionCount: 0, recent: [], daily: [], channels: [], categories: [], hourly: Array(24).fill(0) }),
+    insights_report: () => ({ total: 0, firstWatchedAt: null }),
     popular_lives: () => Array.from({ length: 12 }, (_, i) => ({ channelId: `c${i}`, channelName: `이름-${i}`, liveTitle: `방송 ${i}`, isLive: true, viewerCount: 1000 - i * 10, openDate: new Date(Date.now() - i * 60000).toISOString(), liveCategoryValue: i % 2 ? '게임' : '토크' })),
     search: () => ({ lives: [], channels: [] }),
     search_videos: () => ({ items: [], hasMore: false }),

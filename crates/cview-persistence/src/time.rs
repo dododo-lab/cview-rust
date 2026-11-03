@@ -5,7 +5,7 @@
 //! `DataStore+WatchHistorySync.swift` 가 달력을 주입받던 자리를 [`Calendar`] trait 로 옮겼다.
 //! 날짜는 SQLite 에 Unix epoch 나노초 정수로 저장해 왕복이 정확히 같다.
 
-use chrono::{DateTime, Duration, LocalResult, NaiveDateTime, TimeZone, Timelike, Utc};
+use chrono::{DateTime, Datelike, Duration, LocalResult, NaiveDateTime, TimeZone, Timelike, Utc};
 pub use cview_core::utils::time::{adding, from_unix, interval_since, Date, TimeInterval};
 
 /// Foundation `Calendar` 가운데 이 크레이트가 쓰는 부분.
@@ -16,6 +16,12 @@ pub trait Calendar: Send + Sync {
     fn add_days(&self, days: i64, date: Date) -> Option<Date>;
     /// 현지 시(0…23).
     fn hour(&self, date: Date) -> u32;
+    /// 현지 요일 — 월요일 0 … 일요일 6.
+    fn weekday(&self, date: Date) -> u32;
+    /// `date` 뒤의 첫 현지 정시(정시 자체면 한 시간 뒤).
+    fn next_hour(&self, date: Date) -> Date;
+    /// 그달 1일 0시(현지).
+    fn start_of_month(&self, date: Date) -> Date;
 }
 
 fn resolve<Tz: TimeZone>(tz: &Tz, naive: NaiveDateTime) -> Option<Date> {
@@ -53,6 +59,28 @@ where
 
     fn hour(&self, date: Date) -> u32 {
         date.with_timezone(self).hour()
+    }
+
+    fn weekday(&self, date: Date) -> u32 {
+        date.with_timezone(self).weekday().num_days_from_monday()
+    }
+
+    fn next_hour(&self, date: Date) -> Date {
+        // 현지 분·초를 덜어 그 시의 정시를 구한다. 오프셋은 정시에만 바뀌므로 한 시간 안에서는 같다.
+        let local = date.with_timezone(self);
+        let into_hour = Duration::seconds(i64::from(local.minute() * 60 + local.second()))
+            + Duration::nanoseconds(i64::from(local.nanosecond()));
+        date - into_hour + Duration::hours(1)
+    }
+
+    fn start_of_month(&self, date: Date) -> Date {
+        let local = date.with_timezone(self);
+        let first = local
+            .date_naive()
+            .with_day(1)
+            .and_then(|d| d.and_hms_opt(0, 0, 0))
+            .expect("1일 자정");
+        resolve(self, first).unwrap_or(date)
     }
 }
 

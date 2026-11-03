@@ -2105,7 +2105,7 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 
 /* ── 통계 (DAT-04·DSN-05·DAT-06) ───────────────── */
 .stats-body { display: flex; flex-direction: column; gap: var(--sp-lg); }
-.kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--sp-md); }
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--sp-md); }
 .kpi-card { display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: var(--radius-lg); background: var(--surface-elevated); border: 1px solid var(--border-subtle); box-shadow: var(--shadow-sm); }
 .kpi-label { font-size: var(--fs-caption); color: var(--text-tertiary); }
 .kpi-value { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); }
@@ -2114,18 +2114,148 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .stats-card h3 { margin: 0 0 12px; font-size: var(--fs-subhead); }
 .stats-card .sub-h { margin-top: 18px; }
 .stats-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--sp-md); }
-.rank-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.rank-bars li { display: grid; grid-template-columns: 20px minmax(80px, 160px) 1fr auto; align-items: center; gap: 10px; font-size: var(--fs-footnote); }
 .rank-no { color: var(--text-tertiary); font-variant-numeric: tabular-nums; text-align: right; }
 .rank-track { height: 8px; border-radius: 4px; background: var(--hover); overflow: hidden; }
 .rank-fill { display: block; height: 100%; border-radius: 4px; background: var(--brand-gradient, var(--primary)); }
-.rank-bars li:first-child .rank-fill { background: var(--primary); }
 .rank-val { color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.col-chart { display: flex; align-items: stretch; gap: 3px; height: 160px; }
-.col-chart .col { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; min-width: 0; gap: 4px; }
-.col-chart .col-bar { width: 100%; max-width: 22px; border-radius: 4px 4px 2px 2px; background: color-mix(in srgb, var(--primary) 55%, transparent); transition: background .15s; }
-.col-chart .col:hover .col-bar, .col-chart .col.hi .col-bar { background: var(--primary); }
-.col-chart .col-label { font-size: 10px; color: var(--text-tertiary); height: 12px; white-space: nowrap; }
+
+/* 차트 색 — 추이 쌓기·카테고리 비중이 같은 순서로 쓴다. 마지막(s-rest)은 기타.
+   색만으로 구분하지 않게 범례·풍선에 이름과 값을 함께 둔다. */
+.page[data-page="stats"] {
+  --chart-1: var(--primary); --chart-2: var(--accent-blue); --chart-3: var(--donation); --chart-4: var(--accent-purple);
+  --chart-rest: color-mix(in srgb, var(--text-tertiary) 55%, transparent);
+  --heat-0: var(--hover);
+  --heat-1: color-mix(in srgb, var(--primary) 20%, var(--surface-base));
+  --heat-2: color-mix(in srgb, var(--primary) 42%, var(--surface-base));
+  --heat-3: color-mix(in srgb, var(--primary) 68%, var(--surface-base));
+  --heat-4: var(--primary);
+}
+:root[data-theme="light"] .page[data-page="stats"] { --chart-3: #d9a400; --heat-4: #00b377; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .page[data-page="stats"] { --chart-3: #d9a400; --heat-4: #00b377; } }
+.page[data-page="stats"] .s0 { --c: var(--chart-1); }
+.page[data-page="stats"] .s1 { --c: var(--chart-2); }
+.page[data-page="stats"] .s2 { --c: var(--chart-3); }
+.page[data-page="stats"] .s3 { --c: var(--chart-4); }
+.page[data-page="stats"] .s-rest { --c: var(--chart-rest); }
+.page[data-page="stats"] .sw { flex: none; display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: var(--c, var(--primary)); }
+.page[data-page="stats"] .sw.avg { height: 0; border-radius: 0; border-top: 2px dashed var(--text-secondary); background: none; width: 14px; }
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+.stats-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-sm) var(--sp-md); flex-wrap: wrap; margin-bottom: var(--sp-lg); }
+.stats-toolbar .lib-tabs { margin: 0; }
+.stats-period[hidden] { display: none; }
+.stats-period .seg { font-variant-numeric: tabular-nums; }
+.card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.card-head h3 { margin: 0; }
+.card-head .link-btn { margin: -4px -6px; }
+.stats-meta { font-size: var(--fs-footnote); color: var(--text-tertiary); }
+.kpi-sub.up, .kpi-sub.down { font-weight: 600; }
+.kpi-sub.up { color: var(--primary-text); }
+.kpi-sub.down { color: var(--text-secondary); }
+.kpi-value { font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 차트 공통 — 초점 링, 고른 칸 강조 */
+.chart { position: relative; border-radius: var(--radius-sm); outline: none; }
+.chart:focus-visible { box-shadow: var(--focus-ring); }
+
+/* 세로 막대(쌓기) */
+.bar-chart { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: 190px auto; column-gap: 8px; row-gap: 6px; padding: 6px 4px 0 0; }
+.bar-chart.short { grid-template-rows: 130px auto; }
+.chart-y { position: relative; min-width: 34px; }
+.chart-y span { position: absolute; right: 0; transform: translateY(50%); font-size: var(--fs-micro); color: var(--text-tertiary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.chart-plot { position: relative; border-bottom: 1px solid var(--border); }
+.chart-grid { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--border-subtle); pointer-events: none; }
+.chart-avg { position: absolute; left: 0; right: 0; border-top: 2px dashed color-mix(in srgb, var(--text-secondary) 70%, transparent); pointer-events: none; z-index: 2; }
+.chart-avg em { position: absolute; right: 0; bottom: 3px; font-style: normal; font-size: var(--fs-micro); color: var(--text-secondary); background: color-mix(in srgb, var(--surface-elevated) 85%, transparent); padding: 0 4px; border-radius: 4px; white-space: nowrap; }
+.chart-cols, .chart-x { display: flex; gap: clamp(1px, 0.5vw, 6px); }
+.chart-cols { position: absolute; inset: 0; align-items: flex-end; }
+.chart-col { position: relative; flex: 1 1 0; min-width: 0; height: 100%; display: flex; align-items: flex-end; justify-content: center; cursor: default; }
+.chart-col::before { content: ""; position: absolute; inset: 0 -1px; border-radius: 4px; background: transparent; transition: background .12s; }
+.chart-col.is-active::before { background: var(--hover); }
+.chart-stack { position: relative; width: 100%; max-width: 30px; min-height: 2px; display: flex; flex-direction: column-reverse; gap: 1px; border-radius: 4px 4px 1px 1px; overflow: hidden; }
+.chart-stack > i { display: block; flex: 1 1 0; min-height: 1px; background: var(--c); }
+.chart-stack > i.mono { background: color-mix(in srgb, var(--primary) 62%, transparent); }
+.chart-col.is-active .chart-stack { filter: brightness(1.12); box-shadow: 0 0 0 1px color-mix(in srgb, var(--text-primary) 35%, transparent); }
+.chart-col.is-active .chart-stack > i.mono { background: var(--primary); }
+.chart-x { grid-column: 2; }
+.chart-x span { flex: 1 1 0; min-width: 0; display: flex; justify-content: center; font-size: var(--fs-micro); color: var(--text-tertiary); white-space: nowrap; overflow: visible; height: 13px; font-variant-numeric: tabular-nums; }
+.chart-legend { list-style: none; display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 12px 0 0; padding: 0; font-size: var(--fs-footnote); color: var(--text-secondary); }
+.chart-legend li { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+
+/* 요일 × 시간대 히트맵 */
+.hm-grid { display: grid; grid-template-columns: 20px repeat(24, minmax(0, 1fr)); gap: 3px; }
+.hm-day, .hm-hour { font-size: var(--fs-micro); color: var(--text-tertiary); display: flex; align-items: center; }
+.hm-hour { justify-content: flex-start; height: 14px; font-variant-numeric: tabular-nums; }
+.hm-cell { height: 26px; border-radius: 4px; background: var(--heat-0); transition: box-shadow .12s; }
+.hm-cell.l1 { background: var(--heat-1); } .hm-cell.l2 { background: var(--heat-2); } .hm-cell.l3 { background: var(--heat-3); } .hm-cell.l4 { background: var(--heat-4); }
+.hm-cell.is-active { box-shadow: 0 0 0 2px var(--text-primary); }
+.hm-scale { display: flex; align-items: center; justify-content: flex-end; gap: 4px; margin-top: 10px; font-size: var(--fs-micro); color: var(--text-tertiary); }
+.hm-scale .hm-cell { width: 14px; height: 14px; border-radius: 3px; }
+
+/* 도넛 + 범례 */
+.donut-wrap { display: flex; align-items: center; gap: var(--sp-xl); flex-wrap: wrap; }
+.donut { position: relative; flex: none; width: 168px; height: 168px; }
+.donut svg { width: 100%; height: 100%; display: block; }
+.donut-bg { fill: none; stroke: var(--hover); stroke-width: 14; }
+.donut-arc { fill: none; stroke: var(--c); stroke-width: 14; transition: stroke-width .12s; }
+.donut-arc.is-active { stroke-width: 18; }
+.donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
+.donut-center strong { font-size: 24px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.donut-center span { font-size: var(--fs-micro); color: var(--text-tertiary); }
+.donut-legend { list-style: none; margin: 0; padding: 0; flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.donut-legend li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px; font-size: var(--fs-footnote); }
+.donut-legend li.is-active { background: var(--hover); }
+.donut-legend b { font-variant-numeric: tabular-nums; }
+.donut-legend small { color: var(--text-tertiary); font-variant-numeric: tabular-nums; min-width: 64px; text-align: right; }
+
+/* 순위 막대(비중) */
+.share-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.share-bars li { display: grid; grid-template-columns: 20px minmax(64px, 1fr) minmax(56px, 1.15fr) 44px minmax(68px, auto); align-items: center; gap: 10px; font-size: var(--fs-footnote); min-height: 26px; }
+.share-bars .rank-name { display: inline-flex; align-items: center; gap: 6px; min-width: 0; text-align: left; justify-content: flex-start; }
+.share-bars button.rank-name { display: block; font-size: var(--fs-footnote); color: var(--text-primary); padding: 4px 6px; margin: 0 -6px; }
+.share-bars button.rank-name:hover { color: var(--primary-text); }
+.share-bars li:first-child .rank-fill { background: var(--primary); }
+.rank-share { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.len-bars li { grid-template-columns: minmax(76px, 104px) minmax(40px, 1fr) 52px 52px; }
+.len-bars .rank-fill { background: color-mix(in srgb, var(--primary) 60%, transparent); }
+.rank-others { margin: 10px 0 0; }
+
+/* 채널 순위표 — 좁으면 횟수·마지막 시청을 접는다 */
+.rank-table { display: flex; flex-direction: column; container-type: inline-size; }
+.rt-row { display: grid; grid-template-columns: 24px minmax(90px, 1.2fr) minmax(90px, 1.4fr) 92px 52px 76px; align-items: center; gap: 12px; padding: 6px 4px; border-bottom: 1px solid var(--border-subtle); font-size: var(--fs-footnote); }
+.rt-row:last-child { border-bottom: 0; }
+.rt-head { color: var(--text-tertiary); font-size: var(--fs-micro); font-weight: 600; padding-top: 0; }
+.rt-head > :first-child, .rt-head > :nth-child(n+4) { text-align: right; }
+.rt-row > .rank-val { text-align: right; }
+.rt-name { min-width: 0; }
+.rt-name .link-btn { display: block; max-width: 100%; padding: 4px 6px; margin: 0 -6px; text-align: left; font-size: var(--fs-footnote); color: var(--text-primary); font-weight: 600; }
+.rt-name .link-btn:hover { color: var(--primary-text); }
+.rt-bar { display: grid; grid-template-columns: minmax(0, 1fr) 52px; align-items: center; gap: 8px; }
+.rt-head .rt-bar { display: block; }
+.rt-row:not(.rt-head):hover { background: var(--hover); border-radius: 6px; }
+@container (max-width: 560px) {
+  .rt-row { grid-template-columns: 24px minmax(80px, 1fr) minmax(70px, 1fr) 84px; }
+  .rt-opt { display: none; }
+}
+
+/* 값 풍선 — 마우스·키보드로 고른 칸 위에 뜬다 */
+.chart-tip {
+  position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none; min-width: 120px; max-width: 260px;
+  padding: 8px 10px; border-radius: 10px; background: var(--surface-popover); border: 1px solid var(--border); box-shadow: var(--shadow-md);
+  display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-footnote); color: var(--text-primary);
+}
+.chart-tip[hidden] { display: none; }
+.chart-tip strong { font-size: var(--fs-micro); font-weight: 600; color: var(--text-secondary); }
+.chart-tip .tip-total { font-size: var(--fs-subhead); font-weight: 700; font-variant-numeric: tabular-nums; }
+.chart-tip small { color: var(--text-tertiary); }
+.chart-tip ul { list-style: none; margin: 4px 0 0; padding: 4px 0 0; border-top: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 2px; }
+.chart-tip li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 6px; }
+.chart-tip li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chart-tip li b { font-weight: 600; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) {
+  .chart-col::before, .hm-cell, .donut-arc { transition: none; }
+}
 .history-list { display: flex; flex-direction: column; gap: 6px; }
 .history-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: var(--radius-md); background: var(--surface-elevated); border: 1px solid var(--border-subtle); text-align: left; color: inherit; cursor: pointer; }
 .history-row:hover { background: var(--hover); }

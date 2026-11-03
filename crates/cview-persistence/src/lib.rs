@@ -9,6 +9,7 @@
 //! - [`user_record_file`] — `UserRecordFile.swift`
 //! - [`download_history`] — `DownloadHistoryRecord.swift`
 //! - [`watch_rollup_math`] — `WatchRollupMath.swift`
+//! - [`watch_report`] — 통계 화면 기간 리포트(Rust 에서 새로 만든 것, 원본 없음)
 //! - [`store_open_health`] — `StoreOpenHealth.swift`
 //! - [`store_backup`] — `StoreBackup.swift`
 //! - [`revision`] — `CViewCore/Performance/WatchInsightsRevision.swift`(Rust core 미포팅분)
@@ -31,6 +32,7 @@ pub mod store_backup;
 pub mod store_open_health;
 pub mod time;
 pub mod user_record_file;
+pub mod watch_report;
 pub mod watch_rollup_math;
 
 pub use error::{PersistenceError, Result};

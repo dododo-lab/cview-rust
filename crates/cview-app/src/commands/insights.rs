@@ -5,6 +5,7 @@
 //! 백업 복원은 스토어가 열린 채로 파일을 바꿔야 해서 앱에서는 하지 않는다(백업 폴더만 연다).
 
 use cview_persistence::store_backup::{BackupReason, StoreBackup};
+use cview_persistence::watch_report::{ReportPeriod, WatchReport};
 use serde::Serialize;
 use tauri::{Manager, State};
 
@@ -124,6 +125,25 @@ pub async fn insights_overview(services: State<'_, AppServices>) -> CmdResult<In
         bookmark_count: store.table_row_count("StreamBookmark").unwrap_or(0),
         recent,
     })
+}
+
+/// 통계 화면 기간 리포트 — `period`: today · 7d · 30d · 90d · all.
+/// 기록을 현지 정시 경계로 잘라 담은 추이·요일×시간대·순위·길이 분포를 한 번에 돌려준다.
+#[tauri::command]
+pub async fn insights_report(
+    services: State<'_, AppServices>,
+    period: String,
+) -> CmdResult<WatchReport> {
+    let Some(store) = &services.data_store else {
+        return Err(CommandError(
+            "데이터 저장소를 열지 못해 통계를 볼 수 없습니다".into(),
+        ));
+    };
+    let period = ReportPeriod::parse(&period)
+        .ok_or_else(|| CommandError(format!("알 수 없는 통계 기간: {period}")))?;
+    store
+        .watch_report(period, chrono::Utc::now())
+        .map_err(|e| CommandError(e.to_string()))
 }
 
 // ── 로컬 데이터 관리 (DAT-06) ─────────────────────

@@ -33,6 +33,7 @@ function mockTauri() {
     data_cleanup: () => health,
     data_backup_now: () => health,
     insights_overview: () => ({ sessionCount: 0, recent: [], daily: [], channels: [], categories: [], hourly: Array(24).fill(0) }),
+    insights_report: () => ({ total: 0, firstWatchedAt: null }),
     popular_lives: () => [],
     search: () => ({ lives: [], channels: [] }),
     search_videos: () => ({ items: [], hasMore: false }),

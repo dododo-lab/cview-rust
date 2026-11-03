@@ -1,0 +1,80 @@
+//! 통계 기간 리포트 — 서머타임 경계와 DataStore 경유 집계.
+
+mod common;
+
+use chrono::TimeZone;
+use chrono_tz::Tz;
+use common::*;
+use cview_persistence::models::WatchHistory;
+use cview_persistence::time::{adding, Date};
+use cview_persistence::watch_report::{BucketUnit, ReportPeriod};
+use std::sync::Arc;
+
+fn local(tz: Tz, y: i32, m: u32, d: u32, h: u32, min: u32) -> Date {
+    tz.with_ymd_and_hms(y, m, d, h, min, 0)
+        .earliest()
+        .unwrap()
+        .with_timezone(&chrono::Utc)
+}
+
+fn row(ch: &str, cat: &str, start: Date, secs: f64) -> WatchHistory {
+    let mut w = WatchHistory::new(ch, format!("{ch} 채널"), None, Some(cat.into()), start);
+    w.duration = secs;
+    w.ended_at = Some(adding(&start, secs));
+    w.updated_at = w.ended_at;
+    w
+}
+
+#[test]
+fn fall_back_day_has_25_hour_buckets_and_keeps_every_second() {
+    let tz = chrono_tz::America::New_York;
+    let s = store();
+    s.set_calendar(Arc::new(tz));
+    // 2026-11-01 01:00 이 두 번 온다 — 00:30 부터 3시간.
+    let start = local(tz, 2026, 11, 1, 0, 30);
+    s.insert_watch_history_rows(&[row("a", "게임", start, 3.0 * 3600.0)])
+        .unwrap();
+    let now = local(tz, 2026, 11, 1, 22, 0);
+    let r = s.watch_report(ReportPeriod::Today, now).unwrap();
+    assert_eq!(r.unit, BucketUnit::Hour);
+    assert_eq!(r.trend.len(), 25);
+    assert_eq!(r.total, 3.0 * 3600.0);
+    let summed: f64 = r.trend.iter().map(|b| b.seconds).sum();
+    assert_eq!(summed, r.total);
+    // 현지 1시 칸은 두 번(1시간씩) 채워져 히트맵에서 합쳐진다. 2026-11-01 은 일요일(6).
+    assert_eq!(r.heatmap[6][0], 1800.0);
+    assert_eq!(r.heatmap[6][1], 7200.0);
+    assert_eq!(r.heatmap[6][2], 1800.0);
+}
+
+#[test]
+fn store_report_matches_records_and_ignores_zero_rows() {
+    let tz = chrono_tz::Asia::Seoul;
+    let s = store();
+    s.set_calendar(Arc::new(tz));
+    let now = local(tz, 2026, 11, 3, 21, 0);
+    s.insert_watch_history_rows(&[
+        row("a", "게임", local(tz, 2026, 11, 3, 19, 0), 3600.0),
+        row("b", "토크", local(tz, 2026, 11, 1, 20, 0), 1800.0),
+        row("b", "토크", local(tz, 2026, 10, 30, 20, 0), 0.0),
+        row("c", "음악", local(tz, 2026, 10, 1, 20, 0), 900.0),
+    ])
+    .unwrap();
+    let week = s.watch_report(ReportPeriod::Days7, now).unwrap();
+    assert_eq!(week.total, 5400.0);
+    assert_eq!(week.session_count, 2);
+    assert_eq!(week.channel_count, 2);
+    assert_eq!(week.channels[0].channel_id, "a");
+    assert_eq!(week.active_days, 2);
+    assert_eq!(week.current_streak, 1);
+
+    let all = s.watch_report(ReportPeriod::All, now).unwrap();
+    assert_eq!(all.total, 6300.0);
+    assert_eq!(all.first_watched_at, Some(local(tz, 2026, 10, 1, 20, 0)));
+    assert_eq!(all.unit, BucketUnit::Week);
+    assert!(approx(
+        all.trend.iter().map(|b| b.seconds).sum::<f64>(),
+        6300.0,
+        1e-6
+    ));
+}
