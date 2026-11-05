@@ -107,6 +107,41 @@ function columns(values, labels) {
 const empty = (text) => `<div class="ip-empty">${esc(text)}</div>`;
 const rows = (pairs) => `<dl class="ip-kv">${pairs.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`;
 
+/** 보관함에서 지금 보는 탭(LibraryPage 가 data-lib-tab 에 적어 둔다). */
+const libraryTab = () => document.querySelector('[data-page="library"]')?.dataset.libTab || '';
+/** 시각 → 밀리초. favorites_list 의 lastWatched 는 Unix 밀리초 숫자, 다른 곳은 ISO 문자열일 수 있다. */
+const toMs = (v) => (typeof v === 'number' ? v : typeof v === 'string' && v ? Date.parse(v) : NaN);
+
+/**
+ * 보관함 정리 제안 — 개요 탭 옆 패널. 개수·최근 항목은 개요 카드가 이미 보여 주므로 겹치지 않게,
+ * 다 본 이어 보기·오래 안 본 즐겨찾기·파일이 사라진(또는 실패한) 다운로드처럼 손볼 것만 모은다. 순수 함수.
+ */
+export function tidySuggestions({ cont = [], favorites = [], downloads = { history: [] } } = {}, now = Date.now()) {
+  const DAY = 86400000;
+  const done = cont.filter((x) => x.duration > 0 && (x.position || 0) / x.duration >= 0.9);
+  const stale = favorites.filter((c) => { const t = toMs(c.lastWatched); return !Number.isFinite(t) || now - t >= 30 * DAY; });
+  const history = Array.isArray(downloads?.history) ? downloads.history : [];
+  const missing = history.filter((h) => h.completed && h.fileStatus === 'missing');
+  const failed = history.filter((h) => !h.completed);
+  return { done, stale, missing, failed, total: done.length + stale.length + missing.length + failed.length };
+}
+
+async function libraryTidy() {
+  const [cont, favorites, downloads] = await Promise.all([
+    safe(api.vodContinueList(40), []), safe(api.favoritesList(), []), safe(api.downloadList(), { jobs: [], history: [] })]);
+  const t = tidySuggestions({ cont, favorites, downloads });
+  const list = (items, name, value) => rows(items.slice(0, 4).map((x) => [name(x), value(x)]))
+    + (items.length > 4 ? `<small class="ip-more">외 ${items.length - 4}개</small>` : '');
+  const ago = (c) => { const d = toMs(c.lastWatched); return Number.isFinite(d) ? `${Math.floor((Date.now() - d) / 86400000)}일 전` : '안 봄'; };
+  return header('보관함 정리', t.total ? `손볼 만한 항목 ${t.total}개` : '정리할 항목이 없어요')
+    + (t.total ? '' : empty('다 본 영상·오래 안 본 채널·사라진 파일이 생기면 여기서 알려 드려요'))
+    + section('clock', '다 본 이어 보기', t.done.length ? list(t.done, (x) => x.title || '제목 없음', (x) => `${Math.round(((x.position || 0) / x.duration) * 100)}%`) : '')
+    + section('heart', '30일 넘게 안 본 즐겨찾기', t.stale.length ? list(t.stale, (c) => c.channelName || c.channelId, ago) : '')
+    + section('box', '확인이 필요한 다운로드', t.missing.length || t.failed.length ? rows([
+      ...(t.missing.length ? [['파일 없음', `${t.missing.length}개`]] : []),
+      ...(t.failed.length ? [['실패', `${t.failed.length}개`]] : [])]) : '');
+}
+
 // ── 메뉴별 내용 ─────────────────────────────
 const popular = () => cached('popular', () => api.popularLives(50, false));
 const following = (isLoggedIn) => (isLoggedIn() ? cached('following', () => api.followingLives(false)) : Promise.resolve(null));
@@ -184,7 +219,8 @@ const PROVIDERS = {
       + section('chat', '채팅 속도', bars(rows2.filter((r) => r.rate > 0).map((r) => ({ name: r.name, value: r.rate })), (v) => `${v}/분`))
       + section('spark', '함께 보면 좋은 팔로잉', liveRows(suggest, (l) => `${l.categoryName || '기타'} · ${l.viewerCountText}명`));
   },
-  async library() {
+  async library(ctx) {
+    if (libraryTab() === 'overview') return libraryTidy(ctx);
     const [cont, later, marks, dl, recent] = await Promise.all([
       safe(api.vodContinueList(50), []), safe(api.vodWatchLaterList(), []), safe(api.bookmarksList(), []),
       safe(api.downloadList(), { jobs: [], history: [] }), safe(api.recentChannels(5), [])]);
@@ -213,6 +249,7 @@ const PROVIDERS = {
 };
 
 // ── 패널 ─────────────────────────────
+const SKELETON = '<div class="ip-skeleton"><span></span><span></span><span></span><span></span><i></i><i></i><i></i></div>';
 export class InsightPanel {
   constructor(content, { isLoggedIn }) {
     this.isLoggedIn = isLoggedIn;
@@ -233,6 +270,13 @@ export class InsightPanel {
     this.el.querySelector('.ip-toggle').addEventListener('click', () => this.setCollapsed(true));
     this.reopen.addEventListener('click', () => this.setCollapsed(false));
     this.el.addEventListener('click', (e) => this.onClick(e));
+    // 보관함은 개요와 다른 탭의 내용이 달라, 그 사이를 오갈 때만 다시 그린다(탭마다 깜빡이지 않게).
+    window.addEventListener('cview:insights-context', () => {
+      const key = this.contextKey();
+      if (key === this.key) return;
+      this.key = key;
+      if (this.visible && !this.collapsed) { this.body.innerHTML = SKELETON; this.load(); }
+    });
     let collapsed = false;
     try { collapsed = localStorage.getItem(COLLAPSE_KEY) === '1'; } catch { /* 기본 펼침 */ }
     this.collapsed = collapsed;
@@ -259,12 +303,19 @@ export class InsightPanel {
     this.reopen.hidden = !show || !this.collapsed;
   }
 
+  /** 같은 메뉴 안에서도 내용이 달라지는 경우(보관함 개요)를 가르는 열쇠. */
+  contextKey() {
+    return this.route === 'library' ? `library:${libraryTab() === 'overview' ? 'overview' : 'tab'}` : this.route;
+  }
+
   show(route) {
-    const changed = route !== this.route;
     this.route = route;
+    const key = this.contextKey();
+    const changed = key !== this.key;
+    this.key = key;
     this.apply();
     if (this.visible && !this.collapsed && changed) {
-      this.body.innerHTML = '<div class="ip-skeleton"><span></span><span></span><span></span><span></span><i></i><i></i><i></i></div>';
+      this.body.innerHTML = SKELETON;
       this.load();
     }
   }
