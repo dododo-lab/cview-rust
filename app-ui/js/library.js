@@ -1,6 +1,6 @@
 // 보관함 — 원본 LibraryHubView / PopularClipsView / VODBrowseView / RecentFavoritesView / 북마크 목록.
 // VOD-04 인기 클립(기간·정렬), VOD-01 팔로우 채널 다시보기·이어 보기·나중에 보기, NAV-08 허브,
-// NAV-09 즐겨찾기·최근 시청(DB, 지우기), PLY-17 북마크 목록·삭제.
+// NAV-09 즐겨찾기·최근 시청(DB, 지우기), PLY-17 북마크 목록·삭제. 첫 탭 "개요"는 나머지 탭 전부를 카드로 요약한다.
 import { api } from './api.js';
 import { esc, safeUrl, toast, imageSrc } from './dom.js';
 import { emptyState, loadingState, errorState } from './cards.js';
@@ -9,10 +9,12 @@ import { continueCard } from './media.js';
 import { mountDownloads } from './downloads.js';
 import { syncTabs, bindTabKeys } from './a11y.js';
 import { refreshVeiled } from './refresh-veil.js';
+import { summarizeSection, overviewCard, RECENT_LIMIT } from './library-overview.js';
 
 export const libraryIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h4v16H4zM10 4h4v16h-4zM16.2 4.4l3.8-1 4 15.5-3.8 1z" transform="scale(.92) translate(1 1)"/></svg>';
 
 const TABS = [
+  ['overview', '개요'],
   ['clips', '인기 클립'],
   ['vods', '팔로우 다시보기'],
   ['continue', '이어 보기'],
@@ -24,6 +26,11 @@ const TABS = [
 ];
 const CLIP_FILTERS = [['WITHIN_1_DAY', '오늘'], ['WITHIN_7_DAYS', '7일'], ['WITHIN_30_DAYS', '30일']];
 const CLIP_ORDERS = [['POPULAR', '인기순'], ['RECOMMEND', '추천순']];
+const TAB_IDS = new Set(TABS.map(([id]) => id));
+/** 개요 카드 순서 — 탭 순서 그대로(개요 자신은 빼고). */
+const SECTIONS = TABS.filter(([id]) => id !== 'overview');
+/** 네트워크로 받는 탭은 잠깐 기억해 개요 → 탭(또는 그 반대)으로 옮겨 갈 때 다시 받지 않는다. */
+const NET_CACHE_MS = 60_000;
 
 function channelRowSaved(c) {
   const avatar = safeUrl(c.channelImageUrl);
@@ -54,7 +61,7 @@ export class LibraryPage {
     this.isLoggedIn = isLoggedIn;
     this.onOpenChannel = onOpenChannel;
     this.acceptsParams = true;
-    this.tab = 'clips';
+    this.tab = 'overview';
     this.clipFilter = 'WITHIN_7_DAYS';
     this.clipOrder = 'POPULAR';
     this.root = document.createElement('section');
@@ -74,15 +81,73 @@ export class LibraryPage {
     this.filters = this.root.querySelector('.lib-filters');
     this.tabs = this.root.querySelector('.lib-tabs');
     this.seq = 0;
+    this.cache = new Map();
     bindTabKeys(this.tabs);
     this.root.addEventListener('click', (e) => this.onClick(e));
   }
 
   show(params = {}) {
-    if (params.tab) this.tab = params.tab;
+    if (params.tab) this.tab = TAB_IDS.has(params.tab) ? params.tab : 'overview';
     syncTabs(this.tabs, this.tab, this.body, 'lib');
-    // 직접 새로고침(덮개 아래)이면 보던 내용을 흐리게 둔 채 바꾼다.
-    return this.load({ keep: refreshVeiled(this.root) });
+    // 직접 새로고침(덮개 아래)이면 보던 내용을 흐리게 둔 채 바꾼다. 이때는 기억해 둔 목록도 버린다.
+    const keep = refreshVeiled(this.root);
+    if (keep) this.cache.clear();
+    return this.load({ keep });
+  }
+
+  /** 오류 화면의 "다시 시도" — 경로 매개변수가 아니라 지금 보는 탭을 다시 불러온다. */
+  retry() {
+    this.cache.clear();
+    return this.load();
+  }
+
+  /** 탭 하나의 데이터. 인기 클립·팔로우 다시보기는 잠깐 기억해 둔다(같은 인자일 때만). */
+  fetchTab(tab) {
+    const net = {
+      clips: [`clips:${this.clipFilter}:${this.clipOrder}`, () => api.popularClips(this.clipFilter, this.clipOrder)],
+      vods: ['vods', () => api.followingVods(24, 3)],
+    }[tab];
+    if (net) {
+      const [key, run] = net;
+      const hit = this.cache.get(key);
+      if (hit && Date.now() - hit.at < NET_CACHE_MS) return hit.promise;
+      const promise = run();
+      this.cache.set(key, { at: Date.now(), promise });
+      promise.catch(() => { if (this.cache.get(key)?.promise === promise) this.cache.delete(key); });
+      return promise;
+    }
+    switch (tab) {
+      case 'continue': return api.vodContinueList(40);
+      case 'later': return api.vodWatchLaterList();
+      case 'favorites': return api.favoritesList();
+      case 'recent': return api.recentChannels(RECENT_LIMIT);
+      case 'bookmarks': return api.bookmarksList();
+      case 'downloads': return api.downloadList();
+      default: return Promise.resolve([]);
+    }
+  }
+
+  /** 개요 — 카드 틀을 먼저 그리고, 탭마다 받는 대로 제 카드만 채운다(느린 탭이 다른 카드를 붙잡지 않게). */
+  renderOverview(seq, { keep = false, only = null } = {}) {
+    const sections = only ? SECTIONS.filter(([id]) => id === only) : SECTIONS;
+    if (!only && !(keep && this.body.querySelector('.lib-ov-grid'))) {
+      this.body.innerHTML = `<div class="lib-ov-grid">${SECTIONS.map(([id, label]) => overviewCard(id, label)).join('')}</div>`;
+    }
+    const put = (id, label, state) => {
+      if (seq !== this.seq) return;
+      const card = this.body.querySelector(`.lib-ov-card[data-ov-section="${id}"]`);
+      if (card) card.outerHTML = overviewCard(id, label, state);
+    };
+    return Promise.all(sections.map(async ([id, label]) => {
+      if (only) put(id, label, { status: 'loading' });
+      if (id === 'vods' && !this.isLoggedIn()) { put(id, label, { status: 'login' }); return; }
+      try {
+        const data = await this.fetchTab(id);
+        put(id, label, { status: 'ok', summary: summarizeSection(id, data) });
+      } catch (error) {
+        put(id, label, { status: 'error', error });
+      }
+    }));
   }
 
   renderFilters() {
@@ -100,6 +165,7 @@ export class LibraryPage {
     const seq = ++this.seq;
     if (this.unmountDownloads) { this.unmountDownloads(); this.unmountDownloads = null; }
     this.renderFilters();
+    if (this.tab === 'overview') { await this.renderOverview(seq, { keep }); return; }
     if (!keep) this.body.innerHTML = loadingState();
     const needsLogin = this.tab === 'vods';
     if (needsLogin && !this.isLoggedIn()) {
@@ -110,32 +176,32 @@ export class LibraryPage {
     try {
       switch (this.tab) {
         case 'clips': {
-          const list = await api.popularClips(this.clipFilter, this.clipOrder);
+          const list = await this.fetchTab('clips');
           html = list.length ? `<div class="grid clip-grid">${list.map(clipCard).join('')}</div>` : emptyState('클립이 없습니다');
           break;
         }
         case 'vods': {
-          const list = await api.followingVods(24, 3);
+          const list = await this.fetchTab('vods');
           html = list.length ? `<div class="grid">${list.map(vodCard).join('')}</div>` : emptyState('최근 다시보기가 없습니다');
           break;
         }
         case 'continue': {
-          const list = await api.vodContinueList(40);
+          const list = await this.fetchTab('continue');
           html = list.length ? `<div class="grid">${list.map(continueCard).join('')}</div>` : emptyState('이어 볼 다시보기가 없습니다', '다시보기를 보다 멈추면 여기에 남습니다');
           break;
         }
         case 'later': {
-          const list = await api.vodWatchLaterList();
+          const list = await this.fetchTab('later');
           html = list.length ? `<div class="grid">${list.map(continueCard).join('')}</div>` : emptyState('나중에 볼 다시보기가 없습니다', '다시보기 화면의 "나중에 보기"로 담을 수 있어요');
           break;
         }
         case 'favorites': {
-          const list = await api.favoritesList();
+          const list = await this.fetchTab('favorites');
           html = list.length ? `<div class="recent-row">${list.map(channelRowSaved).join('')}</div>` : emptyState('즐겨찾기한 채널이 없습니다', '채널 화면의 ☆ 버튼으로 추가할 수 있어요');
           break;
         }
         case 'recent': {
-          const list = await api.recentChannels(60);
+          const list = await this.fetchTab('recent');
           html = list.length ? `<div class="recent-row">${list.map(channelRowSaved).join('')}</div>` : emptyState('최근 시청 기록이 없습니다');
           break;
         }
@@ -150,7 +216,7 @@ export class LibraryPage {
           return;
         }
         case 'bookmarks': {
-          const list = await api.bookmarksList();
+          const list = await this.fetchTab('bookmarks');
           html = list.length ? `<div class="bookmark-list">${list.map(bookmarkRow).join('')}</div>` : emptyState('북마크가 없습니다', '시청 중 북마크 버튼(또는 B 키)으로 지금 장면을 남길 수 있어요');
           break;
         }
@@ -163,6 +229,16 @@ export class LibraryPage {
   }
 
   async onClick(e) {
+    const again = e.target.closest('[data-ov-retry]');
+    if (again) { this.renderOverview(this.seq, { only: again.dataset.ovRetry }); return; }
+    // 개요 카드 — 안의 다른 단추(로그인 등)가 아니면 카드 어디를 눌러도 그 탭으로
+    const go = e.target.closest('[data-ov-go]');
+    if (go && !e.target.closest('button:not([data-ov-go]), a')) {
+      this.tab = go.dataset.ovGo;
+      this.show();
+      this.tabs.querySelector(`[data-tab="${this.tab}"]`)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+      return;
+    }
     const tab = e.target.closest('[data-tab]');
     if (tab) {
       this.tab = tab.dataset.tab;
