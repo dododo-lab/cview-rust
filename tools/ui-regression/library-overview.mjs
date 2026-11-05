@@ -136,6 +136,13 @@ const settled = (page) => page.waitForFunction(() => !document.querySelector('[d
     await page.waitForSelector('[data-page="library"] .clip-grid');
     assert.equal(await page.getAttribute('[data-page="library"] [data-tab="clips"]', 'aria-selected'), 'true');
     assert.equal(await calls(page, 'popular_clips'), before, '개요에서 받은 클립을 다시 받음');
+    // 탭 안의 내용(클립 카드·필터)은 제 할 일을 한다 — 루트 속성이 탭 단추로 잡히면 안 된다
+    await page.evaluate(() => { window.__opened = null; window.addEventListener('cview:open-clip', (e) => { window.__opened = e.detail.clipUid; }, { once: true }); });
+    await page.click('[data-page="library"] .clip-grid [data-clip-uid]');
+    assert.equal(await page.evaluate(() => window.__opened), 'c0', '클립 카드를 눌러도 열리지 않음');
+    await go(page, 'library', { tab: 'clips' });
+    await page.click('[data-page="library"] [data-clip-filter="WITHIN_30_DAYS"]');
+    await page.waitForFunction(() => window.__mock.calls.some((c) => c.cmd === 'popular_clips' && c.args?.filter === 'WITHIN_30_DAYS'));
     await page.click('[data-page="library"] [data-tab="overview"]');
     await settled(page);
     await page.focus(`${card('bookmarks')} .lib-ov-title`);
@@ -208,7 +215,8 @@ const settled = (page) => page.waitForFunction(() => !document.querySelector('[d
   await check('L14 insight panel: tidy suggestions on overview, summary on other tabs', async () => {
     await page.evaluate(() => {
       window.__mock.handlers.vod_continue_list = () => [{ videoNo: 1, title: '거의 다 본 영상', channelName: '채널1', duration: 1000, position: 950 }, { videoNo: 2, title: '반쯤', channelName: '채널2', duration: 1200, position: 600 }];
-      window.__mock.handlers.favorites_list = () => [{ channelId: 'ch2', channelName: '오래된 즐찾', isFavorite: true, lastWatched: null }];
+      // favorites_list 의 lastWatched 는 Unix 밀리초 숫자 — 최근에 본 즐겨찾기는 정리 대상이 아니다
+      window.__mock.handlers.favorites_list = () => [{ channelId: 'ch2', channelName: '오래된 즐찾', isFavorite: true, lastWatched: null }, { channelId: 'ch3', channelName: '어제 본 즐찾', isFavorite: true, lastWatched: Date.now() - 86400000 }, { channelId: 'ch4', channelName: '40일 전 즐찾', isFavorite: true, lastWatched: Date.now() - 40 * 86400000 }];
     });
     await go(page, 'library', { tab: 'later' });
     await page.waitForFunction(() => /보관함 인사이트/.test(document.querySelector('.insight-panel .ip-head')?.textContent || ''));
@@ -218,6 +226,8 @@ const settled = (page) => page.waitForFunction(() => !document.querySelector('[d
     const t = await text(page, '.insight-panel .ip-scroll');
     assert.match(t, /다 본 이어 보기.*거의 다 본 영상 ?95%/);
     assert.doesNotMatch(t, /반쯤/);
+    assert.doesNotMatch(t, /어제 본 즐찾/);
+    assert.match(t, /40일 전 즐찾 ?40일 전/);
     assert.match(t, /30일 넘게 안 본 즐겨찾기.*오래된 즐찾 ?안 봄/);
     assert.equal(await page.$('.insight-panel .ip-tiles'), null, '개요 옆 패널에 개수 타일이 겹침');
     await go(page, 'library', { tab: 'bookmarks' });

@@ -90,7 +90,7 @@ export class LibraryPage {
   show(params = {}) {
     if (params.tab) this.tab = TAB_IDS.has(params.tab) ? params.tab : 'overview';
     syncTabs(this.tabs, this.tab, this.body, 'lib');
-    this.root.dataset.tab = this.tab;
+    this.root.dataset.libTab = this.tab; // data-tab 이면 onClick 의 closest('[data-tab]') 가 루트까지 잡는다
     // 오른쪽 인사이트 패널은 개요와 다른 탭에서 보여 주는 내용이 다르다(개요에서는 요약을 겹치지 않고 정리할 것만).
     window.dispatchEvent(new CustomEvent('cview:insights-context', { detail: { route: 'library', tab: this.tab } }));
     // 직접 새로고침(덮개 아래)이면 보던 내용을 흐리게 둔 채 바꾼다. 이때는 기억해 둔 목록도 버린다.
@@ -241,7 +241,7 @@ export class LibraryPage {
       this.tabs.querySelector(`[data-tab="${this.tab}"]`)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
       return;
     }
-    const tab = e.target.closest('[data-tab]');
+    const tab = e.target.closest('.lib-tabs [data-tab]');
     if (tab) {
       this.tab = tab.dataset.tab;
       this.show();
