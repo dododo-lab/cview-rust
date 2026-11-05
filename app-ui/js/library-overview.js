@@ -33,11 +33,11 @@ export function spanText(sec) {
 
 /**
  * 탭 데이터 → 카드 요약. 순수 함수.
- * 돌려주는 값: { count, countText, unit, metrics: [[이름, 값]], items: [{ thumb, shape, title, meta }], empty }
+ * 돌려주는 값: { count, countText, unit, metrics: [[이름, 값]], items: [{ thumb, shape, title, meta }], empty, hint }
  */
 export function summarizeSection(tab, data, now = Date.now()) {
   const list = Array.isArray(data) ? data : [];
-  const base = { count: list.length, countText: String(list.length), unit: '개', metrics: [], items: [], empty: '' };
+  const base = { count: list.length, countText: String(list.length), unit: '개', metrics: [], items: [], empty: '', hint: '' };
   switch (tab) {
     case 'clips': {
       const top = list.reduce((m, c) => Math.max(m, Number(c.readCount) || 0), 0);
@@ -48,7 +48,7 @@ export function summarizeSection(tab, data, now = Date.now()) {
           thumb: c.thumbnailImageUrl, shape: 'clip', title: c.clipTitle || '제목 없음',
           meta: `${c.channel?.channelName ? `${c.channel.channelName} · ` : ''}조회 ${compactCount(c.readCount || 0)}`,
         })),
-        empty: '클립이 없습니다',
+        empty: '클립이 없습니다', hint: '기간을 바꾸면 다른 클립을 볼 수 있어요',
       };
     }
     case 'vods': {
@@ -61,7 +61,7 @@ export function summarizeSection(tab, data, now = Date.now()) {
           thumb: v.thumbnailImageUrl || v.videoImageUrl, shape: 'wide', title: v.videoTitle || '제목 없음',
           meta: `${v.channel?.channelName ? `${v.channel.channelName} · ` : ''}${when(v.publishDate, now)}`,
         })),
-        empty: '최근 다시보기가 없습니다',
+        empty: '최근 다시보기가 없습니다', hint: '팔로우한 채널이 다시보기를 올리면 여기에 모입니다',
       };
     }
     case 'continue':
@@ -79,6 +79,7 @@ export function summarizeSection(tab, data, now = Date.now()) {
           progress: x.duration > 0 && x.position ? Math.min(100, Math.round((x.position / x.duration) * 100)) : 0,
         })),
         empty: tab === 'continue' ? '이어 볼 다시보기가 없습니다' : '나중에 볼 다시보기가 없습니다',
+        hint: tab === 'continue' ? '다시보기를 보다 멈추면 여기에 남습니다' : '다시보기 화면의 "나중에 보기"로 담을 수 있어요',
       };
     }
     case 'favorites':
@@ -100,6 +101,7 @@ export function summarizeSection(tab, data, now = Date.now()) {
           meta: Number.isFinite(toMs(c.lastWatched)) ? `${when(c.lastWatched, now)} 시청` : '아직 안 봄',
         })),
         empty: tab === 'favorites' ? '즐겨찾기한 채널이 없습니다' : '최근 시청 기록이 없습니다',
+        hint: tab === 'favorites' ? '채널 화면의 ☆ 버튼으로 추가할 수 있어요' : '라이브를 보면 채널이 여기에 남습니다',
       };
     }
     case 'bookmarks': {
@@ -111,7 +113,7 @@ export function summarizeSection(tab, data, now = Date.now()) {
           thumb: b.thumbnailUrl, shape: 'wide', title: b.liveTitle || '제목 없음',
           meta: `${b.channelName || ''} · 방송 ${formatDuration(b.liveUptime)} 지점`,
         })),
-        empty: '북마크가 없습니다',
+        empty: '북마크가 없습니다', hint: '시청 중 북마크 버튼(또는 B 키)으로 지금 장면을 남길 수 있어요',
       };
     }
     case 'downloads': {
@@ -138,12 +140,26 @@ export function summarizeSection(tab, data, now = Date.now()) {
         countText: String(done.length + active.length),
         metrics,
         items: rows.slice(0, OVERVIEW_ITEMS),
-        empty: '받은 파일이 없습니다',
+        empty: '받은 파일이 없습니다', hint: '다시보기·클립 화면의 받기 버튼으로 저장할 수 있어요',
       };
     }
     default: return base;
   }
 }
+
+const ic = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+/** 탭마다 카드 머리 아이콘. */
+export const SECTION_ICONS = {
+  clips: ic('<rect x="6" y="3" width="12" height="18" rx="3"/><path d="m10.5 9.5 4 2.5-4 2.5z"/>'),
+  vods: ic('<rect x="3" y="5" width="18" height="13" rx="3"/><path d="m10.5 9 4 2.5-4 2.5zM8 21h8"/>'),
+  continue: ic('<circle cx="12" cy="12" r="8.5"/><path d="m10.5 9 4 3-4 3z"/>'),
+  later: ic('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
+  favorites: ic('<path d="m12 3.8 2.5 5.1 5.6.8-4 3.9.9 5.6-5-2.6-5 2.6.9-5.6-4-3.9 5.6-.8z"/>'),
+  recent: ic('<path d="M3.5 12a8.5 8.5 0 1 0 2.5-6M3.5 4.5V8H7"/><path d="M12 8v4.2l2.8 1.8"/>'),
+  bookmarks: ic('<path d="M7 3.5h10v17l-5-3.6-5 3.6z"/>'),
+  downloads: ic('<path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14"/>'),
+};
+const CHEVRON = '<svg class="lib-ov-chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 function itemRow(it) {
   const thumb = safeUrl(it.thumb);
@@ -151,13 +167,16 @@ function itemRow(it) {
   const media = it.shape === 'kind'
     ? `<span class="lib-ov-kind">${esc(it.kind)}</span>`
     : `<span class="lib-ov-thumb ${it.shape}">${thumb ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(thumb, kind))}" alt="" referrerpolicy="no-referrer">` : ''}${it.progress ? `<i style="width:${it.progress}%"></i>` : ''}</span>`;
-  return `<li class="lib-ov-item">${media}<span class="lib-ov-item-text"><span class="ellipsis">${esc(it.title || '')}</span><span class="ellipsis">${esc(it.meta || '')}</span></span></li>`;
+  return `<li class="lib-ov-item">${media}<span class="lib-ov-item-text"><span class="lib-ov-item-title ellipsis" title="${esc(it.title || '')}">${esc(it.title || '')}</span><span class="lib-ov-item-meta ellipsis">${esc(it.meta || '')}</span></span></li>`;
 }
 
-const SKELETON = `<ul class="lib-ov-items" aria-hidden="true">${'<li class="lib-ov-item"><span class="lib-ov-thumb wide sk"></span><span class="lib-ov-item-text"><span class="sk line"></span><span class="sk line short"></span></span></li>'.repeat(2)}</ul>`;
+const SKELETON = `<div class="lib-ov-metrics sk-row" aria-hidden="true"><span class="sk"></span><span class="sk"></span></div>`
+  + `<ul class="lib-ov-items" aria-hidden="true">${'<li class="lib-ov-item"><span class="lib-ov-thumb wide sk"></span><span class="lib-ov-item-text"><span class="sk line"></span><span class="sk line short"></span></span></li>'.repeat(OVERVIEW_ITEMS)}</ul>`;
 
 /**
  * 개요 카드 하나. state.status: 'loading' | 'ok' | 'error' | 'login'.
+ * 모양은 통계 카드(stats-card)와 같은 틀 — 머리(아이콘 · 제목 › · 개수), 핵심 수치 두 칸(kpi), 최근 항목 세 줄.
+ * 항목 자리는 늘 세 줄만큼 잡아 같은 줄 카드 높이가 맞고, 비었을 때는 그 자리 가운데에 안내를 둔다.
  * 카드 전체(빈 곳)를 누르거나 제목 단추를 누르면 data-ov-go 의 탭으로 간다. 안의 다른 단추(다시 시도·로그인)는 제 할 일을 한다.
  */
 export function overviewCard(tab, label, state = { status: 'loading' }) {
@@ -165,11 +184,13 @@ export function overviewCard(tab, label, state = { status: 'loading' }) {
   const s = status === 'ok' ? state.summary : null;
   let count = '<span class="lib-ov-count muted" aria-hidden="true">—</span>';
   if (s) count = `<span class="lib-ov-count${s.count ? '' : ' zero'}"><strong>${esc(s.countText)}</strong>${esc(s.unit)}</span>`;
+  const icon = SECTION_ICONS[tab] || '';
+  const note = (cls, title, sub, action = '') => `<div class="lib-ov-note${cls}"${cls === ' error' ? ' role="alert"' : ''}><span class="lib-ov-note-icon">${icon}</span><span class="lib-ov-note-text"><strong>${esc(title)}</strong>${sub ? `<small>${esc(sub)}</small>` : ''}</span>${action}</div>`;
   let body;
   if (status === 'loading') body = SKELETON;
-  else if (status === 'login') body = '<div class="lib-ov-note"><span>로그인하면 팔로우한 채널의 다시보기를 모아 보여 드립니다</span><button class="btn primary" data-action="login">로그인</button></div>';
-  else if (status === 'error') body = `<div class="lib-ov-note error" role="alert"><span>${esc(friendlyError(state.error))}</span><button class="btn" data-ov-retry="${esc(tab)}">다시 시도</button></div>`;
-  else if (!s.count && !s.items.length) body = `<div class="lib-ov-note"><span>${esc(s.empty)}</span></div>`;
+  else if (status === 'login') body = note('', '로그인이 필요합니다', '로그인하면 팔로우한 채널의 다시보기를 모아 보여 드립니다', '<button class="btn primary" data-action="login">로그인</button>');
+  else if (status === 'error') body = note(' error', friendlyError(state.error), '', `<button class="btn" data-ov-retry="${esc(tab)}">다시 시도</button>`);
+  else if (!s.count && !s.items.length) body = note(' empty', s.empty, s.hint);
   else {
     body = `${s.metrics.length ? `<dl class="lib-ov-metrics">${s.metrics.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>` : ''}`
       + `<ul class="lib-ov-items">${s.items.map(itemRow).join('')}</ul>`;
@@ -177,9 +198,25 @@ export function overviewCard(tab, label, state = { status: 'loading' }) {
   return `
     <article class="lib-ov-card" data-ov-go="${esc(tab)}" data-ov-section="${esc(tab)}" data-status="${esc(status)}"${status === 'loading' ? ' aria-busy="true"' : ''}>
       <header class="lib-ov-head">
-        <button class="lib-ov-title" data-ov-go="${esc(tab)}" aria-label="${esc(label)} 탭 열기"><span>${esc(label)}</span><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <span class="lib-ov-icon">${icon}</span>
+        <button class="lib-ov-title" data-ov-go="${esc(tab)}" aria-label="${esc(label)} 탭 열기"><span>${esc(label)}</span>${CHEVRON}</button>
         ${count}
       </header>
       ${body}
     </article>`;
+}
+
+/** 개요 묶음 — 탭 순서 그대로 넷씩 나눠 홈·검색처럼 구역 제목 아래 카드 격자로 둔다. */
+export const OVERVIEW_GROUPS = [
+  ['media', '영상', '클립 · 다시보기 · 보다 만 영상', ['clips', 'vods', 'continue', 'later']],
+  ['saved', '채널과 저장한 것', '즐겨찾기 · 최근 시청 · 북마크 · 다운로드', ['favorites', 'recent', 'bookmarks', 'downloads']],
+];
+
+/** 개요 화면 틀(모든 카드를 로딩 상태로). labels: Map(탭 → 이름). */
+export function overviewLayout(labels) {
+  return `<div class="lib-ov">${OVERVIEW_GROUPS.map(([id, title, sub, tabs]) => `
+    <section class="lib-ov-group" data-ov-group="${esc(id)}" aria-label="${esc(title)}">
+      <div class="section-head"><div class="section-titles"><h2 class="section-title">${esc(title)}</h2><span class="section-sub">${esc(sub)}</span></div></div>
+      <div class="lib-ov-grid">${tabs.map((t) => overviewCard(t, labels.get(t) || t)).join('')}</div>
+    </section>`).join('')}</div>`;
 }

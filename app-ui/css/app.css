@@ -1427,48 +1427,74 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .bookmark-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-caption); }
 .bookmark-text span { color: var(--text-tertiary); font-size: var(--fs-footnote); }
 
-/* 보관함 개요 — 탭마다 카드 하나(library-overview.js). 통계 화면 .stats-card 와 같은 면·테두리.
-   좁은 창·멀티라이브 옆 화면에서도 한 줄 한 장으로 접히도록 최소 너비를 100% 로 묶는다. */
-.lib-ov-grid { display: grid; gap: var(--sp-md); grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); align-items: start; }
+/* 보관함 개요(library-overview.js) — 홈·검색처럼 구역 제목(.section-head) 아래 카드 격자, 카드는 통계 .stats-card 와 같은 면·테두리.
+   묶음마다 카드가 넷이라 열은 1 · 2 · 4 만 쓴다(3열이면 한 장이 남는다). 열 수는 창이 아니라 개요 폭으로 정한다(인사이트 패널·멀티라이브 옆 화면). */
+.lib-ov { container: libov / inline-size; display: flex; flex-direction: column; gap: var(--sp-xxl); padding: var(--sp-md) 0 var(--sp-xxl); }
+.lib-ov-group { min-width: 0; }
+.lib-ov-group .section-head { margin-bottom: var(--sp-md); }
+.lib-ov-grid { display: grid; gap: var(--sp-md); grid-template-columns: minmax(0, 1fr); align-items: stretch; }
+@container libov (min-width: 620px) { .lib-ov-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container libov (min-width: 1240px) { .lib-ov-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-lg); } }
 .lib-ov-card {
-  display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px 16px; cursor: pointer;
+  --ov-thumb-h: 54px; --ov-row-gap: 10px;
+  display: flex; flex-direction: column; gap: 14px; min-width: 0; padding: 16px 18px; cursor: pointer;
   border-radius: var(--radius-lg); background: var(--surface-elevated); border: 1px solid var(--border-subtle); box-shadow: var(--shadow-sm);
-  transition: border-color .15s ease, background-color .15s ease;
+  transition: border-color .15s ease, background-color .15s ease, transform .15s ease;
 }
 .lib-ov-card:hover { border-color: var(--border); background: color-mix(in srgb, var(--surface-elevated) 92%, var(--text-primary)); }
 .lib-ov-card:focus-within { border-color: var(--primary-ring); }
-.lib-ov-head { display: flex; align-items: center; gap: var(--sp-sm); min-width: 0; }
+/* 머리 — 아이콘 칩(인사이트 구역 아이콘과 같은 꼴) · 제목 › · 오른쪽 큰 개수(kpi-value 와 같은 크기) */
+.lib-ov-head { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 30px; }
+.lib-ov-icon { flex: none; width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: var(--primary-text); background: var(--primary-dim); }
+.lib-ov-icon svg { width: 15px; height: 15px; }
 .lib-ov-title {
-  display: inline-flex; align-items: center; gap: 4px; min-width: 0; padding: 2px 4px; margin: -2px -4px;
-  border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-primary); font: inherit; font-size: var(--fs-subhead); font-weight: 700; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 2px; min-width: 0; padding: 2px 4px; margin: -2px -4px; border: 0; border-radius: 6px; background: none;
+  color: var(--text-primary); font-size: var(--fs-subhead); font-weight: 700; letter-spacing: -0.2px; cursor: pointer;
 }
 .lib-ov-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lib-ov-title svg { width: 14px; height: 14px; flex: none; color: var(--text-tertiary); transition: transform .15s ease, color .15s ease; }
-.lib-ov-card:hover .lib-ov-title svg { color: var(--primary-text); transform: translateX(2px); }
+.lib-ov-chev { width: 14px; height: 14px; flex: none; color: var(--text-tertiary); transition: transform .15s ease, color .15s ease; }
+.lib-ov-card:hover .lib-ov-chev { color: var(--primary-text); transform: translateX(2px); }
 .lib-ov-title:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .lib-ov-count { margin-left: auto; flex: none; font-size: var(--fs-caption); color: var(--text-tertiary); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .lib-ov-count strong { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); margin-right: 2px; }
 .lib-ov-count.zero strong { color: var(--text-tertiary); }
-.lib-ov-metrics { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
-.lib-ov-metrics > div { display: inline-flex; gap: 6px; align-items: baseline; min-width: 0; max-width: 100%; padding: 3px 8px; border-radius: 999px; background: var(--surface-overlay); font-size: var(--fs-footnote); }
-.lib-ov-metrics dt { color: var(--text-tertiary); white-space: nowrap; }
-.lib-ov-metrics dd { margin: 0; color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lib-ov-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.lib-ov-item { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.lib-ov-thumb { position: relative; flex: none; overflow: hidden; background: var(--surface-overlay); border-radius: 6px; }
-.lib-ov-thumb.wide { width: 64px; aspect-ratio: 16 / 9; }
-.lib-ov-thumb.clip { width: 27px; height: 36px; }
-.lib-ov-thumb.avatar { width: 32px; height: 32px; border-radius: 50%; }
+/* 핵심 수치 두 칸 — 통계 KPI 처럼 이름 위 · 값 아래 */
+.lib-ov-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; margin: 0; border-radius: 12px; overflow: hidden; background: var(--border-subtle); }
+.lib-ov-metrics > div, .lib-ov-metrics.sk-row > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 8px 12px; background: var(--surface-overlay); }
+.lib-ov-metrics.sk-row { background: none; gap: 8px; }
+.lib-ov-metrics.sk-row > span { height: 50px; border-radius: 12px; padding: 0; }
+.lib-ov-metrics dt { color: var(--text-tertiary); font-size: var(--fs-footnote); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lib-ov-metrics dd { margin: 0; color: var(--text-primary); font-size: 15px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 최근 항목 — 늘 세 줄 자리를 잡아(나머지는 비움) 같은 줄 카드의 높이·줄 위치가 맞는다 */
+.lib-ov-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--ov-row-gap); min-height: calc(3 * var(--ov-thumb-h) + 2 * var(--ov-row-gap)); }
+.lib-ov-item { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: var(--ov-thumb-h); }
+.lib-ov-thumb { position: relative; flex: none; overflow: hidden; background: var(--surface-overlay); border-radius: var(--radius-sm, 8px); }
+.lib-ov-thumb.wide { width: calc(var(--ov-thumb-h) * 16 / 9); height: var(--ov-thumb-h); }
+.lib-ov-thumb.clip { width: calc(var(--ov-thumb-h) * 9 / 16); height: var(--ov-thumb-h); }
+.lib-ov-thumb.avatar { width: 42px; height: 42px; border-radius: 50%; }
 .lib-ov-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .lib-ov-thumb i { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--live); }
-.lib-ov-kind { flex: none; min-width: 40px; padding: 3px 6px; border-radius: 6px; background: var(--surface-overlay); color: var(--text-secondary); font-size: var(--fs-micro); font-weight: 700; text-align: center; }
-.lib-ov-item-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: var(--fs-caption); color: var(--text-primary); }
-.lib-ov-item-text > span + span { color: var(--text-tertiary); font-size: var(--fs-footnote); }
-.lib-ov-item-text .sk.line { display: block; height: 10px; border-radius: 5px; width: 80%; margin: 2px 0; }
-.lib-ov-item-text .sk.line.short { width: 45%; }
-.lib-ov-note { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-sm); padding: 6px 0 2px; color: var(--text-tertiary); font-size: var(--fs-caption); }
-.lib-ov-note > span { flex: 1 1 160px; min-width: 0; }
-.lib-ov-note.error > span { color: var(--error); }
+.lib-ov-kind { flex: none; display: grid; place-items: center; width: calc(var(--ov-thumb-h) * 16 / 9); height: var(--ov-thumb-h); border-radius: var(--radius-sm, 8px); background: var(--surface-overlay); color: var(--text-secondary); font-size: var(--fs-footnote); font-weight: 700; }
+.lib-ov-item-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.lib-ov-item-title { font-size: var(--fs-caption); font-weight: 600; color: var(--text-primary); }
+.lib-ov-item-meta { font-size: var(--fs-footnote); color: var(--text-tertiary); }
+.lib-ov-item-text .sk.line { display: block; height: 11px; border-radius: 5px; width: 82%; }
+.lib-ov-item-text .sk.line.short { width: 48%; }
+/* 빈 · 오류 · 로그인 — 수치와 항목 자리를 합친 높이 가운데에 아이콘 · 안내 · 단추 */
+.lib-ov-note {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center;
+  min-height: calc(3 * var(--ov-thumb-h) + 2 * var(--ov-row-gap) + 64px); padding: 12px; border-radius: 12px; border: 1px dashed var(--border-subtle);
+}
+.lib-ov-note-icon { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; color: var(--text-tertiary); background: var(--surface-overlay); }
+.lib-ov-note-icon svg { width: 18px; height: 18px; }
+.lib-ov-note-text { display: flex; flex-direction: column; gap: 3px; max-width: 260px; word-break: keep-all; overflow-wrap: anywhere; }
+.lib-ov-note-text strong { font-size: var(--fs-caption); font-weight: 600; color: var(--text-secondary); }
+.lib-ov-note-text small { font-size: var(--fs-footnote); color: var(--text-tertiary); line-height: 1.4; }
+.lib-ov-note.error { border-color: color-mix(in srgb, var(--error) 35%, transparent); }
+.lib-ov-note.error .lib-ov-note-icon { color: var(--error); background: color-mix(in srgb, var(--error) 12%, transparent); }
+.lib-ov-note.error .lib-ov-note-text strong { color: var(--error); }
+/* 아주 좁은 개요(멀티라이브 옆 등) — 썸네일을 줄인다 */
+@container libov (max-width: 380px) { .lib-ov-card { --ov-thumb-h: 44px; padding: 14px; } }
 
 .clip-embed { width: 100%; height: 100%; border: 0; display: block; background: #000; }
 
@@ -2753,7 +2779,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .ip-kv { margin: 0; display: flex; flex-direction: column; gap: 6px; }
 .ip-kv div { display: flex; justify-content: space-between; gap: 10px; font-size: var(--fs-footnote); }
 .ip-kv dt { color: var(--text-tertiary); }
-.ip-kv dd { margin: 0; font-weight: 600; text-align: right; }
+.ip-kv dd { margin: 0; font-weight: 600; text-align: right; white-space: nowrap; }
+.ip-kv dt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ip-more { font-size: var(--fs-micro); color: var(--text-tertiary); }
 .ip-empty { padding: 16px 12px; border-radius: 12px; border: 1px dashed var(--border); color: var(--text-tertiary); font-size: var(--fs-footnote); text-align: center; }
 .ip-skeleton { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .ip-skeleton span { height: 56px; border-radius: 12px; }

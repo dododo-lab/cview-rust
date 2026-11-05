@@ -1,5 +1,5 @@
 // 보관함 "개요" 탭 UI 회귀 검사 — 첫 탭이 개요인지, 탭마다 요약 카드(개수·핵심 수치·최근 항목)가 맞게 나오는지,
-// 카드를 누르면 그 탭으로 가는지, 빈·로딩·오류·로그인 필요 상태와 좁은 창 레이아웃을 본다.
+// 카드를 누르면 그 탭으로 가는지, 빈·로딩·오류·로그인 필요 상태, 폭별 열 수·카드 높이, 개요 옆 인사이트 패널(정리 제안)을 본다.
 // app-ui 를 그대로 띄우고 window.__TAURI__ 를 모의 IPC 로 바꿔 실제 화면 코드를 돌린다(실제 서비스·데이터는 건드리지 않음).
 // 저장소 루트에서: node tools/ui-regression/library-overview.mjs   (Playwright 가 필요하다. CVIEW_UI_SHOTS=<폴더> 면 스크린샷)
 import http from 'node:http';
@@ -183,6 +183,47 @@ const settled = (page) => page.waitForFunction(() => !document.querySelector('[d
     await page.evaluate(() => { window.__delay = {}; });
   });
 
+  // 폭별 열 수 — 묶음(넷)마다 1 · 2 · 4 열만(3열로 한 장이 남지 않게), 같은 줄 카드는 높이가 같다.
+  for (const [width, cols] of [[2700, 4], [2000, 4], [1280, 2], [420, 1]]) {
+    await check(`L13 ${cols} column(s) and even rows at ${width}px`, async () => {
+      await page.setViewportSize({ width, height: 1000 });
+      await go(page, 'library', { tab: 'overview' });
+      await settled(page);
+      await page.waitForTimeout(150);
+      if (width === 2000) await shot(page, 'library-overview-wide');
+      const r = await page.evaluate(() => [...document.querySelectorAll('[data-page="library"] .lib-ov-grid')].map((g) => {
+        const rects = [...g.children].map((c) => c.getBoundingClientRect());
+        const tops = [...new Set(rects.map((x) => Math.round(x.top)))];
+        return { cols: rects.filter((x) => Math.round(x.top) === tops[0]).length, heights: tops.map((t) => [...new Set(rects.filter((x) => Math.round(x.top) === t).map((x) => Math.round(x.height)))]) };
+      }));
+      assert.equal(r.length, 2, '묶음 둘');
+      for (const g of r) {
+        assert.equal(g.cols, cols);
+        for (const h of g.heights) assert.equal(h.length, 1, `같은 줄 카드 높이가 다름 ${h}`);
+      }
+    });
+  }
+  await page.setViewportSize({ width: 1280, height: 860 });
+
+  await check('L14 insight panel: tidy suggestions on overview, summary on other tabs', async () => {
+    await page.evaluate(() => {
+      window.__mock.handlers.vod_continue_list = () => [{ videoNo: 1, title: '거의 다 본 영상', channelName: '채널1', duration: 1000, position: 950 }, { videoNo: 2, title: '반쯤', channelName: '채널2', duration: 1200, position: 600 }];
+      window.__mock.handlers.favorites_list = () => [{ channelId: 'ch2', channelName: '오래된 즐찾', isFavorite: true, lastWatched: null }];
+    });
+    await go(page, 'library', { tab: 'later' });
+    await page.waitForFunction(() => /보관함 인사이트/.test(document.querySelector('.insight-panel .ip-head')?.textContent || ''));
+    await go(page, 'library', { tab: 'overview' });
+    await settled(page);
+    await page.waitForFunction(() => /보관함 정리/.test(document.querySelector('.insight-panel .ip-head')?.textContent || ''));
+    const t = await text(page, '.insight-panel .ip-scroll');
+    assert.match(t, /다 본 이어 보기.*거의 다 본 영상 ?95%/);
+    assert.doesNotMatch(t, /반쯤/);
+    assert.match(t, /30일 넘게 안 본 즐겨찾기.*오래된 즐찾 ?안 봄/);
+    assert.equal(await page.$('.insight-panel .ip-tiles'), null, '개요 옆 패널에 개수 타일이 겹침');
+    await go(page, 'library', { tab: 'bookmarks' });
+    await page.waitForFunction(() => /보관함 인사이트/.test(document.querySelector('.insight-panel .ip-head')?.textContent || ''));
+  });
+
   // 좁은 창 — 카드가 한 줄 한 장으로 접히고 가로로 넘치지 않는다(멀티라이브 옆 화면처럼 좁아져도).
   for (const width of [960, 640, 420]) {
     await check(`L07 no horizontal overflow at ${width}px`, async () => {
@@ -223,6 +264,10 @@ const settled = (page) => page.waitForFunction(() => !document.querySelector('[d
     assert.equal(await text(page, `${card('clips')} .lib-ov-count`), '0개');
     assert.match(await text(page, `${card('bookmarks')} .lib-ov-note`), /북마크가 없습니다/);
     assert.match(await text(page, `${card('downloads')} .lib-ov-note`), /받은 파일이 없습니다/);
+    // 빈 카드도 데이터 있는 카드와 같은 자리를 채운다(아이콘 · 안내 · 도움말)
+    assert.match(await text(page, `${card('bookmarks')} .lib-ov-note small`), /B 키/);
+    const hs = await page.$$eval('[data-page="library"] .lib-ov-card', (cs) => [...new Set(cs.map((c) => Math.round(c.getBoundingClientRect().height)))]);
+    assert.equal(hs.length, 1, `빈 카드 높이가 제각각 ${hs}`);
     assert.equal(await page.$(`${card('clips')} .lib-ov-metrics`), null);
   });
 

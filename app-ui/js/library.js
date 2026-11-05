@@ -9,7 +9,7 @@ import { continueCard } from './media.js';
 import { mountDownloads } from './downloads.js';
 import { syncTabs, bindTabKeys } from './a11y.js';
 import { refreshVeiled } from './refresh-veil.js';
-import { summarizeSection, overviewCard, RECENT_LIMIT } from './library-overview.js';
+import { summarizeSection, overviewCard, overviewLayout, RECENT_LIMIT } from './library-overview.js';
 
 export const libraryIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h4v16H4zM10 4h4v16h-4zM16.2 4.4l3.8-1 4 15.5-3.8 1z" transform="scale(.92) translate(1 1)"/></svg>';
 
@@ -29,6 +29,7 @@ const CLIP_ORDERS = [['POPULAR', '인기순'], ['RECOMMEND', '추천순']];
 const TAB_IDS = new Set(TABS.map(([id]) => id));
 /** 개요 카드 순서 — 탭 순서 그대로(개요 자신은 빼고). */
 const SECTIONS = TABS.filter(([id]) => id !== 'overview');
+const SECTION_LABELS = new Map(SECTIONS);
 /** 네트워크로 받는 탭은 잠깐 기억해 개요 → 탭(또는 그 반대)으로 옮겨 갈 때 다시 받지 않는다. */
 const NET_CACHE_MS = 60_000;
 
@@ -89,6 +90,9 @@ export class LibraryPage {
   show(params = {}) {
     if (params.tab) this.tab = TAB_IDS.has(params.tab) ? params.tab : 'overview';
     syncTabs(this.tabs, this.tab, this.body, 'lib');
+    this.root.dataset.tab = this.tab;
+    // 오른쪽 인사이트 패널은 개요와 다른 탭에서 보여 주는 내용이 다르다(개요에서는 요약을 겹치지 않고 정리할 것만).
+    window.dispatchEvent(new CustomEvent('cview:insights-context', { detail: { route: 'library', tab: this.tab } }));
     // 직접 새로고침(덮개 아래)이면 보던 내용을 흐리게 둔 채 바꾼다. 이때는 기억해 둔 목록도 버린다.
     const keep = refreshVeiled(this.root);
     if (keep) this.cache.clear();
@@ -130,9 +134,7 @@ export class LibraryPage {
   /** 개요 — 카드 틀을 먼저 그리고, 탭마다 받는 대로 제 카드만 채운다(느린 탭이 다른 카드를 붙잡지 않게). */
   renderOverview(seq, { keep = false, only = null } = {}) {
     const sections = only ? SECTIONS.filter(([id]) => id === only) : SECTIONS;
-    if (!only && !(keep && this.body.querySelector('.lib-ov-grid'))) {
-      this.body.innerHTML = `<div class="lib-ov-grid">${SECTIONS.map(([id, label]) => overviewCard(id, label)).join('')}</div>`;
-    }
+    if (!only && !(keep && this.body.querySelector('.lib-ov'))) this.body.innerHTML = overviewLayout(SECTION_LABELS);
     const put = (id, label, state) => {
       if (seq !== this.seq) return;
       const card = this.body.querySelector(`.lib-ov-card[data-ov-section="${id}"]`);
