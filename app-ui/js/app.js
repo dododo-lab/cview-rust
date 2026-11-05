@@ -571,6 +571,7 @@ function installPalette() {
     actions: () => [
       ...ROUTES.map((r) => ({ group: '화면', label: r.title, hint: '이동', run: () => (r.id === 'live' ? openLiveMenu() : navigate(r.id)) })),
       { group: '화면', label: '검색', hint: '라이브·채널·다시보기', run: () => navigate('search') },
+      { group: '보관함', label: '보관함 개요', hint: '한눈에', run: () => navigate('library', { tab: 'overview' }) },
       { group: '보관함', label: '인기 클립', hint: '보관함', run: () => navigate('library', { tab: 'clips' }) },
       { group: '보관함', label: '이어 보기', hint: '다시보기', run: () => navigate('library', { tab: 'continue' }) },
       { group: '보관함', label: '즐겨찾기', hint: '채널', run: () => navigate('library', { tab: 'favorites' }) },

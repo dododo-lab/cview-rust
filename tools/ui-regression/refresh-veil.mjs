@@ -55,6 +55,11 @@ function mockTauri(origin) {
     popular_lives: () => popular,
     recent_channels: () => [],
     vod_continue_list: () => [],
+    vod_watch_later_list: () => [],
+    following_vods: () => [],
+    favorites_list: () => [],
+    bookmarks_list: () => [],
+    download_list: () => ({ folder: '/tmp/dl', jobs: [], history: [] }),
     popular_clips: () => clips,
     search: () => ({ lives: popular.slice(0, 4), channels: [] }),
     search_videos: () => ({ items: [], hasMore: false }),
@@ -135,7 +140,8 @@ const MENUS = [
   ['popular', {}, ['popular_lives']],
   ['categories', {}, ['popular_lives']],
   ['live', {}, ['following_lives', 'popular_lives']],
-  ['library', {}, ['popular_clips']],
+  ['library', { tab: 'clips' }, ['popular_clips']],
+  ['library', { tab: 'overview' }, ['popular_clips', 'bookmarks_list']],
   ['stats', {}, ['insights_report']],
   ['search', { query: '릴카' }, ['search', 'search_videos']],
   ['settings', {}, ['settings_get'], 600],
@@ -154,7 +160,7 @@ for (const scheme of ['dark', 'light']) {
     if (route === 'popular' || route === 'home') await shot(page, `refresh-${route}-${scheme}`);
     await page.waitForTimeout(1500);
     const after = await veilState(page, route);
-    await check(`R-${scheme}-${route} veil while refreshing, gone after`, async () => {
+    await check(`R-${scheme}-${route}${params.tab ? `:${params.tab}` : ''} veil while refreshing, gone after`, async () => {
       assert.equal(during.shown, true, 'veil visible during refresh');
       assert.equal(during.blurred, true, 'body blurred during refresh');
       assert.match(during.filter, /blur\(6px\)/, during.filter);

@@ -247,7 +247,7 @@ for (const [route, sel, kind] of [
   ['library', '[data-page="library"] .thumb[data-preview]', 'clip'],
 ]) {
   await check(`P09 ${route} thumbnails preview (${kind})`, async () => {
-    await go(p, route);
+    await go(p, route, route === 'library' ? { tab: 'clips' } : {}); // 보관함 첫 탭은 개요 — 썸네일은 인기 클립 탭에
     await p.waitForSelector(sel, { timeout: 4000 });
     await hover(p, sel);
     await waitPlaying(p);
@@ -287,7 +287,7 @@ await hover(off.page, '.top-shelf .top-item:nth-child(1) .thumb[data-preview]');
 await off.page.waitForTimeout(500);
 await shot(off.page, 'before-home-top10', '.top-shelf .top-item:nth-child(1)');
 for (const [route, sel] of [['popular', '[data-page="popular"] .thumb[data-preview]'], ['following', '[data-page="following"] .thumb[data-preview]'], ['categories', '[data-page="categories"] .category-art[data-preview]'], ['library', '[data-page="library"] .thumb[data-preview]']]) {
-  await go(off.page, route);
+  await go(off.page, route, route === 'library' ? { tab: 'clips' } : {});
   await off.page.waitForSelector(sel, { timeout: 4000 }).catch(() => {});
   await hover(off.page, sel).catch(() => {});
   await off.page.waitForTimeout(500);

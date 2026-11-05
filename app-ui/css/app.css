@@ -1427,6 +1427,49 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .bookmark-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-caption); }
 .bookmark-text span { color: var(--text-tertiary); font-size: var(--fs-footnote); }
 
+/* 보관함 개요 — 탭마다 카드 하나(library-overview.js). 통계 화면 .stats-card 와 같은 면·테두리.
+   좁은 창·멀티라이브 옆 화면에서도 한 줄 한 장으로 접히도록 최소 너비를 100% 로 묶는다. */
+.lib-ov-grid { display: grid; gap: var(--sp-md); grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); align-items: start; }
+.lib-ov-card {
+  display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 14px 16px; cursor: pointer;
+  border-radius: var(--radius-lg); background: var(--surface-elevated); border: 1px solid var(--border-subtle); box-shadow: var(--shadow-sm);
+  transition: border-color .15s ease, background-color .15s ease;
+}
+.lib-ov-card:hover { border-color: var(--border); background: color-mix(in srgb, var(--surface-elevated) 92%, var(--text-primary)); }
+.lib-ov-card:focus-within { border-color: var(--primary-ring); }
+.lib-ov-head { display: flex; align-items: center; gap: var(--sp-sm); min-width: 0; }
+.lib-ov-title {
+  display: inline-flex; align-items: center; gap: 4px; min-width: 0; padding: 2px 4px; margin: -2px -4px;
+  border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-primary); font: inherit; font-size: var(--fs-subhead); font-weight: 700; cursor: pointer;
+}
+.lib-ov-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lib-ov-title svg { width: 14px; height: 14px; flex: none; color: var(--text-tertiary); transition: transform .15s ease, color .15s ease; }
+.lib-ov-card:hover .lib-ov-title svg { color: var(--primary-text); transform: translateX(2px); }
+.lib-ov-title:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.lib-ov-count { margin-left: auto; flex: none; font-size: var(--fs-caption); color: var(--text-tertiary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lib-ov-count strong { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); margin-right: 2px; }
+.lib-ov-count.zero strong { color: var(--text-tertiary); }
+.lib-ov-metrics { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.lib-ov-metrics > div { display: inline-flex; gap: 6px; align-items: baseline; min-width: 0; max-width: 100%; padding: 3px 8px; border-radius: 999px; background: var(--surface-overlay); font-size: var(--fs-footnote); }
+.lib-ov-metrics dt { color: var(--text-tertiary); white-space: nowrap; }
+.lib-ov-metrics dd { margin: 0; color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lib-ov-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.lib-ov-item { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.lib-ov-thumb { position: relative; flex: none; overflow: hidden; background: var(--surface-overlay); border-radius: 6px; }
+.lib-ov-thumb.wide { width: 64px; aspect-ratio: 16 / 9; }
+.lib-ov-thumb.clip { width: 27px; height: 36px; }
+.lib-ov-thumb.avatar { width: 32px; height: 32px; border-radius: 50%; }
+.lib-ov-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.lib-ov-thumb i { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--live); }
+.lib-ov-kind { flex: none; min-width: 40px; padding: 3px 6px; border-radius: 6px; background: var(--surface-overlay); color: var(--text-secondary); font-size: var(--fs-micro); font-weight: 700; text-align: center; }
+.lib-ov-item-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: var(--fs-caption); color: var(--text-primary); }
+.lib-ov-item-text > span + span { color: var(--text-tertiary); font-size: var(--fs-footnote); }
+.lib-ov-item-text .sk.line { display: block; height: 10px; border-radius: 5px; width: 80%; margin: 2px 0; }
+.lib-ov-item-text .sk.line.short { width: 45%; }
+.lib-ov-note { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-sm); padding: 6px 0 2px; color: var(--text-tertiary); font-size: var(--fs-caption); }
+.lib-ov-note > span { flex: 1 1 160px; min-width: 0; }
+.lib-ov-note.error > span { color: var(--error); }
+
 .clip-embed { width: 100%; height: 100%; border: 0; display: block; background: #000; }
 
 /* ══ 채팅 확장 (chat.js) ═══════════════════════════════════════ */
@@ -2448,7 +2491,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 :root[data-transparency="full"] .sheet, :root[data-transparency="full"] .notify-pop, :root[data-transparency="full"] .toast {
   background: color-mix(in srgb, var(--surface-popover) 78%, transparent); backdrop-filter: blur(24px) saturate(1.5); -webkit-backdrop-filter: blur(24px) saturate(1.5);
 }
-:root[data-transparency="full"] .kpi-card, :root[data-transparency="full"] .stats-card, :root[data-transparency="full"] .insight-rail {
+:root[data-transparency="full"] .kpi-card, :root[data-transparency="full"] .stats-card, :root[data-transparency="full"] .lib-ov-card, :root[data-transparency="full"] .insight-rail {
   background: color-mix(in srgb, var(--surface-elevated) 82%, transparent); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
 }
 :root[data-transparency="reduced"] *, :root[data-transparency="reduced"] *::before, :root[data-transparency="reduced"] *::after { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
