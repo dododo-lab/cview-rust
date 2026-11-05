@@ -1207,11 +1207,21 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 .rank-chip .rank-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .rank-chip .rank-amount { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
 
-/* 스트림 알림(플레이어 위) — 유리 카드 + 톤 색 */
-.stream-alerts { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; z-index: 3; }
+/* 스트림 알림(플레이어 위) — 유리 카드 + 톤 색.
+   크기는 늘 같다 — 너비·높이·글자 크기를 픽셀로 고정하고, 긴 닉네임·메시지는 말줄임으로 자른다.
+   예전에는 너비가 내용대로(max-content)였고 상한이 창(80vw)·패인(92cqw) 너비에 묶여, 메시지 길이·이모티콘·
+   창 크기·멀티라이브 패인 크기마다 카드 크기가 달랐다. 이제 패인이 카드보다 좁을 때만 패인 안으로 줄인다.
+   글자 크기 토큰도 여기서 다시 고정해 조상(채팅 글자 배율 등)이 바꾼 값을 물려받지 않는다.
+   (설정의 '알림 크기'(--alert-scale)는 사용자가 고른 배율이라 모든 화면에 똑같이 곱한다.) */
+.stream-alerts {
+  --alert-w: 360px; --alert-h: 98px;
+  --fs-micro: 10px; --fs-footnote: 12px; --fs-caption: 13px; --fs-subhead: 16px;
+  position: absolute; left: 50%; top: 18px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; z-index: 3;
+}
 .stream-alert {
   --ev: var(--donation);
-  position: relative; overflow: hidden; display: flex; align-items: center; gap: 12px; max-width: min(520px, 80vw);
+  position: relative; overflow: hidden; display: flex; align-items: center; gap: 12px; box-sizing: border-box;
+  width: 100%; height: var(--alert-h); flex: none;
   padding: 12px 18px 12px 12px; border-radius: 18px; color: #fff;
   /* 흐림 없이 — 재생 중인 영상 위 흐림은 영상 프레임마다 다시 계산돼 GPU 를 늘 쓴다(GPU 최적화 2026-10-24) */
   background: linear-gradient(135deg, color-mix(in srgb, var(--ev) 26%, rgba(14, 15, 18, 0.9)), rgba(14, 15, 18, 0.9) 60%);
@@ -1221,18 +1231,27 @@ select.select { border-radius: 10px; padding: 6px 10px; border-color: var(--bord
 }
 .stream-alert.leaving { animation: alert-out 0.35s ease both; pointer-events: none; }
 /* 알림을 끌어 옮긴다(donations.js) — 카드만 잡히고 빈 곳은 아래 영상으로 그대로 간다. */
-/* 너비는 내용대로 — 오른쪽 끝에 두어도 남은 폭에 눌려 좁아지지 않는다. */
-.stream-alerts { width: max-content; }
+/* 너비는 고정 — 오른쪽 끝에 두어도 남은 폭에 눌려 좁아지지 않는다. 영상 틀(무대·패인)이 카드보다 좁을 때만
+   틀 안(양옆 8px 여백)으로 줄인다. 배율(--alert-scale)을 곱한 뒤에도 틀 안에 들도록 배율로 나눈다. */
+.stream-alerts { width: min(var(--alert-w), calc((100% - 16px) / var(--alert-scale, 1))); }
 .stream-alerts .stream-alert { pointer-events: auto; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
 .stream-alerts.dragging .stream-alert { cursor: grabbing; }
 .stream-alert-icon { width: 40px; height: 40px; flex: none; border-radius: 12px; display: grid; place-items: center; background: var(--ev); color: #111; box-shadow: 0 6px 16px color-mix(in srgb, var(--ev) 40%, transparent); }
 .stream-alert-icon svg { width: 20px; height: 20px; }
-.stream-alert-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; line-height: 1.35; }
-.stream-alert-kicker { font-size: var(--fs-micro); font-weight: 700; letter-spacing: .02em; color: color-mix(in srgb, var(--ev) 70%, #fff); }
-.stream-alert-title { display: flex; align-items: baseline; gap: 8px; font-size: var(--fs-caption); font-weight: 700; }
+.stream-alert-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+/* 줄 높이를 픽셀로 — 머리 14 + 제목 22 + 본문 2줄 34 + 간격 2 = 72, 위아래 여백 24·테두리 2 를 더해 --alert-h(98). */
+.stream-alert-kicker { font-size: var(--fs-micro); line-height: 14px; font-weight: 700; letter-spacing: .02em; color: color-mix(in srgb, var(--ev) 70%, #fff); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stream-alert-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: var(--fs-caption); line-height: 22px; font-weight: 700; }
 .stream-alert-nick { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.stream-alert-title b { flex: none; color: color-mix(in srgb, var(--ev) 80%, #fff); font-size: var(--fs-subhead); font-variant-numeric: tabular-nums; }
-.stream-alert-msg { font-size: var(--fs-footnote); color: rgba(255, 255, 255, 0.82); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.stream-alert-title b { flex: none; max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: color-mix(in srgb, var(--ev) 80%, #fff); font-size: var(--fs-subhead); font-variant-numeric: tabular-nums; }
+/* 본문(미션 문구·후원 메시지)은 합쳐 두 줄 — 둘 다 있으면 한 줄씩, 하나면 두 줄까지. 짧으면 글 묶음이
+   카드 높이 안에서 세로 가운데로 온다(카드 높이는 그대로). */
+.stream-alert-body { display: flex; flex-direction: column; max-height: 34px; overflow: hidden; }
+.stream-alert-body:empty { display: none; }
+.stream-alert-msg { font-size: var(--fs-footnote); line-height: 17px; color: rgba(255, 255, 255, 0.82); overflow: hidden; text-overflow: ellipsis; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.stream-alert-msg:not(:only-child) { -webkit-line-clamp: 1; }
+/* 이모티콘이 줄 높이를 늘리지 않게 — 줄(17px) 안에 들어가는 고정 높이. */
+.stream-alert-msg .emoji { height: 16px; width: auto; vertical-align: -3px; }
 @keyframes alert-in { from { opacity: 0; transform: translateY(-10px) scale(0.97); } to { opacity: 1; transform: none; } }
 @keyframes alert-out { to { opacity: 0; transform: translateY(-8px); } }
 

@@ -6,6 +6,7 @@
 // - 주간 후원 랭킹: 채팅 패널 위 칩 줄(`chat_donation_ranking`).
 // - 스트림 알림: 시청 화면 위에 새 후원·구독을 잠깐 띄운다(설정에서 끌 수 있음, 기본 켬).
 //   떠 있는 알림을 끌면 그 자리로 옮기고(영상 크기 대비 비율로 저장), 더블클릭하면 기본 위치로 돌린다.
+//   알림 카드는 내용·창·패인 크기와 상관없이 같은 픽셀 크기다(app.css `.stream-alerts` --alert-w/--alert-h).
 import { api, invoke } from './api.js';
 import { esc, safeUrl, imageSrc, toast, renderContent } from './dom.js';
 import { verifiedBadge } from './verified-badge.js';
@@ -269,8 +270,7 @@ export class StreamAlerts {
       <span class="stream-alert-text">
         <span class="stream-alert-kicker">${esc(e.title)}${e.detail ? ` · ${esc(e.detail)}` : ''}</span>
         <span class="stream-alert-title"><span class="stream-alert-nick">${esc(m.nickname || '익명')}</span><b>${esc(e.value)}</b></span>
-        ${e.extra ? `<span class="stream-alert-msg">${esc(e.extra)}</span>` : ''}
-        ${m.content ? `<span class="stream-alert-msg">${renderContent(m.content, m.emojis)}</span>` : ''}
+        <span class="stream-alert-body">${e.extra ? `<span class="stream-alert-msg">${esc(e.extra)}</span>` : ''}${m.content ? `<span class="stream-alert-msg">${renderContent(m.content, m.emojis)}</span>` : ''}</span>
       </span>`;
     this.show(item, ALERT_MS);
   }
@@ -285,7 +285,7 @@ export class StreamAlerts {
       <span class="stream-alert-text">
         <span class="stream-alert-kicker">후원 알림 위치</span>
         <span class="stream-alert-title"><span class="stream-alert-nick">끌어서 옮기세요</span></span>
-        <span class="stream-alert-msg">놓으면 저장 · 더블클릭은 기본 위치 · Esc 닫기</span>
+        <span class="stream-alert-body"><span class="stream-alert-msg">놓으면 저장 · 더블클릭은 기본 위치 · Esc 닫기</span></span>
       </span>`;
     this.ghost = item;
     document.addEventListener('keydown', this.onKey, true); // 잡는 단계 — 시청 화면의 Esc(닫기)보다 먼저
