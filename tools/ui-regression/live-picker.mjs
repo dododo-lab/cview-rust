@@ -249,14 +249,19 @@ await check('칩의 × 는 아바타 자리에 겹쳐 있다가 마우스를 올
     };
   }, id);
   await page.mouse.move(640, 600);
-  await page.waitForTimeout(250);
+  await page.waitForFunction(() => Number(getComputedStyle(document.querySelector('.ml-watch-close[data-session-id="s-p3"]')).opacity) === 0, null, { timeout: 2000 });
   let g = await geo('s-p3');
   assert.equal(g.xOpacity, 0, '평소엔 × 가 숨어 있다');
   assert.ok(g.dx <= 1 && g.dy <= 1, `× 가 아바타 위에 겹친다: ${JSON.stringify(g)}`);
   assert.equal(g.label, '이름-p3 채널 닫기');
   assert.ok(!g.inChip, '× 는 칩 단추 밖(단추 안 단추가 아님)');
   await page.locator('.ml-watch-chip[data-session-id="s-p3"]').hover();
-  await page.waitForTimeout(250);
+  // × 와 아바타가 각자 전환(.15s·.18s)을 마칠 때까지 기다린다.
+  await page.waitForFunction(() => {
+    const tab = document.querySelector('.ml-watch-tab[data-session-id="s-p3"]');
+    const op = (el) => Number(getComputedStyle(el).opacity);
+    return op(tab.querySelector('.ml-watch-close')) === 1 && op(tab.querySelector('.ml-watch-chip img, .ml-watch-chip .ml-watch-dot')) === 0;
+  }, null, { timeout: 2000 });
   g = await geo('s-p3');
   assert.equal(g.xOpacity, 1, '올리면 × 가 뜬다');
   assert.equal(g.avOpacity, 0, '아바타는 × 에 자리를 내준다');
@@ -273,14 +278,20 @@ await check('키보드: 칩 다음 Tab 이 × 로 가고, 초점이 오면 × �
   await page.mouse.move(640, 600);
   await page.focus('.ml-watch-chip[data-session-id="s-p2"]');
   await page.keyboard.press('Tab');
-  const f = await page.evaluate(() => {
+  // × 는 0 → 1 로 150ms 전환한다 — 중간값을 읽지 않게 다 뜰 때까지 기다린다.
+  await page.waitForFunction(() => {
     const a = document.activeElement;
-    return { cls: a.className, id: a.dataset.sessionId, opacity: Number(getComputedStyle(a).opacity) };
-  });
-  assert.deepEqual(f, { cls: 'ml-watch-close', id: 's-p2', opacity: 1 });
+    return a?.classList.contains('ml-watch-close') && Number(getComputedStyle(a).opacity) === 1;
+  }, null, { timeout: 2000 });
+  assert.equal(await page.evaluate(() => document.activeElement.dataset.sessionId), 's-p2');
   await page.keyboard.press('Enter');
   await settle();
   assert.deepEqual(await chips(), ['p4', 'p5*']);
+  const focused = await page.evaluate(() => {
+    const a = document.activeElement;
+    return { cls: a.className, id: a.dataset.sessionId };
+  });
+  assert.deepEqual(focused, { cls: 'ml-watch-chip', id: 's-p4' }, '닫은 뒤 초점이 옆 채널 칩으로 간다');
 });
 
 await check('라이트·다크에서 보는 칩·다른 칩의 × 가 바탕과 구분된다', async () => {
@@ -303,15 +314,16 @@ await check('라이트·다크에서 보는 칩·다른 칩의 × 가 바탕과 
 });
 
 await check('보는 채널의 × 는 패인 닫기와 같은 길 — 남은 채널로 바꿔 보고 라이브 화면에 머문다', async () => {
-  await page.locator('.ml-watch-chip.active').hover();
-  await page.waitForTimeout(250);
-  await page.click('.ml-watch-tab.active .ml-watch-close');
+  await page.focus('.ml-watch-tab.active .ml-watch-close');
+  await page.keyboard.press('Enter');
   await settle();
   const v = await page.evaluate(() => ({
     watch: window.__mock.state.watchId, ids: window.__mock.state.sessions.map((s) => s.id),
     asWatch: document.querySelector('[data-page="multilive"]').classList.contains('as-watch'),
   }));
   assert.deepEqual(v, { watch: 's-p4', ids: ['s-p4'], asWatch: true });
+  const f = await page.evaluate(() => ({ ml: document.activeElement.dataset.ml, shown: document.activeElement.offsetParent !== null }));
+  assert.deepEqual(f, { ml: 'add', shown: true }, '칩 줄이 숨으면 초점이 보이는 채널 추가 단추로 간다');
 });
 
 await browser.close();

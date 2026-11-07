@@ -1059,7 +1059,7 @@ export class MultiLivePage {
     const list = watched ? sessions.filter((x) => x.slot != null) : [];
     const picker = this.watchPicker;
     picker.hidden = list.length < 2;
-    if (picker.hidden) { this.chipPeek.close(); picker.innerHTML = ''; this.watchPickerHtml = ''; return; }
+    if (picker.hidden) { this.chipPeek.close(); picker.innerHTML = ''; this.watchPickerHtml = ''; this.restoreChipFocus(list); return; }
     const html = list.map((x) => {
       const on = x.id === watched.id;
       const avatar = safeUrl(x.profileImageUrl);
@@ -1092,6 +1092,29 @@ export class MultiLivePage {
       if (this.watchPickerReveal) this.revealActiveWatchChip();
       this.syncWatchPickerFade();
     });
+    this.restoreChipFocus(list);
+  }
+
+  /**
+   * 키보드로 칩의 × 를 눌러 닫으면 칩 줄이 다시 그려지며 초점이 body 로 떨어진다 — 닫은 채널이 빠진 뒤 처음 그릴 때
+   * 옆 채널의 칩(창 밖으로 밀렸으면 보이는 첫 칩)으로, 칩 줄이 숨으면(한 채널만 남음) 보이는 채널 추가 단추로 옮긴다.
+   */
+  restoreChipFocus(list) {
+    const want = this.chipFocusAfterClose;
+    if (!want) return;
+    if (performance.now() > want.until) { this.chipFocusAfterClose = null; return; }
+    if (list.some((x) => x.id === want.closed)) return; // 아직 닫히기 전 그림
+    this.chipFocusAfterClose = null;
+    const picker = this.watchPicker;
+    let target = null;
+    if (!picker.hidden) {
+      const tabs = [...picker.querySelectorAll('.ml-watch-tab')];
+      const tab = tabs.find((t) => t.dataset.sessionId === want.next && !t.hidden) || tabs.find((t) => !t.hidden);
+      target = tab && tab.querySelector('.ml-watch-chip');
+    } else {
+      target = [...this.root.querySelectorAll('[data-ml="add"]')].find((b) => b.offsetParent !== null);
+    }
+    if (target) target.focus({ preventScroll: true });
   }
 
   /** 머리줄 왼쪽 묶음(아이콘·제목·전환)과 오른쪽 도구의 폭 차이 — 채널 칩 줄을 한가운데 두는 데 쓴다. */
@@ -1201,7 +1224,14 @@ export class MultiLivePage {
         // 받는 처리가 생겨도 고르기로 이어지지 않게 막는다. 닫는 길은 패인 닫기와 같다.
         e.preventDefault();
         e.stopPropagation();
-        if (action.dataset.sessionId) this.closeSession(action.dataset.sessionId);
+        if (!action.dataset.sessionId) break;
+        // 키보드로 닫았으면(× 에 초점) 다시 그린 뒤 옆 채널로 초점을 옮긴다 — 뒤 채널, 없으면 앞 채널.
+        if (document.activeElement === action) {
+          const tab = action.closest('.ml-watch-tab');
+          const near = tab && (tab.nextElementSibling?.matches('.ml-watch-tab') ? tab.nextElementSibling : tab.previousElementSibling);
+          this.chipFocusAfterClose = { closed: action.dataset.sessionId, next: near?.dataset.sessionId, until: performance.now() + 5000 };
+        }
+        this.closeSession(action.dataset.sessionId);
         break;
       case 'audio':
         if (!sessionId) break;
