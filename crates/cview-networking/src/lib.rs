@@ -36,6 +36,7 @@ pub use client::{AgedResponse, ChzzkApiClient, ClientConfig, ResponseBody};
 pub use client_content::{emoticon_family, CHANNEL_POSTS_PAGE_SIZE};
 pub use client_live::{
     following_max_pages, TraversalOptions, FOLLOWING_PAGE_SIZE, FOLLOWING_ROW_LIMIT,
+    LIVE_STATUS_SHARE_AGE,
 };
 pub use endpoint::{ChzzkEndpoint, TopLivesSortType};
 pub use response::{ChzzkResponse, PagedContent};

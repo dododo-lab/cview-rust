@@ -197,6 +197,8 @@ pub(crate) struct ClientState {
     pub user_status_memo: Option<(u64, UserStatusInfo)>,
     pub user_status_flight: Option<UserStatusFlight>,
     pub user_status_loads_running: usize,
+    /// 채널별 마지막 live-status 응답(받은 시각) — 주기 폴러끼리 나눠 쓴다(`live_status_recent`).
+    pub live_status_memo: HashMap<String, (std::time::Instant, cview_core::models::live::LiveInfo)>,
 }
 
 pub(crate) struct Inner {
@@ -383,6 +385,7 @@ impl ChzzkApiClient {
                 transport: config.transport,
                 gate: crate::gate::RequestGate::new(),
                 state: Mutex::new(ClientState {
+                    live_status_memo: HashMap::new(),
                     cache_generation: 0,
                     max_retries: 3,
                     network_policy_generation: 0,

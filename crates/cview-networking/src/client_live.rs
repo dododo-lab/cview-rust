@@ -27,6 +27,12 @@ use crate::response::{
 use crate::transport::HttpRequest;
 use crate::wait::GetWait;
 
+/// live-status 메모 상한 — 넘으면 오래된 것을 지운다.
+const LIVE_STATUS_MEMO_CAP: usize = 64;
+const LIVE_STATUS_MEMO_KEEP: std::time::Duration = std::time::Duration::from_secs(120);
+/// 주기 폴러가 나눠 쓰는 live-status 응답의 나이 상한.
+pub const LIVE_STATUS_SHARE_AGE: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// 팔로잉 목록 페이지 크기.
 pub const FOLLOWING_PAGE_SIZE: i64 = 50;
 /// 팔로잉 채널 수 상한. 최대 페이지 수는 ceil(이 값 / 페이지 크기)다.
@@ -268,12 +274,39 @@ impl ChzzkApiClient {
         }
     }
 
-    /// 라이브 상태 폴링.
+    /// 라이브 상태 폴링(늘 새로 받는다). 받은 응답은 [`Self::live_status_recent`] 가 나눠 쓴다.
     pub async fn live_status(&self, channel_id: &str) -> Result<LiveInfo, ApiError> {
-        self.request(&ChzzkEndpoint::LiveStatus {
-            channel_id: channel_id.into(),
-        })
-        .await
+        let info: LiveInfo = self
+            .request(&ChzzkEndpoint::LiveStatus {
+                channel_id: channel_id.into(),
+            })
+            .await?;
+        let now = std::time::Instant::now();
+        let mut state = self.lock_state();
+        let memo = &mut state.live_status_memo;
+        if memo.len() >= LIVE_STATUS_MEMO_CAP {
+            memo.retain(|_, (at, _)| now.duration_since(*at) < LIVE_STATUS_MEMO_KEEP);
+        }
+        memo.insert(channel_id.to_string(), (now, info.clone()));
+        Ok(info)
+    }
+
+    /// 주기 폴러용 라이브 상태 — 같은 채널을 `max_age` 안에 누가 받았으면 그 응답을 쓴다.
+    ///
+    /// 같은 채널을 보는 채팅 머리(시청자 수)와 멀티라이브 패인(방송 종료·시청자 수)이 각자 60초마다 따로
+    /// 받았다. 30초 창이면 두 폴러의 어긋남과 상관없이 실제 요청이 60초에 한 번으로 준다. 방송 종료 확인처럼
+    /// 지금 값이 필요한 곳은 [`Self::live_status`] 를 쓴다.
+    pub async fn live_status_recent(
+        &self,
+        channel_id: &str,
+        max_age: std::time::Duration,
+    ) -> Result<LiveInfo, ApiError> {
+        if let Some((at, info)) = self.lock_state().live_status_memo.get(channel_id) {
+            if at.elapsed() < max_age {
+                return Ok(info.clone());
+            }
+        }
+        self.live_status(channel_id).await
     }
 
     // MARK: - 사용자 상태

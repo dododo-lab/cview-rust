@@ -1013,3 +1013,28 @@ async fn channel_posts_uses_comment_api_with_fixed_page_size() {
     );
     assert_eq!(t.sends(), 1);
 }
+
+#[tokio::test]
+async fn live_status_recent_shares_a_fresh_response_between_pollers() {
+    let t = MockTransport::new(Duration::ZERO, |req, _| {
+        assert!(req.url.path().ends_with("/live-status"));
+        ok(live_json(1, "방송"))
+    });
+    let c = client(t.clone(), None);
+    let window = cview_networking::LIVE_STATUS_SHARE_AGE;
+    // 패인 폴이 받은 응답을 30초 안의 다른 주기 폴은 그대로 쓴다
+    c.live_status_recent("a", window).await.unwrap();
+    c.live_status_recent("a", window).await.unwrap();
+    assert_eq!(t.sends(), 1);
+    // 채널이 다르면 따로
+    c.live_status_recent("b", window).await.unwrap();
+    assert_eq!(t.sends(), 2);
+    // 방송 종료 확인처럼 지금 값이 필요한 호출은 늘 새로 받고, 그 응답도 나눠 쓴다
+    c.live_status("a").await.unwrap();
+    assert_eq!(t.sends(), 3);
+    c.live_status_recent("a", window).await.unwrap();
+    assert_eq!(t.sends(), 3);
+    // 창이 지나면 다시 받는다
+    c.live_status_recent("a", Duration::ZERO).await.unwrap();
+    assert_eq!(t.sends(), 4);
+}

@@ -1129,7 +1129,7 @@ async fn poll_loop(weak: Weak<MultiLiveSession>) {
         if s.obs.read().is_menu_suspended {
             continue;
         }
-        match backend.live_status(&s.channel_id).await {
+        match backend.live_status_for_poll(&s.channel_id).await {
             Ok(status) => {
                 s.apply_live_info_metadata(&LiveMetadata::from(&status));
                 if status.is_closed {
