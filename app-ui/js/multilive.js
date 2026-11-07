@@ -1065,10 +1065,12 @@ export class MultiLivePage {
       const avatar = safeUrl(x.profileImageUrl);
       const name = x.channelName || x.channelId;
       // 지금 보는 칩만 글자 툴팁 — 나머지는 미리보기 말풍선(ml-chip-peek.js)이 대신한다(둘이 겹쳐 뜨지 않게).
-      return `<button class="ml-watch-chip${on ? ' active' : ''}" data-ml="watch" data-session-id="${esc(x.id)}" aria-pressed="${on}" ${on ? `title="${esc(`${name} — 지금 보는 채널`)}"` : `aria-label="${esc(`${name} 라이브로 보기`)}"`}>
+      // 닫기(×)는 칩 단추 안에 넣을 수 없어(단추 안 단추) 칩과 나란히 두고, 칩의 아바타 자리에 겹쳐 띄운다 —
+      // 브라우저 탭의 파비콘 → × 처럼 칩에 마우스를 올리거나 초점이 오면 아바타가 ×로 바뀐다(multilive.css .ml-watch-close).
+      return `<span class="ml-watch-tab${on ? ' active' : ''}" data-session-id="${esc(x.id)}"><button class="ml-watch-chip${on ? ' active' : ''}" data-ml="watch" data-session-id="${esc(x.id)}" aria-pressed="${on}" ${on ? `title="${esc(`${name} — 지금 보는 채널`)}"` : `aria-label="${esc(`${name} 라이브로 보기`)}"`}>
         ${avatar ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="ml-watch-dot"></span>'}
         <span class="ellipsis">${esc(name)}</span>${verifiedBadge(x.verifiedBadge, 'sm')}
-      </button>`;
+      </button><button class="ml-watch-close" data-ml="watch-close" data-session-id="${esc(x.id)}" title="채널 닫기" aria-label="${esc(`${name} 채널 닫기`)}">${ICON_CLOSE}</button></span>`;
     }).join('');
     // 상태 알림마다 다시 그리면 칩의 호버·키보드 초점이 날아간다 — 바뀐 때만.
     if (html === this.watchPickerHtml) return;
@@ -1117,8 +1119,8 @@ export class MultiLivePage {
     if (this.chipStart === before) return;
     this.chipPeek.close();
     // 새로 드러난 칩만 들어오는 쪽에서 살짝 미끄러져 나온다
-    const chips = this.watchPicker.querySelectorAll('.ml-watch-chip');
-    const shown = chips[dir > 0 ? this.chipStart + CHIP_WINDOW - 1 : this.chipStart];
+    const tabs = this.watchPicker.querySelectorAll('.ml-watch-tab');
+    const shown = tabs[dir > 0 ? this.chipStart + CHIP_WINDOW - 1 : this.chipStart];
     if (shown) {
       shown.classList.remove('enter-start', 'enter-end');
       void shown.offsetWidth;
@@ -1131,10 +1133,10 @@ export class MultiLivePage {
   /** 창 밖 칩은 숨기고 양끝에 가려진 개수(+N)를 단다. */
   applyChipWindow() {
     const picker = this.watchPicker;
-    const chips = [...picker.querySelectorAll('.ml-watch-chip')];
-    const n = chips.length;
+    const tabs = [...picker.querySelectorAll('.ml-watch-tab')];
+    const n = tabs.length;
     this.chipStart = Math.max(0, Math.min(this.chipStart, n - CHIP_WINDOW));
-    chips.forEach((c, i) => { c.hidden = i < this.chipStart || i >= this.chipStart + CHIP_WINDOW; });
+    tabs.forEach((c, i) => { c.hidden = i < this.chipStart || i >= this.chipStart + CHIP_WINDOW; });
     const lead = this.chipStart;
     const tail = Math.max(0, n - this.chipStart - CHIP_WINDOW);
     for (const [el, count, label] of [[picker.querySelector('.ml-watch-more.start'), lead, '앞'], [picker.querySelector('.ml-watch-more.end'), tail, '뒤']]) {
@@ -1148,7 +1150,8 @@ export class MultiLivePage {
 
   revealActiveWatchChip() {
     const picker = this.watchPicker;
-    const active = picker.querySelector('.ml-watch-chip.active');
+    // 칩을 감싼 틀(.ml-watch-tab, position: relative)로 잰다 — 칩의 offsetLeft 는 그 틀 기준이 된다.
+    const active = picker.querySelector('.ml-watch-tab.active');
     if (!active) return;
     const left = active.offsetLeft - picker.offsetLeft;
     if (left < picker.scrollLeft) picker.scrollLeft = left - 12;
@@ -1161,6 +1164,13 @@ export class MultiLivePage {
     const over = !p.hidden && p.scrollWidth > p.clientWidth + 1;
     p.classList.toggle('fade-start', over && p.scrollLeft > 1);
     p.classList.toggle('fade-end', over && p.scrollLeft + p.clientWidth < p.scrollWidth - 1);
+  }
+
+  /** 채널(세션) 닫기 — 패인의 ×와 라이브 머리줄 칩의 ×가 같은 길을 쓴다. */
+  closeSession(sessionId) {
+    // 라이브 단독 보기에서 보는 채널을 닫으면 — 둘러보다 연 방송이면 보던 화면(인기·카테고리 등)으로 돌아간다(app.js).
+    if (this.watchSlot != null && sessionId === this.state.watchId) window.dispatchEvent(new CustomEvent('cview:ml-watch-close', { detail: { remove: true } }));
+    else this.run(api.multiLiveRemove(sessionId));
   }
 
   async onClick(e) {
@@ -1184,10 +1194,14 @@ export class MultiLivePage {
       case 'stop-all': this.run(api.multiLiveStopAll()); break;
       case 'select': if (sessionId && sessionId !== this.state.selectedId) this.run(api.multiLiveSelect(sessionId)); break;
       case 'remove':
-        if (!sessionId) break;
-        // 라이브 단독 보기의 닫기 — 둘러보다 연 방송이면 보던 화면(인기·카테고리 등)으로 돌아간다(app.js).
-        if (this.watchSlot != null && sessionId === this.state.watchId) window.dispatchEvent(new CustomEvent('cview:ml-watch-close', { detail: { remove: true } }));
-        else this.run(api.multiLiveRemove(sessionId));
+        if (sessionId) this.closeSession(sessionId);
+        break;
+      case 'watch-close':
+        // 라이브 머리줄 채널 칩의 ×(아바타 위) — 칩 단추와 나란한 형제라 칩의 '바꿔 보기'로 번지지 않지만, 혹시 감싼 쪽에서
+        // 받는 처리가 생겨도 고르기로 이어지지 않게 막는다. 닫는 길은 패인 닫기와 같다.
+        e.preventDefault();
+        e.stopPropagation();
+        if (action.dataset.sessionId) this.closeSession(action.dataset.sessionId);
         break;
       case 'audio':
         if (!sessionId) break;

@@ -185,7 +185,7 @@ await check('라이브 상한이 차면 가장 오래전에 둘러본 채널을 
 await check('칩은 4개만 보이고 휠로 한 칸씩 넘긴다, 지금 보는 칩은 창 안', async () => {
   const view = () => page.evaluate(() => {
     const p = document.querySelector('.ml-watch-picker');
-    const shown = [...p.querySelectorAll('.ml-watch-chip')].filter((c) => !c.hidden).map((c) => c.textContent.trim().replace('이름-', '') + (c.classList.contains('active') ? '*' : ''));
+    const shown = [...p.querySelectorAll('.ml-watch-chip')].filter((c) => !c.closest('.ml-watch-tab').hidden).map((c) => c.textContent.trim().replace('이름-', '') + (c.classList.contains('active') ? '*' : ''));
     const more = (k) => { const m = p.querySelector(`.ml-watch-more.${k}`); return m.hidden ? '' : m.textContent; };
     return { shown, start: more('start'), end: more('end') };
   });
@@ -234,6 +234,84 @@ await check('닫기 단추는 머리줄에 남은 옆 채널로 바꿔 보고 �
   await settle();
   assert.deepEqual(await chips(), ['p2', 'p3', 'p4', 'p5*']);
   assert.ok(await page.evaluate(() => document.querySelector('[data-page="multilive"]').classList.contains('as-watch')), '라이브 단독 보기에 머문다');
+});
+
+await check('칩의 × 는 아바타 자리에 겹쳐 있다가 마우스를 올리면 뜨고, 누르면 그 채널만 닫는다(고르기 아님)', async () => {
+  const geo = (id) => page.evaluate((sid) => {
+    const tab = document.querySelector(`.ml-watch-tab[data-session-id="${sid}"]`);
+    const x = tab.querySelector('.ml-watch-close');
+    const av = tab.querySelector('.ml-watch-chip img, .ml-watch-chip .ml-watch-dot');
+    const xr = x.getBoundingClientRect(); const ar = av.getBoundingClientRect();
+    return {
+      xOpacity: Number(getComputedStyle(x).opacity), avOpacity: Number(getComputedStyle(av).opacity),
+      dx: Math.abs((xr.left + xr.right) / 2 - (ar.left + ar.right) / 2), dy: Math.abs((xr.top + xr.bottom) / 2 - (ar.top + ar.bottom) / 2),
+      label: x.getAttribute('aria-label'), inChip: !!x.closest('.ml-watch-chip'),
+    };
+  }, id);
+  await page.mouse.move(640, 600);
+  await page.waitForTimeout(250);
+  let g = await geo('s-p3');
+  assert.equal(g.xOpacity, 0, '평소엔 × 가 숨어 있다');
+  assert.ok(g.dx <= 1 && g.dy <= 1, `× 가 아바타 위에 겹친다: ${JSON.stringify(g)}`);
+  assert.equal(g.label, '이름-p3 채널 닫기');
+  assert.ok(!g.inChip, '× 는 칩 단추 밖(단추 안 단추가 아님)');
+  await page.locator('.ml-watch-chip[data-session-id="s-p3"]').hover();
+  await page.waitForTimeout(250);
+  g = await geo('s-p3');
+  assert.equal(g.xOpacity, 1, '올리면 × 가 뜬다');
+  assert.equal(g.avOpacity, 0, '아바타는 × 에 자리를 내준다');
+  if (shot) await page.screenshot({ path: path.join(shot, 'close-hover.png'), clip: { x: 0, y: 0, width: 1280, height: 70 } });
+  const before = await page.evaluate(() => window.__mock.calls.length);
+  await page.click('.ml-watch-close[data-session-id="s-p3"]');
+  await settle();
+  const after = await page.evaluate((n) => window.__mock.calls.slice(n), before);
+  assert.deepEqual(after, [['remove', 's-p3']], '고르기(watch) 없이 그 채널만 닫는다');
+  assert.deepEqual(await chips(), ['p2', 'p4', 'p5*']);
+});
+
+await check('키보드: 칩 다음 Tab 이 × 로 가고, 초점이 오면 × 가 보이며 Enter 로 닫는다', async () => {
+  await page.mouse.move(640, 600);
+  await page.focus('.ml-watch-chip[data-session-id="s-p2"]');
+  await page.keyboard.press('Tab');
+  const f = await page.evaluate(() => {
+    const a = document.activeElement;
+    return { cls: a.className, id: a.dataset.sessionId, opacity: Number(getComputedStyle(a).opacity) };
+  });
+  assert.deepEqual(f, { cls: 'ml-watch-close', id: 's-p2', opacity: 1 });
+  await page.keyboard.press('Enter');
+  await settle();
+  assert.deepEqual(await chips(), ['p4', 'p5*']);
+});
+
+await check('라이트·다크에서 보는 칩·다른 칩의 × 가 바탕과 구분된다', async () => {
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate((t) => { document.documentElement.dataset.theme = t; }, theme);
+    for (const id of ['s-p4', 's-p5']) {
+      await page.locator(`.ml-watch-chip[data-session-id="${id}"]`).hover();
+      await page.waitForTimeout(250);
+      const c = await page.evaluate((sid) => {
+        const x = document.querySelector(`.ml-watch-close[data-session-id="${sid}"]`);
+        const cs = getComputedStyle(x);
+        return { bg: cs.backgroundColor, fg: cs.color, ring: cs.boxShadow };
+      }, id);
+      assert.notEqual(c.bg, c.fg, `${theme} ${id}: × 색이 바탕과 같다`);
+      if (id === 's-p5') assert.notEqual(c.ring, 'none', '보는 칩의 × 는 초록 링을 유지');
+      if (shot) await page.screenshot({ path: path.join(shot, `close-${theme}-${id}.png`), clip: { x: 0, y: 0, width: 1280, height: 70 } });
+    }
+  }
+  await page.evaluate(() => { delete document.documentElement.dataset.theme; });
+});
+
+await check('보는 채널의 × 는 패인 닫기와 같은 길 — 남은 채널로 바꿔 보고 라이브 화면에 머문다', async () => {
+  await page.locator('.ml-watch-chip.active').hover();
+  await page.waitForTimeout(250);
+  await page.click('.ml-watch-tab.active .ml-watch-close');
+  await settle();
+  const v = await page.evaluate(() => ({
+    watch: window.__mock.state.watchId, ids: window.__mock.state.sessions.map((s) => s.id),
+    asWatch: document.querySelector('[data-page="multilive"]').classList.contains('as-watch'),
+  }));
+  assert.deepEqual(v, { watch: 's-p4', ids: ['s-p4'], asWatch: true });
 });
 
 await browser.close();
