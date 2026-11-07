@@ -99,6 +99,11 @@ export function syncTabs(tablist, activeId, panel, prefix) {
     b.setAttribute('aria-controls', panelId);
     b.tabIndex = on ? 0 : -1;
     if (on && panel) panel.setAttribute('aria-labelledby', b.id);
+    // 탭이 넘쳐 가로로 밀리는 묶음(.page-tabs)은 고른 탭이 보이게 묶음 안에서만 민다(페이지는 움직이지 않는다)
+    if (on && tablist.scrollWidth > tablist.clientWidth) {
+      const l = b.offsetLeft - 8; const r = b.offsetLeft + b.offsetWidth + 8 - tablist.clientWidth;
+      if (tablist.scrollLeft > l) tablist.scrollLeft = l; else if (tablist.scrollLeft < r) tablist.scrollLeft = r;
+    }
   }
 }
 

@@ -1,7 +1,8 @@
-// 디자인 토큰·글자 대비 UI 회귀 검사.
+// 디자인 토큰·글자 대비·공통 컴포넌트 UI 회귀 검사.
 // 1) CSS 정적 검사 — 반경(4px 이상)·글자 크기(px)를 리터럴로 쓰지 않고 :root 토큰(--radius-* · --fs-*)을 쓰는지,
 //    쓰는 토큰이 모두 정의돼 있는지, 같은 토큰을 :root 에서 두 번 정의하지 않는지.
 // 2) 화면 검사 — 주요 화면을 다크·라이트로 띄워 axe-core 의 color-contrast 위반이 없는지(이미지 위 글자인 홈 히어로 .hero-main 은 axe 가 배경을 못 읽어 제외).
+// 3) 공통 컴포넌트 — 화면 탭(보관함·통계·설정)은 세그먼트 tablist(필터 칩과 구분), 기본 컨트롤 높이는 --control-* 토큰, 좁은 창에서 탭은 한 줄로 밀린다.
 // app-ui 를 그대로 띄우고 window.__TAURI__ 를 모의 IPC 로 바꿔 실제 화면 코드를 돌린다(실제 서비스·데이터는 건드리지 않음).
 // 저장소 루트에서: node tools/ui-regression/design-tokens.mjs
 //   Playwright 와 axe-core 가 필요하다(예: npm i playwright@1.49.1 axe-core@4.10.2 를 다른 폴더에 설치하고 NODE_PATH 로 지정).
@@ -126,6 +127,9 @@ function mockTauri([origin, theme]) {
     search_videos: () => ({ items: vods, hasMore: true }),
     app_info: () => ({ version: '0.1.0', build: 1, os: 'macos', arch: 'aarch64' }),
     multilive_state: () => ({ sessions: [], layout: 'grid' }),
+    channel_detail: () => ({ channel: { ...ch(1), followerCount: 12000 }, live: null, isFavorite: false }),
+    channel_vods: () => ({ data: vods, totalPages: 1 }),
+    channel_clips: () => ({ data: clips, next: null }),
   };
   window.__TAURI__ = {
     core: { invoke: async (cmd, args) => { const h = handlers[cmd]; if (!h) throw new Error(`mock: ${cmd}`); return h(args || {}); } },
@@ -167,6 +171,93 @@ for (const theme of ['dark', 'light']) {
     }
     await ctx.close();
   }
+}
+
+// ── 3) 공통 컴포넌트 — 화면 탭은 세그먼트, 필터는 칩, 기본 컨트롤 높이는 --control-* 토큰 ──
+async function openApp(width) {
+  const ctx = await browser.newContext({ viewport: { width, height: 900 }, colorScheme: 'dark' });
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(8000);
+  await page.addInitScript(mockTauri, [base, 'dark']);
+  await page.goto(base);
+  await page.waitForSelector('[data-page]', { state: 'attached' });
+  await page.evaluate(() => document.querySelectorAll('.sheet-scrim.welcome-scrim').forEach((x) => x.remove()));
+  await page.waitForFunction(() => { const s = document.getElementById('splash'); return !s || !s.isConnected || getComputedStyle(s).display === 'none' || getComputedStyle(s).opacity === '0'; }, null, { timeout: 8000 }).catch(() => {});
+  return { ctx, page };
+}
+const TABBED = [['library', '[data-page="library"] .lib-tabs'], ['stats', '[data-page="stats"] .lib-tabs'], ['settings', '[data-page="settings"] .settings-tabs']];
+{
+  const { ctx, page } = await openApp(1280);
+  const token = (name) => page.evaluate((n) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n)), name);
+  const [sm, md, lg] = [await token('--control-sm'), await token('--control-md'), await token('--control-lg')];
+  for (const [route, sel] of TABBED) {
+    await go(page, route, {});
+    await page.waitForSelector(sel);
+    await check(`D20 ${route}: page tabs are one segmented tablist (not filter chips)`, async () => {
+      const t = await page.$eval(sel, (n) => ({
+        cls: [...n.classList], role: n.getAttribute('role'), chips: n.querySelectorAll('.chip').length,
+        tabs: [...n.querySelectorAll('[role="tab"]')].map((b) => [b.classList.contains('seg'), b.getAttribute('aria-selected'), b.tabIndex]),
+        h: Math.round(n.getBoundingClientRect().height),
+      }));
+      assert.ok(t.cls.includes('segmented') && t.cls.includes('page-tabs'), `클래스 ${t.cls}`);
+      assert.equal(t.role, 'tablist');
+      assert.equal(t.chips, 0, '탭 안에 칩이 없다');
+      assert.ok(t.tabs.length > 2 && t.tabs.every((x) => x[0]), '모든 탭이 .seg');
+      assert.equal(t.tabs.filter((x) => x[1] === 'true').length, 1, '고른 탭 하나');
+      assert.deepEqual(t.tabs.filter((x) => x[2] === 0).length, 1, '초점 받는 탭은 고른 탭 하나(나머지는 화살표로)');
+      assert.equal(t.h, md, `탭 묶음 높이 = --control-md(${md}px)`);
+    });
+  }
+  await check('D21 settings tabs: arrow keys switch group and keep focus on the tab', async () => {
+    await go(page, 'settings', {});
+    await page.focus('[data-page="settings"] .settings-tabs [aria-selected="true"]');
+    await page.keyboard.press('ArrowRight');
+    const st = await page.evaluate(() => ({ sel: document.querySelector('[data-page="settings"] .settings-tabs [aria-selected="true"]')?.dataset.group, focus: document.activeElement?.dataset.group }));
+    assert.notEqual(st.sel, 'overview');
+    assert.equal(st.focus, st.sel, '다시 그린 뒤에도 고른 탭에 초점');
+    await page.keyboard.press('Home');
+  });
+  await check('D22 default controls follow --control-* heights', async () => {
+    const h = async (route, sel) => { await go(page, route, {}); await page.waitForSelector(sel); return page.$eval(sel, (n) => Math.round(n.getBoundingClientRect().height)); };
+    assert.equal(await h('following', '[data-page="following"] .chip'), sm, '필터 칩 = --control-sm');
+    assert.equal(await h('following', '[data-page="following"] .segmented'), md, '세그먼트 = --control-md');
+    assert.equal(await h('following', '[data-page="following"] .btn.primary'), md, '버튼 = --control-md');
+    assert.equal(await h('settings', '[data-page="settings"] .settings-search'), md, '설정 검색칸 = --control-md');
+    assert.equal(await h('multichat', '[data-page="multichat"] .mc-search'), md, '멀티채팅 검색칸 = --control-md');
+    assert.equal(await h('home', '[data-page="home"] .btn.lg'), lg, '큰 버튼 = --control-lg');
+  });
+  await check('D24 channel page: tabs are a segmented tablist synced with the panel', async () => {
+    await go(page, 'channel', { channelId: 'ch1' });
+    const sel = '[data-page="channel"] .channel-tabs';
+    await page.waitForSelector(sel);
+    const read = () => page.$eval(sel, (n) => ({ cls: [...n.classList], sel: [...n.querySelectorAll('[aria-selected="true"]')].map((b) => b.dataset.tab), panel: document.querySelector('[data-page="channel"] .channel-tab-body')?.getAttribute('role') }));
+    const a = await read();
+    assert.ok(a.cls.includes('segmented') && a.cls.includes('page-tabs'));
+    assert.deepEqual(a.sel, ['info']);
+    assert.equal(a.panel, 'tabpanel');
+    await page.click(`${sel} [data-tab="vod"]`);
+    assert.deepEqual((await read()).sel, ['vod']);
+  });
+  await ctx.close();
+}
+{
+  const { ctx, page } = await openApp(640);
+  await check('D23 narrow window: library tabs stay on one row and scroll the chosen tab into view', async () => {
+    await go(page, 'library', {});
+    const sel = '[data-page="library"] .lib-tabs';
+    await page.waitForSelector(sel);
+    const before = await page.$eval(sel, (n) => ({ h: Math.round(n.getBoundingClientRect().height), over: n.scrollWidth > n.clientWidth, doc: document.scrollingElement.scrollWidth <= innerWidth }));
+    assert.ok(before.over, '좁은 창에서는 탭이 넘친다(검사 전제)');
+    assert.ok(before.h <= 40, `한 줄(${before.h}px)`);
+    assert.ok(before.doc, '페이지 가로 넘침 없음');
+    await page.focus(`${sel} [aria-selected="true"]`);
+    await page.keyboard.press('End');
+    await page.waitForTimeout(150);
+    const last = await page.$eval(sel, (n) => { const b = n.querySelector('[role="tab"]:last-child'); const r = b.getBoundingClientRect(); const box = n.getBoundingClientRect(); return { sel: b.getAttribute('aria-selected'), inView: r.left >= box.left - 1 && r.right <= box.right + 1 }; });
+    assert.equal(last.sel, 'true');
+    assert.ok(last.inView, '고른 마지막 탭이 묶음 안에서 보인다');
+  });
+  await ctx.close();
 }
 
 await browser.close();

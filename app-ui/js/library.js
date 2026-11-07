@@ -74,7 +74,7 @@ export class LibraryPage {
         <h1 class="page-title">보관함</h1>
         <span class="page-subtitle">클립 · 다시보기 · 즐겨찾기 · 북마크</span>
       </header>
-      <div class="chips lib-tabs" role="tablist" aria-label="보관함">${TABS.map(([id, label]) => `<button class="chip" data-tab="${id}" role="tab">${label}</button>`).join('')}</div>
+      <div class="segmented page-tabs lib-tabs" role="tablist" aria-label="보관함">${TABS.map(([id, label]) => `<button class="seg" data-tab="${id}" role="tab">${label}</button>`).join('')}</div>
       <div class="lib-filters"></div>
       <div class="page-body"></div>`;
     content.append(this.root);

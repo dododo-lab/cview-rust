@@ -6,6 +6,7 @@ import { emptyState, loadingState, compactCount, errorState } from './cards.js';
 import { previewAttr } from './hover-preview.js';
 import { verifiedBadge } from './verified-badge.js';
 import { refreshVeiled } from './refresh-veil.js';
+import { syncTabs, bindTabKeys } from './a11y.js';
 
 const ICON_STAR = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></svg>';
 const ICON_STAR_LINE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></svg>';
@@ -138,10 +139,13 @@ export class ChannelPage {
         </div>
         ${live ? `<div class="channel-live-line"><span class="badge-live">LIVE</span> ${esc(live.liveTitle || '')}${live.categoryName ? ` · <span>${esc(live.categoryName)}</span>` : ''}</div>` : ''}
       </header>
-      <div class="chips channel-tabs" role="tablist">
-        ${[['info', '정보'], ['vod', '다시보기'], ['clip', '클립']].map(([id, label]) => `<button class="chip${this.tab === id ? ' active' : ''}" data-tab="${id}" role="tab">${label}</button>`).join('')}
+      <div class="segmented page-tabs channel-tabs" role="tablist" aria-label="채널">
+        ${[['info', '정보'], ['vod', '다시보기'], ['clip', '클립']].map(([id, label]) => `<button class="seg" data-tab="${id}" role="tab">${label}</button>`).join('')}
       </div>
       <div class="channel-tab-body"></div>`;
+    const tabs = this.body.querySelector('.channel-tabs');
+    syncTabs(tabs, this.tab, this.body.querySelector('.channel-tab-body'), 'channel');
+    bindTabKeys(tabs);
     this.renderTab();
   }
 
@@ -199,7 +203,7 @@ export class ChannelPage {
     const tab = e.target.closest('[data-tab]');
     if (tab) {
       this.tab = tab.dataset.tab;
-      for (const b of this.body.querySelectorAll('[data-tab]')) b.classList.toggle('active', b === tab);
+      syncTabs(tab.closest('[role="tablist"]'), this.tab, this.body.querySelector('.channel-tab-body'), 'channel');
       this.renderTab();
       return;
     }

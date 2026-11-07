@@ -6,6 +6,7 @@
 import { api, listen, Events } from './api.js';
 import { ACTIONS, FIXED, currentBindings, bindingLabel, bindingFromEvent, saveBinding, conflictOf } from './shortcuts.js';
 import { esc, toast } from './dom.js';
+import { bindTabKeys } from './a11y.js';
 import { emptyState, errorState, loadingState } from './cards.js';
 import { THEMES, THEME_LABELS, currentTheme, setTheme } from './theme.js';
 import { streamAlertsEnabled, setStreamAlertsEnabled, ALERT_HOME } from './donations.js';
@@ -238,10 +239,11 @@ export class SettingsPage {
   render() {
     if (!this.settings) return;
     const tabs = `<div class="settings-top">
-      <div class="chips settings-tabs">${GROUPS.map(([id, l]) => `<button class="chip${this.group === id ? ' active' : ''}" data-group="${id}">${l}</button>`).join('')}</div>
+      <div class="segmented page-tabs settings-tabs" role="tablist" aria-label="설정 분류">${GROUPS.map(([id, l]) => { const on = this.group === id; return `<button class="seg${on ? ' active' : ''}" data-group="${id}" role="tab" aria-selected="${on}" tabindex="${on ? 0 : -1}">${l}</button>`; }).join('')}</div>
       <input type="search" class="settings-search" placeholder="설정 검색" value="${esc(this.query)}">
     </div>`;
     this.body.innerHTML = `${tabs}<div class="settings-groups">${this.groupHtml()}</div><div class="settings-search-empty" role="status" hidden></div>`;
+    bindTabKeys(this.body.querySelector('.settings-tabs'));
     this.applySearch();
     this.refreshOAuth();
     if (this.body.querySelector('.update-row')) this.showUpdate();
@@ -618,7 +620,12 @@ export class SettingsPage {
     const sys = e.target.closest('[data-sys]');
     if (sys) { this.onSystem(sys); return; }
     const g = e.target.closest('[data-group]');
-    if (g) { this.group = g.dataset.group; this.query = ''; this.render(); return; }
+    if (g) {
+      const keepFocus = g === document.activeElement; // ←/→ 로 고르면 다시 그린 뒤에도 탭에 초점을 둔다
+      this.group = g.dataset.group; this.query = ''; this.render();
+      if (keepFocus) this.body.querySelector('.settings-tabs [aria-selected="true"]')?.focus();
+      return;
+    }
     if (e.target.closest('[data-settings-clear]')) {
       this.query = '';
       this.render();

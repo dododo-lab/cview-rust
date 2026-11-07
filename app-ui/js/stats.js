@@ -261,7 +261,7 @@ export class StatsPage {
         <span class="page-subtitle">이 기기에서 본 방송 기록으로 계산합니다 · 기록은 이 기기에만 저장됩니다</span>
       </header>
       <div class="stats-toolbar">
-        <div class="chips lib-tabs" role="tablist" aria-label="통계">${TABS.map(([id, label]) => `<button class="chip" data-tab="${id}" role="tab">${label}</button>`).join('')}</div>
+        <div class="segmented page-tabs lib-tabs" role="tablist" aria-label="통계">${TABS.map(([id, label]) => `<button class="seg" data-tab="${id}" role="tab">${label}</button>`).join('')}</div>
         <div class="segmented stats-period" role="group" aria-label="기간">${PERIODS.map(([id, label]) => `<button class="seg" data-period="${id}" aria-pressed="false">${label}</button>`).join('')}</div>
       </div>
       <div class="page-body stats-body"></div>
