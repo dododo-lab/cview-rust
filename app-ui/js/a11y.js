@@ -108,7 +108,25 @@ export function syncTabs(tablist, activeId, panel, prefix) {
 }
 
 /** 탭 묶음의 키보드 — ←/→ 로 옆 탭, Home/End 로 처음·끝 탭을 고르고 초점을 옮긴다(고르면 click 으로 바뀐다). */
+/** 가로로 넘치는 묶음의 넘친 쪽을 data-edge(start·end·both)로 알린다 — CSS 가 그쪽 끝을 흐리게 한다. */
+export function watchEdges(box) {
+  const update = () => {
+    const max = box.scrollWidth - box.clientWidth;
+    const start = box.scrollLeft > 2;
+    const end = max > 2 && box.scrollLeft < max - 2;
+    const edge = start && end ? 'both' : start ? 'start' : end ? 'end' : '';
+    if (edge) box.dataset.edge = edge; else delete box.dataset.edge;
+  };
+  box.addEventListener('scroll', update, { passive: true });
+  // 설정처럼 다시 그려 묶음이 통째로 바뀌는 화면이 있어, 떨어져 나가면 관찰을 끊는다
+  const ro = new ResizeObserver(() => { if (!box.isConnected) { ro.disconnect(); return; } update(); });
+  ro.observe(box);
+  update();
+  return update;
+}
+
 export function bindTabKeys(tablist) {
+  if (tablist.classList.contains('page-tabs')) watchEdges(tablist);
   tablist.addEventListener('keydown', (e) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const tabs = [...tablist.querySelectorAll('[role="tab"]')];

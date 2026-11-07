@@ -17,6 +17,14 @@ export function clampChatWidth(width, containerWidth, limits = CHAT_WIDTH) {
   return Math.round(Math.min(upper, Math.max(limits.min, w)));
 }
 
+/**
+ * 좁은 창 자동 접기 — 순수 함수. 채팅 최소 폭과 플레이어 최소 폭이 함께 들어가지 않으면(예: 640px 창의 멀티라이브)
+ * 채팅이 화면 절반을 차지해 영상이 너무 작아진다. 그때는 채팅을 접어 두고 '채팅' 버튼으로 연다(저장하지 않는다).
+ */
+export function tooNarrowForChat(containerWidth, limits = CHAT_WIDTH) {
+  return Number.isFinite(containerWidth) && containerWidth > 0 && containerWidth < limits.min + limits.minStage;
+}
+
 function load(key) {
   try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch { return null; }
 }
@@ -57,12 +65,21 @@ export function installChatSplitter({ container, chat, key }) {
   reopen.innerHTML = `${ICON_CHAT}<span>채팅</span>`;
   container.append(reopen);
 
+  // 좁아서 저절로 접힌 동안 사용자가 '채팅'을 눌러 열었는지 — 이번 실행만 기억하고, 다시 넓어지면 잊는다.
+  let openWhileNarrow = false;
   const apply = () => {
-    const width = clampChatWidth(state.width, container.getBoundingClientRect().width);
+    const box = container.getBoundingClientRect().width;
+    // 멀티라이브 '오버레이 채팅'은 이미 영상 위에 떠 있어 좁은 창 접기를 하지 않는다(그 모드에선 '채팅' 버튼도 숨는다)
+    const narrow = tooNarrowForChat(box) && !container.classList.contains('chat-overlay');
+    if (!narrow) openWhileNarrow = false;
+    const collapsed = state.collapsed || (narrow && !openWhileNarrow);
+    const width = clampChatWidth(state.width, box);
     chat.style.width = `${width}px`;
-    chat.classList.toggle('collapsed', state.collapsed);
-    handle.hidden = state.collapsed;
-    reopen.hidden = !state.collapsed;
+    chat.classList.toggle('collapsed', collapsed);
+    chat.classList.toggle('auto-collapsed', collapsed && !state.collapsed);
+    chat.classList.toggle('narrow-open', narrow && !collapsed); // 좁은 창에서 연 채팅은 영상 위에 겹친다(영상을 밀어내지 않게)
+    handle.hidden = collapsed || narrow;
+    reopen.hidden = !collapsed;
     handle.setAttribute('aria-valuenow', String(width));
     handle.setAttribute('aria-valuemax', String(clampChatWidth(CHAT_WIDTH.max, container.getBoundingClientRect().width)));
   };
@@ -111,15 +128,18 @@ export function installChatSplitter({ container, chat, key }) {
     persist();
   });
   collapse.addEventListener('click', () => {
+    if (openWhileNarrow && !state.collapsed) { openWhileNarrow = false; apply(); return; } // 좁은 창에서 잠깐 연 것만 다시 접는다(저장값은 그대로)
     state.collapsed = true;
     apply();
     persist();
   });
   reopen.addEventListener('click', () => {
+    if (!state.collapsed && tooNarrowForChat(container.getBoundingClientRect().width)) { openWhileNarrow = true; apply(); return; }
     state.collapsed = false;
     apply();
     persist();
   });
   new ResizeObserver(() => apply()).observe(container);
+  new MutationObserver(() => apply()).observe(container, { attributes: true, attributeFilter: ['class'] });
   apply();
 }
