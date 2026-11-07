@@ -3,6 +3,8 @@
 //     — 예전엔 숨은 멀티라이브·멀티채팅 세그먼트 판(motion.js place)과 채팅 분할기(splitter.js apply)가 시작마다 일으켰다.
 // P02 화면마다 10초 가만히 둘 때 스크립트·레이아웃·요청이 거의 없는지(주기적 다시 그리기·폴링 회귀).
 // P03 첫 화면 아래의 목록 이미지는 지연 로딩(loading="lazy")인지.
+// P04 붐비는 채팅(초당 200개, CPU 4배 감속)에서 넘친 줄을 모았다가 한 번에 지우는지(trimFront), 프레임이 버티는지.
+//     — 예전엔 플러시마다 앞에서 몇 줄씩 지워 남은 줄 전체가 다시 배치됐다(프레임 25~47%가 20ms 초과).
 // 저장소 루트에서: node tools/ui-regression/perf.mjs   (Playwright 가 필요하다)
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -87,6 +89,67 @@ await check('P01 startup: app code forces almost no synchronous layout', async (
   }
   await ctx.close();
 }
+
+// ── P04 채팅 폭주 ──
+await check('P04 chat burst: trims overflow in batches and keeps frames', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  const cdp = await ctx.newCDPSession(page);
+  await page.addInitScript(mockTauri, [base, 'dark']);
+  // 모의 listen 은 아무것도 하지 않는다 — 채팅 이벤트를 흘려 보낼 수 있게 바꾼다.
+  await page.addInitScript(() => {
+    const m = new Map();
+    window.__TAURI__.event = { listen: async (n, f) => { if (!m.has(n)) m.set(n, new Set()); m.get(n).add(f); return () => m.get(n).delete(f); } };
+    window.__emit = (n, p) => { for (const f of m.get(n) || []) f({ event: n, payload: p }); };
+    const inv = window.__TAURI__.core.invoke;
+    window.__TAURI__.core.invoke = async (c, a) => { try { return await inv(c, a); } catch { return null; } };
+  });
+  await page.goto(base);
+  await page.waitForFunction(() => !document.getElementById('splash') || !document.getElementById('splash').isConnected, null, { timeout: 20000 });
+  await page.evaluate(async () => {
+    const { ChatPanel } = await import('/js/chat.js');
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;right:0;top:0;width:360px;height:860px;z-index:9999;display:flex;flex-direction:column';
+    box.innerHTML = document.querySelector('#viewer .chat').outerHTML;
+    document.body.appendChild(box);
+    const root = box.firstElementChild;
+    root.hidden = false;
+    root.style.cssText = 'display:flex;flex-direction:column;height:100%;width:100%';
+    root.querySelectorAll('.chat-tools,.chat-tools-toggle').forEach((x) => x.remove());
+    const panel = new ChatPanel(root, { isLoggedIn: () => true });
+    await panel.connect('cc1', 'ch1').catch(() => {});
+    panel.active = true;
+    panel.chatChannelId = null;
+    window.__panel = panel;
+    window.__trims = [];
+    new MutationObserver((ms) => { const k = ms.reduce((a, r) => a + [...r.removedNodes].filter((x) => !x.classList?.contains('empty')).length, 0); if (k) window.__trims.push(k); }).observe(panel.list, { childList: true });
+  });
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+  const r = await page.evaluate(async () => {
+    let n = 0;
+    const mk = () => ({ id: `syn-${++n}`, kind: 'chat', nickname: `테스트${n % 50}`, content: `합성 메시지 ${n} 가나다라마바사 ㅋㅋㅋㅋ`, emojis: {}, role: 'common_user', badges: [], time: Date.now() });
+    const d = []; let last = performance.now(); let run = true;
+    const tick = (t) => { d.push(t - last); last = t; if (run) requestAnimationFrame(tick); };
+    requestAnimationFrame(tick);
+    const until = performance.now() + 4000;
+    while (performance.now() < until) {
+      window.__emit('chat://event', { type: 'messages', messages: Array.from({ length: 10 }, mk) });
+      await new Promise((res) => setTimeout(res, 50));
+    }
+    run = false;
+    await new Promise((res) => setTimeout(res, 300));
+    d.shift();
+    const max = window.__panel.maxLines;
+    return { over20: d.filter((x) => x > 20).length / d.length, lines: window.__panel.list.children.length, max, trims: window.__trims };
+  });
+  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+  assert.ok(r.lines <= r.max * 1.25 + 1 && r.lines >= r.max, `줄 수 ${r.lines}(상한 ${r.max})`);
+  assert.ok(r.trims.length <= 15, `앞에서 지운 횟수 ${r.trims.length} — 붙일 때마다 지우고 있다`);
+  assert.ok(r.trims.every((k) => k >= 20), `한 번에 지운 줄 ${r.trims}`);
+  // 프레임은 기계에 따라 흔들려 넉넉히 — 고치기 전 25~47%, 고친 뒤 약 4%.
+  assert.ok(r.over20 < 0.15, `20ms 넘은 프레임 ${(r.over20 * 100).toFixed(1)}%`);
+  await ctx.close();
+});
 
 await browser.close();
 server.close();

@@ -10,7 +10,7 @@ import { applyChatSkin } from './chat-extras.js';
 import { nickColorClass } from './nick-color.js';
 import { chatPrefs, onChatPrefs, passesFilters } from './chat-prefs.js';
 import { kbd } from './platform.js';
-import { chatFollower } from './chat-follow.js';
+import { chatFollower, trimFront } from './chat-follow.js';
 import { MultiLiveAddDrawer } from './ml-add-drawer.js';
 import { verifiedBadge } from './verified-badge.js';
 
@@ -285,7 +285,7 @@ export class MultiChatPage {
         line.classList.toggle('search-hit', ok);
       }
     }
-    while (this.mergedList.children.length > 600) this.mergedList.firstElementChild.remove();
+    trimFront(this.mergedList, 600);
     if (q) this.queueSearchNote();
     if (follow) follower.snap();
   }
