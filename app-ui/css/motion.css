@@ -110,7 +110,7 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 .refresh-veil { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; pointer-events: none; }
 .refresh-veil[hidden] { display: none; }
 .content.with-insights > .refresh-veil { right: var(--insight-w); }
-.rv-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 26px 16px; border-radius: 22px;
+.rv-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 26px 16px; border-radius: var(--radius-xl);
   background: var(--surface-popover); border: 1px solid var(--border-subtle); box-shadow: var(--shadow-lg);
   animation: rv-in .32s cubic-bezier(.34, 1.56, .64, 1) both; }
 .refresh-veil.leaving .rv-card { transition: opacity .2s ease, scale .2s cubic-bezier(.4, 0, .2, 1); opacity: 0; scale: .94; }
@@ -370,7 +370,7 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 .segmented.has-glider { position: relative; isolation: isolate; }
 .seg-glider {
   position: absolute; left: 0; top: 0; z-index: -1; pointer-events: none; opacity: 0;
-  border-radius: var(--glider-r, 8px); background: var(--glider-bg, var(--surface-base)); box-shadow: var(--glider-shadow, var(--shadow-sm));
+  border-radius: var(--glider-r, var(--radius-sm)); background: var(--glider-bg, var(--surface-base)); box-shadow: var(--glider-shadow, var(--shadow-sm));
   transition: translate .36s var(--ease-spring), width .3s var(--ease-emph), height .3s var(--ease-emph), opacity var(--dur-2) ease;
 }
 .seg-glider.instant { transition: none; }
