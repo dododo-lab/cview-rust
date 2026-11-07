@@ -581,7 +581,7 @@
 .ml-watch-chip.active { padding-left: 6px; gap: 8px; }
 
 /* 칩은 4개씩만(multilive.js CHIP_WINDOW) — 창 밖 칩은 숨기고 양끝에 가려진 개수 "+N". 휠로 한 칸씩 넘긴다. */
-.ml-watch-chip[hidden], .ml-watch-more[hidden] { display: none; }
+.ml-watch-tab[hidden], .ml-watch-more[hidden] { display: none; }
 .ml-watch-more {
   flex: none; align-self: center; height: 22px; min-width: 26px; padding: 0 6px; border: 0; border-radius: 6px;
   background: var(--hover); color: var(--text-tertiary); font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; cursor: pointer;
@@ -590,11 +590,30 @@
 .ml-watch-more.start { margin-right: 2px; }
 .ml-watch-more.end { margin-left: 2px; }
 .ml-watch-more:hover { color: var(--text-primary); background: var(--surface-overlay); }
-.ml-watch-chip.enter-end { animation: ml-chip-enter-end .2s var(--ease-out); }
-.ml-watch-chip.enter-start { animation: ml-chip-enter-start .2s var(--ease-out); }
+.ml-watch-tab.enter-end { animation: ml-chip-enter-end .2s var(--ease-out); }
+.ml-watch-tab.enter-start { animation: ml-chip-enter-start .2s var(--ease-out); }
 @keyframes ml-chip-enter-end { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: none; } }
 @keyframes ml-chip-enter-start { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
-:root[data-motion="reduced"] .ml-watch-chip { animation: none !important; }
+:root[data-motion="reduced"] .ml-watch-tab { animation: none !important; }
+
+/* 채널 닫기(×) — 칩과 나란한 단추를 칩의 아바타 자리(왼쪽 4px, 지금 보는 칩은 6px)에 겹쳐 둔다. 평소엔 숨었다가 칩에
+   마우스를 올리거나 칩·× 에 초점이 오면 아바타가 사라지고 그 자리에 × 가 뜬다(브라우저 탭의 파비콘 → ×).
+   칩 폭은 그대로라 칩 줄이 흔들리지 않는다. 지금 보는 칩은 아바타처럼 초록 링을 그대로 두른다. */
+.ml-watch-tab { position: relative; flex: none; display: flex; align-items: stretch; min-width: 0; }
+.ml-watch-close {
+  position: absolute; left: 4px; top: 50%; width: 20px; height: 20px; margin-top: -10px; padding: 0; border: 0; border-radius: 50%;
+  display: grid; place-items: center; background: var(--surface-overlay); color: var(--text-secondary); cursor: pointer;
+  opacity: 0; pointer-events: none;
+  transition: opacity .15s var(--ease-out), color .15s var(--ease-out), background-color .15s var(--ease-out);
+}
+.ml-watch-close svg { width: 11px; height: 11px; }
+.ml-watch-tab.active .ml-watch-close { left: 6px; box-shadow: 0 0 0 2px var(--surface-base), 0 0 0 4px var(--primary); }
+.ml-watch-tab:is(:hover, :focus-within) .ml-watch-close { opacity: 1; pointer-events: auto; }
+.ml-watch-tab:is(:hover, :focus-within) .ml-watch-chip :is(img, .ml-watch-dot) { opacity: 0; }
+.ml-watch-close:hover { color: var(--error); }
+.ml-watch-close:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+/* × 위에 있어도 칩은 가리킨 모양을 유지한다(× 는 칩의 형제라 칩의 :hover 가 풀린다). */
+.ml-watch-tab:hover .ml-watch-chip:not(.active) { color: var(--text-primary); background: var(--hover); }
 
 /* ── 채널 칩 미리보기 말풍선(ml-chip-peek.js) — 칩 바로 아래, 꼬리가 칩 가운데를 가리킨다 ── */
 .ml-peek {
