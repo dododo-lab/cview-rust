@@ -11,7 +11,7 @@ import { DonationRanking, eventCardHtml, eventClasses, EVENT_ICONS } from './don
 import { installChatExtras } from './chat-extras.js';
 import { nickColorClass } from './nick-color.js';
 import { kbd } from './platform.js';
-import { chatFollower } from './chat-follow.js';
+import { chatFollower, trimFront } from './chat-follow.js';
 import { openUserPop, closeUserPop } from './chat-user-pop.js';
 import {
   chatPrefs, onChatPrefs, updateChatPrefs, passesFilters, mentionsMe, getMyNickname,
@@ -499,12 +499,16 @@ export class ChatPanel {
     for (const fn of this.appendHooks) {
       try { fn(shown); } catch (e) { console.error(e); }
     }
-    let extra = this.list.children.length - this.maxLines;
-    while (extra-- > 0) this.list.firstElementChild.remove();
-    // 맨 위에 남은 줄이 묶음 중간이면 아바타·이름을 다시 보인다
-    this.list.firstElementChild?.classList.remove('cont');
+    this.trimLines();
     if (follow) this.follower.snap();
     else { this.unread += shown.length; this.renderJump(); }
+  }
+
+  /** 줄 상한(trimFront — 넘친 줄을 모았다가 한 번에 지운다). */
+  trimLines() {
+    if (!trimFront(this.list, this.maxLines)) return;
+    // 맨 위에 남은 줄이 묶음 중간이면 아바타·이름을 다시 보인다
+    this.list.firstElementChild?.classList.remove('cont');
   }
 
   onScroll() {

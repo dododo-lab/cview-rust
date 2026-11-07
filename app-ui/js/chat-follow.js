@@ -78,6 +78,21 @@ export function followAppend(list, insert, { resumeMs = 0 } = {}) {
   return follow;
 }
 
+/**
+ * 줄 상한 — 넘친 줄을 앞에서 지운다. 붙일 때마다 몇 줄씩 지우면 남은 줄이 모두 위로 밀려 목록 전체를 다시
+ * 배치한다(붐비는 채팅에서 붙일 때마다 수백 줄 레이아웃 — 4배 감속 초당 200개에서 프레임 25%가 20ms 를 넘었다).
+ * 그래서 상한의 1/4(최소 20줄)을 더 넘칠 때까지 두었다가 상한까지 한 번에 지운다. 지웠으면 참.
+ */
+export function trimFront(list, max) {
+  const children = list.children;
+  if (children.length <= max + Math.max(20, max >> 2)) return false;
+  const range = document.createRange();
+  range.setStartBefore(children[0]);
+  range.setEndAfter(children[children.length - max - 1]);
+  range.deleteContents();
+  return true;
+}
+
 function resyncAll() {
   for (const ref of followers) {
     const f = ref.deref();

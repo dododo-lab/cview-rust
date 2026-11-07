@@ -14,7 +14,7 @@ import { esc } from './dom.js';
 import { mergedLinesHtml } from './multichat.js';
 import { applyChatSkin } from './chat-extras.js';
 import { onChatPrefs } from './chat-prefs.js';
-import { chatFollower, followAppend } from './chat-follow.js';
+import { chatFollower, followAppend, trimFront } from './chat-follow.js';
 import { bindMenuKeys, focusFirstMenuItem } from './ml-pane-controls.js';
 import { verifiedBadge } from './verified-badge.js';
 
@@ -54,7 +54,7 @@ function appendTo(list, html, max) {
     const empty = list.querySelector(':scope > .empty');
     if (empty) empty.remove();
     list.insertAdjacentHTML('beforeend', html);
-    while (list.children.length > max) list.firstElementChild.remove();
+    trimFront(list, max);
   }, { resumeMs: RESUME_FOLLOW_MS });
 }
 
