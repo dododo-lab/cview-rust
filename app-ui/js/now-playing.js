@@ -131,12 +131,13 @@ export function vodHandlers(video, { step = 10 } = {}) {
 
 /**
  * 멀티라이브에서 시스템에 보일 패인 — 소리 나는 패인 중 라이브 무대(watch)·선택·포커스 메인 순, 소리 나는 패인이
- * 없으면 같은 순서로 아무 패인. 플레이어가 없는 세션(slot 없음)은 고르지 않는다.
+ * 없으면 같은 순서로 아무 패인. 플레이어가 없는 세션(slot 없음)·끝난 방송(state.kind 'offline')은 고르지 않는다.
  * @param {Array<{id: string, slot?: number|null, isAudible?: boolean}>} sessions
  * @param {{ watchId?: string|null, selectedId?: string|null, focusMainId?: string|null }} [state]
  */
 export function pickNowPlayingSession(sessions, state = {}) {
-  const list = (sessions || []).filter((s) => s && s.slot != null);
+  // 끝난 방송은 슬롯·소리 라우팅이 남아도 고르지 않는다.
+  const list = (sessions || []).filter((s) => s && s.slot != null && !(s.state && s.state.kind === 'offline'));
   if (!list.length) return null;
   const prefer = [state.watchId, state.selectedId, state.focusMainId].filter(Boolean);
   const pick = (pool) => {

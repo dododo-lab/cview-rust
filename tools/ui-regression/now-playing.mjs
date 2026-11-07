@@ -137,6 +137,9 @@ assert.equal(pickNowPlayingSession([S('a', 0, true), S('b', 1, true)], { selecte
 assert.equal(pickNowPlayingSession([S('a', 0, true), S('b', 1, true)], { watchId: 'a', selectedId: 'b' }).id, 'a', '라이브 무대가 가장 먼저');
 assert.equal(pickNowPlayingSession([S('a', 0), S('b', 1)], { selectedId: 'b' }).id, 'b', '모두 무음이면 선택된 패인');
 assert.equal(pickNowPlayingSession([S('a', 0), S('b', 1)], {}).id, 'a');
+assert.equal(pickNowPlayingSession([{ ...S('a', 0, true), state: { kind: 'offline' } }, S('b', 1)], { selectedId: 'a' }).id, 'b', '끝난 방송은 고르지 않는다');
+assert.equal(pickNowPlayingSession([{ ...S('a', 0, true), state: { kind: 'offline' } }], {}), null);
+assert.equal(pickNowPlayingSession([{ ...S('a', 0, true), state: { kind: 'playing' } }], {}).id, 'a');
 assert.deepEqual(multiLiveNowPlayingInfo({ ...S('a', 0), channelName: '', thumbnailUrl: 't', profileImageUrl: 'p' }), {
   kind: 'live', title: '방송a', channelName: 'c-a', thumbnailUrl: 't', imageUrl: 'p',
 });

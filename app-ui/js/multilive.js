@@ -90,6 +90,18 @@ export function pickTintHue(used, rand = Math.random) {
 const CHIP_WINDOW = 4;
 const CHIP_WHEEL_STEP = 40;
 
+/**
+ * 패인이 재생 중이거나 재생하려는가 — 디코드 예산으로 잠시 멈춘 패인(suspendLoading)은 영상이 멈춰 있어도
+ * 재생 의도가 남아 있다(player.html watchIntendsPlay). 페이지 함수가 없으면 영상 상태로.
+ */
+function paneIntendsPlay(pane, video) {
+  try {
+    const fn = pane.bridge.iframe.contentWindow?.watchIntendsPlay;
+    if (typeof fn === 'function') return Boolean(fn());
+  } catch { /* 준비 전 */ }
+  return !video.paused;
+}
+
 export class MultiLivePage {
   /**
    * @param {{ isLoggedIn: () => boolean, onAddChannel?: (channelId: string, opts?: { quiet?: boolean }) => Promise<void>,
@@ -335,7 +347,9 @@ export class MultiLivePage {
       pause: () => {
         for (const [slot, pane] of this.panes) {
           const v = pane.sessionId && !pane.exiting ? pane.controls.video : null;
-          if (v && !v.paused) { pane.bridge.call('pause'); this.systemPaused.add(slot); }
+          if (!v || !paneIntendsPlay(pane, v)) continue;
+          pane.bridge.call('pause');
+          this.systemPaused.add(slot);
         }
       },
       play: () => {
@@ -562,6 +576,8 @@ export class MultiLivePage {
         pane.el.style.setProperty('--ml-hue', String(pane.hue));
         // 같은 슬롯을 다른 채널이 다시 쓰면 앞 채널의 볼륨 0·수동 화질이 넘어왔다.
         pane.controls?.reset();
+        // 시스템 일시정지 기록도 앞 채널 것 — 남기면 다음 시스템 재생이 새 채널의 수동 정지를 푼다.
+        this.systemPaused.delete(s.slot);
       }
       pane.sessionId = s.id;
       // 성능 수집기가 player.net(채널 앞 6자)과 맞춘다. data-channel-id 를 쓰면 안 된다 — 카드 열기(bindCardOpen)가
@@ -610,7 +626,12 @@ export class MultiLivePage {
 
   /** 시스템 '지금 재생 중' — 소리 나는(없으면 보고 있는) 패인의 방송을 모든 패인 문서에 넣고, 닫힌 패인은 지운다. */
   syncNowPlaying(sessions, state) {
-    const target = pickNowPlayingSession(sessions, state);
+    // 실제로 들리는가 — Rust 의 소리 라우팅(isAudible)에 패인 볼륨(0 이면 무음)을 더한다(PaneControls.sync 와 같은 기준).
+    const heard = sessions.map((s) => {
+      const gain = s.slot != null ? this.panes.get(s.slot)?.controls?.gain : undefined;
+      return gain === 0 && s.isAudible ? { ...s, isAudible: false } : s;
+    });
+    const target = pickNowPlayingSession(heard, state);
     this.nowPlayingSlot = target ? target.slot : null;
     const info = multiLiveNowPlayingInfo(target);
     for (const [slot, pane] of this.panes) {

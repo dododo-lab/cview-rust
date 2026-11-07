@@ -33,7 +33,8 @@ export class MediaPage {
     this.body.addEventListener('click', (e) => this.onClick(e));
     this.body.addEventListener('change', (e) => this.onChange(e));
     // 화면을 떠나면 멈추고 위치를 저장한다.
-    new MutationObserver(() => { if (this.root.hidden) this.leave(); })
+    // 진행 중인 열기(vodPlay 응답 대기)도 무효로 — 늦은 응답이 떠난 영상의 지금 재생 중 정보를 다시 넣지 않게.
+    new MutationObserver(() => { if (this.root.hidden) { this.seq++; this.leave(); } })
       .observe(this.root, { attributes: true, attributeFilter: ['hidden'] });
   }
 
