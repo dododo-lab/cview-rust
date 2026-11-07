@@ -882,7 +882,7 @@ export class ChatPanel {
     let items = [];
     if (tok.kind === ':') {
       items = this.allEmoticons().filter((e) => e.id.toLowerCase().startsWith(q) || String(e.name).toLowerCase().includes(q)).slice(0, 8)
-        .map((e) => ({ value: `{:${e.id}:}`, html: `<img src="${esc(imageSrc(e.url, 'static'))}" alt="" referrerpolicy="no-referrer"><span>${esc(e.name)}</span>` }));
+        .map((e) => ({ value: `{:${e.id}:}`, html: `<img loading="lazy" decoding="async" src="${esc(imageSrc(e.url, 'static'))}" alt="" referrerpolicy="no-referrer"><span>${esc(e.name)}</span>` }));
     } else {
       items = [...this.recentNicks.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n)
         .filter((n) => n.toLowerCase().includes(q)).slice(0, 8)

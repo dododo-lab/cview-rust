@@ -79,6 +79,12 @@
   --radius-xl: 20px;
   --radius-pill: 999px;
 
+  /* 컨트롤 높이 — 기본 컨트롤은 줄 높이로 맞춘다(min-height 를 쓰면 일부러 작게 만든 툴바 변형까지 커진다).
+     sm: 칩·선택 상자 · md: 버튼·세그먼트·검색칸·둥근 아이콘 버튼 · lg: 큰 버튼·큰 검색 필드 */
+  --control-sm: 32px;
+  --control-md: 36px;
+  --control-lg: 40px;
+
   /* 글자 크기 — 92px 같은 장식용 숫자·이모지만 리터럴로 둔다 */
   --fs-hero: 34px;               /* 홈 히어로 제목 최대(clamp) */
   --fs-display: 30px;            /* 홈 인사말 */
@@ -615,12 +621,24 @@ a { color: var(--primary); }
 /* ── 상태 ─────────────────────────────────── */
 .empty {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--sp-sm);
-  padding: 64px var(--sp-lg); color: var(--text-tertiary); text-align: center;
+  padding: 64px var(--sp-lg); color: var(--text-tertiary); font-size: var(--fs-caption); line-height: 1.5; text-align: center;
   word-break: keep-all; overflow-wrap: anywhere;   /* 한국어는 어절 단위로 줄바꿈(DT-2) */
 }
-.empty strong { color: var(--text-secondary); font-size: var(--fs-subhead); }
+/* 빈 상태·오류는 한 가지 구조 — <div class="empty [lg] [boxed] [error]">[.empty-logo | .empty-icon]<strong>제목</strong><span>설명</span>[버튼]</div>
+   기본: 목록·카드 자리(emptyState·errorState). lg: 화면 한가운데 큰 자리(멀티라이브 무대·멀티채팅). boxed: 채널을 넣을 자리임을 점선으로.
+   예전엔 화면마다 따로 그려 제목이 보조색 16px · 기본색 20px · 15px · 14px 로 제각각이었다. */
+.empty[hidden] { display: none; }
+.empty > strong { color: var(--text-primary); font-size: var(--fs-subhead); font-weight: 700; line-height: 1.35; }
+.empty > span:not(.empty-icon) { max-width: 440px; }
+.empty.lg { font-size: var(--fs-body); }
+.empty.lg > strong { font-size: var(--fs-headline); }
+.empty.boxed { border: 1px dashed var(--border); border-radius: var(--radius-lg); }
+.empty.boxed.error { border-style: solid; border-color: color-mix(in srgb, var(--live) 30%, var(--border-subtle)); }
+.empty > .btn { margin-top: var(--sp-xs); }
+.empty-icon { display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 4px; border-radius: var(--radius-lg); color: var(--text-secondary); background: color-mix(in srgb, var(--text-primary) 6%, transparent); }
+.empty-icon svg { width: 24px; height: 24px; }
 /* 여러 줄 안내문도 어절 단위로(DT-2) */
-:is(.mc-empty, .ip-empty, .welcome p, .home-notice, .tray-empty, .side-empty, .chat-notice, .pp-note, .setting-label small, .player-overlay span) { word-break: keep-all; overflow-wrap: anywhere; }
+:is(.ip-empty, .welcome p, .home-notice, .tray-empty, .side-empty, .chat-notice, .pp-note, .setting-label small, .player-overlay span) { word-break: keep-all; overflow-wrap: anywhere; }
 /* 로더(.spinner)는 motion.css 의 로고 로더. spin 은 새로고침 아이콘 회전에 쓴다. */
 @keyframes spin { to { rotate: 360deg; } } /* transform 대신 rotate — 위치를 transform 으로 잡은 요소와 겹치지 않게(motion.css 와 같은 규칙) */
 .skeleton { background: var(--surface-elevated); border-radius: var(--radius-md); aspect-ratio: 16 / 9; }
@@ -640,7 +658,7 @@ a { color: var(--primary); }
   background: var(--surface-base); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg);
   margin-bottom: var(--sp-xl); max-width: 720px;
 }
-.settings-group h3 {
+.settings-group :is(h2, h3) {
   font-size: var(--fs-caption); color: var(--text-tertiary); font-weight: 600; padding: var(--sp-md) var(--sp-lg) 0;
 }
 .setting {
@@ -766,7 +784,7 @@ select.select {
 .icon-btn.round:hover { background: var(--surface-elevated); }
 .btn.lg { padding: 9px 18px; font-size: var(--fs-body); border-radius: var(--radius-ms); }
 
-.home { display: flex; flex-direction: column; gap: 40px; padding-bottom: var(--sp-xxl); }
+.home { container: home / inline-size; display: flex; flex-direction: column; gap: 40px; padding-bottom: var(--sp-xxl); }
 .home-section { min-width: 0; }
 .section-head { display: flex; align-items: flex-end; gap: var(--sp-sm); margin-bottom: 14px; }
 .section-titles { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -917,6 +935,16 @@ select.select {
 .queue-item.active .queue-progress { animation: queue-progress 7s linear forwards; }
 .hero:hover .queue-item.active .queue-progress { animation-play-state: paused; }
 @keyframes queue-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+/* 넓은 창(홈 폭 1400px 이상) — 히어로가 2000px 넘게 가로로만 늘어나 띠처럼 보였다. 넘김 탭을 오른쪽 세로 목록으로 옮기고
+   히어로는 약 3:1 비율을 지킨다(높이 460→최대 580px). */
+@container home (min-width: 1400px) {
+  .hero { display: grid; grid-template-columns: minmax(0, 1fr) clamp(280px, 20%, 360px); gap: 12px; }
+  .hero-main, .hero-sk { min-height: clamp(460px, 28cqi, 580px); }
+  .hero-queue { grid-auto-flow: row; grid-auto-columns: auto; grid-auto-rows: minmax(0, 1fr); overflow-x: hidden; overflow-y: auto; }
+  .queue-item { padding: 14px 12px 10px; }
+  .queue-thumb { width: 96px; }
+  .home .hero-queue .queue-sk { height: auto; }
+}
 .queue-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .queue-title {
   font-size: var(--fs-footnote); font-weight: 600; line-height: 1.3; color: var(--text-secondary);
@@ -986,7 +1014,7 @@ select.select {
 .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: var(--sp-lg); }
 .chip {
   border: 1px solid var(--border-subtle); background: var(--surface-base); color: var(--text-secondary);
-  padding: 6px 14px; border-radius: var(--radius-pill); font-size: var(--fs-caption); font-weight: 500;
+  padding: 6px 14px; border-radius: var(--radius-pill); font-size: var(--fs-caption); font-weight: 500; line-height: 18px; /* = --control-sm */
   transition: background 0.15s ease, color 0.15s ease;
 }
 .chip:hover { background: var(--surface-elevated); color: var(--text-primary); }
@@ -1043,7 +1071,7 @@ html, body {
   transition: background 0.16s var(--ease-out), color 0.16s var(--ease-out), border-color 0.16s var(--ease-out),
     box-shadow 0.16s var(--ease-out), transform 0.16s var(--ease-out);
 }
-.btn { border-radius: var(--radius-ms); padding: 7px 14px; border-color: var(--border-subtle); box-shadow: var(--shadow-sm); }
+.btn { border-radius: var(--radius-ms); padding: 7px 14px; line-height: 20px; border-color: var(--border-subtle); box-shadow: var(--shadow-sm); } /* = --control-md, .btn.lg = --control-lg */
 .btn:hover { background: var(--surface-overlay); border-color: var(--border); }
 .btn:active:not(:disabled) { transform: scale(0.98); }
 .btn.primary { box-shadow: 0 6px 18px var(--primary-glow); }
@@ -1093,7 +1121,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 
 /* 설정 */
 .settings-group { border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); overflow: hidden; }
-.settings-group h3 { text-transform: none; letter-spacing: 0.2px; padding-top: var(--sp-lg); }
+.settings-group :is(h2, h3) { text-transform: none; letter-spacing: 0.2px; padding-top: var(--sp-lg); }
 .setting { padding: 14px var(--sp-lg); }
 .toggle span { background: var(--surface-overlay); box-shadow: inset 0 0 0 1px var(--border); }
 .toggle span::after { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
@@ -1104,11 +1132,25 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .segmented { display: inline-flex; padding: 3px; gap: 2px; border-radius: var(--radius-ms); background: var(--surface-elevated); border: 1px solid var(--border-subtle); }
 .segmented .seg {
   border: 0; background: transparent; color: var(--text-secondary); font-size: var(--fs-caption);
-  padding: 5px 12px; border-radius: var(--radius-sm); display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: var(--radius-sm); display: inline-flex; align-items: center; gap: 6px; line-height: 18px; /* 묶음 높이 = --control-md */
 }
 .segmented .seg svg { width: 14px; height: 14px; }
 .segmented .seg:hover { color: var(--text-primary); }
 .segmented .seg.active { background: var(--surface-base); color: var(--text-primary); font-weight: 600; box-shadow: var(--shadow-sm); }
+/* 화면 탭(보관함·통계·설정·채널) — 화면 안 탭은 세그먼트로 그린다(필터는 칩, 정렬·보기 방식도 세그먼트).
+   탭이 많아 넘치면 줄을 바꾸지 않고 묶음 안에서 가로로 민다(고른 탭은 a11y.syncTabs 가 보이게 민다). */
+.segmented.page-tabs { display: flex; width: fit-content; max-width: 100%; min-width: 0; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+.segmented.page-tabs::-webkit-scrollbar { display: none; }
+.segmented.page-tabs .seg { flex: none; white-space: nowrap; }
+/* 넘친 쪽 끝을 흐리게 — 더 있다는 표시(a11y.watchEdges 가 data-edge 를 단다) */
+.segmented.page-tabs[data-edge="end"] { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
+.segmented.page-tabs[data-edge="start"] { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px); mask-image: linear-gradient(90deg, transparent, #000 36px); }
+.segmented.page-tabs[data-edge="both"] { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
+/* 좁은 머리줄 — 멀티채팅처럼 검색칸·전환·버튼이 한 줄에 몰리면 검색칸이 96px 로 눌렸다. 좁으면 검색칸을 다음 줄 전체로 내린다. */
+@media (max-width: 760px) {
+  .page-header.ph:has(> .mc-search) { flex-wrap: wrap; row-gap: 10px; }
+  .ph > .mc-search { order: 9; flex: 1 1 100%; width: auto; }
+}
 
 /* 라이브 메뉴 보기 전환(라이브 · 멀티라이브) — 제목 옆 알약. 아이콘+글자, 고른 쪽은 떠 있는 판에 브랜드색 아이콘.
    머리줄이 좁아도 줄지 않는다. */
@@ -1281,6 +1323,8 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .resizing, .resizing * { user-select: none; cursor: col-resize; }
 .resizing iframe { pointer-events: none; }
 .chat.collapsed { display: none; }
+/* 좁은 창에서 '채팅' 버튼으로 연 채팅 — 플레이어 옆이 아니라 위에 겹친다(splitter.js tooNarrowForChat) */
+.chat.narrow-open { position: absolute; top: 0; right: 0; bottom: 0; z-index: 6; max-width: 86%; box-shadow: var(--shadow-lg); }
 .chat-collapse { margin-left: auto; width: 28px; height: 28px; color: var(--text-tertiary); }
 .chat-collapse svg { width: 16px; height: 16px; }
 .chat-reopen {
@@ -1413,6 +1457,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .media-stage.vertical { aspect-ratio: 9 / 16; max-height: calc(100vh - 200px); max-width: 100%; height: calc(100vh - 200px); }
 .media-stage video { width: 100%; height: 100%; display: block; background: #000; }
 .media-stage .empty { height: 100%; color: #ccc; }
+.media-stage .empty > strong { color: #fff; } /* 검은 무대 위 — 라이트 테마에서도 밝게 */
 .media-bar { display: flex; align-items: center; gap: var(--sp-sm); flex-wrap: wrap; margin-top: var(--sp-md); }
 .media-title { font-size: var(--fs-headline); font-weight: 800; letter-spacing: -0.3px; line-height: 1.3; }
 .media-meta { color: var(--text-secondary); font-size: var(--fs-caption); margin-top: 4px; display: flex; align-items: center; flex-wrap: wrap; gap: 2px; }
@@ -1892,15 +1937,15 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .update-notes { max-height: 220px; overflow: auto; margin: 0; padding: 10px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--surface-elevated); font: inherit; font-size: var(--fs-caption); white-space: pre-wrap; }
 
 /* ══ 설정 (settings.js) ════════════════════════════════════════ */
-.settings-top { display: flex; align-items: center; gap: var(--sp-md); flex-wrap: wrap; margin-bottom: var(--sp-lg); max-width: 860px; }
-.settings-tabs { margin: 0; flex: 1; }
-.settings-search { width: 220px; height: 34px; border-radius: var(--radius-ms); border: 1px solid var(--border-subtle); background: var(--surface-base); padding: 0 12px; outline: none; }
+.settings-top { display: flex; align-items: center; gap: var(--sp-md); flex-wrap: wrap; margin-bottom: var(--sp-lg); max-width: 1320px; }
+.settings-tabs { margin: 0; flex: 0 1 auto; }
+.settings-search { width: 220px; height: var(--control-md); border-radius: var(--radius-ms); border: 1px solid var(--border-subtle); background: var(--surface-base); padding: 0 12px; outline: none; }
 .settings-search:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
-.settings-search-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 16px; text-align: center; color: var(--text-tertiary); font-size: var(--fs-footnote); }
-.settings-search-empty[hidden] { display: none; }
-.settings-search-empty strong { color: var(--text-primary); font-size: var(--fs-body); }
-.settings-groups .settings-group { max-width: 860px; }
-.settings-group h3 { display: flex; align-items: center; gap: 8px; }
+.settings-search-empty { padding: 48px 16px; } /* 모양은 .empty */
+/* 넓은 창 — 예전엔 860px 한 단에 왼쪽으로 쏠려 오른쪽이 비었다. 카드 두 단(단 최소 420px)이 들어가면 두 단으로 흘린다(위→아래, 왼쪽 단 먼저). */
+.settings-groups { columns: 2 420px; column-gap: var(--sp-lg); max-width: 1320px; }
+.settings-groups .settings-group { max-width: none; break-inside: avoid; -webkit-column-break-inside: avoid; }
+.settings-group :is(h2, h3) { display: flex; align-items: center; gap: 8px; }
 .adv-toggle { margin-left: auto; font-size: var(--fs-footnote); padding: 0 var(--sp-lg) 0 0; }
 .setting[hidden], .settings-group[hidden] { display: none; }
 .num-input, .text-input { height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--surface-base); padding: 0 10px; outline: none; }
@@ -2159,7 +2204,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 /* ══ 멀티채팅 (multichat.js) ═══════════════════════════════════ */
 .page-multichat { display: flex; flex-direction: column; overflow: hidden; }
 .mc-header { flex: none; }
-.mc-search { width: 200px; height: 32px; border-radius: var(--radius-ms); border: 1px solid var(--border-subtle); background: var(--surface-base); padding: 0 10px; outline: none; }
+.mc-search { width: 200px; height: var(--control-md); border-radius: var(--radius-ms); border: 1px solid var(--border-subtle); background: var(--surface-base); padding: 0 10px; outline: none; }
 .mc-search:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
 .mc-overview { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: none; padding: 2px 0 10px; }
 .mc-overview:empty { display: none; }
@@ -2174,9 +2219,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .mc-chip-x { color: var(--text-tertiary); padding: 0 2px; }
 .mc-chip-x:hover { color: var(--error); }
 .mc-body { flex: 1; min-height: 0; position: relative; display: flex; }
-.mc-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; color: var(--text-tertiary); border: 1px dashed var(--border); border-radius: var(--radius-lg); }
-.mc-empty[hidden] { display: none; }
-.mc-empty strong { color: var(--text-primary); font-size: var(--fs-headline); }
+.mc-empty { flex: 1; padding: var(--sp-xl); } /* 모양은 .empty.lg.boxed */
 .mc-panes { flex: 1; min-height: 0; display: grid; gap: 8px; }
 .mc-panes[hidden] { display: none; }
 .mc-panes.layout-tabs { grid-template-columns: 1fr; }
@@ -2213,7 +2256,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .kpi-value { font-size: var(--fs-stat); font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); }
 .kpi-sub { font-size: var(--fs-micro); color: var(--text-secondary); }
 .stats-card { padding: 16px 18px; border-radius: var(--radius-lg); background: var(--surface-elevated); border: 1px solid var(--border-subtle); min-width: 0; }
-.stats-card h3 { margin: 0 0 12px; font-size: var(--fs-subhead); }
+.stats-card :is(h2, h3) { margin: 0 0 12px; font-size: var(--fs-subhead); }
 .stats-card .sub-h { margin-top: 18px; }
 .stats-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--sp-md); }
 .rank-no { color: var(--text-tertiary); font-variant-numeric: tabular-nums; text-align: right; }
@@ -2241,6 +2284,14 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .page[data-page="stats"] .s-rest { --c: var(--chart-rest); }
 .page[data-page="stats"] .sw { flex: none; display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: var(--c, var(--primary)); }
 .page[data-page="stats"] .sw.avg { height: 0; border-radius: 0; border-top: 2px dashed var(--text-secondary); background: none; width: 14px; }
+/* 본문 바로가기 — 키보드로 처음 Tab 하면 왼쪽 위에 나타난다(사이드바 항목 20여 개를 건너뛴다). a11y.installA11y 가 지금 화면으로 초점을 옮긴다. */
+.skip-link {
+  position: fixed; left: 12px; top: 10px; z-index: 9200; padding: 8px 14px; border-radius: var(--radius-ms);
+  background: var(--primary); color: var(--on-primary); font-weight: 700; font-size: var(--fs-caption); text-decoration: none;
+  box-shadow: var(--shadow-md); transform: translateY(-160%); transition: transform 0.15s var(--ease-out);
+}
+.skip-link:focus, .skip-link:focus-visible { transform: none; outline: 2px solid var(--text-primary); outline-offset: 2px; }
+[data-skip-target]:focus { outline: none; } /* 바로가기로 옮긴 화면 자체에는 링을 그리지 않는다(다음 Tab 이 화면 안 첫 요소로 간다) */
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 .stats-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-sm) var(--sp-md); flex-wrap: wrap; margin-bottom: var(--sp-lg); }
@@ -2248,7 +2299,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .stats-period[hidden] { display: none; }
 .stats-period .seg { font-variant-numeric: tabular-nums; }
 .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 14px; }
-.card-head h3 { margin: 0; }
+.card-head h2 { margin: 0; }
 .card-head .link-btn { margin: -4px -6px; }
 .stats-meta { font-size: var(--fs-footnote); color: var(--text-tertiary); }
 .kpi-sub.up, .kpi-sub.down { font-weight: 600; }
@@ -2432,8 +2483,8 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .notify-pop .setting { padding: 6px 0; }
 .shortcut-edit { display: inline-flex; align-items: center; gap: 8px; }
 .kbd { display: inline-block; min-width: 28px; padding: 3px 8px; border-radius: var(--radius-xs); border: 1px solid var(--border); background: var(--surface-base); font: 600 var(--fs-footnote) ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center; }
-.oauth-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px 0 10px; }
-.oauth-form input { flex: 1 1 180px; min-width: 0; height: 32px; padding: 0 10px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-base); color: var(--text-primary); font: inherit; }
+.oauth-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 4px var(--sp-lg) var(--sp-md); } /* 다른 설정 줄과 같은 안쪽 여백(예전엔 0 이라 입력칸이 카드 가장자리에 붙었다) */
+.oauth-form input { flex: 1 1 180px; min-width: 0; height: var(--control-md); padding: 0 10px; border-radius: var(--radius-ms); border: 1px solid var(--border); background: var(--surface-base); color: var(--text-primary); font: inherit; }
 
 /* ── 디자인 토큰 정합 (DSN-01) — 원본 DesignTokens 의 빠진 값 ───────── */
 :root {
@@ -2759,7 +2810,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .ip-tile span { font-size: var(--fs-micro); color: var(--text-tertiary); }
 .ip-tile:first-child strong { background: var(--brand-gradient); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .ip-section { padding: 12px; border-radius: var(--radius-ml); background: var(--surface-elevated); border: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 10px; }
-.ip-section h4 { margin: 0; display: flex; align-items: center; gap: 7px; font-size: var(--fs-footnote); font-weight: 700; color: var(--text-primary); }
+.ip-section h2 { margin: 0; display: flex; align-items: center; gap: 7px; font-size: var(--fs-footnote); font-weight: 700; color: var(--text-primary); }
 .ip-sec-icon { width: 20px; height: 20px; border-radius: var(--radius-xs); display: grid; place-items: center; color: var(--primary-text); background: var(--primary-dim); }
 .ip-sec-icon svg { width: 12px; height: 12px; }
 .ip-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }

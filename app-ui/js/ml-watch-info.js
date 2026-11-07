@@ -338,12 +338,12 @@ export class WatchInfoPanel {
 
   emptyHtml(kind) {
     const [icon, title, sub] = EMPTY[kind];
-    return `<div class="mwi-empty"><span class="mwi-empty-icon" aria-hidden="true">${icon}</span><strong>${esc(title)}</strong><span>${esc(sub)}</span></div>`;
+    return `<div class="empty boxed mwi-empty"><span class="empty-icon" aria-hidden="true">${icon}</span><strong>${esc(title)}</strong><span>${esc(sub)}</span></div>`;
   }
 
   failHtml(title, err, action) {
     const raw = String((err && err.message) || err || '');
-    return `<div class="mwi-empty error" role="alert"><strong>${esc(title)}</strong>${raw ? `<span>${esc(raw)}</span>` : ''}<button class="mwi-btn" data-mwi="${action}">다시 시도</button></div>`;
+    return `<div class="empty boxed error mwi-empty" role="alert"><strong>${esc(title)}</strong>${raw ? `<span>${esc(raw)}</span>` : ''}<button class="mwi-btn" data-mwi="${action}">다시 시도</button></div>`;
   }
 
   postHtml(p) {

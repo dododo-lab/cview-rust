@@ -23,7 +23,7 @@ function storedCollapsed() {
 function avatar(url, cls = 'avatar') {
   const src = safeUrl(url);
   return src
-    ? `<img class="${cls}" src="${esc(imageSrc(src, 'avatar'))}" alt="" referrerpolicy="no-referrer">`
+    ? `<img class="${cls}" loading="lazy" decoding="async" src="${esc(imageSrc(src, 'avatar'))}" alt="" referrerpolicy="no-referrer">`
     : `<div class="${cls}"></div>`;
 }
 

@@ -86,17 +86,10 @@
 .ml-ratio input { width: 110px; accent-color: var(--primary); }
 .ml-ratio output { min-width: 34px; font-variant-numeric: tabular-nums; color: var(--text-primary); font-weight: 600; }
 
-.ml-empty {
-  grid-column: 1 / -1; grid-row: 1 / -1; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: var(--sp-sm); text-align: center; color: var(--text-tertiary); border: 1px dashed var(--border);
-  border-radius: var(--radius-lg); padding: var(--sp-xl);
-}
-.ml-empty[hidden] { display: none; }
-.ml-empty strong { color: var(--text-primary); font-size: var(--fs-headline); }
-.ml-empty span { max-width: 420px; line-height: 1.5; }
-/* 한국어 안내문은 어절 중간에서 꺾지 않는다 */
-.ml-empty, .ml-addbar-notice, .ml-addbar-list .empty { word-break: keep-all; overflow-wrap: anywhere; }
+.ml-empty { grid-column: 1 / -1; grid-row: 1 / -1; padding: var(--sp-xl); } /* 모양은 .empty.lg.boxed */
 .ml-empty .btn { margin-top: var(--sp-sm); }
+/* 한국어 안내문은 어절 중간에서 꺾지 않는다 */
+.ml-addbar-notice, .ml-addbar-list .empty { word-break: keep-all; overflow-wrap: anywhere; }
 
 /* 패인 — 치지직처럼 무대는 테마와 상관없이 검정(위·아래 막대·상태 글자는 아래 on-media 토큰). */
 .ml-pane {
@@ -931,12 +924,7 @@
 .mwi-dots i:nth-child(2) { animation-delay: .15s; }
 .mwi-dots i:nth-child(3) { animation-delay: .3s; }
 @keyframes mwi-dot { 0%, 80%, 100% { opacity: .25; translate: 0 0; } 40% { opacity: 1; translate: 0 -3px; } }
-.mwi-empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 44px 16px; text-align: center; border-radius: var(--radius-lg); border: 1px dashed var(--border); color: var(--text-tertiary); font-size: var(--fs-caption); }
-.mwi-empty strong { color: var(--text-primary); font-size: var(--fs-callout); font-weight: 700; }
-.mwi-empty-icon { display: grid; place-items: center; width: 52px; height: 52px; margin-bottom: 6px; border-radius: var(--radius-lg); color: var(--text-secondary); background: color-mix(in srgb, var(--text-primary) 6%, transparent); }
-.mwi-empty-icon svg { width: 24px; height: 24px; }
-.mwi-empty.error { border-style: solid; border-color: color-mix(in srgb, var(--live) 30%, var(--border-subtle)); }
-.mwi-empty.error > span { max-width: 460px; overflow-wrap: anywhere; }
+.mwi-empty { padding: 44px 16px; } /* 모양은 .empty.boxed(+ .error) */
 .mwi-empty .mwi-btn { margin-top: 8px; }
 .mwi-link { color: var(--primary-text); text-decoration: none; overflow-wrap: anywhere; }
 .mwi-link:hover { text-decoration: underline; }

@@ -142,7 +142,7 @@ function heroQueue(lives, active) {
 /** 히어로 뒤 앰비언트 빛 — 지금 장의 썸네일을 크게 흐려 화면에 색을 번지게 한다(정지 화면, 장이 바뀔 때만 다시 그림). */
 function heroAmbient(live) {
   const thumb = safeUrl(live && live.thumbnailUrl);
-  return thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" referrerpolicy="no-referrer">` : '';
+  return thumb ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(thumb, 'live'))}" alt="" referrerpolicy="no-referrer">` : '';
 }
 
 /** 지금 인기 TOP 10 — 큰 순위 숫자 + 썸네일 카드. */
@@ -210,7 +210,7 @@ function categoryChips(popular, selected) {
   if (selected && !top.includes(selected)) top.push(selected);
   const chip = (value, label, n) =>
     `<button class="chip${value === selected ? ' active' : ''}" data-category="${esc(value)}">${esc(label)}<span class="chip-count">${n}</span></button>`;
-  return `<div class="chips home-chips" role="tablist">${chip(ALL, '전체', popular.length)}${top.map((n) => chip(n, n, counts.get(n) || 0)).join('')}</div>`;
+  return `<div class="chips home-chips" role="group" aria-label="카테고리">${chip(ALL, '전체', popular.length)}${top.map((n) => chip(n, n, counts.get(n) || 0)).join('')}</div>`;
 }
 
 function popularGrid(popular, category, limit = GRID_STEP) {

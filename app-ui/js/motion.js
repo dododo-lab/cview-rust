@@ -76,9 +76,9 @@ export function installSegmentGlider() {
   const ro = new ResizeObserver((entries) => {
     for (const e of entries) {
       if (!e.target.isConnected) { ro.unobserve(e.target); dirty.delete(e.target); continue; }
-      // 관찰을 시작하면 크기가 그대로여도 한 번 불린다 — track() 이 이미 놓았으니 건너뛴다
-      // (넘겨받은 판이 미끄러지는 중에 instant 로 끝 자리에 뚝 놓지 않게).
-      if (!seen.has(e.target)) { seen.add(e.target); continue; }
+      // 관찰을 시작하면 크기가 그대로여도 한 번 불린다 — 그 첫 알림이 첫 배치다(track 참고).
+      // 넘겨받아 track() 이 이미 놓은 판은 건너뛴다(미끄러지는 중에 instant 로 끝 자리에 뚝 놓지 않게).
+      if (!seen.has(e.target)) { seen.add(e.target); if (!e.target.querySelector(':scope > .seg-glider')) place(e.target, false); continue; }
       place(e.target, false);
     }
   });
@@ -109,7 +109,9 @@ export function installSegmentGlider() {
   function place(box, animate = true) {
     const active = box.querySelector(':scope > .seg.active');
     let g = box.querySelector(':scope > .seg-glider');
-    if (!active || !active.offsetWidth) {
+    // 숨은 화면([hidden] 조상)이면 재지 않는다 — 어차피 크기 0 인데 offsetWidth 를 읽으면 강제 동기 레이아웃(전체 문서)이 일어났다
+    // (시작할 때 숨은 멀티라이브·멀티채팅 세그먼트마다). closest 는 레이아웃 없이 답한다.
+    if (!active || box.closest('[hidden]') || !active.offsetWidth) {
       if (g) g.style.opacity = '0';
       // 숨어 있어 못 놓음 — 다시 보이면 놓는다(고른 칸이 없는 세그먼트는 기다리지 않는다).
       if (active && !dirty.has(box)) { dirty.add(box); io.observe(box); }
@@ -140,9 +142,14 @@ export function installSegmentGlider() {
     g.style.opacity = '1';
     if (instant) requestAnimationFrame(() => requestAnimationFrame(() => g.classList.remove('instant')));
   }
+  // 새로 붙은 세그먼트의 첫 배치는 ResizeObserver 의 첫 알림(레이아웃이 끝난 뒤·페인트 전)에서 — 그때 offset 을 읽으면 공짜다.
+  // 예전엔 MutationObserver 안에서 바로 offsetWidth 를 읽어 시작 중 강제 동기 레이아웃(전체 문서)을 일으켰다.
+  // 다시 그린 목록이 옛 판 자리를 넘겨받아 미끄러지는 경우(handoff)만 지금 놓는다 — 그 전환은 같은 묶음 안에서 걸어야 한다.
   function track(box) {
-    if (!tracked.has(box)) { tracked.add(box); ro.observe(box); }
-    place(box, false);
+    if (tracked.has(box)) { place(box, false); return; }
+    tracked.add(box);
+    if (handoff.size && handoff.has(sigOf(box, box.closest('[data-page]')?.dataset.page || ''))) place(box, false);
+    ro.observe(box);
   }
   function scan(node) {
     if (node.nodeType !== 1) return;

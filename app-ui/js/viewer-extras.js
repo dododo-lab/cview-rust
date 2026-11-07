@@ -49,8 +49,8 @@ export class ViewerExtras {
     const head = root.querySelector('.viewer-header');
     if (head) {
       const syncHead = () => root.style.setProperty('--viewer-head-h', `${head.offsetHeight}px`);
+      // 첫 값은 ResizeObserver 첫 알림(레이아웃 뒤·페인트 전)이 넣는다 — 바로 offsetHeight 를 읽으면 시작 중 강제 레이아웃이 났다
       new ResizeObserver(syncHead).observe(head);
-      syncHead();
     }
 
     document.addEventListener('keydown', (e) => this.onKey(e));

@@ -1,16 +1,17 @@
-// 디자인 토큰·글자 대비 UI 회귀 검사.
+// 디자인 토큰·글자 대비·공통 컴포넌트 UI 회귀 검사.
 // 1) CSS 정적 검사 — 반경(4px 이상)·글자 크기(px)를 리터럴로 쓰지 않고 :root 토큰(--radius-* · --fs-*)을 쓰는지,
 //    쓰는 토큰이 모두 정의돼 있는지, 같은 토큰을 :root 에서 두 번 정의하지 않는지.
 // 2) 화면 검사 — 주요 화면을 다크·라이트로 띄워 axe-core 의 color-contrast 위반이 없는지(이미지 위 글자인 홈 히어로 .hero-main 은 axe 가 배경을 못 읽어 제외).
-// app-ui 를 그대로 띄우고 window.__TAURI__ 를 모의 IPC 로 바꿔 실제 화면 코드를 돌린다(실제 서비스·데이터는 건드리지 않음).
+// 3) 공통 컴포넌트 — 화면 탭(보관함·통계·설정)은 세그먼트 tablist(필터 칩과 구분), 기본 컨트롤 높이는 --control-* 토큰, 좁은 창에서 탭은 한 줄로 밀린다.
+// app-ui 를 그대로 띄우고 window.__TAURI__ 를 모의 IPC 로 바꿔 실제 화면 코드를 돌린다(mock-app.mjs, 실제 서비스·데이터는 건드리지 않음).
 // 저장소 루트에서: node tools/ui-regression/design-tokens.mjs
 //   Playwright 와 axe-core 가 필요하다(예: npm i playwright@1.49.1 axe-core@4.10.2 를 다른 폴더에 설치하고 NODE_PATH 로 지정).
 //   CVIEW_UI_SHOTS=<폴더> 면 화면 × 폭(640·900·1280·1680·2560) × 테마 스크린샷을 남긴다 — 단계별 UI 작업의 전후 비교용.
-import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { server, go, openApp } from './mock-app.mjs';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
@@ -67,89 +68,14 @@ await check('D03 every used --radius-*/--fs-* token is defined once in :root', (
 });
 
 // ── 2) 화면 검사 ──
-const PALETTE = [['#ff6b6b', '#5f27cd'], ['#00d2d3', '#341f97'], ['#feca57', '#ee5253'], ['#48dbfb', '#0abde3'], ['#1dd1a1', '#10ac84'], ['#ff9ff3', '#f368e0']];
-function fakeImage(kind, n) {
-  const [a, b] = PALETTE[n % PALETTE.length];
-  if (kind === 'avatar') return `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><rect width="120" height="120" fill="${a}"/><circle cx="60" cy="48" r="22" fill="#fff" opacity=".85"/></svg>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="1280" height="720" fill="url(#g)"/></svg>`;
-}
-const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.json': 'application/json' };
-const server = http.createServer((req, res) => {
-  const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-  const img = url.match(/^\/__img\/(\w+)\/(\d+)\.svg$/);
-  if (img) { res.writeHead(200, { 'content-type': 'image/svg+xml' }); res.end(fakeImage(img[1], Number(img[2]))); return; }
-  const file = path.join(ROOT, url === '/' ? 'index.html' : url);
-  if (!file.startsWith(ROOT) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); res.end(); return; }
-  res.writeHead(200, { 'content-type': TYPES[path.extname(file)] || 'application/octet-stream' });
-  fs.createReadStream(file).pipe(res);
-});
-await new Promise((r) => server.listen(0, '127.0.0.1', r));
-const base = `http://127.0.0.1:${server.address().port}/`;
-
-// 모의 IPC — 로그인·데이터 있음. 화면이 쓰는 명령만 채우고 나머지는 실패로 돌려 오류·빈 상태 코드도 지나가게 둔다.
-function mockTauri([origin, theme]) {
-  const img = (kind, n) => `${origin}__img/${kind}/${n}.svg`;
-  const names = ['릴카', '플러리', '따효니', '괴물쥐', '침착맨', '녹두로', '한동숙', '풍월량', '김도', '소풍왔니', '마라맛', '서새봄'];
-  const cats = ['마인크래프트', '메이플스토리', '배틀그라운드', '리그 오브 레전드', '스타크래프트', '저스트 채팅'];
-  const titles = ['시청자 참여 내전 + 경품', '신작 첫 플레이! 스포 금지', '혼돈의 서버 생존기', '대회 리뷰 & 분석', '저녁 먹고 수다 한 판', '새벽 감성 노래방'];
-  const now = Date.now();
-  const ago = (min) => new Date(now - min * 60000).toISOString();
-  const ch = (i) => ({ channelId: `ch${i}`, channelName: names[i % names.length], channelImageUrl: img('avatar', i) });
-  const live = (i, v) => ({ ...ch(i), liveTitle: titles[i % titles.length], thumbnailUrl: img('thumb', i), viewerCount: v, viewerCountText: v.toLocaleString('ko-KR'), categoryName: cats[i % cats.length], openDate: ago(20 + i * 17), isLive: true, adult: false });
-  const lives = Array.from({ length: 12 }, (_, i) => live(i, Math.round(60000 / (1 + i))));
-  const clips = Array.from({ length: 8 }, (_, i) => ({ clipUID: `c${i}`, clipTitle: `레전드 순간 #${i + 1}`, thumbnailImageUrl: img('thumb', 30 + i), duration: 40 + i * 7, readCount: 120000 - i * 9000, channel: ch(i) }));
-  const vods = Array.from({ length: 8 }, (_, i) => ({ videoNo: 500 + i, videoTitle: titles[i % titles.length], thumbnailImageUrl: img('thumb', 10 + i), duration: 9000, readCount: 80 + i, publishDate: ago(i * 600), channel: ch(i) }));
-  const cont = Array.from({ length: 4 }, (_, i) => ({ videoNo: 100 + i, title: `${titles[i]} 다시보기`, thumbnailUrl: img('thumb', 20 + i), duration: 7200, position: 1200 + i * 900, channelName: names[i] }));
-  const channels = Array.from({ length: 12 }, (_, i) => ({ ...ch(i), followerCountText: `${i + 1}.2만`, openLive: i < 4, isFavorite: i < 3, lastWatched: ago(i * 90) }));
-  const trend = Array.from({ length: 7 }, (_, i) => ({ start: ago((7 - i) * 1440), seconds: (i % 3 + 1) * 4000, parts: [2000, 1000, 1000 * (i % 3)] }));
-  const total = trend.reduce((a, t) => a + t.seconds, 0);
-  const report = (period) => ({
-    period, rangeStart: ago(7 * 1440), rangeEnd: new Date().toISOString(), days: 7, unit: 'day', total, previousTotal: total * 0.8, sessionCount: 21, activeDays: 6, averageSession: total / 21, dailyAverage: total / 7,
-    longest: { channelId: 'ch0', channelName: names[0], category: cats[0], startedAt: ago(2880), seconds: 20000 }, channelCount: 8, categoryCount: 6, currentStreak: 4, bestStreak: 12, firstWatchedAt: ago(400 * 1440),
-    channels: names.slice(0, 8).map((name, i) => ({ channelId: `ch${i}`, name, seconds: total / (i + 2), sessions: 9 - i, lastWatchedAt: ago(i * 400) })), otherChannels: { count: 0, seconds: 0 },
-    categories: cats.map((name, i) => ({ name, seconds: total / (i + 2), sessions: 6 - i })), otherCategories: { count: 0, seconds: 0 },
-    heatmap: Array.from({ length: 7 }, (_, d) => Array.from({ length: 24 }, (_, h) => ((h + d) % 5) * 600)), series: cats.slice(0, 3), trend,
-    lengths: [600, 1800, 3600, 7200, 14400, null].map((max, i) => ({ maxSeconds: max, count: i + 1, seconds: (i + 1) * 3000 })),
-  });
-  const handlers = {
-    auth_status: () => ({ loggedIn: true, state: 'loggedIn', nickname: '도도', profileImageUrl: img('avatar', 3) }),
-    settings_get: () => ({ multiLive: { maxConcurrentSessions: 4, maxLiveChannels: 5 }, multiChat: {}, player: {}, chat: {}, general: {}, appearance: { theme } }),
-    following_lives: () => lives.slice(0, 6), popular_lives: () => lives, popular_clips: () => clips, following_vods: () => vods,
-    following_channels_all: () => channels, recent_channels: ({ limit } = {}) => channels.slice(0, limit || 8), favorites_list: () => channels.slice(0, 3),
-    vod_continue_list: () => cont, vod_watch_later_list: () => cont.slice(0, 2),
-    bookmarks_list: () => [{ id: 'b1', channelId: 'ch1', channelName: names[1], liveTitle: '옛 장면', liveUptime: 600, capturedAt: ago(3000) }],
-    download_list: () => ({ folder: '/tmp/dl', jobs: [], history: [] }),
-    insights_report: ({ period }) => report(period),
-    insights_overview: () => ({ sessionCount: 5, streak: 3, last7: 9000, average: 1800, recent: [], daily: [], channels: [], categories: [], hourly: Array(24).fill(0) }),
-    data_health: () => ({ available: true, storeBytes: 1000, freeBytes: 1e9, backups: [], tables: [{ label: '시청 기록', rows: 3 }], backupDir: '/tmp/b', storePath: '/tmp/s' }),
-    search: () => ({ lives: lives.slice(0, 2), channels: channels.slice(0, 6), clips, hasMoreClips: true, errors: {} }),
-    search_videos: () => ({ items: vods, hasMore: true }),
-    app_info: () => ({ version: '0.1.0', build: 1, os: 'macos', arch: 'aarch64' }),
-    multilive_state: () => ({ sessions: [], layout: 'grid' }),
-  };
-  window.__TAURI__ = {
-    core: { invoke: async (cmd, args) => { const h = handlers[cmd]; if (!h) throw new Error(`mock: ${cmd}`); return h(args || {}); } },
-    event: { listen: async () => () => {} },
-  };
-  try { localStorage.setItem('cview.onboarded', '1'); localStorage.setItem('cview.theme', theme); } catch { /* 무시 */ }
-}
-
 const ROUTES = [['home', {}], ['following', {}], ['popular', {}], ['categories', {}], ['multichat', {}], ['multilive', {}], ['library', {}], ['stats', {}], ['search', { query: '루다' }], ['settings', {}]];
 const SHOTS = process.env.CVIEW_UI_SHOTS;
 const WIDTHS = SHOTS ? [640, 900, 1280, 1680, 2560] : [1280];
 const browser = await chromium.launch();
-const go = (page, route, params) => page.evaluate(([r, p]) => window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: r, params: p } })), [route, params]);
 
 for (const theme of ['dark', 'light']) {
   for (const width of WIDTHS) {
-    const ctx = await browser.newContext({ viewport: { width, height: 900 }, colorScheme: theme });
-    const page = await ctx.newPage();
-    page.setDefaultTimeout(8000);
-    await page.addInitScript(mockTauri, [base, theme]);
-    await page.goto(base);
-    await page.waitForSelector('[data-page]', { state: 'attached' });
-    await page.evaluate(() => document.querySelectorAll('.sheet-scrim.welcome-scrim').forEach((x) => x.remove()));
-    await page.waitForFunction(() => { const s = document.getElementById('splash'); return !s || !s.isConnected || getComputedStyle(s).display === 'none' || getComputedStyle(s).opacity === '0'; }, null, { timeout: 8000 }).catch(() => {});
+    const { ctx, page } = await openApp(browser, { width, theme });
     for (const [route, params] of ROUTES) {
       await go(page, route, params);
       await page.waitForTimeout(700);
@@ -167,6 +93,105 @@ for (const theme of ['dark', 'light']) {
     }
     await ctx.close();
   }
+}
+
+// ── 3) 공통 컴포넌트 — 화면 탭은 세그먼트, 필터는 칩, 기본 컨트롤 높이는 --control-* 토큰 ──
+const TABBED = [['library', '[data-page="library"] .lib-tabs'], ['stats', '[data-page="stats"] .lib-tabs'], ['settings', '[data-page="settings"] .settings-tabs']];
+{
+  const { ctx, page } = await openApp(browser, { width: 1280 });
+  const token = (name) => page.evaluate((n) => parseFloat(getComputedStyle(document.documentElement).getPropertyValue(n)), name);
+  const [sm, md, lg] = [await token('--control-sm'), await token('--control-md'), await token('--control-lg')];
+  for (const [route, sel] of TABBED) {
+    await go(page, route, {});
+    await page.waitForSelector(sel);
+    await check(`D20 ${route}: page tabs are one segmented tablist (not filter chips)`, async () => {
+      const t = await page.$eval(sel, (n) => ({
+        cls: [...n.classList], role: n.getAttribute('role'), chips: n.querySelectorAll('.chip').length,
+        tabs: [...n.querySelectorAll('[role="tab"]')].map((b) => [b.classList.contains('seg'), b.getAttribute('aria-selected'), b.tabIndex]),
+        h: Math.round(n.getBoundingClientRect().height),
+      }));
+      assert.ok(t.cls.includes('segmented') && t.cls.includes('page-tabs'), `클래스 ${t.cls}`);
+      assert.equal(t.role, 'tablist');
+      assert.equal(t.chips, 0, '탭 안에 칩이 없다');
+      assert.ok(t.tabs.length > 2 && t.tabs.every((x) => x[0]), '모든 탭이 .seg');
+      assert.equal(t.tabs.filter((x) => x[1] === 'true').length, 1, '고른 탭 하나');
+      assert.deepEqual(t.tabs.filter((x) => x[2] === 0).length, 1, '초점 받는 탭은 고른 탭 하나(나머지는 화살표로)');
+      assert.equal(t.h, md, `탭 묶음 높이 = --control-md(${md}px)`);
+    });
+  }
+  await check('D21 settings tabs: arrow keys switch group and keep focus on the tab', async () => {
+    await go(page, 'settings', {});
+    await page.focus('[data-page="settings"] .settings-tabs [aria-selected="true"]');
+    await page.keyboard.press('ArrowRight');
+    const st = await page.evaluate(() => ({ sel: document.querySelector('[data-page="settings"] .settings-tabs [aria-selected="true"]')?.dataset.group, focus: document.activeElement?.dataset.group }));
+    assert.notEqual(st.sel, 'overview');
+    assert.equal(st.focus, st.sel, '다시 그린 뒤에도 고른 탭에 초점');
+    await page.keyboard.press('Home');
+  });
+  await check('D22 default controls follow --control-* heights', async () => {
+    const h = async (route, sel) => { await go(page, route, {}); await page.waitForSelector(sel); return page.$eval(sel, (n) => Math.round(n.getBoundingClientRect().height)); };
+    assert.equal(await h('following', '[data-page="following"] .chip'), sm, '필터 칩 = --control-sm');
+    assert.equal(await h('following', '[data-page="following"] .segmented'), md, '세그먼트 = --control-md');
+    assert.equal(await h('following', '[data-page="following"] .btn.primary'), md, '버튼 = --control-md');
+    assert.equal(await h('settings', '[data-page="settings"] .settings-search'), md, '설정 검색칸 = --control-md');
+    assert.equal(await h('multichat', '[data-page="multichat"] .mc-search'), md, '멀티채팅 검색칸 = --control-md');
+    assert.equal(await h('home', '[data-page="home"] .btn.lg'), lg, '큰 버튼 = --control-lg');
+  });
+  await check('D25 empty states share one structure (.empty, title color, token sizes)', async () => {
+    const read = (sel) => page.$eval(sel, (n) => {
+      const t = n.querySelector(':scope > strong');
+      const root = getComputedStyle(document.documentElement);
+      return { cls: [...n.classList], color: getComputedStyle(t).color, size: parseFloat(getComputedStyle(t).fontSize), primary: root.getPropertyValue('--text-primary').trim(),
+        headline: parseFloat(root.getPropertyValue('--fs-headline')), subhead: parseFloat(root.getPropertyValue('--fs-subhead')) };
+    });
+    const toRgb = (hex) => { const h = hex.replace('#', ''); return `rgb(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)})`; };
+    const cases = [];
+    await go(page, 'multichat'); await page.waitForSelector('[data-page="multichat"] .mc-empty');
+    cases.push(['multichat', await read('[data-page="multichat"] .mc-empty'), 'lg']);
+    await go(page, 'multilive'); await page.waitForSelector('[data-page="multilive"] .ml-empty');
+    cases.push(['multilive', await read('[data-page="multilive"] .ml-empty'), 'lg']);
+    await go(page, 'settings'); await page.fill('[data-page="settings"] .settings-search', 'zzzz');
+    await page.waitForSelector('[data-page="settings"] .settings-search-empty:not([hidden]) strong');
+    cases.push(['settings search', await read('[data-page="settings"] .settings-search-empty'), '']);
+    await page.fill('[data-page="settings"] .settings-search', '');
+    for (const [name, c, size] of cases) {
+      assert.ok(c.cls.includes('empty'), `${name}: .empty 구조`);
+      assert.equal(c.color, toRgb(c.primary), `${name}: 제목은 기본 글자색`);
+      assert.equal(c.size, size === 'lg' ? c.headline : c.subhead, `${name}: 제목 크기 토큰`);
+    }
+  });
+  await check('D24 channel page: tabs are a segmented tablist synced with the panel', async () => {
+    await go(page, 'channel', { channelId: 'ch1' });
+    const sel = '[data-page="channel"] .channel-tabs';
+    await page.waitForSelector(sel);
+    const read = () => page.$eval(sel, (n) => ({ cls: [...n.classList], sel: [...n.querySelectorAll('[aria-selected="true"]')].map((b) => b.dataset.tab), panel: document.querySelector('[data-page="channel"] .channel-tab-body')?.getAttribute('role') }));
+    const a = await read();
+    assert.ok(a.cls.includes('segmented') && a.cls.includes('page-tabs'));
+    assert.deepEqual(a.sel, ['info']);
+    assert.equal(a.panel, 'tabpanel');
+    await page.click(`${sel} [data-tab="vod"]`);
+    assert.deepEqual((await read()).sel, ['vod']);
+  });
+  await ctx.close();
+}
+{
+  const { ctx, page } = await openApp(browser, { width: 640 });
+  await check('D23 narrow window: library tabs stay on one row and scroll the chosen tab into view', async () => {
+    await go(page, 'library', {});
+    const sel = '[data-page="library"] .lib-tabs';
+    await page.waitForSelector(sel);
+    const before = await page.$eval(sel, (n) => ({ h: Math.round(n.getBoundingClientRect().height), over: n.scrollWidth > n.clientWidth, doc: document.scrollingElement.scrollWidth <= innerWidth }));
+    assert.ok(before.over, '좁은 창에서는 탭이 넘친다(검사 전제)');
+    assert.ok(before.h <= 40, `한 줄(${before.h}px)`);
+    assert.ok(before.doc, '페이지 가로 넘침 없음');
+    await page.focus(`${sel} [aria-selected="true"]`);
+    await page.keyboard.press('End');
+    await page.waitForTimeout(150);
+    const last = await page.$eval(sel, (n) => { const b = n.querySelector('[role="tab"]:last-child'); const r = b.getBoundingClientRect(); const box = n.getBoundingClientRect(); return { sel: b.getAttribute('aria-selected'), inView: r.left >= box.left - 1 && r.right <= box.right + 1 }; });
+    assert.equal(last.sel, 'true');
+    assert.ok(last.inView, '고른 마지막 탭이 묶음 안에서 보인다');
+  });
+  await ctx.close();
 }
 
 await browser.close();

@@ -261,7 +261,7 @@ export class StatsPage {
         <span class="page-subtitle">이 기기에서 본 방송 기록으로 계산합니다 · 기록은 이 기기에만 저장됩니다</span>
       </header>
       <div class="stats-toolbar">
-        <div class="chips lib-tabs" role="tablist" aria-label="통계">${TABS.map(([id, label]) => `<button class="chip" data-tab="${id}" role="tab">${label}</button>`).join('')}</div>
+        <div class="segmented page-tabs lib-tabs" role="tablist" aria-label="통계">${TABS.map(([id, label]) => `<button class="seg" data-tab="${id}" role="tab">${label}</button>`).join('')}</div>
         <div class="segmented stats-period" role="group" aria-label="기간">${PERIODS.map(([id, label]) => `<button class="seg" data-period="${id}" aria-pressed="false">${label}</button>`).join('')}</div>
       </div>
       <div class="page-body stats-body"></div>
@@ -356,7 +356,7 @@ export class StatsPage {
       },
     };
     const range = r.unit === 'hour' ? '오늘 0시부터' : `${mdLong(new Date(r.rangeStart))} ~ ${mdLong(new Date(r.rangeEnd))}`;
-    return `<section class="stats-card"><div class="card-head"><h3>시청 추이</h3><span class="stats-meta">${esc(range)} · ${esc(unitName)} 단위</span></div>
+    return `<section class="stats-card"><div class="card-head"><h2>시청 추이</h2><span class="stats-meta">${esc(range)} · ${esc(unitName)} 단위</span></div>
       ${barChart('trend', r.trend.map((b, i) => ({ label: labels[i].label, total: b.seconds, parts: b.parts })),
     { seriesCount: r.series.length, avg, avgLabel: `${unitName} 평균 ${durationText(avg)}`, aria: `${this.periodName()} 시청 추이`, active })}
       ${legend(names, r.series.length, avg > 0 ? '<li><i class="sw avg"></i>평균</li>' : '')}</section>`;
@@ -390,9 +390,9 @@ export class StatsPage {
       </div>
       ${this.trendCard(r)}
       <div class="stats-split">
-        <section class="stats-card"><div class="card-head"><h3>많이 본 채널</h3><button class="link-btn" data-tab="ranking">전체 순위</button></div>
+        <section class="stats-card"><div class="card-head"><h2>많이 본 채널</h2><button class="link-btn" data-tab="ranking">전체 순위</button></div>
           ${shareBars(r.channels, r.total, { channel: true, limit: 5 })}</section>
-        <section class="stats-card"><div class="card-head"><h3>카테고리 비중</h3></div>${this.categoryDonut(r)}</section>
+        <section class="stats-card"><div class="card-head"><h2>카테고리 비중</h2></div>${this.categoryDonut(r)}</section>
       </div>`;
   }
 
@@ -400,7 +400,7 @@ export class StatsPage {
     const others = r.otherChannels.count ? `<p class="stats-meta rank-others">그 밖의 채널 ${r.otherChannels.count}개 · ${esc(durationText(r.otherChannels.seconds))} (${esc(shareText(r.otherChannels.seconds, r.total))})</p>` : '';
     const otherCats = r.otherCategories.count ? `<p class="stats-meta rank-others">그 밖의 카테고리 ${r.otherCategories.count}개 · ${esc(durationText(r.otherCategories.seconds))}</p>` : '';
     this.body.innerHTML = `
-      <section class="stats-card"><div class="card-head"><h3>채널 순위</h3><span class="stats-meta">${esc(this.periodName())} · ${r.channelCount}개 채널</span></div>
+      <section class="stats-card"><div class="card-head"><h2>채널 순위</h2><span class="stats-meta">${esc(this.periodName())} · ${r.channelCount}개 채널</span></div>
         <div class="rank-table" role="table" aria-label="채널 순위">
           <div class="rt-row rt-head" role="row"><span role="columnheader">순위</span><span role="columnheader">채널</span><span role="columnheader" class="rt-bar">비중</span><span role="columnheader">시청 시간</span><span role="columnheader" class="rt-opt">횟수</span><span role="columnheader" class="rt-opt">마지막 시청</span></div>
           ${r.channels.map((c, i) => `<div class="rt-row" role="row"><span role="cell" class="rank-no">${i + 1}</span>
@@ -411,8 +411,8 @@ export class StatsPage {
             <span role="cell" class="rt-opt rank-val">${esc(relativeDate(c.lastWatchedAt))}</span></div>`).join('')}
         </div>${others}</section>
       <div class="stats-split">
-        <section class="stats-card"><div class="card-head"><h3>카테고리 비중</h3></div>${this.categoryDonut(r)}</section>
-        <section class="stats-card"><div class="card-head"><h3>카테고리 순위</h3></div>${shareBars(r.categories, r.total, { swatches: r.series.length })}${otherCats}</section>
+        <section class="stats-card"><div class="card-head"><h2>카테고리 비중</h2></div>${this.categoryDonut(r)}</section>
+        <section class="stats-card"><div class="card-head"><h2>카테고리 순위</h2></div>${shareBars(r.categories, r.total, { swatches: r.series.length })}${otherCats}</section>
       </div>`;
   }
 
@@ -445,14 +445,14 @@ export class StatsPage {
         ${kpi('심야 시청', shareText(night, r.total), '0시 ~ 6시')}
         ${kpi('주말 시청', shareText(weekend, r.total), '토 · 일')}
       </div>
-      <section class="stats-card"><div class="card-head"><h3>요일 · 시간대</h3><span class="stats-meta">${esc(this.periodName())} · 실제로 본 시간에 나눠 담습니다</span></div>${heatmap('heat', r.heatmap)}</section>
+      <section class="stats-card"><div class="card-head"><h2>요일 · 시간대</h2><span class="stats-meta">${esc(this.periodName())} · 실제로 본 시간에 나눠 담습니다</span></div>${heatmap('heat', r.heatmap)}</section>
       <div class="stats-split">
-        <section class="stats-card"><div class="card-head"><h3>시간대별</h3></div>
+        <section class="stats-card"><div class="card-head"><h2>시간대별</h2></div>
           ${barChart('hours', hourly.map((v, h) => ({ label: h % 3 === 0 ? `${h}시` : '', total: v, parts: [v] })), { aria: '시간대별 시청 시간', active: peakH, tall: false })}</section>
-        <section class="stats-card"><div class="card-head"><h3>요일별</h3></div>
+        <section class="stats-card"><div class="card-head"><h2>요일별</h2></div>
           ${barChart('days', weekly.map((v, d) => ({ label: WEEKDAYS[d], total: v, parts: [v] })), { aria: '요일별 시청 시간', active: peakD, tall: false })}</section>
       </div>
-      <section class="stats-card"><div class="card-head"><h3>한 번에 보는 길이</h3><span class="stats-meta">${r.sessionCount}회 · 회당 평균 ${esc(durationText(r.averageSession))}</span></div>
+      <section class="stats-card"><div class="card-head"><h2>한 번에 보는 길이</h2><span class="stats-meta">${r.sessionCount}회 · 회당 평균 ${esc(durationText(r.averageSession))}</span></div>
         <ol class="share-bars len-bars">${r.lengths.map((l, i) => `<li><span class="rank-name">${LENGTH_LABELS[i]}</span>
           <span class="rank-track" aria-hidden="true"><span class="rank-fill" style="width:${((l.count / lenMax) * 100).toFixed(1)}%"></span></span>
           <span class="rank-share">${l.count}회</span><span class="rank-val">${esc(shareText(l.count, r.sessionCount))}</span></li>`).join('')}</ol></section>`;
@@ -559,7 +559,7 @@ export class StatsPage {
     this.body.innerHTML = `<div class="history-list">${d.recent.map((r) => {
       const thumb = safeUrl(r.thumbnailUrl);
       return `<button class="history-row" data-open-channel-id="${esc(r.channelId)}">
-        <span class="bookmark-thumb">${thumb ? `<img src="${esc(imageSrc(thumb, 'static'))}" alt="" referrerpolicy="no-referrer">` : ''}</span>
+        <span class="bookmark-thumb">${thumb ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(thumb, 'static'))}" alt="" referrerpolicy="no-referrer">` : ''}</span>
         <span class="bookmark-text"><strong class="ellipsis">${esc(r.channelName || r.channelId)}${r.active ? ' <span class="live-dot-text">시청 중</span>' : ''}</strong>
         <span class="ellipsis">${r.categoryName ? `${esc(r.categoryName)} · ` : ''}${esc(relativeDate(r.startedAt))} · ${esc(durationText(r.seconds))}</span></span></button>`;
     }).join('')}</div>`;
@@ -585,9 +585,9 @@ export class StatsPage {
         ${kpi('백업', `${h.backups.length}개`, h.backups[0] ? `${relativeDate(h.backups[0].createdAt)} · ${h.backups[0].reason}` : '아직 없음')}
       </div>
       <div class="stats-split">
-        <section class="stats-card"><h3>저장된 항목</h3>
+        <section class="stats-card"><h2>저장된 항목</h2>
           <table class="data-table">${h.tables.map((t) => `<tr><td>${esc(t.label)}</td><td class="num">${t.rows.toLocaleString()}</td></tr>`).join('')}</table></section>
-        <section class="stats-card"><h3>정리</h3>
+        <section class="stats-card"><h2>정리</h2>
           <div class="cleanup-list">${cleanups.map(([k, l, s]) => `<div class="cleanup-row"><span><strong>${esc(l)}</strong><small>${esc(s)}</small></span>${DESTRUCTIVE_CLEANUPS[k]
             ? `<button class="btn danger" data-stats="cleanup" data-kind="${k}" aria-haspopup="dialog">지우기…</button>`
             : `<button class="btn" data-stats="cleanup" data-kind="${k}">정리</button>`}</div>`).join('')}</div>
