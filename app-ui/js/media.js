@@ -9,6 +9,7 @@ import { formatDuration, relativeDate, clipCard } from './channel.js';
 import { startDownload } from './downloads.js';
 import { previewAttr } from './hover-preview.js';
 import { playPreroll, cancelPreroll } from './ads.js';
+import { applyNowPlaying, clearNowPlaying, vodHandlers } from './now-playing.js';
 
 const ICON_BACK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>';
 const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
@@ -32,7 +33,8 @@ export class MediaPage {
     this.body.addEventListener('click', (e) => this.onClick(e));
     this.body.addEventListener('change', (e) => this.onChange(e));
     // 화면을 떠나면 멈추고 위치를 저장한다.
-    new MutationObserver(() => { if (this.root.hidden) this.leave(); })
+    // 진행 중인 열기(vodPlay 응답 대기)도 무효로 — 늦은 응답이 떠난 영상의 지금 재생 중 정보를 다시 넣지 않게.
+    new MutationObserver(() => { if (this.root.hidden) { this.seq++; this.leave(); } })
       .observe(this.root, { attributes: true, attributeFilter: ['hidden'] });
   }
 
@@ -95,6 +97,13 @@ export class MediaPage {
       </div>`;
     const video = this.video;
     video.src = info.streamUrl;
+    // 시스템 '지금 재생 중'(macOS 섬·제어 센터) — 이 영상은 앱 문서에 있으므로 앱 창의 mediaSession 에 넣는다.
+    applyNowPlaying(window, {
+      kind: 'vod',
+      title: info.title,
+      channelName: info.channelName,
+      thumbnailUrl: info.thumbnailUrl,
+    }, vodHandlers(video));
     if (info.resumeAt > 0) {
       video.addEventListener('loadedmetadata', () => { video.currentTime = info.resumeAt; }, { once: true });
       toast(`${formatDuration(info.resumeAt)}부터 이어서 재생합니다`, 2200);
@@ -160,6 +169,7 @@ export class MediaPage {
   leave() {
     cancelPreroll();
     clearInterval(this.saveTimer);
+    clearNowPlaying(window);
     // 클립은 치지직 임베드 iframe 이라 화면을 떠나도 소리가 계속 났다 — 비운다.
     for (const f of this.root.querySelectorAll('iframe.clip-embed')) f.src = 'about:blank';
     const v = this.video;

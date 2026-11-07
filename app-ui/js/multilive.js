@@ -28,6 +28,7 @@ import { WatchInfoPanel } from './ml-watch-info.js';
 import { liveIcon, multiLiveIcon, liveModeSwitch, setLiveModeActive } from './live-mode.js';
 import { decoratePageHeader } from './page-header.js';
 import { verifiedBadge } from './verified-badge.js';
+import { liveHandlers, pickNowPlayingSession, multiLiveNowPlayingInfo } from './now-playing.js';
 
 export { multiLiveIcon };
 
@@ -88,6 +89,18 @@ export function pickTintHue(used, rand = Math.random) {
 /** 라이브 머리줄에 한 번에 보이는 채널 칩 수, 휠 한 칸에 모을 delta(px). */
 const CHIP_WINDOW = 4;
 const CHIP_WHEEL_STEP = 40;
+
+/**
+ * 패인이 재생 중이거나 재생하려는가 — 디코드 예산으로 잠시 멈춘 패인(suspendLoading)은 영상이 멈춰 있어도
+ * 재생 의도가 남아 있다(player.html watchIntendsPlay). 페이지 함수가 없으면 영상 상태로.
+ */
+function paneIntendsPlay(pane, video) {
+  try {
+    const fn = pane.bridge.iframe.contentWindow?.watchIntendsPlay;
+    if (typeof fn === 'function') return Boolean(fn());
+  } catch { /* 준비 전 */ }
+  return !video.paused;
+}
 
 export class MultiLivePage {
   /**
@@ -326,6 +339,28 @@ export class MultiLivePage {
       addLabel: '멀티라이브에 추가',
     });
     this.watch = new WatchTools(this);
+    // 시스템 '지금 재생 중'(macOS 섬·제어 센터)의 재생·일시정지. WebKit 은 볼륨 0 패인도 후보로 보므로
+    // 어느 패인이 시스템에 올라가도 같게 — 일시정지는 재생 중인 패인을 모두 멈추고, 재생은 그렇게 멈춘
+    // 패인만 다시 튼다(사용자가 따로 멈춘 패인은 그대로). 그런 패인이 없으면 보이는 패인을 튼다.
+    this.systemPaused = new Set();
+    this.nowPlayingHandlers = liveHandlers({
+      pause: () => {
+        for (const [slot, pane] of this.panes) {
+          const v = pane.sessionId && !pane.exiting ? pane.controls.video : null;
+          if (!v || !paneIntendsPlay(pane, v)) continue;
+          pane.bridge.call('pause');
+          this.systemPaused.add(slot);
+        }
+      },
+      play: () => {
+        const slots = this.systemPaused.size ? [...this.systemPaused] : [this.nowPlayingSlot];
+        this.systemPaused.clear();
+        for (const slot of slots) {
+          const pane = slot != null ? this.panes.get(slot) : null;
+          if (pane && pane.sessionId && !pane.exiting) pane.bridge.call('play');
+        }
+      },
+    });
 
     listenHere(Events.multiLiveCommand, (p) => p && this.dispatch(p.slot, p.script));
     listen(Events.multiLiveState, (s) => this.render(s));
@@ -541,6 +576,8 @@ export class MultiLivePage {
         pane.el.style.setProperty('--ml-hue', String(pane.hue));
         // 같은 슬롯을 다른 채널이 다시 쓰면 앞 채널의 볼륨 0·수동 화질이 넘어왔다.
         pane.controls?.reset();
+        // 시스템 일시정지 기록도 앞 채널 것 — 남기면 다음 시스템 재생이 새 채널의 수동 정지를 푼다.
+        this.systemPaused.delete(s.slot);
       }
       pane.sessionId = s.id;
       // 성능 수집기가 player.net(채널 앞 6자)과 맞춘다. data-channel-id 를 쓰면 안 된다 — 카드 열기(bindCardOpen)가
@@ -573,6 +610,7 @@ export class MultiLivePage {
       }
     }
     if (before) playLayoutMotion(this.panes, before);
+    this.syncNowPlaying(sessions, state);
     this.syncChat(sessions.find((s) => s.id === state.selectedId) || null);
     // 채팅 테두리는 채팅을 보여 주는(선택) 패인의 색을 따른다.
     const shown = [...this.panes.values()].find((p) => p.sessionId && p.sessionId === state.selectedId);
@@ -584,6 +622,23 @@ export class MultiLivePage {
     this.addBar.sync();
     this.mergedChat.sync();
     this.watch.sync();
+  }
+
+  /** 시스템 '지금 재생 중' — 소리 나는(없으면 보고 있는) 패인의 방송을 모든 패인 문서에 넣고, 닫힌 패인은 지운다. */
+  syncNowPlaying(sessions, state) {
+    // 실제로 들리는가 — Rust 의 소리 라우팅(isAudible)에 패인 볼륨(0 이면 무음)을 더한다(PaneControls.sync 와 같은 기준).
+    const heard = sessions.map((s) => {
+      const gain = s.slot != null ? this.panes.get(s.slot)?.controls?.gain : undefined;
+      return gain === 0 && s.isAudible ? { ...s, isAudible: false } : s;
+    });
+    const target = pickNowPlayingSession(heard, state);
+    this.nowPlayingSlot = target ? target.slot : null;
+    const info = multiLiveNowPlayingInfo(target);
+    for (const [slot, pane] of this.panes) {
+      const open = Boolean(info && pane.sessionId && !pane.exiting);
+      if (!open) this.systemPaused.delete(slot);
+      pane.bridge.setNowPlaying(open ? info : null, this.nowPlayingHandlers);
+    }
   }
 
   /** 패인 배치의 지문 — 이게 바뀔 때만 움직임을 준다(시청자 수 같은 잦은 상태 갱신은 그대로). */

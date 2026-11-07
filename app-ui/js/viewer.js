@@ -12,6 +12,7 @@ import { uptimeText, compactCount } from './cards.js';
 import { noteConnectorLimit } from './live-connector.js';
 import { playPreroll, cancelPreroll } from './ads.js';
 import { verifiedBadge } from './verified-badge.js';
+import { liveHandlers } from './now-playing.js';
 
 const PHASE_TEXT = {
   idle: '',
@@ -72,6 +73,27 @@ export class Viewer {
     this.controls = new ViewerControls(this);
     this.panel = new PlayerPanel(this);
     this.extras = new ViewerExtras(this, { isLoggedIn });
+    // 시스템 '지금 재생 중'(macOS 섬·제어 센터)의 재생·일시정지 — 화면의 재생 버튼과 같은 길로.
+    const fromSystem = (name) => () => {
+      this.player.call(name);
+      setTimeout(() => this.controls.renderStatus(), 150);
+    };
+    this.nowPlayingHandlers = liveHandlers({ play: fromSystem('play'), pause: fromSystem('pause') });
+  }
+
+  /** 시스템 '지금 재생 중' 정보 — 방송 제목·채널·썸네일. 방송이 없으면 지운다. */
+  syncNowPlaying(live) {
+    if (!live || !this.channelId) {
+      this.player.setNowPlaying(null);
+      return;
+    }
+    this.player.setNowPlaying({
+      kind: 'live',
+      title: live.liveTitle,
+      channelName: live.channelName,
+      thumbnailUrl: live.thumbnailUrl,
+      imageUrl: live.channelImageUrl,
+    }, this.nowPlayingHandlers);
   }
 
   /** 재생 중인 채널이 있는가(화면을 숨겨도 재생은 이어진다). */
@@ -180,6 +202,7 @@ export class Viewer {
     if (settings) this.lastSettings = settings;
     this.root.hidden = false;
     this.renderHeader(null);
+    this.syncNowPlaying(null);
     this.showOverlay(PHASE_TEXT.loadingInfo);
     this.status.textContent = '';
     if (settings && typeof settings.volumeLevel === 'number') {
@@ -192,6 +215,7 @@ export class Viewer {
       const started = await api.playerStart(channelId);
       if (token !== this.startToken) return;
       this.renderHeader(started.live);
+      this.syncNowPlaying(started.live);
       this.loadFollowers(channelId, token);
       this.extras.loadRail(channelId);
       if (started.audioOnly) this.status.textContent = '오디오 전용 방송';
@@ -222,6 +246,7 @@ export class Viewer {
     this.cancelAd();
     this.root.hidden = true;
     this.channelId = null;
+    this.syncNowPlaying(null);
     clearInterval(this.uptimeTimer);
     this.alerts.clear();
     this.showOverlay('');
@@ -287,6 +312,7 @@ export class Viewer {
       this.status.textContent = ev.resolution ? `${ev.name} (${ev.resolution})` : ev.name;
     } else if (ev.type === 'ended') {
       this.showOverlay(PHASE_TEXT.streamEnded);
+      this.player.setNowPlaying(null);
     } else if (ev.type === 'error') {
       toast(ev.message);
     }
