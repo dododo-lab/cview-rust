@@ -38,6 +38,62 @@ pub fn following_max_pages(page_size: i64) -> i64 {
     (FOLLOWING_ROW_LIMIT + size - 1) / size
 }
 
+/// 팔로잉 목록을 한 번에 받아 볼 때의 페이지 크기(치지직 웹의 팔로잉 화면과 같은 값).
+pub const FOLLOWING_ONE_PAGE_SIZE: i64 = 505;
+
+/// 목록 응답 항목 → 행. 채널 id 가 없거나 이미 본 채널은 건너뛴다(처음 것만 남긴다).
+fn push_following_rows(
+    items: Vec<crate::response::FollowingItem>,
+    rows: &mut Vec<FollowingRow>,
+    seen: &mut HashSet<String>,
+) {
+    for item in items {
+        let Some(channel) = item.channel else {
+            continue;
+        };
+        let follow = channel.follow_state();
+        let Some(channel_id) = channel.channel_id else {
+            continue;
+        };
+        if !seen.insert(channel_id.clone()) {
+            continue;
+        }
+        rows.push(FollowingRow {
+            channel_id,
+            verified: channel.verified_mark.unwrap_or(false),
+            verified_badge: cview_core::models::verified_badge(
+                channel.verified_mark.unwrap_or(false),
+                channel.verified_mark_type.as_deref(),
+            )
+            .map(str::to_string),
+            follow,
+            channel_name: channel.channel_name.unwrap_or_else(|| "Unknown".into()),
+            channel_image_url: channel.channel_image_url,
+            is_live: item.streamer.is_some_and(|s| s.is_actually_live()),
+            list_live_info: item.live_info,
+        });
+    }
+}
+
+fn following_rows_page(
+    rows: Vec<FollowingRow>,
+    total_count: Option<i64>,
+    fetched_at: chrono::DateTime<chrono::Utc>,
+) -> FollowingRowsPage {
+    let carries_live_info = rows.iter().any(|r| {
+        r.is_live
+            && r.list_live_info
+                .as_ref()
+                .is_some_and(|i| i.has_list_fields())
+    });
+    FollowingRowsPage {
+        rows,
+        total_count,
+        carries_live_info,
+        fetched_at,
+    }
+}
+
 /// 전수 순회 옵션 (Swift `liveCatalogTraversal` 인자).
 #[derive(Debug, Clone, Default)]
 pub struct TraversalOptions {
@@ -397,12 +453,77 @@ impl ChzzkApiClient {
     ///
     /// 종료 조건: 빈 페이지 → totalCount 도달 → (totalCount 가 없을 때만) 요청보다 적은 페이지.
     /// 같은 채널이 여러 페이지에 나오면 처음 것만 남긴다. 페이지마다 인증 문맥을 다시 확인한다.
+    ///
+    /// 먼저 큰 페이지([`FOLLOWING_ONE_PAGE_SIZE`])로 받아 본다. 그 한 페이지가 목록 끝까지 담았으면 — `totalCount`
+    /// 에 닿았거나, 요청보다 적게 왔고 다음 페이지가 비어 있으면 — 그대로 쓴다. 실제 계정에서 `totalCount` 가
+    /// 내려오는 행 수보다 커서(숨은·탈퇴 채널로 보인다) 나눠 받기도 빈 페이지에서 멈춘다. 그 밖에는(다음 페이지에
+    /// 행이 있거나, 꽉 찬 페이지거나, 4xx 로 거절했으면) 이 세션 동안 큰 페이지를 끄고 50개씩 처음부터 다시
+    /// 받는다 — 오프셋을 추측하지 않으므로 빠지는 행이 없다. 정기 폴(61초)마다 요청이 9번에서 2번으로 준다.
     pub async fn fetch_following_rows(
         &self,
         bypass_cache: bool,
     ) -> Result<FollowingRowsPage, ApiError> {
+        if !self.lock_state().following_one_page_disabled {
+            match self.fetch_following_rows_one_page(bypass_cache).await {
+                Ok(Some(page)) => return Ok(page),
+                Ok(None) => {}
+                Err(ApiError::HttpError { status_code })
+                    if (400..500).contains(&status_code)
+                        && status_code != 401
+                        && status_code != 403
+                        && status_code != 429 => {}
+                Err(error) => return Err(error),
+            }
+            self.lock_state().following_one_page_disabled = true;
+            tracing::debug!(
+                "팔로잉 목록: 큰 페이지 한 번으로 받지 못해 페이지 나눠 받기로 돌아간다"
+            );
+        }
         self.fetch_following_rows_with_page_size(bypass_cache, FOLLOWING_PAGE_SIZE)
             .await
+    }
+
+    /// 큰 페이지 한 번. 그 페이지가 `totalCount` 전부를 담았으면 `Some`, 아니면 `None`(나눠 받기로).
+    async fn fetch_following_rows_one_page(
+        &self,
+        bypass_cache: bool,
+    ) -> Result<Option<FollowingRowsPage>, ApiError> {
+        let context = self.auth_context().await;
+        self.check_auth_context(context).await?;
+        let size = FOLLOWING_ONE_PAGE_SIZE;
+        let aged: AgedResponse<FollowingContent> = self
+            .request_with_age(
+                &ChzzkEndpoint::Following { size, page: 0 },
+                bypass_cache,
+                true,
+            )
+            .await?;
+        self.check_auth_context(context).await?;
+        let total = aged.value.total_count;
+        let items = aged.value.following_list.unwrap_or_default();
+        if items.is_empty() || items.len() as i64 >= size {
+            return Ok(None); // 비었거나 꽉 찼다 — 나눠 받기로 확인한다
+        }
+        let mut rows = Vec::new();
+        let mut seen = HashSet::new();
+        push_following_rows(items, &mut rows, &mut seen);
+        let mut fetched_at = aged.fetched_at;
+        if total.is_none_or(|t| (seen.len() as i64) < t) {
+            // 끝인지 다음 페이지로 확인한다 — 비어 있어야 끝이다.
+            let next: AgedResponse<FollowingContent> = self
+                .request_with_age(
+                    &ChzzkEndpoint::Following { size, page: 1 },
+                    bypass_cache,
+                    true,
+                )
+                .await?;
+            self.check_auth_context(context).await?;
+            if !next.value.following_list.unwrap_or_default().is_empty() {
+                return Ok(None);
+            }
+            fetched_at = fetched_at.min(next.fetched_at);
+        }
+        Ok(Some(following_rows_page(rows, total, fetched_at)))
     }
 
     /// 페이지 크기 주입점(테스트).
@@ -433,32 +554,7 @@ impl ChzzkApiClient {
             }
             let items = aged.value.following_list.unwrap_or_default();
             let item_count = items.len() as i64;
-            for item in items {
-                let Some(channel) = item.channel else {
-                    continue;
-                };
-                let follow = channel.follow_state();
-                let Some(channel_id) = channel.channel_id else {
-                    continue;
-                };
-                if !seen.insert(channel_id.clone()) {
-                    continue;
-                }
-                rows.push(FollowingRow {
-                    channel_id,
-                    verified: channel.verified_mark.unwrap_or(false),
-                    verified_badge: cview_core::models::verified_badge(
-                        channel.verified_mark.unwrap_or(false),
-                        channel.verified_mark_type.as_deref(),
-                    )
-                    .map(str::to_string),
-                    follow,
-                    channel_name: channel.channel_name.unwrap_or_else(|| "Unknown".into()),
-                    channel_image_url: channel.channel_image_url,
-                    is_live: item.streamer.is_some_and(|s| s.is_actually_live()),
-                    list_live_info: item.live_info,
-                });
-            }
+            push_following_rows(items, &mut rows, &mut seen);
             if item_count == 0 {
                 break;
             }
@@ -477,18 +573,8 @@ impl ChzzkApiClient {
         }
 
         self.check_auth_context(context).await?;
-        let carries_live_info = rows.iter().any(|r| {
-            r.is_live
-                && r.list_live_info
-                    .as_ref()
-                    .is_some_and(|i| i.has_list_fields())
-        });
-        Ok(FollowingRowsPage {
-            rows,
-            total_count,
-            carries_live_info,
-            fetched_at: oldest.unwrap_or_else(|| self.inner.cache.now()),
-        })
+        let fetched_at = oldest.unwrap_or_else(|| self.inner.cache.now());
+        Ok(following_rows_page(rows, total_count, fetched_at))
     }
 
     /// 모든 팔로잉 채널을 수집하고, 라이브 행의 상세를 슬라이딩 윈도우로 병렬 조회한다.

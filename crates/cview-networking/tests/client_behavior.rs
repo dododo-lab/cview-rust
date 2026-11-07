@@ -1013,3 +1013,113 @@ async fn channel_posts_uses_comment_api_with_fixed_page_size() {
     );
     assert_eq!(t.sends(), 1);
 }
+
+fn query(req: &HttpRequest, key: &str) -> String {
+    req.url
+        .query_pairs()
+        .find(|(k, _)| k == key)
+        .map(|(_, v)| v.to_string())
+        .unwrap_or_default()
+}
+
+#[tokio::test]
+async fn following_rows_use_one_big_page_when_it_holds_everything() {
+    let t = MockTransport::new(Duration::ZERO, |req, _| {
+        assert_eq!(query(req, "size"), "505");
+        ok(json!({"totalCount": 3, "followingList": [
+            following_item("a", true), following_item("b", false), following_item("c", true)
+        ]}))
+    });
+    let c = client(t.clone(), Some(MockAuth::with_cookies()));
+    let page = c.fetch_following_rows(false).await.unwrap();
+    let ids: Vec<_> = page.rows.iter().map(|r| r.channel_id.as_str()).collect();
+    assert_eq!(ids, vec!["a", "b", "c"]);
+    assert!(page.carries_live_info);
+    assert_eq!(t.sends(), 1, "한 페이지가 전부를 담으면 요청 한 번");
+    let _ = c.fetch_following_rows(true).await.unwrap();
+    assert_eq!(t.sends(), 2, "다음 폴도 한 번");
+}
+
+/// 실제 계정은 totalCount 가 내려오는 행보다 크다 — 다음 페이지가 비어 있으면 끝으로 본다(요청 두 번).
+#[tokio::test]
+async fn following_rows_one_page_ends_on_empty_next_page_when_total_overcounts() {
+    let t = MockTransport::new(Duration::ZERO, |req, _| {
+        assert_eq!(query(req, "size"), "505");
+        if query(req, "page") == "0" {
+            ok(
+                json!({"totalCount": 9, "followingList": [following_item("a", true), following_item("b", false)]}),
+            )
+        } else {
+            ok(json!({"totalCount": 9, "followingList": []}))
+        }
+    });
+    let c = client(t.clone(), Some(MockAuth::with_cookies()));
+    let page = c.fetch_following_rows(false).await.unwrap();
+    assert_eq!(page.rows.len(), 2);
+    assert_eq!(t.sends(), 2);
+    let _ = c.fetch_following_rows(true).await.unwrap();
+    assert_eq!(t.sends(), 4, "큰 페이지를 계속 쓴다");
+}
+
+#[tokio::test]
+async fn following_rows_fall_back_to_pages_when_server_shrinks_the_page() {
+    // 서버가 size 를 2로 줄여 응답한다 — 큰 페이지에 전부가 없으니 처음부터 50개씩(여기서는 2개씩) 다시 받는다.
+    let all = ["a", "b", "c", "d", "e"];
+    let t = MockTransport::new(Duration::ZERO, move |req, _| {
+        let page: usize = query(req, "page").parse().unwrap();
+        let items: Vec<_> = all
+            .iter()
+            .skip(page * 2)
+            .take(2)
+            .map(|id| following_item(id, true))
+            .collect();
+        ok(json!({"totalCount": 5, "followingList": items}))
+    });
+    let c = client(t.clone(), Some(MockAuth::with_cookies()));
+    let page = c.fetch_following_rows(false).await.unwrap();
+    let ids: Vec<_> = page.rows.iter().map(|r| r.channel_id.as_str()).collect();
+    assert_eq!(ids, all.to_vec(), "빠지는 행 없이 전부");
+    let first = t.sends();
+    let sizes: Vec<_> = (0..t.sends())
+        .map(|i| query(&t.request(i), "size"))
+        .collect();
+    assert_eq!(
+        &sizes[..2],
+        ["505", "505"],
+        "다음 페이지에 행이 있으면 끝이 아니다"
+    );
+    assert!(
+        sizes[2..].iter().all(|s| s == "50"),
+        "되돌아가면 50개씩: {sizes:?}"
+    );
+    let _ = c.fetch_following_rows(true).await.unwrap();
+    let sizes: Vec<_> = (first..t.sends())
+        .map(|i| query(&t.request(i), "size"))
+        .collect();
+    assert!(
+        sizes.iter().all(|s| s == "50"),
+        "이 세션에서는 큰 페이지를 다시 시도하지 않는다: {sizes:?}"
+    );
+}
+
+#[tokio::test]
+async fn following_rows_fall_back_when_big_page_is_rejected_but_not_on_auth_error() {
+    let t = MockTransport::new(Duration::ZERO, |req, _| {
+        if query(req, "size") == "505" {
+            status(400)
+        } else {
+            ok(json!({"totalCount": 1, "followingList": [following_item("a", true)]}))
+        }
+    });
+    let c = client(t.clone(), Some(MockAuth::with_cookies()));
+    let page = c.fetch_following_rows(false).await.unwrap();
+    assert_eq!(page.rows.len(), 1);
+    assert_eq!(t.sends(), 2, "400 이면 나눠 받기로 한 번 더");
+
+    let t = MockTransport::new(Duration::ZERO, |_, _| status(500));
+    let c = client(t.clone(), Some(MockAuth::with_cookies()));
+    assert!(
+        c.fetch_following_rows(false).await.is_err(),
+        "서버 오류는 폴 실패로 그대로 알린다"
+    );
+}
