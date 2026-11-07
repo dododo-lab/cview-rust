@@ -173,7 +173,7 @@ export class MultiLivePage {
         </div>
         <section class="ml-watch-info" aria-label="채널 정보" hidden></section>
         </div>
-        <aside class="chat ml-chat">
+        <section class="chat ml-chat" aria-label="채팅">
           <header class="chat-header">
             <strong>채팅</strong>
             <span class="chat-state">연결 끊김</span>
@@ -184,7 +184,7 @@ export class MultiLivePage {
             <input type="text" maxlength="100" placeholder="채팅을 입력하세요…" autocomplete="off">
             <button class="btn primary" type="submit">채팅</button>
           </form>
-        </aside>
+        </section>
       </div>`;
     content.append(this.root);
     // 툴바가 빽빽한 화면이라 머리줄은 한 줄(수 알약은 줄 안에). 아이콘은 보기(라이브·멀티라이브)를 따른다.

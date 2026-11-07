@@ -87,7 +87,7 @@ function bytesText(n) {
 // ── 그리기 조각 ─────────────────────────────
 const header = (title, subtitle) => `<div class="ip-head"><span class="ip-head-icon">${ICON.insight}</span><div class="ip-head-text"><strong>${esc(title)}</strong><small>${esc(subtitle)}</small></div></div>`;
 const tiles = (items) => `<div class="ip-tiles">${items.map(([v, l]) => `<div class="ip-tile"><strong>${esc(v)}</strong><span>${esc(l)}</span></div>`).join('')}</div>`;
-const section = (icon, title, body) => (body ? `<section class="ip-section"><h4><span class="ip-sec-icon">${ICON[icon] || ''}</span>${esc(title)}</h4>${body}</section>` : '');
+const section = (icon, title, body) => (body ? `<section class="ip-section"><h2><span class="ip-sec-icon">${ICON[icon] || ''}</span>${esc(title)}</h2>${body}</section>` : '');
 function bars(items, fmt = compactCount) {
   if (!items.length) return '';
   const max = Math.max(...items.map((x) => x.value), 1);

@@ -41,8 +41,46 @@ function labelIconButtons(root) {
 // 채팅 목록은 줄이 프레임마다 들어오지만 아이콘 버튼이 없다 — 그 안의 변화는 보지 않는다.
 const SKIP = '.chat-list, .mc-merged-list';
 
+// 선택 묶음(필터 칩·정렬/보기 세그먼트)의 고른 상태 — 화면은 .active 로만 그려 화면 낭독기가 무엇이 골라졌는지 몰랐다.
+// 탭(role=tablist → aria-selected)·라디오(role=radiogroup → aria-checked)·스스로 역할을 단 버튼은 건드리지 않는다.
+// 고른 버튼이 하나도 없는 묶음(예: 카테고리 바로가기 칩)은 누르면 동작하는 버튼이라 토글로 알리지 않는다.
+const PRESS_BTN = 'button.chip, button.seg';
+const PRESS_GROUP = '.chips, .segmented';
+function syncPressedGroup(group) {
+  if (group.matches('[role="tablist"], [role="radiogroup"]')) return;
+  const buttons = [...group.querySelectorAll(PRESS_BTN)].filter((b) => b.closest(PRESS_GROUP) === group && !b.hasAttribute('role'));
+  if (!buttons.some((b) => b.classList.contains('active'))) return;
+  for (const b of buttons) {
+    const on = String(b.classList.contains('active'));
+    if (b.getAttribute('aria-pressed') !== on) b.setAttribute('aria-pressed', on);
+  }
+}
+export function syncPressed(root) {
+  if (root.matches && root.matches(PRESS_GROUP)) syncPressedGroup(root);
+  else if (root.matches && root.matches(PRESS_BTN)) { const g = root.closest(PRESS_GROUP); if (g) syncPressedGroup(g); }
+  for (const g of root.querySelectorAll ? root.querySelectorAll(PRESS_GROUP) : []) syncPressedGroup(g);
+}
+
+/** 본문 바로가기 — 지금 보이는 화면(시청 화면이 떠 있으면 그 화면)으로 초점을 옮긴다. */
+function bindSkipLink() {
+  const link = document.querySelector('.skip-link');
+  if (!link) return;
+  link.addEventListener('click', (e) => {
+    e.preventDefault();
+    const main = document.getElementById('main-content');
+    const visible = (el) => el && !el.hidden && el.offsetParent !== null;
+    const target = [...document.querySelectorAll('.viewer, #main-content > .page')].find(visible) || main;
+    if (!target) return;
+    target.dataset.skipTarget = '';
+    if (!target.hasAttribute('tabindex')) target.tabIndex = -1;
+    target.focus({ preventScroll: true });
+  });
+}
+
 export function installA11y() {
   labelIconButtons(document);
+  syncPressed(document);
+  bindSkipLink();
   // 새로 붙은 노드만 훑는다(예전엔 변화마다 문서 전체를 다시 검색해 채팅 묶음마다 비용이 들었다).
   const queue = new Set();
   let pending = false;
@@ -55,10 +93,20 @@ export function installA11y() {
     pending = true;
     requestAnimationFrame(() => {
       pending = false;
-      for (const n of queue) if (n.isConnected) labelIconButtons(n);
+      for (const n of queue) if (n.isConnected) { labelIconButtons(n); syncPressed(n); }
       queue.clear();
     });
   }).observe(document.body, { childList: true, subtree: true });
+  // 다시 그리지 않고 .active 만 옮기는 묶음(홈 카테고리 칩 등) — 칩·세그먼트 버튼의 class 변화만 본다
+  new MutationObserver((records) => {
+    const groups = new Set();
+    for (const r of records) {
+      if (!r.target.matches || !r.target.matches(PRESS_BTN)) continue;
+      const g = r.target.closest(PRESS_GROUP);
+      if (g) groups.add(g);
+    }
+    for (const g of groups) syncPressedGroup(g);
+  }).observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
 
   document.addEventListener('keydown', (e) => {
     const card = e.target && e.target.closest && e.target.closest('.card[tabindex]');

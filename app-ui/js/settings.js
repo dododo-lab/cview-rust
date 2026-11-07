@@ -303,10 +303,10 @@ export class SettingsPage {
     for (const [g, title, items] of SCHEMA) {
       if (!want(g)) continue;
       const adv = items.some((i) => i.adv);
-      sections.push(`<section class="settings-group" data-g="${g}"><h3>${esc(title)}${adv ? `<button class="link-btn adv-toggle" data-adv>${this.showAdvanced ? '고급 숨기기' : '고급 보기'}</button>` : ''}</h3>
+      sections.push(`<section class="settings-group" data-g="${g}"><h2>${esc(title)}${adv ? `<button class="link-btn adv-toggle" data-adv>${this.showAdvanced ? '고급 숨기기' : '고급 보기'}</button>` : ''}</h2>
         ${items.map((i) => itemHtml(i, this.settings)).join('')}</section>`);
       if (g === 'advanced' && title === '네트워크') {
-        sections.push(`<section class="settings-group" data-g="advanced"><h3>네트워크 프리셋</h3><div class="setting" data-search="네트워크 프리셋 자동 밸런스 안정 저지연 고성능"><span class="setting-label">한 번에 맞추기<small>${esc(netPresetHelp(this.settings))}</small></span>
+        sections.push(`<section class="settings-group" data-g="advanced"><h2>네트워크 프리셋</h2><div class="setting" data-search="네트워크 프리셋 자동 밸런스 안정 저지연 고성능"><span class="setting-label">한 번에 맞추기<small>${esc(netPresetHelp(this.settings))}</small></span>
           <div class="segmented" role="radiogroup" aria-label="네트워크 프리셋">${NETWORK_PRESETS.map(([v, l]) => { const on = v === this.settings.networkPreset; return `<button class="seg ${on ? 'active' : ''}" data-net-preset="${v}" role="radio" aria-checked="${on}">${l}</button>`; }).join('')}</div></div></section>`);
       }
     }
@@ -322,8 +322,8 @@ export class SettingsPage {
       ? `<div class="setting" data-search="계정 로그아웃"><span class="setting-label">${esc(auth.nickname || '로그인됨')}<small>네이버 계정 (${esc(auth.method || 'cookie')})</small></span><button class="btn" data-action="logout">로그아웃</button></div>`
       : '<div class="setting" data-search="계정 로그인"><span class="setting-label">로그인되지 않음<small>팔로잉 목록과 채팅 참여에 네이버 로그인이 필요합니다</small></span><button class="btn primary" data-action="login">로그인</button></div>';
     return `
-      <section class="settings-group" data-g="overview"><h3>계정</h3>${account}</section>
-      <section class="settings-group oauth-group" data-g="overview"><h3>치지직 OAuth 연동 <small class="muted">선택</small></h3>
+      <section class="settings-group" data-g="overview"><h2>계정</h2>${account}</section>
+      <section class="settings-group oauth-group" data-g="overview"><h2>치지직 OAuth 연동 <small class="muted">선택</small></h2>
         <div class="setting" data-search="oauth 치지직 연동 client id secret 개발자"><span class="setting-label">애플리케이션 자격 증명<small class="oauth-status">치지직 개발자 센터에 등록한 앱의 Client ID·Secret — 키체인에 저장합니다</small></span></div>
         <div class="oauth-form">
           <input type="text" name="clientId" placeholder="Client ID" autocomplete="off" spellcheck="false">
@@ -333,7 +333,7 @@ export class SettingsPage {
           <button type="button" class="link-btn" data-oauth="clear">지우기</button>
         </div>
       </section>
-      <section class="settings-group" data-g="overview"><h3>화면</h3>
+      <section class="settings-group" data-g="overview"><h2>화면</h2>
         <div class="setting" data-search="테마 다크 라이트 시스템">
           <span class="setting-label">테마<small>시스템은 macOS 화면 모드를 따릅니다</small></span>
           <div class="segmented" role="radiogroup" aria-label="테마">
@@ -341,7 +341,7 @@ export class SettingsPage {
           </div>
         </div>
       </section>
-      <section class="settings-group" data-g="overview"><h3>앱</h3>
+      <section class="settings-group" data-g="overview"><h2>앱</h2>
         <div class="setting update-row" data-search="업데이트 확인 설치 버전 다운로드 릴리스"><span class="setting-label">업데이트 확인<small class="update-version">현재 버전 확인 중…</small><small class="update-status">업데이트 서버의 최신 릴리스와 비교합니다</small></span><span class="shortcut-edit"><button class="link-btn" data-sys="update-page" hidden>릴리스 노트</button><button class="btn primary" data-sys="update-download" hidden>다운로드</button><button class="btn primary" data-sys="update-install" hidden>업데이트 설치</button><button class="btn" data-sys="update">지금 확인</button></span></div>
         <div class="setting" data-search="알림 권한 시스템 알림"><span class="setting-label">시스템 알림 권한<small class="notify-status">방송 시작·멘션 알림에 필요합니다</small></span><span class="shortcut-edit"><button class="btn" data-sys="notify">권한 확인</button><button class="link-btn" data-sys="notify-settings">시스템 설정 열기</button></span></div>
         <div class="setting" data-search="딥 링크 cview url"><span class="setting-label">링크로 열기<small>cview://live?channelId=… · cview://search?q=… · cview://multilive</small></span></div>
@@ -359,14 +359,14 @@ export class SettingsPage {
     const words = (p.blockedWords || []).map((w) => `<span class="word-chip">${esc(w)}<button data-remove-word="${esc(w)}" title="지우기">✕</button></span>`).join('');
     const users = (p.blockedUsers || []).map((u) => `<span class="word-chip">${esc(blockedLabel(u))}<button data-unblock="${esc(u)}" title="차단 해제">해제</button></span>`).join('');
     return `
-      <section class="settings-group" data-g="chat"><h3>채팅 표시</h3>
+      <section class="settings-group" data-g="chat"><h2>채팅 표시</h2>
         ${range('fontSize', '글자 크기', 11, 20, 1)}
         ${range('lineSpacing', '줄 간격', 0, 8, 1)}
         ${CHAT_TOGGLES.map(toggle).join('')}
         <label class="setting" data-search="최대 표시 줄 수"><span class="setting-label">최대 표시 줄 수<small>오래된 메시지부터 지웁니다</small></span>
           <select class="select" data-chat="maxVisibleMessages">${[150, 300, 500, 1000].map((n) => `<option value="${n}" ${Number(p.maxVisibleMessages) === n ? 'selected' : ''}>${n}줄</option>`).join('')}</select></label>
       </section>
-      <section class="settings-group" data-g="chat"><h3>읽기 폭 · 배경</h3>
+      <section class="settings-group" data-g="chat"><h2>읽기 폭 · 배경</h2>
         <label class="setting" data-search="읽기 폭 채팅 너비"><span class="setting-label">읽기 폭<small>넓은 채팅 창에서 메시지 줄 길이를 제한합니다</small></span>
           <select class="select" data-chat-str="readingWidth">${READING_WIDTHS.map(([v, l]) => `<option value="${v}" ${(p.readingWidth || 'full') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="setting" data-search="채팅 배경"><span class="setting-label">배경</span>
@@ -374,14 +374,14 @@ export class SettingsPage {
         <label class="setting" data-search="배경 강도"><span class="setting-label">배경 강도</span>
           <span class="range-field"><input type="range" min="0" max="1" step="0.05" value="${esc((p.background || {}).strength ?? 0.5)}" data-chat-bg="strength"><output>${esc((p.background || {}).strength ?? 0.5)}</output></span></label>
       </section>
-      <section class="settings-group" data-g="chat"><h3>후원 읽어 주기(TTS)</h3>
+      <section class="settings-group" data-g="chat"><h2>후원 읽어 주기(TTS)</h2>
         ${toggle(['ttsEnabled', '후원·구독 읽어 주기', '새 후원과 구독을 소리 내어 읽습니다 (/tts 로도 켜고 끔)'])}
         ${range('ttsVolume', '음량', 0, 1, 0.05)}
         ${range('ttsRate', '속도', 100, 400, 10)}
         <label class="setting" data-search="tts 음성 목소리"><span class="setting-label">목소리</span>
           <select class="select" data-chat-str="ttsVoiceIdentifier"><option value="">기본</option>${(window.speechSynthesis ? speechSynthesis.getVoices() : []).filter((v) => v.lang.startsWith('ko')).map((v) => `<option value="${esc(v.voiceURI)}" ${p.ttsVoiceIdentifier === v.voiceURI ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}</select></label>
       </section>
-      <section class="settings-group" data-g="chat"><h3>필터 · 사용자 관리</h3>
+      <section class="settings-group" data-g="chat"><h2>필터 · 사용자 관리</h2>
         ${toggle(['chatFilterEnabled', '금지어 필터', '아래 단어가 들어간 메시지를 숨깁니다'])}
         <div class="setting column" data-search="금지어"><div class="word-list">${words || '<span class="muted">금지어가 없습니다</span>'}</div>
           <form class="word-form" data-word-form><input type="text" maxlength="40" placeholder="숨길 단어 추가"><button class="btn">추가</button></form></div>
@@ -396,12 +396,12 @@ export class SettingsPage {
       <div class="setting" data-search="${esc(`단축키 키보드 ${label}`)}"><span class="setting-label">${esc(label)}${FIXED.has(id) ? '<small>메뉴가 정한 고정 키</small>' : ''}</span>
         ${FIXED.has(id) ? `<kbd class="kbd">${esc(fixed)}</kbd>` : `<span class="shortcut-edit"><kbd class="kbd">${esc(bindingLabel(b[id]))}</kbd><button class="btn" data-bind="${id}">바꾸기</button><button class="link-btn" data-bind-reset="${id}">기본값</button></span>`}
       </div>`).join('');
-    return `<section class="settings-group" data-g="general"><h3>키보드 단축키</h3>${rows}
+    return `<section class="settings-group" data-g="general"><h2>키보드 단축키</h2>${rows}
       <div class="setting" data-search="단축키 키보드 목록"><span class="setting-label">전체 단축키 목록<small>${kbd('메뉴 막대와 ⌘/ 로 볼 수 있습니다 · ⌘ 가 들어간 단축키는 메뉴 막대에도 반영됩니다')}</small></span><button class="btn" data-open-shortcuts>보기</button></div></section>`;
   }
 
   backupHtml() {
-    return `<section class="settings-group" data-g="advanced"><h3>백업 · 초기화</h3>
+    return `<section class="settings-group" data-g="advanced"><h2>백업 · 초기화</h2>
       <div class="setting" data-search="설정 내보내기 백업"><span class="setting-label">설정 내보내기<small>모든 설정을 JSON 파일로 ~/Downloads/CView 에 저장합니다</small></span><button class="btn" data-export>내보내기</button></div>
       <div class="setting column" data-search="설정 가져오기 복원"><span class="setting-label">설정 가져오기<small>내보낸 JSON 내용을 붙여 넣으세요</small></span>
         <form class="word-form" data-import><input type="text" placeholder='{"player": …}'><button class="btn">가져오기</button></form></div>

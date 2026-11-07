@@ -210,7 +210,7 @@ function categoryChips(popular, selected) {
   if (selected && !top.includes(selected)) top.push(selected);
   const chip = (value, label, n) =>
     `<button class="chip${value === selected ? ' active' : ''}" data-category="${esc(value)}">${esc(label)}<span class="chip-count">${n}</span></button>`;
-  return `<div class="chips home-chips" role="tablist">${chip(ALL, '전체', popular.length)}${top.map((n) => chip(n, n, counts.get(n) || 0)).join('')}</div>`;
+  return `<div class="chips home-chips" role="group" aria-label="카테고리">${chip(ALL, '전체', popular.length)}${top.map((n) => chip(n, n, counts.get(n) || 0)).join('')}</div>`;
 }
 
 function popularGrid(popular, category, limit = GRID_STEP) {

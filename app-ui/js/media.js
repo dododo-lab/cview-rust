@@ -139,7 +139,7 @@ export class MediaPage {
             <button class="btn ghost" data-media="external">치지직에서 열기</button>
           </div>
         </div>
-        <aside class="media-side"><h2 class="section-title">다른 클립</h2><div class="media-dock">${loadingState()}</div></aside>
+        <section class="media-side" aria-label="다른 클립"><h2 class="section-title">다른 클립</h2><div class="media-dock">${loadingState()}</div></section>
       </div>`;
     this.loadDock(channelId, clipUid, seq);
   }

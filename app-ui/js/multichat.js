@@ -19,12 +19,12 @@ const COLORS = ['#00c77f', '#5ba3ff', '#ff8a3d', '#c77dff', '#ff5d8f', '#2ec4b6'
 const MAX_CHANNELS = 8;
 
 const chatMarkup = `
-  <aside class="chat mc-chat">
+  <section class="chat mc-chat" aria-label="채팅">
     <header class="chat-header"><strong class="mc-name">채팅</strong><span class="chat-state">연결 끊김</span></header>
     <div class="chat-notice" hidden></div>
     <div class="chat-list"></div>
     <form class="chat-input"><input type="text" maxlength="100" placeholder="채팅을 입력하세요…" autocomplete="off"><button class="btn primary" type="submit">채팅</button></form>
-  </aside>`;
+  </section>`;
 
 /** 검색어가 줄에 있는가(대소문자 무시). 순수 함수. */
 export function lineMatches(text, query) {
@@ -61,7 +61,7 @@ export class MultiChatPage {
         <h1 class="page-title">멀티채팅</h1>
         <span class="page-subtitle mc-count"></span>
         <div class="grow"></div>
-        <input type="search" class="mc-search" placeholder="${kbd('메시지 검색 (⌥⌘F)')}">
+        <input type="search" class="mc-search" aria-label="메시지 검색" placeholder="${kbd('메시지 검색 (⌥⌘F)')}">
         <div class="segmented"><button class="seg" data-mc-layout="tabs">탭</button><button class="seg" data-mc-layout="grid">그리드</button><button class="seg" data-mc-layout="merged">통합</button></div>
         <button class="btn primary" data-mc="add">+ 채널</button>
         <button class="btn ghost" data-mc="close-all">모두 닫기</button>

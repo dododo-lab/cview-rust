@@ -157,11 +157,11 @@ export class ChannelPage {
       const desc = d.channel.channelDescription;
       box.innerHTML = `
         <section class="settings-group channel-info">
-          <h3>채널 소개</h3>
+          <h2>채널 소개</h2>
           <p class="channel-desc">${desc ? esc(desc) : '소개가 없습니다'}</p>
         </section>
         <section class="settings-group channel-info">
-          <h3>내 메모</h3>
+          <h2>내 메모</h2>
           <p class="channel-desc">${d.memo ? esc(d.memo) : '메모가 없습니다 — 오른쪽 위 메모 버튼으로 남길 수 있어요'}</p>
         </section>`;
       return;

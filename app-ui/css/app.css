@@ -646,7 +646,7 @@ a { color: var(--primary); }
   background: var(--surface-base); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg);
   margin-bottom: var(--sp-xl); max-width: 720px;
 }
-.settings-group h3 {
+.settings-group :is(h2, h3) {
   font-size: var(--fs-caption); color: var(--text-tertiary); font-weight: 600; padding: var(--sp-md) var(--sp-lg) 0;
 }
 .setting {
@@ -1109,7 +1109,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 
 /* 설정 */
 .settings-group { border-radius: var(--radius-xl); box-shadow: var(--shadow-sm); overflow: hidden; }
-.settings-group h3 { text-transform: none; letter-spacing: 0.2px; padding-top: var(--sp-lg); }
+.settings-group :is(h2, h3) { text-transform: none; letter-spacing: 0.2px; padding-top: var(--sp-lg); }
 .setting { padding: 14px var(--sp-lg); }
 .toggle span { background: var(--surface-overlay); box-shadow: inset 0 0 0 1px var(--border); }
 .toggle span::after { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3); }
@@ -1934,7 +1934,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 /* 넓은 창 — 예전엔 860px 한 단에 왼쪽으로 쏠려 오른쪽이 비었다. 카드 두 단(단 최소 420px)이 들어가면 두 단으로 흘린다(위→아래, 왼쪽 단 먼저). */
 .settings-groups { columns: 2 420px; column-gap: var(--sp-lg); max-width: 1320px; }
 .settings-groups .settings-group { max-width: none; break-inside: avoid; -webkit-column-break-inside: avoid; }
-.settings-group h3 { display: flex; align-items: center; gap: 8px; }
+.settings-group :is(h2, h3) { display: flex; align-items: center; gap: 8px; }
 .adv-toggle { margin-left: auto; font-size: var(--fs-footnote); padding: 0 var(--sp-lg) 0 0; }
 .setting[hidden], .settings-group[hidden] { display: none; }
 .num-input, .text-input { height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--surface-base); padding: 0 10px; outline: none; }
@@ -2247,7 +2247,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .kpi-value { font-size: var(--fs-stat); font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); }
 .kpi-sub { font-size: var(--fs-micro); color: var(--text-secondary); }
 .stats-card { padding: 16px 18px; border-radius: var(--radius-lg); background: var(--surface-elevated); border: 1px solid var(--border-subtle); min-width: 0; }
-.stats-card h3 { margin: 0 0 12px; font-size: var(--fs-subhead); }
+.stats-card :is(h2, h3) { margin: 0 0 12px; font-size: var(--fs-subhead); }
 .stats-card .sub-h { margin-top: 18px; }
 .stats-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--sp-md); }
 .rank-no { color: var(--text-tertiary); font-variant-numeric: tabular-nums; text-align: right; }
@@ -2275,6 +2275,14 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .page[data-page="stats"] .s-rest { --c: var(--chart-rest); }
 .page[data-page="stats"] .sw { flex: none; display: inline-block; width: 10px; height: 10px; border-radius: 3px; background: var(--c, var(--primary)); }
 .page[data-page="stats"] .sw.avg { height: 0; border-radius: 0; border-top: 2px dashed var(--text-secondary); background: none; width: 14px; }
+/* 본문 바로가기 — 키보드로 처음 Tab 하면 왼쪽 위에 나타난다(사이드바 항목 20여 개를 건너뛴다). a11y.installA11y 가 지금 화면으로 초점을 옮긴다. */
+.skip-link {
+  position: fixed; left: 12px; top: 10px; z-index: 9200; padding: 8px 14px; border-radius: var(--radius-ms);
+  background: var(--primary); color: var(--on-primary); font-weight: 700; font-size: var(--fs-caption); text-decoration: none;
+  box-shadow: var(--shadow-md); transform: translateY(-160%); transition: transform 0.15s var(--ease-out);
+}
+.skip-link:focus, .skip-link:focus-visible { transform: none; outline: 2px solid var(--text-primary); outline-offset: 2px; }
+[data-skip-target]:focus { outline: none; } /* 바로가기로 옮긴 화면 자체에는 링을 그리지 않는다(다음 Tab 이 화면 안 첫 요소로 간다) */
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 .stats-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-sm) var(--sp-md); flex-wrap: wrap; margin-bottom: var(--sp-lg); }
@@ -2282,7 +2290,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .stats-period[hidden] { display: none; }
 .stats-period .seg { font-variant-numeric: tabular-nums; }
 .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px 12px; flex-wrap: wrap; margin-bottom: 14px; }
-.card-head h3 { margin: 0; }
+.card-head h2 { margin: 0; }
 .card-head .link-btn { margin: -4px -6px; }
 .stats-meta { font-size: var(--fs-footnote); color: var(--text-tertiary); }
 .kpi-sub.up, .kpi-sub.down { font-weight: 600; }
@@ -2793,7 +2801,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .ip-tile span { font-size: var(--fs-micro); color: var(--text-tertiary); }
 .ip-tile:first-child strong { background: var(--brand-gradient); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .ip-section { padding: 12px; border-radius: var(--radius-ml); background: var(--surface-elevated); border: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 10px; }
-.ip-section h4 { margin: 0; display: flex; align-items: center; gap: 7px; font-size: var(--fs-footnote); font-weight: 700; color: var(--text-primary); }
+.ip-section h2 { margin: 0; display: flex; align-items: center; gap: 7px; font-size: var(--fs-footnote); font-weight: 700; color: var(--text-primary); }
 .ip-sec-icon { width: 20px; height: 20px; border-radius: var(--radius-xs); display: grid; place-items: center; color: var(--primary-text); background: var(--primary-dim); }
 .ip-sec-icon svg { width: 12px; height: 12px; }
 .ip-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
