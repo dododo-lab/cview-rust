@@ -80,6 +80,7 @@
   --radius-pill: 999px;
 
   /* 글자 크기 — 92px 같은 장식용 숫자·이모지만 리터럴로 둔다 */
+  --fs-hero: 34px;               /* 홈 히어로 제목 최대(clamp) */
   --fs-display: 30px;            /* 홈 인사말 */
   --fs-title: 26px;
   --fs-page: 24px;               /* 화면 머리 제목(.ph) */
@@ -868,7 +869,7 @@ select.select {
 .chip-glass.soft { color: var(--primary); background: rgba(0, 255, 163, 0.14); }
 .chip-glass.warn { color: var(--warning); }
 .hero-title {
-  font-size: clamp(24px, 2.4vw, 34px); font-weight: 800; line-height: 1.2; letter-spacing: -0.8px; text-shadow: 0 2px 16px rgba(0, 0, 0, 0.45);
+  font-size: clamp(var(--fs-page), 2.4vw, var(--fs-hero)); font-weight: 800; line-height: 1.2; letter-spacing: -0.8px; text-shadow: 0 2px 16px rgba(0, 0, 0, 0.45);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 .hero-channel { display: flex; align-items: center; gap: 10px; color: var(--text-secondary); font-size: var(--fs-caption); min-width: 0; }
@@ -1518,7 +1519,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
    --chat-gap-adj 는 기본 줄 간격(2px)과의 차이 — 디자인마다 다른 줄 여백에 더한다. */
 .chat-skin .chat-list { --fs-subhead: calc(16px * var(--chat-scale, 1)); --fs-caption: calc(13px * var(--chat-scale, 1)); --fs-footnote: calc(12px * var(--chat-scale, 1)); --fs-micro: calc(10px * var(--chat-scale, 1)); }
 .chat-skin .chat-line { --chat-gap-adj: calc((var(--chat-gap, 2px) - 2px) / 2); }
-:is(.chat, .chat-skin) .chat-line { font-size: var(--chat-font, 14px); padding: calc(2px + var(--chat-gap, 2px) / 2) 0; }
+:is(.chat, .chat-skin) .chat-line { font-size: var(--chat-font, var(--fs-body)); padding: calc(2px + var(--chat-gap, 2px) / 2) 0; }
 .chat-time { color: var(--text-tertiary); font-size: 0.8em; margin-right: 6px; font-variant-numeric: tabular-nums; }
 .chat-skin.hide-time .chat-time { display: none; }
 .chat-skin.hide-badge .badge { display: none; }
@@ -2041,7 +2042,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .chat-skin .chat-line.msg:hover { background: var(--cs-hover); }
 .chat-skin .chat-avatar {
   display: grid; place-items: center; flex: none; width: var(--cs-av); height: var(--cs-av); border-radius: 38%;
-  font-size: calc(13px * var(--chat-scale, 1)); font-weight: 700; color: var(--cs-avtext); background: var(--cs-fill);
+  font-size: var(--fs-caption) /* .chat-skin .chat-list 가 --chat-scale 을 곱해 둔 값 */; font-weight: 700; color: var(--cs-avtext); background: var(--cs-fill);
 }
 .chat-skin:not(.no-nick-colors) .chat-avatar.nc { color: var(--nc); background: color-mix(in srgb, var(--nc) 20%, var(--cs-fill)); }
 .chat-skin .chat-line[data-role="streamer"] .chat-avatar { color: var(--primary-text); background: color-mix(in srgb, var(--primary) 24%, var(--cs-fill)); }

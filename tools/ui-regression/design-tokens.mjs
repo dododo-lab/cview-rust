@@ -37,20 +37,33 @@ await check('D01 border-radius uses tokens (literal only for <=3px)', () => {
 await check('D02 font-size uses tokens (literal only for decorative >=40px)', () => {
   const bad = [];
   for (const [file, src] of CSS) {
-    for (const m of src.matchAll(/(?<![-\w])font-size\s*:\s*(\d+(?:\.\d+)?)px\b/g)) if (Number(m[1]) < 40) bad.push(`${file}:${lineOf(src, m.index)} ${m[0]}`);
+    // 선언 값 전체를 본다 — calc()·clamp()·var() 대체값 안의 px 도 리터럴로 친다. 값이 40px 이상 리터럴 하나뿐일 때만 허용.
+    for (const m of src.matchAll(/(?<![-\w])font-size\s*:\s*([^;}]+)/g)) {
+      const value = m[1].replace(/\/\*[\s\S]*?\*\//g, '').replace(/!important/, '').trim();
+      const decorative = /^(\d+(?:\.\d+)?)px$/.exec(value);
+      if (decorative && Number(decorative[1]) >= 40) continue;
+      if (/(?<![\w.-])\d+(?:\.\d+)?px\b/.test(value)) bad.push(`${file}:${lineOf(src, m.index)} font-size: ${value}`);
+    }
   }
   assert.deepEqual(bad, [], '글자 크기는 var(--fs-*) 토큰을 쓴다');
 });
 await check('D03 every used --radius-*/--fs-* token is defined once in :root', () => {
   const all = CSS.map(([, s]) => s).join('\n');
   const used = new Set([...all.matchAll(/var\((--(?:radius|fs)-[\w-]+)/g)].map((m) => m[1]));
-  const app = CSS[0][1];
-  const rootBlocks = [...app.matchAll(/(?:^|\n):root\s*\{([^}]*)\}/g)].map((m) => m[1]).join('\n');
-  const defs = [...rootBlocks.matchAll(/(--(?:radius|fs)-[\w-]+)\s*:/g)].map((m) => m[1]);
-  const missing = [...used].filter((t) => !defs.includes(t));
-  const dup = defs.filter((t, i) => defs.indexOf(t) !== i);
+  // 세 스타일시트의 모든 :root 블록을 모은다 — 나중에 로드되는 파일의 :root 가 같은 토큰을 다시 정의해도 잡는다.
+  const defs = [];
+  for (const [file, src] of CSS) {
+    for (const block of src.matchAll(/(?:^|\n):root\s*\{([^}]*)\}/g)) {
+      for (const d of block[1].matchAll(/(--(?:radius|fs)-[\w-]+)\s*:/g)) defs.push({ token: d[1], at: `${file}:${lineOf(src, block.index + d.index)}` });
+    }
+  }
+  const names = defs.map((d) => d.token);
+  const missing = [...used].filter((t) => !names.includes(t));
+  const dup = defs.filter((d) => names.indexOf(d.token) !== names.lastIndexOf(d.token)).map((d) => `${d.token} @ ${d.at}`);
   assert.deepEqual(missing, [], '정의 안 된 토큰');
   assert.deepEqual(dup, [], ':root 에서 두 번 정의된 토큰(뒤 정의가 앞 정의를 덮는다)');
+  // 검사 자체가 정의를 찾는지 — 0개면 정규식이 깨진 것
+  assert.ok(names.includes('--fs-body') && names.includes('--radius-md'), ':root 토큰 정의를 찾지 못함');
 });
 
 // ── 2) 화면 검사 ──

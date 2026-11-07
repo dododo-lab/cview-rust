@@ -145,7 +145,7 @@
 /* 머리 — 제목과 남은 자리, 그 아래 자리 칸 */
 .ml-addbar-head { flex: none; display: flex; align-items: center; gap: 4px; padding: 12px 8px 6px 14px; }
 .ml-addbar-titles { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.ml-addbar-head strong { font-size: var(--fs-subhead, 15px); font-weight: 700; letter-spacing: -0.01em; }
+.ml-addbar-head strong { font-size: var(--fs-subhead); font-weight: 700; letter-spacing: -0.01em; }
 .ml-addbar-count { font-size: var(--fs-micro); color: var(--text-tertiary); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .ml-addbar-refresh.spinning svg { animation: spin .8s linear infinite; }
 .ml-addbar-refresh:disabled { cursor: default; }
@@ -280,7 +280,7 @@
 .ml-drop-hint { display: none; }
 .ml-pane.ml-lifted.has-drop .ml-drop-hint {
   display: block; position: absolute; left: 50%; top: 50%; translate: -50% -50%; z-index: 6; pointer-events: none;
-  padding: 7px 14px; border-radius: var(--radius-pill); background: rgba(0, 0, 0, .72); color: var(--text-on-media, #fff); font-size: var(--fs-footnote, 13px); font-weight: 700; white-space: nowrap;
+  padding: 7px 14px; border-radius: var(--radius-pill); background: rgba(0, 0, 0, .72); color: var(--text-on-media, #fff); font-size: var(--fs-footnote); font-weight: 700; white-space: nowrap;
 }
 .ml-restore[hidden] { display: none; }
 .ml-body.chat-overlay .chat-splitter, .ml-body.chat-overlay .chat-reopen { display: none !important; }
@@ -291,7 +291,7 @@
   background: rgba(12, 13, 16, min(0.94, calc(var(--ml-chat-opacity, 0.5) + 0.12))); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
   --text-primary: #f4f5f7; --text-secondary: #d0d3d9; --text-tertiary: #a4a8b0; color: var(--text-primary);
 }
-.ml-body.chat-overlay .ml-chat .chat-line { font-size: var(--ml-chat-font, 12px); }
+.ml-body.chat-overlay .ml-chat .chat-line { font-size: var(--ml-chat-font, var(--fs-footnote)); }
 /* 오버레이 글자 크기 설정에 맞춰 닉네임·시간·이모티콘·이벤트 카드도 같은 배율로 */
 .ml-body.chat-overlay .ml-chat .chat-list { --chat-scale: var(--ml-chat-scale, 0.857); }
 .ml-body.chat-overlay .ml-main { margin-right: 0; }
@@ -351,7 +351,7 @@
 .ml-menu-item.danger:hover { background: color-mix(in srgb, var(--error) 12%, transparent); }
 .ml-menu-sep { height: 1px; margin: 4px 6px; background: var(--border-subtle); }
 /* 메뉴 안 설정 묶음 — 레이아웃 / 포커스 배치 / 소리 */
-.ml-menu-label { padding: 6px 10px 4px; font-size: var(--fs-micro, 11px); font-weight: 700; color: var(--text-tertiary); }
+.ml-menu-label { padding: 6px 10px 4px; font-size: var(--fs-micro); font-weight: 700; color: var(--text-tertiary); }
 .ml-menu-section { display: flex; flex-direction: column; gap: 6px; padding: 0 6px 6px; }
 .ml-menu-section .ml-menu-label { padding-left: 4px; padding-right: 4px; }
 .ml-focus-controls.ml-menu-section { display: flex; }
