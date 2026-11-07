@@ -242,7 +242,7 @@ export class SettingsPage {
       <div class="segmented page-tabs settings-tabs" role="tablist" aria-label="설정 분류">${GROUPS.map(([id, l]) => { const on = this.group === id; return `<button class="seg${on ? ' active' : ''}" data-group="${id}" role="tab" aria-selected="${on}" tabindex="${on ? 0 : -1}">${l}</button>`; }).join('')}</div>
       <input type="search" class="settings-search" placeholder="설정 검색" value="${esc(this.query)}">
     </div>`;
-    this.body.innerHTML = `${tabs}<div class="settings-groups">${this.groupHtml()}</div><div class="settings-search-empty" role="status" hidden></div>`;
+    this.body.innerHTML = `${tabs}<div class="settings-groups">${this.groupHtml()}</div><div class="empty settings-search-empty" role="status" hidden></div>`;
     bindTabKeys(this.body.querySelector('.settings-tabs'));
     this.applySearch();
     this.refreshOAuth();

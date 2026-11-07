@@ -137,6 +137,29 @@ const TABBED = [['library', '[data-page="library"] .lib-tabs'], ['stats', '[data
     assert.equal(await h('multichat', '[data-page="multichat"] .mc-search'), md, '멀티채팅 검색칸 = --control-md');
     assert.equal(await h('home', '[data-page="home"] .btn.lg'), lg, '큰 버튼 = --control-lg');
   });
+  await check('D25 empty states share one structure (.empty, title color, token sizes)', async () => {
+    const read = (sel) => page.$eval(sel, (n) => {
+      const t = n.querySelector(':scope > strong');
+      const root = getComputedStyle(document.documentElement);
+      return { cls: [...n.classList], color: getComputedStyle(t).color, size: parseFloat(getComputedStyle(t).fontSize), primary: root.getPropertyValue('--text-primary').trim(),
+        headline: parseFloat(root.getPropertyValue('--fs-headline')), subhead: parseFloat(root.getPropertyValue('--fs-subhead')) };
+    });
+    const toRgb = (hex) => { const h = hex.replace('#', ''); return `rgb(${parseInt(h.slice(0, 2), 16)}, ${parseInt(h.slice(2, 4), 16)}, ${parseInt(h.slice(4, 6), 16)})`; };
+    const cases = [];
+    await go(page, 'multichat'); await page.waitForSelector('[data-page="multichat"] .mc-empty');
+    cases.push(['multichat', await read('[data-page="multichat"] .mc-empty'), 'lg']);
+    await go(page, 'multilive'); await page.waitForSelector('[data-page="multilive"] .ml-empty');
+    cases.push(['multilive', await read('[data-page="multilive"] .ml-empty'), 'lg']);
+    await go(page, 'settings'); await page.fill('[data-page="settings"] .settings-search', 'zzzz');
+    await page.waitForSelector('[data-page="settings"] .settings-search-empty:not([hidden]) strong');
+    cases.push(['settings search', await read('[data-page="settings"] .settings-search-empty'), '']);
+    await page.fill('[data-page="settings"] .settings-search', '');
+    for (const [name, c, size] of cases) {
+      assert.ok(c.cls.includes('empty'), `${name}: .empty 구조`);
+      assert.equal(c.color, toRgb(c.primary), `${name}: 제목은 기본 글자색`);
+      assert.equal(c.size, size === 'lg' ? c.headline : c.subhead, `${name}: 제목 크기 토큰`);
+    }
+  });
   await check('D24 channel page: tabs are a segmented tablist synced with the panel', async () => {
     await go(page, 'channel', { channelId: 'ch1' });
     const sel = '[data-page="channel"] .channel-tabs';

@@ -69,7 +69,7 @@ export class MultiChatPage {
       <div class="mc-overview"></div>
       <div class="mc-search-note" role="status" hidden></div>
       <div class="mc-body">
-        <div class="mc-empty"><strong>여러 채널의 채팅을 한 화면에서</strong><span>최대 ${MAX_CHANNELS}개 채널을 추가해 탭·그리드로 보거나 하나의 타임라인으로 합쳐 볼 수 있어요.</span><button class="btn primary lg" data-mc="add">+ 채널 추가</button></div>
+        <div class="empty lg boxed mc-empty"><span class="empty-icon" aria-hidden="true">${multiChatIcon}</span><strong>여러 채널의 채팅을 한 화면에서</strong><span>최대 ${MAX_CHANNELS}개 채널을 추가해 탭·그리드로 보거나 하나의 타임라인으로 합쳐 볼 수 있어요.</span><button class="btn primary lg" data-mc="add">+ 채널 추가</button></div>
         <div class="mc-panes"></div>
         <div class="mc-merged" hidden>
           <div class="chat-list mc-merged-list"></div>

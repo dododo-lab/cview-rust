@@ -162,7 +162,7 @@ export class MultiLivePage {
       <div class="page-body ml-body">
         <div class="ml-main">
         <div class="ml-stage">
-          <div class="ml-empty">
+          <div class="empty lg boxed ml-empty">
             <strong>여러 방송을 한 화면에서 보세요</strong>
             <span class="ml-empty-text">채널을 추가하면 최대 4개까지 나란히 재생합니다. 패인을 누르면 소리와 채팅이 그 방송으로 바뀝니다.</span>
             <button class="btn primary lg" data-ml="add">${ICON_PLUS}<span>채널 추가</span></button>
