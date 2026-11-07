@@ -390,9 +390,10 @@ async fn poll_finished_reports_success_flag() {
 }
 
 /// 라이브가 상세 상한(24)보다 많으면 첫 폴은 일부만 상세를 받는다 — 그 결과를 화면 진입이 재사용하면
-/// 나머지 카드는 썸네일 없이 재사용 창 내내 빈칸이었다. 묻지 못한 채널이 남아 있으면 다시 받아 채운다.
+/// 나머지 카드는 썸네일 없이 재사용 창 내내 빈칸이었다. 묻지 못한 채널이 남아 있으면 채운다 — 목록은 아직
+/// 새것이라 다시 받지 않고(예전엔 팔로잉 목록 전체를 다시 받았다) 상세만 보충한다.
 #[tokio::test]
-async fn screen_entry_does_not_reuse_result_with_unrequested_details() {
+async fn screen_entry_tops_up_unrequested_details_without_relisting() {
     let rows: Vec<FollowingRow> = (0..40).map(|i| row(&format!("c{i}"), true)).collect();
     let fake = Fake::new(rows);
     let clock = ManualClock::new(from_unix(0.0));
@@ -400,16 +401,127 @@ async fn screen_entry_does_not_reuse_result_with_unrequested_details() {
     let cap = LiveDetailRefreshConfig::default().missing_meta_cap_per_poll;
 
     s.poll(FollowingPollReason::ScreenEntry).await;
+    settle(&s).await;
     assert_eq!(fake.details().len(), cap);
     assert_eq!(s.unrequested_missing_details(), 40 - cap);
 
     clock.advance(1.0);
-    s.poll(FollowingPollReason::ScreenEntry).await;
-    assert_eq!(fake.page_requests(), 2, "빈 카드가 남은 결과를 재사용했다");
+    let filled = s.poll(FollowingPollReason::ScreenEntry).await.unwrap();
+    assert_eq!(fake.page_requests(), 1, "보충은 목록을 다시 받지 않는다");
+    assert_eq!(fake.details().len(), 40, "묻지 못한 16개만 더 묻는다");
     assert_eq!(s.unrequested_missing_details(), 0);
     assert_eq!(s.meta().len(), 40);
+    assert_eq!(filled.channels.len(), 40);
+    assert!(filled
+        .channels
+        .iter()
+        .all(|c| c.live_title.ends_with("-title")));
 
     clock.advance(1.0);
     s.poll(FollowingPollReason::ScreenEntry).await;
-    assert_eq!(fake.page_requests(), 2, "다 채운 뒤에는 재사용해야 한다");
+    assert_eq!(fake.page_requests(), 1, "다 채운 뒤에는 재사용해야 한다");
+    assert_eq!(fake.details().len(), 40);
+}
+
+/// 보충은 결과의 나이를 늘리지 않는다 — 재사용 창이 지나면 목록을 새로 받는다.
+#[tokio::test]
+async fn top_up_does_not_extend_list_freshness() {
+    let rows: Vec<FollowingRow> = (0..30).map(|i| row(&format!("c{i}"), true)).collect();
+    let fake = Fake::new(rows);
+    let clock = ManualClock::new(from_unix(0.0));
+    let s = store(&fake, &clock);
+    s.poll(FollowingPollReason::ScreenEntry).await;
+    settle(&s).await;
+    clock.advance(50.0);
+    s.poll(FollowingPollReason::ScreenEntry).await; // 보충
+    assert_eq!(fake.page_requests(), 1);
+    clock.advance(15.0); // 목록은 65초 전 — 창(60초) 밖
+    s.poll(FollowingPollReason::ScreenEntry).await;
+    assert_eq!(fake.page_requests(), 2);
+}
+
+/// 정기 폴이 보충 폴에 합류하면 보충 결과(옛 목록)를 받지 않고 끝난 뒤 새 목록을 받는다.
+#[tokio::test]
+async fn scheduled_poll_does_not_settle_for_a_top_up() {
+    let rows: Vec<FollowingRow> = (0..30).map(|i| row(&format!("c{i}"), true)).collect();
+    let fake = Fake::new(rows);
+    let clock = ManualClock::new(from_unix(0.0));
+    let s = store(&fake, &clock);
+    s.poll(FollowingPollReason::ScreenEntry).await;
+    settle(&s).await;
+    clock.advance(1.0);
+    let top_up = s.poll(FollowingPollReason::ScreenEntry);
+    let scheduled = s.poll(FollowingPollReason::Scheduled);
+    let (_, scheduled) = tokio::join!(top_up, scheduled);
+    assert!(scheduled.is_some());
+    assert_eq!(fake.page_requests(), 2, "정기 폴은 목록을 새로 받는다");
+}
+
+/// 화면 진입은 상세 팬아웃을 기다리지 않는다 — 목록을 받자마자 결과를 받고, 상세는 뒤에서 이어진다.
+#[tokio::test]
+async fn screen_entry_returns_listed_result_before_details() {
+    let fake = Arc::new(SlowDetails {
+        inner: Fake::new(vec![row("a", true), row("b", true), row("off", false)]),
+        gate: Semaphore::new(0),
+    });
+    let clock = ManualClock::new(from_unix(0.0));
+    let source: Arc<dyn FollowingSource> = fake.clone();
+    let s = FollowingStore::with_clocks(
+        Some(source),
+        clock.uptime_fn(),
+        clock.clock(),
+        Arc::new(|| false),
+    );
+
+    let first = s.poll(FollowingPollReason::ScreenEntry).await.unwrap();
+    assert_eq!(first.channels.len(), 3, "목록 행은 다 있다");
+    assert!(first
+        .channels
+        .iter()
+        .all(|c| c.thumbnail_url.is_none() && c.open_date.is_none()));
+    assert!(s.has_in_flight_poll(), "상세는 아직 받는 중");
+    assert!(
+        s.last_result().is_none(),
+        "목록 단계 결과는 저장하지 않는다"
+    );
+
+    // 상세가 끝나기 전의 다른 화면 진입도 기다리지 않는다
+    let again = s.poll(FollowingPollReason::ScreenEntry).await.unwrap();
+    assert_eq!(again.channels.len(), 3);
+    assert_eq!(fake.inner.page_requests(), 1, "진행 중인 폴에 합류한다");
+
+    // 수동 새로고침은 상세까지 기다린다
+    let manual = s.poll(MANUAL);
+    fake.gate.add_permits(100);
+    let manual = manual.await.unwrap();
+    assert!(manual
+        .channels
+        .iter()
+        .filter(|c| c.is_live)
+        .all(|c| c.live_title.ends_with("-title")));
+    settle(&s).await;
+    assert_eq!(s.meta().len(), 2);
+}
+
+struct SlowDetails {
+    inner: Arc<Fake>,
+    gate: Semaphore,
+}
+
+#[async_trait]
+impl FollowingSource for SlowDetails {
+    async fn fetch_following_rows(&self) -> Result<FollowingRowsPage, ApiError> {
+        self.inner.fetch_following_rows().await
+    }
+    async fn live_detail(&self, channel_id: &str) -> Option<LiveDetailSnapshot> {
+        self.gate.acquire().await.unwrap().forget();
+        self.inner.live_detail(channel_id).await
+    }
+}
+
+/// 진행 중인 폴(상세 팬아웃)이 끝날 때까지.
+async fn settle(s: &FollowingStore) {
+    while s.has_in_flight_poll() {
+        tokio::task::yield_now().await;
+    }
 }

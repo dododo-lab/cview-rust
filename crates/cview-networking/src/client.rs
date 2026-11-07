@@ -197,6 +197,8 @@ pub(crate) struct ClientState {
     pub user_status_memo: Option<(u64, UserStatusInfo)>,
     pub user_status_flight: Option<UserStatusFlight>,
     pub user_status_loads_running: usize,
+    /// 팔로잉 목록을 큰 페이지 한 번으로 다 받지 못했다 — 이 세션에서는 50개씩 페이지로만 받는다.
+    pub following_one_page_disabled: bool,
 }
 
 pub(crate) struct Inner {
@@ -383,6 +385,7 @@ impl ChzzkApiClient {
                 transport: config.transport,
                 gate: crate::gate::RequestGate::new(),
                 state: Mutex::new(ClientState {
+                    following_one_page_disabled: false,
                     cache_generation: 0,
                     max_retries: 3,
                     network_policy_generation: 0,
