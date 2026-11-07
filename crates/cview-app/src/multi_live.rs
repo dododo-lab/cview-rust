@@ -753,12 +753,18 @@ impl MultiLiveSessionBackend for ShellBackend {
             .live_status(channel_id)
             .await
             .map_err(|e| MultiLiveBackendError::Message(e.to_string()))?;
-        Ok(LiveStatusSnapshot {
-            is_closed: info.status != LiveStatus::Open,
-            concurrent_user_count: info.concurrent_user_count,
-            accumulate_count: info.accumulate_count,
-            open_date: info.open_date,
-        })
+        Ok(live_status_snapshot(&info))
+    }
+    async fn live_status_for_poll(
+        &self,
+        channel_id: &str,
+    ) -> Result<LiveStatusSnapshot, MultiLiveBackendError> {
+        let info = self
+            .api
+            .live_status_recent(channel_id, cview_networking::LIVE_STATUS_SHARE_AGE)
+            .await
+            .map_err(|e| MultiLiveBackendError::Message(e.to_string()))?;
+        Ok(live_status_snapshot(&info))
     }
     async fn connect_chat(
         &self,
@@ -1154,6 +1160,15 @@ pub struct MultiLiveStateDto {
 pub struct SlotCommandPayload {
     pub slot: u32,
     pub script: String,
+}
+
+fn live_status_snapshot(info: &LiveInfo) -> LiveStatusSnapshot {
+    LiveStatusSnapshot {
+        is_closed: info.status != LiveStatus::Open,
+        concurrent_user_count: info.concurrent_user_count,
+        accumulate_count: info.accumulate_count,
+        open_date: info.open_date,
+    }
 }
 
 #[cfg(test)]

@@ -338,6 +338,7 @@ struct FakeBackend {
     status_closed: AtomicBool,
     plan_error: AtomicBool,
     detail_calls: AtomicUsize,
+    poll_status_calls: AtomicUsize,
 }
 
 fn live(channel_id: &str, status: LiveStatus) -> LiveInfo {
@@ -389,6 +390,13 @@ impl MultiLiveSessionBackend for FakeBackend {
             accumulate_count: 500,
             open_date: None,
         })
+    }
+    async fn live_status_for_poll(
+        &self,
+        channel_id: &str,
+    ) -> Result<LiveStatusSnapshot, MultiLiveBackendError> {
+        self.poll_status_calls.fetch_add(1, Ordering::SeqCst);
+        self.live_status(channel_id).await
     }
     async fn connect_chat(
         &self,
@@ -1781,6 +1789,11 @@ async fn session_poll_marks_offline_when_closed() {
         tokio::task::yield_now().await;
     }
     assert_eq!(session.load_state(), MultiLiveLoadState::Offline);
+    assert_eq!(
+        backend.poll_status_calls.load(Ordering::SeqCst),
+        1,
+        "주기 폴은 나눠 쓰는 경로(live_status_for_poll)로 묻는다"
+    );
     let st = session.read();
     assert!(st.is_offline);
     assert_eq!(st.viewer_count(), 99);

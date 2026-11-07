@@ -183,6 +183,8 @@ pub(crate) struct ClientState {
     pub network_policy_generation: u64,
     /// 초 단위.
     pub applied_api_timeout: i64,
+    /// 채널별 마지막 live-status 응답(받은 시각) — 주기 폴러끼리 나눠 쓴다(`live_status_recent`).
+    pub live_status_memo: HashMap<String, (std::time::Instant, cview_core::models::live::LiveInfo)>,
     /// 404(영구 미지원)로 확인된 이모티콘 endpoint family. 세션 동안만 유지.
     pub unsupported_emoticon_families: HashSet<String>,
     pub unsupported_emoticon_context: Option<AuthContext>,
@@ -388,6 +390,7 @@ impl ChzzkApiClient {
                     following_one_page_disabled: false,
                     cache_generation: 0,
                     max_retries: 3,
+                    live_status_memo: HashMap::new(),
                     network_policy_generation: 0,
                     applied_api_timeout: NetworkSettings::default().effective_api_timeout(),
                     unsupported_emoticon_families: HashSet::new(),

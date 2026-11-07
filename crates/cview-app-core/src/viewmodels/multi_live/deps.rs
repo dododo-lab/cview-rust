@@ -269,6 +269,14 @@ pub trait MultiLiveSessionBackend: Send + Sync {
         &self,
         channel_id: &str,
     ) -> Result<LiveStatusSnapshot, MultiLiveBackendError>;
+    /// 주기 폴(60초)용 — 같은 채널을 다른 폴러(채팅 머리)가 막 받았으면 그 응답을 써도 된다.
+    /// 방송 종료 확인처럼 지금 값이 필요하면 [`Self::live_status`].
+    async fn live_status_for_poll(
+        &self,
+        channel_id: &str,
+    ) -> Result<LiveStatusSnapshot, MultiLiveBackendError> {
+        self.live_status(channel_id).await
+    }
     /// `ChatSessionBootstrap.prepareConnection` → `connect` → 후원 순위 폴링.
     async fn connect_chat(
         &self,
