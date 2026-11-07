@@ -1,0 +1,4 @@
+error: failed to open: /Volumes/data/project/Rust/CView/target/debug/.cargo-build-lock
+
+Caused by:
+  Operation not permitted (os error 1)

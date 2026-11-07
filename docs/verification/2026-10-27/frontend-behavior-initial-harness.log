@@ -1,0 +1,33 @@
+FAIL new messages keep a following list at the bottom
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+700 !== 600
+
+    at file:///Users/dong/Downloads/cview-rust-main/docs/verification/2026-10-27/frontend-behavior.mjs:78:10
+    at async file:///Users/dong/Downloads/cview-rust-main/docs/verification/2026-10-27/frontend-behavior.mjs:145:9
+PASS user scroll preserves the reading position before the resume deadline
+FAIL idle multichat resumes following after eight seconds
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+520 !== 420
+
+    at file:///Users/dong/Downloads/cview-rust-main/docs/verification/2026-10-27/frontend-behavior.mjs:90:10
+    at async file:///Users/dong/Downloads/cview-rust-main/docs/verification/2026-10-27/frontend-behavior.mjs:145:9
+PASS holding the scrollbar suppresses automatic resumption
+FAIL background geometry drift resynchronizes when the page becomes visible
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+700 !== 600
+
+    at file:///Users/dong/Downloads/cview-rust-main/docs/verification/2026-10-27/frontend-behavior.mjs:102:47
+    at async file:///Users/dong/Downloads/cview-rust-main/docs/verification/2026-10-27/frontend-behavior.mjs:145:9
+PASS disabled ordinary-chat autoscroll is respected during focus resync
+PASS a disconnected pane reconnects only once after the grace period
+PASS messages arriving before retry cancel redundant reconnection
+PASS late messages from a previous chat channel are discarded
+PASS dropping a pane cancels retry and disconnects its session
+PASS reconnection skips replayed history and accepts subsequent live messages
+PASS auxiliary windows do not acquire main-window multichat sessions
+{"passed":9,"failed":3,"total":12}
+(node:26727) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)

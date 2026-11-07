@@ -1,0 +1,137 @@
+[
+  {
+    "target": "aarch64-apple-darwin",
+    "package": "proc-macro-error",
+    "kind": "unmaintained",
+    "advisory": "RUSTSEC-2024-0370",
+    "present": false,
+    "exit_code": 0,
+    "path": ""
+  },
+  {
+    "target": "aarch64-apple-darwin",
+    "package": "zbus_names",
+    "kind": "unmaintained",
+    "advisory": "RUSTSEC-2026-0371",
+    "present": false,
+    "exit_code": 0,
+    "path": ""
+  },
+  {
+    "target": "aarch64-apple-darwin",
+    "package": "zvariant",
+    "kind": "unmaintained",
+    "advisory": "RUSTSEC-2026-0370",
+    "present": false,
+    "exit_code": 0,
+    "path": ""
+  },
+  {
+    "target": "aarch64-apple-darwin",
+    "package": "zvariant_derive",
+    "kind": "unmaintained",
+    "advisory": "RUSTSEC-2026-0372",
+    "present": false,
+    "exit_code": 0,
+    "path": ""
+  },
+  {
+    "target": "aarch64-apple-darwin",
+    "package": "glib",
+    "kind": "unsound",
+    "advisory": "RUSTSEC-2024-0429",
+    "present": false,
+    "exit_code": 0,
+    "path": ""
+  },
+  {
+    "target": "x86_64-pc-windows-gnu",
+    "package": "proc-macro-error",
+    "kind": "unmaintained",
+    "advisory": "RUSTSEC-2024-0370",
+    "present": false,
+    "exit_code": 0,
+    "path": ""
+  },
+  {
+    "target": "x86_64-pc-windows-gnu",
+    "package": "zbus_names",
+    "kind": "unmaintained",
+    "advisory": "RUSTSEC-2026-0371",
+    "present": false,
+    "exit_code": 0,
+    "path": ""
+  },
+  {
+    "target": "x86_64-pc-windows-gnu",
+    "package": "zvariant",
+    "kind": "unmaintained",
+    "advisory": "RUSTSEC-2026-0370",
+    "present": false,
+    "exit_code": 0,
+    "path": ""
+  },
+  {
+    "target": "x86_64-pc-windows-gnu",
+    "package": "zvariant_derive",
+    "kind": "unmaintained",
+    "advisory": "RUSTSEC-2026-0372",
+    "present": false,
+    "exit_code": 0,
+    "path": ""
+  },
+  {
+    "target": "x86_64-pc-windows-gnu",
+    "package": "glib",
+    "kind": "unsound",
+    "advisory": "RUSTSEC-2024-0429",
+    "present": false,
+    "exit_code": 0,
+    "path": ""
+  },
+  {
+    "target": "x86_64-unknown-linux-gnu",
+    "package": "proc-macro-error",
+    "kind": "unmaintained",
+    "advisory": "RUSTSEC-2024-0370",
+    "present": true,
+    "exit_code": 0,
+    "path": "proc-macro-error v1.0.4\n\u251c\u2500\u2500 glib-macros v0.18.5 (proc-macro)\n\u2502   \u2514\u2500\u2500 glib v0.18.5\n\u2502       \u251c\u2500\u2500 atk v0.18.2\n\u2502       \u2502   \u2514\u2500\u2500 gtk v0.18.2\n\u2502       \u2502       \u251c\u2500\u2500 libappindicator v0.9.0\n\u2502       \u2502       \u2502   \u2514\u2500\u2500 tray-icon v0.25.1\n\u2502       \u2502       \u2502       \u2514\u2500\u2500 tauri v2.12.4\n\u2502       \u2502       \u2502           \u251c\u2500\u2500 cview-app v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app)\n\u2502       \u2502       \u2502           \u251c\u2500\u2500 tauri-plugin-deep-link v2.6.2\n\u2502       \u2502       \u2502           \u2502   \u251c\u2500\u2500 cview-app v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app)\n\u2502       \u2502       \u2502           \u2502   \u2514\u2500\u2500 tauri-plugin-single-instance v2.5.4\n\u2502       \u2502       \u2502           \u2502       \u2514\u2500\u2500 cview-app v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app)\n\u2502       \u2502       \u2502           \u251c\u2500\u2500 tauri-plugin-notification v2.7.0\n\u2502       \u2502       \u2502           \u2502   \u2514\u2500\u2500 cview-app v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app)\n\u2502       \u2502       \u2502           \u2514\u2500\u2500 tauri-plugin-single-instance v2.5.4 (*)\n\u2502       \u2502       \u251c\u2500\u2500 muda v0.20.0\n\u2502       \u2502       \u2502   \u251c\u2500\u2500 tauri v2.12.4 (*)\n\u2502       \u2502       \u2502   \u2514\u2500\u2500 tray-icon v0.25.1 (*)\n\u2502       \u2502       \u251c\u2500\u2500 tao v0.37.1\n\u2502       \u2502       \u2502   \u2514\u2500\u2500 tauri-runtime-wry v2.12.2\n\u2502       \u2502       \u2502       \u2514\u2500\u2500 tauri v2.12.4 (*)\n\u2502       \u2502       \u251c\u2500\u2500 tauri v2.12.4 (*)\n\u2502       \u2502       \u251c\u2500\u2500 tauri-runtime v2.12.2\n\u2502       \u2502       \u2502   \u251c\u2500\u2500 tauri v2.12.4 (*)\n\u2502       \u2502       \u2502   \u2514\u2500\u2500 tauri-runtime-wry v2.12.2 (*)\n\u2502       \u2502       \u251c\u2500\u2500 tauri-runtime-wry v2.12.2 (*)\n\u2502       \u2502       \u251c\u2500\u2500 webkit2gtk v2.0.2\n\u2502       \u2502       \u2502   \u251c\u2500\u2500 tauri v2.12.4 (*)\n\u2502       \u2502       \u2502   \u251c\u2500\u2500 tauri-runtime v2.12.2 (*)\n\u2502       \u2502       \u2502   \u251c\u2500\u2500 tauri-runtime-wry v2.12.2 (*)\n\u2502       \u2502       \u2502   \u2514\u2500\u2500 wry v0.57.0\n\u2502       \u2502       \u2502       \u2514\u2500\u2500 tauri-runtime-wry v2.12.2 (*)\n\u2502       \u2502       \u2514\u2500\u2500 wry v0.57.0 (*)\n\u2502       \u251c\u2500\u2500 cairo-rs v0.18.5\n\u2502       \u2502   \u251c\u2500\u2500 gdk v0.18.2\n\u2502       \u2502   \u2502   \u251c\u2500\u2500 gdkx11 v0.18.2\n\u2502       \u2502   \u2502   \u2502   \u2514\u2500\u2500 wry v0.57.0 (*)\n\u2502       \u2502   \u2502   \u251c\u2500\u2500 gtk v0.18.2 (*)\n\u2502       \u2502   \u2502   \u2514\u2500\u2500 webkit2gtk v2.0.2 (*)\n\u2502       \u2502   \u251c\u2500\u2500 gtk v0.18.2 (*)\n\u2502       \u2502   \u2514\u2500\u2500 webkit2gtk v2.0.2 (*)\n\u2502       \u251c\u2500\u2500 gdk v0.18.2 (*)\n\u2502       \u251c\u2500\u2500 gdk-pixbuf v0.18.5\n\u2502       \u2502   \u251c\u2500\u2500 gdk v0.18.2 (*)\n\u2502       \u2502   \u2514\u2500\u2500 gtk v0.18.2 (*)\n\u2502       \u251c\u2500\u2500 gdkx11 v0.18.2 (*)\n\u2502       \u251c\u2500\u2500 gio v0.18.4\n\u2502       \u2502   \u251c\u2500\u2500 gdk v0.18.2 (*)\n\u2502       \u2502   \u251c\u2500\u2500 gdk-pixbuf v0.18.5 (*)\n\u2502       \u2502   \u251c\u2500\u2500 gdkx11 v0.18.2 (*)\n\u2502       \u2502   \u251c\u2500\u2500 gtk v0.18.2 (*)\n\u2502       \u2502   \u251c\u2500\u2500 pango v0.18.3\n\u2502       \u2502   \u2502   \u251c\u2500\u2500 gdk v0.18.2 (*)\n\u2502       \u2502   \u2502   \u2514\u2500\u2500 gtk v0.18.2 (*)\n\u2502       \u2502   \u251c\u2500\u2500 soup3 v0.5.0\n\u2502       \u2502   \u2502   \u251c\u2500\u2500 webkit2gtk v2.0.2 (*)\n\u2502       \u2502   \u2502   \u2514\u2500\u2500 wry v0.57.0 (*)\n\u2502       \u2502   \u2514\u2500\u2500 webkit2gtk v2.0.2 (*)\n\u2502       \u251c\u2500\u2500 gtk v0.18.2 (*)\n\u2502       \u251c\u2500\u2500 javascriptcore-rs v1.1.2\n\u2502       \u2502   \u251c\u2500\u2500 webkit2gtk v2.0.2 (*)\n\u2502       \u2502   \u2514\u2500\u2500 wry v0.57.0 (*)\n\u2502       \u251c\u2500\u2500 libappindicator v0.9.0 (*)\n\u2502       \u251c\u2500\u2500 pango v0.18.3 (*)\n\u2502       \u251c\u2500\u2500 soup3 v0.5.0 (*)\n\u2502       \u2514\u2500\u2500 webkit2gtk v2.0.2 (*)\n\u2514\u2500\u2500 gtk3-macros v0.18.2 (proc-macro)\n    \u2514\u2500\u2500 gtk v0.18.2 (*)"
+  },
+  {
+    "target": "x86_64-unknown-linux-gnu",
+    "package": "zbus_names",
+    "kind": "unmaintained",
+    "advisory": "RUSTSEC-2026-0371",
+    "present": true,
+    "exit_code": 0,
+    "path": "zbus_names v4.3.5\n\u2514\u2500\u2500 zbus_macros v5.19.0 (proc-macro)\n    \u2514\u2500\u2500 zbus v5.19.0\n        \u251c\u2500\u2500 notify-rust v4.18.2\n        \u2502   \u2514\u2500\u2500 tauri-plugin-notification v2.7.0\n        \u2502       \u2514\u2500\u2500 cview-app v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app)\n        \u251c\u2500\u2500 tauri-plugin-notification v2.7.0 (*)\n        \u2514\u2500\u2500 tauri-plugin-single-instance v2.5.4\n            \u2514\u2500\u2500 cview-app v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app)\n\nzbus_names v4.3.5\n\u2514\u2500\u2500 zbus v5.19.0 (*)"
+  },
+  {
+    "target": "x86_64-unknown-linux-gnu",
+    "package": "zvariant",
+    "kind": "unmaintained",
+    "advisory": "RUSTSEC-2026-0370",
+    "present": true,
+    "exit_code": 0,
+    "path": "zvariant v5.15.1\n\u251c\u2500\u2500 zbus_macros v5.19.0 (proc-macro)\n\u2502   \u2514\u2500\u2500 zbus v5.19.0\n\u2502       \u251c\u2500\u2500 notify-rust v4.18.2\n\u2502       \u2502   \u2514\u2500\u2500 tauri-plugin-notification v2.7.0\n\u2502       \u2502       \u2514\u2500\u2500 cview-app v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app)\n\u2502       \u251c\u2500\u2500 tauri-plugin-notification v2.7.0 (*)\n\u2502       \u2514\u2500\u2500 tauri-plugin-single-instance v2.5.4\n\u2502           \u2514\u2500\u2500 cview-app v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app)\n\u2514\u2500\u2500 zbus_names v4.3.5\n    \u2514\u2500\u2500 zbus_macros v5.19.0 (proc-macro) (*)\n\nzvariant v5.15.1\n\u251c\u2500\u2500 zbus v5.19.0 (*)\n\u2514\u2500\u2500 zbus_names v4.3.5\n    \u2514\u2500\u2500 zbus v5.19.0 (*)"
+  },
+  {
+    "target": "x86_64-unknown-linux-gnu",
+    "package": "zvariant_derive",
+    "kind": "unmaintained",
+    "advisory": "RUSTSEC-2026-0372",
+    "present": true,
+    "exit_code": 0,
+    "path": "zvariant_derive v5.15.1 (proc-macro)\n\u251c\u2500\u2500 zvariant v5.15.1\n\u2502   \u251c\u2500\u2500 zbus_macros v5.19.0 (proc-macro)\n\u2502   \u2502   \u2514\u2500\u2500 zbus v5.19.0\n\u2502   \u2502       \u251c\u2500\u2500 notify-rust v4.18.2\n\u2502   \u2502       \u2502   \u2514\u2500\u2500 tauri-plugin-notification v2.7.0\n\u2502   \u2502       \u2502       \u2514\u2500\u2500 cview-app v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app)\n\u2502   \u2502       \u251c\u2500\u2500 tauri-plugin-notification v2.7.0 (*)\n\u2502   \u2502       \u2514\u2500\u2500 tauri-plugin-single-instance v2.5.4\n\u2502   \u2502           \u2514\u2500\u2500 cview-app v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app)\n\u2502   \u2514\u2500\u2500 zbus_names v4.3.5\n\u2502       \u2514\u2500\u2500 zbus_macros v5.19.0 (proc-macro) (*)\n\u2514\u2500\u2500 zvariant v5.15.1\n    \u251c\u2500\u2500 zbus v5.19.0 (*)\n    \u2514\u2500\u2500 zbus_names v4.3.5\n        \u2514\u2500\u2500 zbus v5.19.0 (*)"
+  },
+  {
+    "target": "x86_64-unknown-linux-gnu",
+    "package": "glib",
+    "kind": "unsound",
+    "advisory": "RUSTSEC-2024-0429",
+    "present": true,
+    "exit_code": 0,
+    "path": "glib v0.18.5\n\u251c\u2500\u2500 atk v0.18.2\n\u2502   \u2514\u2500\u2500 gtk v0.18.2\n\u2502       \u251c\u2500\u2500 libappindicator v0.9.0\n\u2502       \u2502   \u2514\u2500\u2500 tray-icon v0.25.1\n\u2502       \u2502       \u2514\u2500\u2500 tauri v2.12.4\n\u2502       \u2502           \u251c\u2500\u2500 cview-app v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app)\n\u2502       \u2502           \u251c\u2500\u2500 tauri-plugin-deep-link v2.6.2\n\u2502       \u2502           \u2502   \u251c\u2500\u2500 cview-app v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app)\n\u2502       \u2502           \u2502   \u2514\u2500\u2500 tauri-plugin-single-instance v2.5.4\n\u2502       \u2502           \u2502       \u2514\u2500\u2500 cview-app v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app)\n\u2502       \u2502           \u251c\u2500\u2500 tauri-plugin-notification v2.7.0\n\u2502       \u2502           \u2502   \u2514\u2500\u2500 cview-app v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app)\n\u2502       \u2502           \u2514\u2500\u2500 tauri-plugin-single-instance v2.5.4 (*)\n\u2502       \u251c\u2500\u2500 muda v0.20.0\n\u2502       \u2502   \u251c\u2500\u2500 tauri v2.12.4 (*)\n\u2502       \u2502   \u2514\u2500\u2500 tray-icon v0.25.1 (*)\n\u2502       \u251c\u2500\u2500 tao v0.37.1\n\u2502       \u2502   \u2514\u2500\u2500 tauri-runtime-wry v2.12.2\n\u2502       \u2502       \u2514\u2500\u2500 tauri v2.12.4 (*)\n\u2502       \u251c\u2500\u2500 tauri v2.12.4 (*)\n\u2502       \u251c\u2500\u2500 tauri-runtime v2.12.2\n\u2502       \u2502   \u251c\u2500\u2500 tauri v2.12.4 (*)\n\u2502       \u2502   \u2514\u2500\u2500 tauri-runtime-wry v2.12.2 (*)\n\u2502       \u251c\u2500\u2500 tauri-runtime-wry v2.12.2 (*)\n\u2502       \u251c\u2500\u2500 webkit2gtk v2.0.2\n\u2502       \u2502   \u251c\u2500\u2500 tauri v2.12.4 (*)\n\u2502       \u2502   \u251c\u2500\u2500 tauri-runtime v2.12.2 (*)\n\u2502       \u2502   \u251c\u2500\u2500 tauri-runtime-wry v2.12.2 (*)\n\u2502       \u2502   \u2514\u2500\u2500 wry v0.57.0\n\u2502       \u2502       \u2514\u2500\u2500 tauri-runtime-wry v2.12.2 (*)\n\u2502       \u2514\u2500\u2500 wry v0.57.0 (*)\n\u251c\u2500\u2500 cairo-rs v0.18.5\n\u2502   \u251c\u2500\u2500 gdk v0.18.2\n\u2502   \u2502   \u251c\u2500\u2500 gdkx11 v0.18.2\n\u2502   \u2502   \u2502   \u2514\u2500\u2500 wry v0.57.0 (*)\n\u2502   \u2502   \u251c\u2500\u2500 gtk v0.18.2 (*)\n\u2502   \u2502   \u2514\u2500\u2500 webkit2gtk v2.0.2 (*)\n\u2502   \u251c\u2500\u2500 gtk v0.18.2 (*)\n\u2502   \u2514\u2500\u2500 webkit2gtk v2.0.2 (*)\n\u251c\u2500\u2500 gdk v0.18.2 (*)\n\u251c\u2500\u2500 gdk-pixbuf v0.18.5\n\u2502   \u251c\u2500\u2500 gdk v0.18.2 (*)\n\u2502   \u2514\u2500\u2500 gtk v0.18.2 (*)\n\u251c\u2500\u2500 gdkx11 v0.18.2 (*)\n\u251c\u2500\u2500 gio v0.18.4\n\u2502   \u251c\u2500\u2500 gdk v0.18.2 (*)\n\u2502   \u251c\u2500\u2500 gdk-pixbuf v0.18.5 (*)\n\u2502   \u251c\u2500\u2500 gdkx11 v0.18.2 (*)\n\u2502   \u251c\u2500\u2500 gtk v0.18.2 (*)\n\u2502   \u251c\u2500\u2500 pango v0.18.3\n\u2502   \u2502   \u251c\u2500\u2500 gdk v0.18.2 (*)\n\u2502   \u2502   \u2514\u2500\u2500 gtk v0.18.2 (*)\n\u2502   \u251c\u2500\u2500 soup3 v0.5.0\n\u2502   \u2502   \u251c\u2500\u2500 webkit2gtk v2.0.2 (*)\n\u2502   \u2502   \u2514\u2500\u2500 wry v0.57.0 (*)\n\u2502   \u2514\u2500\u2500 webkit2gtk v2.0.2 (*)\n\u251c\u2500\u2500 gtk v0.18.2 (*)\n\u251c\u2500\u2500 javascriptcore-rs v1.1.2\n\u2502   \u251c\u2500\u2500 webkit2gtk v2.0.2 (*)\n\u2502   \u2514\u2500\u2500 wry v0.57.0 (*)\n\u251c\u2500\u2500 libappindicator v0.9.0 (*)\n\u251c\u2500\u2500 pango v0.18.3 (*)\n\u251c\u2500\u2500 soup3 v0.5.0 (*)\n\u2514\u2500\u2500 webkit2gtk v2.0.2 (*)"
+  }
+]

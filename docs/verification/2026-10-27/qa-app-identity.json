@@ -1,0 +1,9 @@
+{
+  "source_commit": "114a89686d8341e98545321fd19533cfa0e0606f",
+  "path": "/Users/dong/Downloads/cview-rust-main/target/verification-2026-10-27/debug/bundle/macos/CView Verification.app",
+  "identifier": "app.cview.rust.verification20261027",
+  "version": "0.1.36",
+  "build": "36",
+  "sha256": "9c385d76c1d34dadf445a441481681591193fea1122f112f16078035f9416024",
+  "configuration": "debug; separate app identity; --no-sign; not a distribution build"
+}
