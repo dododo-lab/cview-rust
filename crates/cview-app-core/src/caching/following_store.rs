@@ -7,6 +7,11 @@
 //!           → liveDetail 팬아웃(캐시 우회) → merge → 세대 확인 → 싱크(홈 → 알림기 → 제안기)
 //! ```
 //!
+//! - 화면 진입(screenEntry)은 상세 팬아웃을 기다리지 않는다 — 목록을 받은 순간 지난 meta 로 채운 결과를 먼저
+//!   받는다(상세가 없는 새 라이브는 썸네일이 빈 카드, 화면이 잠시 뒤 다시 불러 채운다). 시작할 때 홈이 상세
+//!   24건(요청 게이트 초당 10회 → 약 2.4초)을 기다리던 것을 없앤다.
+//! - 상한 때문에 상세를 묻지 못한 라이브가 남은 결과를 화면 진입이 만나면, 목록을 다시 받지 않고 지난 목록으로
+//!   상세만 보충한다(보충 폴 — 싱크에 넘기지 않고 결과의 나이도 늘리지 않는다).
 //! - 단일 비행: 진행 중이면 합류한다. manual 이 manual 아닌 폴에 합류하면 끝난 뒤 한 번 더 돈다.
 //!   screenEntry 는 마지막 성공이 재사용 창 안이면 네트워크 없이 그 결과를 돌려준다(싱크는 부르지 않는다).
 //! - 실패: 목록이 실패하면 폴 전체가 실패다. 싱크에 실패로 알린다. 취소·계정 경계 뒤에 끝난 폴은
@@ -35,6 +40,7 @@ use cview_networking::response::{FollowingRow, FollowingRowsPage};
 use cview_networking::ChzzkApiClient;
 use futures_util::future::{BoxFuture, FutureExt, Shared};
 use futures_util::stream::{FuturesUnordered, StreamExt};
+use tokio::sync::watch;
 
 use crate::services::support::{lock, system_clock, system_uptime, Clock, Uptime};
 
@@ -143,6 +149,18 @@ struct InFlight {
     generation: u64,
     future: SharedPoll,
     abort: tokio::task::AbortHandle,
+    /// 목록을 받고 상세를 기다리기 전의 결과(화면 진입만 쓴다).
+    early: watch::Receiver<Option<PollResult>>,
+    /// 지난 목록으로 상세만 보충하는 폴인가.
+    top_up: bool,
+}
+
+/// 마지막 성공 폴의 목록 — 보충 폴이 목록을 다시 받지 않고 쓴다.
+#[derive(Clone)]
+struct ListedRows {
+    rows: Vec<FollowingRowSnapshot>,
+    fetched_at: Date,
+    carries: bool,
 }
 
 type SetChanged = Arc<dyn Fn(HashSet<String>) + Send + Sync>;
@@ -172,6 +190,7 @@ struct Inner {
     last_success_uptime: Option<TimeInterval>,
     last_poll_start_uptime: Option<TimeInterval>,
     next_flight_id: u64,
+    last_rows: Option<ListedRows>,
 }
 
 /// 팔로잉 폴 저장소 핸들. 복제는 같은 상태를 공유한다.
@@ -225,6 +244,7 @@ impl FollowingStore {
                 last_success_uptime: None,
                 last_poll_start_uptime: None,
                 next_flight_id: 0,
+                last_rows: None,
             })),
             uptime,
             clock,
@@ -382,28 +402,61 @@ impl FollowingStore {
         async move {
             // 상세 상한(폴당 MissingMeta) 때문에 아직 묻지 못한 라이브 채널이 있으면 재사용하지 않는다 —
             // 그 결과는 썸네일·시작 시각이 빈 카드를 담고 있어, 재사용 창(최대 180초) 동안 빈칸이 그대로 남았다.
-            if reason == FollowingPollReason::ScreenEntry
-                && this.last_failure_at().is_none()
-                && this.unrequested_missing_details() == 0
-            {
+            let screen_entry = reason == FollowingPollReason::ScreenEntry;
+            let mut top_up = None;
+            if screen_entry && this.last_failure_at().is_none() {
                 if let Some(reused) = this.fresh_result(this.screen_entry_reuse_age()) {
-                    return Some(reused);
+                    if this.unrequested_missing_details() == 0 {
+                        return Some(reused);
+                    }
+                    // 목록은 아직 새것 — 다시 받지 않고 묻지 못한 상세만 보충한다.
+                    top_up = lock(&this.inner).last_rows.clone();
                 }
             }
             let running = lock(&this.inner).in_flight.clone();
             if let Some(running) = running {
-                let result = running.future.clone().await;
-                if !(reason.is_manual()
-                    && !running.reason.is_manual()
-                    && running.generation == this.generation())
-                {
-                    return result;
+                if screen_entry {
+                    return Self::listed_or_done(running).await;
                 }
-                return this.poll(reason).await;
+                let result = running.future.clone().await;
+                // 보충 폴은 새 목록이 아니다 — 정기·수동 폴은 끝난 뒤 새로 돈다.
+                if running.top_up
+                    || (reason.is_manual()
+                        && !running.reason.is_manual()
+                        && running.generation == this.generation())
+                {
+                    return this.poll(reason).await;
+                }
+                return result;
             }
-            this.start(reason).await
+            let flight = this.start(reason, top_up);
+            if screen_entry {
+                Self::listed_or_done(flight).await
+            } else {
+                flight.future.await
+            }
         }
         .boxed()
+    }
+
+    /// 화면 진입 — 목록 단계 결과가 먼저 나오면 그것을, 아니면 끝난 결과를 돌려준다.
+    async fn listed_or_done(flight: InFlight) -> Option<PollResult> {
+        let mut early = flight.early.clone();
+        let listed = async move {
+            loop {
+                if let Some(result) = early.borrow_and_update().clone() {
+                    return Some(result);
+                }
+                if early.changed().await.is_err() {
+                    return None;
+                }
+            }
+        };
+        tokio::select! {
+            biased;
+            done = flight.future.clone() => done,
+            Some(result) = listed => Some(result),
+        }
     }
 
     /// 계정 경계 — 세대를 올리고 진행 중인 폴을 취소하고 상태를 비운다. 보이는 표면 등록은 남긴다.
@@ -421,20 +474,23 @@ impl FollowingStore {
         inner.carries_live_info = false;
         inner.last_success_uptime = None;
         inner.last_poll_start_uptime = None;
+        inner.last_rows = None;
         inner.live_count = 0;
         inner.last_success_at = None;
         inner.last_failure_at = None;
     }
 
-    fn start(&self, reason: FollowingPollReason) -> SharedPoll {
+    fn start(&self, reason: FollowingPollReason, listed: Option<ListedRows>) -> InFlight {
         let mut inner = lock(&self.inner);
         inner.next_flight_id += 1;
         let id = inner.next_flight_id;
         let generation = inner.generation;
         let this = self.clone();
+        let top_up = listed.is_some();
+        let (early_tx, early) = watch::channel(None);
         // 비구조 작업 — 합류한 호출자 하나가 버려져도 공유 폴은 계속된다. 끊는 것은 계정 경계뿐이다.
         let handle = tokio::spawn(async move {
-            let result = this.run(reason, generation).await;
+            let result = this.run(reason, generation, listed, early_tx).await;
             this.finish_flight(id);
             let finished = {
                 let inner = lock(&this.inner);
@@ -449,15 +505,18 @@ impl FollowingStore {
         });
         let abort = handle.abort_handle();
         let future: SharedPoll = async move { handle.await.ok().flatten() }.boxed().shared();
-        inner.in_flight = Some(InFlight {
+        let flight = InFlight {
             id,
             reason,
             generation,
-            future: future.clone(),
+            future,
             abort,
-        });
+            early,
+            top_up,
+        };
+        inner.in_flight = Some(flight.clone());
         inner.is_polling = true;
-        future
+        flight
     }
 
     fn finish_flight(&self, id: u64) {
@@ -473,8 +532,18 @@ impl FollowingStore {
         lock(&self.inner).generation == generation
     }
 
-    async fn run(&self, reason: FollowingPollReason, generation: u64) -> Option<PollResult> {
+    /// `listed` 가 있으면 보충 폴이다 — 목록을 받지 않고 그 행으로 상세만 받는다. 싱크에는 넘기지 않는다.
+    async fn run(
+        &self,
+        reason: FollowingPollReason,
+        generation: u64,
+        listed_rows: Option<ListedRows>,
+        early: watch::Sender<Option<PollResult>>,
+    ) -> Option<PollResult> {
         let source = lock(&self.inner).source.clone()?;
+        if let Some(cached) = listed_rows {
+            return self.top_up(reason, generation, cached, &source).await;
+        }
         let started = (self.uptime)();
         let poll_gap = {
             let mut inner = lock(&self.inner);
@@ -534,6 +603,14 @@ impl FollowingStore {
             )
         };
         let (requests, carries) = requests;
+        // 화면 진입이 상세를 기다리지 않게 — 목록 + 지난 meta 결과를 먼저 내놓는다.
+        if !requests.is_empty() {
+            let (channels, _) = Self::merge(&rows, &HashMap::new(), &meta, listed);
+            let mut first = FollowingPollResult::new(reason, channels, page.fetched_at, generation);
+            first.list_carries_live_info = carries;
+            first.detail_requests = requests.clone();
+            let _ = early.send(Some(first));
+        }
         let details =
             Self::fetch_details(&requests, &source, detail_concurrency(reason), &self.uptime).await;
         if !self.is_current(generation) {
@@ -556,7 +633,12 @@ impl FollowingStore {
         result.is_baseline = previous.is_none();
         result.list_carries_live_info = carries;
         result.detail_requests = requests.clone();
-        self.commit(&result, &rows, next_meta, carries);
+        self.commit(&result, &rows, next_meta, carries, false);
+        lock(&self.inner).last_rows = Some(ListedRows {
+            rows,
+            fetched_at: page.fetched_at,
+            carries,
+        });
         self.deliver(FollowingPollOutcome::Success(result.clone()))
             .await;
         let delivered = (self.uptime)();
@@ -567,6 +649,64 @@ impl FollowingStore {
             requests.len(),
             ((delivered - listed) * 1_000.0) as i64,
             u8::from(carries)
+        );
+        Some(result)
+    }
+
+    /// 보충 폴 — 지난 목록 그대로, 묻지 못한 상세(와 기한이 된 상세)만 받는다. 결과의 나이는 늘리지 않는다.
+    async fn top_up(
+        &self,
+        reason: FollowingPollReason,
+        generation: u64,
+        listed: ListedRows,
+        source: &Arc<dyn FollowingSource>,
+    ) -> Option<PollResult> {
+        let now = (self.uptime)();
+        let (requests, meta, asked_before) = {
+            let inner = lock(&self.inner);
+            let notify = (inner.notify_watch_provider)();
+            let requests = live_detail_refresh::plan(
+                &listed.rows,
+                inner.previous_live.as_ref(),
+                &inner.meta,
+                &Self::visible_of(&inner),
+                |id: &str| notify(id),
+                PlanOptions {
+                    list_carries_live_info: listed.carries,
+                    suspended: (self.is_suspended)(),
+                    manual: false,
+                },
+                now,
+                &self.config,
+            );
+            let asked_before = inner
+                .last_result
+                .as_ref()
+                .map(|r| r.detail_requests.clone())
+                .unwrap_or_default();
+            (requests, inner.meta.clone(), asked_before)
+        };
+        let details =
+            Self::fetch_details(&requests, source, detail_concurrency(reason), &self.uptime).await;
+        if !self.is_current(generation) {
+            return None;
+        }
+        let (channels, next_meta) = Self::merge(&listed.rows, &details, &meta, now);
+        let mut result = FollowingPollResult::new(reason, channels, listed.fetched_at, generation);
+        result.list_carries_live_info = listed.carries;
+        // 앞선 폴이 물었던 채널도 '물은 것' 으로 남긴다 — 실패가 이어지는 채널 때문에 보충이 끝나지 않게.
+        let mut asked = requests.clone();
+        for r in asked_before {
+            if !asked.iter().any(|a| a.channel_id == r.channel_id) {
+                asked.push(r);
+            }
+        }
+        result.detail_requests = asked;
+        self.commit(&result, &listed.rows, next_meta, listed.carries, true);
+        tracing::debug!(
+            "FollowingPoll top_up details_n={} details_ms={}",
+            requests.len(),
+            (((self.uptime)() - now) * 1_000.0) as i64
         );
         Some(result)
     }
@@ -646,6 +786,7 @@ impl FollowingStore {
         rows: &[FollowingRowSnapshot],
         next_meta: HashMap<String, LiveDetailMeta>,
         carries: bool,
+        top_up: bool,
     ) {
         let changed_callback = {
             let mut inner = lock(&self.inner);
@@ -670,7 +811,9 @@ impl FollowingStore {
                 });
             inner.followed_ids = Some(ids);
             inner.last_result = Some(result.clone());
-            inner.last_success_uptime = Some((self.uptime)());
+            if !top_up {
+                inner.last_success_uptime = Some((self.uptime)());
+            }
             inner.live_count = result.live_count();
             inner.last_success_at = Some(result.fetched_at);
             inner.last_failure_at = None;
