@@ -28,6 +28,7 @@ import { WatchInfoPanel } from './ml-watch-info.js';
 import { liveIcon, multiLiveIcon, liveModeSwitch, setLiveModeActive } from './live-mode.js';
 import { decoratePageHeader } from './page-header.js';
 import { verifiedBadge } from './verified-badge.js';
+import { liveHandlers, pickNowPlayingSession, multiLiveNowPlayingInfo } from './now-playing.js';
 
 export { multiLiveIcon };
 
@@ -326,6 +327,26 @@ export class MultiLivePage {
       addLabel: '멀티라이브에 추가',
     });
     this.watch = new WatchTools(this);
+    // 시스템 '지금 재생 중'(macOS 섬·제어 센터)의 재생·일시정지. WebKit 은 볼륨 0 패인도 후보로 보므로
+    // 어느 패인이 시스템에 올라가도 같게 — 일시정지는 재생 중인 패인을 모두 멈추고, 재생은 그렇게 멈춘
+    // 패인만 다시 튼다(사용자가 따로 멈춘 패인은 그대로). 그런 패인이 없으면 보이는 패인을 튼다.
+    this.systemPaused = new Set();
+    this.nowPlayingHandlers = liveHandlers({
+      pause: () => {
+        for (const [slot, pane] of this.panes) {
+          const v = pane.sessionId && !pane.exiting ? pane.controls.video : null;
+          if (v && !v.paused) { pane.bridge.call('pause'); this.systemPaused.add(slot); }
+        }
+      },
+      play: () => {
+        const slots = this.systemPaused.size ? [...this.systemPaused] : [this.nowPlayingSlot];
+        this.systemPaused.clear();
+        for (const slot of slots) {
+          const pane = slot != null ? this.panes.get(slot) : null;
+          if (pane && pane.sessionId && !pane.exiting) pane.bridge.call('play');
+        }
+      },
+    });
 
     listenHere(Events.multiLiveCommand, (p) => p && this.dispatch(p.slot, p.script));
     listen(Events.multiLiveState, (s) => this.render(s));
@@ -573,6 +594,7 @@ export class MultiLivePage {
       }
     }
     if (before) playLayoutMotion(this.panes, before);
+    this.syncNowPlaying(sessions, state);
     this.syncChat(sessions.find((s) => s.id === state.selectedId) || null);
     // 채팅 테두리는 채팅을 보여 주는(선택) 패인의 색을 따른다.
     const shown = [...this.panes.values()].find((p) => p.sessionId && p.sessionId === state.selectedId);
@@ -584,6 +606,18 @@ export class MultiLivePage {
     this.addBar.sync();
     this.mergedChat.sync();
     this.watch.sync();
+  }
+
+  /** 시스템 '지금 재생 중' — 소리 나는(없으면 보고 있는) 패인의 방송을 모든 패인 문서에 넣고, 닫힌 패인은 지운다. */
+  syncNowPlaying(sessions, state) {
+    const target = pickNowPlayingSession(sessions, state);
+    this.nowPlayingSlot = target ? target.slot : null;
+    const info = multiLiveNowPlayingInfo(target);
+    for (const [slot, pane] of this.panes) {
+      const open = Boolean(info && pane.sessionId && !pane.exiting);
+      if (!open) this.systemPaused.delete(slot);
+      pane.bridge.setNowPlaying(open ? info : null, this.nowPlayingHandlers);
+    }
   }
 
   /** 패인 배치의 지문 — 이게 바뀔 때만 움직임을 준다(시청자 수 같은 잦은 상태 갱신은 그대로). */

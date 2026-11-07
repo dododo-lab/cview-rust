@@ -10,6 +10,7 @@
 //   보낸다. 패인 브리지는 명령 이벤트를 직접 듣지 않고(`commandEvent: null`) 화면이 슬롯별로 넣어 주며,
 //   메시지는 `forward` 로 `multilive_player_message` 에 넘긴다.
 import { api, Events, listenHere } from './api.js';
+import { applyNowPlaying, clearNowPlaying } from './now-playing.js';
 
 // 창(WindowProxy) → 브리지. iframe 의 contentWindow 는 문서가 바뀌어도 같은 객체다.
 const bridges = new Map();
@@ -38,6 +39,7 @@ export class PlayerBridge {
     this.readyDocument = null;
     this.queue = [];
     this.listeners = new Set();
+    this.nowPlaying = null;
     if (iframe.contentWindow) bridges.set(iframe.contentWindow, this);
     if (commandEvent === Events.playerCommand && !defaultBridge) defaultBridge = this;
     // 페이지는 스크립트 끝에서 `ready` 를 보내지만 두 경우에 잃는다: 부모 모듈보다 iframe 이 먼저
@@ -60,6 +62,22 @@ export class PlayerBridge {
     this.onPageMessage({ type: 'ready', data: { hlsSupported, pageGen } });
   }
 
+  /**
+   * 시스템 '지금 재생 중'(macOS 섬·제어 센터, Windows SMTC)에 보일 정보 — 영상이 이 iframe 안에 있으므로
+   * 이 문서의 mediaSession 에 넣는다. `handlers` 는 같은 객체를 넘겨야 다시 등록하지 않는다. null 이면 지운다.
+   */
+  setNowPlaying(info, handlers) {
+    this.nowPlaying = info ? { info, handlers: handlers || {} } : null;
+    this.applyNowPlaying();
+  }
+
+  applyNowPlaying() {
+    const win = this.iframe.contentWindow;
+    if (!win) return;
+    if (this.nowPlaying) applyNowPlaying(win, this.nowPlaying.info, this.nowPlaying.handlers);
+    else clearNowPlaying(win);
+  }
+
   /** 페이지 메시지 구독 (type, data). */
   onMessage(fn) {
     this.listeners.add(fn);
@@ -74,6 +92,8 @@ export class PlayerBridge {
       this.readyDocument = doc;
       this.ready = true;
       this.flush();
+      // 새 문서는 mediaSession 도 새것이다 — 시스템 '지금 재생 중' 정보를 다시 넣는다.
+      this.applyNowPlaying();
     }
     for (const fn of this.listeners) {
       try { fn(message.type, message.data || {}); } catch (e) { console.error(e); }
