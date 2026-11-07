@@ -439,6 +439,13 @@ pub struct TaggedChatEvent {
     pub chat_channel_id: String,
 }
 
+/// 추가 채팅 세션 이벤트(`chat://session-event`) — `{ session, event }`.
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct SessionChatEvent<'a> {
+    pub session: &'a str,
+    pub event: &'a TaggedChatEvent,
+}
+
 /// 채팅 이벤트 본문.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]

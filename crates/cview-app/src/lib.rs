@@ -181,9 +181,13 @@ fn shell_sinks<R: Runtime>(app: &AppHandle<R>) -> ShellSinks {
             if let crate::dto::ChatEventDto::Messages { messages, .. } = &event.event {
                 perf_log::count_chat_batch(messages.len());
             }
+            // 빌린 구조체로 바로 직렬화한다 — `json!` 은 메시지 묶음 전체를 Value 트리로 한 번 더 복사했다.
             let _ = session_app.emit(
                 events::CHAT_SESSION_EVENT,
-                serde_json::json!({ "session": session, "event": event }),
+                crate::dto::SessionChatEvent {
+                    session: &session,
+                    event: &event,
+                },
             );
         }),
     }

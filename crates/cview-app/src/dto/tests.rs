@@ -280,6 +280,23 @@ fn tagged_chat_event_carries_chat_channel_id() {
 }
 
 #[test]
+fn session_chat_event_keeps_session_and_event_shape() {
+    let ev = TaggedChatEvent {
+        event: ChatEventDto::Connected,
+        chat_channel_id: "chat-b".into(),
+    };
+    let payload = SessionChatEvent {
+        session: "mc:abc",
+        event: &ev,
+    };
+    // 예전 `json!({ "session": session, "event": event })` 과 같은 모양
+    assert_eq!(
+        serde_json::to_value(payload).unwrap(),
+        json!({"session": "mc:abc", "event": {"type": "connected", "chatChannelId": "chat-b"}})
+    );
+}
+
+#[test]
 fn verified_badge_follows_mark_type() {
     // 종류 없이 verifiedMark 만 참이면(챌린저 제도 이전 응답) 파트너.
     let card = LiveCardDto::from_live_info(&popular_live()).unwrap();
