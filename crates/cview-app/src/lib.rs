@@ -80,6 +80,11 @@ fn spawn_auth_tasks<R: Runtime>(app: AppHandle<R>) {
     });
 }
 
+/// 멀티라이브 상태 감시 주기 — 세션이 없으면 드물게.
+fn multi_live_state_tick(idle: bool) -> std::time::Duration {
+    std::time::Duration::from_secs(if idle { 30 } else { 1 })
+}
+
 /// 시작 미리 받기 — 웹뷰가 뜨고 홈이 데이터를 부르기 전에 인기 라이브 첫 묶음을 받기 시작한다.
 /// 홈·사이드바의 `popular_lives` 는 같은 첫 로드를 기다려 이어 받는다(`load_initial_if_needed`).
 fn prefetch_popular<R: Runtime>(app: &AppHandle<R>) {
@@ -114,21 +119,24 @@ fn prefetch_following<R: Runtime>(app: &AppHandle<R>) {
     });
 }
 
-/// 멀티라이브 상태 감시 → `multilive://state`. 매니저 변화나 1초 주기로 보고, 바뀐 것만 보낸다
+/// 멀티라이브 상태 감시 → `multilive://state`. 매니저 변화나 주기로 보고, 바뀐 것만 보낸다
 /// (세션 재생 상태는 매니저 감시 채널을 거치지 않으므로 주기 확인이 필요하다).
+/// 주기는 재생 중인 세션이 있으면 1초, 없으면 30초 — 세션이 없을 때 볼 것은 자동 네트워크 프리셋의
+/// 불안정 유지 시간이 지났는지뿐이라, 앱이 놀고 있을 때 초마다 깨지 않게 한다(세션이 생기면 매니저 변화로 깬다).
 fn spawn_multi_live_state_task<R: Runtime>(app: AppHandle<R>) {
     tauri::async_runtime::spawn(async move {
         let shell = app.state::<MultiLiveShell>();
         let mut changes = shell.manager.subscribe();
         let mut last = None;
         loop {
+            let idle = shell.manager.read().sessions().is_empty();
             tokio::select! {
                 changed = changes.changed() => {
                     if changed.is_err() {
                         break;
                     }
                 }
-                _ = tokio::time::sleep(std::time::Duration::from_secs(1)) => {}
+                _ = tokio::time::sleep(multi_live_state_tick(idle)) => {}
             }
             // 자동 네트워크 프리셋 — 멀티라이브 스트림 수·재생 오류에 맞춰 다시 고른다.
             if commands::settings::apply_auto_network(&app.state::<AppServices>(), &shell) {
