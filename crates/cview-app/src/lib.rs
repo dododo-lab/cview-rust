@@ -267,17 +267,20 @@ pub fn run() {
             commands::settings::apply_window_theme(&handle, services.settings.appearance().theme);
             window_prefs::apply_on_launch(&handle, &data_dir, &services.settings.general());
             // 창 위치·크기 저장 — 움직이거나 크기를 바꾸면 기록한다(SYS-16).
+            // 끄는 동안의 이벤트는 모았다가 조용해지면 한 번 쓴다(window_prefs::FrameSaver).
             if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
-                let dir = data_dir.clone();
+                let saver = window_prefs::FrameSaver::new(data_dir.clone());
+                app.manage(saver.clone()); // 종료(⌘Q) 때 밀린 위치를 쓴다 — exit_cleanup
                 let w = window.clone();
                 window.on_window_event(move |event| {
-                    if matches!(
-                        event,
-                        tauri::WindowEvent::Moved(_)
-                            | tauri::WindowEvent::Resized(_)
-                            | tauri::WindowEvent::CloseRequested { .. }
-                    ) {
-                        window_prefs::save_frame(&dir, &w);
+                    match event {
+                        tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_) => {
+                            saver.schedule(window_prefs::current_frame(&w));
+                        }
+                        tauri::WindowEvent::CloseRequested { .. } => {
+                            saver.save_now(window_prefs::current_frame(&w));
+                        }
+                        _ => {}
                     }
                     // 시스템 외형이 바뀌면(앱 테마 "시스템"일 때) Dock 아이콘을 다시 고른다.
                     if let tauri::WindowEvent::ThemeChanged(_) = event {
@@ -449,6 +452,10 @@ pub fn run() {
 /// 타이머(`tokio::time::timeout`)는 반드시 런타임 안(async 블록)에서 만든다: 밖에서 만들면 "no reactor running" 패닉.
 fn exit_cleanup<R: Runtime>(handle: &AppHandle<R>) {
     const LIMIT: std::time::Duration = std::time::Duration::from_secs(3);
+    // 창을 옮기고 곧바로 끝내면(⌘Q 는 창 닫기 이벤트 없이 끝날 수 있다) 아직 쓰지 않은 위치가 남아 있다.
+    if let Some(saver) = handle.try_state::<window_prefs::FrameSaver>() {
+        saver.save_now(None);
+    }
     let started = std::time::Instant::now();
     let services = handle.try_state::<AppServices>();
     let shell = handle.try_state::<MultiLiveShell>();
