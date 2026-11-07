@@ -559,7 +559,7 @@ export class StatsPage {
     this.body.innerHTML = `<div class="history-list">${d.recent.map((r) => {
       const thumb = safeUrl(r.thumbnailUrl);
       return `<button class="history-row" data-open-channel-id="${esc(r.channelId)}">
-        <span class="bookmark-thumb">${thumb ? `<img src="${esc(imageSrc(thumb, 'static'))}" alt="" referrerpolicy="no-referrer">` : ''}</span>
+        <span class="bookmark-thumb">${thumb ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(thumb, 'static'))}" alt="" referrerpolicy="no-referrer">` : ''}</span>
         <span class="bookmark-text"><strong class="ellipsis">${esc(r.channelName || r.channelId)}${r.active ? ' <span class="live-dot-text">시청 중</span>' : ''}</strong>
         <span class="ellipsis">${r.categoryName ? `${esc(r.categoryName)} · ` : ''}${esc(relativeDate(r.startedAt))} · ${esc(durationText(r.seconds))}</span></span></button>`;
     }).join('')}</div>`;

@@ -68,8 +68,9 @@ export function mockTauri([origin, theme]) {
     channel_vods: () => ({ data: vods, totalPages: 1 }),
     channel_clips: () => ({ data: clips, next: null }),
   };
+  window.__calls = []; // 부른 명령 기록 — 대기 중 불필요한 요청을 세는 검사가 쓴다
   window.__TAURI__ = {
-    core: { invoke: async (cmd, args) => { const h = handlers[cmd]; if (!h) throw new Error(`mock: ${cmd}`); return h(args || {}); } },
+    core: { invoke: async (cmd, args) => { window.__calls.push(cmd); const h = handlers[cmd]; if (!h) throw new Error(`mock: ${cmd}`); return h(args || {}); } },
     event: { listen: async () => () => {} },
   };
   try { localStorage.setItem('cview.onboarded', '1'); localStorage.setItem('cview.theme', theme); } catch { /* 무시 */ }

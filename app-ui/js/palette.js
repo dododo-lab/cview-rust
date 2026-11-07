@@ -117,7 +117,7 @@ export class CommandPalette {
       lastGroup = it.group;
       const img = safeUrl(it.image);
       return `${head}<div class="palette-item${i === this.index ? ' active' : ''}" role="option" id="palette-opt-${i}" aria-selected="${i === this.index}" data-i="${i}" style="--i:${Math.min(i, 10)}">
-        ${it.group === '채널' ? (img ? `<img class="avatar" src="${esc(imageSrc(img, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>') : ''}
+        ${it.group === '채널' ? (img ? `<img class="avatar" loading="lazy" decoding="async" src="${esc(imageSrc(img, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>') : ''}
         <span class="palette-label">${esc(it.label)}${it.live ? ' <b class="live-dot">LIVE</b>' : ''}</span>
         <span class="palette-hint ellipsis">${esc(it.hint || '')}</span></div>`;
     }).join('') || '<div class="tray-empty">일치하는 항목이 없습니다</div>';

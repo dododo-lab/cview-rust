@@ -118,10 +118,10 @@ export class ChannelPage {
     this.body.innerHTML = `
       <button class="back-btn" data-ch="back">${ICON_BACK}<span>뒤로</span></button>
       <header class="channel-hero" style="--tone: ${channelTone(this.channelId)}">
-        <div class="channel-hero-bg">${avatar ? `<img src="${esc(imageSrc(avatar, 'avatar-lg'))}" alt="" referrerpolicy="no-referrer">` : ''}</div>
+        <div class="channel-hero-bg">${avatar ? `<img decoding="async" src="${esc(imageSrc(avatar, 'avatar-lg'))}" alt="" referrerpolicy="no-referrer">` : ''}</div>
         <div class="channel-hero-main">
           <div class="channel-avatar${live ? ' live' : ''}">
-            ${avatar ? `<img class="avatar" src="${esc(imageSrc(avatar, 'avatar-lg'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}
+            ${avatar ? `<img class="avatar" decoding="async" src="${esc(imageSrc(avatar, 'avatar-lg'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}
             ${live ? '<span class="strip-live">LIVE</span>' : ''}
           </div>
           <div class="channel-id">

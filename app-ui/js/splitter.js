@@ -139,7 +139,9 @@ export function installChatSplitter({ container, chat, key }) {
     apply();
     persist();
   });
+  // 첫 배치는 ResizeObserver 의 첫 알림(레이아웃 뒤·페인트 전)이 맡는다 — 설치 중 바로 apply() 하면 숨은 시청 화면까지
+  // getBoundingClientRect 로 강제 동기 레이아웃을 일으켰다. 페인트 전에 맞춰지므로 첫 화면은 그대로다.
   new ResizeObserver(() => apply()).observe(container);
-  new MutationObserver(() => apply()).observe(container, { attributes: true, attributeFilter: ['class'] });
-  apply();
+  // 오버레이 채팅 전환(class) — 숨은 화면이면 재지 않는다(강제 레이아웃). 다시 보이면 크기가 바뀌어 위 ResizeObserver 가 맞춘다.
+  new MutationObserver(() => { if (!container.closest('[hidden]')) apply(); }).observe(container, { attributes: true, attributeFilter: ['class'] });
 }

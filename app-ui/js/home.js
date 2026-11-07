@@ -142,7 +142,7 @@ function heroQueue(lives, active) {
 /** 히어로 뒤 앰비언트 빛 — 지금 장의 썸네일을 크게 흐려 화면에 색을 번지게 한다(정지 화면, 장이 바뀔 때만 다시 그림). */
 function heroAmbient(live) {
   const thumb = safeUrl(live && live.thumbnailUrl);
-  return thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" referrerpolicy="no-referrer">` : '';
+  return thumb ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(thumb, 'live'))}" alt="" referrerpolicy="no-referrer">` : '';
 }
 
 /** 지금 인기 TOP 10 — 큰 순위 숫자 + 썸네일 카드. */

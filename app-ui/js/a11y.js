@@ -167,9 +167,9 @@ export function watchEdges(box) {
   };
   box.addEventListener('scroll', update, { passive: true });
   // 설정처럼 다시 그려 묶음이 통째로 바뀌는 화면이 있어, 떨어져 나가면 관찰을 끊는다
+  // 첫 계산은 ResizeObserver 의 첫 알림(레이아웃 뒤)에서 — 만들자마자 scrollWidth 를 읽으면 숨은 화면에서도 강제 레이아웃이 일어났다
   const ro = new ResizeObserver(() => { if (!box.isConnected) { ro.disconnect(); return; } update(); });
   ro.observe(box);
-  update();
   return update;
 }
 
