@@ -74,7 +74,7 @@ impl ManagerState {
         let sessions = self.sessions.clone();
         if !self.decode_suspension_reasons.is_empty() {
             for s in &sessions {
-                let protected = self.is_protected_session(s.id());
+                let protected = self.is_protected_during_suspension(s);
                 self.apply_decode_state(s, protected);
             }
             return;
@@ -127,10 +127,29 @@ impl ManagerState {
         }
     }
 
+    /// 정지 사유가 있는 동안에도 디코드를 이어 갈 세션 — 선택·PiP, 그리고 창 가림만으로 멈추는 동안에는
+    /// 들리는 패인(소리를 옮긴 패인, 여러 소리 모드의 켜진 패인)도. 창을 가린 채 소리만 듣는 일이 흔해서
+    /// 가림으로 그 패인까지 멈추면 소리가 끊긴다. 발열 정지는 예전처럼 선택·PiP 만 지킨다.
+    fn is_protected_during_suspension(&self, session: &MultiLiveSession) -> bool {
+        let id = session.id();
+        if self.is_protected_session(id) {
+            return true;
+        }
+        if self
+            .decode_suspension_reasons
+            .contains(&DecodeSuspensionReason::ThermalPressure)
+        {
+            return false;
+        }
+        Some(id) == self.audio_session_id
+            || Some(id) == self.stage_session_id
+            || self.is_audible_session(session)
+    }
+
     pub fn suspend_non_selected_decode(&mut self, reason: DecodeSuspensionReason) {
         let inserted = self.decode_suspension_reasons.insert(reason);
         for s in self.sessions.clone() {
-            let protected = self.is_protected_session(s.id());
+            let protected = self.is_protected_during_suspension(&s);
             self.apply_decode_state(&s, protected);
         }
         if inserted {
@@ -139,6 +158,25 @@ impl ManagerState {
                 self.sessions.len()
             );
         }
+    }
+
+    /// 창 가림 — 가려지면(`true`) 선택·PiP·들리는 패인 밖의 패인 디코드를 멈추고, 다시 보이면 예산대로 되돌린다.
+    /// 같은 값이 거듭 와도 한 번만 바뀐다.
+    pub fn set_window_occluded(&mut self, occluded: bool) {
+        let reason = DecodeSuspensionReason::WindowOcclusion;
+        if occluded == self.decode_suspension_reasons.contains(&reason) {
+            return;
+        }
+        if occluded {
+            self.suspend_non_selected_decode(reason);
+        } else {
+            self.restore_decode_from_budget(reason);
+        }
+    }
+
+    pub fn is_window_occluded(&self) -> bool {
+        self.decode_suspension_reasons
+            .contains(&DecodeSuspensionReason::WindowOcclusion)
     }
 
     pub fn restore_decode_from_budget(&mut self, reason: DecodeSuspensionReason) {

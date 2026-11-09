@@ -86,6 +86,7 @@ export const api = {
   multiLiveSelect: (sessionId) => invoke('multilive_select', { sessionId }),
   multiLiveWatch: (sessionId) => invoke('multilive_watch', { sessionId }),
   multiLivePark: (parked) => invoke('multilive_park', { parked }),
+  multiLiveSetWindowOccluded: (occluded) => invoke('multilive_set_window_occluded', { occluded }),
   multiLiveSetLayout: (layout) => invoke('multilive_set_layout', { layout }),
   multiLiveStageSize: (width, height) => invoke('multilive_stage_size', { width, height }),
   multiLiveStopAll: () => invoke('multilive_stop_all'),

@@ -100,7 +100,9 @@ export function installSegmentGlider() {
   const sigOf = (box, page) => `${page}#${[...box.querySelectorAll(':scope > .seg')].map((b) => b.textContent.trim()).join('|')}`;
   function remember(node, page) {
     if (node.nodeType !== 1) return;
-    const boxes = node.classList.contains('segmented') ? [node] : node.getElementsByClassName('segmented');
+    // querySelectorAll — getElementsByClassName 은 살아 있는 목록을 노드마다 캐시해, 문서의 모든 추가·삭제 노드(채팅 줄·칩)에
+    // ClassCollection 이 붙어 지운 노드가 GC 될 때까지 남았다. 고정 목록이면 그런 캐시가 없다.
+    const boxes = node.classList.contains('segmented') ? [node] : node.querySelectorAll('.segmented');
     for (const box of boxes) {
       const g = box.querySelector(':scope > .seg-glider');
       if (g && g.style.opacity === '1') handoff.set(sigOf(box, page), { translate: g.style.translate, width: g.style.width, height: g.style.height });
@@ -154,7 +156,7 @@ export function installSegmentGlider() {
   function scan(node) {
     if (node.nodeType !== 1) return;
     if (node.classList.contains('segmented')) track(node);
-    for (const b of node.getElementsByClassName('segmented')) track(b);
+    for (const b of node.querySelectorAll('.segmented')) track(b);
   }
   new MutationObserver((records) => {
     handoff.clear();
