@@ -20,6 +20,7 @@ pub mod playback;
 pub mod state;
 pub mod system;
 pub mod tray;
+pub mod ui_watchdog;
 pub mod updater;
 pub mod webview_store;
 pub mod window_prefs;
@@ -316,6 +317,8 @@ pub fn run() {
                 tracing::warn!("메뉴 막대 아이콘을 달지 못했습니다: {e}");
             }
             prefetch_popular(&handle);
+            // 웹 화면 멈춤 감시 — GPU 프로세스가 끊긴 뒤 창 전체가 검게 남던 문제(ui_watchdog.rs).
+            ui_watchdog::spawn(handle.clone());
             spawn_auth_tasks(handle);
             perf_log::emit("startup.setup_end", serde_json::json!({}));
             Ok(())
@@ -430,6 +433,7 @@ pub fn run() {
             commands::settings::settings_update,
             commands::settings::perf_log,
             commands::settings::perf_log_status,
+            ui_watchdog::ui_heartbeat,
             commands::settings::image_cache_status,
             commands::settings::image_cache_clear,
         ])
