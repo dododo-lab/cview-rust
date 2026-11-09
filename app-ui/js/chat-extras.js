@@ -93,13 +93,20 @@ export function installChatExtras(panel) {
   rail.hidden = true;
   const anchor = root.querySelector('.donation-rank') || root.querySelector('.chat-header');
   anchor.after(rail);
+  // 칩은 후원·구독이 들어오거나 비울 때만 다시 그린다. 예전엔 채팅 묶음마다(초당 몇 번) 칩 12개를 통째로
+  // 새로 써서, 칩마다 SVG 아이콘·span 이 버려졌다 — 창이 가려진 채 오래 켜 두면 그 버린 요소가 웹 콘텐츠
+  // 프로세스에 쌓였다(실측: 가려진 15분에 SVG 요소 +3,559개).
+  let railHtml = '';
   const renderRail = () => {
     rail.hidden = events.length === 0;
-    rail.innerHTML = events.slice(0, 12).map((m) => {
+    const html = events.slice(0, 12).map((m) => {
       const e = eventMeta(m);
       if (!e) return '';
       return `<span class="event-chip ev-${e.tone} ev-tier-${e.tier} ev-lv-${e.level}" title="${esc(`${e.title} · ${m.content || ''}`)}"><span class="event-chip-icon">${EVENT_ICONS[e.icon] || ''}</span><b>${esc(m.nickname || '익명')}</b><span class="event-chip-value">${esc(e.value)}</span></span>`;
     }).join('');
+    if (html === railHtml) return;
+    railHtml = html;
+    rail.innerHTML = html;
   };
 
   // ── 통계 버튼 (CHT-24) ──
@@ -171,6 +178,7 @@ export function installChatExtras(panel) {
 
   panel.appendHooks.push((messages) => {
     const now = Date.now();
+    let gotEvent = false;
     for (const m of messages) {
       if (m.kind === 'system') continue;
       stats.times.push(now);
@@ -179,12 +187,13 @@ export function installChatExtras(panel) {
       if (m.kind === 'subscription') stats.subs += 1;
       if (m.kind === 'donation' || m.kind === 'subscription') {
         events.unshift(m);
+        gotEvent = true;
         if (panel.active && root.offsetParent) speak(m);
       }
     }
     if (stats.times.length > 5000) stats.times.splice(0, stats.times.length - 5000);
     if (events.length > 30) events.length = 30;
-    renderRail();
+    if (gotEvent) renderRail();
     // 로컬 음소거(/mute) — 시간이 지나면 다시 보인다.
     if (muted.size) {
       for (const [nick, until] of muted) {
