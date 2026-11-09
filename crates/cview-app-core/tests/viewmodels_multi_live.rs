@@ -992,6 +992,45 @@ fn repeated_round_trips_restore_every_pane() {
     }
 }
 
+#[test]
+fn window_occlusion_keeps_heard_pane_and_is_idempotent() {
+    let (m, p) = decode_setup();
+    let mut st = m.lock();
+    // 소리를 선택 밖 패인으로 옮겨 둔 채 창을 가린다 — 그 패인은 들리므로 계속 디코드한다.
+    st.route_audio(p[2].session.id());
+    st.set_window_occluded(true);
+    assert!(st.is_window_occluded());
+    assert_eq!(suspended(&p), vec![false, true, false, true]);
+    // 같은 값이 거듭 와도 그대로, 예산 새로 고침에도 유지된다.
+    st.set_window_occluded(true);
+    st.reconcile_decode_budget();
+    assert_eq!(suspended(&p), vec![false, true, false, true]);
+    assert_eq!(
+        st.pane_suspension().get(&p[1].session.id()).copied(),
+        Some(policy::PaneSuspensionCause::Occlusion)
+    );
+    st.set_window_occluded(false);
+    assert!(!st.is_window_occluded());
+    assert_eq!(suspended(&p), vec![false; 4]);
+    assert!(st.pane_suspension().is_empty());
+    st.set_window_occluded(false);
+    assert_eq!(suspended(&p), vec![false; 4]);
+}
+
+#[test]
+fn thermal_suspension_still_stops_heard_non_selected_pane() {
+    let (m, p) = decode_setup();
+    let mut st = m.lock();
+    st.route_audio(p[2].session.id());
+    st.set_window_occluded(true);
+    st.suspend_non_selected_decode(DecodeSuspensionReason::ThermalPressure);
+    assert_eq!(suspended(&p), vec![false, true, true, true]);
+    st.restore_decode_from_budget(DecodeSuspensionReason::ThermalPressure);
+    assert_eq!(suspended(&p), vec![false, true, false, true]);
+    st.set_window_occluded(false);
+    assert_eq!(suspended(&p), vec![false; 4]);
+}
+
 #[tokio::test(start_paused = true)]
 async fn memory_pressure_limits_budget_then_recovers() {
     let (m, p) = decode_setup();

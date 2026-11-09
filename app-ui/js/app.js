@@ -170,6 +170,28 @@ function setMultiLiveParked(on) {
   multiLiveParked = on;
   api.multiLivePark(on).catch(() => {});
 }
+// 창 가림 — 메인 창이 가려지면(최소화·다른 창 뒤·다른 Space, `document.hidden`) 선택·PiP·들리는 패인 밖의
+// 멀티라이브 패인 디코드를 멈추고, 다시 보이면 바로 되돌린다(원본 창 가림 디코드 정지). 보이지 않는 패인을
+// 계속 디코드하면 WebKit 웹 콘텐츠 프로세스 메모리가 가려진 시간만큼 쌓였다(5패인 27시간 190MB → 1.1~1.4GB).
+// 잠깐 다른 창으로 넘어갔다 오는 정도로는 멈추지 않게 조금 기다린다. 보조 창에는 멀티라이브가 없다.
+const OCCLUDE_DELAY_MS = 5000;
+// null — 아직 보낸 적 없음. 페이지를 다시 불러오면(웹 콘텐츠 복구 등) 매니저에 남은 가림 상태를 첫 값으로 덮는다.
+let windowOccluded = null;
+let occludeTimer = 0;
+function sendWindowOccluded(on) {
+  if (on === windowOccluded) return;
+  windowOccluded = on;
+  api.multiLiveSetWindowOccluded(on).catch(() => { windowOccluded = null; });
+}
+function syncWindowOcclusion() {
+  clearTimeout(occludeTimer);
+  if (document.hidden) occludeTimer = setTimeout(() => { if (document.hidden) sendWindowOccluded(true); }, OCCLUDE_DELAY_MS);
+  else sendWindowOccluded(false);
+}
+if (!AUX) {
+  document.addEventListener('visibilitychange', syncWindowOcclusion);
+  syncWindowOcclusion();
+}
 function multiLiveSessionFor(channelId) {
   return (pages.multilive.state.sessions || []).find((x) => x.channelId === channelId && x.slot != null) || null;
 }

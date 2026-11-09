@@ -119,6 +119,26 @@ pub async fn multilive_park(shell: State<'_, MultiLiveShell>, parked: bool) -> C
     Ok(())
 }
 
+/// 메인 창이 가려졌다(`true`, 최소화·다른 창 뒤·다른 Space) / 다시 보인다(`false`) — 원본 창 가림 디코드 정지.
+/// 가려진 동안 선택·PiP·들리는 패인만 디코드한다. 보이지 않는 패인을 계속 디코드하면 WebKit 웹 콘텐츠
+/// 프로세스 메모리가 가려진 시간만큼 쌓였다(5패인 27시간 1.1~1.4GB).
+#[tauri::command]
+pub async fn multilive_set_window_occluded(
+    shell: State<'_, MultiLiveShell>,
+    occluded: bool,
+) -> CmdResult<()> {
+    let changed = {
+        let mut st = shell.manager.lock();
+        let before = st.is_window_occluded();
+        st.set_window_occluded(occluded);
+        before != st.is_window_occluded()
+    };
+    if changed {
+        shell.log_stage_transition(if occluded { "occlude" } else { "unocclude" });
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn multilive_set_layout(
     shell: State<'_, MultiLiveShell>,
