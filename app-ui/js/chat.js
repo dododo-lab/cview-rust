@@ -128,6 +128,17 @@ export function refreshChatAuth() {
   }
 }
 
+/**
+ * 네트워크가 돌아오면 연결에 실패한 채 멈춘 채팅을 다시 연결한다 — 끊긴 동안 연결 요청이 실패하면 패널이
+ * '연결 실패'로 남고 아무도 다시 시도하지 않아, 방송은 돌아와도 채팅은 "다시 연결"을 눌러야 했다.
+ * 엔진이 스스로 재시도 중인 패널(재연결 중)과 사용자가 끊은 패널(연결 끊김)은 건드리지 않는다.
+ */
+export function reconnectFailedChats() {
+  for (const p of PANELS) {
+    if (p.active && p.chatChannelId && p.stateName === 'failed') p.connect(p.chatChannelId, p.channelId);
+  }
+}
+
 export class ChatPanel {
   /**
    * @param {HTMLElement} root `.chat` 패널

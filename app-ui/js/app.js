@@ -36,7 +36,8 @@ import { MultiChatPage, multiChatIcon } from './multichat.js';
 import { installPrefsEffects } from './prefs-effects.js';
 import { installBackgroundSaver, setMenuHidden } from './background-saver.js';
 import { installPerfCollector } from './perf-collector.js';
-import { showMenu, refreshChatAuth } from './chat.js';
+import { showMenu, refreshChatAuth, reconnectFailedChats } from './chat.js';
+import { installUiHealth } from './ui-health.js';
 import { kbd } from './platform.js';
 import { installWindowControls } from './window-controls.js';
 import { withRefreshVeil, cancelRefreshVeil } from './refresh-veil.js';
@@ -76,6 +77,8 @@ function renderNav() {
 // 사이드바 아래 채널 목록 — 메뉴마다 다른 목록(sidebar-lists.js). 팔로잉은 Rust FollowingStore 가 60초 안의 결과를
 // 재사용하므로 주기 호출이 가볍다. 인기·최근 본 채널은 그 목록을 쓰는 메뉴에 들어갈 때만 불러온다.
 const SIDEBAR_FOLLOWING_MS = 120000;
+// 갱신이 실패했으면(네트워크 끊김 등) 2분을 다 기다리지 않고 이 간격으로 다시 해 본다.
+const SIDEBAR_FOLLOWING_RETRY_MS = 20000;
 const SIDEBAR_EXTRA_MS = 60000;
 let followingTimer = 0;
 const sideData = { following: null, favorites: new Set(), popular: null, popularAt: 0, recent: null, recentAt: 0 };
@@ -109,6 +112,7 @@ async function refreshSidebarList() {
 }
 async function refreshSidebarFollowing() {
   clearTimeout(followingTimer);
+  let failed = false;
   if (!isLoggedIn()) {
     sideData.following = null;
     sidebar.setLiveCount(null);
@@ -119,14 +123,16 @@ async function refreshSidebarFollowing() {
       sideData.following = lives;
       sideData.favorites = new Set(favs.map((f) => f.channelId));
     } catch {
-      sideData.following = null;
+      // 한 번 실패했다고(잠깐의 네트워크 끊김) 보던 목록을 지우지 않는다 — 예전엔 사이드바 팔로잉 목록과 개수가
+      // 사라진 채 다음 주기(2분)까지, 네트워크가 돌아온 뒤에도 비어 있었다. 받은 적이 없을 때만 비운다.
+      failed = true;
     }
     sidebar.setLiveCount(sideData.following ? sideData.following.length : null);
   }
   paintSidebarList();
   // 여러 호출이 겹쳐도 주기 타이머는 하나만(예전엔 겹친 호출마다 타이머가 늘었다).
   clearTimeout(followingTimer);
-  followingTimer = setTimeout(refreshSidebarFollowing, SIDEBAR_FOLLOWING_MS);
+  followingTimer = setTimeout(refreshSidebarFollowing, failed ? SIDEBAR_FOLLOWING_RETRY_MS : SIDEBAR_FOLLOWING_MS);
 }
 
 // 단독 라이브와 멀티라이브는 동시에 소리를 내지 않는다 — 마지막으로 연 쪽이 소리를 가진다.
@@ -721,13 +727,27 @@ function installMenuAndShortcuts() {
     banner.hidden = false;
     if (isTauri) api.playerNetworkPath(false).catch(() => {});
   });
+  // 네트워크가 흔들리면(VPN·Wi-Fi 전환) online 이 짧은 간격으로 여러 번 온다 — 복구 작업은 잠잠해진 뒤 한 번만.
+  let onlineTimer = 0;
+  window.addEventListener('offline', () => clearTimeout(onlineTimer));
   window.addEventListener('online', () => {
     banner.hidden = true;
     if (isTauri) api.playerNetworkPath(true).catch(() => {});
-    toast('다시 연결되었습니다', 1500);
-    if (pages[current] && !viewer.isOpen) reloadCurrent(); // 자동 복구 — 덮개 없이
+    clearTimeout(onlineTimer);
+    onlineTimer = setTimeout(() => {
+      if (navigator.onLine === false) return;
+      toast('다시 연결되었습니다', 1500);
+      // 자동 복구 — 덮개 없이. 실패는 화면이 스스로 안내한다(처리되지 않은 거부로 남기지 않는다).
+      if (pages[current] && !viewer.isOpen) Promise.resolve(reloadCurrent()).catch(() => {});
+      // 끊긴 동안 실패한 사이드바 팔로잉·채팅도 바로 다시 — 다음 주기(2분)·수동 "다시 연결"을 기다리지 않게.
+      refreshSidebarFollowing();
+      reconnectFailedChats();
+    }, ONLINE_SETTLE_MS);
   });
 }
+
+/** online 이벤트가 잠잠해지기를 기다리는 시간. */
+const ONLINE_SETTLE_MS = 800;
 
 /** 전체 화면이면 신호등 자리를 비우지 않는다. */
 function trackFullscreen() {
@@ -742,6 +762,7 @@ function trackFullscreen() {
 }
 
 async function main() {
+  installUiHealth(); // 멈춤 감시 신호·오류 기록 — 무엇보다 먼저(아래에서 실패해도 신호는 간다)
   installImageFade(); // 첫 화면 그림보다 먼저 — 놓친 load 로 썸네일이 투명하게 남지 않게
   installSegmentGlider(); // 모든 세그먼트의 고른 칸 판이 미끄러지게
   installMicroMotion();
@@ -1012,4 +1033,9 @@ async function queueMulti(channelIds) {
   }
 }
 
-main();
+// 시작 중 예외가 나면 로딩 화면이 걷히지 않고 영원히 남았다(누구도 거부를 받지 않았다) — 걷고 다시 불러오기를 권한다.
+main().catch((e) => {
+  console.error('CView 시작 실패', e);
+  hideSplash();
+  toast('화면을 준비하지 못했습니다', 600000, { label: '다시 불러오기', run: () => location.reload() });
+});

@@ -70,7 +70,13 @@ export function mockTauri([origin, theme]) {
   };
   window.__calls = []; // 부른 명령 기록 — 대기 중 불필요한 요청을 세는 검사가 쓴다
   window.__TAURI__ = {
-    core: { invoke: async (cmd, args) => { window.__calls.push(cmd); const h = handlers[cmd]; if (!h) throw new Error(`mock: ${cmd}`); return h(args || {}); } },
+    core: {
+      invoke: async (cmd, args) => {
+        // 멈춤 감시 신호(ui-health.js, 5초마다)는 데이터 요청이 아니다 — 대기 중 요청을 세는 검사에 넣지 않는다.
+        if (cmd === 'ui_heartbeat') { window.__beats = (window.__beats || 0) + 1; return null; }
+        window.__calls.push(cmd); const h = handlers[cmd]; if (!h) throw new Error(`mock: ${cmd}`); return h(args || {});
+      },
+    },
     event: { listen: async () => () => {} },
   };
   try { localStorage.setItem('cview.onboarded', '1'); localStorage.setItem('cview.theme', theme); } catch { /* 무시 */ }
