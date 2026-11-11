@@ -5,6 +5,8 @@
 // P03 첫 화면 아래의 목록 이미지는 지연 로딩(loading="lazy")인지.
 // P04 붐비는 채팅(초당 200개, CPU 4배 감속)에서 넘친 줄을 모았다가 한 번에 지우는지(trimFront), 프레임이 버티는지.
 //     — 예전엔 플러시마다 앞에서 몇 줄씩 지워 남은 줄 전체가 다시 배치됐다(프레임 25~47%가 20ms 초과).
+// P05 창이 가려진 동안 채팅 줄을 붙여도 바닥 따라가기(snap)가 레이아웃을 당기지 않는지, 다시 보이면 바닥으로 내리는지.
+//     — 예전엔 숨은 창에서도 줄을 붙일 때마다 scrollHeight 를 읽어 목록 전체를 다시 배치했다.
 // 저장소 루트에서: node tools/ui-regression/perf.mjs   (Playwright 가 필요하다)
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -148,6 +150,50 @@ await check('P04 chat burst: trims overflow in batches and keeps frames', async 
   assert.ok(r.trims.every((k) => k >= 20), `한 번에 지운 줄 ${r.trims}`);
   // 프레임은 기계에 따라 흔들려 넉넉히 — 고치기 전 25~47%, 고친 뒤 약 4%.
   assert.ok(r.over20 < 0.15, `20ms 넘은 프레임 ${(r.over20 * 100).toFixed(1)}%`);
+  await ctx.close();
+});
+
+// ── P05 가려진 창의 채팅 ──
+await check('P05 hidden window: chat appends force no layout, snaps back to bottom when shown', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  const cdp = await ctx.newCDPSession(page);
+  await page.addInitScript(mockTauri, [base, 'dark']);
+  await page.goto(base);
+  await page.waitForFunction(() => !document.getElementById('splash') || !document.getElementById('splash').isConnected, null, { timeout: 20000 });
+  await page.evaluate(async () => {
+    const { followAppend, trimFront } = await import('/js/chat-follow.js');
+    const list = document.createElement('div');
+    list.className = 'chat-list';
+    list.style.cssText = 'position:fixed;right:0;top:0;width:320px;height:400px;overflow:auto;z-index:9999';
+    document.body.appendChild(list);
+    let hidden = false;
+    Object.defineProperty(document, 'hidden', { get: () => hidden, configurable: true });
+    window.__setHidden = (v) => { hidden = v; document.dispatchEvent(new Event('visibilitychange')); };
+    let n = 0;
+    // 멀티라이브 패인 채팅처럼 이벤트마다 붙인다
+    window.__burst = (k) => { for (let i = 0; i < k; i++) followAppend(list, () => { list.insertAdjacentHTML('beforeend', `<div class="chat-line">줄 ${++n} 가나다라마바사</div>`); trimFront(list, 300); }); };
+    window.__list = list;
+    window.__burst(50);
+    window.__setHidden(true);
+  });
+  const evs = [];
+  cdp.on('Tracing.dataCollected', (d) => evs.push(...d.value));
+  const done = new Promise((r) => cdp.once('Tracing.tracingComplete', r));
+  await cdp.send('Tracing.start', { categories: 'devtools.timeline,disabled-by-default-devtools.timeline.stack', transferMode: 'ReportEvents' });
+  await page.evaluate(() => window.__burst(400));
+  await cdp.send('Tracing.end');
+  await done;
+  const forced = evs.filter((e) => e.name === 'Layout' && e.ph === 'X' && e.args?.beginData?.stackTrace?.some((f) => /chat-follow\.js|chat\.js/.test(f.url || '')));
+  // 고치기 전: 줄마다 snap 이 scrollHeight 를 읽어 400번 강제 레이아웃
+  assert.equal(forced.length, 0, `숨은 창에서 채팅이 레이아웃을 ${forced.length}번 당김`);
+  const gap = await page.evaluate(async () => {
+    window.__setHidden(false);
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const l = window.__list;
+    return l.scrollHeight - l.clientHeight - l.scrollTop;
+  });
+  assert.ok(gap <= 1, `다시 보였는데 바닥에서 ${gap}px 떨어져 있음`);
   await ctx.close();
 });
 

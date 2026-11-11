@@ -41,6 +41,9 @@ class Follower {
   }
 
   snap() {
+    // 창이 숨어 있으면 내리지 않는다 — 아무도 보지 않는데 scrollHeight 를 읽으면 줄을 붙일 때마다 목록 전체
+    // 레이아웃을 강제한다(가린 채 멀티라이브를 켜 두면 패인 채팅마다 계속). 다시 보이면 resyncAll 이 바닥으로 내린다.
+    if (document.hidden) return;
     const l = this.list;
     if (l.scrollHeight - l.clientHeight - l.scrollTop > 1) l.scrollTop = l.scrollHeight;
   }

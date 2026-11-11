@@ -31,6 +31,8 @@ const ICON = {
 // 닉네임 색을 바꾸는 역할만 클래스로 붙인다. 역할 문자열을 그대로 클래스로 쓰면 일반 시청자
 // `viewer` 가 시청 화면 섹션의 `.viewer`(position:absolute; inset:0) 와 겹쳐 닉네임이 창 전체를 덮는다.
 const ROLE_CLASSES = new Set(['streamer', 'manager', 'channelManager']);
+// 창이 숨은 동안 채팅 줄을 모아 붙이는 간격(보일 때는 다음 프레임, 늦어도 250ms).
+const HIDDEN_FLUSH_MS = 1000;
 
 function roleClass(role) {
   return ROLE_CLASSES.has(role) ? ` ${role}` : '';
@@ -476,10 +478,11 @@ export class ChatPanel {
     if (this.pendingLines.length > this.maxLines) this.pendingLines = this.pendingLines.slice(-this.maxLines);
     if (!this.flushScheduled) {
       this.flushScheduled = true;
-      // 보이면 다음 프레임, 창이 숨어 rAF 가 멈춰도 타이머로 결국 그린다.
+      // 보이면 다음 프레임, 창이 숨어 rAF 가 멈춰도 타이머로 결국 그린다. 숨은 동안은 덜 자주(1초) 모아 붙인다 —
+      // 보는 사람이 없어 늦어도 그만이고, 다시 보이면 rAF 가 바로 그린다.
       const run = () => this.flushLines();
       this.flushRaf = requestAnimationFrame(run);
-      this.flushTimer = setTimeout(run, 250);
+      this.flushTimer = setTimeout(run, document.hidden ? HIDDEN_FLUSH_MS : 250);
     }
   }
 
