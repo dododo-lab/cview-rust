@@ -10,6 +10,7 @@ import { esc, safeUrl, imageSrc, toast, channelTone } from './dom.js';
 import { compactCount } from './cards.js';
 import { vodCard, clipCard, relativeDate } from './channel.js';
 import { verifiedBadge } from './verified-badge.js';
+import { bindLiveMotion, countUpIn, rollTo, tabSwap, watchPulse, unwatchPulse } from './live-motion.js';
 
 const TABS = [['info', '정보'], ['vod', '다시보기'], ['clip', '클립'], ['community', '커뮤니티']];
 const svg = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
@@ -86,6 +87,7 @@ export class WatchInfoPanel {
     this.observers = [];
     el.addEventListener('click', (e) => this.onClick(e));
     el.addEventListener('keydown', (e) => this.onTabKey(e));
+    bindLiveMotion(el); // 다시보기·클립 카드 기울기·빛 번짐(live-motion.js)
   }
 
   get scroller() {
@@ -107,15 +109,15 @@ export class WatchInfoPanel {
 
   /** 멀티라이브 상태의 시청자 수 — 카드는 처음 불러온 값이라 포커스 정보 칸에서는 상태가 올 때마다 맞춘다. */
   syncViewers(text) {
-    const pill = this.detail?.live && text ? this.el.querySelector('.mwi-pill-live') : null;
-    if (!pill) return;
-    const html = `<i aria-hidden="true"></i>${esc(text)}명`;
-    if (pill.innerHTML !== html) pill.innerHTML = html;
+    const num = this.detail?.live && text ? this.el.querySelector('.mwi-pill-live .mo-num') : null;
+    // 바뀐 숫자만 굴러 바뀐다(커지면 아래에서, 줄면 위에서) — 같은 값이면 DOM 을 건드리지 않는다
+    if (num) rollTo(num, String(text));
   }
 
   disconnect() {
     for (const o of this.observers) o.disconnect();
     this.observers = [];
+    unwatchPulse(this.el.querySelector('.mwi-hero'));
   }
 
   async load() {
@@ -146,18 +148,18 @@ export class WatchInfoPanel {
       : `<span>${esc((c.channelName || '?').slice(0, 1))}</span>`);
     const meta = live ? [
       live.categoryName ? `<span class="mwi-pill mwi-pill-cat">${esc(live.categoryName)}</span>` : '',
-      `<span class="mwi-pill mwi-pill-live" title="지금 시청자"><i aria-hidden="true"></i>${esc(live.viewerCountText || '0')}명</span>`,
+      `<span class="mwi-pill mwi-pill-live" title="지금 시청자"><i aria-hidden="true"></i><span><span class="mo-num" data-mo-count>${esc(live.viewerCountText || '0')}</span>명</span></span>`,
       duration ? `<span class="mwi-pill" title="방송 시작 ${esc(absoluteTime(parseKst(live.openDate)))}">${ICON.clock}${esc(duration)}</span>` : '',
     ].join('') : '<span class="mwi-pill">오프라인</span>';
     this.disconnect();
     this.el.innerHTML = `
-      <header class="mwi-hero" style="--tone: ${channelTone(this.channelId)}">
+      <header class="mwi-hero mo-enter" style="--tone: ${channelTone(this.channelId)}">
         <div class="mwi-avatar${live ? ' live' : ''}">${avatarImg('avatar-lg')}${live ? '<b class="mwi-live-tag">LIVE</b>' : ''}</div>
         <div class="mwi-id">
           <div class="mwi-name">
             <h2 class="ellipsis" title="${esc(c.channelName)}">${esc(c.channelName)}</h2>
             ${verifiedBadge(c, 'mwi-vb')}
-            <span class="mwi-followers">팔로워 <b>${esc(compactCount(c.followerCount || 0))}</b></span>
+            <span class="mwi-followers">팔로워 <b data-mo-count>${esc(compactCount(c.followerCount || 0))}</b></span>
           </div>
           ${live ? `<p class="mwi-title" title="${esc(live.liveTitle || '')}">${esc(live.liveTitle || '')}</p>` : ''}
           <div class="mwi-meta">${meta}</div>
@@ -175,6 +177,9 @@ export class WatchInfoPanel {
       </nav>
       <div class="mwi-body" id="mwi-panel" role="tabpanel"></div>`;
     this.watchStuck();
+    const hero = this.el.querySelector('.mwi-hero');
+    watchPulse(hero); // LIVE 점 맥동 — 화면 밖이면 멈춘다
+    countUpIn(hero);
     this.renderTab();
   }
 
@@ -195,6 +200,7 @@ export class WatchInfoPanel {
   selectTab(id, focus = false) {
     if (!TABS.some(([t]) => t === id)) return;
     const changed = id !== this.tab;
+    const prev = this.tab;
     this.tab = id;
     for (const b of this.el.querySelectorAll('[data-mwi-tab]')) {
       const on = b.dataset.mwiTab === id;
@@ -204,6 +210,9 @@ export class WatchInfoPanel {
       if (on && focus) b.focus();
     }
     if (!changed) return;
+    const ids = TABS.map(([t]) => t);
+    const dir = Math.sign(ids.indexOf(id) - ids.indexOf(prev));
+    this.el.querySelector('.mwi-hero')?.classList.remove('mo-enter'); // 첫 등장은 끝났다 — 탭 내용은 지연 없이 바로 떠오른다
     // 이미 탭 막대를 지나왔으면 새 내용이 막대 바로 밑에서 시작되게 올린다
     const bar = this.el.querySelector('.mwi-tabbar');
     const sc = this.scroller;
@@ -212,6 +221,7 @@ export class WatchInfoPanel {
       sc.scrollTo({ top, behavior: 'smooth' });
     }
     this.renderTab();
+    tabSwap(this.el.querySelector('.mwi-body'), dir); // 가는 쪽에서 내용이 들어온다
   }
 
   onTabKey(e) {
@@ -230,6 +240,7 @@ export class WatchInfoPanel {
     if (!box || !this.detail) return;
     if (this.tab === 'info') {
       box.innerHTML = this.infoHtml();
+      countUpIn(box, { delay: 260 });
       return;
     }
     const kind = this.tab;
@@ -311,15 +322,15 @@ export class WatchInfoPanel {
     const { channel: c, live } = this.detail;
     const duration = live ? liveDuration(live.openDate) : '';
     const tiles = [
-      [ICON.users, '팔로워', compactCount(c.followerCount || 0)],
-      live && [ICON.eye, '지금 시청', compactCount(live.viewerCount || 0)],
-      live && live.accumulateCount > 0 && [ICON.chart, '누적 시청', compactCount(live.accumulateCount)],
-      duration && [ICON.clock, '방송 시간', duration],
+      [ICON.users, '팔로워', compactCount(c.followerCount || 0), true],
+      live && [ICON.eye, '지금 시청', compactCount(live.viewerCount || 0), true],
+      live && live.accumulateCount > 0 && [ICON.chart, '누적 시청', compactCount(live.accumulateCount), true],
+      duration && [ICON.clock, '방송 시간', duration, false],
     ].filter(Boolean);
     const tags = live ? (live.tags || []).filter(Boolean).slice(0, 12) : [];
     const desc = c.channelDescription;
     return `
-      <div class="mwi-tiles">${tiles.map(([icon, k, v]) => `<div class="mwi-tile"><span class="mwi-tile-icon" aria-hidden="true">${icon}</span><span class="mwi-tile-text"><small>${esc(k)}</small><strong>${esc(v)}</strong></span></div>`).join('')}</div>
+      <div class="mwi-tiles">${tiles.map(([icon, k, v, count]) => `<div class="mwi-tile"><span class="mwi-tile-icon" aria-hidden="true">${icon}</span><span class="mwi-tile-text"><small>${esc(k)}</small><strong${count ? ' data-mo-count' : ''}>${esc(v)}</strong></span></div>`).join('')}</div>
       <section class="mwi-card">
         <h3>채널 소개</h3>
         <p class="mwi-desc${desc ? '' : ' empty'}">${desc ? linkifyPost(desc) : '아직 채널 소개가 없습니다'}</p>

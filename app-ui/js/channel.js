@@ -7,6 +7,7 @@ import { previewAttr } from './hover-preview.js';
 import { verifiedBadge } from './verified-badge.js';
 import { refreshVeiled } from './refresh-veil.js';
 import { syncTabs, bindTabKeys } from './a11y.js';
+import { bindLiveMotion, countUpIn, tabSwap, watchPulse, unwatchPulse } from './live-motion.js';
 
 const ICON_STAR = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></svg>';
 const ICON_STAR_LINE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></svg>';
@@ -90,6 +91,10 @@ export class ChannelPage {
     this.clipCursor = null; // 클립 다음 쪽 커서(앞 응답의 nextCursor)
     this.clipSeen = new Set(); // 받은 clipUID — 쪽이 겹쳐도 같은 카드를 두 번 붙이지 않게
     this.body.addEventListener('click', (e) => this.onClick(e));
+    // 카드 기울기·빛 번짐, 배너 마우스 패럴랙스(live-motion.js) — 위임이라 다시 그려도 그대로
+    bindLiveMotion(this.body, { hero: '.channel-hero' });
+    this.enterNext = false; // 다음 render 에 등장 모션을 걸까 — 화면에 들어올 때만(즐겨찾기로 다시 그릴 때는 X)
+    this.favPop = false;
   }
 
   async show(params = {}) {
@@ -98,6 +103,7 @@ export class ChannelPage {
     this.channelId = params.channelId;
     if (changed) this.tab = params.tab || 'info';
     const seq = ++this.seq;
+    this.enterNext = !params.refresh;
     if (!(params.refresh && !changed && refreshVeiled(this.root))) this.body.innerHTML = loadingState();
     try {
       const detail = await api.channelDetail(this.channelId);
@@ -115,9 +121,14 @@ export class ChannelPage {
     const c = d.channel;
     const avatar = safeUrl(c.channelImageUrl);
     const live = d.live;
+    const enter = this.enterNext;
+    this.enterNext = false;
+    const pop = this.favPop;
+    this.favPop = false;
+    unwatchPulse(this.body.querySelector('.channel-hero'));
     this.body.innerHTML = `
       <button class="back-btn" data-ch="back">${ICON_BACK}<span>뒤로</span></button>
-      <header class="channel-hero" style="--tone: ${channelTone(this.channelId)}">
+      <header class="channel-hero${enter ? ' mo-enter' : ''}" style="--tone: ${channelTone(this.channelId)}">
         <div class="channel-hero-bg">${avatar ? `<img decoding="async" src="${esc(imageSrc(avatar, 'avatar-lg'))}" alt="" referrerpolicy="no-referrer">` : ''}</div>
         <div class="channel-hero-main">
           <div class="channel-avatar${live ? ' live' : ''}">
@@ -126,12 +137,12 @@ export class ChannelPage {
           </div>
           <div class="channel-id">
             <h1>${esc(c.channelName)}${verifiedBadge(c, 'lg')}</h1>
-            <p>팔로워 ${esc(compactCount(c.followerCount || 0))}명${live ? ` · <b>${esc(live.viewerCountText)}명 시청 중</b>` : ''}</p>
+            <p>팔로워 <span class="mo-num" data-mo-count>${esc(compactCount(c.followerCount || 0))}</span>명${live ? ` · <b><span class="mo-num" data-mo-count>${esc(live.viewerCountText)}</span>명 시청 중</b>` : ''}</p>
           </div>
           <div class="grow"></div>
           <div class="channel-actions">
             ${live ? '<button class="btn primary lg" data-ch="play">▶ 라이브 보기</button><button class="btn" data-ch="multi">멀티라이브에 추가</button>' : ''}
-            <button class="icon-btn round fav${d.isFavorite ? ' on' : ''}" data-ch="favorite" title="${d.isFavorite ? '즐겨찾기 해제' : '즐겨찾기'}">${d.isFavorite ? ICON_STAR : ICON_STAR_LINE}</button>
+            <button class="icon-btn round fav${d.isFavorite ? ' on' : ''}${pop ? ' mo-pop' : ''}" data-ch="favorite" title="${d.isFavorite ? '즐겨찾기 해제' : '즐겨찾기'}">${d.isFavorite ? ICON_STAR : ICON_STAR_LINE}</button>
             <button class="icon-btn round" data-ch="memo" title="메모">${ICON_NOTE}</button>
             <button class="icon-btn round" data-ch="notify" title="이 채널 알림 설정">🔔</button>
             <button class="icon-btn round" data-ch="external" title="치지직에서 열기">${ICON_EXT}</button>
@@ -142,7 +153,10 @@ export class ChannelPage {
       <div class="segmented page-tabs channel-tabs" role="tablist" aria-label="채널">
         ${[['info', '정보'], ['vod', '다시보기'], ['clip', '클립']].map(([id, label]) => `<button class="seg" data-tab="${id}" role="tab">${label}</button>`).join('')}
       </div>
-      <div class="channel-tab-body"></div>`;
+      <div class="channel-tab-body${enter ? ' mo-enter' : ''}"></div>`;
+    const hero = this.body.querySelector('.channel-hero');
+    watchPulse(hero); // LIVE 맥동 — 스크롤로 화면 밖이면 멈춘다
+    if (enter) countUpIn(hero);
     const tabs = this.body.querySelector('.channel-tabs');
     syncTabs(tabs, this.tab, this.body.querySelector('.channel-tab-body'), 'channel');
     bindTabKeys(tabs);
@@ -202,9 +216,15 @@ export class ChannelPage {
   async onClick(e) {
     const tab = e.target.closest('[data-tab]');
     if (tab) {
+      const order = ['info', 'vod', 'clip'];
+      const dir = Math.sign(order.indexOf(tab.dataset.tab) - order.indexOf(this.tab));
       this.tab = tab.dataset.tab;
-      syncTabs(tab.closest('[role="tablist"]'), this.tab, this.body.querySelector('.channel-tab-body'), 'channel');
+      const box = this.body.querySelector('.channel-tab-body');
+      syncTabs(tab.closest('[role="tablist"]'), this.tab, box, 'channel');
+      box.classList.add('mo-enter'); // 새 탭의 카드·묶음은 차례로 떠오른다
+      this.body.querySelector('.channel-hero')?.classList.remove('mo-enter'); // 머리 등장은 끝났다 — 내용 지연을 걷는다
       this.renderTab();
+      tabSwap(box, dir);
       return;
     }
     const vod = e.target.closest('[data-vod-no]');
@@ -230,6 +250,7 @@ export class ChannelPage {
         try {
           await api.favoriteSet(this.channelId, next, c.channelName, c.channelImageUrl || null);
           this.detail.isFavorite = next;
+          this.favPop = next; // 켜면 별이 톡 튄다
           toast(next ? '즐겨찾기에 추가했습니다' : '즐겨찾기에서 뺐습니다', 1500);
           this.render();
         } catch (er) { toast(er.message); }

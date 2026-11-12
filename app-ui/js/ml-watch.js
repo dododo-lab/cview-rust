@@ -109,6 +109,7 @@ export class WatchTools {
       this.loadInfo(id);
     }
     this.infoPanel.show(id);
+    if (s) this.infoPanel.syncViewers(s.viewerCountText); // 시청자 수가 바뀌면 정보란 숫자가 굴러 바뀐다
     // 위 정보 줄의 인증·팔로워·카테고리 — 지금 무대 패인에만
     for (const p of this.page.panes.values()) {
       const meta = p.el.querySelector('.ml-watch-meta');
