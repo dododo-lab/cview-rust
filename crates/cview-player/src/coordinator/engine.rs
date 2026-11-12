@@ -60,6 +60,19 @@ pub trait HlsEngineControl: Send + Sync {
     fn measured_segment_duration(&self) -> f64 {
         0.0
     }
+    /// 실측 LL 파트 길이(초). LL-HLS 로 파트를 받지 않는 세션·미측정은 0.
+    fn measured_part_duration(&self) -> f64 {
+        0.0
+    }
+    /// 전방 버퍼가 차는 단위(초) — 구조적 지연 하한의 입력. 파트를 받으면 파트, 아니면 세그먼트.
+    fn structural_buffer_unit_seconds(&self) -> f64 {
+        let part = self.measured_part_duration();
+        if part > 0.05 {
+            part
+        } else {
+            self.measured_segment_duration()
+        }
+    }
     /// hls.js 실측 버퍼 비율 0~1.
     fn buffer_health(&self) -> f64 {
         1.0
@@ -78,9 +91,6 @@ pub trait HlsEngineControl: Send + Sync {
     }
     fn match_web_v2_display_sample(&self) -> Option<MatchWebV2DisplaySample> {
         None
-    }
-    fn measured_part_duration(&self) -> f64 {
-        0.0
     }
     fn set_match_web_v2_targets(&self, _hls: f64, _ingest: f64, _generation: u64) {}
 

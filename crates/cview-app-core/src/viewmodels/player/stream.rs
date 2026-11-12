@@ -78,7 +78,7 @@ impl PlayerViewModel {
         } else {
             req.player_settings
                 .as_ref()
-                .map_or(LowLatencyConfiguration::WEB_PARITY_HLSJS, |p| {
+                .map_or(LowLatencyConfiguration::WEB_MATCH_HLSJS, |p| {
                     LatencyPresetPairing::pairing(Some(p)).configuration
                 })
         };

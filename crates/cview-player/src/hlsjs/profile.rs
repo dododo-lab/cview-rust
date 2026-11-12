@@ -14,7 +14,7 @@ pub enum HlsJsStreamingProfile {
     LowLatency,
     /// 웹 기본 동작 근사 (hold-back 6s, 버퍼 30/60s).
     Mirror,
-    /// chzzk 웹 재생 위치 미러 (hold-back 3.0s).
+    /// chzzk 웹 재생 위치 미러 — LL-HLS, 목표 2.0s(웹 `liveSyncDuration`).
     WebParity,
 }
 
@@ -34,7 +34,7 @@ impl HlsJsStreamingProfile {
         match self {
             Self::UltraLow => 4.0,
             Self::LowLatency | Self::Mirror => 6.0,
-            Self::WebParity => 3.0,
+            Self::WebParity => 2.0,
         }
     }
 

@@ -336,9 +336,11 @@ impl LatencyPreset {
     /// ⚠ `LowLatencyController.Configuration` 과 **쌍으로** 검증된다. 한쪽만 바꾸지 말 것.
     pub fn values(self) -> LatencyPresetValues {
         let (target, max, min, max_rate, min_rate, catch_up, slow_down, kp, ki, kd) = match self {
-            Self::MatchWeb | Self::Custom => {
-                (3.0, 8.0, 1.5, 1.03, 0.97, 0.55, 0.55, 0.35, 0.03, 0.02)
-            }
+            // [웹 지연 맞춤 2026-11-12] 치지직 웹 플레이어의 liveSyncDuration 2초(LL 끝 기준). 배속은 컨트롤러가
+            // 아니라 웹과 같은 전방 버퍼 규칙이 맡는다(`WEB_MATCH_HLSJS`, buffer_paced) — PID 값은 "직접 조정"의 시작값.
+            Self::MatchWeb => (2.0, 12.0, 1.0, 1.03, 0.97, 0.55, 0.55, 0.35, 0.03, 0.02),
+            // 직접 조정은 종전 웹 패리티 PID 값에서 시작한다.
+            Self::Custom => (3.0, 8.0, 1.5, 1.03, 0.97, 0.55, 0.55, 0.35, 0.03, 0.02),
             Self::WebSync => (6.0, 12.0, 3.0, 1.08, 0.93, 1.0, 0.8, 0.5, 0.05, 0.03),
             Self::Standard => (3.0, 8.0, 1.0, 1.15, 0.90, 1.2, 0.5, 0.8, 0.12, 0.06),
             Self::UltraLow => (1.5, 8.0, 0.5, 1.20, 0.85, 1.0, 0.3, 1.0, 0.15, 0.08),

@@ -75,7 +75,7 @@ mod tests {
         );
         assert_eq!(
             HlsJsStreamingProfile::WebParity.target_live_latency_seconds(),
-            3.0
+            2.0
         );
     }
 }

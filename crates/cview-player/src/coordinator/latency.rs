@@ -68,6 +68,9 @@ impl StreamCoordinator {
             || self.inner.low_latency.is_none()
             || managed_active
             || self.match_web_v2_engine_active()
+            // 웹식 세션은 모든 패인이 웹과 같은 자리(목표 2초)에서 같은 버퍼 규칙으로 돈다 — 비선택 패인만
+            // 10초 넘게 뒤에 두면 패인끼리 장면이 어긋난다.
+            || config.low_latency_config.buffer_paced
         {
             return 0.0;
         }
@@ -85,6 +88,11 @@ impl StreamCoordinator {
             return;
         };
         if self.match_web_v2_engine_active() {
+            return;
+        }
+        // 웹식 세션은 메인 패인도 다른 패인·웹과 같은 자리에 둔다. 대역폭 경쟁으로 버퍼가 마르면 웹 규칙대로
+        // 그 자리에서 기다렸다가 버퍼가 4초를 넘을 때 1.03배로 돌아온다.
+        if self.inner.config.low_latency_config.buffer_paced {
             return;
         }
         let margin = if margin.is_finite() {
@@ -361,12 +369,13 @@ impl StreamCoordinator {
                     }
                 })
             },
-            // 실측 세그먼트 길이를 목표 지연의 하한으로 준다.
+            // 실측 세그먼트 길이를 목표 지연의 하한으로 준다. LL-HLS 로 파트를 받는 세션은 버퍼가 파트 단위로
+            // 차므로 파트 길이를 쓴다(4.17초 세그먼트 채널에서 하한이 5.17초로 올라 웹보다 3초 넘게 뒤처지던 원인).
             segment_duration_provider: Some({
                 let e = Arc::downgrade(&engine);
                 Arc::new(move || {
                     e.upgrade()
-                        .and_then(|e| e.hls().map(|h| h.measured_segment_duration()))
+                        .and_then(|e| e.hls().map(|h| h.structural_buffer_unit_seconds()))
                         .unwrap_or(0.0)
                 })
             }),
@@ -409,12 +418,14 @@ impl StreamCoordinator {
         if !self.low_latency_command_is_current(generation, engine) {
             return;
         }
-        // 측정 전·JS 허용 폭 안에서는 스냅하지 않는다.
-        if latency_snap::should_snap_on_sync_start(
-            hls.live_latency_seconds(),
-            hls.measured_segment_duration(),
-            target,
-        ) {
+        // 측정 전·JS 허용 폭 안에서는 스냅하지 않는다. 웹식 세션은 웹처럼 시작한 자리를 지킨다.
+        if !controller.current_configuration().buffer_paced
+            && latency_snap::should_snap_on_sync_start(
+                hls.live_latency_seconds(),
+                hls.measured_segment_duration(),
+                target,
+            )
+        {
             tracing::info!(
                 "HLS.js initial seek-to-target: latency={:.2}s target={target:.2}s",
                 hls.live_latency_seconds()

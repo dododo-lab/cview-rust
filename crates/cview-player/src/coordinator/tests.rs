@@ -1643,6 +1643,32 @@ async fn unselected_pane_gets_stability_target_and_selection_owns_latency() {
     assert!(!c.low_latency_controller().unwrap().has_sync_task());
 }
 
+/// 웹식(buffer_paced) 멀티라이브: 비선택 패인도 안정성 목표를 받지 않고, 메인 패인 여유도 붙지 않는다 —
+/// 모든 패인이 웹과 같은 자리(프로파일 목표 2초)에 선다.
+#[tokio::test]
+async fn web_match_panes_share_one_target() {
+    let config = Configuration {
+        low_latency_config: crate::LowLatencyConfiguration::WEB_MATCH_HLSJS,
+        ..managed_config()
+    };
+    let c = coordinator_with(config, Arc::new(MockFetcher::default()));
+    let engine = MockEngine::hls();
+    c.set_player_engine(engine.shared()).await;
+    assert_eq!(c.idle_latency_target_seconds(), 0.0);
+    assert_eq!(
+        engine.s().controller_target,
+        0.0,
+        "비선택 패인도 프로파일 목표"
+    );
+    let before = c.low_latency_controller().unwrap().current_configuration();
+    c.set_target_latency_margin(1.5);
+    assert_eq!(
+        c.low_latency_controller().unwrap().current_configuration(),
+        before,
+        "메인 패인 여유 없음"
+    );
+}
+
 #[tokio::test]
 async fn automatic_mode_has_no_idle_target() {
     let c = coordinator(true);

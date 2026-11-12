@@ -60,6 +60,8 @@ pub struct EngineSnapshot {
     pub hidden: bool,
     /// 실측 프래그먼트 길이(초). 0 이면 미측정.
     pub segment_duration: f64,
+    /// 실측 LL 파트 길이(초). LL 로 파트를 받지 않으면 0.
+    pub part_duration: f64,
     /// 이번 재생에서 metrics 를 받았는가.
     pub has_metrics: bool,
     /// 재생 위치 앞 버퍼(초).
@@ -104,6 +106,7 @@ impl EngineSnapshot {
                     .then_some((s.seekable_start, s.seekable_end));
                 self.hidden = s.hidden;
                 self.segment_duration = s.frag_duration_seconds;
+                self.part_duration = s.part_duration_seconds;
                 self.buffer_ahead_seconds = s.buffer_ahead_seconds;
                 self.bitrate = s.bitrate;
                 self.transfers = s.network_metrics.transfers.clone();
@@ -497,6 +500,10 @@ impl HlsEngineControl for WebViewHlsEngine {
         self.snap().segment_duration
     }
 
+    fn measured_part_duration(&self) -> f64 {
+        self.snap().part_duration
+    }
+
     fn buffer_health(&self) -> f64 {
         self.snap().buffer_health
     }
@@ -645,7 +652,7 @@ mod tests {
         assert!(sent.contains(&"setLockTopLevel(true)".to_string()));
         assert!(sent.iter().any(|s| s
             == r#"loadSource("http://127.0.0.1:1/b.m3u8", "webParity", false, true, true, true)"#));
-        assert_eq!(e.effective_live_target_latency_seconds(), 3.0);
+        assert_eq!(e.effective_live_target_latency_seconds(), 2.0);
     }
 
     #[tokio::test]

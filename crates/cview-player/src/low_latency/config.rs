@@ -18,6 +18,11 @@ pub struct LowLatencyConfiguration {
     pub pid_kd: f64,
     /// `playbackRate` 재적용 최소 Δ.
     pub rate_significance_threshold: f64,
+    /// 치지직 웹처럼 **전방 버퍼 기준**으로 따라잡는 세션인가. 켜면 이 컨트롤러는 배속을 바꾸지 않고
+    /// (따라잡기는 플레이어 페이지의 웹 규칙이 맡는다) 시작 스냅·초기 seek 도 하지 않는다 — 웹은 시작한
+    /// 자리에서 그대로 재생한다. 목표 지연은 시작·복귀·리싱크 위치로만 쓰고, `max_latency` 를 넘는 큰
+    /// 어긋남만 seek 로 되돌린다.
+    pub buffer_paced: bool,
 }
 
 impl Default for LowLatencyConfiguration {
@@ -35,6 +40,7 @@ impl Default for LowLatencyConfiguration {
             pid_ki: 0.1,
             pid_kd: 0.05,
             rate_significance_threshold: latency_defaults::RATE_SIGNIFICANCE_THRESHOLD,
+            buffer_paced: false,
         }
     }
 }
@@ -65,6 +71,7 @@ impl LowLatencyConfiguration {
             pid_ki: ki,
             pid_kd: kd,
             rate_significance_threshold: latency_defaults::RATE_SIGNIFICANCE_THRESHOLD,
+            buffer_paced: false,
         }
     }
 
@@ -82,6 +89,16 @@ impl LowLatencyConfiguration {
     /// hls.js 전용 웹 패리티 (3.0s, `PROFILES.webParity.liveSyncDuration` 과 일치).
     pub const WEB_PARITY_HLSJS: Self =
         Self::preset(3.0, 8.0, 1.5, 1.03, 0.97, 0.55, 0.55, 0.35, 0.03, 0.02);
+
+    /// 치지직 웹과 같은 지점 — 기본 프리셋 "웹과 같게". 웹 플레이어(hls.js LL-HLS)의 `liveSyncDuration` 2초를
+    /// LL 재생목록 끝 기준 목표로 쓰고, 배속은 바꾸지 않는다(`buffer_paced`). 웹은 전방 버퍼가 4초를 넘으면
+    /// 1.03배, 2초 이하로 내려오면 1배로 돌아가며 그 규칙은 `player.html` 의 `webCatchupTick` 이 똑같이 한다.
+    /// `max_latency` 12초는 웹의 라이브 구간(20초) 안쪽 안전망 — 그보다 크게 밀리면 목표 자리로 seek 한다.
+    pub const WEB_MATCH_HLSJS: Self = Self {
+        buffer_paced: true,
+        // PID 값은 이 세션에서 쓰지 않는다 — "직접 조정"으로 옮겨 갈 때 슬라이더 시작값이 될 뿐이다.
+        ..Self::preset(2.0, 12.0, 1.0, 1.03, 0.97, 0.55, 0.55, 0.35, 0.03, 0.02)
+    };
 
     /// matchWeb v2 — hls.js 가장자리 목표(H_base). PID 는 돌지 않는다.
     pub const MATCH_WEB_V2_HLSJS: Self =
@@ -121,6 +138,21 @@ mod tests {
         assert_eq!(c.catch_up_threshold, 0.55);
         assert_eq!(c.slow_down_threshold, 0.55);
         assert_eq!(c.rate_significance_threshold, 0.015);
+    }
+
+    #[test]
+    fn web_match_is_buffer_paced_with_web_target() {
+        let presets = [LowLatencyConfiguration::WEB_MATCH_HLSJS];
+        let c = presets[0];
+        assert!(presets.iter().all(|p| p.buffer_paced));
+        assert_eq!(c.target_latency, 2.0, "웹 liveSyncDuration");
+        assert_eq!(c.max_latency, 12.0);
+        let others = [
+            LowLatencyConfiguration::WEB_PARITY_HLSJS,
+            LowLatencyConfiguration::STANDARD,
+            LowLatencyConfiguration::default(),
+        ];
+        assert!(others.iter().all(|o| !o.buffer_paced));
     }
 
     #[test]

@@ -65,10 +65,14 @@ function playerStats() {
     let latency = null;
     let level = null;
     let target = null;
+    let wall = null;
     try {
       latency = w.eval('typeof hls !== "undefined" && hls && hls.latency != null ? hls.latency : null');
       level = w.eval('typeof hls !== "undefined" && hls ? hls.currentLevel : null');
       // 지금 겨누는 목표 지연 — 컨트롤러 주입값(백오프·메인 여유 포함), 없으면 hls.js 목표
+      // 벽시계 지연 — 지금 보이는 장면의 EXT-X-PROGRAM-DATE-TIME 이 몇 초 전인가. hls.latency 는 hls.js 가
+      // 아는 재생목록 끝(LL 파트 포함 여부에 따라 다르다) 기준이라 웹(LL-HLS)과 바로 비교할 수 없다.
+      wall = w.eval('typeof hls !== "undefined" && hls && hls.playingDate ? (Date.now() - hls.playingDate.getTime()) / 1000 : null');
       target = w.eval('typeof _controllerTarget !== "undefined" && _controllerTarget > 0 ? _controllerTarget : (typeof hls !== "undefined" && hls ? hls.targetLatency : null)');
     } catch { /* 플레이어 준비 전 */ }
     const q = v.getVideoPlaybackQuality ? v.getVideoPlaybackQuality() : null;
@@ -83,6 +87,8 @@ function playerStats() {
       level,
       buffer_s: round(buffer, 2),
       latency_s: round(latency, 2),
+      wall_s: round(wall, 2),
+      rate: round(v.playbackRate, 3),
       dropped: q ? q.droppedVideoFrames : null,
       frames: q ? q.totalVideoFrames : null,
       stalls: s.count,
