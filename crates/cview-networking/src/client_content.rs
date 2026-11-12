@@ -10,9 +10,9 @@ use cview_core::models::chat::{DonationRankResponse, EmoticonDeploy, EmoticonPac
 use cview_core::models::clip::{ClipInkeyContent, NaverVodPlayResponse};
 use cview_core::models::community::ChannelPostsContent;
 use cview_core::models::{
-    ChannelFollowStatus, ChannelInfo, ChannelSearchItem, ChannelViewerInfo, ClipDetail, ClipInfo,
-    ClipListPage, LiveInfo, LiveSearchItem, SearchResult, TimeMachinePlaybackInfo, VideoSearchItem,
-    VodDetail, VodInfo,
+    ChannelAvatar, ChannelFollowStatus, ChannelInfo, ChannelSearchItem, ChannelViewerInfo,
+    ClipDetail, ClipInfo, ClipListPage, LiveInfo, LiveSearchItem, SearchResult,
+    TimeMachinePlaybackInfo, VideoSearchItem, VodDetail, VodInfo,
 };
 use cview_core::protocols::{HttpCookie, HttpMethod, QueryItem};
 use url::Url;
@@ -42,6 +42,14 @@ impl ChzzkApiClient {
     /// 채널 정보 조회.
     pub async fn channel_info(&self, channel_id: &str) -> Result<ChannelInfo, ApiError> {
         self.request(&ChzzkEndpoint::ChannelInfo {
+            channel_id: channel_id.into(),
+        })
+        .await
+    }
+
+    /// 채팅 아바타 — 이 채널(시청자의 userIdHash)의 사진 주소. 응답 캐시를 쓰지 않는다.
+    pub async fn channel_avatar(&self, channel_id: &str) -> Result<ChannelAvatar, ApiError> {
+        self.request(&ChzzkEndpoint::ChannelAvatar {
             channel_id: channel_id.into(),
         })
         .await

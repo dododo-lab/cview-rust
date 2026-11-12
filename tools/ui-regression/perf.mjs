@@ -129,7 +129,8 @@ await check('P04 chat burst: trims overflow in batches and keeps frames', async 
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
   const r = await page.evaluate(async () => {
     let n = 0;
-    const mk = () => ({ id: `syn-${++n}`, kind: 'chat', nickname: `테스트${n % 50}`, content: `합성 메시지 ${n} 가나다라마바사 ㅋㅋㅋㅋ`, emojis: {}, role: 'common_user', badges: [], time: Date.now() });
+    // 사용자 ID 를 넣어 아바타(아이콘·사진 찾기, chat-avatar.js)도 함께 잰다
+    const mk = () => ({ id: `syn-${++n}`, kind: 'chat', userId: `synuser${n % 300}`, nickname: `테스트${n % 50}`, content: `합성 메시지 ${n} 가나다라마바사 ㅋㅋㅋㅋ`, emojis: {}, role: 'common_user', badges: [], time: Date.now() });
     const d = []; let last = performance.now(); let run = true;
     const tick = (t) => { d.push(t - last); last = t; if (run) requestAnimationFrame(tick); };
     requestAnimationFrame(tick);

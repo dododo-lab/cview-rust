@@ -170,6 +170,46 @@ fn chat_message_dto() {
     assert_eq!(dto.role, "manager");
     let notice = ChatMessageDto::from_message(&chat_message(), true);
     assert_eq!(notice.kind, "notice");
+    assert_eq!(dto.profile_image_url, None);
+}
+
+#[test]
+fn chat_message_dto_carries_profile_image_unless_hidden() {
+    let with_image = |url: &str| {
+        let mut m = chat_message();
+        m.profile.as_mut().unwrap().profile_image_url = Some(url.into());
+        m
+    };
+    let dto =
+        ChatMessageDto::from_message(&with_image("https://nng-phinf.pstatic.net/a.png"), false);
+    assert_eq!(
+        dto.profile_image_url.as_deref(),
+        Some("https://nng-phinf.pstatic.net/a.png")
+    );
+    let json = serde_json::to_value(&dto).unwrap();
+    assert_eq!(
+        json["profileImageUrl"],
+        "https://nng-phinf.pstatic.net/a.png"
+    );
+    // https 가 아니면 싣지 않는다
+    let plain = ChatMessageDto::from_message(&with_image("http://x/a.png"), false);
+    assert_eq!(plain.profile_image_url, None);
+    // 가려진 메시지·익명 후원은 사진을 싣지 않는다
+    let mut blinded = with_image("https://x/a.png");
+    blinded.is_blinded = true;
+    assert_eq!(
+        ChatMessageDto::from_message(&blinded, false).profile_image_url,
+        None
+    );
+    let mut anon = with_image("https://x/a.png");
+    anon.extras = Some(cview_core::models::chat::ChatExtras {
+        is_anonymous: Some(true),
+        ..Default::default()
+    });
+    assert_eq!(
+        ChatMessageDto::from_message(&anon, false).profile_image_url,
+        None
+    );
 }
 
 #[test]

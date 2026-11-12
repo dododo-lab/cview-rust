@@ -91,8 +91,16 @@ export function trimFront(list, max) {
   if (children.length <= max + Math.max(20, max >> 2)) return false;
   const range = document.createRange();
   range.setStartBefore(children[0]);
-  range.setEndAfter(children[children.length - max - 1]);
+  const cut = children.length - max;
+  range.setEndAfter(children[cut - 1]);
+  // 지울 줄의 아바타 사진은 떼어 낸 뒤 src 를 비워 디코드한 그림 메모리를 바로 놓아 준다(chat-avatar.js).
+  const photos = [];
+  for (let i = 0; i < cut; i++) {
+    const img = children[i].querySelector('img.av-photo');
+    if (img) photos.push(img);
+  }
   range.deleteContents();
+  for (const img of photos) img.removeAttribute('src');
   return true;
 }
 

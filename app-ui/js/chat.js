@@ -10,6 +10,7 @@ export { renderContent };
 import { DonationRanking, eventCardHtml, eventClasses, EVENT_ICONS } from './donations.js';
 import { installChatExtras } from './chat-extras.js';
 import { nickColorClass } from './nick-color.js';
+import { avatarHtml } from './chat-avatar.js';
 import { kbd } from './platform.js';
 import { chatFollower, trimFront } from './chat-follow.js';
 import { openUserPop, closeUserPop } from './chat-user-pop.js';
@@ -98,11 +99,10 @@ function lineHtml(m, prefs, grp = {}) {
   if (grp.cont) classes.push('cont');
   if (grp.next) classes.push('has-next');
   if (prefs.emoticonEnabled !== false && isEmoteOnly(m.content, m.emojis)) classes.push('emote-only');
-  const initial = esc(Array.from(m.nickname || '•')[0] || '•');
   const mentionTag = classes.includes('mention') ? '<span class="msg-mention">나를 언급</span>' : '';
-  // 아바타도 닉네임 해시색을 따른다(역할·내 메시지는 CSS 가 역할색으로).
-  const avatarTone = nickColorClass(m.nickname, m.role, isMe);
-  return `<div class="${classes.join(' ')}" ${data}><span class="chat-avatar${avatarTone}" aria-hidden="true">${initial}</span><span class="msg-main"><span class="msg-head"><span class="badges">${badges}</span>${nick}${mentionTag}</span><span class="msg-row">${text}${time}</span></span></div>`;
+  // 아바타 — 프로필 사진(찾으면) 또는 사용자 ID 로 정해지는 랜덤 아이콘(chat-avatar.js). 내 말은 CSS 가 감춘다.
+  const avatar = avatarHtml(m, prefs.chatAvatars || 'photo');
+  return `<div class="${classes.join(' ')}" ${data}>${avatar}<span class="msg-main"><span class="msg-head"><span class="badges">${badges}</span>${nick}${mentionTag}</span><span class="msg-row">${text}${time}</span></span></div>`;
 }
 
 const STATE_LABEL = {

@@ -7,6 +7,7 @@
 pub mod ads;
 pub mod auth;
 pub mod chat;
+pub mod chat_avatar;
 pub mod content;
 pub mod download;
 pub mod insights;

@@ -164,6 +164,8 @@ const CHAT_TOGGLES = [
   ['showDonationsOnly', '후원만 보기', '후원·구독 메시지만 보여 줍니다'],
 ];
 
+const CHAT_AVATAR_MODES = [['photo', '프로필 사진 + 아이콘'], ['icon', '아이콘만(사진을 찾지 않음)'], ['off', '숨김']];
+
 // 이 기기에만 두는 설정(localStorage).
 const LOCAL_GET = { streamAlerts: streamAlertsEnabled, thumbPreview: thumbPreviewEnabled };
 
@@ -363,6 +365,8 @@ export class SettingsPage {
         ${range('fontSize', '글자 크기', 11, 20, 1)}
         ${range('lineSpacing', '줄 간격', 0, 8, 1)}
         ${CHAT_TOGGLES.map(toggle).join('')}
+        <label class="setting" data-search="채팅 아바타 프로필 사진 아이콘"><span class="setting-label">아바타<small>프로필 사진이 없는 시청자는 사람마다 다른 동물·캐릭터 아이콘으로 보여 줍니다</small></span>
+          <select class="select" data-chat-str="chatAvatars">${CHAT_AVATAR_MODES.map(([v, l]) => `<option value="${v}" ${(p.chatAvatars || 'photo') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="setting" data-search="최대 표시 줄 수"><span class="setting-label">최대 표시 줄 수<small>오래된 메시지부터 지웁니다</small></span>
           <select class="select" data-chat="maxVisibleMessages">${[150, 300, 500, 1000].map((n) => `<option value="${n}" ${Number(p.maxVisibleMessages) === n ? 'selected' : ''}>${n}줄</option>`).join('')}</select></label>
       </section>

@@ -7,6 +7,8 @@ export const CHAT_DEFAULTS = Object.freeze({
   lineSpacing: 2,
   showTimestamp: true,
   showBadge: true,
+  // 채팅 아바타 — 'photo'(프로필 사진, 없으면 랜덤 아이콘) · 'icon'(랜덤 아이콘만, 사진을 찾지 않음) · 'off'(숨김)
+  chatAvatars: 'photo',
   highlightMentions: true,
   mentionNotify: true,
   nicknameColors: true,

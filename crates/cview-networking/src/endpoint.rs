@@ -34,6 +34,10 @@ pub enum ChzzkEndpoint {
     ChannelFollowStatus {
         channel_id: String,
     },
+    /// 채팅 아바타 — 채널 정보와 같은 경로에서 `channelImageUrl` 만 읽는다. 시청자가 많아 응답 캐시를 거치지 않는다.
+    ChannelAvatar {
+        channel_id: String,
+    },
     LiveDetail {
         channel_id: String,
     },
@@ -149,7 +153,9 @@ impl EndpointProtocol for ChzzkEndpoint {
     fn path(&self) -> String {
         use ChzzkEndpoint::*;
         match self {
-            ChannelInfo { channel_id } | ChannelFollowStatus { channel_id } => {
+            ChannelInfo { channel_id }
+            | ChannelFollowStatus { channel_id }
+            | ChannelAvatar { channel_id } => {
                 format!("/service/v1/channels/{channel_id}")
             }
             ChannelViewerInfo { channel_id } => {
@@ -308,6 +314,7 @@ impl EndpointProtocol for ChzzkEndpoint {
             ChannelInfo { .. } => "channelInfo",
             ChannelViewerInfo { .. } => "channelViewerInfo",
             ChannelFollowStatus { .. } => "channelFollowStatus",
+            ChannelAvatar { .. } => "channelAvatar",
             LiveDetail { .. } => "liveDetail",
             TimeMachinePlayback { .. } => "timeMachinePlayback",
             LiveStatus { .. } => "liveStatus",
@@ -354,6 +361,7 @@ impl EndpointProtocol for ChzzkEndpoint {
         match self {
             ChannelViewerInfo { .. }
             | ChannelFollowStatus { .. }
+            | ChannelAvatar { .. }
             | TimeMachinePlayback { .. }
             | LiveStatus { .. }
             | ChatAccessToken { .. } => CachePolicy::ReloadIgnoringCache,
@@ -546,6 +554,13 @@ mod tests {
             .cache_policy(),
             CachePolicy::ReturnCacheElseLoad { ttl: 300.0 }
         );
+        // 채팅 아바타는 시청자마다 한 번씩이라 응답 캐시(용량 제한)를 밀어내지 않게 거친다.
+        let avatar = ChzzkEndpoint::ChannelAvatar {
+            channel_id: "c".into(),
+        };
+        assert_eq!(avatar.cache_policy(), CachePolicy::ReloadIgnoringCache);
+        assert!(!avatar.requires_auth());
+        assert_eq!(avatar.path(), "/service/v1/channels/c");
         assert_eq!(
             ChzzkEndpoint::LiveStatus {
                 channel_id: "c".into()

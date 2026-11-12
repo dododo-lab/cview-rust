@@ -72,6 +72,26 @@ impl<'de> Deserialize<'de> for ChannelInfo {
     }
 }
 
+/// 채팅 아바타용 채널 사진 — 채널 정보 응답에서 `channelImageUrl` 만 읽는다.
+/// 치지직 채팅 메시지의 `profile.profileImageUrl` 은 늘 비어 와서(2026-11-12 실측) 채널(= userIdHash)에서 받는다.
+/// 채널 이름 같은 다른 값이 비어 있어도 디코딩이 실패하지 않게 따로 둔다.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelAvatar {
+    pub channel_image_url: Option<Url>,
+}
+
+impl<'de> Deserialize<'de> for ChannelAvatar {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let o = LenientObject::from_deserializer(d)?;
+        Ok(Self {
+            channel_image_url: o
+                .url("channelImageUrl")
+                .filter(|u| matches!(u.scheme(), "https" | "http")),
+        })
+    }
+}
+
 /// 로그인한 시청자 기준 채널 팔로우 상태 — 채널 정보 응답의 `personalData.following`.
 ///
 /// 비로그인이거나 응답에 `personalData` 가 없으면 `following` 이 `None`(모름)이다.
@@ -155,6 +175,27 @@ pub struct StreamerInfo {
 mod tests {
     //! `Tests/CViewCoreTests/ChannelInfoTests.swift` 포팅.
     use super::*;
+
+    #[test]
+    fn channel_avatar_reads_only_image() {
+        let a: ChannelAvatar = serde_json::from_str(
+            r#"{"channelId":"a","channelName":null,"channelImageUrl":"https://nng-phinf.pstatic.net/x/y.png"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            a.channel_image_url.map(|u| u.to_string()).as_deref(),
+            Some("https://nng-phinf.pstatic.net/x/y.png")
+        );
+        for raw in [
+            r#"{"channelImageUrl":""}"#,
+            r#"{"channelImageUrl":null}"#,
+            r#"{}"#,
+            r#"{"channelImageUrl":"javascript:alert(1)"}"#,
+        ] {
+            let a: ChannelAvatar = serde_json::from_str(raw).unwrap();
+            assert_eq!(a.channel_image_url, None, "{raw}");
+        }
+    }
 
     #[test]
     fn follow_status_from_personal_data() {

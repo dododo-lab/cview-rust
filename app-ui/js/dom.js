@@ -100,6 +100,7 @@ export function safeUrl(value) {
 // - live: 라이브 썸네일 image_720(1280×720, ~150KB) → image_405(720×405, ~60KB). 카드 칸은 약 330×185.
 // - hero: 홈 큰 슬라이드 — 720 그대로.
 // - avatar / avatar-lg: 네이버 이미지 원본(최대 1344² PNG) → ?type=f120_120_na(~24KB) / f240_240_na.
+// - avatar-sm: 채팅 아바타(34px) → ?type=f60_60_na(~7KB, 2026-11-12 실측 200 — f48·f64·f80 은 404).
 // - vod: 다시보기 썸네일(가로) 원본 1280~1920px(~75~120KB) → ?type=w640(640×360, ~50KB). 카드 칸은 약 330×185.
 // - clip: 클립 썸네일(세로 칸 약 170×300). nng-phinf 는 늘 1080×1920(250~360KB) → ?type=w640(640×1138, ~100~130KB).
 //   video-phinf 클립은 가로·세로가 섞여 있어(가로 원본을 줄이면 세로 칸에서 흐려진다) 그대로 둔다.
@@ -128,11 +129,11 @@ function sizedForBox(url, kind) {
     } catch { /* 그대로 */ }
     return url;
   }
-  if (kind === 'avatar' || kind === 'avatar-lg') {
+  if (kind === 'avatar' || kind === 'avatar-lg' || kind === 'avatar-sm') {
     try {
       const u = new URL(url);
       if (/phinf\.pstatic\.net$/i.test(u.host) && !u.searchParams.has('type')) {
-        u.searchParams.set('type', kind === 'avatar' ? 'f120_120_na' : 'f240_240_na');
+        u.searchParams.set('type', { avatar: 'f120_120_na', 'avatar-sm': 'f60_60_na' }[kind] || 'f240_240_na');
         return u.toString();
       }
     } catch { /* 그대로 */ }
