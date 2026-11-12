@@ -559,7 +559,10 @@ mod tests {
         for _ in 0..40 {
             c.process_latency(14.0);
         }
-        assert!(seeks.lock().unwrap().is_empty(), "라이브 구간(20초) 안에서는 당기지 않는다");
+        assert!(
+            seeks.lock().unwrap().is_empty(),
+            "라이브 구간(20초) 안에서는 당기지 않는다"
+        );
         // 안전망: max_latency(20초)를 넘으면 목표 자리로 되돌린다.
         for _ in 0..40 {
             c.process_latency(30.0);
