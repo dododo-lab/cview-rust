@@ -156,7 +156,7 @@ export class MultiLivePage {
               <button class="ml-menu-item danger" role="menuitem" data-ml="stop-all"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>모두 닫기</button>
             </div>
           </div>
-          <button class="btn primary ml-add" data-ml="add" title="채널 추가">${ICON_PLUS}<span>채널 추가</span></button>
+          <button class="btn primary ml-add" data-ml="add" title="채널 추가" aria-label="채널 추가">${ICON_PLUS}<span class="ml-add-label"><span class="ml-add-long">채널 </span>추가</span><span class="ml-add-full" aria-hidden="true" hidden></span></button>
         </div>
       </header>
       <div class="page-body ml-body">
@@ -524,7 +524,14 @@ export class MultiLivePage {
     for (const b of this.root.querySelectorAll('[data-ml="add"]')) {
       b.disabled = false;
       if (full) b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled');
-      if (b.classList.contains('ml-add') || b.classList.contains('ml-focus-add')) b.title = full ? this.fullMessage() : '채널 추가';
+      if (b.classList.contains('ml-add') || b.classList.contains('ml-focus-add')) {
+        b.title = full ? this.fullMessage() : '채널 추가';
+        // 화면 읽기 프로그램에도 왜 막혔는지 — 라이브 단독 보기는 개수 칩을 숨겨 이름에 담는다.
+        b.setAttribute('aria-label', full ? `채널 추가 — 가득 참 ${n}/${state.maxSessions}` : '채널 추가');
+      }
+      // 머리줄 단추 안의 "n/최대" 표시 — 가득 찼을 때만(라이브 단독 보기는 개수 칩이 없어 왜 막혔는지 단추에서 보인다).
+      const badge = b.querySelector('.ml-add-full');
+      if (badge) { badge.hidden = !full; badge.textContent = full ? `${n}/${state.maxSessions}` : ''; }
     }
     this.root.querySelector('[data-ml="stop-all"]').hidden = n === 0;
     this.root.querySelector('[data-ml="retry-all"]').hidden = n === 0;

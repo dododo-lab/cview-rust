@@ -100,6 +100,18 @@ const centerOffset = () => page.evaluate(() => {
   return Math.abs((pr.left + pr.right) / 2 - mid);
 });
 const shot = process.env.SHOT_DIR;
+// 머리줄 채널 추가 단추의 모양·이름 — 라벨·아이콘·가득 참 표시가 실제로 보이는지
+const addBtn = () => page.evaluate(() => {
+  const b = document.querySelector('.ml-toolbar .ml-add');
+  const shown = (el) => !!el && el.getClientRects().length > 0 && getComputedStyle(el).display !== 'none';
+  const cs = getComputedStyle(b);
+  return {
+    label: b.getAttribute('aria-label'), disabled: b.getAttribute('aria-disabled') === 'true', width: b.offsetWidth,
+    long: shown(b.querySelector('.ml-add-long')), short: shown(b.querySelector('.ml-add-label')),
+    badge: shown(b.querySelector('.ml-add-full')) ? b.querySelector('.ml-add-full').textContent : '',
+    borderStyle: cs.borderTopStyle, bg: cs.backgroundColor, cursor: cs.cursor,
+  };
+});
 
 const results = [];
 async function check(id, fn) {
@@ -180,6 +192,18 @@ await check('라이브 상한이 차면 가장 오래전에 둘러본 채널을 
   await play('p6'); // 가득 — p1(가장 오래된 둘러본 채널)을 뺀다
   await settle();
   assert.deepEqual(await chips(), ['p2', 'p3', 'p4', 'p5', 'p6*']);
+});
+
+await check('가득 차면 채널 추가 단추가 점선·흐린 모양으로 바뀌고 n/최대 와 이름으로 이유를 알린다', async () => {
+  await page.mouse.move(640, 600);
+  await settle();
+  const b = await addBtn();
+  assert.equal(b.disabled, true);
+  assert.equal(b.badge, '5/5');
+  assert.equal(b.borderStyle, 'dashed');
+  assert.equal(b.cursor, 'not-allowed');
+  assert.equal(b.label, '채널 추가 — 가득 참 5/5');
+  if (shot) await page.screenshot({ path: path.join(shot, 'add-full.png'), clip: { x: 0, y: 0, width: 1280, height: 70 } });
 });
 
 await check('칩은 4개만 보이고 휠로 한 칸씩 넘긴다, 지금 보는 칩은 창 안', async () => {
@@ -324,6 +348,47 @@ await check('보는 채널의 × 는 패인 닫기와 같은 길 — 남은 채�
   assert.deepEqual(v, { watch: 's-p4', ids: ['s-p4'], asWatch: true });
   const f = await page.evaluate(() => ({ ml: document.activeElement.dataset.ml, shown: document.activeElement.offsetParent !== null }));
   assert.deepEqual(f, { ml: 'add', shown: true }, '칩 줄이 숨으면 초점이 보이는 채널 추가 단추로 간다');
+});
+
+await check('채널 추가 단추: 넓으면 "채널 추가", 좁으면 "추가", 더 좁으면 + 만 — 이름은 늘 "채널 추가"', async () => {
+  await page.mouse.move(640, 600);
+  let b = await addBtn();
+  assert.deepEqual([b.disabled, b.badge, b.label, b.long, b.short], [false, '', '채널 추가', true, true]);
+  assert.equal(b.borderStyle, 'solid');
+  await page.setViewportSize({ width: 860, height: 800 });
+  await settle();
+  b = await addBtn();
+  assert.deepEqual([b.long, b.short, b.label], [false, true, '채널 추가'], '좁으면 "+ 추가"');
+  assert.ok(b.width > 40, `짧은 라벨이 보일 폭: ${b.width}`);
+  await page.setViewportSize({ width: 700, height: 800 });
+  await settle();
+  b = await addBtn();
+  assert.deepEqual([b.short, b.label], [false, '채널 추가'], '아이콘만이어도 이름은 남는다');
+  assert.ok(b.width >= 30, `누를 자리 30px 이상: ${b.width}`);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await settle();
+});
+
+await check('채널 추가 단추: 올리면 떠오르고 초점은 호버와 다른 테두리', async () => {
+  const add = page.locator('.ml-toolbar .ml-add');
+  const look = () => add.evaluate((b) => { const cs = getComputedStyle(b); return { translate: cs.translate, shadow: cs.boxShadow, outline: cs.outlineStyle }; });
+  await page.mouse.move(640, 600);
+  await page.waitForTimeout(250);
+  const rest = await look();
+  await add.hover();
+  await page.waitForTimeout(250);
+  const hover = await look();
+  assert.notEqual(hover.shadow, rest.shadow, '호버 그림자가 바뀐다');
+  assert.notEqual(hover.translate, rest.translate, '호버하면 떠오른다');
+  await page.mouse.move(640, 600);
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
+  await add.focus();
+  await page.waitForTimeout(250);
+  const focus = await look();
+  assert.equal(focus.outline, 'solid', '키보드 초점 테두리');
+  if (shot) await page.screenshot({ path: path.join(shot, 'add-focus.png'), clip: { x: 0, y: 0, width: 1280, height: 70 } });
+  await page.evaluate(() => document.activeElement.blur());
 });
 
 await browser.close();
