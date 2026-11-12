@@ -1,0 +1,130 @@
+diff --git a/src/config.ts b/src/config.ts
+index f8987a1..20531e7 100644
+--- a/src/config.ts
++++ b/src/config.ts
+@@ -272,6 +272,11 @@ export type StreamControllerConfig = {
+   maxBufferSize: number;
+   maxBufferHole: number;
+   maxFragLookUpTolerance: number;
++  /**
++   * CView 수정(0005): 저지연(파트) 로드에서, 버퍼 판정 여유(0.2초) 때문에 이미 "다 받음"으로 잡힌 세그먼트에 아직 받지 않은
++   * 파트가 남아 있으면 그 파트를 받는다. 끄면(기본) 업스트림과 같다.
++   */
++  loadUnbufferedTailParts?: boolean;
+   maxMaxBufferLength: number;
+   startFragPrefetch: boolean;
+   testBandwidth: boolean;
+@@ -484,6 +489,7 @@ export const hlsDefaultConfig: HlsConfig = {
+   nextAudioTrackBufferFlushForwardOffset: 0.25, // used by stream-controller
+   maxBufferSize: 60 * 1000 * 1000, // used by stream-controller
+   maxFragLookUpTolerance: 0.25, // used by stream-controller
++  loadUnbufferedTailParts: false, // CView 수정(0005): used by base-stream-controller, stream-controller
+   maxBufferHole: 0.1, // used by stream-controller and gap-controller
+   detectStallWithCurrentTimeMs: 1250, // used by gap-controller
+   highBufferWatchdogPeriod: 2, // used by gap-controller
+diff --git a/src/controller/base-stream-controller.ts b/src/controller/base-stream-controller.ts
+index 690b863..7baa6fd 100644
+--- a/src/controller/base-stream-controller.ts
++++ b/src/controller/base-stream-controller.ts
+@@ -1,3 +1,4 @@
++// CView 수정(0005): 버퍼 판정 여유 안쪽의 받지 않은 파트를 반복 로드로 보지 않는다(hasUnbufferedTailPart).
+ import { SOURCE_BUFFER_ERROR_NAME } from './buffer-controller';
+ import { ErrorActionFlags, NetworkErrorAction } from './error-controller';
+ import {
+@@ -77,6 +78,9 @@ import type { TimestampOffset } from '../utils/timescale-conversion';
+ type ResolveFragLoaded = (FragLoadedEndData) => void;
+ type RejectFragLoaded = (LoadError) => void;
+ 
++// CView 수정(0005): 버퍼 끝과 받은 끝의 차이를 반올림으로 볼 상한(fragment-tracker bufferPadding 과 같은 값).
++const LL_LOAD_POSITION_SLACK = 0.2;
++
+ export const State = {
+   STOPPED: 'STOPPED',
+   IDLE: 'IDLE',
+@@ -1651,7 +1655,8 @@ export default class BaseStreamController
+     }
+     const trackerState = this.fragmentTracker.getState(frag);
+     if (trackerState === FragmentState.OK) {
+-      return true;
++      // CView 수정(0005)
++      return !this.hasUnbufferedTailPart(frag);
+     }
+     if (trackerState === FragmentState.PARTIAL) {
+       if (frag.gap) {
+@@ -1664,6 +1669,30 @@ export default class BaseStreamController
+     return false;
+   }
+ 
++  /**
++   * CView 수정(0005): 저지연(파트) 로드에서 fragment-tracker 는 버퍼 판정에 0.2초 여유(bufferPadding)를 둔다. 그래서 세그먼트의
++   * 꼬리 파트가 그보다 짧거나(4.17초 세그먼트의 0.03~0.15초 마지막 파트) 버퍼 끝이 파트 끝보다 몇 ms 모자라면, 앞 파트만
++   * 받은 세그먼트를 OK(다 받음)로 본다. 그런데 getFragmentAtPosition 은 받지 않은 파트가 남았다며 같은 세그먼트를 다시
++   * 고르고, isLoopLoading 은 OK 라서 반복 로드로, loadFragment 는 OK 라서 받을 것이 없다고 본다 — 그 세그먼트의 파트가
++   * 재생목록에서 빠질 때까지(≈3세그먼트, 12초 남짓) 다음 조각을 하나도 받지 못한 채 멈춘다.
++   * 받지 않은 파트가 남았으면 반복 로드가 아니고 받을 것이 있다고 본다. 한 번 받았는데도 버퍼에 오르지 않은 파트는
++   * 다시 받지 않는다(진짜 반복 로드 방지). 설정 `loadUnbufferedTailParts` 가 꺼져 있으면(기본) 업스트림과 같다.
++   */
++  protected hasUnbufferedTailPart(frag: Fragment): boolean {
++    if (!this.config.loadUnbufferedTailParts || !this.loadingParts) {
++      return false;
++    }
++    const partList = this.getLevelDetails()?.partList;
++    return !!partList?.some(
++      (part) =>
++        part.fragment.sn === frag.sn &&
++        part.fragment.level === frag.level &&
++        !part.loaded &&
++        !part.gap &&
++        !(part.stats.loading.end > 0),
++    );
++  }
++
+   protected getNextFragmentLoopLoading(
+     frag: MediaFragment,
+     levelDetails: LevelDetails,
+@@ -1672,6 +1701,26 @@ export default class BaseStreamController
+     maxBufLen: number,
+   ): MediaFragment | null {
+     let nextFragment: MediaFragment | null = null;
++    // CView 수정(0005): 파트를 모두 받은 세그먼트인데 버퍼 끝이 받은 끝(nextLoadPosition)보다 몇 ms 모자라면(오디오가 영상보다
++    //   먼저 끝남) 위치로 찾은 조각이 다시 그 세그먼트라 반복 로드로 잡힌다. 저지연 파트 로드는 조회 여유가 0 이라 업스트림의
++    //   반올림 보정(1.5µs)으로는 못 넘는다. 받은 끝에서 다음 조각을 찾는다 — 버퍼 판정 여유(0.2초) 안쪽일 때만.
++    if (
++      !frag.gap &&
++      this.config.loadUnbufferedTailParts &&
++      this.loadingParts &&
++      this.nextLoadPosition > bufferInfo.end &&
++      this.nextLoadPosition - bufferInfo.end < LL_LOAD_POSITION_SLACK
++    ) {
++      const next = this.getNextFragment(this.nextLoadPosition, levelDetails);
++      if (
++        next &&
++        !mediaFragmentsAreEqual(next, frag) &&
++        this.fragmentTracker.getState(next) !== FragmentState.OK
++      ) {
++        this.loopSn = undefined;
++        return next;
++      }
++    }
+     if (frag.gap) {
+       nextFragment = this.getNextFragment(this.nextLoadPosition, levelDetails);
+       if (nextFragment && !nextFragment.gap && bufferInfo.nextStart) {
+diff --git a/src/controller/stream-controller.ts b/src/controller/stream-controller.ts
+index ed3ab12..b30ed66 100644
+--- a/src/controller/stream-controller.ts
++++ b/src/controller/stream-controller.ts
+@@ -1,3 +1,4 @@
++// CView 수정(0005): loadFragment 가 "다 받음"으로 잡힌 세그먼트의 받지 않은 파트를 받는다(hasUnbufferedTailPart).
+ import { liveSyncUnit } from '../utils/live-sync-reference'; // CView 수정(0001)
+ import BaseStreamController, { State } from './base-stream-controller';
+ import { findFragmentByPTS } from './fragment-finders';
+@@ -396,7 +397,8 @@ export default class StreamController
+     const fragState = this.fragmentTracker.getState(frag);
+     if (
+       fragState === FragmentState.NOT_LOADED ||
+-      fragState === FragmentState.PARTIAL
++      fragState === FragmentState.PARTIAL ||
++      (fragState === FragmentState.OK && this.hasUnbufferedTailPart(frag)) // CView 수정(0005)
+     ) {
+       if (this.bitrateTest) {
+         this.log(

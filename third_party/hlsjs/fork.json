@@ -3,7 +3,7 @@
   "upstreamTag": "v1.7.4",
   "upstreamVersion": "1.7.4",
   "upstreamTarballSHA256": "ef4407762f3c971ec4edc097e8d2b8255e786fe3be7fcad01023647b54468b43",
-  "forkRevision": 2,
+  "forkRevision": 3,
   "configType": "fullMin",
   "features": {
     "USE_SUBTITLES": false,
