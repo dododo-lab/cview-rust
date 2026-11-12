@@ -10,7 +10,7 @@ import { esc, toast, keyBelongsToTarget } from './dom.js';
 import { chatPrefs, onChatPrefs, updateChatPrefs } from './chat-prefs.js';
 import { matchPlainAction } from './shortcuts.js';
 import { togglePipFor, stamp } from './viewer-controls.js';
-import { seekTarget } from './viewer-extras.js';
+import { seekPlan } from './viewer-extras.js';
 import { compactCount } from './cards.js';
 import { kbd } from './platform.js';
 import { WatchInfoPanel } from './ml-watch-info.js';
@@ -239,9 +239,15 @@ export class WatchTools {
     if (!video || !video.seekable || !video.seekable.length) return;
     const start = video.seekable.start(0);
     const end = video.seekable.end(video.seekable.length - 1);
-    const target = seekTarget(video.currentTime, step, start, end);
-    if (target === null) return;
-    if (Math.abs(target - video.currentTime) < 1) {
+    const plan = seekPlan(video.currentTime, step, start, end);
+    if (plan === null) return;
+    if (plan.live) {
+      this.pane.bridge.call('seekToLiveEdge');
+      this.flash('라이브');
+      return;
+    }
+    const target = plan.target;
+    if (plan.atLive || Math.abs(target - video.currentTime) < 1) {
       this.flash(step < 0 ? '더 되감을 수 없어요' : '라이브 끝입니다');
       return;
     }

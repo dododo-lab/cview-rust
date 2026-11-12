@@ -15,6 +15,25 @@ export function seekTarget(current, delta, start, end) {
   return Math.min(end - 0.5, Math.max(start + 0.5, current + delta));
 }
 
+/** 라이브 끝에서 이 안쪽은 "라이브"로 본다(초). LL 재생 자리(끝 − 2~3.5s)가 들어간다. */
+export const LIVE_EDGE_WINDOW_S = 4;
+
+/**
+ * ←/→ 이동 계획. 순수 함수. `{ live: true }` 는 라이브 목표 자리로(`seekToLiveEdge`), `{ atLive: true }` 는 이미 라이브라
+ * 움직이지 않음, `{ target }` 는 그 시각으로 seek.
+ * 앞으로 가다 라이브 끝 근처에 닿으면 seekable 끝 − 0.5s 가 아니라 라이브 목표 자리로 보낸다 — LL-HLS 에서 seekable 끝은
+ * 마지막 파트 끝이라 그 바로 앞으로 옮기면 전방 버퍼가 거의 남지 않는다(2026-11-13 실측: → 한 번에 3.2s → 0.6s).
+ */
+export function seekPlan(current, delta, start, end) {
+  const target = seekTarget(current, delta, start, end);
+  if (target === null) return null;
+  if (delta > 0) {
+    if (end - current <= LIVE_EDGE_WINDOW_S) return { atLive: true };
+    if (current + delta >= end - LIVE_EDGE_WINDOW_S) return { live: true };
+  }
+  return { target };
+}
+
 export class ViewerExtras {
   /** @param {import('./viewer.js').Viewer} viewer */
   constructor(viewer, { isLoggedIn }) {
@@ -136,9 +155,15 @@ export class ViewerExtras {
     const step = (e.shiftKey ? 60 : 10) * (e.key === 'ArrowLeft' ? -1 : 1);
     const start = video.seekable.start(0);
     const end = video.seekable.end(video.seekable.length - 1);
-    const target = seekTarget(video.currentTime, step, start, end);
-    if (target === null) return;
-    if (Math.abs(target - video.currentTime) < 1) {
+    const plan = seekPlan(video.currentTime, step, start, end);
+    if (plan === null) return;
+    if (plan.live) {
+      v.player.call('seekToLiveEdge');
+      v.controls.flash('라이브');
+      return;
+    }
+    const target = plan.target;
+    if (plan.atLive || Math.abs(target - video.currentTime) < 1) {
       v.controls.flash(step < 0 ? '더 되감을 수 없어요' : '라이브 끝입니다');
       return;
     }

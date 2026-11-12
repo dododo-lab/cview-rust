@@ -1428,6 +1428,12 @@ function loadSource(url, profile, preserveRecoveryBudget, preferSourceQuality, l
         blockingReloadOutsideLowLatency: false,
         blockingReloadFallback: true,
         liveSyncStallDecayMs: 20000,
+        //   · 0005 loadUnbufferedTailParts true: LL 파트 로드가 세그먼트 경계에서 멈추지 않게 한다. 꼬리 파트가 짧거나(4.17s
+        //     세그먼트 채널의 0.03~0.17s 마지막 파트) 버퍼 끝이 받은 끝보다 몇 ms 모자라면, hls.js 는 그 세그먼트를 "다 받음"으로
+        //     보면서 반복 로드로 판정해 다음 조각을 받지 않았다 — 그 파트가 재생목록에서 빠질 때까지 ≈12s 끊김(2026-11-13 실측,
+        //     792acf: 4분에 1회 12.6s, 7초 만에 9.7s). 남은 꼬리 파트를 받고, 다 받았으면 받은 끝에서 다음 조각을 고른다.
+        //     LL 이 아닌 세션(파트를 받지 않음)에는 영향이 없다.
+        loadUnbufferedTailParts: true,
         // [v6] duration(초) 기반 라이브 싱크 — TARGETDURATION(10s) 인플레이션 면역.
         //   count 계열 키와 혼용하면 hls.js 가 throw 하므로 duration 만 전달한다.
         liveSyncDuration: v2Load ? v2HlsTarget : effectiveLiveTarget,
@@ -5102,7 +5108,7 @@ function webLlFreshSession(requested) {
 function webLlEligible() {
     return currentProfile === 'webParity' && !_timeshiftMode;
 }
-function webLlActive() { return _webLl.requested && _webLl.partTarget > 0 && !webLongSegment(); }
+function webLlActive() { return _webLl.requested && _webLl.partTarget > 0; }
 function webLlOnLevelUpdated(det) {
     if (!_webLl.requested || !det) return;
     _webLl.partTarget = (typeof det.partTarget === 'number' && det.partTarget > 0) ? det.partTarget : 0;
@@ -5119,7 +5125,7 @@ function webLlOnLevelUpdated(det) {
             if (_fragDurations.length > 32) _fragDurations.shift();
         }
     }
-    // 가려진 채 시작했거나 긴 세그먼트 채널이면 세그먼트 길이를 알게 된 지금 안정 목표를 건다.
+    // 가려진 채 시작했으면 세그먼트 길이를 알게 된 지금 안정 목표를 건다.
     if (webStabilityMode()) {
         webOnVisibilityChange();
         // 아직 첫 프레임 전이면 그 자리(끝 − 목표)에서 로드를 다시 시작한다 — 웹 자리에서 시작했다가 LL 을 끄면
@@ -5138,19 +5144,19 @@ function webLlOnLevelUpdated(det) {
 //   LL 을 끄고(세그먼트 단위·비블로킹 재로드), hls.js 목표(끊김 뒤 다시 붙는 자리)를 세그먼트 + 1s 아래로 내리지 않는다.
 //   재생 위치를 일부러 옮기지는 않는다. 다시 보이면 LL·원래 목표로 되돌리고, visibilitychange 의 forceLiveResync 가
 //   웹 자리(끝 − 2s)로 옮긴다. Rust 에는 계속 파트 길이를 보고해 컨트롤러 목표(복귀 자리)는 웹 값을 유지한다.
-// [웹 지연 맞춤 2026-11-12] **긴 세그먼트 채널**(≈4.17s, 파트 ≈0.83~0.86s): 같은 날 실측에서 이 채널들만 앱이 LL 로
-//   웹 자리(끝 − 2s)에 서면 10초 넘게 조각을 못 받는 끊김이 되풀이됐다(단독 3분 1회·14s, 멀티라이브 메인 3분 2~4회).
-//   같은 채널의 웹은 끊김 0 이었고 원인(hls.js 1.7 포크·로컬 프록시 블로킹 재로드 중 어디인지)은 아직 못 가렸다.
-//   그래서 세그먼트가 이 길이 이상이면 가려진 창과 같은 안정 우선(LL 끔, 세그먼트 + 1s)으로 돈다 — 종전 앱과 같은 자리다.
-//   2s 세그먼트 채널(표본 12개 중 8개)은 웹 자리 그대로다.
-const WEB_LONG_SEGMENT_S = 3.0;
-function webLongSegment() {
-    if (!_webLl.requested || _fragDurations.length < 3) return false;
-    return _quantile(_fragDurations, 0.5) >= WEB_LONG_SEGMENT_S;
-}
-// 안정 우선으로 돌 때인가 — 가려진 창이거나 긴 세그먼트 채널.
+// [LL 긴 세그먼트 2026-11-13] 4.17s 세그먼트 채널에 두었던 "긴 세그먼트 안정 우선"(LL 끔, 세그먼트 + 1s) 분기는 없앴다.
+//   같은 채널을 웹(네이버 hls.js 1.6.13)과 앱(1.7.4-cview)에 나란히 틀고 hls.js 이벤트·프록시 요청을 모두 기록해 보니
+//   요청 흐름(블로킹 재로드 ≈1.0s 주기, 새 파트 즉시 로드, 화질별 MSN 차이는 렌디션 리포트로 처리)은 웹과 같았고, 끊김은
+//   hls.js 1.7 의 LL 파트 로드가 **세그먼트 경계에서 다음 조각을 고르지 못하고 멈추는 것**이었다 — 세그먼트 꼬리 파트가
+//   짧거나(0.03~0.17s) 버퍼 끝이 파트 끝보다 몇 ms 모자라면 fragment-tracker(0.2s 여유)는 그 세그먼트를 "다 받음"으로 보고,
+//   반복 로드 판정이 로드를 막아 그 파트가 재생목록에서 빠질 때까지(≈12s) 아무것도 받지 않았다. 2s 세그먼트는 꼬리 파트가
+//   없어(1s × 2) 거의 걸리지 않는다. 포크 패치 0005(loadUnbufferedTailParts, 아래 hls 설정)로 고쳤다.
+//   → 키(10초 앞으로)가 seekable 끝 − 0.5s(LL 끝 바로 앞)로 잘려 전방 버퍼가 0.6s 로 줄던 것도 라이브 목표 자리로 가게 했다
+//   (ml-watch·viewer-extras).
+//   가려진 창의 안정 우선은 그대로 둔다(WebKit 타이머 감속은 세그먼트 길이와 무관하다).
+// 안정 우선으로 돌 때인가 — 가려진 창.
 function webStabilityMode() {
-    return _webLl.requested && (document.hidden || webLongSegment());
+    return _webLl.requested && document.hidden;
 }
 function webHiddenFloor() {
     if (!webStabilityMode() || _fragDurations.length < 3) return 0;
