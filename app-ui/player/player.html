@@ -5096,13 +5096,13 @@ let _webRateChangedAt = 0;
 let _webSkipUntil = 0;
 let _webLastTick = 0;
 function webLlFreshSession(requested) {
-    return { requested: !!requested, partTarget: 0 };
+    return { requested: !!requested, partTarget: 0, startAdjusted: false };
 }
 // 웹식으로 실을 세션인가 — 기본 프리셋 "웹과 같게"(webParity). 되감기(timeshift)·다른 프리셋은 종전 그대로.
 function webLlEligible() {
     return currentProfile === 'webParity' && !_timeshiftMode;
 }
-function webLlActive() { return _webLl.requested && _webLl.partTarget > 0; }
+function webLlActive() { return _webLl.requested && _webLl.partTarget > 0 && !webLongSegment(); }
 function webLlOnLevelUpdated(det) {
     if (!_webLl.requested || !det) return;
     _webLl.partTarget = (typeof det.partTarget === 'number' && det.partTarget > 0) ? det.partTarget : 0;
@@ -5119,8 +5119,17 @@ function webLlOnLevelUpdated(det) {
             if (_fragDurations.length > 32) _fragDurations.shift();
         }
     }
-    // 가려진 채 시작한 세션은 세그먼트 길이를 알게 된 지금 안정 목표를 건다.
-    if (document.hidden) webOnVisibilityChange();
+    // 가려진 채 시작했거나 긴 세그먼트 채널이면 세그먼트 길이를 알게 된 지금 안정 목표를 건다.
+    if (webStabilityMode()) {
+        webOnVisibilityChange();
+        // 아직 첫 프레임 전이면 그 자리(끝 − 목표)에서 로드를 다시 시작한다 — 웹 자리에서 시작했다가 LL 을 끄면
+        //   다음 세그먼트가 완성될 때까지 한 번 끊긴다.
+        if (!_webLl.startAdjusted && !_hasEverPlayed && hls && Number.isFinite(det.edge)) {
+            _webLl.startAdjusted = true;
+            const pos = det.edge - (hls.targetLatency || 0);
+            if (pos > 0) { try { hls.startLoad(pos); } catch (e) {} }
+        }
+    }
 }
 // [웹 지연 맞춤 2026-11-12] **가려진 창**: WebKit 은 숨은 페이지의 타이머를 점점 느리게 돌려 LL 파트 갱신(≈1s)을
 //   제때 못 한다. 실측(2026-11-12, 4.17s 세그먼트 채널): 가려진 지 2분 20초 뒤 끊기기 시작했고, 끊김마다 hls.js 가
@@ -5129,8 +5138,22 @@ function webLlOnLevelUpdated(det) {
 //   LL 을 끄고(세그먼트 단위·비블로킹 재로드), hls.js 목표(끊김 뒤 다시 붙는 자리)를 세그먼트 + 1s 아래로 내리지 않는다.
 //   재생 위치를 일부러 옮기지는 않는다. 다시 보이면 LL·원래 목표로 되돌리고, visibilitychange 의 forceLiveResync 가
 //   웹 자리(끝 − 2s)로 옮긴다. Rust 에는 계속 파트 길이를 보고해 컨트롤러 목표(복귀 자리)는 웹 값을 유지한다.
+// [웹 지연 맞춤 2026-11-12] **긴 세그먼트 채널**(≈4.17s, 파트 ≈0.83~0.86s): 같은 날 실측에서 이 채널들만 앱이 LL 로
+//   웹 자리(끝 − 2s)에 서면 10초 넘게 조각을 못 받는 끊김이 되풀이됐다(단독 3분 1회·14s, 멀티라이브 메인 3분 2~4회).
+//   같은 채널의 웹은 끊김 0 이었고 원인(hls.js 1.7 포크·로컬 프록시 블로킹 재로드 중 어디인지)은 아직 못 가렸다.
+//   그래서 세그먼트가 이 길이 이상이면 가려진 창과 같은 안정 우선(LL 끔, 세그먼트 + 1s)으로 돈다 — 종전 앱과 같은 자리다.
+//   2s 세그먼트 채널(표본 12개 중 8개)은 웹 자리 그대로다.
+const WEB_LONG_SEGMENT_S = 3.0;
+function webLongSegment() {
+    if (!_webLl.requested || _fragDurations.length < 3) return false;
+    return _quantile(_fragDurations, 0.5) >= WEB_LONG_SEGMENT_S;
+}
+// 안정 우선으로 돌 때인가 — 가려진 창이거나 긴 세그먼트 채널.
+function webStabilityMode() {
+    return _webLl.requested && (document.hidden || webLongSegment());
+}
 function webHiddenFloor() {
-    if (!_webLl.requested || !document.hidden || _fragDurations.length < 3) return 0;
+    if (!webStabilityMode() || _fragDurations.length < 3) return 0;
     const d = _quantile(_fragDurations, 0.5);
     return (d > 0.1 && d < 30) ? d + STRUCTURAL_TARGET_MARGIN_S : 0;
 }
@@ -5139,7 +5162,7 @@ function webHiddenAdjustedTarget(target) {
 }
 function webOnVisibilityChange() {
     if (!_webLl.requested || !hls) return;
-    const ll = !document.hidden;
+    const ll = !webStabilityMode();
     if (hls.lowLatencyMode !== ll) {
         try { hls.lowLatencyMode = ll; } catch (e) {}
         runtimeDiagnostic('web_ll_mode', 'debug', {lowLatencyMode: ll});
