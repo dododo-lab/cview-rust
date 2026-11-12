@@ -221,6 +221,8 @@ pub struct HlsJsPlaybackSnapshot {
     pub frag_samples: i64,
     /// 실측 프래그먼트 길이(초) 중앙값. 0 이면 미측정.
     pub frag_duration_seconds: f64,
+    /// 실측 LL 파트 길이(초) 중앙값. LL 로 파트를 받지 않으면 0.
+    pub part_duration_seconds: f64,
     pub pl_end_sn_age_ms: f64,
     pub pl_reload_p50_ms: f64,
     pub pl_reload_p90_ms: f64,
@@ -261,6 +263,7 @@ impl HlsJsPlaybackSnapshot {
             frag_total_p90: d("fragTotalP90"),
             frag_samples: i("fragSamples", 0),
             frag_duration_seconds: d("fragDurationSeconds"),
+            part_duration_seconds: d("partDurationSeconds"),
             pl_end_sn_age_ms: double(data, "plEndSnAgeMs", -1.0),
             pl_reload_p50_ms: d("plReloadP50Ms"),
             pl_reload_p90_ms: d("plReloadP90Ms"),

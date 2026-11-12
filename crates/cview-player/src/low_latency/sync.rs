@@ -80,7 +80,8 @@ impl State {
         if !self.initial_seek_done {
             self.initial_seek_done = true;
             let initial_error = smoothed - active_target;
-            if initial_error > 2.0 && self.is_seek_authorized() {
+            // 웹식(buffer_paced) 세션은 시작한 자리를 지킨다 — 웹도 시작 뒤 스냅하지 않는다.
+            if !self.config.buffer_paced && initial_error > 2.0 && self.is_seek_authorized() {
                 self.state = SyncState::SeekRequired;
                 if self.on_seek_required.is_some() {
                     self.outbox.push(Effect::Seek(active_target));
@@ -104,6 +105,14 @@ impl State {
                 self.outbox.push(Effect::Seek(active_target));
             }
             self.enter_post_seek_grace();
+            return;
+        }
+
+        // 웹식 세션은 배속을 플레이어 페이지의 웹 규칙(전방 버퍼 4초↑ → 1.03배, 2초↓ → 1배)에 맡긴다.
+        // 여기서 PID 배속을 함께 걸면 같은 재생을 두 주체가 당긴다.
+        if self.config.buffer_paced {
+            self.state = SyncState::Synced;
+            self.last_process_instant = Some(now);
             return;
         }
 
@@ -522,4 +531,42 @@ mod tests {
     }
 
     use crate::clock::Clock;
+
+    #[test]
+    fn buffer_paced_never_changes_rate_or_snaps_at_start() {
+        let c = LowLatencyController::new(LowLatencyConfiguration::WEB_MATCH_HLSJS);
+        let rates = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seeks = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let r = rates.clone();
+        c.set_on_rate_change(move |v| r.lock().unwrap().push(v));
+        let sk = seeks.clone();
+        c.set_on_seek_required(move |v| sk.lock().unwrap().push(v));
+        // 시작 지연 5초(목표 2초 + 3초) — 종전 프리셋이면 첫 표본에서 seek 했다.
+        for _ in 0..10 {
+            c.process_latency(5.0);
+        }
+        assert!(
+            seeks.lock().unwrap().is_empty(),
+            "웹처럼 시작 자리를 지킨다"
+        );
+        assert!(
+            rates.lock().unwrap().is_empty(),
+            "배속은 페이지의 웹 규칙 몫"
+        );
+        assert_eq!(c.current_rate(), 1.0);
+        assert_eq!(c.sync_state(), SyncState::Synced);
+        // 10초쯤 끊겨 밀려도 웹처럼 제자리에서 이어 간다.
+        for _ in 0..40 {
+            c.process_latency(14.0);
+        }
+        assert!(
+            seeks.lock().unwrap().is_empty(),
+            "라이브 구간(20초) 안에서는 당기지 않는다"
+        );
+        // 안전망: max_latency(20초)를 넘으면 목표 자리로 되돌린다.
+        for _ in 0..40 {
+            c.process_latency(30.0);
+        }
+        assert_eq!(seeks.lock().unwrap().first().copied(), Some(2.0));
+    }
 }

@@ -35,7 +35,7 @@ impl LatencyPresetPairing {
         };
         match preset {
             Some(LatencyPreset::MatchWeb) => Self {
-                configuration: LowLatencyConfiguration::WEB_PARITY_HLSJS,
+                configuration: LowLatencyConfiguration::WEB_MATCH_HLSJS,
                 profile: pick(HlsJsStreamingProfile::WebParity),
             },
             Some(LatencyPreset::WebSync) => Self {
@@ -52,7 +52,7 @@ impl LatencyPresetPairing {
             },
             Some(LatencyPreset::Custom) | None => Self {
                 configuration: settings.map_or(
-                    LowLatencyConfiguration::WEB_PARITY_HLSJS,
+                    LowLatencyConfiguration::WEB_MATCH_HLSJS,
                     Self::custom_configuration,
                 ),
                 profile: pick(if preset.is_none() {
@@ -94,6 +94,7 @@ impl LatencyPresetPairing {
             pid_ki: ps.latency_pid_ki,
             pid_kd: ps.latency_pid_kd,
             rate_significance_threshold: latency_defaults::RATE_SIGNIFICANCE_THRESHOLD,
+            buffer_paced: false,
         }
     }
 
@@ -178,9 +179,9 @@ mod tests {
         vec![
             Row {
                 preset: LatencyPreset::MatchWeb,
-                swift_target: 3.0,
+                swift_target: 2.0,
                 profile_key: "webParity",
-                js_fallback: 3.0,
+                js_fallback: 2.0,
             },
             Row {
                 preset: LatencyPreset::WebSync,
@@ -202,7 +203,8 @@ mod tests {
             },
             Row {
                 preset: LatencyPreset::Custom,
-                swift_target: 3.0,
+                // 직접 조정은 지금 슬라이더 값(기본 = "웹과 같게" 2.0s)에서 시작한다.
+                swift_target: 2.0,
                 profile_key: "lowLatency",
                 js_fallback: 6.0,
             },
@@ -246,7 +248,8 @@ mod tests {
     #[test]
     fn nil_settings_falls_back_to_web_parity() {
         let p = LatencyPresetPairing::pairing(None);
-        assert_eq!(p.configuration.target_latency, 3.0);
+        assert_eq!(p.configuration, LowLatencyConfiguration::WEB_MATCH_HLSJS);
+        assert_eq!(p.configuration.target_latency, 2.0);
         assert_eq!(p.profile.profile_key(), "webParity");
     }
 
@@ -255,7 +258,7 @@ mod tests {
         let expected = [
             (
                 LatencyPreset::MatchWeb,
-                LowLatencyConfiguration::WEB_PARITY_HLSJS,
+                LowLatencyConfiguration::WEB_MATCH_HLSJS,
             ),
             (LatencyPreset::WebSync, LowLatencyConfiguration::WEB_SYNC),
             (LatencyPreset::Standard, LowLatencyConfiguration::STANDARD),
@@ -405,6 +408,6 @@ mod tests {
         );
         let fallback = LatencyPresetPairing::match_web_v2_fallback_configuration();
         assert_eq!(fallback, v1.configuration);
-        assert_eq!(fallback, LowLatencyConfiguration::WEB_PARITY_HLSJS);
+        assert_eq!(fallback, LowLatencyConfiguration::WEB_MATCH_HLSJS);
     }
 }
