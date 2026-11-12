@@ -1405,7 +1405,8 @@ function loadSource(url, profile, preserveRecoveryBudget, preferSourceQuality, l
         // [matchWeb v2] v2 와 [웹 지연 맞춤 2026-11-12] 웹식(webParity) 세션은 LL. 치지직 LLHLS 에는 EXT-X-PART·SERVER-CONTROL 이 있다(2026-09-27 실측).
         //   웹 플레이어도 같은 재생목록을 lowLatencyMode 로 받는다 — 파트(≈1s)가 도착하는 대로 버퍼가 차서 세그먼트(2~4.17s)를
         //   통째로 기다리지 않는다.
-        lowLatencyMode: llLoad,
+        //   가려진 창에서 싣는 웹식 세션은 LL 을 끈 채 시작한다 — webApplyVisibilityMode 주석.
+        lowLatencyMode: v2Load || (_webLl.requested && !document.hidden),
         // 1.7부터 MMS 선택지가 생겼다. 기존 MSE 재생 경로를 명시해 업그레이드 자체가
         // 버퍼/seek 백엔드 변경까지 동반하지 않게 한다.
         preferManagedMediaSource: false,
@@ -5116,12 +5117,16 @@ function webLlOnLevelUpdated(det) {
             if (_fragDurations.length > 32) _fragDurations.shift();
         }
     }
+    // 가려진 채 시작한 세션은 세그먼트 길이를 알게 된 지금 안정 목표를 건다.
+    if (document.hidden) webOnVisibilityChange();
 }
 // [웹 지연 맞춤 2026-11-12] **가려진 창**: WebKit 은 숨은 페이지의 타이머를 점점 느리게 돌려 LL 파트 갱신(≈1s)을
 //   제때 못 한다. 실측(2026-11-12, 4.17s 세그먼트 채널): 가려진 지 2분 20초 뒤 끊기기 시작했고, 끊김마다 hls.js 가
-//   liveSyncPosition(끝 − 2s)으로 다시 붙어 얇은 버퍼에서 또 끊기는 고리가 30초 넘게 이어졌다. 그래서 가려진 동안에는
-//   hls.js 목표(끊김 뒤 다시 붙는 자리)를 세그먼트 + 1s 아래로 내리지 않는다 — 재생 위치를 일부러 옮기지는 않는다(웹도
-//   시작한 자리를 지킨다). 다시 보이면 원래 목표로 되돌리고, visibilitychange 의 forceLiveResync 가 웹 자리로 옮긴다.
+//   liveSyncPosition(끝 − 2s)으로 다시 붙어 얇은 버퍼에서 또 끊기는 고리가 30초 넘게 이어졌다(처음부터 가려진 채
+//   열면 4분에 3회·40초). 가려진 창에서는 화면을 웹과 맞춰 볼 수 없고 소리만 이어지면 되므로 **안정 우선**으로 돈다:
+//   LL 을 끄고(세그먼트 단위·비블로킹 재로드), hls.js 목표(끊김 뒤 다시 붙는 자리)를 세그먼트 + 1s 아래로 내리지 않는다.
+//   재생 위치를 일부러 옮기지는 않는다. 다시 보이면 LL·원래 목표로 되돌리고, visibilitychange 의 forceLiveResync 가
+//   웹 자리(끝 − 2s)로 옮긴다. Rust 에는 계속 파트 길이를 보고해 컨트롤러 목표(복귀 자리)는 웹 값을 유지한다.
 function webHiddenFloor() {
     if (!_webLl.requested || !document.hidden || _fragDurations.length < 3) return 0;
     const d = _quantile(_fragDurations, 0.5);
@@ -5132,6 +5137,11 @@ function webHiddenAdjustedTarget(target) {
 }
 function webOnVisibilityChange() {
     if (!_webLl.requested || !hls) return;
+    const ll = !document.hidden;
+    if (hls.lowLatencyMode !== ll) {
+        try { hls.lowLatencyMode = ll; } catch (e) {}
+        runtimeDiagnostic('web_ll_mode', 'debug', {lowLatencyMode: ll});
+    }
     const cfg = PROFILES[currentProfile] || PROFILES.lowLatency;
     const base = _controllerTarget > 0 ? _controllerTarget : cfg.liveSyncDuration;
     const next = webHiddenAdjustedTarget(base);
