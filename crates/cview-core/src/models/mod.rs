@@ -25,7 +25,9 @@ pub mod stream_proxy;
 pub mod verified_mark;
 pub mod vod;
 
-pub use channel::{ChannelFollowStatus, ChannelInfo, FollowingChannel, StreamerInfo};
+pub use channel::{
+    ChannelAvatar, ChannelFollowStatus, ChannelInfo, FollowingChannel, StreamerInfo,
+};
 pub use clip::{ClipDetail, ClipInkeyContent, ClipOptionalProperty, NaverVodPlayResponse};
 pub use live::{
     ChannelViewerInfo, LiveInfo, LivePlayback, LiveStatus, StreamQuality, TimeMachinePlaybackInfo,

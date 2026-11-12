@@ -427,6 +427,7 @@ pub fn run() {
             commands::chat::chat_donation_ranking,
             commands::chat::chat_emoticons,
             commands::chat::chat_user_card,
+            commands::chat_avatar::chat_avatars,
             commands::settings::appearance_set_theme,
             commands::chat::chat_disconnect,
             commands::chat::chat_send,

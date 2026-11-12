@@ -25,6 +25,7 @@ export function applyChatSkin(el, p = chatPrefs()) {
   el.classList.toggle('hide-badge', !p.showBadge);
   el.classList.toggle('no-role-color', !p.highlightRoles);
   el.classList.toggle('no-nick-colors', p.nicknameColors === false);
+  el.classList.toggle('no-avatars', p.chatAvatars === 'off');
   el.classList.remove(...OLD_STYLE_CLASSES);
   const w = READING_WIDTHS.find(([v]) => v === p.readingWidth);
   if (w && w[2]) { el.dataset.readWidth = w[0]; el.style.setProperty('--chat-read-width', `${w[2]}px`); }

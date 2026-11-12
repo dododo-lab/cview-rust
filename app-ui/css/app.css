@@ -2092,6 +2092,28 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .chat-skin:not(.no-nick-colors) .chat-avatar.nc { color: var(--nc); background: color-mix(in srgb, var(--nc) 20%, var(--cs-fill)); }
 .chat-skin .chat-line[data-role="streamer"] .chat-avatar { color: var(--primary-text); background: color-mix(in srgb, var(--primary) 24%, var(--cs-fill)); }
 .chat-skin .chat-line:is([data-role="manager"], [data-role="channelManager"]) .chat-avatar { color: var(--accent-blue); background: color-mix(in srgb, var(--accent-blue) 22%, var(--cs-fill)); }
+/* 프로필 사진·랜덤 아이콘(chat-avatar.js) — 원형, 크기 고정. 아이콘(배경 그림)을 깔고 사진을 그 위에 겹쳐
+   사진이 늦게 오거나 실패해도 줄 높이가 바뀌지 않는다. 역할(스트리머·매니저)은 테두리 고리로 구분한다. */
+.chat-skin .chat-avatar.av {
+  position: relative; overflow: hidden; border-radius: 50%; padding: 0; contain: strict;
+  background-color: var(--cs-fill); background-image: var(--cv-av-sheet); background-size: 1400% 1200%; /* 종류 14 × 색 12 */
+}
+/* 장식 — 볼터치·반짝이(고정 그림 두 장) */
+.chat-skin .chat-avatar.av:is(.av-x-blush, .av-x-shine)::before { content: ""; position: absolute; inset: 0; background: center / cover no-repeat; }
+.chat-skin .chat-avatar.av.av-x-blush::before { background-image: var(--cv-av-blush); }
+.chat-skin .chat-avatar.av.av-x-shine::before { background-image: var(--cv-av-shine); }
+.chat-skin .chat-avatar.av .av-photo { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; background: var(--cs-fill); }
+/* 위 역할 규칙의 배경색(역할 틴트)이 아이콘을 덮지 않게 */
+.chat-skin .chat-line:is([data-role="streamer"], [data-role="manager"], [data-role="channelManager"]) .chat-avatar.av { background-color: var(--cs-fill); background-image: var(--cv-av-sheet); background-size: 1400% 1200%; }
+/* 역할 고리 — 사진(img) 위에도 보이게 가상 요소로 덮는다 */
+.chat-skin .chat-line:is([data-role="streamer"], [data-role="manager"], [data-role="channelManager"]) .chat-avatar.av::after {
+  content: ""; position: absolute; inset: 0; z-index: 2; border-radius: 50%; pointer-events: none;
+  box-shadow: inset 0 0 0 2px var(--primary);
+}
+.chat-skin .chat-line:is([data-role="manager"], [data-role="channelManager"]) .chat-avatar.av::after { box-shadow: inset 0 0 0 2px var(--accent-blue); }
+/* 아바타 숨김 설정 — 말풍선이 그 자리까지 넓어진다 */
+.chat-skin.no-avatars { --cs-av: 0px; }
+.chat-skin.no-avatars .chat-line.msg { gap: 0; }
 /* 묶음의 이어진 줄 — 아바타 자리는 비워 두고(말풍선 줄 맞춤) 이름은 감춘다 */
 .chat-skin .chat-line.cont .chat-avatar { visibility: hidden; height: 0; }
 .chat-skin .chat-line.cont .msg-head { display: none; }

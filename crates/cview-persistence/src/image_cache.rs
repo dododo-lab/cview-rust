@@ -39,7 +39,7 @@ impl ImageKind {
     pub fn parse(value: &str) -> Self {
         match value {
             "live" | "hero" => ImageKind::Live,
-            "avatar" | "avatar-lg" => ImageKind::Avatar,
+            "avatar" | "avatar-lg" | "avatar-sm" => ImageKind::Avatar,
             _ => ImageKind::Static,
         }
     }
@@ -448,6 +448,7 @@ mod tests {
     fn kind_parsing() {
         assert_eq!(ImageKind::parse("hero"), ImageKind::Live);
         assert_eq!(ImageKind::parse("avatar-lg"), ImageKind::Avatar);
+        assert_eq!(ImageKind::parse("avatar-sm"), ImageKind::Avatar);
         assert_eq!(ImageKind::parse("poster"), ImageKind::Static);
     }
 }

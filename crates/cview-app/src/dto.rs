@@ -315,6 +315,9 @@ pub struct ChatMessageDto {
     pub gift_count: Option<i64>,
     pub mission_text: Option<String>,
     pub anonymous: bool,
+    /// 채팅 페이로드의 프로필 사진(`profile.profileImageUrl`) — 지금 치지직은 늘 비워 보내지만 오면 바로 쓴다.
+    /// 없으면 화면이 채널 사진을 따로 찾는다(`chat_avatars`). 익명 후원·가려진 메시지는 싣지 않는다.
+    pub profile_image_url: Option<String>,
 }
 
 fn message_kind(t: MessageType) -> &'static str {
@@ -339,6 +342,11 @@ fn role_name(r: UserRole) -> &'static str {
 impl ChatMessageDto {
     pub fn from_message(message: &ChatMessage, is_notice: bool) -> Self {
         let item = ChatMessageItem::from_message(message, is_notice);
+        let anonymous = message
+            .extras
+            .as_ref()
+            .and_then(|e| e.is_anonymous)
+            .unwrap_or(false);
         let kind = if item.is_notice {
             "notice"
         } else {
@@ -374,11 +382,10 @@ impl ChatMessageDto {
             gift_type: message.extras.as_ref().and_then(|e| e.gift_type.clone()),
             gift_count: message.extras.as_ref().and_then(|e| e.gift_count),
             mission_text: message.extras.as_ref().and_then(|e| e.mission_text.clone()),
-            anonymous: message
-                .extras
-                .as_ref()
-                .and_then(|e| e.is_anonymous)
-                .unwrap_or(false),
+            anonymous,
+            profile_image_url: item
+                .profile_image_url
+                .filter(|u| !anonymous && !item.is_blinded && u.starts_with("https://")),
         }
     }
 }
