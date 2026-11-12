@@ -80,7 +80,21 @@ impl ShellSinks {
 struct TappedChatEngine {
     inner: LiveChatEngine,
     chat_channel_id: String,
+    /// 이 연결의 내 사용자 ID(로그인했을 때) — 다른 사람 제재 이벤트를 화면으로 보내지 않는 데 쓴다.
+    uid: Option<String>,
     sink: Arc<dyn Fn(TaggedChatEvent) + Send + Sync>,
+}
+
+/// 엔진 이벤트를 화면(`chat://event`)으로도 보낼까. 채팅 제한(94015)은 채팅방 전원에게 대상 ID 와 함께 오므로
+/// 내 것이 아니면 보내지 않는다 — 예전엔 누가 제한되든 내 채팅창에 "채팅 이용이 제한되었습니다"가 떴다
+/// (뷰모델은 이미 내 것만 받는다, `event_listen.rs`).
+pub(crate) fn forward_to_shell(event: &ChatEngineEvent, my_uid: Option<&str>) -> bool {
+    match event {
+        ChatEngineEvent::UserPenalized { user_id, .. } => {
+            my_uid.is_some_and(|me| !me.is_empty() && me == user_id)
+        }
+        _ => true,
+    }
 }
 
 #[async_trait]
@@ -105,7 +119,10 @@ impl ChatEngineHandle for TappedChatEngine {
     }
     async fn next_event(&self) -> Option<ChatEngineEvent> {
         let event = self.inner.next_event().await;
-        if let Some(e) = &event {
+        if let Some(e) = event
+            .as_ref()
+            .filter(|e| forward_to_shell(e, self.uid.as_deref()))
+        {
             (self.sink)(TaggedChatEvent {
                 event: ChatEventDto::from_engine(e),
                 chat_channel_id: self.chat_channel_id.clone(),
@@ -133,9 +150,11 @@ fn chat_engine_factory(
                 .collect()
         });
         let chat_channel_id = config.chat_channel_id.clone();
+        let uid = config.uid.clone();
         Arc::new(TappedChatEngine {
             inner: LiveChatEngine::new(config.cookie_provider(Some(provider))),
             chat_channel_id,
+            uid,
             sink: sink.clone(),
         }) as Arc<dyn ChatEngineHandle>
     })
@@ -646,6 +665,23 @@ fn open_store(data_dir: &Path) -> Option<DataStore> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_my_penalty_reaches_the_chat_screen() {
+        let pen = |u: &str| ChatEngineEvent::UserPenalized {
+            user_id: u.into(),
+            duration: 60,
+        };
+        assert!(forward_to_shell(&pen("me"), Some("me")));
+        assert!(
+            !forward_to_shell(&pen("other"), Some("me")),
+            "다른 사람 제한은 내 채팅창에 띄우지 않는다"
+        );
+        assert!(!forward_to_shell(&pen("other"), None), "비로그인");
+        assert!(!forward_to_shell(&pen(""), Some("")));
+        assert!(forward_to_shell(&ChatEngineEvent::Kicked, None));
+        assert!(forward_to_shell(&ChatEngineEvent::Connected, Some("me")));
+    }
 
     #[test]
     fn corrupt_store_is_moved_aside_and_fresh_store_opens() {

@@ -2,7 +2,8 @@
 // CHT-01 이모티콘 선택기, CHT-02 자동완성(:이모티콘·@멘션), CHT-03 컨텍스트 메뉴, CHT-04 프로필 시트,
 // CHT-05 차단, CHT-06 금지어 필터, CHT-08 멘션 강조·트레이, CHT-09 하이라이트, CHT-10 메시지 고정·공지 숨기기,
 // CHT-11 자동 스크롤·"새 메시지" 버튼·읽음 구분선(⌘J), CHT-12 지우기(⇧⌘K)·재연결, CHT-14 표시 옵션,
-// CHT-16 후원 필터, CHT-20 입력 상태 배너, CHT-25 닉네임 말풍선(chat-user-pop.js)·이 사람 채팅만 보기.
+// CHT-16 후원 필터, CHT-20 입력 상태 배너, CHT-25 닉네임 말풍선(chat-user-pop.js)·이 사람 채팅만 보기,
+// 줄 동작 막대·키보드 줄 고르기·채팅 검색(chat-actions.js), 입력 기록(↑/↓)·남은 글자 수.
 import { api, listen, Events } from './api.js';
 import { esc, safeUrl, toast, imageSrc, dismiss, hideWithExit, renderContent, emojiUrl } from './dom.js';
 
@@ -14,6 +15,7 @@ import { avatarHtml } from './chat-avatar.js';
 import { kbd } from './platform.js';
 import { chatFollower, trimFront } from './chat-follow.js';
 import { openUserPop, closeUserPop } from './chat-user-pop.js';
+import { installChatActions, lineCopyText } from './chat-actions.js';
 import {
   chatPrefs, onChatPrefs, updateChatPrefs, passesFilters, mentionsMe, getMyNickname,
 } from './chat-prefs.js';
@@ -34,6 +36,11 @@ const ICON = {
 const ROLE_CLASSES = new Set(['streamer', 'manager', 'channelManager']);
 // 창이 숨은 동안 채팅 줄을 모아 붙이는 간격(보일 때는 다음 프레임, 늦어도 250ms).
 const HIDDEN_FLUSH_MS = 1000;
+// 글자 수 표시 — 입력 제한(index.html maxlength, Rust MAX_CHAT_LENGTH 100)에 가까워지면 남은 글자를 보인다.
+const COUNT_FROM = 80;
+// 입력 기록(↑/↓)으로 되부를 수 있는 보낸 메시지 수
+const HISTORY_MAX = 30;
+const BLIND_TEXT = '관리자에 의해 삭제된 메시지입니다.';
 
 function roleClass(role) {
   return ROLE_CLASSES.has(role) ? ` ${role}` : '';
@@ -117,6 +124,7 @@ const STATE_LABEL = {
 const emoticonCache = new Map();
 /** 모든 채팅 패널 — Rust 채팅 세션은 하나라 마지막으로 연결한 패널만 이벤트를 그린다. */
 const PANELS = new Set();
+let PANEL_SEQ = 0;
 
 /**
  * 로그인 상태가 바뀌면(로그인·만료·로그아웃) 열린 채팅을 새 신원으로 다시 연결한다 — 비로그인으로 붙은 채팅은
@@ -225,6 +233,16 @@ export class ChatPanel {
       else if (b.dataset.chat === 'reconnect') this.reconnect();
     });
     this.mentionCount = header.querySelector('.mention-count');
+    // 연결 상태는 바뀔 때 화면 읽기가 알린다. 끊기거나 실패하면 '⋯' 서랍을 열지 않아도 바로 다시 연결할 수 있게
+    // 상태 옆에 버튼을 꺼내 둔다(예전엔 '연결 실패' 글자만 보이고 다시 연결은 서랍 안에 숨어 있었다).
+    this.state.setAttribute('role', 'status');
+    this.retry = document.createElement('button');
+    this.retry.type = 'button';
+    this.retry.className = 'link-btn chat-retry';
+    this.retry.textContent = '다시 연결';
+    this.retry.hidden = true;
+    this.state.after(this.retry);
+    this.retry.addEventListener('click', () => this.reconnect());
 
     this.pinBar = document.createElement('div');
     this.pinBar.className = 'chat-pin';
@@ -275,17 +293,25 @@ export class ChatPanel {
     this.emojiButton.type = 'button';
     this.emojiButton.className = 'icon-btn chat-emoji-btn';
     this.emojiButton.title = '이모티콘';
+    this.emojiButton.setAttribute('aria-label', '이모티콘');
+    this.emojiButton.setAttribute('aria-expanded', 'false');
     this.emojiButton.innerHTML = ICON.smile;
     this.input.before(this.emojiButton);
     this.picker = document.createElement('div');
     this.picker.className = 'emoji-picker';
+    this.picker.setAttribute('role', 'dialog');
+    this.picker.setAttribute('aria-label', '이모티콘 고르기');
     this.picker.hidden = true;
     form.append(this.picker);
     this.emojiButton.addEventListener('click', (e) => { e.stopPropagation(); this.togglePicker(); });
     this.picker.addEventListener('click', (e) => this.onPickerClick(e));
     this.picker.addEventListener('input', () => this.renderPicker());
+    // Esc 로 닫고 입력창으로 돌아간다(예전엔 검색칸에 초점이 있어도 Esc 가 먹지 않았다).
+    this.picker.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.closePicker(); this.input.focus(); }
+    });
     const onDocClick = (e) => {
-      if (!this.picker.contains(e.target) && e.target !== this.emojiButton) hideWithExit(this.picker);
+      if (!this.picker.contains(e.target) && !this.emojiButton.contains(e.target)) this.closePicker();
       if (!this.tray.contains(e.target) && !e.target.closest('.mention-btn')) this.tray.hidden = true;
     };
     document.addEventListener('click', onDocClick);
@@ -294,8 +320,27 @@ export class ChatPanel {
     this.autocomplete = document.createElement('div');
     this.autocomplete.className = 'chat-autocomplete';
     this.autocomplete.hidden = true;
+    // 콤보박스 — 화면 읽기가 후보 목록과 고른 후보를 알 수 있게.
+    PANEL_SEQ += 1;
+    this.uid = `cp${PANEL_SEQ}`;
+    this.autocomplete.id = `${this.uid}-ac`;
+    this.autocomplete.setAttribute('role', 'listbox');
+    this.autocomplete.setAttribute('aria-label', '자동 완성');
+    this.input.setAttribute('role', 'combobox');
+    this.input.setAttribute('aria-autocomplete', 'list');
+    this.input.setAttribute('aria-controls', this.autocomplete.id);
+    this.input.setAttribute('aria-expanded', 'false');
+    this.input.setAttribute('aria-label', '채팅 입력');
+    // 남은 글자 수 — 제한에 가까울 때만 보인다.
+    this.counter = document.createElement('span');
+    this.counter.className = 'chat-count';
+    this.counter.hidden = true;
+    this.counter.setAttribute('aria-live', 'polite');
+    this.input.after(this.counter);
+    this.history = [];
+    this.historyAt = -1;
     form.append(this.autocomplete);
-    this.input.addEventListener('input', () => this.updateAutocomplete());
+    this.input.addEventListener('input', () => { this.updateAutocomplete(); this.renderCount(); this.historyAt = -1; });
     this.input.addEventListener('keydown', (e) => this.onInputKey(e));
     this.autocomplete.addEventListener('mousedown', (e) => {
       const item = e.target.closest('[data-ac]');
@@ -333,6 +378,7 @@ export class ChatPanel {
     };
     document.addEventListener('keydown', onDocKey);
     this.cleanups.push(() => document.removeEventListener('keydown', onDocKey));
+    installChatActions(this);
   }
 
   /** 패널을 버린다(멀티채팅에서 채널 닫기) — 이벤트 구독·문서 리스너·설정 구독·패널 목록에서 뺀다. */
@@ -405,6 +451,7 @@ export class ChatPanel {
   }
 
   clear(byUser = false) {
+    this.clearLineSelection?.();
     this.pendingLines = [];
     this.lastGroup = null;
     this.list.innerHTML = `<div class="empty">${byUser ? '채팅을 지웠습니다' : '메시지 대기 중…'}</div>`;
@@ -419,6 +466,7 @@ export class ChatPanel {
     this.state.className = `chat-state ${cls}`;
     this.stateName = name;
     this.connected = name === 'connected';
+    this.retry.hidden = !(this.active && this.chatChannelId && (name === 'failed' || name === 'disconnected'));
     this.updateInput();
   }
 
@@ -431,11 +479,14 @@ export class ChatPanel {
     this.emojiButton.disabled = !enabled;
     this.input.placeholder = loggedIn ? '채팅을 입력하세요…' : '로그인 후 채팅 참여 가능';
     let html = '';
+    if (!reason && this.restrictedUntil > Date.now()) reason = this.restrictText;
     if (reason) html = esc(reason);
     else if (!loggedIn) html = '로그인하면 채팅에 참여할 수 있어요 <button class="link-btn" data-login>로그인</button>';
     else if (this.connected && !this.canSend) html = '이 채팅방에서는 지금 채팅을 보낼 수 없습니다 (팔로워·구독자 전용이거나 제한 중)';
     this.banner.innerHTML = html;
     this.banner.hidden = !html;
+    this.banner.classList.toggle('warn', Boolean(reason));
+    this.banner.setAttribute('role', reason ? 'alert' : 'status');
     for (const fn of this.inputHooks) {
       try { fn(); } catch (e) { console.error(e); }
     }
@@ -585,27 +636,26 @@ export class ChatPanel {
       case 'noticeCleared':
         this.notice.hidden = true;
         break;
-      case 'blinded': {
-        const line = this.list.querySelector(`[data-id="${CSS.escape(ev.messageId)}"]`);
-        if (line) {
-          line.classList.add('blinded');
-          const text = line.querySelector('.text');
-          if (text) text.textContent = ev.blindText || '관리자에 의해 삭제된 메시지입니다.';
-        }
+      case 'blinded':
+        this.blind(ev.messageId, ev.blindText);
         break;
-      }
       case 'kicked':
         this.system('채팅방에서 퇴장되었습니다');
         break;
-      case 'penalized':
-        this.system('채팅 이용이 제한되었습니다');
-        this.updateInput('채팅 이용이 제한되었습니다');
+      case 'penalized': {
+        // 셸은 내 제한만 보낸다(state.rs forward_to_shell). 기간이 있으면 그동안 배너에 남기고, 끝나면 걷는다.
+        const sec = Math.max(0, Number(ev.duration) || 0);
+        const text = penaltyText(sec);
+        this.system(text);
+        this.restrictText = text;
+        this.restrictedUntil = sec > 0 ? Date.now() + sec * 1000 : 0;
+        clearTimeout(this.restrictTimer);
+        if (sec > 0) this.restrictTimer = setTimeout(() => this.updateInput(), sec * 1000 + 50);
+        this.updateInput(text);
         break;
+      }
       case 'sendRejected':
-        toast(ev.message || '메시지를 보내지 못했습니다');
-        this.updateInput(ev.message || '메시지를 보내지 못했습니다');
-        clearTimeout(this.bannerTimer);
-        this.bannerTimer = setTimeout(() => this.updateInput(), 5000);
+        this.flashInput(ev.message || '메시지를 보내지 못했습니다');
         break;
       case 'system':
         this.system(ev.text);
@@ -626,15 +676,80 @@ export class ChatPanel {
       if (fn(text)) { this.input.value = ''; return; }
     }
     this.input.disabled = true;
+    let failed = '';
     try {
       await api.chatSend(text, this.session);
       this.input.value = '';
+      this.remember(text);
     } catch (e) {
-      toast(e.message);
+      failed = (e && e.message) || '메시지를 보내지 못했습니다';
     } finally {
       this.updateInput();
+      this.renderCount();
       this.input.focus();
     }
+    // 실패는 이 패널 입력창 위에 — 멀티채팅처럼 패널이 여럿이면 토스트만으로는 어느 채팅인지 몰랐다. 쓴 글은 남긴다.
+    if (failed) this.flashInput(failed);
+  }
+
+  /** 입력창 위 배너에 잠깐(5초) 알린다 — 전송 실패·서버 거절. 토스트도 함께 띄운다. */
+  flashInput(text) {
+    toast(text);
+    this.updateInput(text);
+    clearTimeout(this.bannerTimer);
+    this.bannerTimer = setTimeout(() => this.updateInput(), 5000);
+  }
+
+  /** 보낸 메시지를 입력 기록에 — 같은 말을 연달아 보내면 한 번만. */
+  remember(text) {
+    if (this.history[this.history.length - 1] !== text) this.history.push(text);
+    if (this.history.length > HISTORY_MAX) this.history.shift();
+    this.historyAt = -1;
+  }
+
+  /** ↑/↓ 입력 기록 — 입력창이 비었거나 기록을 넘기는 중일 때만(쓰던 글의 커서 이동은 그대로). */
+  recall(dir) {
+    if (!this.history.length) return false;
+    const browsing = this.historyAt >= 0;
+    if (!browsing && (dir > 0 || this.input.value)) return false;
+    let at = browsing ? this.historyAt + dir : this.history.length - 1;
+    if (at < 0) at = 0;
+    if (at >= this.history.length) { this.historyAt = -1; this.input.value = ''; this.renderCount(); return true; }
+    this.historyAt = at;
+    this.input.value = this.history[at];
+    const end = this.input.value.length;
+    this.input.setSelectionRange(end, end);
+    this.renderCount();
+    return true;
+  }
+
+  /** 남은 글자 수 — 제한에 가까울 때만. */
+  renderCount() {
+    const max = this.input.maxLength > 0 ? this.input.maxLength : 100;
+    const n = [...this.input.value].length;
+    const show = n >= COUNT_FROM;
+    this.counter.hidden = !show;
+    this.root.classList.toggle('has-count', show);
+    if (!show) return;
+    this.counter.textContent = `${n}/${max}`;
+    this.counter.classList.toggle('full', n >= max);
+    this.counter.setAttribute('aria-label', n >= max ? `${max}자까지 쓸 수 있어요` : `${max - n}자 남음`);
+  }
+
+  /** 관리자 삭제(블라인드) — 이미 붙은 줄은 글을 바꾸고, 아직 붙기 전(다음 프레임·가려진 창의 1초 묶음)이면
+   *  붙일 글을 바꿔 둔다. 예전엔 붙기 전에 온 삭제를 놓쳐 지워진 메시지가 그대로 보였다. */
+  blind(messageId, blindText) {
+    if (!messageId) return;
+    const text = blindText || BLIND_TEXT;
+    const pending = this.pendingLines || [];
+    const i = pending.findIndex((m) => m.id === messageId);
+    if (i >= 0) pending[i] = { ...pending[i], isBlinded: true, content: text, emojis: {} };
+    const line = this.list.querySelector(`.chat-line[data-id="${CSS.escape(messageId)}"]`);
+    if (!line) return;
+    line.classList.add('blinded');
+    line.classList.remove('emote-only');
+    const el = line.querySelector('.text, .ev-body');
+    if (el) el.textContent = text;
   }
 
   // ── 멘션 트레이 (CHT-08) ───────────────────
@@ -675,11 +790,15 @@ export class ChatPanel {
 
   onContextMenu(e) {
     const line = e.target.closest('.chat-line[data-uid]');
-    if (!line) return;
+    if (!line || !line.dataset.uid) return;
     e.preventDefault();
+    this.openLineMenu(line, e.clientX, e.clientY);
+  }
+
+  /** 줄 메뉴 — 우클릭, 동작 막대의 '더보기', 키보드(Shift+F10·메뉴 키)가 함께 쓴다. */
+  openLineMenu(line, x, y) {
     const uid = line.dataset.uid;
     const nick = line.dataset.nick;
-    const text = line.querySelector('.text')?.textContent || '';
     const amount = line.querySelector('.amount')?.textContent || '';
     const highlighted = (chatPrefs().highlightedUsers || []).includes(uid);
     const items = [
@@ -695,9 +814,9 @@ export class ChatPanel {
       ['-'],
       ['block', '사용자 차단', 'danger'],
     ];
-    showMenu(e.clientX, e.clientY, items, (action) => {
+    showMenu(x, y, items, (action) => {
       switch (action) {
-        case 'copy-text': copy(text); break;
+        case 'copy-text': this.copyLine(line); break;
         case 'copy-nick': copy(nick); break;
         case 'copy-amount': copy(amount); break;
         case 'copy-id': copy(uid); break;
@@ -711,6 +830,11 @@ export class ChatPanel {
     });
   }
 
+  /** 줄 글 복사 — 이모티콘은 :이름: 으로 넣는다(예전엔 그림이 빠진 채 글만 복사됐다). */
+  copyLine(line) {
+    copy(lineCopyText(line));
+  }
+
   mention(nick) {
     if (this.input.disabled) { toast('지금은 채팅을 보낼 수 없습니다'); return; }
     this.input.value = `${`@${nick} ${this.input.value}`.trimEnd()} `;
@@ -718,8 +842,10 @@ export class ChatPanel {
   }
 
   pin(line) {
+    this.detachActions?.();
     const clone = line.cloneNode(true);
-    clone.classList.remove('mention', 'highlighted');
+    clone.classList.remove('mention', 'highlighted', 'kb-cur', 'search-match', 'solo-match');
+    clone.removeAttribute('id');
     clone.removeAttribute('data-uid');
     clone.removeAttribute('data-id');
     this.pinBar.innerHTML = `<span class="pin-icon">${ICON.pin}</span><div class="pin-body"></div><button class="icon-btn notice-x" data-unpin title="고정 해제">✕</button>`;
@@ -835,8 +961,15 @@ export class ChatPanel {
     return out;
   }
 
+  closePicker() {
+    if (this.picker.hidden) return;
+    hideWithExit(this.picker);
+    this.emojiButton.setAttribute('aria-expanded', 'false');
+  }
+
   togglePicker() {
-    if (!this.picker.hidden) { hideWithExit(this.picker); return; }
+    if (!this.picker.hidden) { this.closePicker(); return; }
+    this.emojiButton.setAttribute('aria-expanded', 'true');
     this.pickerPack = this.pickerPack || 0;
     this.picker.innerHTML = `
       <input type="search" class="emoji-search" placeholder="이모티콘 검색" autocomplete="off">
@@ -895,7 +1028,7 @@ export class ChatPanel {
 
   updateAutocomplete() {
     const tok = this.currentToken();
-    if (!tok) { this.autocomplete.hidden = true; return; }
+    if (!tok) { this.setAutocompleteOpen(false); return; }
     const q = tok.query.toLowerCase();
     let items = [];
     if (tok.kind === ':') {
@@ -909,8 +1042,15 @@ export class ChatPanel {
     this.acItems = items;
     this.acIndex = 0;
     this.acToken = tok;
-    this.autocomplete.innerHTML = items.map((it, i) => `<div class="ac-item${i === 0 ? ' active' : ''}" data-ac="${esc(it.value)}">${it.html}</div>`).join('');
-    this.autocomplete.hidden = items.length === 0;
+    this.autocomplete.innerHTML = items.map((it, i) => `<div class="ac-item${i === 0 ? ' active' : ''}" id="${this.uid}-ac${i}" role="option" aria-selected="${i === 0}" data-ac="${esc(it.value)}">${it.html}</div>`).join('');
+    this.setAutocompleteOpen(items.length > 0);
+  }
+
+  setAutocompleteOpen(open) {
+    this.autocomplete.hidden = !open;
+    this.input.setAttribute('aria-expanded', String(open));
+    if (open) this.input.setAttribute('aria-activedescendant', `${this.uid}-ac${this.acIndex || 0}`);
+    else this.input.removeAttribute('aria-activedescendant');
   }
 
   applyAutocomplete(value) {
@@ -921,25 +1061,41 @@ export class ChatPanel {
     el.value = el.value.slice(0, tok.start) + value + el.value.slice(caret);
     const pos = tok.start + value.length;
     el.setSelectionRange(pos, pos);
-    this.autocomplete.hidden = true;
+    this.setAutocompleteOpen(false);
     el.focus();
+    this.renderCount();
   }
 
   onInputKey(e) {
-    if (this.autocomplete.hidden) return;
+    if (this.autocomplete.hidden) {
+      if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !e.shiftKey && !e.altKey && !e.metaKey && !e.isComposing
+        && this.recall(e.key === 'ArrowUp' ? -1 : 1)) e.preventDefault();
+      return;
+    }
     const items = this.autocomplete.querySelectorAll('.ac-item');
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
       this.acIndex = (this.acIndex + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
-      items.forEach((el, i) => el.classList.toggle('active', i === this.acIndex));
+      items.forEach((el, i) => { el.classList.toggle('active', i === this.acIndex); el.setAttribute('aria-selected', String(i === this.acIndex)); });
+      this.input.setAttribute('aria-activedescendant', `${this.uid}-ac${this.acIndex}`);
+      items[this.acIndex]?.scrollIntoView({ block: 'nearest' });
     } else if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault();
       this.applyAutocomplete(this.acItems[this.acIndex].value);
     } else if (e.key === 'Escape') {
       e.preventDefault();
-      this.autocomplete.hidden = true;
+      this.setAutocompleteOpen(false);
     }
   }
+}
+
+/** 채팅 제한 안내 — 초 단위 기간을 사람 말로. 순수 함수. */
+export function penaltyText(sec) {
+  const s = Math.max(0, Math.round(Number(sec) || 0));
+  if (!s) return '채팅 이용이 잠시 제한되었습니다';
+  if (s < 60) return `${s}초 동안 채팅 이용이 제한되었습니다`;
+  if (s < 3600) return `${Math.round(s / 60)}분 동안 채팅 이용이 제한되었습니다`;
+  return `${Math.round(s / 360) / 10}시간 동안 채팅 이용이 제한되었습니다`;
 }
 
 function copy(text) {
@@ -958,21 +1114,44 @@ export function showMenu(x, y, items, onPick) {
     : `<button class="ctx-item${tone ? ` ${tone}` : ''}" role="menuitem" data-ctx="${esc(a)}">${esc(label)}</button>`)).join('');
   document.body.append(menu);
   const r = menu.getBoundingClientRect();
-  menu.style.left = `${Math.min(x, window.innerWidth - r.width - 8)}px`;
-  menu.style.top = `${Math.min(y, window.innerHeight - r.height - 8)}px`;
+  menu.style.left = `${Math.max(8, Math.min(x, window.innerWidth - r.width - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(y, window.innerHeight - r.height - 8))}px`;
+  // 키보드 — 열면 첫 항목에 초점, ↑/↓·Home/End 로 옮기고 Esc·Tab 으로 닫으면 연 자리로 초점을 돌린다.
+  // (예전엔 초점이 메뉴로 가지 않아 Esc 도 먹지 않고, 화살표로 고를 수 없었다.)
+  const opener = document.activeElement;
+  const buttons = [...menu.querySelectorAll('.ctx-item')];
+  buttons.forEach((b) => { b.tabIndex = -1; });
+  buttons[0]?.focus({ preventScroll: true });
   const outside = (e) => { if (!menu.contains(e.target)) close(); };
-  function close() {
+  const onBlur = () => close();
+  function close(restore = false) {
+    if (!menu.isConnected) return;
     menu.remove();
     document.removeEventListener('mousedown', outside, true);
-    window.removeEventListener('blur', close);
+    window.removeEventListener('blur', onBlur);
+    if (restore && opener && opener !== document.body && opener.isConnected && typeof opener.focus === 'function') opener.focus({ preventScroll: true });
   }
   setTimeout(() => document.addEventListener('mousedown', outside, true), 0);
-  window.addEventListener('blur', close);
+  window.addEventListener('blur', onBlur);
   menu.addEventListener('click', (e) => {
     const item = e.target.closest('[data-ctx]');
     if (!item) return;
-    close();
+    close(true);
     onPick(item.dataset.ctx);
   });
-  menu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
+  menu.addEventListener('keydown', (e) => {
+    const i = buttons.indexOf(document.activeElement);
+    const move = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: buttons.length - 1 }[e.key];
+    if (move !== undefined) {
+      e.preventDefault();
+      buttons[(move + buttons.length) % buttons.length]?.focus();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      close(true);
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      close(true);
+    }
+  });
 }
