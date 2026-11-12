@@ -93,11 +93,13 @@ impl LowLatencyConfiguration {
     /// 치지직 웹과 같은 지점 — 기본 프리셋 "웹과 같게". 웹 플레이어(hls.js LL-HLS)의 `liveSyncDuration` 2초를
     /// LL 재생목록 끝 기준 목표로 쓰고, 배속은 바꾸지 않는다(`buffer_paced`). 웹은 전방 버퍼가 4초를 넘으면
     /// 1.03배, 2초 이하로 내려오면 1배로 돌아가며 그 규칙은 `player.html` 의 `webCatchupTick` 이 똑같이 한다.
-    /// `max_latency` 12초는 웹의 라이브 구간(20초) 안쪽 안전망 — 그보다 크게 밀리면 목표 자리로 seek 한다.
+    /// `max_latency` 20초는 웹의 라이브 구간(`explictInLiveRange` 20초)과 같다 — 웹은 그 안에서는 끊긴 뒤에도 제자리에서
+    /// 이어 가고 버퍼가 4초를 넘을 때만 1.03배로 회수한다. 12초로 두었더니 10초 남짓 끊긴 뒤 목표 자리로 당겨져 얇은
+    /// 버퍼에서 다시 끊기는 고리가 생겼다(2026-11-12 실측, 4.17초 세그먼트 채널 멀티라이브: 3분에 4번·36초).
     pub const WEB_MATCH_HLSJS: Self = Self {
         buffer_paced: true,
         // PID 값은 이 세션에서 쓰지 않는다 — "직접 조정"으로 옮겨 갈 때 슬라이더 시작값이 될 뿐이다.
-        ..Self::preset(2.0, 12.0, 1.0, 1.03, 0.97, 0.55, 0.55, 0.35, 0.03, 0.02)
+        ..Self::preset(2.0, 20.0, 1.0, 1.03, 0.97, 0.55, 0.55, 0.35, 0.03, 0.02)
     };
 
     /// matchWeb v2 — hls.js 가장자리 목표(H_base). PID 는 돌지 않는다.
@@ -146,7 +148,7 @@ mod tests {
         let c = presets[0];
         assert!(presets.iter().all(|p| p.buffer_paced));
         assert_eq!(c.target_latency, 2.0, "웹 liveSyncDuration");
-        assert_eq!(c.max_latency, 12.0);
+        assert_eq!(c.max_latency, 20.0, "웹 explictInLiveRange");
         let others = [
             LowLatencyConfiguration::WEB_PARITY_HLSJS,
             LowLatencyConfiguration::STANDARD,

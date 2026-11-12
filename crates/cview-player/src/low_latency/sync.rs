@@ -555,9 +555,14 @@ mod tests {
         );
         assert_eq!(c.current_rate(), 1.0);
         assert_eq!(c.sync_state(), SyncState::Synced);
-        // 안전망: max_latency(12초)를 넘으면 목표 자리로 되돌린다.
+        // 10초쯤 끊겨 밀려도 웹처럼 제자리에서 이어 간다.
         for _ in 0..40 {
-            c.process_latency(20.0);
+            c.process_latency(14.0);
+        }
+        assert!(seeks.lock().unwrap().is_empty(), "라이브 구간(20초) 안에서는 당기지 않는다");
+        // 안전망: max_latency(20초)를 넘으면 목표 자리로 되돌린다.
+        for _ in 0..40 {
+            c.process_latency(30.0);
         }
         assert_eq!(seeks.lock().unwrap().first().copied(), Some(2.0));
     }

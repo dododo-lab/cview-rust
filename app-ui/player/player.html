@@ -825,7 +825,9 @@ const PROFILES = {
     //   (종전 [실측 2026-07-09] 3.0s 는 LL 을 끈 hls.js 의 세그먼트 끝 기준이었다.)
     webParity: {
         liveSyncDuration: 2.0,
-        liveMaxLatencyDuration: 16.0,
+        // 웹은 liveMaxLatencyDuration 이 없다(라이브 구간 20s 안에서는 끊겨도 제자리). hls.js 의 자동 점프는 Rust 안전망
+        //   (WEB_MATCH_HLSJS.max_latency 20s)보다 뒤에서만 걸리게 둔다.
+        liveMaxLatencyDuration: 24.0,
         liveBackBufferLength: 6,
         maxBufferLength: 12,
         maxMaxBufferLength: 20,
