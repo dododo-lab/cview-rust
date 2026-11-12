@@ -4,6 +4,7 @@ import { toast, icons } from './dom.js';
 import { showShortcuts, showAbout, showUpdateCheck } from './app-sheets.js';
 import { installUpdateNotifier } from './update-notify.js';
 import { installImageFade, installSegmentGlider, refreshSegmentGliders, installMicroMotion } from './motion.js';
+import { installLiveMotion } from './live-motion.js';
 import { installHoverPreview } from './hover-preview.js';
 import { setAdAudioHooks } from './ads.js';
 import { noteConnectorLimit } from './live-connector.js';
@@ -788,6 +789,7 @@ async function main() {
   installImageFade(); // 첫 화면 그림보다 먼저 — 놓친 load 로 썸네일이 투명하게 남지 않게
   installSegmentGlider(); // 모든 세그먼트의 고른 칸 판이 미끄러지게
   installMicroMotion();
+  installLiveMotion();
   installHoverPreview(); // 재생 썸네일 위에 잠시 머물면 소리 없이 미리보기
   trackFullscreen();
   installWindowControls(); // Windows — 제목 막대 대신 화면 오른쪽 위의 메뉴·최소화·최대화·닫기

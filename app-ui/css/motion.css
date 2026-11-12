@@ -687,3 +687,136 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
   animation: thumb-preview-load 1s linear infinite; opacity: 1;
 }
 @keyframes thumb-preview-load { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+
+/* ══ 라이브 정보란·채널 화면 (2026-11-12) — 등장 순차·숫자·LIVE 맥동·탄성 호버·카드 기울기·배너 패럴랙스 ══
+   - 대상: 라이브 단독 보기·포커스 아래 채널 정보(.mwi-*, ml-watch-info.js), 채널 화면(.page-channel, channel.js).
+   - JS 쪽(숫자 카운트업·롤링, 카드 기울기·빛 번짐, 배너 마우스 패럴랙스, 탭 내용 방향 전환)은 live-motion.js.
+   - 성능: transform 계열(translate·scale·rotate·transform)·opacity 만. 등장은 처음 그릴 때(.mo-enter)만 —
+     즐겨찾기·새로고침으로 다시 그릴 때는 되풀이하지 않는다. 키프레임은 from 만 둬 끝은 원래 값(배지의 translate 등)을 쓴다.
+   - 무한 반복은 LIVE 맥동 하나(작은 점·배지 테두리, 2.4초에 한 번 퍼지는 고리). 창이 가려지면(:root.mo-hidden)·
+     카드가 화면 밖이면(.mo-off) 멈춘다. 멀티라이브 영상 칸에는 아무것도 걸지 않는다.
+   - 움직임 줄이기(시스템·설정 "절약")는 맨 아래에서 none — 전역 규칙(시간 0.01ms)이 무한 반복을 빨리 돌리지 않게. */
+@keyframes mo-in-up { from { opacity: 0; translate: 0 8px; } }
+@keyframes mo-in-left { from { opacity: 0; translate: 12px 0; } }
+@keyframes mo-in-pop { from { opacity: 0; scale: .55; } }
+@keyframes mo-in-zoom { from { opacity: 0; scale: 1.18; } }
+@keyframes mo-live-ping { 0% { transform: scale(1); opacity: .6; } 70%, 100% { transform: scale(2.8); opacity: 0; } }
+@keyframes mo-live-halo { 0% { transform: scale(1); opacity: .85; } 75%, 100% { transform: scale(1.3, 1.6); opacity: 0; } }
+@keyframes mo-star-pop { 0% { scale: .3; rotate: -50deg; } 55% { scale: 1.28; rotate: 8deg; } 100% { scale: 1; rotate: 0deg; } }
+
+/* ── 등장 — 아바타가 톡 튀어나오고, 이름·제목·정보 줄·단추가 차례로 ── */
+.mo-enter :is(.channel-avatar, .mwi-avatar) { animation: mo-in-pop .5s var(--ease-spring) backwards; }
+.mo-enter :is(.channel-avatar .strip-live, .mwi-live-tag) { animation: mo-in-pop .4s var(--ease-spring) .26s backwards; }
+.mo-enter .channel-hero-bg { animation: mo-in-zoom .9s var(--ease-emph) backwards; }
+.mo-enter :is(.channel-id, .mwi-name) { animation: mo-in-up var(--dur-4) var(--ease-emph) .08s backwards; }
+.mo-enter .mwi-title { animation: mo-in-up var(--dur-4) var(--ease-emph) .13s backwards; }
+.mo-enter .mwi-meta > * { animation: mo-in-up var(--dur-4) var(--ease-emph) backwards; animation-delay: .18s; }
+.mo-enter .mwi-meta > :nth-child(2) { animation-delay: .22s; }
+.mo-enter .mwi-meta > :nth-child(3) { animation-delay: .26s; }
+.mo-enter :is(.channel-actions, .mwi-actions) > * { animation: mo-in-left .36s var(--ease-emph) backwards; animation-delay: .16s; }
+.mo-enter :is(.channel-actions, .mwi-actions) > :nth-child(2) { animation-delay: .2s; }
+.mo-enter :is(.channel-actions, .mwi-actions) > :nth-child(3) { animation-delay: .24s; }
+.mo-enter :is(.channel-actions, .mwi-actions) > :nth-child(4) { animation-delay: .28s; }
+.mo-enter :is(.channel-actions, .mwi-actions) > :nth-child(5) { animation-delay: .32s; }
+.mo-enter :is(.channel-actions, .mwi-actions) > :nth-child(n+6) { animation-delay: .36s; }
+.mo-enter .channel-live-line { animation: mo-in-up var(--dur-4) var(--ease-emph) .3s backwards; }
+:is(.channel-hero, .mwi-hero).mo-enter ~ :is(.channel-tabs, .mwi-tabbar) { animation: mo-in-up var(--dur-4) var(--ease-emph) .3s backwards; }
+/* 탭 내용 — 머리가 막 떠오르는 중이면 그 뒤로(--mo-base), 탭을 바꿔 그린 것은 바로 */
+:is(.channel-hero, .mwi-hero).mo-enter ~ :is(.channel-tab-body, .mwi-body) { --mo-base: .32s; }
+:is(.channel-tab-body.mo-enter > :is(.channel-info, .grid > .card:nth-child(-n+12)), .mwi-tiles > .mwi-tile, .mwi-card, .mwi-grid > .card:nth-child(-n+12)) {
+  animation: mo-in-up .38s var(--ease-emph) backwards; animation-delay: calc(var(--mo-base, 0s) + var(--mo-n, 0) * 45ms);
+}
+.mwi-tags > span:nth-child(-n+12) { animation: mo-in-pop .34s var(--ease-spring) backwards; animation-delay: calc(var(--mo-base, 0s) + .26s + var(--mo-n, 0) * 30ms); }
+:is(.channel-tab-body > .channel-info, :is(.channel-tab-body, .mwi-body) .grid > .card, .mwi-tiles > .mwi-tile, .mwi-tags > span):nth-child(2) { --mo-n: 1; }
+:is(.channel-tab-body > .channel-info, :is(.channel-tab-body, .mwi-body) .grid > .card, .mwi-tiles > .mwi-tile, .mwi-tags > span):nth-child(3) { --mo-n: 2; }
+:is(.channel-tab-body > .channel-info, :is(.channel-tab-body, .mwi-body) .grid > .card, .mwi-tiles > .mwi-tile, .mwi-tags > span):nth-child(4) { --mo-n: 3; }
+:is(:is(.channel-tab-body, .mwi-body) .grid > .card, .mwi-tags > span):nth-child(5) { --mo-n: 4; }
+:is(:is(.channel-tab-body, .mwi-body) .grid > .card, .mwi-tags > span):nth-child(6) { --mo-n: 5; }
+:is(:is(.channel-tab-body, .mwi-body) .grid > .card, .mwi-tags > span):nth-child(7) { --mo-n: 6; }
+:is(:is(.channel-tab-body, .mwi-body) .grid > .card, .mwi-tags > span):nth-child(8) { --mo-n: 7; }
+:is(:is(.channel-tab-body, .mwi-body) .grid > .card, .mwi-tags > span):nth-child(9) { --mo-n: 8; }
+:is(:is(.channel-tab-body, .mwi-body) .grid > .card, .mwi-tags > span):nth-child(10) { --mo-n: 9; }
+:is(:is(.channel-tab-body, .mwi-body) .grid > .card, .mwi-tags > span):nth-child(11) { --mo-n: 10; }
+:is(:is(.channel-tab-body, .mwi-body) .grid > .card, .mwi-tags > span):nth-child(12) { --mo-n: 11; }
+.mwi-card { --mo-n: 4; }
+
+/* ── 숫자 — 폭이 흔들리지 않게 고정폭 숫자, 롤링(live-motion.js rollTo)은 inline-block 이어야 옮겨진다 ── */
+.mo-num { display: inline-block; font-variant-numeric: tabular-nums; }
+.channel-id p { font-variant-numeric: tabular-nums; }
+
+/* ── LIVE 맥동 — 점에서 고리가 퍼지고, 배지는 테두리 빛이 번진다(2.4초에 한 번) ── */
+.mwi-pill-live i::after {
+  content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--live); pointer-events: none;
+  animation: mo-live-ping 2.4s var(--ease-out) infinite;
+}
+.channel-live-line .badge-live { position: relative; inset: auto; } /* 고리 기준 — 기본 .badge-live 의 top·left(썸네일 모서리용)는 걷는다 */
+:is(.mwi-live-tag, .channel-avatar .strip-live, .channel-live-line .badge-live)::after {
+  content: ""; position: absolute; inset: -2px; border-radius: inherit; pointer-events: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--live) 60%, transparent); opacity: 0;
+  animation: mo-live-halo 2.4s var(--ease-out) .6s infinite;
+}
+:is(:root.mo-hidden, .mo-off) :is(.mwi-pill-live i, .mwi-live-tag, .channel-avatar .strip-live, .channel-live-line .badge-live)::after { animation-play-state: paused; }
+
+/* ── 프로필 — 올리면 살짝 커지며 기운다(스프링으로 돌아온다) ── */
+:is(.channel-avatar, .mwi-avatar) { transition: scale .42s var(--ease-spring), rotate .42s var(--ease-spring); }
+:is(.channel-avatar, .mwi-avatar):hover { scale: 1.06; rotate: -4deg; }
+
+/* ── 태그·카테고리·통계 타일·단추 — 탄성 호버·누름 ── */
+:is(.mwi-tags > span, .mwi-pill-cat) {
+  transition: scale .32s var(--ease-spring), translate .32s var(--ease-spring), color var(--dur-2) var(--ease-out), background-color var(--dur-2) var(--ease-out);
+}
+:is(.mwi-tags > span, .mwi-pill-cat):hover { scale: 1.06; translate: 0 -2px; }
+.mwi-tags > span:hover { color: var(--text-primary); }
+:is(.mwi-tags > span, .mwi-pill-cat):active { scale: .94; translate: 0 0; transition-duration: var(--dur-1); }
+.mwi-tile { transition: translate var(--dur-3) var(--ease-spring), box-shadow var(--dur-2) var(--ease-out); }
+.mwi-tile:hover { translate: 0 -2px; box-shadow: inset 0 0 0 1px var(--border), 0 10px 22px -16px rgba(0, 0, 0, .45); }
+.mwi-tile-icon { transition: scale .42s var(--ease-spring), rotate .42s var(--ease-spring); }
+.mwi-tile:hover .mwi-tile-icon { scale: 1.12; rotate: -8deg; }
+.channel-actions .icon-btn.round {
+  transition-property: background, color, border-color, box-shadow, opacity, scale, translate;
+  transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), .32s, .32s;
+  transition-timing-function: var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-spring), var(--ease-spring);
+}
+.channel-actions .icon-btn.round:hover:not(:active) { translate: 0 -2px; }
+.channel-actions .btn:hover:not(:disabled):not(:active) { translate: 0 -2px; }
+.channel-actions .fav.mo-pop svg { animation: mo-star-pop .55s var(--ease-spring); }
+
+/* ── 카드 기울기·빛 번짐 — 썸네일만 마우스 쪽으로 기울고, 미리 그린 빛 층이 마우스를 따라 옮겨진다 ── */
+:is(.page-channel, .mwi-body) .card.media-card > .thumb { transition: box-shadow var(--dur-3) var(--ease-out), transform .55s var(--ease-spring); }
+.thumb.mo-tilting { transform: perspective(700px) rotateX(var(--mo-rx, 0deg)) rotateY(var(--mo-ry, 0deg)); transition-duration: var(--dur-3), .14s; transition-timing-function: var(--ease-out), var(--ease-out); }
+.mo-glare {
+  position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: 0;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, .26), rgba(255, 255, 255, .08) 32%, transparent 58%);
+  translate: calc((var(--mo-gx, .5) - .5) * 100%) calc((var(--mo-gy, .5) - .5) * 100%);
+  transition: opacity var(--dur-3) var(--ease-out);
+}
+.mo-tilting > .mo-glare { opacity: 1; }
+:root[data-theme="light"] .mo-glare { background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, .34), rgba(255, 255, 255, .1) 32%, transparent 58%); }
+
+/* ── 배너 패럴랙스 — 흐린 배경은 마우스 반대쪽으로(--mo-px/py, live-motion.js), 스크롤하면 내용보다 느리게 내려간다 ── */
+.channel-hero-bg { transform: scale(1.4) translate(var(--mo-px, 0px), var(--mo-py, 0px)); transition: transform .9s var(--ease-out); }
+@supports (animation-timeline: scroll()) {
+  /* 채널 화면은 .page 가 스크롤한다 — 배너(.channel-hero)가 overflow:hidden 이라 nearest 로는 그 칸을 잡아 이름을 단다 */
+  .page-channel { scroll-timeline: --mo-channel-y block; }
+  .channel-hero-bg img { animation: mo-hero-parallax linear both; animation-timeline: --mo-channel-y; animation-range: 0 320px; }
+  @keyframes mo-hero-parallax { to { translate: 0 34px; scale: 1.08; } }
+}
+
+/* ── 움직임 줄이기 — 등장·맥동·패럴랙스·기울기·호버 크기 변화를 모두 끈다(색 변화만 남는다) ── */
+@media (prefers-reduced-motion: reduce) {
+  .mo-enter *, :is(.channel-hero, .mwi-hero).mo-enter ~ *, .channel-tab-body > *, .channel-tab-body .grid > .card, .mwi-tiles > *, .mwi-card, .mwi-grid > .card, .mwi-tags > span,
+  :is(.mwi-pill-live i, .mwi-live-tag, .channel-avatar .strip-live, .channel-live-line .badge-live)::after, .channel-hero-bg img, .channel-actions .fav svg { animation: none !important; }
+  :is(.channel-avatar, .mwi-avatar, .mwi-tags > span, .mwi-pill-cat, .mwi-tile, .mwi-tile-icon, .channel-actions .icon-btn.round, .channel-actions .btn):is(:hover, :active),
+  :is(.mwi-tile:hover .mwi-tile-icon) { scale: none !important; translate: none !important; rotate: none !important; }
+  .channel-hero-bg { transform: scale(1.4) !important; }
+  .thumb.mo-tilting { transform: none !important; }
+  .mo-glare { display: none; }
+}
+:root[data-motion="reduced"] :is(.mo-enter *, :is(.channel-hero, .mwi-hero).mo-enter ~ *, .channel-tab-body > *, .channel-tab-body .grid > .card, .mwi-tiles > *, .mwi-card, .mwi-grid > .card, .mwi-tags > span,
+  .channel-hero-bg img, .channel-actions .fav svg),
+:root[data-motion="reduced"] :is(.mwi-pill-live i, .mwi-live-tag, .channel-avatar .strip-live, .channel-live-line .badge-live)::after { animation: none !important; }
+:root[data-motion="reduced"] :is(.channel-avatar, .mwi-avatar, .mwi-tags > span, .mwi-pill-cat, .mwi-tile, .mwi-tile-icon, .channel-actions .icon-btn.round, .channel-actions .btn):is(:hover, :active),
+:root[data-motion="reduced"] .mwi-tile:hover .mwi-tile-icon { scale: none !important; translate: none !important; rotate: none !important; }
+:root[data-motion="reduced"] .channel-hero-bg { transform: scale(1.4) !important; }
+:root[data-motion="reduced"] .thumb.mo-tilting { transform: none !important; }
+:root[data-motion="reduced"] .mo-glare { display: none; }
