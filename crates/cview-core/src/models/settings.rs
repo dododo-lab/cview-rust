@@ -1078,9 +1078,11 @@ mod tests {
             .get("sharpnessLevel")
             .is_none());
         // 왕복
-        let mut s = PlayerSettings::default();
-        s.sharpness_level = Some(3);
-        s.sharpness_enlarged_only = true;
+        let s = PlayerSettings {
+            sharpness_level: Some(3),
+            sharpness_enlarged_only: true,
+            ..Default::default()
+        };
         let back: PlayerSettings =
             serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
         assert_eq!(back, s);
