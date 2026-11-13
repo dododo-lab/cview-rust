@@ -481,6 +481,7 @@ export class MultiLivePage {
     pane.controls = new PaneControls(pane, {
       makeAudible: () => this.makeAudible(pane),
       applySharpenAll: (on) => this.applySharpenAll(on),
+      flash: (text) => this.watch.flash(text),
     });
     this.panes.set(slot, pane);
     const queued = this.pending.get(slot);
@@ -591,6 +592,8 @@ export class MultiLivePage {
       // 그 속성을 보고 패인 클릭을 "라이브로 열기"로 바꿔 포커스 전환 대신 라이브 단독 보기로 넘어갔다.
       pane.el.dataset.perfChannel = s.channelId;
       pane.controls?.setChannel(s.channelId);
+      // 라이브 단독 보기의 무대 패인만 배속·화면 비율·자동 보정/업스케일·이퀄라이저를 쓴다(ml-pane-controls.js).
+      pane.controls?.setStage(this.watchSlot === s.slot);
       this.renderPane(pane, s, order.indexOf(s.id), s.id === state.selectedId);
     }
     this.applyFocusGrid(focus, order);
@@ -600,6 +603,7 @@ export class MultiLivePage {
       if (live.has(slot) || pane.exiting) continue;
       // 닫힌 패인 — 숨기기만 하면 iframe 이 MediaSource 버퍼를 계속 쥔다(모두 닫은 뒤 RSS 3GB대).
       cancelPreroll(pane.el);
+      pane.controls?.setStage(false);
       const release = () => {
         pane.bridge.run('try { stop(); video.removeAttribute("src"); video.load(); } catch (e) {}');
         pane.el.hidden = true;

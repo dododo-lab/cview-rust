@@ -5,12 +5,30 @@
 // - 들리는 패인은 Rust 가 setVolume(0/1) 로 정한다. 패인 볼륨은 그 위에 곱하는 배율이라
 //   여러 소리 모드와 함께 써도 서로 덮어쓰지 않는다.
 // - 마우스를 움직이면 나타나고 재생 중 2.5초 가만히 있으면 커서와 함께 숨는다. 일시정지·메뉴 열림이면 계속 보인다.
+// - 라이브 단독 보기의 무대 패인(setStage)은 ⚙ 에 예전 시청 화면 고급 패널의 재생 도구를 더 보인다 —
+//   배속·화면 꽉 채우기·자동 화질 보정·업스케일·픽셀 그대로 확대·이퀄라이저(Windows). 배속 말고는 전역 플레이어
+//   설정(player-tools.js)이라 시청 화면과 같은 값을 쓰고, 무대에 오를 때·새 재생마다 다시 걸고 내려오면 되돌린다.
+//   그리드 패인은 작고 여러 개라(업스케일은 패인마다 GPU 를 쓴다) 화질·지연·채널별 화면 보정만 둔다.
 import { esc, toast, hideWithExit } from './dom.js';
 import { qualityOptions, liveBadgeState, togglePipFor, installVolumeReveal, toggleFullscreenOn } from './viewer-controls.js';
 import { ADJUST_RANGES, applyPicture, pictureFor, resetAdjust, setPicture } from './picture.js';
 import { watchBarHtml, watchBarEndHtml, WATCH_ICON } from './ml-watch.js';
+import {
+  RATES, RATE_NOTE, EQ_SUPPORTED, EQ_FREQS, freqLabel, loadEqPresets, loadPlayerSettings, savePlayerSettings,
+  applyPlayerTools, clearPlayerTools, eqWanted, eqBands, eqOnPatch,
+} from './player-tools.js';
 
 const IDLE_MS = 2500;
+
+// 단독 보기 ⚙ 의 전역 플레이어 설정 스위치 — [설정 키, 이름, 설명]
+const STAGE_TOOLS = [
+  ['autoPictureEnhancement', '자동 화질 보정', '어두운·흐린 장면의 밝기·대비·채도를 자동으로 맞춥니다'],
+  ['videoUpscaling', '업스케일', '영상보다 큰 화면에서 GPU 로 또렷하게 키웁니다'],
+  ['sharpPixelScaling', '픽셀 그대로 확대', '확대할 때 픽셀을 부드럽게 하지 않습니다'],
+];
+const GLOBAL_NOTE = '플레이어 설정 — 시청 화면과 단독 보기에 함께 적용';
+// 다시 그린 메뉴에서 같은 항목으로 초점을 되돌릴 때 보는 속성
+const FOCUS_KEYS = ['data-mp', 'data-level', 'data-rate', 'data-key', 'data-adj', 'data-eq-band', 'data-eq-preamp', 'data-eq-preset'];
 
 /** 메뉴 안에서 보이는(누를 수 있는) 항목 — 숨은 좁은 화면 전용 항목은 뺀다. */
 function menuItems(menu) {
@@ -106,6 +124,12 @@ export class PaneControls {
     this.latency = 0;
     this.gain = 1;
     this.audible = false;
+    this.stage = false; // 라이브 단독 보기의 무대 패인인가(multilive.render 가 정한다)
+    this.rate = 1; // 이 재생의 배속 — 저장하지 않는다(새 재생·LIVE·무대에서 내려오면 1)
+    this.playerSettings = null; // 무대일 때 쓰는 전역 플레이어 설정
+    this.settingsSeq = 0;
+    this.eqApplied = false;
+    this.eq = { freqs: EQ_FREQS, presets: [] };
     this.playButton = this.el.querySelector('.ml-pane-bar [data-mp="play"]');
     this.liveButton = this.el.querySelector('[data-mp="live"]');
     this.gearMenu = this.el.querySelector('.ml-gear-menu');
@@ -117,6 +141,7 @@ export class PaneControls {
     bindMenuKeys(this.gearMenu);
     bindMenuKeys(this.moreMenu);
     this.gearMenu.addEventListener('input', (e) => this.onAdjustInput(e));
+    this.gearMenu.addEventListener('change', (e) => this.onMenuChange(e));
     this.range.addEventListener('input', () => this.setGain(Number(this.range.value) / 100));
     this.volumeReveal = installVolumeReveal(this.el.querySelector('.ml-vol'), this.range);
     this.syncRangeFill();
@@ -186,6 +211,13 @@ export class PaneControls {
     } else if (type === 'playStarted' || type === 'ready') {
       this.patchVolume();
       this.applyPicture();
+      if (this.stage) {
+        // 새 재생·새 플레이어 문서는 1배속(예전 시청 화면과 같다) — 메뉴가 고른 배속과 어긋나지 않게 맞춘다.
+        if (this.rate !== 1) this.normalRate();
+        this.applyTools();
+      }
+    } else if (type === 'equalizer' && this.stage && data && data.ok === false) {
+      toast('이퀄라이저를 켤 수 없습니다 — 이 방송은 오디오 처리를 쓸 수 없습니다');
     }
   }
 
@@ -201,6 +233,7 @@ export class PaneControls {
     this.latency = 0;
     this.levels = [];
     this.audible = false;
+    this.rate = 1; // 새 채널의 플레이어는 1배속으로 시작한다(loadSource)
     this.range.value = '100';
     this.syncRangeFill();
     this.closeMenus();
@@ -266,6 +299,9 @@ export class PaneControls {
       case 'sharpen': this.setSharpen(!pictureFor(this.channelId).sharpen); break;
       case 'sharpen-all': this.hooks.applySharpenAll?.(pictureFor(this.channelId).sharpen); break;
       case 'adjust-reset': resetAdjust(this.channelId); this.applyPicture(); this.renderGear(); break;
+      case 'rate': this.setRate(Number(action.dataset.rate)); break;
+      case 'tool': this.toggleTool(action.dataset.key); break;
+      case 'eq': this.toggleEq(); break;
       default: break;
     }
   }
@@ -277,6 +313,8 @@ export class PaneControls {
     if (menu === this.gearMenu) {
       this.bridge.call('getLevels');
       this.renderGear();
+      // 무대 패인 — 다른 곳(설정·시청 화면)에서 바꾼 플레이어 설정을 다시 읽는다. 값이 같으면 다시 그리지 않는다.
+      if (this.stage) this.refreshSettings();
     }
     menu.hidden = false;
     this.menuButton = this.el.querySelector(`[data-mp="${menu === this.gearMenu ? 'gear' : 'more'}"]`);
@@ -296,9 +334,16 @@ export class PaneControls {
   goLive() {
     const v = this.video;
     if (v && v.paused) this.bridge.call('play');
-    if (v && v.playbackRate !== 1) this.bridge.call('setRate', 1);
+    this.normalRate();
     this.bridge.call('seekToLiveEdge');
     toast('라이브로 이동', 1000);
+  }
+
+  /** 1배속으로 — LIVE(따라잡기)·새 재생·무대에서 내려올 때. 지연 따라잡기 배속(1.03)도 이것으로 풀린다. */
+  normalRate() {
+    const v = this.video;
+    if (this.rate !== 1 || (v && v.playbackRate !== 1)) this.bridge.call('setRate', 1);
+    this.rate = 1;
   }
 
   toggleFullscreen() {
@@ -306,6 +351,7 @@ export class PaneControls {
   }
 
   renderGear() {
+    const focusSel = this.focusedItemSelector();
     const items = [{ index: -1, label: '자동' }, ...this.levels];
     const v = this.video;
     // 직접 고른 화질은 고른 높이로(바꾼 직후 영상은 아직 앞 화질이다)
@@ -318,7 +364,171 @@ export class PaneControls {
       <div class="ml-menu-sep"></div>
       <div class="ml-menu-head">지연 <span>${lat}</span></div>
       <button class="ml-menu-item" data-mp="live"><span>라이브로 이동 (따라잡기)</span></button>
-      ${this.pictureMenuHtml()}`;
+      ${this.stage ? this.playMenuHtml() : ''}
+      ${this.pictureMenuHtml()}
+      ${this.stage ? this.stageToolsHtml() : ''}
+      ${this.stage && EQ_SUPPORTED ? this.eqMenuHtml() : ''}`;
+    this.gearMenu.classList.toggle('ml-stage-tools', this.stage);
+    // 열린 채 다시 그리면(화질 목록·설정이 늦게 옴) 키보드 초점이 body 로 떨어졌다 — 같은 항목으로 되돌린다.
+    if (focusSel) this.gearMenu.querySelector(focusSel)?.focus({ preventScroll: true });
+  }
+
+  focusedItemSelector() {
+    const a = document.activeElement;
+    if (!a || !this.gearMenu.contains(a)) return null;
+    const parts = FOCUS_KEYS.filter((k) => a.hasAttribute(k)).map((k) => `[${k}="${CSS.escape(a.getAttribute(k))}"]`);
+    return parts.length ? parts.join('') : null;
+  }
+
+  // ── 단독 보기 무대 — 배속·화면 비율·자동 보정/업스케일·이퀄라이저(예전 시청 화면 고급 패널과 같은 설정) ──
+
+  /** multilive.render 가 매번 부른다 — 무대에 오르면 저장된 도구를 걸고, 내려오면 되돌린다. */
+  setStage(on) {
+    const stage = Boolean(on);
+    if (this.stage === stage) return;
+    this.stage = stage;
+    // 무대에 오르고 내릴 때 패인 크기·자리가 크게 바뀐다 — 열린 메뉴는 닫는다(항목도 달라진다).
+    if (this.menuOpen) this.closeMenus();
+    if (!stage) {
+      if (this.rate !== 1) this.normalRate(); // 지연 따라잡기(1.03)는 그리드에서도 그대로 둔다
+      clearPlayerTools(this.bridge, { eq: this.eqApplied });
+      this.eqApplied = false;
+      return;
+    }
+    this.applyTools(); // 앞서 읽은 값이 있으면 바로
+    this.refreshSettings();
+  }
+
+  /** 전역 플레이어 설정을 다시 읽어 건다(무대에 오를 때·⚙ 를 열 때). */
+  async refreshSettings() {
+    const seq = this.settingsSeq;
+    const [p] = await Promise.all([loadPlayerSettings(), EQ_SUPPORTED ? this.loadEq() : null]);
+    // 읽는 사이 무대에서 내려왔거나 메뉴에서 값을 바꿨으면 그 값을 덮지 않는다.
+    if (!this.stage || seq !== this.settingsSeq) return;
+    const changed = JSON.stringify(p) !== JSON.stringify(this.playerSettings);
+    this.playerSettings = p;
+    if (!changed) return;
+    this.applyTools();
+    if (!this.gearMenu.hidden) this.renderGear();
+  }
+
+  async loadEq() {
+    this.eq = await loadEqPresets();
+  }
+
+  /** 저장된 도구를 이 패인 플레이어에 건다(무대일 때만). 플레이어 문서가 아직이면 ready 에서 다시 온다. */
+  applyTools() {
+    if (!this.stage || !this.playerSettings) return;
+    const p = this.playerSettings;
+    const eqOn = applyPlayerTools(this.bridge, p);
+    if (!eqOn && this.eqApplied) this.bridge.call('setEqualizerEnabled', false);
+    this.eqApplied = eqOn && this.bridge.ready;
+  }
+
+  /** 메뉴에서 바꾼 값 — 바로 걸고 저장한다(저장 응답을 기다리면 스위치가 늦게 바뀐다). */
+  async savePatch(patch) {
+    this.settingsSeq += 1;
+    this.playerSettings = { ...(this.playerSettings || {}), ...patch };
+    this.applyTools();
+    if (!this.gearMenu.hidden) this.renderGear();
+    const seq = this.settingsSeq;
+    try {
+      const saved = await savePlayerSettings(patch);
+      if (seq === this.settingsSeq && this.stage) this.playerSettings = saved;
+    } catch (e) {
+      toast(e.message);
+    }
+  }
+
+  setRate(rate) {
+    if (!RATES.includes(rate)) return;
+    this.rate = rate;
+    this.bridge.call('setRate', rate);
+    this.hooks.flash?.(`${rate}배속`);
+  }
+
+  toggleTool(key) {
+    const p = this.playerSettings || {};
+    if (key === 'aspectRatio') this.savePatch({ aspectRatio: p.aspectRatio === 'fill' ? null : 'fill' });
+    else if (STAGE_TOOLS.some(([k]) => k === key)) this.savePatch({ [key]: !p[key] });
+  }
+
+  toggleEq() {
+    if (!EQ_SUPPORTED) return;
+    const p = this.playerSettings || {};
+    this.savePatch(eqWanted(p) ? { equalizerPreset: null } : eqOnPatch(p, this.eq.presets));
+  }
+
+  playMenuHtml() {
+    const p = this.playerSettings || {};
+    const fill = p.aspectRatio === 'fill';
+    return `
+      <div class="ml-menu-sep"></div>
+      <div class="ml-menu-head" title="${esc(RATE_NOTE)}">재생 속도 <span>${this.rate}x</span></div>
+      <div class="ml-rate-row" role="group" aria-label="재생 속도">${RATES.map((r) => `<button class="ml-menu-item ml-rate${r === this.rate ? ' active' : ''}" role="menuitemradio" aria-checked="${r === this.rate}" data-mp="rate" data-rate="${r}" aria-label="${r}배속">${r}x</button>`).join('')}</div>
+      <p class="ml-menu-note">LIVE 를 누르면 1배속으로 돌아갑니다</p>
+      <button class="ml-menu-item ml-check" role="menuitemcheckbox" aria-checked="${fill}" data-mp="tool" data-key="aspectRatio" data-keep-open title="${esc(GLOBAL_NOTE)}"><span>화면 꽉 채우기(비율 무시)</span><span class="ml-switch${fill ? ' on' : ''}"></span></button>`;
+  }
+
+  stageToolsHtml() {
+    const p = this.playerSettings || {};
+    return `
+      <div class="ml-menu-sep"></div>
+      <div class="ml-menu-head" title="${esc(GLOBAL_NOTE)}">자동 보정·확대 <span>플레이어 설정</span></div>${STAGE_TOOLS.map(([key, label, help]) => `
+      <button class="ml-menu-item ml-check" role="menuitemcheckbox" aria-checked="${Boolean(p[key])}" data-mp="tool" data-key="${key}" data-keep-open title="${esc(`${help} · ${GLOBAL_NOTE}`)}"><span>${label}</span><span class="ml-switch${p[key] ? ' on' : ''}"></span></button>`).join('')}`;
+  }
+
+  /** 10밴드 이퀄라이저 — Windows(WebView2)에서만. 꺼져 있으면 스위치만(꺼진 슬라이더는 초점을 받지 못해 화살표 이동이 막힌다). */
+  eqMenuHtml() {
+    const p = this.playerSettings || {};
+    const on = eqWanted(p);
+    const head = `
+      <div class="ml-menu-sep"></div>
+      <div class="ml-menu-head">이퀄라이저</div>
+      <button class="ml-menu-item ml-check" role="menuitemcheckbox" aria-checked="${on}" data-mp="eq" data-keep-open title="${esc(GLOBAL_NOTE)}"><span>이퀄라이저</span><span class="ml-switch${on ? ' on' : ''}"></span></button>`;
+    if (!on) return head;
+    const { freqs, presets } = this.eq;
+    const bands = eqBands(p, presets);
+    const pre = Number(p.equalizerPreAmp) || 0;
+    const known = presets.some((pr) => pr.name === p.equalizerPreset);
+    return `${head}
+      <label class="ml-adjust-row ml-eq-row" data-keep-open><span>프리셋</span>
+        <select data-eq-preset aria-label="이퀄라이저 프리셋">
+          ${presets.map((pr) => `<option value="${esc(pr.name)}"${pr.name === p.equalizerPreset ? ' selected' : ''}>${esc(pr.name)}</option>`).join('')}
+          ${known ? '' : `<option selected>${esc(p.equalizerPreset)}</option>`}
+        </select></label>
+      <label class="ml-adjust-row ml-eq-row" data-keep-open><span>프리앰프</span>
+        <input type="range" data-eq-preamp min="-12" max="12" step="0.5" value="${pre}" aria-label="프리앰프">
+        <output>${pre}dB</output></label>
+      <div class="ml-eq-bands" data-keep-open>${bands.map((g, i) => `
+        <label class="ml-eq-band"><output>${g > 0 ? '+' : ''}${g}</output><input type="range" min="-12" max="12" step="0.5" value="${g}" data-eq-band="${i}" aria-label="${freqLabel(freqs[i])}Hz"><span>${freqLabel(freqs[i])}</span></label>`).join('')}</div>`;
+  }
+
+  /** 이퀄라이저 슬라이더를 끄는 동안 — 바로 듣게 걸기만 하고 저장은 놓을 때(change). */
+  onEqInput(t) {
+    const out = t.parentElement.querySelector('output');
+    const v = Number(t.value);
+    if (t.dataset.eqBand !== undefined) {
+      if (out) out.textContent = `${v > 0 ? '+' : ''}${v}`;
+      this.bridge.call('setEqualizerBand', Number(t.dataset.eqBand), v);
+    } else if (t.dataset.eqPreamp !== undefined) {
+      if (out) out.textContent = `${v}dB`;
+      this.bridge.call('setEqualizerPreAmp', v);
+    }
+  }
+
+  onMenuChange(e) {
+    const t = e.target;
+    if (!this.stage || !EQ_SUPPORTED || !t.closest) return;
+    if (t.dataset.eqBand !== undefined) {
+      const bands = [...this.gearMenu.querySelectorAll('[data-eq-band]')].map((x) => Number(x.value));
+      this.savePatch({ equalizerBands: bands, equalizerPreset: '사용자 지정' });
+    } else if (t.dataset.eqPreamp !== undefined) {
+      this.savePatch({ equalizerPreAmp: Number(t.value) });
+    } else if (t.dataset.eqPreset !== undefined) {
+      const pr = this.eq.presets.find((x) => x.name === t.value);
+      if (pr) this.savePatch({ equalizerPreset: pr.name, equalizerBands: pr.gains, equalizerPreAmp: pr.preAmp });
+    }
   }
 
   // ── 화면 보정(선명한 화면·밝기·대비·채도) — 채널마다 기억(picture.js) ──
@@ -357,6 +567,7 @@ export class PaneControls {
   }
 
   onAdjustInput(e) {
+    if (this.stage && e.target.matches?.('[data-eq-band], [data-eq-preamp]')) { this.onEqInput(e.target); return; }
     const input = e.target.closest('[data-adj]');
     if (!input || !this.channelId) return;
     const value = Number(input.value);
