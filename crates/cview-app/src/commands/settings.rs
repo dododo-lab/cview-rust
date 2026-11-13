@@ -390,8 +390,7 @@ mod tests {
         assert!(set.video_upscaling);
         let clamped: PlayerSettings = apply_patch(&set, json!({ "sharpnessLevel": 7 })).unwrap();
         assert_eq!(clamped.sharpness_level, Some(3));
-        let cleared: PlayerSettings =
-            apply_patch(&set, json!({ "sharpnessLevel": null })).unwrap();
+        let cleared: PlayerSettings = apply_patch(&set, json!({ "sharpnessLevel": null })).unwrap();
         assert_eq!(cleared.sharpness_level, None);
         assert!(serde_json::to_value(&cleared)
             .unwrap()

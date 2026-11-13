@@ -1038,14 +1038,17 @@ mod tests {
         assert_eq!(lvl(r#"{"sharpnessLevel":2.6}"#), Some(3));
         // 숫자가 아니면 None 으로 흡수 — 디코딩은 성공해야 한다(실패하면 그 세션의 설정 저장이 막힌다).
         for bad in [r#""high""#, "true", "{}", "null", "[]"] {
-            assert_eq!(lvl(&format!(r#"{{"sharpnessLevel":{bad}}}"#)), None, "{bad}");
+            assert_eq!(
+                lvl(&format!(r#"{{"sharpnessLevel":{bad}}}"#)),
+                None,
+                "{bad}"
+            );
         }
         let s: PlayerSettings =
             serde_json::from_str(r#"{"sharpnessEnlargedOnly":"x","volumeLevel":0.5}"#).unwrap();
         assert!(!s.sharpness_enlarged_only);
         assert_eq!(s.volume_level, 0.5);
-        let on: PlayerSettings =
-            serde_json::from_str(r#"{"sharpnessEnlargedOnly":true}"#).unwrap();
+        let on: PlayerSettings = serde_json::from_str(r#"{"sharpnessEnlargedOnly":true}"#).unwrap();
         assert!(on.sharpness_enlarged_only);
     }
 
