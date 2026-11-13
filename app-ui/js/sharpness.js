@@ -30,6 +30,9 @@ const NOTICE_KEY = 'cview.sharpness.notice.v1';
 const clampLevel = (v) => Math.max(0, Math.min(3, Math.round(Number(v) || 0)));
 let state = { level: 0, enlargedOnly: false };
 let ready = null;
+let localGen = 0; // 사용자가 바꿀 때마다 +1 — 그보다 먼저 시작한 저장값 읽기는 버린다(늦게 온 옛 값이 덮지 않게)
+let saving = 0; // 저장 중인 setSharpness 수
+let pendingNotice = null; // 이전 안내 — 시작 화면이 걷힌 뒤 flushSharpnessNotice 가 띄운다
 
 /** 지금 선명도(단계·크게 볼 때만). */
 export function sharpnessState() {
@@ -61,15 +64,18 @@ export function sharpnessLabel(s = state) {
  */
 export function sharpnessFromLegacy({ on = 0, off = 0, def, upscale = false, snapshot = null } = {}) {
   const u = Boolean(upscale);
-  // 새 판 → 구버전 → 새 판에서 구버전이 아무것도 바꾸지 않았으면(거울이 그대로·채널 값 없음) 스냅숏 그대로(약·강 포함).
-  if (snapshot && typeof snapshot === 'object' && Number.isFinite(snapshot.level) && on === 0 && off === 0
+  // 새 판 → 구버전 → 새 판: 구버전에서 전역 값(처음 보는 채널 기본값·업스케일 = 새 판이 써 둔 거울)을 바꾸지 않았으면
+  // 스냅숏 그대로(약·강 포함). 구버전에서 채널 몇 개만 손댄 것은 채널별 예외라 새 판이 담을 수 없다 — 전역 단계는 지킨다.
+  // (예전에는 채널 값이 하나라도 생기면 다수결로 다시 셌다 → 채널 하나만 꺼도 전역 '강'이 '끔'이 됐다.)
+  if (snapshot && typeof snapshot === 'object' && Number.isFinite(snapshot.level)
       && snapshot.d === Boolean(def) && snapshot.u === u) {
-    return { level: clampLevel(snapshot.level), enlargedOnly: Boolean(snapshot.enlargedOnly), from: 'snapshot', notice: false, mixed: false };
+    return { level: clampLevel(snapshot.level), enlargedOnly: Boolean(snapshot.enlargedOnly), from: 'snapshot', notice: false, mixed: false, lost: false };
   }
   // 채널 다수결 — 동수면 처음 보는 채널 기본값(없으면 켠 채널이 있을 때 켬).
   const s = on > off ? true : (on < off ? false : (def === true || (def === undefined && on > 0)));
   const level = s || u ? 2 : 0;
-  return { level, enlargedOnly: !s && u, from: 'legacy', notice: s || u, mixed: on > 0 && off > 0 };
+  // 안내: 켜진 것이 있었으면 — 다수결로 '끔'이 돼 일부 채널의 선명한 화면이 꺼지는 경우(lost)도 알린다.
+  return { level, enlargedOnly: !s && u, from: 'legacy', notice: s || u || on > 0, mixed: on > 0 && off > 0, lost: !s && on > 0 };
 }
 
 /** 구버전 거울 값 — 둘을 같이 켜지 않는다(구버전에서 이중 선명화가 생기지 않게). */
@@ -108,17 +114,34 @@ async function adopt(player, { notice = false } = {}) {
   apply(r.level, r.enlargedOnly);
   // 한 번만 쓴다 — 다음부터는 Rust 에 값이 있다. 예전 키(채널 값·기본값·videoUpscaling)는 건드리지 않는다.
   try { await api.settingsUpdate('player', { sharpnessLevel: r.level, sharpnessEnlargedOnly: r.enlargedOnly }); } catch { /* 이번 실행은 메모리 값으로 */ }
-  if (notice && r.notice) showMigrationNotice(r);
+  if (notice && r.notice) pendingNotice = r;
   return sharpnessState();
 }
 
-function showMigrationNotice(r) {
+/** 이전 안내 문구(순수 — 검사가 부른다). */
+export function migrationNoticeText(r, s = state) {
+  if (r.lost) return `일부 채널에서 쓰던 선명한 화면은 꺼졌어요 — 선명한 화면과 업스케일이 '선명도' 하나로 합쳐졌어요(지금 '${sharpnessLabel(s)}'). 영상 ⚙ 에서 켤 수 있어요`;
+  const pre = r.mixed ? '채널마다 다르던 선명한 화면 설정을 하나로 합쳤어요. ' : '';
+  return `${pre}선명한 화면과 업스케일이 '선명도' 하나로 합쳐졌어요 — 지금 '${sharpnessLabel(s)}'. 영상 ⚙ 에서 바꿀 수 있어요`;
+}
+
+/** 이전 안내를 한 번 띄운다 — 시작 화면(스플래시) 뒤에 가려지지 않게 app.js 가 시작 화면을 걷은 뒤 부른다. */
+export async function flushSharpnessNotice() {
+  await sharpnessReady();
+  // 시작 화면은 최소 표시 시간 때문에 조금 늦게 걷힐 수 있다 — 걷히기 시작할 때까지(최대 10초) 기다린다.
+  for (let i = 0; i < 50; i++) {
+    const splash = document.getElementById('splash');
+    if (!splash || splash.classList.contains('leaving')) break;
+    await new Promise((res) => setTimeout(res, 200));
+  }
+  const r = pendingNotice;
+  pendingNotice = null;
+  if (!r) return;
   try {
     if (localStorage.getItem(NOTICE_KEY)) return;
     localStorage.setItem(NOTICE_KEY, String(Date.now()));
   } catch { return; }
-  const pre = r.mixed ? '채널마다 다르던 선명한 화면 설정을 하나로 합쳤어요. ' : '';
-  toast(`${pre}선명한 화면과 업스케일이 '선명도' 하나로 합쳐졌어요 — 지금 '${sharpnessLabel()}'. 영상 ⚙ 에서 바꿀 수 있어요`, 6000);
+  toast(migrationNoticeText(r), 7000);
 }
 
 /**
@@ -135,29 +158,46 @@ export async function setSharpness(level, enlargedOnly = state.enlargedOnly) {
   const prev = sharpnessState();
   const next = { level: clampLevel(level), enlargedOnly: Boolean(enlargedOnly) };
   const mirror = legacyMirror(next.level, next.enlargedOnly);
+  const gen = ++localGen;
+  saving += 1;
   apply(next.level, next.enlargedOnly);
   writeSharpnessMirror({ ...next, ...mirror });
   try {
     await api.settingsUpdate('player', { sharpnessLevel: next.level, sharpnessEnlargedOnly: next.enlargedOnly, videoUpscaling: mirror.u });
     return true;
   } catch (e) {
-    apply(prev.level, prev.enlargedOnly);
-    writeSharpnessMirror({ ...prev, ...legacyMirror(prev.level, prev.enlargedOnly) });
+    // 그 사이 더 새로 바꿨으면(그 저장이 이긴다) 되돌리지 않는다.
+    if (gen === localGen) {
+      apply(prev.level, prev.enlargedOnly);
+      writeSharpnessMirror({ ...prev, ...legacyMirror(prev.level, prev.enlargedOnly) });
+    }
     toast(`선명도를 저장하지 못했어요${e && e.message ? ` — ${e.message}` : ''}`);
     return false;
+  } finally {
+    saving -= 1;
   }
 }
 
-// 다른 창(보조 창)·설정 화면에서 바꾼 값 — 창이 다시 앞으로 올 때 저장값을 읽어 맞춘다(storage 이벤트에 기대지 않는다).
-let lastFocusRead = 0;
-window.addEventListener('focus', () => {
-  const now = Date.now();
-  if (now - lastFocusRead < 1500) return;
-  lastFocusRead = now;
-  api.settingsGet().then((s) => adopt((s && s.player) || {}, { notice: false })).catch(() => {});
-});
+// 다른 창(보조 창)·설정 화면에서 바꾼 값을 다시 읽는다.
+//   - 다른 창: 그 창이 setSharpness 로 localStorage 거울(cview.picture.v1)을 쓰면 같은 출처의 다른 창에 'storage' 가 온다
+//     (나란히 보이는 창도 바로 따른다). storage 이벤트가 오지 않는 환경을 위해 창이 앞으로 오거나 다시 보일 때도 읽는다.
+//   - 읽기를 보낸 뒤 이 창에서 바꿨거나(localGen) 저장 중이면 응답을 버린다 — 늦게 온 옛 값이 방금 고른 값을 덮지 않게.
+let reading = false;
+function reread() {
+  if (reading || saving) return;
+  reading = true;
+  const gen = localGen;
+  api.settingsGet()
+    .then((s) => { if (gen === localGen && !saving) return adopt((s && s.player) || {}, { notice: false }); })
+    .catch(() => {})
+    .finally(() => { reading = false; });
+}
+window.addEventListener('focus', reread);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reread(); });
+window.addEventListener('storage', (e) => { if (e.key === 'cview.picture.v1' || e.key === null) reread(); });
 window.addEventListener('cview:settings-changed', (e) => {
   const d = e.detail || {};
+  if (saving) return; // 이 창의 선명도 저장이 끝나지 않았다 — 그 응답(옛 값일 수 있음)으로 덮지 않는다
   if ((d.domain === 'player' || d.domain === 'all') && d.settings && d.settings.player) adopt(d.settings.player, { notice: false });
 });
 

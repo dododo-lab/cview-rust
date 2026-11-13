@@ -42,7 +42,7 @@ import { installUiHealth } from './ui-health.js';
 import { kbd } from './platform.js';
 import { installWindowControls } from './window-controls.js';
 import { withRefreshVeil, cancelRefreshVeil } from './refresh-veil.js';
-import { initSharpness } from './sharpness.js';
+import { initSharpness, flushSharpnessNotice } from './sharpness.js';
 
 // 사이드바 — Swift `AppRouter.SidebarItem` 라벨. `sidebar: false` 는 사이드바에 없고 다른 메뉴 속에서 여는 화면
 // (멀티라이브는 라이브 메뉴의 한 보기 — 머리줄 전환 버튼으로 오간다). ⌘K 팔레트에는 그대로 나온다.
@@ -956,7 +956,7 @@ async function main() {
   const settings = settingsRes && settingsRes.status === 'fulfilled' ? settingsRes.value : null;
   syncTheme(settings && settings.appearance && settings.appearance.theme);
   // 선명도(예전 선명한 화면 + 업스케일) — 받은 설정으로 정하고, 새 판 첫 실행이면 예전 값에서 한 번 옮긴다.
-  // 보조 창도 같은 값을 쓴다(안내 토스트는 메인 창에서만).
+  // 보조 창도 같은 값을 쓴다(안내 토스트는 메인 창에서만 — 시작 화면이 걷힌 뒤 flushSharpnessNotice).
   initSharpness(settings && settings.player, { notice: !AUX });
   // 보조 창은 홈이 없다 — 스플래시(최소 0.4초)만 걷고 제 화면으로.
   if (AUX) { hideSplash(); openAuxWindow(); return; }
@@ -968,6 +968,7 @@ async function main() {
   await loadHomeBehindSplash();
   hideSplash();
   showWelcome({ onLogin: login });
+  flushSharpnessNotice(); // 선명도 이전 안내(한 번) — 시작 화면 뒤에 가려지지 않게 여기서
   // 새 버전 알림 — 메인 창에서만. 조용히 확인하고 사이드바 줄·토스트로 알린다(창·포커스는 건드리지 않음).
   installUpdateNotifier(() => showUpdateCheck());
   // 딥 링크 (SYS-06) — 준비 전에 온 링크가 있으면 작업 공간 복원보다 우선한다.

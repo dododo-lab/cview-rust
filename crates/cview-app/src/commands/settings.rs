@@ -281,7 +281,8 @@ pub async fn settings_reset(
 ) -> CmdResult<SettingsDto> {
     let s = &services.settings;
     let reset = |d: &str| match d {
-        "player" => s.set_player(PlayerSettings::default()),
+        // 선명도는 명시적 끔 — 기본값(None)이면 화면이 예전 값에서 다시 이전해 초기화가 먹지 않는다.
+        "player" => s.set_player(PlayerSettings::reset_defaults()),
         "general" => s.set_general(GeneralSettings::default()),
         "appearance" => s.set_appearance(AppearanceSettings::default()),
         "chat" => s.set_chat(Value::Object(Default::default())),

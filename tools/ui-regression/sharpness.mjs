@@ -15,6 +15,8 @@
 //     구버전이 새 키를 지워도 스냅숏으로 같은 단계(약·강 포함), 구버전에서 바꿨으면 그 선택, 초기화(0)는 거울도 끔.
 // S06 상태 줄·⚙ title — 플레이어의 'sharpness' 알림으로 '업스케일 360p → 560p' 같은 지금 처리를 메뉴를 다시 그리지 않고 보인다.
 // S07 설정 화면 — '선명도' 고르기·'크게 볼 때만 적용', 검색 '업스케일'·'선명'으로 찾힘, 바꾸면 저장·열린 패인에 바로.
+// S08 다시 읽기 — 다른 창이 바꾸면(storage 이벤트) 이 창 패인도 따르고, 늦게 온 옛 저장값 읽기가 방금 고른 값을 덮지 않는다.
+//     시청 화면 고급 패널에서 키보드로 단계를 바꿔도 초점이 그 단추에 남는다.
 // 저장소 루트에서: node tools/ui-regression/sharpness.mjs   (Playwright 가 필요하다)
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -44,7 +46,8 @@ function mlMock({ watchId, player, picture }) {
   const settings = () => ({ multiLive: {}, multiChat: {}, chat: { displayMode: 'side' }, general: {}, appearance: {}, network: {}, keyboard: {}, player: { ...store.player } });
   const handlers = {
     auth_status: () => ({ loggedIn: false, state: 'loggedOut' }),
-    settings_get: settings,
+    // __delayGet 이면 부른 때의 값을 늦게 돌려준다(늦게 온 옛 값 흉내 — S08)
+    settings_get: () => { const v = settings(); return window.__delayGet ? new Promise((r) => setTimeout(() => r(v), window.__delayGet)) : v; },
     settings_update: ({ domain, patch }) => {
       window.__saved.push({ domain, patch });
       if (domain === 'player') {
@@ -74,6 +77,14 @@ function mlMock({ watchId, player, picture }) {
     core: { invoke: async (c, a) => { if (c === 'ui_heartbeat') return null; const h = handlers[c]; if (!h) throw new Error(`mock: ${c}`); return h(a || {}); } },
     event: { listen: async (name, cb) => { (listeners[name] ||= []).push(cb); return () => {}; } },
   };
+  // 안내 토스트가 시작 화면(#splash)이 덮고 있을 때 생겼는지 기록한다(S04)
+  window.__toastUnderSplash = false;
+  if (window.top === window) {
+    new MutationObserver(() => {
+      const splash = document.getElementById('splash');
+      if (splash && !splash.classList.contains('leaving') && document.querySelector('.toast')) window.__toastUnderSplash = true;
+    }).observe(document, { childList: true, subtree: true });
+  }
   try {
     localStorage.setItem('cview.onboarded', '1');
     localStorage.setItem('cview.welcomed.v1', String(Date.now()));
@@ -494,6 +505,7 @@ await check('S04 legacy → 선명도 migration table (pure) and first-run boots
     { name: '업스케일만', player: { videoUpscaling: true }, picture: null, want: { sharpnessLevel: 2, sharpnessEnlargedOnly: true }, notice: true },
     { name: '채널 둘 켬', player: {}, picture: { c1: { sharpen: true }, c2: { sharpen: true, brightness: 1.2 } }, want: { sharpnessLevel: 2, sharpnessEnlargedOnly: false }, notice: true },
     { name: '모두 끔·기본 끔', player: { videoUpscaling: false }, picture: { c1: { sharpen: false }, __default: { sharpen: false } }, want: { sharpnessLevel: 0, sharpnessEnlargedOnly: false }, notice: false },
+    { name: '켬 1 · 끔 3(다수결 끔)', player: {}, picture: { c1: { sharpen: true }, c2: { sharpen: false }, c3: { sharpen: false }, c4: { sharpen: false } }, want: { sharpnessLevel: 0, sharpnessEnlargedOnly: false }, notice: true, lost: true },
     { name: '이미 새 값', player: { sharpnessLevel: 1, sharpnessEnlargedOnly: false, videoUpscaling: true }, picture: { c1: { sharpen: true } }, want: { sharpnessLevel: 1, sharpnessEnlargedOnly: false }, notice: false },
   ];
   for (const c of cases) {
@@ -507,8 +519,14 @@ await check('S04 legacy → 선명도 migration table (pure) and first-run boots
       // 모든 보이는 패인에 이전 결과가 걸렸다
       await p.waitForTimeout(300);
       for (const s of await visibleSlots(p)) assert.equal((await lastCall(p, s, 'setSharpness'))?.args[0], c.want.sharpnessLevel, `${c.name}: 패인 ${s}`);
-      const notice = await p.evaluate(() => [...document.querySelectorAll('.toast')].some((t) => /선명도' 하나로 합쳐졌어요/.test(t.textContent)));
-      assert.equal(notice, c.notice, `${c.name}: 1회 안내 ${notice}`);
+      await p.waitForTimeout(300);
+      const toasts = await p.evaluate(() => [...document.querySelectorAll('.toast')].map((t) => t.textContent));
+      const notice = toasts.some((t) => /선명도' 하나로 합쳐졌어요/.test(t));
+      assert.equal(notice, c.notice, `${c.name}: 1회 안내 ${JSON.stringify(toasts)}`);
+      if (c.lost) assert.ok(toasts.some((t) => /일부 채널에서 쓰던 선명한 화면은 꺼졌어요/.test(t)), `${c.name}: 꺼졌다는 안내가 없다 ${JSON.stringify(toasts)}`);
+      // 시작 화면이 걷힌 뒤에 띄웠다(시작 화면 뒤에 가려지지 않게)
+      assert.equal(await p.evaluate(() => window.__toastUnderSplash), false, `${c.name}: 안내가 시작 화면에 가려진 채 떴다`);
+      assert.equal(await p.evaluate(() => Boolean(localStorage.getItem('cview.sharpness.notice.v1'))), c.notice, `${c.name}: 안내 기록`);
       assert.deepEqual(errs, [], `${c.name}: ${errs}`);
     } finally { await cx.close(); }
   }
@@ -543,15 +561,35 @@ await check('S05 downgrade-safe: legacy mirrors + snapshot restore (약·강), o
       assert.deepEqual(await store(page), { videoUpscaling: false, sharpnessLevel: 3, sharpnessEnlargedOnly: false }, '되돌렸다 다시 올리니 강이 아니다');
     } finally { await ctx.close(); }
   }
-  // 구버전에서 채널 하나의 선명한 화면을 껐다 → 구버전의 선택을 따른다(다시 계산)
+  // 구버전에서 채널 하나만 선명한 화면을 껐다 — 채널별 예외라 새 판이 담을 수 없다. 전역 '강'은 지킨다.
   {
     const edited = JSON.parse(JSON.stringify(ls));
     edited.c3 = { sharpen: false };
     const { ctx, page } = await openMl({ watchId: null, player: { videoUpscaling: false }, picture: edited });
     try {
       await page.waitForFunction(() => typeof window.__ml.store.player.sharpnessLevel === 'number');
-      // 채널 끔 1 · 켬 0 → 끔
-      assert.equal((await store(page)).sharpnessLevel, 0, '구버전에서 바꾼 값을 따르지 않았다');
+      assert.equal((await store(page)).sharpnessLevel, 3, '구버전에서 채널 하나만 바꿨는데 전역 단계가 바뀌었다');
+    } finally { await ctx.close(); }
+  }
+  // 구버전에서 '모든 패인에 선명하게 끄기'(기본값 끔 + 채널들 끔) — 전역 선택이 바뀌었으니 그것을 따른다(끔)
+  {
+    const edited = JSON.parse(JSON.stringify(ls));
+    edited.__default.sharpen = false;
+    edited.c1.sharpen = false;
+    edited.c2.sharpen = false;
+    const { ctx, page } = await openMl({ watchId: null, player: { videoUpscaling: false }, picture: edited });
+    try {
+      await page.waitForFunction(() => typeof window.__ml.store.player.sharpnessLevel === 'number');
+      assert.equal((await store(page)).sharpnessLevel, 0, '구버전에서 모두 끈 것을 따르지 않았다');
+    } finally { await ctx.close(); }
+  }
+  // 구버전에서 업스케일을 켰다(거울 u 가 바뀜) — 구버전 선택(선명한 화면 + 업스케일 = 둘 다)을 따라 '중'
+  {
+    const { ctx, page } = await openMl({ watchId: null, player: { videoUpscaling: true }, picture: ls });
+    try {
+      await page.waitForFunction(() => typeof window.__ml.store.player.sharpnessLevel === 'number');
+      const st = await store(page);
+      assert.deepEqual([st.sharpnessLevel, st.sharpnessEnlargedOnly], [2, false], `구버전에서 업스케일을 켠 뒤 ${JSON.stringify(st)}`);
     } finally { await ctx.close(); }
   }
   // '약·크게 볼 때만' → 거울은 업스케일만(둘을 같이 켜지 않는다) → 되돌렸다 와도 약·크게 볼 때만
@@ -619,6 +657,53 @@ await check('S07 settings: 선명도 select + 크게 볼 때만, found by search
     await page.evaluate(async () => { const { setSharpness } = await import('/js/sharpness.js'); await setSharpness(3, false); });
     await page.waitForTimeout(150);
     assert.deepEqual(await page.evaluate(() => [document.querySelector('select[data-key="sharpnessLevel"]').value, document.querySelector('input[data-key="sharpnessEnlargedOnly"]').checked]), ['3', false]);
+    assert.deepEqual(errors, []);
+  } finally { await ctx.close(); }
+});
+
+// ═══ S08: 다시 읽기(다른 창·늦은 응답)·시청 화면 패널 초점 ═══
+await check('S08 re-reads: other window (storage) follows; a late stale read never overrides a fresh pick; viewer panel keeps focus', async () => {
+  const { ctx, page, errors } = await openMl({ watchId: null });
+  try {
+    await page.waitForFunction(() => typeof window.__ml.store.player.sharpnessLevel === 'number');
+    await page.waitForTimeout(300);
+    // 다른 창이 '중'으로 바꿨다 — 저장값이 바뀌고 거울(localStorage)을 쓰면 이 창에 storage 이벤트가 온다
+    await clearCalls(page);
+    await page.evaluate(() => {
+      window.__ml.store.player = { ...window.__ml.store.player, sharpnessLevel: 2, sharpnessEnlargedOnly: false };
+      window.dispatchEvent(new StorageEvent('storage', { key: 'cview.picture.v1' }));
+    });
+    await page.waitForTimeout(300);
+    for (const s of await visibleSlots(page)) assert.equal((await lastCall(page, s, 'setSharpness'))?.args[0], 2, `다른 창에서 바꾼 값이 패인 ${s} 에 오지 않았다`);
+    // 늦게 온 옛 값 — 창 포커스로 읽기를 보낸 직후 '강'을 고른다. 300ms 뒤 온 응답(옛 값 2)이 덮으면 안 된다
+    await page.evaluate(() => { window.__delayGet = 300; window.dispatchEvent(new Event('focus')); });
+    await openGear(page, 1);
+    await clickItem(page, 1, '[data-mp="sharpness"][data-sharpness="3"]');
+    await page.evaluate(() => { window.__delayGet = 0; });
+    await page.waitForTimeout(600);
+    assert.equal((await gearInfo(page, 1)).active, '3', '늦게 온 옛 값이 메뉴를 되돌렸다');
+    for (const s of await visibleSlots(page)) assert.equal((await lastCall(page, s, 'setSharpness'))?.args[0], 3, `늦게 온 옛 값이 패인 ${s} 를 되돌렸다`);
+    assert.equal((await store(page)).sharpnessLevel, 3);
+    await closeGear(page, 1);
+    // 시청 화면 고급 패널 — 키보드로 '약'을 고르면 초점이 그 단추에 남는다(통째로 다시 그리지 않는다)
+    const kept = await page.evaluate(async () => {
+      const { PlayerPanel } = await import('/js/player-panel.js');
+      const root = document.createElement('div');
+      root.innerHTML = '<div class="player-stage"></div><button id="reload"></button>';
+      document.body.append(root);
+      const viewer = { root, isPlaying: true, channelId: 'c1', player: { onMessage() {}, call() {} }, controls: { flash() {} } };
+      const panel = new PlayerPanel(viewer);
+      panel.tab = 'video';
+      await panel.loadSettings();
+      panel.render();
+      panel.el.hidden = false;
+      const btn = panel.el.querySelector('[data-sharpness="1"]');
+      btn.focus();
+      btn.click();
+      await new Promise((r) => setTimeout(r, 50));
+      return { same: document.activeElement === btn, pressed: btn.getAttribute('aria-pressed'), connected: btn.isConnected };
+    });
+    assert.deepEqual(kept, { same: true, pressed: 'true', connected: true }, `시청 화면 패널 초점 ${JSON.stringify(kept)}`);
     assert.deepEqual(errors, []);
   } finally { await ctx.close(); }
 });

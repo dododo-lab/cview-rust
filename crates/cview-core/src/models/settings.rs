@@ -91,8 +91,9 @@ pub struct PlayerSettings {
     /// 설정 이전·구버전으로 되돌렸을 때의 모습(선명도 '크게 볼 때만'이면 true)에만 쓴다.
     pub video_upscaling: bool,
     /// 선명도(0 끔·1 약·2 중·3 강) — 예전 '선명한 화면'(채널별)과 '업스케일'(전역)을 합친 값.
-    /// 저장본에 키가 없으면 `None` — 화면(app-ui/js/sharpness.js)이 예전 값에서 한 번 옮겨 쓴다.
-    /// 기본값(초기화)은 `Some(0)` = 명시적으로 끔(초기화 뒤 예전 값에서 다시 살아나지 않게).
+    /// 저장본에 키가 없거나 player 행이 아예 없으면 `None`(기본값) — 화면(app-ui/js/sharpness.js)이 예전 값에서
+    /// 한 번 옮겨 쓴다. 설정 초기화는 [`PlayerSettings::reset_defaults`] 로 `Some(0)` = 명시적 끔을 쓴다
+    /// (초기화 뒤 예전 값·구버전 거울에서 다시 살아나지 않게).
     /// 숫자는 반올림해 0..=3 으로 맞추고, 숫자가 아니면 `None` 으로 흡수한다(도메인 디코딩 실패 → 저장 차단 방지).
     #[serde(
         default,
@@ -175,7 +176,7 @@ impl Default for PlayerSettings {
             sharp_pixel_scaling: false,
             auto_picture_enhancement: false,
             video_upscaling: false,
-            sharpness_level: Some(0),
+            sharpness_level: None,
             sharpness_enlarged_only: false,
             hardware_decoding: true,
             aspect_ratio: None,
@@ -247,6 +248,15 @@ fn nearest(choices: &[i64], value: i64, fallback: i64) -> i64 {
 }
 
 impl PlayerSettings {
+    /// 설정 초기화 값 — 기본값과 같되 선명도는 명시적 끔(`Some(0)`). 기본값(`None`)이면 화면이
+    /// 예전 값(구버전 거울)에서 선명도를 다시 이전해 초기화가 먹지 않는다.
+    pub fn reset_defaults() -> Self {
+        Self {
+            sharpness_level: Some(0),
+            ..Self::default()
+        }
+    }
+
     /// 되감기 창 선택지(분).
     pub const LIVE_REWIND_WINDOW_CHOICES: [i64; 3] = [10, 30, 60];
     /// 되감기 디스크 한도 선택지(MiB).
@@ -960,12 +970,9 @@ mod tests {
 
     #[test]
     fn empty_json_decodes_to_defaults() {
-        // 선명도만 예외 — 저장본에 키가 없으면 None(화면이 예전 값에서 옮겨 쓴다), 초기화 기본값은 Some(0).
-        let mut player = PlayerSettings::default();
-        player.sharpness_level = None;
         assert_eq!(
             serde_json::from_str::<PlayerSettings>("{}").unwrap(),
-            player
+            PlayerSettings::default()
         );
         assert_eq!(
             serde_json::from_str::<GeneralSettings>("{}").unwrap(),
@@ -1044,9 +1051,18 @@ mod tests {
 
     #[test]
     fn sharpness_reset_is_explicit_off_and_none_is_not_serialized() {
-        // 초기화(default)는 명시적 끔 — 화면이 예전 값(구버전 거울)에서 다시 켜지 않는다.
-        let d = PlayerSettings::default();
+        // 기본값(player 행이 없는 사용자 포함)은 None — 화면이 예전 값에서 이전한다.
+        assert_eq!(PlayerSettings::default().sharpness_level, None);
+        // 초기화는 명시적 끔 — 화면이 예전 값(구버전 거울)에서 다시 켜지 않는다. 나머지는 기본값과 같다.
+        let d = PlayerSettings::reset_defaults();
         assert_eq!(d.sharpness_level, Some(0));
+        assert_eq!(
+            PlayerSettings {
+                sharpness_level: None,
+                ..d.clone()
+            },
+            PlayerSettings::default()
+        );
         let v = serde_json::to_value(&d).unwrap();
         assert_eq!(v["sharpnessLevel"], serde_json::json!(0));
         assert_eq!(v["sharpnessEnlargedOnly"], serde_json::json!(false));

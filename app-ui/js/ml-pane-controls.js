@@ -586,7 +586,7 @@ export class PaneControls {
       <div class="ml-menu-head" title="${esc(SHARPNESS_HELP)}">선명도 <span>모든 라이브 화면</span></div>
       <div class="ml-rate-row ml-sharp-row" role="group" aria-label="선명도">${SHARPNESS_LEVELS.map((l) => `<button class="ml-menu-item ml-sharp${l.value === s.level ? ' active' : ''}" role="menuitemradio" aria-checked="${l.value === s.level}" data-mp="sharpness" data-sharpness="${l.value}" data-keep-open aria-label="선명도 ${l.label}" title="${esc(l.help)}">${l.label}</button>`).join('')}</div>
       <button class="ml-menu-item ml-check${off ? ' is-disabled' : ''}" role="menuitemcheckbox" aria-checked="${s.enlargedOnly}" aria-disabled="${off}" data-mp="sharpness-enlarged" data-keep-open title="${esc(ENLARGED_ONLY_HELP)}"><span>${ENLARGED_ONLY_LABEL}</span><span class="ml-switch${s.enlargedOnly ? ' on' : ''}"></span></button>
-      <p class="ml-menu-note ml-sharpness-note" aria-live="polite">${esc(sharpnessNote(this.sharpMsg))}</p>`;
+      <p class="ml-menu-note ml-sharpness-note">${esc(sharpnessNote(this.sharpMsg))}</p>`;
   }
 
   /** 상태 줄만 고친다(메뉴를 다시 그리지 않아 초점이 그대로다). */

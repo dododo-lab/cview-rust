@@ -4219,7 +4219,12 @@ function _replanSharpness() {
         hasVideo: !!vh,
         prevPath: prev
     });
-    const outHeight = rect ? Math.round(rect.h * dpr) : 0;
+    // 실제 출력 높이 — GPU 캔버스는 3840×2160 을 넘으면 비율대로 줄여 그린다(_gpuGeometry). 판정(ratio)은 상한 전 값.
+    let outHeight = rect ? Math.round(rect.h * dpr) : 0;
+    if (rect && video.clientWidth && video.clientHeight) {
+        const over = (video.clientWidth * dpr * video.clientHeight * dpr) / UPSCALE_MAX_OUTPUT_PIXELS;
+        if (over > 1) outHeight = Math.round(outHeight / Math.sqrt(over));
+    }
     const key = [_sharpness.level, _plan.path, _plan.reason, vh, outHeight].join('|');
     if (key !== _planPosted) {
         _planPosted = key;

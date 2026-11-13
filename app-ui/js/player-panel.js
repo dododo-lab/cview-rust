@@ -60,7 +60,7 @@ export class PlayerPanel {
     // 선명도는 전역 — 다른 화면(멀티라이브 ⚙·설정)에서 바꿔도 이 시청 화면에 바로 다시 건다.
     window.addEventListener('cview:sharpness', () => {
       this.applySharpness();
-      if (!this.el.hidden && this.tab === 'video') this.render();
+      this.syncSharpness();
     });
     loadEqPresets().then(({ freqs, presets }) => { this.freqs = freqs; this.presets = presets; });
   }
@@ -92,12 +92,31 @@ export class PlayerPanel {
     this.player.call('setSharpness', ...sharpnessArgs(true));
   }
 
+  /** 선명도 묶음만 제자리에서 맞춘다 — 통째로 다시 그리면 키보드로 누른 단추의 초점이 사라진다. */
+  syncSharpness() {
+    if (this.el.hidden || this.tab !== 'video') return;
+    const s = sharpnessState();
+    for (const b of this.el.querySelectorAll('.pp-sharp [data-sharpness]')) {
+      const on = Number(b.dataset.sharpness) === s.level;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', String(on));
+    }
+    const chk = this.el.querySelector('[data-pp="sharpnessEnlarged"]');
+    if (chk) {
+      chk.checked = s.enlargedOnly;
+      chk.disabled = !s.level;
+      chk.closest('.pp-row')?.classList.toggle('disabled', !s.level);
+    }
+    const note = this.el.querySelector('.pp-sharpness-note');
+    if (note) note.textContent = sharpnessNote(this.sharpMsg);
+  }
+
   /** '화면' 탭의 선명도 묶음 — 멀티라이브 ⚙ 와 같은 이름·같은 값. */
   sharpnessHtml() {
     const s = sharpnessState();
     return `
         <div class="pp-row"><span title="${esc(SHARPNESS_HELP)}">선명도</span><div class="segmented pp-sharp" role="group" aria-label="선명도">${SHARPNESS_LEVELS.map((l) => `<button class="seg${l.value === s.level ? ' active' : ''}" data-sharpness="${l.value}" aria-pressed="${l.value === s.level}" title="${esc(l.help)}">${l.label}</button>`).join('')}</div></div>
-        <p class="pp-note pp-sharpness-note" aria-live="polite">${esc(sharpnessNote(this.sharpMsg))}</p>
+        <p class="pp-note pp-sharpness-note">${esc(sharpnessNote(this.sharpMsg))}</p>
         <label class="pp-row${s.level ? '' : ' disabled'}" title="${esc(ENLARGED_ONLY_HELP)}"><span>${ENLARGED_ONLY_LABEL}</span><span class="toggle"><input type="checkbox" data-pp="sharpnessEnlarged" ${s.enlargedOnly ? 'checked' : ''} ${s.level ? '' : 'disabled'}><span></span></span></label>
         <p class="pp-note">선명한 화면과 업스케일을 합쳤어요 — 모든 라이브 화면에 함께 적용됩니다</p>`;
   }

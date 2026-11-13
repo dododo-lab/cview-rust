@@ -636,7 +636,9 @@ impl SettingsStore {
 
     /// 모든 설정 초기화 후 저장.
     pub async fn reset_all(&self) {
-        let defaults = SettingsDomains::default();
+        let mut defaults = SettingsDomains::default();
+        // 선명도는 명시적 끔(PlayerSettings::reset_defaults 와 같은 이유).
+        defaults.player.sharpness_level = Some(0);
         self.apply_player(defaults.player.clone());
         {
             let mut state = self.state();
