@@ -22,6 +22,9 @@ spec.loader.exec_module(client)
 mirror_spec = importlib.util.spec_from_file_location('github_release', TOOLS.parents[1] / 'scripts/github-release.py')
 mirror = importlib.util.module_from_spec(mirror_spec)
 mirror_spec.loader.exec_module(mirror)
+win_spec = importlib.util.spec_from_file_location('windows_installer', TOOLS.parents[1] / 'scripts/windows-installer.py')
+wininst = importlib.util.module_from_spec(win_spec)
+win_spec.loader.exec_module(wininst)
 
 VECTOR = json.loads((Path(__file__).with_name('signed_feed_vector.json')).read_text(encoding='utf-8'))
 # 서버는 형식만 보므로 게이트웨이 테스트에는 테스트 벡터 서명을 그대로 쓴다.
@@ -432,6 +435,142 @@ class GitHubMirrorTests(unittest.TestCase):
             (dist / name).write_bytes(b'not the published file')
             with self.assertRaisesRegex(ValueError, 'differs'):
                 mirror.collect(self.manifest, dist, dist)
+
+
+def pe_with_machine(machine):
+    """Machine 값만 채운 최소 PE 머리."""
+    return b'MZ' + bytes(0x3A) + (0x40).to_bytes(4, 'little') + b'PE\0\0' + machine.to_bytes(2, 'little') + bytes(18)
+
+
+READOBJ_EXE = """File: cview-app.exe
+Format: COFF-ARM64
+Import {
+  Name: kernel32.dll
+  ImportLookupTableRVA: 0x1
+  Symbol: CloseHandle (0)
+}
+Import {
+  Name: WebView2Loader.dll
+  ImportLookupTableRVA: 0x2
+  Symbol: CreateCoreWebView2EnvironmentWithOptions (0)
+}
+Import {
+  Name: api-ms-win-crt-heap-l1-1-0.dll
+  Symbol: malloc (0)
+}
+DelayImport {
+  Name: ole32.dll
+  Attributes: 0x1
+  Import {
+    Symbol: CoCreateInstance (0)
+  }
+}
+"""
+
+SLT_LISTING = """
+Listing archive: CView_0.1.96_arm64-setup.exe
+
+--
+Path = CView_0.1.96_arm64-setup.exe
+Type = Nsis
+
+----------
+Path = $PLUGINSDIR/System.dll
+Size = 12288
+
+Path = cview-app.exe
+Size = 22410752
+
+Path = WebView2Loader.dll
+Size = 160880
+
+Path = uninstall.exe
+Size = 
+"""
+
+
+class WindowsInstallerTests(unittest.TestCase):
+    def test_parse_imports_reads_normal_and_delay_load(self):
+        self.assertEqual(wininst.parse_imports(READOBJ_EXE),
+                         ['kernel32.dll', 'WebView2Loader.dll', 'api-ms-win-crt-heap-l1-1-0.dll', 'ole32.dll'])
+
+    def test_listing_keeps_only_files_next_to_exe(self):
+        paths = wininst.parse_listing(SLT_LISTING)
+        self.assertNotIn('CView_0.1.96_arm64-setup.exe', paths)
+        self.assertEqual(wininst.install_root_files(paths), ['cview-app.exe', 'WebView2Loader.dll', 'uninstall.exe'])
+
+    def audit(self, root, imports, machines=None, machine=0xAA64):
+        machines = machines or {}
+        return wininst.audit(root, machine, lambda name: (machines.get(name, machine), imports[name]))
+
+    def test_missing_webview2_loader_blocks_release(self):
+        # v0.1.71~v0.1.95 arm64 설치 파일: exe 가 WebView2Loader.dll 을 부르는데 옆에 없다.
+        _, problems = self.audit(['cview-app.exe', 'uninstall.exe'],
+                                 {'cview-app.exe': ['kernel32.dll', 'WebView2Loader.dll']})
+        self.assertEqual(len(problems), 1)
+        self.assertIn('WebView2Loader.dll', problems[0])
+
+    def test_bundled_loader_and_its_imports_pass(self):
+        report, problems = self.audit(['cview-app.exe', 'webview2loader.dll', 'uninstall.exe'], {
+            'cview-app.exe': ['KERNEL32.dll', 'WebView2Loader.dll', 'api-ms-win-crt-heap-l1-1-0.dll'],
+            'webview2loader.dll': ['KERNEL32.dll', 'ADVAPI32.dll', 'ole32.dll'],
+        })
+        self.assertEqual(problems, [])
+        self.assertEqual(len(report), 2)
+
+    def test_loader_for_other_architecture_fails(self):
+        _, problems = self.audit(['cview-app.exe', 'WebView2Loader.dll'], {
+            'cview-app.exe': ['WebView2Loader.dll'], 'WebView2Loader.dll': ['kernel32.dll'],
+        }, machines={'WebView2Loader.dll': 0x8664})
+        self.assertTrue(any('0x8664' in p for p in problems))
+
+    def test_runtime_dlls_are_not_system_dlls(self):
+        for dll in ['libunwind.dll', 'libwinpthread-1.dll', 'libgcc_s_seh-1.dll', 'VCRUNTIME140.dll', 'msvcp140.dll']:
+            _, problems = self.audit(['cview-app.exe'], {'cview-app.exe': ['kernel32.dll', dll]})
+            self.assertEqual(len(problems), 1, dll)
+        # 그 DLL 이 부르는 DLL 도 따라가 검사한다.
+        _, problems = self.audit(['cview-app.exe', 'WebView2Loader.dll'], {
+            'cview-app.exe': ['WebView2Loader.dll'], 'WebView2Loader.dll': ['VCRUNTIME140.dll'],
+        })
+        self.assertIn('VCRUNTIME140.dll', problems[0])
+
+    def test_missing_exe_or_duplicate_files_fail(self):
+        self.assertTrue(self.audit(['uninstall.exe'], {})[1])
+        _, problems = self.audit(['cview-app.exe', 'WebView2Loader.dll', 'webview2loader.dll'], {
+            'cview-app.exe': ['kernel32.dll'],
+        })
+        self.assertTrue(any('두 번' in p for p in problems))
+
+    def test_pe_machine(self):
+        self.assertEqual(wininst.pe_machine(pe_with_machine(0xAA64)), 0xAA64)
+        for broken in [b'', b'MZ', b'not a pe' * 10, pe_with_machine(0x8664)[:0x44]]:
+            with self.assertRaises(ValueError):
+                wininst.pe_machine(broken)
+
+    def test_loader_path_uses_locked_package_and_architecture(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            crate = Path(tmp) / 'webview2-com-sys-0.39.1'
+            for folder, machine in [('x64', 0x8664), ('arm64', 0xAA64)]:
+                (crate / folder).mkdir(parents=True)
+                (crate / folder / 'WebView2Loader.dll').write_bytes(pe_with_machine(machine))
+            metadata = {'packages': [{'name': 'webview2-com-sys', 'manifest_path': str(crate / 'Cargo.toml')},
+                                     {'name': 'wry', 'manifest_path': str(Path(tmp) / 'wry/Cargo.toml')}]}
+            self.assertEqual(wininst.loader_path(metadata, 'aarch64'), crate / 'arm64' / 'WebView2Loader.dll')
+            self.assertEqual(wininst.loader_path(metadata, 'x86_64'), crate / 'x64' / 'WebView2Loader.dll')
+            (crate / 'arm64' / 'WebView2Loader.dll').write_bytes(pe_with_machine(0x8664))
+            with self.assertRaises(SystemExit):
+                wininst.loader_path(metadata, 'aarch64')
+            metadata['packages'].append({'name': 'webview2-com-sys', 'manifest_path': str(Path(tmp) / 'other/Cargo.toml')})
+            with self.assertRaises(SystemExit):
+                wininst.loader_path(metadata, 'x86_64')
+
+    def test_release_script_ships_and_checks_the_loader(self):
+        script = (TOOLS.parents[1] / 'scripts/release-macos.sh').read_text(encoding='utf-8')
+        # tauri-bundler 가 스스로 넣지 않는 gnullvm 에는 로더를 리소스로 넘기고, 두 설치 파일을 모두 풀어 검사한다.
+        self.assertIn('[[ "$t" == *-gnu ]] || win_config=(--config "$(python3 scripts/windows-installer.py loader-config --target "$t")")', script)
+        self.assertIn('cargo tauri build --target "$t" --bundles nsis $win_config', script)
+        self.assertIn('python3 scripts/windows-installer.py check --installer "$win_exe" --machine "$win_machine"', script)
+        self.assertIn('brew install sevenzip', script)
 
 
 if __name__ == '__main__':

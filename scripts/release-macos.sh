@@ -34,8 +34,10 @@
 #       arm64: aarch64-pc-windows-gnullvm · llvm-mingw(clang·lld·llvm-windres·aarch64 CRT) · makensis
 #                                                                        → dist/CView_X.Y.Z_arm64-setup.exe
 #       NSIS 설치 프로그램 자체는 두 판 모두 x86 실행 파일이고, 안에 든 CView.exe 가 x64/ARM64 다(빌드 후 PE 헤더로 확인).
+#       GNU 타깃의 CView.exe 는 WebView2Loader.dll 을 동적으로 부르므로 설치 파일이 아키텍처에 맞는 DLL 을 exe 옆에 넣는다.
+#       만든 설치 파일을 풀어 exe·DLL 이 부르는 DLL 이 모두 시스템 DLL 이거나 같은 폴더에 있는지 확인한다(scripts/windows-installer.py).
 #       코드 서명 인증서가 없어 서명되지 않는다(SmartScreen 경고).
-#       도구(rustup target add x86_64-pc-windows-gnu aarch64-pc-windows-gnullvm · brew install mingw-w64 nsis ·
+#       도구(rustup target add x86_64-pc-windows-gnu aarch64-pc-windows-gnullvm · brew install mingw-w64 nsis sevenzip ·
 #       llvm-mingw 를 ~/.local/opt/llvm-mingw 또는 CVIEW_LLVM_MINGW 에)가 없으면 버전을 올리기 전에 멈춘다.
 #       배포에서는 CVIEW_SKIP_WINDOWS를 허용하지 않는다. arm64 만 건너뛰는 길도 없다.
 #   5) 커밋·태그 생성 → 양쪽 파일 SSH 전송 → 서버 원자적 게시 → 서버/클라이언트 전체 다운로드 검증 → Git 푸시.
@@ -70,7 +72,9 @@ check_windows_tools() {
   done
   command -v x86_64-w64-mingw32-gcc >/dev/null || missing+=("brew install mingw-w64")
   command -v makensis >/dev/null || missing+=("brew install nsis")
-  for tool in $CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_LINKER $RC_aarch64_pc_windows_gnullvm $AR_aarch64_pc_windows_gnullvm "$LLVM_MINGW/bin/llvm-objdump"; do
+  # 만든 설치 파일을 풀어 들어 있는 exe·DLL 을 검사한다(scripts/windows-installer.py check).
+  command -v 7zz >/dev/null || missing+=("brew install sevenzip")
+  for tool in $CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_LINKER $RC_aarch64_pc_windows_gnullvm $AR_aarch64_pc_windows_gnullvm "$LLVM_MINGW/bin/llvm-readobj"; do
     [[ -x "$tool" ]] || { missing+=("llvm-mingw → $LLVM_MINGW (CVIEW_LLVM_MINGW): ${tool:t} 없음"); break; }
   done
   if (( ${#missing} )); then
@@ -242,7 +246,8 @@ for img in plistlib.loads(sys.stdin.buffer.read()).get("images", []):
   # macOS 빌드가 끝난 뒤라 같은 target 폴더 잠금과 겹치지 않는다. 출력은 로그에 모았다가 공증 뒤에 보여 준다.
   build_windows_installers() {
     trap - EXIT INT TERM
-    local t win_arch win_machine win_out win_bin machine win_imports runtime_dlls win_exe
+    local t win_arch win_machine win_out win_bin machine win_exe
+    local -a win_config
     for t in $WIN_TARGETS; do
       case "$t" in
         x86_64-*) win_arch=x64 win_machine=0x8664 ;;
@@ -251,19 +256,21 @@ for img in plistlib.loads(sys.stdin.buffer.read()).get("images", []):
       echo "── Windows 설치 파일($win_arch, 교차 빌드 $t)"
       win_out="dist/CView_${version}_${win_arch}-setup.exe"
       rm -f "$TARGET"/$t/release/bundle/nsis/*.exe(N) "$win_out"
-      (cd crates/cview-app && cargo tauri build --target "$t" --bundles nsis)
+      # GNU 타깃의 CView.exe 는 WebView2Loader.dll 을 동적으로 부른다. tauri-bundler 는 타깃 이름이 -gnu 로 끝날 때만
+      # 이 DLL 을 설치 파일에 넣으므로(x64), gnullvm(arm64)은 Cargo.lock 의 webview2-com-sys 에서 arm64 DLL 을 리소스로 넣는다.
+      win_config=()
+      [[ "$t" == *-gnu ]] || win_config=(--config "$(python3 scripts/windows-installer.py loader-config --target "$t")")
+      (cd crates/cview-app && cargo tauri build --target "$t" --bundles nsis $win_config)
       win_bin="$TARGET/$t/release/cview-app.exe"
       machine=$(pe_machine "$win_bin")
       [[ "$machine" == "$win_machine" ]] || { echo "✗ $win_bin 의 PE Machine 이 $machine 입니다($win_arch 는 $win_machine)"; exit 1; }
       echo "   CView.exe PE Machine $machine ($win_arch)"
-      # 설치 파일에 없는 MinGW 런타임 DLL(libunwind·libc++·libwinpthread·libgcc_s 등)을 부르면 Windows 에서 실행되지 않는다.
-      # objdump 실패는 그대로 멈추고(set -e), 가져오기 목록을 못 읽었으면 검사를 통과로 보지 않는다.
-      win_imports=$("$LLVM_MINGW/bin/llvm-objdump" -p "$win_bin")
-      print -r -- "$win_imports" | grep -q 'DLL Name:' || { echo "✗ $win_arch CView.exe 의 가져오기 목록을 읽지 못했습니다"; exit 1; }
-      runtime_dlls=$(print -r -- "$win_imports" | awk '/DLL Name:/ {print $3}' | grep -i '^lib' || true)
-      [[ -z "$runtime_dlls" ]] || { echo "✗ $win_arch CView.exe 가 함께 배포하지 않는 DLL 을 부릅니다: ${(f)runtime_dlls}"; exit 1; }
       win_exe=$(ls -t "$TARGET"/$t/release/bundle/nsis/*.exe(N) | head -1)
       [[ -n "$win_exe" ]] || { echo "✗ Windows $win_arch 설치 파일을 찾지 못했습니다"; exit 1; }
+      # 설치 파일을 풀어 CView.exe 와 옆에 설치되는 DLL 이 부르는 DLL(지연 로드 포함)이 모두 Windows 시스템 DLL 이거나
+      # 같은 폴더에 같은 아키텍처로 들어 있는지 확인한다 — WebView2Loader.dll·MinGW 런타임(libunwind·libwinpthread 등) 누락을 막는다.
+      python3 scripts/windows-installer.py check --installer "$win_exe" --machine "$win_machine" \
+        --readobj "$LLVM_MINGW/bin/llvm-readobj"
       cp "$win_exe" "$win_out"
       shasum -a 256 "$win_out"
       stat -f "   %z bytes" "$win_out"
