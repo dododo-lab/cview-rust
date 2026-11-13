@@ -10,6 +10,8 @@ import { mountDownloads } from './downloads.js';
 import { syncTabs, bindTabKeys } from './a11y.js';
 import { refreshVeiled } from './refresh-veil.js';
 import { summarizeSection, overviewCard, overviewLayout, RECENT_LIMIT } from './library-overview.js';
+import { confirmCleanup } from './stats.js';
+import { deferDelete } from './confirm.js';
 
 export const libraryIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h4v16H4zM10 4h4v16h-4zM16.2 4.4l3.8-1 4 15.5-3.8 1z" transform="scale(.92) translate(1 1)"/></svg>';
 
@@ -158,7 +160,7 @@ export class LibraryPage {
   renderFilters() {
     if (this.tab !== 'clips') {
       this.filters.innerHTML = this.tab === 'recent'
-        ? '<button class="btn ghost" data-lib="recent-clear">최근 시청 기록 지우기</button>' : '';
+        ? '<button class="btn ghost" data-lib="recent-clear" aria-haspopup="dialog">최근 시청 기록 지우기…</button>' : '';
       return;
     }
     this.filters.innerHTML = `
@@ -263,30 +265,39 @@ export class LibraryPage {
     const a = e.target.closest('[data-lib]');
     if (!a) return;
     if (a.dataset.lib === 'recent-clear') {
-      // 시청 기록 전체 삭제는 되돌릴 수 없어 한 번 더 눌러야 지운다.
-      if (a.dataset.armed !== '1') {
-        const label = a.textContent;
-        a.dataset.armed = '1';
-        a.textContent = '한 번 더 누르면 모두 지웁니다';
-        setTimeout(() => { if (a.dataset.armed === '1') { a.dataset.armed = ''; a.textContent = label; } }, 3000);
-        return;
-      }
-      a.dataset.armed = '';
-      try { await api.recentChannelsClear(); toast('최근 시청 기록을 지웠습니다', 1500); this.load(); } catch (er) { toast(er.message); }
+      // 최근 시청 목록은 시청 기록 저장소(DB)에 있고 앱 안에서 되돌릴 수 없다 — 통계 › 데이터 관리의
+      // '최근 시청 목록 비우기'와 같은 데이터라 같은 확인 모달(대상·영향·복구 + 지우기 전 백업)로 묻는다.
+      const ok = await confirmCleanup('recent');
+      if (!ok) { if (a.isConnected) a.focus(); return; }
+      a.disabled = true;
+      try {
+        if (ok.backup) {
+          try { await api.dataBackupNow(); } catch (er) { toast(`백업하지 못해 지우지 않았습니다 — ${er.message}`, 5000); return; }
+        }
+        await api.recentChannelsClear();
+        toast(ok.backup ? '백업한 뒤 최근 시청 기록을 지웠습니다' : '최근 시청 기록을 지웠습니다', 1800);
+        this.load();
+      } catch (er) { toast(er.message); } finally { a.disabled = false; }
     } else if (a.dataset.lib === 'bookmark-delete') {
-      // 바로 지우지 않고 숨긴 뒤, 되돌리기 시간이 지나면 지운다.
+      // 한 항목 — 바로 숨기고 되돌리기 시간이 지나면 지운다(confirm.js 규칙 2).
       const row = a.closest('[data-bookmark-id]');
       const id = row.dataset.bookmarkId;
-      row.hidden = true;
-      deletingBookmarks.add(id);
-      let undone = false;
-      // 되돌리면 지금 화면의 줄을 다시 보인다 — 그사이 목록을 다시 그렸으면 그 줄은 새 목록에 없으니 다시 불러온다.
-      const restore = () => { deletingBookmarks.delete(id); if (row.isConnected) row.hidden = false; else if (this.tab === 'bookmarks') this.load(); };
-      toast('북마크를 지웠습니다', 5000, { label: '되돌리기', run: () => { undone = true; restore(); } });
-      setTimeout(async () => {
-        if (undone) return;
-        try { await api.bookmarkDelete(id); deletingBookmarks.delete(id); row.remove(); } catch (er) { restore(); toast(er.message); }
-      }, 5200);
+      deferDelete({
+        message: '북마크를 지웠습니다',
+        hide: () => {
+          const had = row.contains(document.activeElement);
+          row.hidden = true;
+          deletingBookmarks.add(id);
+          // 키보드로 지웠으면 초점을 다음(없으면 앞) 북마크의 ✕ 로 — 숨긴 줄과 함께 문서 맨 앞으로 빠지지 않게
+          if (had) {
+            const rest = [...this.body.querySelectorAll('.bookmark-row:not([hidden]) [data-lib="bookmark-delete"]')];
+            (rest.find((x) => row.compareDocumentPosition(x) & Node.DOCUMENT_POSITION_FOLLOWING) || rest.pop())?.focus();
+          }
+        },
+        // 되돌리면 지금 화면의 줄을 다시 보인다 — 그사이 목록을 다시 그렸으면 그 줄은 새 목록에 없으니 다시 불러온다.
+        restore: () => { deletingBookmarks.delete(id); if (row.isConnected) row.hidden = false; else if (this.tab === 'bookmarks') this.load(); },
+        commit: async () => { await api.bookmarkDelete(id); deletingBookmarks.delete(id); row.remove(); },
+      });
     } else if (a.dataset.lib === 'bookmark-channel') {
       this.onOpenChannel(a.dataset.channelId);
     }

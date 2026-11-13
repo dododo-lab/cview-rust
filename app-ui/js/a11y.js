@@ -1,6 +1,8 @@
 // 접근성·키보드 포커스 — 원본 Components/CardAccessibility, CViewCore/Focus (DSN-06).
 // - 글자 없는 아이콘 버튼에 title 을 aria-label 로 옮긴다(화면 낭독기가 이름을 읽게).
 // - 카드 격자에서 화살표 키로 포커스를 옮기고, Enter·Space 로 연다(카드의 클릭 동작 그대로).
+//   라이브 카드는 칸이 아니라 칸 안의 주 동작 단추(.card-open, cards.js `cardOpenButton`)가 초점을 받는다 — 단추라 Enter·Space 는
+//   브라우저가 click 으로 바꾸고, 여기서는 화살표만 옮긴다. 다시보기·클립 카드는 아직 칸 자체(.card[tabindex])가 초점을 받는다.
 
 /** 같은 격자 안에서 방향에 맞는 다음 카드를 고른다 — 화면 좌표로 판단. 순수 함수(좌표 배열 입력). */
 export function nextIndex(rects, from, dir) {
@@ -26,6 +28,13 @@ export function nextIndex(rects, from, dir) {
 }
 
 const DIRS = { ArrowRight: 'right', ArrowLeft: 'left', ArrowDown: 'down', ArrowUp: 'up' };
+
+/** 화살표로 오가는 카드 — 주 동작 단추를 품은 칸, 또는 칸 자체가 초점을 받는 예전 방식 카드. */
+const CARD = ':is(.card[tabindex], :has(> .card-open))';
+/** 카드에서 초점을 받을 요소. */
+function cardFocusTarget(card) {
+  return card.matches('[tabindex]') ? card : card.querySelector(':scope > .card-open');
+}
 
 const ICON_BUTTON = 'button[title]:not([aria-label]), [role=button][title]:not([aria-label])';
 
@@ -111,23 +120,24 @@ export function installA11y() {
   }).observe(document.body, { attributes: true, attributeFilter: ['class'], subtree: true });
 
   document.addEventListener('keydown', (e) => {
-    const card = e.target && e.target.closest && e.target.closest('.card[tabindex]');
+    const dir = DIRS[e.key];
+    if (!dir && e.key !== 'Enter' && e.key !== ' ') return; // 글자 입력마다 조상을 훑지 않게
+    const card = e.target && e.target.closest && e.target.closest(CARD);
     if (!card || e.metaKey || e.ctrlKey || e.altKey) return;
-    if (e.key === 'Enter' || e.key === ' ') {
-      if (e.target !== card) return;
+    if (!dir) {
+      // 예전 방식 카드만 — 칸 자체에 초점이 있을 때. 주 동작 단추·+·아바타는 단추라 브라우저가 click 으로 바꾼다(또 누르면 두 번 열린다).
+      if (e.target !== card || !card.hasAttribute('tabindex')) return;
       e.preventDefault();
       card.click();
       return;
     }
-    const dir = DIRS[e.key];
-    if (!dir) return;
     const scope = card.parentElement;
-    const cards = [...scope.querySelectorAll(':scope > .card[tabindex], :scope > * > .card[tabindex]')].filter((c) => c.offsetParent);
+    const cards = [...scope.querySelectorAll(`:scope > ${CARD}, :scope > * > ${CARD}`)].filter((c) => c.offsetParent);
     const i = cards.indexOf(card);
     const j = nextIndex(cards.map((c) => c.getBoundingClientRect()), i, dir);
     if (j >= 0) {
       e.preventDefault();
-      cards[j].focus();
+      cardFocusTarget(cards[j]).focus();
       cards[j].scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
   });

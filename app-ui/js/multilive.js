@@ -21,6 +21,7 @@ import { uptimeText } from './cards.js';
 import { MultiLiveAddDrawer } from './ml-add-drawer.js';
 import { snapshotPanes, playLayoutMotion, playExit, cancelExit, bindPaneDrag, releaseDragged, motionEnabled } from './ml-motion.js';
 import { MultiLiveMergedChat } from './ml-multichat.js';
+import { deferDelete } from './confirm.js';
 import { ChipPeek } from './ml-chip-peek.js';
 import { WatchTools, watchTopHtml } from './ml-watch.js';
 import { WatchInfoPanel } from './ml-watch-info.js';
@@ -86,6 +87,8 @@ export function pickTintHue(used, rand = Math.random) {
   return best;
 }
 
+/** 지우는 중(되돌리기 시간)인 프리셋 id — 그사이 프리셋 시트를 다시 열어도 다시 나타나지 않게 뺀다. */
+const deletingPresets = new Set();
 /** 라이브 머리줄에 한 번에 보이는 채널 칩 수, 휠 한 칸에 모을 delta(px). */
 const CHIP_WINDOW = 4;
 const CHIP_WHEEL_STEP = 40;
@@ -481,6 +484,7 @@ export class MultiLivePage {
     pane.controls = new PaneControls(pane, {
       makeAudible: () => this.makeAudible(pane),
       applySharpenAll: (on) => this.applySharpenAll(on),
+      flash: (text) => this.watch.flash(text),
     });
     this.panes.set(slot, pane);
     const queued = this.pending.get(slot);
@@ -591,6 +595,8 @@ export class MultiLivePage {
       // 그 속성을 보고 패인 클릭을 "라이브로 열기"로 바꿔 포커스 전환 대신 라이브 단독 보기로 넘어갔다.
       pane.el.dataset.perfChannel = s.channelId;
       pane.controls?.setChannel(s.channelId);
+      // 라이브 단독 보기의 무대 패인만 배속·화면 비율·자동 보정/업스케일·이퀄라이저를 쓴다(ml-pane-controls.js).
+      pane.controls?.setStage(this.watchSlot === s.slot);
       this.renderPane(pane, s, order.indexOf(s.id), s.id === state.selectedId);
     }
     this.applyFocusGrid(focus, order);
@@ -600,6 +606,7 @@ export class MultiLivePage {
       if (live.has(slot) || pane.exiting) continue;
       // 닫힌 패인 — 숨기기만 하면 iframe 이 MediaSource 버퍼를 계속 쥔다(모두 닫은 뒤 RSS 3GB대).
       cancelPreroll(pane.el);
+      pane.controls?.setStage(false);
       const release = () => {
         pane.bridge.run('try { stop(); video.removeAttribute("src"); video.load(); } catch (e) {}');
         pane.el.hidden = true;
@@ -993,7 +1000,7 @@ export class MultiLivePage {
   // ── 채널 프리셋 (MUL-14) ─────────────────────
   async showPresets() {
     let presets = [];
-    try { presets = (await api.presetList()).filter((p) => p.kind === 'live'); } catch (e) { toast(e.message); }
+    try { presets = (await api.presetList()).filter((p) => p.kind === 'live' && !deletingPresets.has(p.id)); } catch (e) { toast(e.message); }
     const ids = (this.state.sessions || []).map((s) => s.channelId);
     const scrim = document.createElement('div');
     scrim.className = 'sheet-scrim';
@@ -1012,7 +1019,21 @@ export class MultiLivePage {
       const row = e.target.closest('[data-preset-id]');
       if (!row) return;
       const p = presets.find((x) => x.id === row.dataset.presetId);
-      if (e.target.closest('[data-preset-del]')) { try { await api.presetDelete(p.id); row.remove(); } catch (er) { toast(er.message); } }
+      if (e.target.closest('[data-preset-del]')) {
+        // 사용자가 만든 한 항목 — 바로 숨기고 되돌리기 시간이 지나면 지운다(confirm.js 규칙 2)
+        deferDelete({
+          message: `프리셋 "${p.name}"을 지웠습니다`,
+          hide: () => {
+            row.hidden = true;
+            deletingPresets.add(p.id);
+            // 숨긴 줄의 ✕ 에 있던 초점을 시트 안에 둔다(바깥으로 빠지면 Esc 로 닫히지 않는다)
+            (scrim.querySelector('.preset-row:not([hidden]) [data-preset-del]') || scrim.querySelector('[data-preset-close]')).focus();
+          },
+          restore: () => { deletingPresets.delete(p.id); if (row.isConnected) row.hidden = false; },
+          commit: async () => { await api.presetDelete(p.id); deletingPresets.delete(p.id); row.remove(); },
+        });
+        return;
+      }
       if (e.target.closest('[data-preset-load]')) { close(); toast(`${p.name} 불러오는 중…`, 1500); await this.restoreSessions(p.channels); }
     });
     scrim.querySelector('form').addEventListener('submit', async (e) => {

@@ -4,6 +4,7 @@
 // - 단축키: Space 재생/일시정지 · M 음소거 · ↑↓ 볼륨 · L 라이브로 · ←/→ 되감기(⇧ 60초) · 사용자 맨 글자 동작(F·C·P…)
 // - 막대 단추: 스크린샷 · 북마크 · 채팅 표시 방식(옆·영상 위·숨김) · 영상+채팅 전체 화면, 위쪽: 새 창으로 분리
 // - 위 정보에 인증·팔로워·카테고리 · 가운데 OSD
+// - 패인 ⚙ 의 배속·화면 꽉 채우기·자동 보정/업스케일·이퀄라이저(Windows)는 무대 패인에만(ml-pane-controls.js setStage)
 // 앱 메뉴 동작(⌘S·⇧⌘F·PiP·⌘W 등)은 app.js 가 이 도구로 넘긴다.
 import { api } from './api.js';
 import { esc, toast, keyBelongsToTarget } from './dom.js';
@@ -230,7 +231,7 @@ export class WatchTools {
     if (!c) return;
     const v = c.video;
     if (v && v.paused) c.bridge.call('play');
-    if (v && v.playbackRate !== 1) c.bridge.call('setRate', 1);
+    c.normalRate(); // ⚙ 에서 고른 배속도 1 로(예전 시청 화면 LIVE 와 같다)
     c.bridge.call('seekToLiveEdge');
     this.flash('라이브로 이동');
   }

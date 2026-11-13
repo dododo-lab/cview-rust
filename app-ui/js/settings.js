@@ -6,6 +6,7 @@
 import { api, listen, Events } from './api.js';
 import { ACTIONS, FIXED, currentBindings, bindingLabel, bindingFromEvent, saveBinding, conflictOf } from './shortcuts.js';
 import { esc, toast } from './dom.js';
+import { armConfirm, confirmDialog } from './confirm.js';
 import { bindTabKeys } from './a11y.js';
 import { emptyState, errorState, loadingState } from './cards.js';
 import { THEMES, THEME_LABELS, currentTheme, setTheme, syncTheme } from './theme.js';
@@ -413,7 +414,7 @@ export class SettingsPage {
       <div class="setting" data-search="설정 내보내기 백업"><span class="setting-label">설정 내보내기<small>모든 설정을 JSON 파일로 ~/Downloads/CView 에 저장합니다</small></span><button class="btn" data-export>내보내기</button></div>
       <div class="setting column" data-search="설정 가져오기 복원"><span class="setting-label">설정 가져오기<small>내보낸 JSON 내용을 붙여 넣으세요</small></span>
         <form class="word-form import-form" data-import><textarea rows="4" spellcheck="false" autocomplete="off" aria-label="가져올 설정 JSON" placeholder='{"player": …}'></textarea><button class="btn">가져오기</button></form></div>
-      <div class="setting" data-search="초기화 기본값"><span class="setting-label">모든 설정 초기화<small>로그인·시청 기록은 그대로 둡니다</small></span><button class="btn danger" data-reset-all>초기화</button></div>
+      <div class="setting" data-search="초기화 기본값"><span class="setting-label">모든 설정 초기화<small>로그인·시청 기록은 그대로 둡니다</small></span><button class="btn danger" data-reset-all aria-haspopup="dialog">초기화…</button></div>
     </section>`;
   }
 
@@ -431,6 +432,15 @@ export class SettingsPage {
     again.value = input.value;
     again.focus();
     again.setSelectionRange(caret, caret);
+  }
+
+  /** 설정을 JSON 파일로 ~/Downloads/CView 에 저장하고 경로를 돌려준다. quiet 가 아니면 알림도 띄운다. */
+  async exportSettings({ quiet = false } = {}) {
+    const json = await api.settingsExport();
+    const d = new Date();
+    const path = await api.saveFile('settings', `CView-설정-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`, null, json);
+    if (!quiet) toast(`내보냈습니다 — ${path}`, 4000, { label: 'Finder에서 보기', run: () => api.revealPath(path) });
+    return path;
   }
 
   /**
@@ -636,7 +646,13 @@ export class SettingsPage {
     const bindReset = e.target.closest('[data-bind-reset]');
     if (bindReset) { try { await saveBinding(bindReset.dataset.bindReset, null); this.render(); } catch (er) { toast(er.message); } return; }
     const oa = e.target.closest('[data-oauth]');
-    if (oa) { e.preventDefault(); this.onOAuth(oa); return; }
+    if (oa) {
+      e.preventDefault();
+      // 키체인의 자격 증명 지우기 — 다시 입력하면 되지만 Secret 은 개발자 센터에서 다시 받아야 해 두 번 누르기로 묻는다
+      if (oa.dataset.oauth === 'clear' && !armConfirm(oa, { what: 'OAuth 자격 증명' })) return;
+      this.onOAuth(oa);
+      return;
+    }
     const sys = e.target.closest('[data-sys]');
     if (sys) { this.onSystem(sys); return; }
     const g = e.target.closest('[data-group]');
@@ -697,18 +713,36 @@ export class SettingsPage {
     }
     if (e.target.closest('[data-open-shortcuts]')) { window.dispatchEvent(new CustomEvent('cview:menu', { detail: 'shortcuts' })); return; }
     if (e.target.closest('[data-export]')) {
-      try {
-        const json = await api.settingsExport();
-        const d = new Date();
-        const path = await api.saveFile('settings', `CView-설정-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`, null, json);
-        toast(`내보냈습니다 — ${path}`, 4000, { label: 'Finder에서 보기', run: () => api.revealPath(path) });
-      } catch (er) { toast(er.message); }
+      try { await this.exportSettings(); } catch (er) { toast(er.message); }
       return;
     }
     if (e.target.closest('[data-reset-all]')) {
+      // 모든 설정 영역을 기본값으로 — 범위가 넓고 앱 안에서 되돌릴 수 없어 확인 모달로 묻는다(confirm.js 규칙 4).
+      // 복구 길(내보낸 파일 → 설정 가져오기)을 같이 보이고, 초기화 전에 내보내기를 기본으로 켠다.
       const btn = e.target.closest('[data-reset-all]');
-      if (btn.dataset.armed !== '1') { btn.dataset.armed = '1'; btn.textContent = '한 번 더 누르면 초기화'; setTimeout(() => { btn.dataset.armed = ''; btn.textContent = '초기화'; }, 3000); return; }
-      try { this.settings = await api.settingsReset('all'); toast('설정을 초기화했습니다', 1800); this.render(); this.broadcastAll(); } catch (er) { toast(er.message); }
+      const ok = await confirmDialog({
+        title: '모든 설정을 초기화할까요?',
+        className: 'reset-confirm',
+        confirmLabel: '초기화',
+        facts: [
+          ['바뀌는 것', '재생·화면·일반·채팅(금지어·차단 목록 포함)·키보드 단축키·네트워크·멀티라이브·멀티채팅·채널 알림·동기화 설정이 모두 기본값으로 돌아갑니다.'],
+          ['그대로', '로그인, 시청 기록·통계, 즐겨찾기·북마크, 다운로드한 파일은 그대로 둡니다.'],
+          ['복구', '초기화한 뒤에는 앱 안에서 되돌릴 수 없습니다. 내보내 둔 설정 파일이 있으면 \'설정 가져오기\'로 되돌릴 수 있습니다.'],
+        ],
+        check: { label: '초기화 전에 지금 설정을 내보내기', hint: '~/Downloads/CView 에 JSON 파일로 저장합니다 · 내보내기에 실패하면 초기화하지 않습니다' },
+      });
+      if (!ok) { if (btn.isConnected) btn.focus(); return; }
+      let saved = null;
+      if (ok.checked) {
+        try { saved = await this.exportSettings({ quiet: true }); } catch (er) { toast(`내보내지 못해 초기화하지 않았습니다 — ${er.message}`, 5000); return; }
+      }
+      try {
+        this.settings = await api.settingsReset('all');
+        if (saved) toast(`내보낸 뒤 설정을 초기화했습니다 — ${saved}`, 5000, { label: 'Finder에서 보기', run: () => api.revealPath(saved) });
+        else toast('설정을 초기화했습니다', 1800);
+        this.render();
+        this.broadcastAll();
+      } catch (er) { toast(er.message); }
     }
   }
 }
