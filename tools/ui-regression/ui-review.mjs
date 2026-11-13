@@ -641,6 +641,7 @@ await check('UR16 [P2-1] merged multichat: blinded, emoji-name search, backlog w
     const back = [...list.querySelectorAll('.merged-line')].map((l) => l.querySelector('.text').textContent);
     page.onSessionEvent({ session: 'mc:chA', event: { type: 'messages', messages: [msg('x3', '지금 온 글')] } });
     page.onSessionEvent({ session: 'mc:chA', event: { type: 'blinded', messageId: 'x3', blindText: '' } });
+    page.flushBacklog(); // 통합 목록은 프레임마다 한 번 붙인다(붙기 전에 온 삭제도 걸린다)
     const live = list.lastElementChild.querySelector('.text').textContent;
     root.remove();
     return { pure, away, back, live };

@@ -9,6 +9,8 @@ export const CHAT_DEFAULTS = Object.freeze({
   showBadge: true,
   // 채팅 아바타 — 'photo'(프로필 사진, 없으면 랜덤 아이콘) · 'icon'(랜덤 아이콘만, 사진을 찾지 않음) · 'off'(숨김)
   chatAvatars: 'photo',
+  // 멀티채팅·멀티라이브 통합 목록의 줄 모양 — 'compact'(촘촘: 한 줄에 태그·닉네임·글) · 'bubble'(아바타·말풍선)
+  mergedChatStyle: 'compact',
   highlightMentions: true,
   mentionNotify: true,
   nicknameColors: true,

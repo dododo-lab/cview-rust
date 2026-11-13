@@ -166,6 +166,8 @@ const CHAT_TOGGLES = [
 ];
 
 const CHAT_AVATAR_MODES = [['photo', '프로필 사진 + 아이콘'], ['icon', '아이콘만(사진을 찾지 않음)'], ['off', '숨김']];
+// 멀티채팅·멀티라이브 통합 목록의 줄 모양(chat.mergedChatStyle) — 멀티채팅 머리의 '촘촘|말풍선'과 같은 설정
+const MERGED_CHAT_STYLES = [['compact', '촘촘 — 한 줄에 채널·닉네임·글'], ['bubble', '말풍선 — 아바타와 말풍선']];
 
 // 이 기기에만 두는 설정(localStorage).
 const LOCAL_GET = { streamAlerts: streamAlertsEnabled, thumbPreview: thumbPreviewEnabled };
@@ -372,6 +374,8 @@ export class SettingsPage {
         ${CHAT_TOGGLES.map(toggle).join('')}
         <label class="setting" data-search="채팅 아바타 프로필 사진 아이콘"><span class="setting-label">아바타<small>프로필 사진이 없는 시청자는 사람마다 다른 동물·캐릭터 아이콘으로 보여 줍니다</small></span>
           <select class="select" data-chat-str="chatAvatars">${CHAT_AVATAR_MODES.map(([v, l]) => `<option value="${v}" ${(p.chatAvatars || 'photo') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <label class="setting" data-search="멀티채팅 통합 목록 줄 모양 촘촘 말풍선 아바타"><span class="setting-label">통합 목록 줄 모양<small>멀티채팅·멀티라이브에서 여러 채널이 섞이는 통합 목록 — 말풍선은 한 화면에 보이는 메시지가 절반 이하로 줄어듭니다</small></span>
+          <select class="select" data-chat-str="mergedChatStyle">${MERGED_CHAT_STYLES.map(([v, l]) => `<option value="${v}" ${(p.mergedChatStyle === 'bubble' ? 'bubble' : 'compact') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
         <label class="setting" data-search="최대 표시 줄 수"><span class="setting-label">최대 표시 줄 수<small>오래된 메시지부터 지웁니다</small></span>
           <select class="select" data-chat="maxVisibleMessages">${[150, 300, 500, 1000].map((n) => `<option value="${n}" ${Number(p.maxVisibleMessages) === n ? 'selected' : ''}>${n}줄</option>`).join('')}</select></label>
       </section>

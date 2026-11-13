@@ -2433,6 +2433,32 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .mc-merged-input .select { flex: none; max-width: 160px; }
 .merged-line { box-shadow: inset 3px 0 0 var(--mc-color); padding-left: 8px !important; }
 .mc-tag { font-size: var(--fs-micro); font-weight: 800; color: var(--mc-color); margin-right: 6px; }
+/* 통합 줄 — 단일 채팅과 같은 줄(chat.js lineHtml)에 출처 태그(.mc-tag)를 붙인다.
+   촘촘(.mc-compact, 기본 — 설정 chat.mergedChatStyle)은 말풍선·아바타 없이 한 줄에 [태그·배지·닉네임] 글 시간.
+   여러 채널이 섞여 같은 사람 묶음이 거의 생기지 않고, 말풍선은 메시지마다 이름 줄과 말풍선 줄·아바타 자리를 써서
+   한 화면에 보이는 메시지가 절반쯤으로 준다(검사 MC05). 이어진 줄(.cont)도 태그·이름을 보인다 — 한 줄 모양에서
+   이름 없는 줄은 누구 말인지 모른다. 이모티콘만 보낸 말(.emote-only)은 촘촘에서도 크게 보인다.
+   우선순위: 말풍선 규칙(:root.compact .chat-skin .chat-line.msg:not(.cont) 등)보다 높게 .merged-line 과 :is() 를 더한다. */
+/* display 는 말풍선(.chat-skin .chat-line.msg — flex)과 같은 무게로 뒤에서 이긴다 — 이 사람만 보기(.chat-list.solo)가 감출 수 있게 */
+.mc-compact .chat-line.msg { display: block; }
+.chat-skin.mc-compact .chat-line.msg.merged-line:is(:not(.cont), .cont) { padding: calc(2px + var(--chat-gap-adj, 0px)) 6px; border-radius: 0; }
+.chat-skin.mc-compact .chat-line.msg.merged-line .chat-avatar { display: none; }
+.chat-skin.mc-compact .chat-line.msg.merged-line :is(.msg-main, .msg-head, .msg-row) { display: inline; max-width: none; margin: 0; }
+.chat-skin.mc-compact .chat-line.msg.merged-line .msg-head { font-size: inherit; line-height: inherit; }
+.chat-skin.mc-compact .chat-line.msg.merged-line .msg-head .badges:not(:empty) { display: inline; margin-right: 2px; }
+.chat-skin.mc-compact .chat-line.msg.merged-line .msg-head .nick { margin-right: 6px; white-space: normal; overflow: visible; }
+.chat-skin.mc-compact .chat-line.msg.merged-line .msg-row > .text { padding: 0; background: none; box-shadow: none; border-radius: 0; color: var(--cs-ink); line-height: inherit; }
+.chat-skin.mc-compact .chat-line.msg.merged-line .msg-row > .text::before { display: none; }
+.chat-skin.mc-compact .chat-line.msg.merged-line .msg-row .chat-time { margin: 0 0 0 6px; visibility: visible; }
+.chat-skin.mc-compact .chat-line.msg.merged-line.emote-only .msg-row > .text { display: inline-block; vertical-align: middle; }
+/* 말풍선 통합 — 왼쪽 채널 색 띠가 줄 모서리를 따라 휘지 않게 왼쪽은 각지게 */
+.chat-skin .chat-line.msg.merged-line { border-radius: 0 var(--radius-ms) var(--radius-ms) 0; }
+/* 말풍선 통합 — 내 말도 태그(어느 채널로 보냈는지)는 보인다. 오른쪽 정렬은 그대로 */
+.chat-skin:not(.mc-compact) .chat-line.own.merged-line .msg-head { display: flex; }
+.chat-skin:not(.mc-compact) .chat-line.own.merged-line .msg-head > :not(.mc-tag) { display: none; }
+/* 멀티라이브 칸 묶음의 '이 사람 채팅만 보기'(merged-lines.js 가 묶음에 .solo) */
+.ml-mc-grid.solo .chat-list > :is(.chat-line:not(.solo-match, .system), .read-divider) { display: none; }
+.mc-merged.has-count .chat-input > input { padding-right: 52px; }
 /* 검색 중 — 일치 수·검색 지우기. 0건이면 '기다리는 중'을 감추고 결과 없음으로 */
 .mc-search-note { flex: none; display: flex; align-items: center; gap: 10px; margin: 0 0 8px; padding: 6px 12px; border-radius: var(--radius-ms); background: var(--surface-elevated); color: var(--text-secondary); font-size: var(--fs-footnote); }
 .mc-search-note[hidden] { display: none; }
