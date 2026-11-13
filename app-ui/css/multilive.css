@@ -88,6 +88,11 @@
 
 .ml-empty { grid-column: 1 / -1; grid-row: 1 / -1; padding: var(--sp-xl); } /* 모양은 .empty.lg.boxed */
 .ml-empty .btn { margin-top: var(--sp-sm); }
+/* 빈 화면 채널 추가 — + 아이콘에 크기가 없어 단추가 큰 + 아래 글자가 놓인 네모가 됐다. 머리줄처럼 한 줄(+ 채널 추가)로.
+   .ch-add 열림(× 로 45° 회전·옅은 칩)과 한 묶음이다 — 이 두 줄만 지우면 서랍이 열릴 때 큰 칩 안에 큰 × 가 생긴다.
+   예전 모양으로 돌리려면 multilive.js 의 빈 화면 단추에서 ch-add 도 함께 뺀다(그러면 그 단추 호버는 예전 방식). */
+.ml-empty .ch-add { display: inline-flex; align-items: center; gap: 6px; }
+.ml-empty .ch-add svg { width: 16px; height: 16px; flex: none; }
 /* 한국어 안내문은 어절 중간에서 꺾지 않는다 */
 .ml-addbar-notice, .ml-addbar-list .empty { word-break: keep-all; overflow-wrap: anywhere; }
 
