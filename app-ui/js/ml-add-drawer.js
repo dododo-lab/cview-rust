@@ -193,6 +193,14 @@ export class MultiLiveAddDrawer {
     this.el.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { e.stopPropagation(); this.close(); }
     });
+    // 초점이 서랍 밖(무대·머리줄)에 있어도 Esc 로 닫는다 — 위에 시트·팔레트·메뉴가 떠 있으면 그쪽이 먼저다.
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || !this.isOpen || e.defaultPrevented || this.el.contains(e.target)) return;
+      if (document.querySelector('.sheet-scrim, .palette-scrim:not([hidden]), .ctx-menu, :is(.ml-pane-menu, .ml-more-menu, .quality-menu, .emoji-picker):not([hidden])')) return;
+      if (this.el.closest('[hidden]')) return;
+      e.preventDefault();
+      this.close();
+    });
     // 바깥(무대·머리줄)을 누르면 닫는다 — 여는 버튼은 onClick 의 토글이 처리한다.
     document.addEventListener('pointerdown', (e) => {
       if (this.isOpen && !this.el.contains(e.target) && !e.target.closest(this.toggleSelector) && !e.target.closest('.toast, .sheet-scrim')) this.close();

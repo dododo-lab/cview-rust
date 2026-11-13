@@ -310,7 +310,8 @@ export class ChatPanel {
     this.picker.addEventListener('input', () => this.renderPicker());
     // Esc 로 닫고 입력창으로 돌아간다(예전엔 검색칸에 초점이 있어도 Esc 가 먹지 않았다).
     this.picker.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.closePicker(); this.input.focus(); }
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.closePicker(); this.input.focus(); return; }
+      this.onPickerKey(e);
     });
     const onDocClick = (e) => {
       if (!this.picker.contains(e.target) && !this.emojiButton.contains(e.target)) this.closePicker();
@@ -460,6 +461,8 @@ export class ChatPanel {
     if (!byUser) this.notice.hidden = true;
     this.unread = 0;
     this.renderJump();
+    // 검색 — 채널이 바뀌면 닫고, 지우기(/clear·⇧⌘K)면 줄 수만 다시 센다(예전엔 지운 줄의 'N개'가 남았다).
+    if (this.searchQuery) { if (byUser) this.refreshSearch?.(); else this.closeSearch?.(); }
   }
 
   setState(name, detail) {
@@ -512,7 +515,9 @@ export class ChatPanel {
   append(messages, { recent = false } = {}) {
     if (!messages || !messages.length) return;
     const prefs = chatPrefs();
-    const shown = messages.filter((m) => passesFilters(m, prefs));
+    // localHidden — /mute 로 잠시 숨긴 닉네임(chat-extras.js). 붙인 뒤 지우면 한 프레임 보였다가 사라졌다.
+    const hidden = this.localHidden;
+    const shown = messages.filter((m) => passesFilters(m, prefs) && !(hidden && hidden(m)));
     if (!shown.length) return;
     for (const m of shown) {
       if (recent) RECENT.add(m);
@@ -847,8 +852,20 @@ export class ChatPanel {
 
   mention(nick) {
     if (this.input.disabled) { toast('지금은 채팅을 보낼 수 없습니다'); return; }
-    this.input.value = `${`@${nick} ${this.input.value}`.trimEnd()} `;
+    const next = `${`@${nick} ${this.input.value}`.trimEnd()} `;
+    if (!this.fitsInput(next)) return;
+    this.input.value = next;
     this.input.focus();
+    this.renderCount();
+  }
+
+  /** 입력 제한(maxlength 100 = 백엔드 MAX_CHAT_LENGTH) 안인가 — 넘으면 알리고 넣지 않는다. 멘션·이모티콘을 코드로 넣으면
+   *  maxlength 가 막지 않아, 100자를 넘긴 글이 보낼 때 뒤가 잘렸다(글자 수 표시도 갱신되지 않았다). */
+  fitsInput(value) {
+    const max = this.input.maxLength > 0 ? this.input.maxLength : 100;
+    if ([...value].length <= max) return true;
+    toast(`채팅은 ${max}자까지 쓸 수 있어요`, 1500);
+    return false;
   }
 
   pin(line) {
@@ -941,6 +958,7 @@ export class ChatPanel {
 
   async loadEmoticons(channelId) {
     if (!channelId) return;
+    this.emoticonError = false;
     if (emoticonCache.has(channelId)) { this.emoticons = emoticonCache.get(channelId); return; }
     this.emoticons = []; // 앞 채널의 팩이 남아 다른 채널 이모티콘을 고르지 않게
     try {
@@ -951,7 +969,12 @@ export class ChatPanel {
       this.emoticons = packs;
       // 목록이 오기 전에 선택기를 열었으면 바로 다시 그린다(닫았다 열어야 보였다).
       if (!this.picker.hidden) this.renderPicker();
-    } catch { if (this.channelId === channelId) this.emoticons = []; }
+    } catch {
+      if (this.channelId !== channelId) return;
+      this.emoticons = [];
+      this.emoticonError = true;
+      if (!this.picker.hidden) this.renderPicker();
+    }
   }
 
   /** 이모티콘 팩 + 채팅에서 본 이모티콘 팩. */
@@ -981,13 +1004,45 @@ export class ChatPanel {
     if (!this.picker.hidden) { this.closePicker(); return; }
     this.emojiButton.setAttribute('aria-expanded', 'true');
     this.pickerPack = this.pickerPack || 0;
-    this.picker.innerHTML = `
-      <input type="search" class="emoji-search" placeholder="이모티콘 검색" autocomplete="off">
-      <div class="emoji-tabs"></div>
-      <div class="emoji-grid"></div>`;
+    // 틀은 한 번만 만든다 — 다시 열면 직전 검색어·스크롤이 그대로다(예전엔 열 때마다 innerHTML 을 새로 써 지워졌다).
+    if (!this.picker.querySelector('.emoji-search')) {
+      this.picker.innerHTML = `
+        <input type="search" class="emoji-search" placeholder="이모티콘 검색" autocomplete="off" aria-label="이모티콘 검색">
+        <div class="emoji-tabs"></div>
+        <div class="emoji-grid" role="group" aria-label="이모티콘"></div>`;
+    }
+    // 불러오지 못했던 채널이면 다시 묻는다(열 때 한 번).
+    if (this.emoticonError && this.channelId && !this.emoticons.length) this.loadEmoticons(this.channelId);
+    const grid = this.picker.querySelector('.emoji-grid');
+    const scroll = grid.scrollTop;
     this.picker.hidden = false;
     this.renderPicker();
+    grid.scrollTop = scroll;
     this.picker.querySelector('.emoji-search').focus();
+  }
+
+  /** 선택기 키보드 — 칸 사이를 ←→↑↓ 로(줄 너비는 칸 위치로 잰다), 검색칸에서 ↓ 는 첫 칸, 첫 줄에서 ↑ 는 검색칸. */
+  onPickerKey(e) {
+    if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+    const search = this.picker.querySelector('.emoji-search');
+    const cells = [...this.picker.querySelectorAll('.emoji-cell')];
+    if (!cells.length) return;
+    if (e.target === search) {
+      if (e.key !== 'ArrowDown') return;
+      e.preventDefault();
+      cells[0].focus();
+      return;
+    }
+    const i = cells.indexOf(e.target.closest('.emoji-cell'));
+    if (i < 0) return;
+    e.preventDefault();
+    const top = cells[0].offsetTop;
+    let cols = cells.findIndex((c) => c.offsetTop !== top);
+    if (cols < 0) cols = cells.length;
+    const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[e.key];
+    const j = i + step;
+    if (j < 0) { if (e.key === 'ArrowUp') search.focus(); return; }
+    cells[Math.min(cells.length - 1, j)].focus();
   }
 
   renderPicker() {
@@ -995,7 +1050,13 @@ export class ChatPanel {
     const grid = this.picker.querySelector('.emoji-grid');
     if (!tabs || !grid) return;
     const packs = this.packs();
-    if (!packs.length) { grid.innerHTML = '<div class="tray-empty">이 채널은 이모티콘 목록을 주지 않습니다 — 채팅에 이모티콘이 보이면 여기에 모입니다</div>'; return; }
+    if (!packs.length) {
+      // 네트워크 실패와 '목록 없음'을 가른다 — 예전엔 실패해도 '이 채널은 주지 않습니다'라고 했다.
+      grid.innerHTML = this.emoticonError
+        ? '<div class="tray-empty">이모티콘 목록을 불러오지 못했습니다 — 닫았다 다시 열면 다시 시도합니다</div>'
+        : '<div class="tray-empty">이 채널은 이모티콘 목록을 주지 않습니다 — 채팅에 이모티콘이 보이면 여기에 모입니다</div>';
+      return;
+    }
     const q = (this.picker.querySelector('.emoji-search').value || '').trim().toLowerCase();
     if (this.pickerPack >= packs.length) this.pickerPack = 0;
     tabs.hidden = Boolean(q);
@@ -1022,10 +1083,13 @@ export class ChatPanel {
     const el = this.input;
     const start = el.selectionStart ?? el.value.length;
     const end = el.selectionEnd ?? el.value.length;
-    el.value = el.value.slice(0, start) + text + el.value.slice(end);
+    const next = el.value.slice(0, start) + text + el.value.slice(end);
+    if (!this.fitsInput(next)) return;
+    el.value = next;
     const pos = start + text.length;
     el.focus();
     el.setSelectionRange(pos, pos);
+    this.renderCount();
   }
 
   /** 커서 앞 토큰(`:abc` 또는 `@abc`). */
@@ -1068,7 +1132,9 @@ export class ChatPanel {
     const el = this.input;
     if (!tok) return;
     const caret = el.selectionStart ?? el.value.length;
-    el.value = el.value.slice(0, tok.start) + value + el.value.slice(caret);
+    const next = el.value.slice(0, tok.start) + value + el.value.slice(caret);
+    if (!this.fitsInput(next)) { this.setAutocompleteOpen(false); return; }
+    el.value = next;
     const pos = tok.start + value.length;
     el.setSelectionRange(pos, pos);
     this.setAutocompleteOpen(false);

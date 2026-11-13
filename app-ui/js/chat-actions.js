@@ -151,6 +151,11 @@ export function installChatActions(panel) {
   panel.soloBar.after(box);
   const input = box.querySelector('.cs-input');
   const count = box.querySelector('.cs-count');
+  // 맞는 줄이 없을 때 목록 위 안내 — 예전엔 빈 목록과 '없음' 세 글자뿐이라 채팅이 끊긴 것처럼 보였다.
+  const empty = document.createElement('div');
+  empty.className = 'chat-search-empty';
+  empty.hidden = true;
+  list.before(empty);
   panel.searchQuery = '';
 
   const mark = (lines) => {
@@ -161,9 +166,11 @@ export function installChatActions(panel) {
     }
   };
   const renderCount = () => {
-    if (!panel.searchQuery) { count.textContent = ''; return; }
+    if (!panel.searchQuery) { count.textContent = ''; empty.hidden = true; return; }
     const n = list.querySelectorAll('.chat-line.search-match').length;
     count.textContent = n ? `${n}개` : '없음';
+    empty.hidden = n > 0;
+    if (!n) empty.textContent = `‘${input.value.trim()}’와 맞는 채팅이 아직 없습니다 — 새로 오는 채팅도 찾아 보여 줍니다`;
   };
   let debounce = 0;
   const run = () => {
@@ -192,6 +199,7 @@ export function installChatActions(panel) {
   };
   panel.openSearch = open;
   panel.closeSearch = close;
+  panel.refreshSearch = renderCount;
   searchBtn.setAttribute('aria-pressed', 'false');
   searchBtn.addEventListener('click', (e) => { e.stopPropagation(); if (box.hidden) open(); else close(); });
   box.querySelector('.cs-close').addEventListener('click', () => { close(); list.focus(); });

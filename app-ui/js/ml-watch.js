@@ -9,7 +9,7 @@ import { api } from './api.js';
 import { esc, toast, keyBelongsToTarget } from './dom.js';
 import { chatPrefs, onChatPrefs, updateChatPrefs } from './chat-prefs.js';
 import { matchPlainAction } from './shortcuts.js';
-import { togglePipFor, stamp } from './viewer-controls.js';
+import { togglePipFor, stamp, toggleFullscreenOn } from './viewer-controls.js';
 import { seekPlan } from './viewer-extras.js';
 import { compactCount } from './cards.js';
 import { kbd } from './platform.js';
@@ -298,12 +298,7 @@ export class WatchTools {
 
   /** 영상 전체 화면(패인) 또는 영상+채팅 전체 화면(무대+채팅). 이미 전체 화면이면 끝낸다. */
   fullscreen(withChat) {
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
-      return;
-    }
-    const target = withChat ? this.body : this.pane?.el;
-    if (target && target.requestFullscreen) target.requestFullscreen();
+    toggleFullscreenOn(withChat ? this.body : this.pane?.el);
   }
 
   flash(text) {

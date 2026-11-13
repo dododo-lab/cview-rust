@@ -164,7 +164,8 @@ export function shortcutHelpRows() {
     ...bound('togglePiP', 'PiP'),
     [kbd('⌥⌘P'), 'PiP (메뉴)'],
     ['B', '북마크'],
-    ...bound('bookmarkStream', '북마크'),
+    // 바꾼 북마크 키가 맨 B 면 위 줄과 같은 줄이 두 번 나왔다
+    ...bound('bookmarkStream', '북마크').filter(([k]) => k !== 'B'),
     ...bound('screenshot', '스크린샷'),
     [kbd('⌘W / Esc'), '시청 화면 닫기'],
   ];

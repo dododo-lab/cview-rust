@@ -4,10 +4,12 @@ import { toast, dismiss, esc } from './dom.js';
 import { checkForUpdate, currentVersionText, versionText, updateDetailHtml, downloadTarget, openDownload, canInstall, installUpdate, progressHtml, renderProgress } from './update-check.js';
 import { shortcutHelpRows } from './shortcuts.js';
 import { kbd } from './platform.js';
+import { trapFocus } from './a11y.js';
+import { HUBS } from './workspace.js';
 
 // '시청' 묶음은 바꿀 수 있는 단축키를 따르므로 열 때마다 만든다(shortcuts.js shortcutHelpRows).
 const shortcutGroups = () => [
-  ['탐색', [['⌘1 ~ ⌘7', '홈 · 팔로잉 · 인기 · 멀티라이브 · 라이브 · 보관함 · 카테고리'], ['⌘K', '명령 팔레트'], ['⌘F', '검색'], ['⌘[  /  ⌥←', '뒤로'], ['⌘R', '새로고침'], ['⌘\\', '사이드바 접기'], ['⇧⌘L', '다크/라이트 전환'], ['⌘,', '설정']]],
+  ['탐색', [['⌘1 ~ ⌘7', '홈 · 팔로잉 · 인기 · 멀티라이브 · 라이브 · 보관함 · 카테고리'], ['⌘K', '명령 팔레트'], ['⌘F', '검색'], ['⌘[  /  ⌥←', '뒤로'], ['⌘R', '새로고침'], ['⌘\\', '사이드바 접기'], ['⇧⌘L', '다크/라이트 전환'], ['⌘,', '설정'], [`⌥⌘1 ~ ⌥⌘${HUBS.length}`, `작업 공간 — ${HUBS.map(([, , label]) => label).join(' · ')}`]]],
   ['시청', shortcutHelpRows()],
   ['채팅', [['⇧⌘K', '채팅 지우기'], ['⌘J', '자동 스크롤'], [':이름', '이모티콘 자동완성'], ['@닉네임', '멘션 자동완성'], ['우클릭', '메시지 메뉴'], ['더블클릭', '프로필']]],
 ];
@@ -16,10 +18,16 @@ export function showSheet(html, cls = '') {
   document.querySelector('.sheet-scrim.app-sheet')?.remove();
   const scrim = document.createElement('div');
   scrim.className = 'sheet-scrim app-sheet';
-  scrim.innerHTML = `<div class="sheet ${cls}" role="dialog" tabindex="-1">${html}<div class="sheet-actions"><button class="btn primary" data-close>닫기</button></div></div>`;
+  scrim.innerHTML = `<div class="sheet ${cls}" role="dialog" aria-modal="true" tabindex="-1">${html}<div class="sheet-actions"><button class="btn primary" data-close>닫기</button></div></div>`;
+  const sheet = scrim.querySelector('.sheet');
+  // 이름은 시트 제목(h2)에서 — 화면 낭독기가 '대화 상자'만 읽었다.
+  const title = sheet.querySelector('h2');
+  if (title) { title.id ||= `sheet-title-${Date.now().toString(36)}`; sheet.setAttribute('aria-labelledby', title.id); }
   document.body.append(scrim);
-  scrim.querySelector('.sheet').focus();
-  const close = () => dismiss(scrim);
+  // 초점을 가두고, 닫으면 연 자리(메뉴 단추 등)로 돌려준다.
+  const release = trapFocus(sheet);
+  sheet.focus();
+  const close = () => { release(); dismiss(scrim); };
   scrim.addEventListener('click', (e) => { if (e.target === scrim || e.target.closest('[data-close]')) close(); });
   scrim.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
   return scrim;

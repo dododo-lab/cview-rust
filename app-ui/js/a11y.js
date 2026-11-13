@@ -30,7 +30,9 @@ const DIRS = { ArrowRight: 'right', ArrowLeft: 'left', ArrowDown: 'down', ArrowU
 const ICON_BUTTON = 'button[title]:not([aria-label]), [role=button][title]:not([aria-label])';
 
 function labelOne(b) {
-  if (!b.textContent.trim() || b.classList.contains('icon-btn')) b.setAttribute('aria-label', b.title);
+  // 글자가 없거나 기호뿐인 버튼('✕'·'×'·'⋯' 등) — 화면 낭독기가 '곱하기 기호'로 읽었다. 글자·숫자가 있으면 그 글이 이름이다.
+  const text = b.textContent.trim();
+  if (!text || !/[\p{L}\p{N}]/u.test(text) || b.classList.contains('icon-btn')) b.setAttribute('aria-label', b.title);
 }
 
 function labelIconButtons(root) {
@@ -171,6 +173,40 @@ export function watchEdges(box) {
   const ro = new ResizeObserver(() => { if (!box.isConnected) { ro.disconnect(); return; } update(); });
   ro.observe(box);
   return update;
+}
+
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * 모달 안에 키보드 초점을 가둔다 — Tab/⇧Tab 이 끝에서 처음으로(거꾸로) 돌고, 바깥에 초점이 있으면 안으로 데려온다.
+ * 예전엔 시트·팔레트·환영 안내·정리 확인에서 Tab 을 몇 번 누르면 뒤 화면으로 빠졌다(aria-modal 인데도).
+ * 돌려준 함수를 부르면 풀고 연 자리로 초점을 돌려준다(restore). 모달이 문서에서 빠지거나 숨으면 스스로 풀린다.
+ * @param {HTMLElement} box
+ * @param {{ restore?: boolean }} [opts]
+ */
+export function trapFocus(box, { restore = true } = {}) {
+  const back = document.activeElement;
+  let on = true;
+  const release = () => {
+    if (!on) return;
+    on = false;
+    document.removeEventListener('keydown', onKey, true);
+    if (restore && back && back !== document.body && back.isConnected && typeof back.focus === 'function') back.focus({ preventScroll: true });
+  };
+  const onKey = (e) => {
+    if (!box.isConnected || box.closest('[hidden]')) { on = false; document.removeEventListener('keydown', onKey, true); return; }
+    if (e.key !== 'Tab' || e.metaKey || e.ctrlKey || e.altKey) return;
+    const items = [...box.querySelectorAll(FOCUSABLE)].filter((el) => el.getClientRects().length > 0 && !el.closest('[hidden], [inert]'));
+    const at = document.activeElement;
+    if (!items.length) { e.preventDefault(); if (box.tabIndex >= -1) box.focus({ preventScroll: true }); return; }
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (!box.contains(at)) { e.preventDefault(); (e.shiftKey ? last : first).focus(); return; }
+    if (e.shiftKey && (at === first || at === box)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && at === last) { e.preventDefault(); first.focus(); }
+  };
+  document.addEventListener('keydown', onKey, true);
+  return release;
 }
 
 export function bindTabKeys(tablist) {

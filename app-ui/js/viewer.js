@@ -5,7 +5,7 @@ import { PlayerBridge } from './player.js';
 import { ChatPanel } from './chat.js';
 import { StreamAlerts } from './donations.js';
 import { installChatSplitter } from './splitter.js';
-import { ViewerControls } from './viewer-controls.js';
+import { ViewerControls, toggleFullscreenOn } from './viewer-controls.js';
 import { PlayerPanel } from './player-panel.js';
 import { ViewerExtras } from './viewer-extras.js';
 import { uptimeText, compactCount } from './cards.js';
@@ -52,11 +52,7 @@ export class Viewer {
     root.querySelector('#viewer-close').addEventListener('click', () => this.close());
     // 다시 연결은 처음 열 때의 플레이어 설정(음소거로 시작 등)을 그대로 쓴다.
     root.querySelector('#reload').addEventListener('click', () => this.channelId && this.open(this.channelId, this.lastSettings));
-    root.querySelector('#fullscreen').addEventListener('click', () => {
-      const stage = root.querySelector('.player-stage');
-      if (document.fullscreenElement) document.exitFullscreen();
-      else if (stage.requestFullscreen) stage.requestFullscreen();
-    });
+    root.querySelector('#fullscreen').addEventListener('click', () => toggleFullscreenOn(root.querySelector('.player-stage')));
     this.muteButton.addEventListener('click', () => this.toggleMute());
     this.volume.addEventListener('input', () => {
       const v = Number(this.volume.value) / 100;

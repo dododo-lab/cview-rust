@@ -3546,6 +3546,9 @@ function getLevels() {
     postToSwift('levels', {
         levels: levels,
         current: hls.currentLevel,
+        // 사용자가 고른 화질(-1 = 자동). current 는 지금 재생 중인 조각의 화질이라 자동에서도 0 이상이고,
+        // 직접 고른 직후엔 아직 앞 화질이다 — 화면의 화질 단추·메뉴는 이 값을 본다.
+        manual: typeof hls.manualLevel === 'number' ? hls.manualLevel : -1,
         capped: hls.autoLevelCapping
     });
 }

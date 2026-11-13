@@ -21,6 +21,8 @@ const MAX_PLAY_MS = { live: 30000, vod: 20000, clip: 30000 };
 const FADE_MS = 200;
 const TTL_MS = { live: 60000, vod: 600000, clip: 600000 };
 const FAIL_TTL_MS = 300000;
+// 소스 조회 자체가 실패(네트워크·IPC 오류)한 카드 — 미리보기가 없는 카드(null)와 달리 잠깐만 쉬었다 다시 묻는다.
+const ERROR_TTL_MS = 15000;
 // 목록 화면만 — 재생 중인 화면(다시보기·클립 독, 멀티라이브 추가 서랍)에선 하지 않는다.
 const PAGES = new Set(['home', 'following', 'popular', 'categories', 'library', 'search', 'channel']);
 const PREF_KEY = 'cview.thumbPreview';
@@ -133,12 +135,13 @@ class HoverPreview {
     const now = Date.now();
     if (hit) {
       if (hit.promise) return hit.promise;
-      if (now - hit.at < (hit.value ? TTL_MS[kind] : FAIL_TTL_MS)) return Promise.resolve(hit.value);
+      if (now - hit.at < (hit.value ? TTL_MS[kind] : (hit.error ? ERROR_TTL_MS : FAIL_TTL_MS))) return Promise.resolve(hit.value);
     }
+    let error = false;
     const promise = api.previewSource(kind, id)
-      .catch(() => null)
+      .catch(() => { error = true; return null; })
       .then((value) => {
-        this.cache.set(key, { at: Date.now(), value: value || null });
+        this.cache.set(key, { at: Date.now(), value: value || null, error });
         if (this.cache.size > 300) this.cache.delete(this.cache.keys().next().value);
         return value || null;
       });
@@ -209,7 +212,12 @@ class HoverPreview {
     } else {
       v.src = src.url;
     }
-    v.play().catch(() => {});
+    // 재생이 거부되면(자동 재생 막힘·디코더 없음) 로딩 표시를 MAX_PLAY_MS 동안 남기지 않고 바로 거둔다.
+    v.play().catch((er) => {
+      if (seq !== this.seq || (er && er.name === 'AbortError')) return; // 정리하며 src 를 비운 경우
+      this.forget(kind, id);
+      this.stop();
+    });
 
     this.cap = setTimeout(() => this.stop(), MAX_PLAY_MS[kind]);
     // 목록 자동 새로고침·화면 이동으로 카드가 떨어지거나 가려지면 정리한다.

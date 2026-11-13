@@ -807,26 +807,27 @@ export class MultiLivePage {
     this.ratioInput.addEventListener('input', () => {
       this.localRatio = Number(this.ratioInput.value) / 100;
       this.ratioOutput.textContent = `${this.ratioInput.value}%`; this.syncRatioFill();
-      this.render(this.state);
+      this.previewFocusRatio();
     });
     this.ratioInput.addEventListener('change', () => this.commitRatio());
     this.divider.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       this.divider.setPointerCapture(e.pointerId);
       this.stage.classList.add('resizing');
+      this.stage.classList.toggle('row-resizing', this.divider.classList.contains('horizontal'));
       const move = (ev) => {
         const r = this.stage.getBoundingClientRect();
         this.localRatio = ratioFromPointer(this.state.focusDirection, (ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height);
         this.ratioInput.value = String(Math.round(this.localRatio * 100));
         this.ratioOutput.textContent = `${this.ratioInput.value}%`; this.syncRatioFill();
-        this.render(this.state);
+        this.previewFocusRatio();
       };
       // 놓기·취소 중 하나만 오므로 둘 다 떼어 낸다({ once } 만이면 남은 쪽이 다음 끌기에 한 번 더 저장한다).
       const up = () => {
         this.divider.removeEventListener('pointermove', move);
         this.divider.removeEventListener('pointerup', up);
         this.divider.removeEventListener('pointercancel', up);
-        this.stage.classList.remove('resizing');
+        this.stage.classList.remove('resizing', 'row-resizing');
         this.commitRatio();
       };
       this.divider.addEventListener('pointermove', move);
@@ -839,7 +840,24 @@ export class MultiLivePage {
     });
   }
 
+  /**
+   * 끄는 중·슬라이더를 미는 중의 미리보기 — 그리드 칸(applyFocusGrid)만 프레임당 한 번 고친다. 예전엔 pointermove·input 마다
+   * render 전체(패인·채팅·현재 재생 정보 동기화)를 돌렸다. 놓으면 commitRatio 가 상태를 받아 한 번 다시 그린다.
+   */
+  previewFocusRatio() {
+    if (this.ratioRaf) return;
+    this.ratioRaf = requestAnimationFrame(() => {
+      this.ratioRaf = 0;
+      const st = this.state;
+      if (!st || this.localRatio == null) return;
+      if (!this.stage.classList.contains('ml-focus')) { this.render(st); return; }
+      this.applyFocusGrid(true, paneOrder(st.sessions || [], st.focusMainId || st.selectedId, st.layout));
+    });
+  }
+
   async commitRatio() {
+    cancelAnimationFrame(this.ratioRaf);
+    this.ratioRaf = 0;
     const ratio = this.localRatio;
     if (ratio == null) return;
     try {
@@ -863,6 +881,7 @@ export class MultiLivePage {
         e.preventDefault();
         d.setPointerCapture(e.pointerId);
         this.stage.classList.add('resizing');
+        this.stage.classList.toggle('row-resizing', axis === 'v');
         const move = (ev) => {
           const r = this.stage.getBoundingClientRect();
           const frac = axis === 'h' ? (ev.clientX - r.left) / r.width : (ev.clientY - r.top) / r.height;
@@ -874,7 +893,7 @@ export class MultiLivePage {
           d.removeEventListener('pointermove', move);
           d.removeEventListener('pointerup', up);
           d.removeEventListener('pointercancel', up);
-          this.stage.classList.remove('resizing');
+          this.stage.classList.remove('resizing', 'row-resizing');
           const g = this.localGrid;
           this.localGrid = null;
           if (g) this.run(api.multiLiveSetRatios(g.h, g.v));

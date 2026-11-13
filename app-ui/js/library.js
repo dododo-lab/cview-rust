@@ -43,6 +43,9 @@ function channelRowSaved(c) {
     </button>`;
 }
 
+// 지우는 중(되돌리기 시간)인 북마크 — 그사이 탭을 오가 목록을 다시 그려도 다시 나타나지 않게 뺀다.
+const deletingBookmarks = new Set();
+
 function bookmarkRow(b) {
   const thumb = safeUrl(b.thumbnailUrl);
   return `
@@ -218,7 +221,7 @@ export class LibraryPage {
           return;
         }
         case 'bookmarks': {
-          const list = await this.fetchTab('bookmarks');
+          const list = (await this.fetchTab('bookmarks')).filter((b) => !deletingBookmarks.has(b.id));
           html = list.length ? `<div class="bookmark-list">${list.map(bookmarkRow).join('')}</div>` : emptyState('북마크가 없습니다', '시청 중 북마크 버튼(또는 B 키)으로 지금 장면을 남길 수 있어요');
           break;
         }
@@ -273,12 +276,16 @@ export class LibraryPage {
     } else if (a.dataset.lib === 'bookmark-delete') {
       // 바로 지우지 않고 숨긴 뒤, 되돌리기 시간이 지나면 지운다.
       const row = a.closest('[data-bookmark-id]');
+      const id = row.dataset.bookmarkId;
       row.hidden = true;
+      deletingBookmarks.add(id);
       let undone = false;
-      toast('북마크를 지웠습니다', 5000, { label: '되돌리기', run: () => { undone = true; row.hidden = false; } });
+      // 되돌리면 지금 화면의 줄을 다시 보인다 — 그사이 목록을 다시 그렸으면 그 줄은 새 목록에 없으니 다시 불러온다.
+      const restore = () => { deletingBookmarks.delete(id); if (row.isConnected) row.hidden = false; else if (this.tab === 'bookmarks') this.load(); };
+      toast('북마크를 지웠습니다', 5000, { label: '되돌리기', run: () => { undone = true; restore(); } });
       setTimeout(async () => {
         if (undone) return;
-        try { await api.bookmarkDelete(row.dataset.bookmarkId); row.remove(); } catch (er) { row.hidden = false; toast(er.message); }
+        try { await api.bookmarkDelete(id); deletingBookmarks.delete(id); row.remove(); } catch (er) { restore(); toast(er.message); }
       }, 5200);
     } else if (a.dataset.lib === 'bookmark-channel') {
       this.onOpenChannel(a.dataset.channelId);

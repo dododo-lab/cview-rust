@@ -8,11 +8,11 @@ import { ACTIONS, FIXED, currentBindings, bindingLabel, bindingFromEvent, saveBi
 import { esc, toast } from './dom.js';
 import { bindTabKeys } from './a11y.js';
 import { emptyState, errorState, loadingState } from './cards.js';
-import { THEMES, THEME_LABELS, currentTheme, setTheme } from './theme.js';
+import { THEMES, THEME_LABELS, currentTheme, setTheme, syncTheme } from './theme.js';
 import { streamAlertsEnabled, setStreamAlertsEnabled, ALERT_HOME } from './donations.js';
 import { chatPrefs, updateChatPrefs, blockedLabel, loadChatPrefs } from './chat-prefs.js';
 import { BACKGROUNDS, READING_WIDTHS } from './chat-extras.js';
-import { kbd } from './platform.js';
+import { kbd, IS_WINDOWS } from './platform.js';
 import { thumbPreviewEnabled, setThumbPreviewEnabled } from './hover-preview.js';
 import { checkForUpdate, lastUpdateResult, updateSummary, downloadTarget, openDownload, currentVersionText, canInstall, installUpdate, progressHtml, renderProgress } from './update-check.js';
 
@@ -241,7 +241,11 @@ export class SettingsPage {
   render() {
     if (!this.settings) return;
     const tabs = `<div class="settings-top">
-      <div class="segmented page-tabs settings-tabs" role="tablist" aria-label="설정 분류">${GROUPS.map(([id, l]) => { const on = this.group === id; return `<button class="seg${on ? ' active' : ''}" data-group="${id}" role="tab" aria-selected="${on}" tabindex="${on ? 0 : -1}">${l}</button>`; }).join('')}</div>
+      <div class="segmented page-tabs settings-tabs${this.query ? ' searching' : ''}" role="tablist" aria-label="설정 분류">${GROUPS.map(([id, l]) => {
+        // 검색 중엔 모든 묶음에서 찾으므로 어느 탭도 켜진 것으로 보이지 않는다(누르면 검색을 닫고 그 묶음으로).
+        const on = this.group === id; const lit = on && !this.query;
+        return `<button class="seg${lit ? ' active' : ''}" data-group="${id}" role="tab" aria-selected="${lit}" tabindex="${on ? 0 : -1}">${l}</button>`;
+      }).join('')}</div>
       <input type="search" class="settings-search" placeholder="설정 검색" value="${esc(this.query)}">
     </div>`;
     this.body.innerHTML = `${tabs}<div class="settings-groups">${this.groupHtml()}</div><div class="empty settings-search-empty" role="status" hidden></div>`;
@@ -337,7 +341,7 @@ export class SettingsPage {
       </section>
       <section class="settings-group" data-g="overview"><h2>화면</h2>
         <div class="setting" data-search="테마 다크 라이트 시스템">
-          <span class="setting-label">테마<small>시스템은 macOS 화면 모드를 따릅니다</small></span>
+          <span class="setting-label">테마<small>시스템은 ${IS_WINDOWS ? 'Windows' : 'macOS'} 화면 모드를 따릅니다</small></span>
           <div class="segmented" role="radiogroup" aria-label="테마">
             ${THEMES.map((t) => `<button class="seg ${t === currentTheme() ? 'active' : ''}" data-theme-choice="${t}" role="radio" aria-checked="${t === currentTheme()}">${THEME_LABELS[t]}</button>`).join('')}
           </div>
@@ -358,7 +362,7 @@ export class SettingsPage {
     const range = (key, label, min, max, step) => `
       <label class="setting" data-search="${esc(label)}"><span class="setting-label">${esc(label)}</span>
         <span class="range-field"><input type="range" min="${min}" max="${max}" step="${step}" value="${esc(p[key])}" data-chat="${key}"><output>${esc(p[key])}</output></span></label>`;
-    const words = (p.blockedWords || []).map((w) => `<span class="word-chip">${esc(w)}<button data-remove-word="${esc(w)}" title="지우기">✕</button></span>`).join('');
+    const words = (p.blockedWords || []).map((w) => `<span class="word-chip">${esc(w)}<button data-remove-word="${esc(w)}" title="지우기" aria-label="${esc(`금지어 ${w} 지우기`)}">✕</button></span>`).join('');
     const users = (p.blockedUsers || []).map((u) => `<span class="word-chip">${esc(blockedLabel(u))}<button data-unblock="${esc(u)}" title="차단 해제">해제</button></span>`).join('');
     return `
       <section class="settings-group" data-g="chat"><h2>채팅 표시</h2>
@@ -408,7 +412,7 @@ export class SettingsPage {
     return `<section class="settings-group" data-g="advanced"><h2>백업 · 초기화</h2>
       <div class="setting" data-search="설정 내보내기 백업"><span class="setting-label">설정 내보내기<small>모든 설정을 JSON 파일로 ~/Downloads/CView 에 저장합니다</small></span><button class="btn" data-export>내보내기</button></div>
       <div class="setting column" data-search="설정 가져오기 복원"><span class="setting-label">설정 가져오기<small>내보낸 JSON 내용을 붙여 넣으세요</small></span>
-        <form class="word-form" data-import><input type="text" placeholder='{"player": …}'><button class="btn">가져오기</button></form></div>
+        <form class="word-form import-form" data-import><textarea rows="4" spellcheck="false" autocomplete="off" aria-label="가져올 설정 JSON" placeholder='{"player": …}'></textarea><button class="btn">가져오기</button></form></div>
       <div class="setting" data-search="초기화 기본값"><span class="setting-label">모든 설정 초기화<small>로그인·시청 기록은 그대로 둡니다</small></span><button class="btn danger" data-reset-all>초기화</button></div>
     </section>`;
   }
@@ -427,6 +431,17 @@ export class SettingsPage {
     again.value = input.value;
     again.focus();
     again.setSelectionRange(caret, caret);
+  }
+
+  /**
+   * 가져오기·전체 초기화 뒤 — 테마와 다른 화면(단축키·채팅·미리보기·플레이어)이 새 설정을 바로 따르게 알린다.
+   * 예전엔 이 화면만 다시 그려 테마·채팅 설정이 앱을 다시 켤 때까지 옛 값으로 남았다.
+   */
+  broadcastAll() {
+    const s = this.settings || {};
+    syncTheme(s.appearance && s.appearance.theme);
+    window.dispatchEvent(new CustomEvent('cview:settings-changed', { detail: { domain: 'all', settings: s } }));
+    loadChatPrefs().catch(() => {});
   }
 
   applySearch() {
@@ -499,10 +514,11 @@ export class SettingsPage {
     } else if (form.matches('[data-import]')) {
       e.preventDefault();
       try {
-        const skipped = await api.settingsImport(form.querySelector('input').value);
+        const skipped = await api.settingsImport(form.querySelector('textarea, input').value);
         this.settings = await api.settingsGet();
         toast(skipped.length ? `가져왔습니다 (건너뜀: ${skipped.join(', ')})` : '설정을 가져왔습니다', 2500);
         this.render();
+        this.broadcastAll();
       } catch (er) { toast(er.message); }
     }
   }
@@ -692,7 +708,7 @@ export class SettingsPage {
     if (e.target.closest('[data-reset-all]')) {
       const btn = e.target.closest('[data-reset-all]');
       if (btn.dataset.armed !== '1') { btn.dataset.armed = '1'; btn.textContent = '한 번 더 누르면 초기화'; setTimeout(() => { btn.dataset.armed = ''; btn.textContent = '초기화'; }, 3000); return; }
-      try { this.settings = await api.settingsReset('all'); toast('설정을 초기화했습니다', 1800); this.render(); } catch (er) { toast(er.message); }
+      try { this.settings = await api.settingsReset('all'); toast('설정을 초기화했습니다', 1800); this.render(); this.broadcastAll(); } catch (er) { toast(er.message); }
     }
   }
 }

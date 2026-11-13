@@ -6,7 +6,7 @@
 //   여러 소리 모드와 함께 써도 서로 덮어쓰지 않는다.
 // - 마우스를 움직이면 나타나고 재생 중 2.5초 가만히 있으면 커서와 함께 숨는다. 일시정지·메뉴 열림이면 계속 보인다.
 import { esc, toast, hideWithExit } from './dom.js';
-import { qualityOptions, liveBadgeState, togglePipFor, installVolumeReveal } from './viewer-controls.js';
+import { qualityOptions, liveBadgeState, togglePipFor, installVolumeReveal, toggleFullscreenOn } from './viewer-controls.js';
 import { ADJUST_RANGES, applyPicture, pictureFor, resetAdjust, setPicture } from './picture.js';
 import { watchBarHtml, watchBarEndHtml, WATCH_ICON } from './ml-watch.js';
 
@@ -176,7 +176,8 @@ export class PaneControls {
   onMessage(type, data) {
     if (type === 'levels') {
       this.levels = qualityOptions(data.levels);
-      this.manualIndex = typeof data.current === 'number' ? data.current : this.manualIndex;
+      // manual — 고른 화질(-1 자동). current 는 지금 재생 중인 화질이라 자동에서도 0 이상이다.
+      this.manualIndex = typeof data.manual === 'number' ? data.manual : (typeof data.current === 'number' ? data.current : this.manualIndex);
       if (!this.gearMenu.hidden) this.renderGear();
     } else if (type === 'metrics') {
       if (typeof data.latency === 'number') this.latency = data.latency;
@@ -301,14 +302,15 @@ export class PaneControls {
   }
 
   toggleFullscreen() {
-    if (document.fullscreenElement) document.exitFullscreen();
-    else if (this.el.requestFullscreen) this.el.requestFullscreen();
+    toggleFullscreenOn(this.el);
   }
 
   renderGear() {
     const items = [{ index: -1, label: '자동' }, ...this.levels];
     const v = this.video;
-    const height = v && v.videoHeight;
+    // 직접 고른 화질은 고른 높이로(바꾼 직후 영상은 아직 앞 화질이다)
+    const chosen = this.manualIndex >= 0 ? this.levels.find((l) => l.index === this.manualIndex) : null;
+    const height = (chosen && chosen.height) || (v && v.videoHeight);
     const lat = Number.isFinite(this.latency) && this.latency > 0 ? `${this.latency.toFixed(1)}초` : '—';
     this.gearMenu.innerHTML = `
       <div class="ml-menu-head">화질${height ? ` <span>${height}p</span>` : ''}</div>

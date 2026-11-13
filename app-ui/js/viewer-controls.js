@@ -29,6 +29,21 @@ export function qualityOptions(levels) {
     .map((l) => ({ index: l.index, label: `${l.height}p`, height: l.height }));
 }
 
+/**
+ * 전체 화면 켜기·끄기·바꾸기 — 같은 대상이면 끄고, 다른 대상(영상만 ↔ 영상+채팅)이 전체 화면이면 나왔다가 이 대상으로
+ * 다시 들어간다. 예전엔 무엇이든 전체 화면이면 끄기만 해 '영상+채팅'으로 바로 넘어가지 못했다.
+ * (exitFullscreen 은 전체 화면이 풀린 뒤 끝난다 — 그때 누른 지 1초 안팎이라 사용자 활성화가 남아 있다.)
+ */
+export function toggleFullscreenOn(target) {
+  const cur = document.fullscreenElement;
+  if (!target || !target.requestFullscreen) { if (cur) document.exitFullscreen().catch(() => {}); return; }
+  if (!cur) { target.requestFullscreen().catch(() => {}); return; }
+  if (cur === target) { document.exitFullscreen().catch(() => {}); return; }
+  document.exitFullscreen()
+    .then(() => { if (!document.fullscreenElement && target.isConnected) return target.requestFullscreen(); return null; })
+    .catch(() => {});
+}
+
 /** 지연(초) → 라이브 배지 상태. 4초 넘게 뒤처지면 "뒤처짐". */
 /**
  * 볼륨 슬라이더 펼침 — 시청 화면·멀티라이브 패인 공용. 예전엔 CSS :hover 만으로 펼쳐(너비 0 → 0.2초에 걸쳐 펼침)
@@ -288,7 +303,8 @@ export class ViewerControls {
   onMessage(type, data) {
     if (type === 'levels') {
       this.levels = qualityOptions(data.levels);
-      this.manualIndex = typeof data.current === 'number' ? data.current : -1;
+      // manual — 고른 화질(-1 자동). 예전 판 플레이어(current 만 보냄)는 current 로.
+      this.manualIndex = typeof data.manual === 'number' ? data.manual : (typeof data.current === 'number' ? data.current : -1);
       this.renderQualityMenu();
     } else if (type === 'metrics') {
       if (typeof data.latency === 'number') this.latency = data.latency;
@@ -321,7 +337,9 @@ export class ViewerControls {
     // 라이브 끝이면 숨긴다 — "LIVE" 는 위쪽 방송 정보 칩이 이미 보여 준다. 늦어지면 "-N초"(누르면 따라잡기)로 나타난다.
     this.liveButton.classList.toggle('at-edge', !badge.behind);
     const auto = this.manualIndex < 0;
-    const height = (v && v.videoHeight) || this.currentHeight;
+    // 직접 고른 화질은 고른 높이로 — 바꾼 직후엔 영상이 아직 앞 화질이라 720p 를 골라도 1080p 로 보였다.
+    const chosen = auto ? null : this.levels.find((l) => l.index === this.manualIndex);
+    const height = (chosen && chosen.height) || (v && v.videoHeight) || this.currentHeight;
     this.qualityButton.textContent = height ? `${auto ? '자동 · ' : ''}${height}p` : '자동';
   }
 
@@ -424,12 +442,7 @@ export class ViewerControls {
   }
 
   fullscreen(withChat) {
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
-      return;
-    }
-    const target = withChat ? this.root : this.stage;
-    if (target.requestFullscreen) target.requestFullscreen();
+    toggleFullscreenOn(withChat ? this.root : this.stage);
   }
 
   onWheel(e) {

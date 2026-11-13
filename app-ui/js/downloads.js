@@ -21,7 +21,8 @@ listen(Events.downloadUpdate, (d) => {
     if (prev && prev !== j.state && j.state === 'completed') {
       toast(`받기 완료 — ${j.title}`, 6000, { label: 'Finder에서 보기', run: () => api.revealPath(j.filePath).catch(() => {}) });
     } else if (prev && prev !== j.state && j.state === 'failed') {
-      toast(`받기 실패 — ${j.title}: ${j.error || ''}`, 6000);
+      // 실패 알림에서 바로 다시 받는다(예전엔 보관함 › 다운로드까지 가야 했다).
+      toast(`받기 실패 — ${j.title}: ${j.error || ''}`, 8000, { label: '다시 시도', run: () => startDownload(j.kind, j.target, j.title, j.channelName) });
     }
   }
   for (const fn of subscribers) fn(d);
@@ -40,14 +41,23 @@ export async function startDownload(kind, target, title, channelName) {
   }
 }
 
+/** 작업 줄의 상태 글 — 받는 중은 %·용량, 합치는 중은 받은 용량(예전엔 합치는 동안 용량이 사라졌다). */
+function jobStatusText(j) {
+  const pct = Math.round((j.progress || 0) * 100);
+  const detail = j.state === 'downloading' ? ` · ${pct}% · ${bytesText(j.bytes)}` : (j.state === 'assembling' && j.bytes ? ` · ${bytesText(j.bytes)}` : '');
+  return `${j.channelName ? `${j.channelName} · ` : ''}${STATE_LABEL[j.state] || j.state}${detail}${j.error ? ` · ${j.error}` : ''}`;
+}
+
 function jobRow(j) {
   const pct = Math.round((j.progress || 0) * 100);
   const active = ['queued', 'preparing', 'downloading', 'assembling'].includes(j.state);
+  // 합치는 중은 끝을 알 수 없어 움직이는 막대로(받기 진행률 100% 에 멈춰 보였다)
+  const indeterminate = j.state === 'preparing' || j.state === 'queued' || j.state === 'assembling';
   return `<div class="dl-row" data-dl-id="${esc(j.id)}">
     <span class="dl-kind">${j.kind === 'clip' ? '클립' : 'VOD'}</span>
     <span class="dl-text"><strong class="ellipsis">${esc(j.title)}</strong>
-      <span class="ellipsis">${j.channelName ? `${esc(j.channelName)} · ` : ''}${esc(STATE_LABEL[j.state] || j.state)}${active && j.state === 'downloading' ? ` · ${pct}% · ${esc(bytesText(j.bytes))}` : ''}${j.error ? ` · ${esc(j.error)}` : ''}</span>
-      ${active ? `<span class="dl-track"><span class="dl-fill${j.state === 'preparing' || j.state === 'queued' ? ' indeterminate' : ''}" style="--p:${pct / 100}"></span></span>` : ''}</span>
+      <span class="ellipsis dl-status">${esc(jobStatusText(j))}</span>
+      ${active ? `<span class="dl-track"><span class="dl-fill${indeterminate ? ' indeterminate' : ''}" style="--p:${pct / 100}"></span></span>` : ''}</span>
     ${active ? '<button class="btn ghost" data-dl="cancel">취소</button>' : ''}
     ${j.state === 'failed' || j.state === 'cancelled' ? `<button class="btn" data-dl="retry" data-kind="${esc(j.kind)}" data-target="${esc(j.target)}" data-title="${esc(j.title)}">다시 시도</button>` : ''}
     ${j.state === 'completed' && j.filePath ? `<button class="btn" data-dl="reveal" data-path="${esc(j.filePath)}">Finder에서 보기</button>` : ''}
@@ -69,10 +79,26 @@ function historyRow(h) {
 
 /** 보관함 "다운로드" 탭 — 컨테이너를 채우고 갱신을 구독한다. 구독 해제 함수를 돌려준다. */
 export async function mountDownloads(container) {
+  let shape = '';
   const render = (d) => {
     // 완료·실패는 기록에도 남으므로 작업 목록에서는 진행 중·취소만 보인다.
     const active = d.jobs.filter((j) => j.state !== 'completed' && j.state !== 'failed');
     const histShown = d.history;
+    // 진행만 바뀌었으면(같은 작업·같은 상태·같은 기록) 글과 막대만 고친다 — 예전엔 0.4초마다 목록 전체를 다시 써
+    // 진행 막대 전환(transition)이 끊기고 단추가 깜빡였다.
+    const next = `${d.folder}|${active.map((j) => `${j.id}:${j.state}`).join(',')}|${histShown.map((h) => `${h.id}:${h.fileStatus}:${h.completed}`).join(',')}`;
+    if (next === shape && container.querySelector('.dl-head')) {
+      for (const j of active) {
+        const row = container.querySelector(`.dl-row[data-dl-id="${CSS.escape(j.id)}"]`);
+        if (!row) continue;
+        const status = row.querySelector('.dl-status');
+        const text = jobStatusText(j);
+        if (status && status.textContent !== text) status.textContent = text;
+        row.querySelector('.dl-fill')?.style.setProperty('--p', String(Math.round((j.progress || 0) * 100) / 100));
+      }
+      return;
+    }
+    shape = next;
     // 진행 이벤트마다 다시 그린다 — 취소·Finder에서 보기에 둔 키보드 초점을 지킨다
     keepFocus(container, () => { container.innerHTML = `
       <div class="dl-head"><span class="muted">저장 폴더 · ${esc(d.folder)}</span><div class="grow"></div>

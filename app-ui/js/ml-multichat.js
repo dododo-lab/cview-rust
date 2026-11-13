@@ -11,7 +11,7 @@
 //   칸 머리를 누르면 그 패인을 선택한다(포커스면 그 칸이 커진다).
 import { api, listen } from './api.js';
 import { esc } from './dom.js';
-import { mergedLinesHtml } from './multichat.js';
+import { mergedLinesHtml, blindMergedLines } from './multichat.js';
 import { applyChatSkin } from './chat-extras.js';
 import { onChatPrefs } from './chat-prefs.js';
 import { chatFollower, followAppend, trimFront } from './chat-follow.js';
@@ -259,16 +259,18 @@ export class MultiLiveMergedChat {
       return;
     }
     if (state === 'connected' || state === 'connecting' || state === 'reconnecting') { clearTimeout(c.retry); c.retry = null; return; }
+    // 관리자 삭제 — 통합 줄과 칸 줄 모두(예전엔 받지 않아 지워진 메시지가 남았다)
+    if (ev.type === 'blinded') { blindMergedLines([this.list, c.list], c.key, ev.messageId, ev.blindText); return; }
     if (ev.type !== 'messages') return;
     clearTimeout(c.retry);
     c.retry = null;
     if (ev.recent && c.skipRecent) { c.skipRecent = false; return; }
     c.skipRecent = false;
     const style = `--lh:${Number(c.hue) || 0}`;
-    const tagged = mergedLinesHtml(ev.messages, { name: c.name, style });
+    const tagged = mergedLinesHtml(ev.messages, { name: c.name, style, src: c.key });
     if (!tagged) return;
     appendTo(this.list, tagged, MAX_LINES);
-    appendTo(c.list, mergedLinesHtml(ev.messages, { name: '', style }), MAX_CELL_LINES);
+    appendTo(c.list, mergedLinesHtml(ev.messages, { name: '', style, src: c.key }), MAX_CELL_LINES);
   }
 
   system(c, text) {

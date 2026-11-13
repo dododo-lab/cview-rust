@@ -128,7 +128,7 @@ function heroQueue(lives, active) {
   return lives.map((l, i) => {
     const thumb = safeUrl(l.thumbnailUrl);
     return `
-      <button class="queue-item${i === active ? ' active' : ''}" data-hero-index="${i}" title="${esc(l.liveTitle)}" role="tab" aria-selected="${i === active}">
+      <button class="queue-item${i === active ? ' active' : ''}" data-hero-index="${i}" title="${esc(l.liveTitle)}" role="tab" aria-selected="${i === active}" tabindex="${i === active ? 0 : -1}">
         <span class="queue-progress" aria-hidden="true"></span>
         <span class="queue-thumb">${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}</span>
         <span class="queue-text">
@@ -263,6 +263,20 @@ export class HomePage {
       goSearch(q);
     });
     this.body.addEventListener('click', (e) => this.onClick(e));
+    // 히어로 넘김 탭 — 다른 탭 목록처럼 화살표·Home/End 로 옮긴다(가로든 넓은 창의 세로 목록이든). 예전엔 Tab 으로 다섯 개를
+    // 하나씩 지나야 했다(roving tabindex 없음).
+    this.body.addEventListener('keydown', (e) => {
+      const tab = e.target.closest?.('.hero-queue [role="tab"]');
+      if (!tab || e.metaKey || e.ctrlKey || e.altKey) return;
+      const tabs = [...tab.parentElement.querySelectorAll('[role="tab"]')];
+      const i = tabs.indexOf(tab);
+      const j = { ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
+      if (j === undefined) return;
+      e.preventDefault();
+      const next = tabs[(j + tabs.length) % tabs.length];
+      this.setHero(Number(next.dataset.heroIndex));
+      next.focus();
+    });
     this.body.addEventListener('animationend', (e) => {
       if (e.animationName !== 'queue-progress' || this.root.hidden || motionReduced()) return;
       this.setHero(this.heroIndex + 1);
@@ -360,7 +374,7 @@ export class HomePage {
         <section class="hero" aria-label="${this.heroSource === 'following' ? '팔로잉 추천' : '지금 뜨는 라이브'}">
           <div class="hero-ambient" aria-hidden="true">${heroAmbient(this.hero[this.heroIndex])}</div>
           <div class="hero-slot">${heroSlide(this.hero[this.heroIndex], this.heroSource)}</div>
-          <div class="hero-queue" role="tablist">${heroQueue(this.hero, this.heroIndex)}</div>
+          <div class="hero-queue" role="tablist" aria-label="추천 방송 넘기기">${heroQueue(this.hero, this.heroIndex)}</div>
         </section>`;
     }
 
@@ -436,6 +450,7 @@ export class HomePage {
       const on = Number(q.dataset.heroIndex) === this.heroIndex;
       q.classList.toggle('active', on);
       q.setAttribute('aria-selected', String(on));
+      q.tabIndex = on ? 0 : -1;
     }
     this.preloadNextHero();
   }
