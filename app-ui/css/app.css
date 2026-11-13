@@ -1320,6 +1320,8 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .chat-splitter:hover::after, .resizing .chat-splitter::after, .chat-splitter:focus-visible::after { opacity: 1; }
 .chat-splitter:focus-visible { outline: none; }   /* 초점은 가운데 막대(::after)를 켜서 보인다 */
 .resizing, .resizing * { user-select: none; cursor: col-resize; }
+/* 가로 분할선(멀티라이브 포커스 위·아래, 사용자 그리드 가로선)을 끄는 중 — 위 col-resize 가 덮어 세로 화살표가 떴다 */
+.resizing.row-resizing, .resizing.row-resizing * { cursor: row-resize; }
 .resizing iframe { pointer-events: none; }
 .chat.collapsed { display: none; }
 /* 좁은 창에서 '채팅' 버튼으로 연 채팅 — 플레이어 옆이 아니라 위에 겹친다(splitter.js tooNarrowForChat) */
@@ -1860,6 +1862,10 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .word-chip button:hover { background: var(--error); color: #fff; }
 .word-form { display: flex; gap: 6px; margin-top: 8px; }
 .word-form input { flex: 1; height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--surface-base); padding: 0 10px; outline: none; }
+/* 설정 가져오기 — 여러 줄 JSON 을 붙여 넣는다(예전 한 줄 입력칸은 붙인 내용을 볼 수 없었다) */
+.import-form { align-items: flex-end; }
+.import-form textarea { flex: 1; min-height: 84px; resize: vertical; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--surface-base); color: var(--text-primary); padding: 8px 10px; outline: none; font: var(--fs-footnote)/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.import-form textarea:focus-visible { border-color: var(--primary); }
 
 /* ══ 탐색 (pages.js·categories.js·palette.js) ═════════════════ */
 .list-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-sm); margin-bottom: var(--sp-lg); }
@@ -2285,6 +2291,9 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .chat-search .cs-close { width: 26px; height: 26px; color: var(--text-tertiary); }
 .chat-search .cs-close svg { width: 13px; height: 13px; }
 .chat-list.searching > :is(.chat-line:not(.search-match, .system), .read-divider) { display: none; }
+/* 검색에 맞는 줄이 없을 때 안내(chat-actions.js) — 목록 위 한 줄, 새 줄이 맞으면 사라진다 */
+.chat-search-empty { margin: 0 var(--sp-sm) var(--sp-sm); padding: 8px 10px; border-radius: var(--radius-ms); color: var(--text-secondary); font-size: var(--fs-footnote); line-height: 1.45; background: var(--surface-elevated); }
+.chat-search-empty[hidden] { display: none; }
 .chat-hbtn[aria-pressed="true"] { color: var(--primary-text); background: var(--primary-dim); }
 
 /* 연결이 끊기거나 실패하면 상태 옆에 '다시 연결' */

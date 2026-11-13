@@ -8,6 +8,15 @@
 // UR06 [P1-6] 숨긴 시청 화면에서 ⌥⌘R 은 녹화를 켜지 않는다. 녹화 표시는 resetRecording 으로 바로 걷힌다.
 // UR07 [P1-7] 백그라운드 절약 상한이 걸린 뒤 PiP 로 띄운 영상도 창이 다시 보이면 상한이 풀린다.
 // UR08 [P2-6] ⌘K 팔레트에 '검색'이 한 번만 나온다.
+// UR09 [P2-2] 채널 추가 서랍·패인 메뉴 안의 키는 플레이어 단축키로 가지 않는다. 초점이 서랍 밖이어도 Esc 로 서랍이 닫힌다.
+// UR10 [P2-3] 포커스 분할선 — 끄는 동안 그리드 칸만 바뀌고(놓기 전 IPC 없음), 위·아래 배치에선 커서가 row-resize.
+// UR11 [P2-4] 직접 고른 화질은 고른 높이로 보이고, 자동이면 '자동'이 켜져 보인다(플레이어 levels 의 manual).
+// UR12 [P2-4] 영상만 전체 화면 → 영상+채팅 전체 화면으로 바로 넘어간다(예전엔 꺼지기만 했다).
+// UR13 [P2-5] 채팅 — 멘션·이모티콘으로 100자를 넘기지 않고 글자 수가 바로 바뀐다, 선택기 검색어·방향키, 불러오기 실패 안내,
+//      검색 0건 안내·지우기 뒤 개수, /unblock 없는 이름, /mute 는 붙이기 전에 거른다, TTS 대기 상한.
+// UR14 [P2-6] 단축키 도움말에 ⌥⌘1~6 작업 공간, 북마크 줄 한 번. 설정 검색 중엔 탭이 켜져 보이지 않고, 가져오기는 여러 줄 칸,
+//      가져오기 뒤 테마·설정 변경을 알린다.
+// UR15 [P2-7] 미리보기 소스 조회 오류는 15초 뒤 다시 묻고(없음은 5분), 팔로잉 팔로워 수 조회 실패는 30초 뒤 다시 묻는다.
 // 저장소 루트에서: node tools/ui-regression/ui-review.mjs   (Playwright 가 필요하다)
 //   CVIEW_UI_SHOTS=<폴더> 면 단독 보기·그리드 장면을 PNG 로 남긴다.
 import fs from 'node:fs';
@@ -46,7 +55,8 @@ function mlMock([watch, gridOverlay]) {
     core: { invoke: async (c, a) => { if (c === 'ui_heartbeat') return null; const h = handlers[c]; if (!h) throw new Error(`mock: ${c}`); return h(a || {}); } },
     event: { listen: async () => () => {} },
   };
-  try { localStorage.setItem('cview.onboarded', '1'); } catch { /* 무시 */ }
+  // 환영 안내를 띄우지 않는다 — 띄운 뒤 지우면 그 Esc 처리기(잡는 단계)가 남아 첫 Esc 를 먹는다.
+  try { localStorage.setItem('cview.onboarded', '1'); localStorage.setItem('cview.welcomed.v1', String(Date.now())); } catch { /* 무시 */ }
 }
 
 async function openMl({ watch, gridOverlay = false }) {
@@ -290,6 +300,307 @@ await check('UR08 [P2-6] command palette lists 검색 once', async () => {
   await page.waitForSelector('.palette-item');
   const labels = await page.$$eval('.palette-item .palette-label', (els) => els.map((e) => e.textContent.trim()));
   assert.equal(labels.filter((l) => l === '검색').length, 1, `검색 ${labels.filter((l) => l === '검색').length}번`);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('UR09 [P2-2] drawer/menu keys stay out of player shortcuts; Esc outside closes the drawer', async () => {
+  const { page, errors } = await openMl({ watch: true });
+  const r = await page.evaluate(async () => {
+    const { keyBelongsToTarget } = await import('/js/dom.js');
+    const ev = (target, key) => ({ key, target, defaultPrevented: false });
+    const btn = (cls) => { const box = document.createElement('div'); box.className = cls; const b = document.createElement('button'); box.append(b); document.body.append(box); return b; };
+    const out = {};
+    for (const cls of ['ml-addbar', 'ml-more-menu', 'ml-pane-menu', 'quality-menu']) {
+      const b = btn(cls);
+      out[cls] = ['ArrowLeft', 'm', 'l', 'b'].every((k) => keyBelongsToTarget(ev(b, k)));
+      b.parentElement.remove();
+    }
+    out.plain = keyBelongsToTarget(ev(document.body, 'm'));
+    return out;
+  });
+  assert.deepEqual(r, { 'ml-addbar': true, 'ml-more-menu': true, 'ml-pane-menu': true, 'quality-menu': true, plain: false });
+  await page.click('[data-ml="add"]');
+  await page.waitForSelector('.ml-addbar.open');
+  await page.evaluate(() => { document.activeElement?.blur(); document.body.focus(); });
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(100);
+  assert.equal(await page.locator('.ml-addbar.open').count(), 0, '서랍 밖 초점에서 Esc 로 닫히지 않았다');
+  assert.equal(await page.evaluate(() => document.querySelector('.page-multilive').classList.contains('as-watch')), true, 'Esc 가 단독 보기까지 닫았다');
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+await check('UR10 [P2-3] focus divider previews grid only while dragging; row-resize cursor for top/bottom', async () => {
+  const { page, errors } = await openMl({ watch: false });
+  await page.evaluate(() => {
+    window.__ipc = [];
+    const inv = window.__TAURI__.core.invoke;
+    window.__TAURI__.core.invoke = async (c, a) => { window.__ipc.push(c); if (c === 'multilive_set_focus_layout') { const st = await inv('multilive_state'); st.layout = 'focus'; if (a.direction) st.focusDirection = a.direction; if (a.ratio != null) st.focusRatio = a.ratio; st.rev += 1; return st; } return inv(c, a); };
+  });
+  await page.evaluate(() => document.querySelector('[data-direction="top"]').click());
+  await page.waitForSelector('.ml-stage.ml-focus.dir-top');
+  await page.waitForTimeout(300);
+  const d = await rect(page, '.ml-stage > .ml-divider:not(.ml-grid-div)');
+  const before = await page.evaluate(() => document.querySelector('.ml-stage').style.gridTemplateRows);
+  await page.evaluate(() => { window.__ipc.length = 0; });
+  await page.mouse.move(d.x + d.w / 2, d.y + d.h / 2);
+  await page.mouse.down();
+  await page.mouse.move(d.x + d.w / 2, d.y + d.h / 2 - 60, { steps: 4 });
+  await page.waitForTimeout(50);
+  const mid = await page.evaluate(() => ({ rows: document.querySelector('.ml-stage').style.gridTemplateRows, cursor: getComputedStyle(document.querySelector('.ml-stage .ml-pane')).cursor, ipc: window.__ipc.slice() }));
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+  const after = await page.evaluate(() => ({ ipc: window.__ipc.slice(), resizing: document.querySelector('.ml-stage').classList.contains('row-resizing') }));
+  assert.notEqual(mid.rows, before, '끄는 동안 칸이 바뀌지 않았다');
+  assert.equal(mid.cursor, 'row-resize', `위·아래 분할선 커서 ${mid.cursor}`);
+  assert.ok(!mid.ipc.includes('multilive_set_focus_layout'), '놓기 전에 저장했다');
+  assert.ok(after.ipc.includes('multilive_set_focus_layout'), '놓은 뒤 저장하지 않았다');
+  assert.equal(after.resizing, false);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+await check('UR11 [P2-4] chosen quality shows the chosen height; auto shows 자동 active', async () => {
+  const { page, errors } = await openMl({ watch: true });
+  await page.waitForFunction(() => { const f = document.querySelector('.ml-pane:not([hidden]) iframe'); return f && f.contentDocument?.readyState === 'complete'; });
+  const send = (data) => page.evaluate((d) => window.__cviewPlayerBridge({ type: 'levels', data: d }, document.querySelector('.ml-pane.ml-single-target iframe').contentWindow), data);
+  const levels = [{ index: 0, height: 480, width: 854, bitrate: 1 }, { index: 1, height: 720, width: 1280, bitrate: 2 }, { index: 2, height: 1080, width: 1920, bitrate: 3 }];
+  // ⚙ 를 열면 플레이어에 화질 목록을 다시 묻는다(모의 화면의 플레이어는 빈 목록을 답한다) — 연 뒤에 보낸다.
+  const gear = async (data) => {
+    await page.evaluate(() => { const p = document.querySelector('.ml-pane.ml-single-target'); p.classList.add('ctl-visible'); p.querySelector('[data-mp="gear"]').click(); });
+    await send(data);
+    const r = await page.evaluate(() => { const m = document.querySelector('.ml-pane.ml-single-target .ml-gear-menu'); return { head: m.querySelector('.ml-menu-head span')?.textContent || '', active: m.querySelector('.ml-level.active span')?.textContent || '' }; });
+    await page.evaluate(() => document.querySelector('.ml-pane.ml-single-target [data-mp="gear"]').click());
+    return r;
+  };
+  const manual = await gear({ levels, current: 2, manual: 1, capped: -1 }); // 720p 를 골랐고 아직 1080p 조각을 재생 중
+  const auto = await gear({ levels, current: 2, manual: -1, capped: -1 });
+  assert.deepEqual(manual, { head: '720p', active: '720p' }, `고른 화질 ${JSON.stringify(manual)}`);
+  assert.equal(auto.active, '자동', `자동인데 ${auto.active} 가 켜져 보인다`);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+await check('UR12 [P2-4] video fullscreen switches straight to video+chat fullscreen', async () => {
+  const { page, errors } = await openMl({ watch: true });
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press('Meta+Shift+F');
+  await page.waitForFunction(() => document.fullscreenElement?.classList.contains('ml-pane'), null, { timeout: 3000 });
+  await page.keyboard.press('Meta+Control+F');
+  await page.waitForFunction(() => document.fullscreenElement?.classList.contains('ml-body'), null, { timeout: 3000 });
+  await page.keyboard.press('Meta+Control+F');
+  await page.waitForFunction(() => !document.fullscreenElement, null, { timeout: 3000 });
+  assert.deepEqual(errors, []);
+  await page.close();
+});
+
+await check('UR13 [P2-5] chat input limit/counter, picker, search empty, /unblock, /mute, TTS cap', async () => {
+  const { ctx, page, errors } = await openChat();
+  await page.evaluate(() => {
+    window.__toasts = [];
+    new MutationObserver(() => { for (const t of document.querySelectorAll('.toast')) if (!window.__toasts.includes(t.textContent)) window.__toasts.push(t.textContent); }).observe(document.body, { childList: true, subtree: true });
+  });
+  const r = await page.evaluate(async () => {
+    const p = window.__panel;
+    const out = {};
+    p.input.disabled = false;
+    p.input.value = 'a'.repeat(85);
+    p.insertAtCaret('{:d_1:}');
+    out.afterEmoji = { len: p.input.value.length, counter: p.counter.textContent, shown: !p.counter.hidden };
+    p.input.value = 'a'.repeat(98);
+    p.mention('긴닉네임');
+    out.afterMention = p.input.value.length;
+    p.insertAtCaret('{:d_1:}');
+    out.afterOverEmoji = p.input.value.length;
+    return out;
+  });
+  assert.equal(r.afterEmoji.len, 92);
+  assert.equal(r.afterEmoji.counter, '92/100', `글자 수가 바로 바뀌지 않았다 ${JSON.stringify(r.afterEmoji)}`);
+  assert.equal(r.afterMention, 98, '멘션이 100자를 넘겼다');
+  assert.equal(r.afterOverEmoji, 98, '이모티콘이 100자를 넘겼다');
+  // 선택기 — 검색어 유지, ↓ 로 첫 칸, → 로 다음 칸
+  const picker = await page.evaluate(async () => {
+    const p = window.__panel;
+    p.emoticons = [{ emoticonPackId: 'a', emoticonPackName: '팩', emoticons: Array.from({ length: 20 }, (_, i) => ({ emoticonId: `e${i}`, emoticonName: `e${i}`, imageUrl: `https://ssl.pstatic.net/e${i}.png` })) }];
+    p.emoticonError = false;
+    p.togglePicker();
+    const search = p.picker.querySelector('.emoji-search');
+    search.value = 'e1';
+    search.dispatchEvent(new Event('input', { bubbles: true }));
+    p.closePicker();
+    await new Promise((res) => setTimeout(res, 300));
+    p.togglePicker();
+    const kept = p.picker.querySelector('.emoji-search').value;
+    p.picker.querySelector('.emoji-search').value = '';
+    p.renderPicker();
+    const s2 = p.picker.querySelector('.emoji-search');
+    s2.focus();
+    s2.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    const first = document.activeElement?.dataset.emoji;
+    document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    const second = document.activeElement?.dataset.emoji;
+    p.closePicker();
+    p.emoticons = [];
+    p.emoticonError = true;
+    p.picker.hidden = false;
+    p.renderPicker();
+    const err = p.picker.querySelector('.tray-empty')?.textContent || '';
+    p.picker.hidden = true;
+    return { kept, first, second, err };
+  });
+  assert.equal(picker.kept, 'e1', '다시 열면 검색어가 지워졌다');
+  assert.deepEqual([picker.first, picker.second], ['e0', 'e1'], `방향키 ${picker.first} → ${picker.second}`);
+  assert.match(picker.err, /불러오지 못했습니다/);
+  // 검색 0건 안내, 지우기 뒤 개수
+  const search = await page.evaluate(async () => {
+    const p = window.__panel;
+    p.onEvent({ type: 'messages', messages: [window.__msg({ content: '안녕' }), window.__msg({ content: '반가워' })] });
+    p.flushLines();
+    p.openSearch();
+    const input = p.root.querySelector('.cs-input');
+    input.value = '없는말';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    const empty = p.root.querySelector('.chat-search-empty');
+    const none = { hidden: empty.hidden, text: empty.textContent };
+    input.value = '안녕';
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    const one = p.root.querySelector('.cs-count').textContent;
+    p.clear(true);
+    const afterClear = p.root.querySelector('.cs-count').textContent;
+    p.closeSearch();
+    return { none, one, afterClear };
+  });
+  assert.equal(search.none.hidden, false, '0건 안내가 없다');
+  assert.match(search.none.text, /없는말/);
+  assert.equal(search.one, '1개');
+  assert.equal(search.afterClear, '없음', `지운 뒤에도 ${search.afterClear}`);
+  // /unblock 없는 이름 · /mute 는 붙이기 전에 거른다
+  const cmd = await page.evaluate(async () => {
+    const p = window.__panel;
+    const run = (t) => p.sendHooks.some((fn) => fn(t));
+    run('/unblock 아무개');
+    run('/mute 시끄러운 60');
+    let flashed = false;
+    const mo = new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.dataset?.nick === '시끄러운') flashed = true; });
+    mo.observe(p.list, { childList: true });
+    p.onEvent({ type: 'messages', messages: [window.__msg({ nickname: '시끄러운', content: '도배' }), window.__msg({ nickname: '조용한', content: '안녕' })] });
+    p.flushLines();
+    mo.disconnect();
+    return { flashed, quiet: Boolean(p.list.querySelector('.chat-line[data-nick="조용한"]')) };
+  });
+  await page.waitForTimeout(100);
+  const toasts = await page.evaluate(() => window.__toasts);
+  assert.ok(toasts.some((t) => t.includes('차단 목록에') && t.includes('아무개')), `/unblock 안내 ${JSON.stringify(toasts)}`);
+  assert.ok(!toasts.some((t) => t.includes('아무개 님 차단을 풀었습니다')), '없는 이름을 풀었다고 했다');
+  assert.equal(cmd.flashed, false, '/mute 한 사람 줄이 붙었다가 지워졌다');
+  assert.equal(cmd.quiet, true);
+  // TTS 대기 상한 — 끝나지 않는 엔진에 후원 10개
+  const spoken = await page.evaluate(async () => {
+    const p = window.__panel;
+    window.__spoken.length = 0;
+    Object.defineProperty(window.speechSynthesis, 'speaking', { configurable: true, get: () => window.__spoken.length > 0 });
+    Object.defineProperty(window.speechSynthesis, 'pending', { configurable: true, get: () => window.__spoken.length > 1 });
+    p.onEvent({ type: 'messages', messages: Array.from({ length: 10 }, (_, i) => window.__msg({ kind: 'donation', donationAmount: 1000, nickname: `후원${i}` })) });
+    p.flushLines();
+    const { TTS_QUEUE_MAX } = await import('/js/chat-extras.js');
+    return { n: window.__spoken.length, max: TTS_QUEUE_MAX };
+  });
+  assert.equal(spoken.n, spoken.max, `TTS 에 ${spoken.n}개를 쌓았다`);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('UR14 [P2-6] shortcut help hubs/bookmark once; settings tabs while searching; import textarea + broadcast', async () => {
+  const { ctx, page, errors } = await openApp(browser, { width: 1280, height: 900 });
+  const help = await page.evaluate(async () => {
+    const { showShortcuts } = await import('/js/app-sheets.js');
+    showShortcuts();
+    const rows = [...document.querySelectorAll('.app-sheet .shortcut-row')].map((r) => r.textContent);
+    document.querySelector('.app-sheet [data-close]').click();
+    return rows;
+  });
+  assert.ok(help.some((t) => t.includes('⌥⌘1') && t.includes('작업 공간')), '⌥⌘1~6 이 도움말에 없다');
+  assert.equal(help.filter((t) => t.includes('북마크') && /^B/.test(t)).length, 1);
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: 'settings', params: {} } })));
+  await page.waitForSelector('.settings-search');
+  await page.fill('.settings-search', '테마');
+  await page.waitForTimeout(300);
+  const tabs = await page.evaluate(() => ({ active: document.querySelectorAll('.settings-tabs .seg.active').length, ta: Boolean(document.querySelector('form[data-import] textarea')), note: document.querySelector('[data-search*="테마"] small')?.textContent || '' }));
+  assert.equal(tabs.active, 0, '검색 중에 탭이 켜져 보인다');
+  assert.match(tabs.note, /macOS|Windows/);
+  await page.fill('.settings-search', '');
+  await page.waitForTimeout(200);
+  await page.click('.settings-tabs [data-group="advanced"]');
+  await page.waitForSelector('form[data-import] textarea');
+  const imp = await page.evaluate(async () => {
+    let changed = null;
+    window.addEventListener('cview:settings-changed', (e) => { changed = e.detail; }, { once: true });
+    const inv = window.__TAURI__.core.invoke;
+    window.__TAURI__.core.invoke = async (c, a) => {
+      if (c === 'settings_import') return [];
+      if (c === 'settings_get') { const s = await inv(c, a); return { ...s, appearance: { theme: 'light' } }; }
+      return inv(c, a);
+    };
+    const form = document.querySelector('form[data-import]');
+    form.querySelector('textarea').value = '{\n  "appearance": { "theme": "light" }\n}';
+    form.requestSubmit();
+    await new Promise((res) => setTimeout(res, 300));
+    return { changed: changed && changed.domain, theme: document.documentElement.dataset.theme };
+  });
+  assert.equal(imp.changed, 'all', '가져오기 뒤 설정 변경을 알리지 않았다');
+  assert.equal(imp.theme, 'light', '가져온 테마가 바로 적용되지 않았다');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('UR15 [P2-7] preview source errors retry after 15s; follower lookups retry after 30s', async () => {
+  const { ctx, page, errors } = await openApp(browser, { width: 1280, height: 900 });
+  await page.evaluate(() => {
+    window.__asked = { preview: [], info: 0 };
+    const inv = window.__TAURI__.core.invoke;
+    window.__TAURI__.core.invoke = async (c, a) => {
+      if (c === 'preview_source') { window.__asked.preview.push(a.kind); if (a.kind === 'live') throw new Error('네트워크'); return null; }
+      if (c === 'channel_info') { window.__asked.info += 1; throw new Error('네트워크'); }
+      return inv(c, a);
+    };
+  });
+  await page.clock.install();
+  await page.evaluate(async () => {
+    const { previewInto } = await import('/js/hover-preview.js');
+    const host = document.createElement('div');
+    document.body.append(host);
+    previewInto(host, 'live', 'x1');
+    await new Promise((res) => setTimeout(res, 0));
+    previewInto(host, 'vod', 'v1');
+    const { FollowExtras } = await import('/js/following-info.js');
+    window.__fx = new FollowExtras();
+    window.__fx.want('ch9', true);
+  });
+  await page.clock.runFor(1000);
+  await page.clock.runFor(16000);
+  await page.evaluate(async () => {
+    const { previewInto } = await import('/js/hover-preview.js');
+    const host = document.createElement('div');
+    document.body.append(host);
+    previewInto(host, 'live', 'x1');
+    await new Promise((res) => setTimeout(res, 0));
+    previewInto(host, 'vod', 'v1');
+  });
+  await page.clock.runFor(16000); // 팔로워 조회 실패 뒤 32초
+  await page.evaluate(() => {
+    const list = document.createElement('div');
+    list.innerHTML = '<div data-fid="ch9" data-live="1" style="height:20px"><span class="fx-followers"></span></div>';
+    document.body.prepend(list);
+    window.__fx.attach(list);
+  });
+  await page.clock.runFor(2000);
+  await page.waitForTimeout(400); // IntersectionObserver 는 실제 그리기 때 알린다
+  await page.clock.runFor(100);
+  const asked = await page.evaluate(() => window.__asked);
+  assert.equal(asked.preview.filter((k) => k === 'live').length, 2, `오류 난 미리보기를 다시 묻지 않았다 ${asked.preview}`);
+  assert.equal(asked.preview.filter((k) => k === 'vod').length, 1, `미리보기 없음(null)을 다시 물었다 ${asked.preview}`);
+  assert.equal(asked.info, 2, `실패한 팔로워 조회를 다시 묻지 않았다 ${asked.info}`);
   assert.deepEqual(errors, []);
   await ctx.close();
 });

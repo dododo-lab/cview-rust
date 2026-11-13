@@ -4,10 +4,11 @@ import { toast, dismiss, esc } from './dom.js';
 import { checkForUpdate, currentVersionText, versionText, updateDetailHtml, downloadTarget, openDownload, canInstall, installUpdate, progressHtml, renderProgress } from './update-check.js';
 import { shortcutHelpRows } from './shortcuts.js';
 import { kbd } from './platform.js';
+import { HUBS } from './workspace.js';
 
 // '시청' 묶음은 바꿀 수 있는 단축키를 따르므로 열 때마다 만든다(shortcuts.js shortcutHelpRows).
 const shortcutGroups = () => [
-  ['탐색', [['⌘1 ~ ⌘7', '홈 · 팔로잉 · 인기 · 멀티라이브 · 라이브 · 보관함 · 카테고리'], ['⌘K', '명령 팔레트'], ['⌘F', '검색'], ['⌘[  /  ⌥←', '뒤로'], ['⌘R', '새로고침'], ['⌘\\', '사이드바 접기'], ['⇧⌘L', '다크/라이트 전환'], ['⌘,', '설정']]],
+  ['탐색', [['⌘1 ~ ⌘7', '홈 · 팔로잉 · 인기 · 멀티라이브 · 라이브 · 보관함 · 카테고리'], ['⌘K', '명령 팔레트'], ['⌘F', '검색'], ['⌘[  /  ⌥←', '뒤로'], ['⌘R', '새로고침'], ['⌘\\', '사이드바 접기'], ['⇧⌘L', '다크/라이트 전환'], ['⌘,', '설정'], [`⌥⌘1 ~ ⌥⌘${HUBS.length}`, `작업 공간 — ${HUBS.map(([, , label]) => label).join(' · ')}`]]],
   ['시청', shortcutHelpRows()],
   ['채팅', [['⇧⌘K', '채팅 지우기'], ['⌘J', '자동 스크롤'], [':이름', '이모티콘 자동완성'], ['@닉네임', '멘션 자동완성'], ['우클릭', '메시지 메뉴'], ['더블클릭', '프로필']]],
 ];

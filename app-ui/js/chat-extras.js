@@ -71,6 +71,9 @@ export function parseCommand(text) {
 }
 
 /** 후원·구독 읽을 문장. */
+/** TTS 가 기다리게 두는 문장 수 상한 — 넘으면 새 후원은 읽지 않는다. */
+export const TTS_QUEUE_MAX = 3;
+
 export function ttsText(m) {
   if (m.kind === 'subscription') return `${donorName(m)}님이 ${m.subscriptionMonths ? `${m.subscriptionMonths}개월 ` : ''}구독했습니다. ${m.content || ''}`;
   // 금액 비공개면 금액 없이("익명님이 채팅 후원했습니다.") — 빈 금액 자리에 공백이 두 번 들어가지 않게.
@@ -89,6 +92,7 @@ export function installChatExtras(panel) {
   const stats = { times: [], users: new Map(), donations: 0, cheese: 0, subs: 0, since: Date.now() };
   const events = [];
   const muted = new Map(); // nick → 해제 시각
+  const uidByNick = new Map(); // nick → userId (최근 본 순)
 
   // ── 이벤트 레일 (CHT-18) ──
   const rail = document.createElement('div');
@@ -167,10 +171,20 @@ export function installChatExtras(panel) {
   };
 
   // ── TTS (CHT-17) ──
+  // 줄 상한 — 후원이 몰리면 speechSynthesis 큐가 끝없이 쌓여 몇 분 지난 후원을 읽었다. 기다리는 문장이 TTS_QUEUE_MAX 개면
+  // 새 후원은 건너뛴다(지금 읽는 문장은 끊지 않는다).
+  let ttsQueued = 0;
   const speak = (m) => {
     const p = chatPrefs();
     if (!p.ttsEnabled || !window.speechSynthesis) return;
+    // 끝 이벤트를 놓쳐도(취소·엔진 재시작) 큐가 비었으면 다시 센다.
+    if (!speechSynthesis.speaking && !speechSynthesis.pending) ttsQueued = 0;
+    if (ttsQueued >= TTS_QUEUE_MAX) return;
     const u = new SpeechSynthesisUtterance(ttsText(m).slice(0, 200));
+    ttsQueued += 1;
+    const done = () => { ttsQueued = Math.max(0, ttsQueued - 1); u.onend = null; u.onerror = null; };
+    u.onend = done;
+    u.onerror = done;
     u.lang = 'ko-KR';
     u.volume = Math.min(1, Math.max(0, Number(p.ttsVolume ?? 0.8)));
     u.rate = Math.min(2, Math.max(0.5, Number(p.ttsRate ?? 200) / 200));
@@ -202,14 +216,22 @@ export function installChatExtras(panel) {
     if (stats.times.length > 5000) stats.times.splice(0, stats.times.length - 5000);
     if (events.length > 30) events.length = 30;
     if (gotEvent) renderRail();
-    // 로컬 음소거(/mute) — 시간이 지나면 다시 보인다.
-    if (muted.size) {
-      for (const [nick, until] of muted) {
-        if (now > until) { muted.delete(nick); continue; }
-        for (const el of panel.list.querySelectorAll(`.chat-line[data-nick="${CSS.escape(nick)}"]`)) el.remove();
-      }
+    // /block 이 화면에서 밀려난 사람도 찾게 닉네임 → 사용자 ID 를 기억한다(최근 500명).
+    for (const m of messages) {
+      if (!m.nickname || !m.userId || m.kind === 'system') continue;
+      uidByNick.delete(m.nickname);
+      uidByNick.set(m.nickname, m.userId);
     }
+    while (uidByNick.size > 500) uidByNick.delete(uidByNick.keys().next().value);
   });
+  // 로컬 음소거(/mute) — 붙이기 전에 거른다(ChatPanel.append). 시간이 지나면 다시 보인다.
+  panel.localHidden = (m) => {
+    if (!muted.size || !m.nickname) return false;
+    const until = muted.get(m.nickname);
+    if (until == null) return false;
+    if (Date.now() > until) { muted.delete(m.nickname); return false; }
+    return true;
+  };
 
   // 연결이 바뀌면 통계·레일 초기화
   const origConnect = panel.connect.bind(panel);
@@ -226,7 +248,7 @@ export function installChatExtras(panel) {
     if (!parsed) return false;
     const [cmd, args] = parsed;
     const p = chatPrefs();
-    const nickToUid = (nick) => panel.list.querySelector(`.chat-line[data-nick="${CSS.escape(nick)}"]`)?.dataset.uid;
+    const nickToUid = (nick) => panel.list.querySelector(`.chat-line[data-nick="${CSS.escape(nick)}"]`)?.dataset.uid || uidByNick.get(nick);
     switch (cmd) {
       case '/clear': panel.clear(true); return true;
       case '/export': exportChat(); return true;
@@ -246,8 +268,11 @@ export function installChatExtras(panel) {
       }
       case '/unblock': {
         const nick = (args[0] || '').replace(/^@/, '');
+        if (!nick) { toast('사용법: /unblock 닉네임'); return true; }
         const names = p.blockedUserNames || {};
         const uid = Object.keys(names).find((k) => names[k] === nick) || nick;
+        // 차단 목록에 없으면 풀었다고 하지 않는다(예전엔 없는 이름에도 '풀었습니다'라고 했다).
+        if (!(p.blockedUsers || []).includes(uid)) { toast(`차단 목록에 ${nick} 님이 없습니다`, 1800); return true; }
         const next = { ...names };
         delete next[uid];
         updateChatPrefs({ blockedUsers: (p.blockedUsers || []).filter((x) => x !== uid), blockedUserNames: next });

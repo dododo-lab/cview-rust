@@ -113,6 +113,9 @@ export function followedInsights(channels, now = Date.now()) {
 
 // ── 보이는 행만 채우는 팔로워 수·마지막 방송 ──────────────
 const TTL = 10 * 60 * 1000;
+// 조회가 실패한 값은 짧게만 기억한다 — 예전엔 일시적 실패(네트워크 끊김)로 비운 값을 10분 동안 그대로 썼다.
+const FAIL_TTL = 30 * 1000;
+const fresh = (x) => Boolean(x) && Date.now() - x.at < (x.failed ? FAIL_TTL : TTL);
 const CONCURRENCY = 2;
 const extras = new Map(); // channelId → { at, followersText, lastClose, lastTitle, lastCategory }
 
@@ -137,7 +140,8 @@ export class FollowExtras {
     if (!list) return;
     for (const row of list.querySelectorAll('[data-fid]')) {
       const known = extras.get(row.dataset.fid);
-      if (known && Date.now() - known.at < TTL) fill(row, known);
+      if (fresh(known)) fill(row, known);
+      else if (known) { fill(row, known); this.observer.observe(row); } // 실패했던 값 — 보이던 것은 두고 다시 묻는다
       else this.observer.observe(row);
     }
   }
@@ -166,11 +170,12 @@ export class FollowExtras {
 }
 
 async function load({ id, live }) {
-  const x = { at: Date.now(), followersText: '', lastClose: '', lastTitle: '', lastCategory: '' };
-  const info = await api.channelInfo(id).catch(() => null);
+  const x = { at: Date.now(), failed: false, followersText: '', lastClose: '', lastTitle: '', lastCategory: '' };
+  const miss = () => { x.failed = true; return null; };
+  const info = await api.channelInfo(id).catch(miss);
   if (info && info.followerCount > 0) x.followersText = info.followerCountText || compactCount(info.followerCount);
   if (!live) {
-    const d = await api.liveDetail(id, false).catch(() => null);
+    const d = await api.liveDetail(id, false).catch(miss);
     if (d && !d.isLive) {
       x.lastClose = d.closeDate || '';
       x.lastTitle = d.liveTitle || '';
