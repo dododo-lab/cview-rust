@@ -17,7 +17,7 @@ export function dismiss(el, ms = 200) {
 /**
  * 영상 단축키(맨 글자·화살표·Space)를 대상에게 넘길 키인가 — 입력란·선택 상자, 버튼·링크의 Space/Enter,
  * 시청 화면 위에 뜬 시트·패널·메뉴 안. 넘기지 않으면 선택 상자의 화살표가 볼륨을, 버튼의 Space 가 재생을 바꾼다.
- * 채널 추가 서랍(.ml-addbar)·머리줄 ⋯ 메뉴·패인 ⚙/⋯ 메뉴·화질 메뉴도 — 그 안의 ←/→·M·L·B 가 뒤의 플레이어로 갔다.
+ * 채널 추가 서랍(.ml-addbar)·머리줄 ⋯ 메뉴·패인 ⚙/⋯ 메뉴·화질 메뉴·후원 목록도 — 그 안의 ←/→·M·L·B 가 뒤의 플레이어로 갔다.
  */
 export function keyBelongsToTarget(e) {
   if (e.defaultPrevented) return true;
@@ -25,7 +25,7 @@ export function keyBelongsToTarget(e) {
   if (!t || !t.closest) return false;
   if (t.isContentEditable || t.closest('input, textarea, select')) return true;
   if ((e.key === ' ' || e.key === 'Enter') && t.closest('button, a[href], [role="button"]')) return true;
-  return Boolean(t.closest('.sheet-scrim, .palette-scrim, .player-panel, .emoji-picker, .ctx-menu, .ml-addbar, .ml-more-menu, .ml-pane-menu, .quality-menu'));
+  return Boolean(t.closest('.sheet-scrim, .palette-scrim, .player-panel, .emoji-picker, .dp-panel, .ctx-menu, .ml-addbar, .ml-more-menu, .ml-pane-menu, .quality-menu'));
 }
 
 /**

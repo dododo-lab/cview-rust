@@ -100,6 +100,8 @@ export function installChatActions(panel) {
     attach(cur);
   };
   panel.clearLineSelection = () => select(null);
+  /** 줄 고르기(후원 목록에서 그 줄로 옮길 때 — donation-list.js). */
+  panel.selectLine = (line) => select(line && line.matches(ACTIONABLE) ? line : null);
   const visibleLines = () => [...list.querySelectorAll(ACTIONABLE)].filter((l) => l.offsetParent !== null);
   list.addEventListener('keydown', (e) => {
     if (e.target !== list) return; // 막대 버튼 위 키는 버튼 몫

@@ -206,7 +206,8 @@ export function trapFocus(box, { restore = true } = {}) {
   const onKey = (e) => {
     if (!box.isConnected || box.closest('[hidden]')) { on = false; document.removeEventListener('keydown', onKey, true); return; }
     if (e.key !== 'Tab' || e.metaKey || e.ctrlKey || e.altKey) return;
-    const items = [...box.querySelectorAll(FOCUSABLE)].filter((el) => el.getClientRects().length > 0 && !el.closest('[hidden], [inert]'));
+    // tabindex=-1(화살표로만 옮기는 목록 항목 등)은 Tab 순서에 없다 — 끝으로 치면 마지막 Tab 이 모달 밖으로 빠졌다.
+    const items = [...box.querySelectorAll(FOCUSABLE)].filter((el) => el.tabIndex >= 0 && el.getClientRects().length > 0 && !el.closest('[hidden], [inert]'));
     const at = document.activeElement;
     if (!items.length) { e.preventDefault(); if (box.tabIndex >= -1) box.focus({ preventScroll: true }); return; }
     const first = items[0];

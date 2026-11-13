@@ -9,6 +9,8 @@
 //   목록이 끊기거나 같은 메시지가 두 번 들어오지 않게(선택 패인 채팅 `ml` 은 패널이 계속 쓴다).
 // - 통합 목록과 칸 목록에 함께 쌓아 두어 보기를 바꿔도 지난 메시지가 남는다. 보내기는 선택 패인으로 간다.
 //   칸 머리를 누르면 그 패인을 선택한다(포커스면 그 칸이 커진다).
+// - 켜 둔 동안 채팅 머리의 후원 목록(donation-list.js)은 모든 패인의 후원·구독을 채널 이름과 함께 모은다
+//   (선택 패인 채팅만 보던 예전 띠는 통합 목록 위에서 다른 패인 후원을 빠뜨렸다).
 import { api, listen } from './api.js';
 import { esc } from './dom.js';
 import { mergedItemsHtml, blindMergedLines, applyMergedStyle, mergedChatStyle, setMergedChatStyle } from './multichat.js';
@@ -16,7 +18,7 @@ import { MergedLineHost } from './merged-lines.js';
 import { mentionInto } from './chat-composer.js';
 import { panelOf } from './chat.js';
 import { applyChatSkin } from './chat-extras.js';
-import { onChatPrefs } from './chat-prefs.js';
+import { onChatPrefs, passesFilters } from './chat-prefs.js';
 import { chatFollower, followAppend, trimFront } from './chat-follow.js';
 import { bindMenuKeys, focusFirstMenuItem } from './ml-pane-controls.js';
 import { verifiedBadge } from './verified-badge.js';
@@ -91,7 +93,7 @@ export class MultiLiveMergedChat {
     this.grid = document.createElement('div');
     this.grid.className = 'ml-mc-grid';
     this.panelList.after(this.list, this.grid);
-    this.pending = []; // [conn, messages] — 프레임마다 한 번 붙인다
+    this.pending = []; // [conn, messages, recent] — 프레임마다 한 번 붙인다
     this.pendingCount = 0;
     this.title = chatEl.querySelector('.chat-header strong');
 
@@ -187,6 +189,13 @@ export class MultiLiveMergedChat {
       b.setAttribute('aria-checked', String(cur));
     }
     this.chatEl.dataset.mcView = this.mode;
+    // 후원 목록 — 켜 둔 동안은 모든 패인(추가 세션)이 채우고, 항목을 누르면 지금 보기(통합 목록·칸)의 그 줄로 간다.
+    // 보조 창은 추가 세션을 열지 않으므로(AUX_WINDOW) 선택 패인 채팅으로 둔다.
+    const feed = this.on && !AUX_WINDOW;
+    panelOf(this.chatEl)?.donations?.setExternal(feed ? 'ml' : null, feed ? {
+      findLine: (entry) => this.lineBox().querySelector(`.chat-line[data-id="${CSS.escape(entry.m.id)}"][data-src="${CSS.escape(entry.src ? entry.src.key : '')}"]`),
+      presentKeys: () => new Set([...this.lineBox().querySelectorAll('.chat-line.ev[data-id][data-src]')].map((l) => `${l.dataset.src}|${l.dataset.id}`)),
+    } : {});
     // 보기를 바꾸면 열린 닉네임 말풍선·이 사람만 보기를 걷는다(감춘 목록의 띠가 남지 않게)
     this.lines?.reset();
     this.cellLines?.reset();
@@ -194,6 +203,11 @@ export class MultiLiveMergedChat {
     this.list.hidden = this.mode !== 'merged';
     this.grid.hidden = this.mode !== 'grid' && this.mode !== 'focus';
     if (this.title) this.title.textContent = TITLES[this.mode];
+  }
+
+  /** 지금 보기에서 줄이 보이는 상자 — 통합이면 통합 목록, 그리드·포커스면 칸 묶음. */
+  lineBox() {
+    return this.mode === 'merged' ? this.list : this.grid;
   }
 
   /** 패인 구성에 맞춰 추가 세션을 열고 닫고, 칸을 배치한다(render 마다 불린다 — 바뀐 것만 건드린다). */
@@ -322,7 +336,7 @@ export class MultiLiveMergedChat {
     c.skipRecent = false;
     if (!ev.messages || !ev.messages.length) return;
     // 모았다가 프레임마다 한 번 붙인다 — 예전엔 패인마다 이벤트가 올 때마다 두 목록에 붙이고 바닥을 맞췄다(패인 4개면 프레임에 8번).
-    this.pending.push([c, ev.messages.slice()]);
+    this.pending.push([c, ev.messages.slice(), Boolean(ev.recent)]);
     this.pendingCount += ev.messages.length;
     while (this.pending.length > 1 && this.pendingCount - this.pending[0][1].length >= MAX_LINES) this.pendingCount -= this.pending.shift()[1].length;
     if (!this.flushScheduled) {
@@ -343,18 +357,28 @@ export class MultiLiveMergedChat {
     this.pendingCount = 0;
     const items = [];
     const cells = new Map();
-    for (const [c, msgs] of batch) {
+    const events = [];
+    for (const [c, msgs, recent] of batch) {
       if (!this.conns.has(c.key.slice(4)) || this.conns.get(c.key.slice(4)) !== c) continue; // 그사이 닫힌 패인
       const style = `--lh:${Number(c.hue) || 0}`;
       for (const m of msgs) items.push({ m, name: c.name, style, src: c.key });
       if (!cells.has(c)) cells.set(c, []);
       for (const m of msgs) cells.get(c).push({ m, style, src: c.key });
+      events.push([c, msgs, recent]);
     }
     if (!items.length) return;
     appendTo(this.list, mergedItemsHtml(items, this.list.lastElementChild), MAX_LINES);
     for (const [c, cellItems] of cells) appendTo(c.list, mergedItemsHtml(cellItems, c.list.lastElementChild), MAX_CELL_LINES);
     this.lines.afterAppend();
     this.cellLines.afterAppend();
+    // 후원 목록 — 줄을 붙인 뒤에 넣어야 목록이 '채팅에 있는 줄'로 그린다. 채팅 설정(차단·후원 숨김)을 줄과 같이 따른다.
+    const donations = panelOf(this.chatEl)?.donations;
+    if (donations && donations.external === 'ml') {
+      for (const [c, msgs, recent] of events) {
+        const shown = msgs.filter((m) => (m.kind === 'donation' || m.kind === 'subscription') && passesFilters(m));
+        if (shown.length) donations.add(shown, { fresh: recent ? new Set() : null, src: { key: c.key, name: c.name, hue: c.hue } });
+      }
+    }
   }
 
   system(c, text) {

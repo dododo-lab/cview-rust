@@ -1,11 +1,12 @@
 // 채팅 부가 기능 — 원본 ChatModerationService(명령)·ChatTTSService·ChatPanelEventRail·ChatStatsView·
 // ChatDesignStyle·ChatBackgroundScope. 채팅 패널마다 설치한다.
-// CHT-07 명령어, CHT-13 말풍선 디자인, CHT-15 배경, CHT-17 후원·구독 TTS, CHT-18 이벤트 레일,
+// CHT-07 명령어, CHT-13 말풍선 디자인, CHT-15 배경, CHT-17 후원·구독 TTS, CHT-18 후원 목록(donation-list.js — 예전 이벤트 레일),
 // CHT-19 채팅 내보내기, CHT-24 채팅 통계.
 import { api } from './api.js';
 import { esc, toast } from './dom.js';
 import { chatPrefs, onChatPrefs, updateChatPrefs } from './chat-prefs.js';
-import { formatCheese, donationKindLabel, eventMeta, EVENT_ICONS, donorName } from './donations.js';
+import { formatCheese, donationKindLabel, donorName } from './donations.js';
+import { DonationList } from './donation-list.js';
 
 // 채팅 디자인은 카카오톡형 말풍선 하나(2026-10-23 통합). 라운지·치지직·하이브리드·iMessage·이전 스타일은 없앴고
 // 좋던 점(닉네임 해시색·호버 줄·아바타 색·"나를 언급"·둥근 입력창)은 이 말풍선에 넣었다. 저장된 designStyle 은 쓰지 않는다.
@@ -90,31 +91,14 @@ function stamp() {
 export function installChatExtras(panel) {
   const root = panel.root;
   const stats = { times: [], users: new Map(), donations: 0, cheese: 0, subs: 0, since: Date.now() };
-  const events = [];
   const muted = new Map(); // nick → 해제 시각
   const uidByNick = new Map(); // nick → userId (최근 본 순)
 
-  // ── 이벤트 레일 (CHT-18) ──
-  const rail = document.createElement('div');
-  rail.className = 'chat-events';
-  rail.hidden = true;
-  const anchor = root.querySelector('.donation-rank') || root.querySelector('.chat-header');
-  anchor.after(rail);
-  // 칩은 후원·구독이 들어오거나 비울 때만 다시 그린다. 예전엔 채팅 묶음마다(초당 몇 번) 칩 12개를 통째로
-  // 새로 써서, 칩마다 SVG 아이콘·span 이 버려졌다 — 창이 가려진 채 오래 켜 두면 그 버린 요소가 웹 콘텐츠
-  // 프로세스에 쌓였다(실측: 가려진 15분에 SVG 요소 +3,559개).
-  let railHtml = '';
-  const renderRail = () => {
-    rail.hidden = events.length === 0;
-    const html = events.slice(0, 12).map((m) => {
-      const e = eventMeta(m);
-      if (!e) return '';
-      return `<span class="event-chip ev-${e.tone} ev-tier-${e.tier} ev-lv-${e.level}" title="${esc(`${e.title} · ${m.content || ''}`)}"><span class="event-chip-icon">${EVENT_ICONS[e.icon] || ''}</span><b>${esc(donorName(m))}</b>${e.value ? `<span class="event-chip-value">${esc(e.value)}</span>` : ''}</span>`;
-    }).join('');
-    if (html === railHtml) return;
-    railHtml = html;
-    rail.innerHTML = html;
-  };
+  // ── 후원 목록 (CHT-18) ──
+  // 예전엔 머리 아래에 후원·구독 칩 띠가 늘 붙어 채팅 자리를 차지했다. 이제는 머리의 후원 단추(새 후원 수 배지)를
+  // 누르면 목록 패널이 열린다(donation-list.js). 설정 chat.donationList 가 'strip' 이면 예전 띠도 함께 보인다.
+  const donations = new DonationList(panel);
+  panel.donations = donations;
 
   // ── 통계 버튼 (CHT-24) ──
   const statsBtn = document.createElement('button');
@@ -193,11 +177,12 @@ export function installChatExtras(panel) {
     speechSynthesis.speak(u);
   };
 
-  // fresh — 지금 막 온 줄(입장 때 받은 지난 기록 제외). 통계(속도·참여자·합계)와 TTS 는 fresh 만, 이벤트 레일은 지난 후원도 보인다.
+  // fresh — 지금 막 온 줄(입장 때 받은 지난 기록 제외). 통계(속도·참여자·합계)와 TTS 는 fresh 만, 후원 목록은 지난 후원도
+  // 넣되 새 후원 배지는 fresh 만 센다. 멀티라이브 멀티채팅 보기에서는 목록을 모든 패인이 채운다(donations.external).
   panel.appendHooks.push((messages, fresh = messages) => {
     const now = Date.now();
-    let gotEvent = false;
     const live = fresh === messages ? null : new Set(fresh);
+    if (!donations.external) donations.add(messages, { fresh: live });
     for (const m of messages) {
       if (m.kind === 'system') continue;
       const isNew = !live || live.has(m);
@@ -207,15 +192,9 @@ export function installChatExtras(panel) {
         if (m.kind === 'donation') { stats.donations += 1; if (Number.isFinite(m.donationAmount) && m.donationAmount > 0) stats.cheese += m.donationAmount; }
         if (m.kind === 'subscription') stats.subs += 1;
       }
-      if (m.kind === 'donation' || m.kind === 'subscription') {
-        events.unshift(m);
-        gotEvent = true;
-        if (isNew && panel.active && root.offsetParent) speak(m);
-      }
+      if ((m.kind === 'donation' || m.kind === 'subscription') && isNew && panel.active && root.offsetParent) speak(m);
     }
     if (stats.times.length > 5000) stats.times.splice(0, stats.times.length - 5000);
-    if (events.length > 30) events.length = 30;
-    if (gotEvent) renderRail();
     // /block 이 화면에서 밀려난 사람도 찾게 닉네임 → 사용자 ID 를 기억한다(최근 500명).
     for (const m of messages) {
       if (!m.nickname || !m.userId || m.kind === 'system') continue;
@@ -233,12 +212,11 @@ export function installChatExtras(panel) {
     return true;
   };
 
-  // 연결이 바뀌면 통계·레일 초기화
+  // 연결이 바뀌면 통계·후원 목록 초기화(멀티라이브 멀티채팅이 채우는 동안의 목록은 패인 선택이 바뀌어도 둔다)
   const origConnect = panel.connect.bind(panel);
   panel.connect = async (...args) => {
     stats.times = []; stats.users.clear(); stats.donations = 0; stats.cheese = 0; stats.subs = 0; stats.since = Date.now();
-    events.length = 0;
-    renderRail();
+    if (!donations.external) donations.reset();
     return origConnect(...args);
   };
 

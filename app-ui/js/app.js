@@ -626,7 +626,7 @@ function installPalette() {
 // ── 메뉴·단축키·정보·오프라인 (SYS-01·02·03·09·12) ─────────────────
 
 // Esc 는 맨 위의 것 하나만 닫는다 — 메뉴·시트·입력란이 먼저 받고, 아무것도 없을 때만 시청 화면을 닫는다.
-const ESC_POPUPS = ':is(.quality-menu, .player-panel, .emoji-picker, .chat-tray, .chat-autocomplete, .ml-pane-menu, .ml-more-menu):not([hidden], .exit-ghost)';
+const ESC_POPUPS = ':is(.quality-menu, .player-panel, .emoji-picker, .chat-tray, .dp-panel, .chat-autocomplete, .ml-pane-menu, .ml-more-menu):not([hidden], .exit-ghost)';
 const ESC_LAYERS = '.sheet-scrim:not(.leaving), .palette-scrim:not([hidden], .exit-ghost)';
 function escapeTaken(e) {
   if (e.defaultPrevented) return true;
