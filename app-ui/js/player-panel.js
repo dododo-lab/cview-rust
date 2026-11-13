@@ -6,11 +6,10 @@ import { api } from './api.js';
 import { esc, toast, hideWithExit } from './dom.js';
 import { kbd } from './platform.js';
 import { applyPicture, pictureFor, setPicture } from './picture.js';
+import { RATES, RATE_NOTE, EQ_SUPPORTED, EQ_FREQS, freqLabel, loadEqPresets, loadPlayerSettings, savePlayerSettings, applyPlayerTools, eqOnPatch } from './player-tools.js';
 
-const RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
-// macOS WKWebView 는 MSE 영상의 오디오를 Web Audio 그래프로 넘기지 않는다(소스 노드 출력이 0 — 실측).
-// 그래프는 한 번 만들면 되돌릴 수 없어 켜는 순간 그 재생의 소리가 사라지므로 여기서는 막는다.
-export const EQ_SUPPORTED = !/Mac OS X|Macintosh/.test(navigator.userAgent);
+// 다른 모듈·검사가 예전처럼 여기서 가져갈 수 있게 다시 내보낸다.
+export { EQ_SUPPORTED, freqLabel };
 const ADJUST = [
   ['videoBrightness', '밝기', 0.5, 1.5, 0.01, 1],
   ['videoContrast', '대비', 0.5, 1.5, 0.01, 1],
@@ -19,11 +18,6 @@ const ADJUST = [
   ['videoGamma', '감마', 0.5, 1.5, 0.01, 1],
 ];
 
-/** 10밴드 주파수 표시 — 31 → "31", 1000 → "1k". */
-export function freqLabel(hz) {
-  return hz >= 1000 ? `${hz / 1000}k` : String(hz);
-}
-
 export class PlayerPanel {
   /** @param {import('./viewer.js').Viewer} viewer */
   constructor(viewer) {
@@ -31,7 +25,7 @@ export class PlayerPanel {
     this.player = viewer.player;
     this.tab = 'play';
     this.settings = null;
-    this.freqs = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+    this.freqs = EQ_FREQS;
     this.presets = [];
     this.recording = null; // { id, bytes }
     this.rate = 1;
@@ -59,32 +53,33 @@ export class PlayerPanel {
       if (e.metaKey && e.altKey && e.key.toLowerCase() === 'r' && viewer.isPlaying && !viewer.root.hidden) { e.preventDefault(); this.toggleRecording(); }
     });
     this.player.onMessage((type, data) => this.onPlayerMessage(type, data));
-    api.equalizerPresets().then(([freqs, presets]) => { this.freqs = freqs; this.presets = presets; }).catch(() => {});
+    loadEqPresets().then(({ freqs, presets }) => { this.freqs = freqs; this.presets = presets; });
   }
 
   async loadSettings() {
-    try { this.settings = (await api.settingsGet()).player; } catch { this.settings = {}; }
+    this.settings = await loadPlayerSettings();
     return this.settings;
   }
 
-  /** 새 재생이 시작되면 저장된 보정·이퀄라이저·비율을 다시 건다. */
+  /**
+   * 새 재생이 시작되면 저장된 보정·이퀄라이저·비율을 다시 건다.
+   * 비율·자동 보정·업스케일·픽셀 확대·이퀄라이저는 라이브 단독 보기 패인과 같은 함수(player-tools.js)로 건다.
+   */
   async applySaved(cached = null) {
     const p = cached || await this.loadSettings();
     this.player.call('applyVideoAdjust', {
       enabled: Boolean(p.videoAdjustEnabled), brightness: p.videoBrightness, contrast: p.videoContrast,
-      saturation: p.videoSaturation, hue: p.videoHue, gamma: p.videoGamma, sharpPixel: Boolean(p.sharpPixelScaling),
+      saturation: p.videoSaturation, hue: p.videoHue, gamma: p.videoGamma,
     });
-    this.player.call('setPictureEnhancement', { auto: Boolean(p.autoPictureEnhancement), upscale: Boolean(p.videoUpscaling) });
+    applyPlayerTools(this.player, p);
     // 선명한 화면은 채널마다(멀티라이브 패인과 같은 기억) — 색 보정은 위의 전역 보정이 맡는다.
     applyPicture(this.player, pictureFor(this.viewer.channelId), { adjust: false });
-    this.player.call('setForcedAspectRatio', p.aspectRatio === 'fill');
-    if (p.equalizerPreset && EQ_SUPPORTED) this.player.call('setEqualizerEnabled', true, p.equalizerBands || [], p.equalizerPreAmp || 0);
     if (this.rate !== 1) this.player.call('setRate', this.rate);
   }
 
   async save(patch) {
     try {
-      this.settings = (await api.settingsUpdate('player', patch)).player;
+      this.settings = await savePlayerSettings(patch);
     } catch (e) { toast(e.message); }
   }
 
@@ -100,7 +95,7 @@ export class PlayerPanel {
     if (this.tab === 'play') {
       body = `
         <div class="pp-row"><span>재생 속도</span><div class="segmented">${RATES.map((r) => `<button class="seg${r === this.rate ? ' active' : ''}" data-rate="${r}">${r}x</button>`).join('')}</div></div>
-        <p class="pp-note">라이브는 1배속이 기본이에요. 바꾸면 지연이 늘거나 줄 수 있고, LIVE 를 누르면 1배속으로 돌아갑니다.</p>
+        <p class="pp-note">${RATE_NOTE}</p>
         <label class="pp-row"><span>화면 꽉 채우기(비율 무시)</span><span class="toggle"><input type="checkbox" data-pp="aspect" ${p.aspectRatio === 'fill' ? 'checked' : ''}><span></span></span></label>`;
     } else if (this.tab === 'video') {
       body = `
@@ -204,10 +199,9 @@ export class PlayerPanel {
     if (!key) return;
     if (key === 'eq') {
       if (t.checked) {
-        const pr = this.presets[0] || { name: '평탄', gains: new Array(10).fill(0), preAmp: 0 };
-        const bands = this.settings.equalizerBands && this.settings.equalizerBands.length === 10 ? this.settings.equalizerBands : pr.gains;
-        await this.save({ equalizerPreset: this.settings.equalizerPreset || pr.name, equalizerBands: bands });
-        this.player.call('setEqualizerEnabled', true, bands, this.settings.equalizerPreAmp || 0);
+        const patch = eqOnPatch(this.settings, this.presets);
+        await this.save(patch);
+        this.player.call('setEqualizerEnabled', true, patch.equalizerBands, this.settings.equalizerPreAmp || 0);
       } else {
         await this.save({ equalizerPreset: null });
         this.player.call('setEqualizerEnabled', false);

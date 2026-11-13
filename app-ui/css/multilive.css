@@ -763,6 +763,19 @@
 .ml-adjust-row { display: grid; grid-template-columns: 34px 1fr 38px; align-items: center; gap: 6px; padding: 3px 9px; color: var(--text-on-media, #fff); font-size: var(--fs-tiny); }
 .ml-adjust-row input[type="range"] { width: 100%; accent-color: var(--ml-media-accent, #00ffa3); }
 .ml-adjust-row output { text-align: right; font-variant-numeric: tabular-nums; opacity: 0.8; }
+/* 단독 보기 무대 패인 ⚙ — 배속·화면 꽉 채우기·자동 보정/업스케일·이퀄라이저(ml-pane-controls.js setStage) */
+.ml-gear-menu.ml-stage-tools { min-width: 236px; }
+.ml-rate-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; padding: 2px 4px; }
+.ml-pane-menu .ml-rate-row .ml-menu-item { justify-content: center; padding: 5px 0; font-size: var(--fs-tiny); font-variant-numeric: tabular-nums; }
+.ml-pane-menu .ml-rate-row .ml-menu-item.active { background: rgba(255, 255, 255, 0.14); font-weight: 700; }
+.ml-pane-menu .ml-rate-row .ml-menu-item.active::after { content: none; }
+.ml-menu-note { margin: 0; padding: 1px 9px 4px; font-size: var(--fs-micro); color: rgba(255, 255, 255, 0.62); }
+.ml-adjust-row.ml-eq-row { grid-template-columns: 46px 1fr 38px; }
+.ml-eq-row select { grid-column: 2 / 4; min-width: 0; padding: 3px 4px; border-radius: var(--radius-sm); border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.08); color: inherit; font: inherit; }
+.ml-eq-row select option { color: initial; }
+.ml-eq-bands { display: grid; grid-template-columns: repeat(10, 1fr); gap: 1px; padding: 4px 6px 2px; }
+.ml-eq-band { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: var(--fs-micro); color: rgba(255, 255, 255, 0.7); font-variant-numeric: tabular-nums; }
+.ml-eq-band input { writing-mode: vertical-lr; direction: rtl; width: 18px; height: 84px; margin: 0; accent-color: var(--ml-media-accent, #00ffa3); }
 
 /* 멀티채팅(ml-multichat.js) — 통합·그리드·포커스 보기. 줄·칸 색은 그 패인 테두리와 같은 색조(--lh). */
 .ml-chat .chat-list[hidden], .ml-mc-grid[hidden] { display: none !important; }
