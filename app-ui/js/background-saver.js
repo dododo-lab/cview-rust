@@ -16,6 +16,11 @@ function inPip(iframe) {
   } catch { return false; }
 }
 
+/** PiP 로 띄우는 영상 — 보고 있는 영상이니 걸려 있던 백그라운드 상한을 바로 푼다(viewer-controls.js togglePipFor). */
+export function releaseForPip(video) {
+  try { video?.ownerDocument?.defaultView?.setBackgroundSaver?.(0); } catch { /* 준비 전 */ }
+}
+
 /** 화면에서 빠진 플레이어에 백그라운드 상한을 바로 건다/푼다(PiP 중이면 걸지 않는다). */
 export function setMenuHidden(iframe, on) {
   if (!iframe) return;
@@ -26,10 +31,14 @@ export function setMenuHidden(iframe, on) {
   try { iframe.contentWindow?.setWatchSurfaceHidden?.(on); } catch { /* 준비 전 */ }
 }
 
-function players() {
+/**
+ * 상한을 걸고 풀 플레이어. 걸 때(height > 0)는 PiP 영상을 빼고, 풀 때는 PiP 영상도 넣는다 —
+ * 상한이 걸린 뒤 PiP 로 띄운 영상은 예전엔 풀 때도 빠져 360p 에 묶여 있었다.
+ */
+function players(release = false) {
   const out = [];
   for (const f of document.querySelectorAll('iframe')) {
-    if (menuHidden.has(f) || inPip(f)) continue;
+    if (menuHidden.has(f) || (!release && inPip(f))) continue;
     try {
       const w = f.contentWindow;
       if (w && typeof w.setBackgroundSaver === 'function') out.push(w);
@@ -42,7 +51,7 @@ export function installBackgroundSaver() {
   let timer = null;
   let applied = false;
   const apply = (height) => {
-    for (const w of players()) {
+    for (const w of players(height === 0)) {
       try { w.setBackgroundSaver(height); } catch { /* 페이지가 아직 준비 전 */ }
     }
   };

@@ -52,11 +52,8 @@ export class Sidebar {
       const item = e.target.closest('[data-route]');
       if (item) this.onNavigate(item.dataset.route);
     });
+    // ⌘K 는 app.js 커맨드 팔레트가 캡처 단계에서 먼저 받아 멈춘다(여기서 받던 '검색으로 이동'은 실행된 적이 없다).
     document.addEventListener('keydown', (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        this.onNavigate('search');
-      }
       if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
         e.preventDefault();
         this.toggle();

@@ -197,8 +197,10 @@ export class WatchTools {
   togglePlay() {
     const v = this.video;
     if (!v) return;
+    // 플레이어의 play()/pause() 는 곧바로 v.paused 를 바꾼다 — 누르기 전 상태로 문구를 고른다(예전엔 반대로 떴다).
+    const wasPaused = v.paused;
     this.pane.controls.togglePlay();
-    this.flash(v.paused ? '재생' : '일시정지');
+    this.flash(wasPaused ? '재생' : '일시정지');
   }
 
   toggleMute() {
