@@ -56,7 +56,7 @@ main() {
     git status --short
     local tag="release-with-prs $(date +%Y%m%d-%H%M%S)-$$"
     git stash push -u -m "$tag"
-    stash_sha=$(git stash list --format='%H %gs' | awk -v t="$tag" 'index($0, t) { print $1; exit }')
+    stash_sha=$(git stash list --format='%H %gs' | awk -v t="$tag" '!f && index($0, t) { print $1; f = 1 }')
     [[ -n "$stash_sha" ]] || { echo "✗ 보관한 작업을 stash 목록에서 찾지 못했습니다: $tag"; exit 1; }
     stashed=1
   fi
@@ -69,7 +69,7 @@ main() {
       git stash apply "$stash_sha" || { echo "⚠︎ stash 적용 충돌 — 'git stash apply $stash_sha'를 직접 확인하세요."; return 1; }
       # 적용에 성공했을 때만 그 항목을 지운다(지금 위치를 다시 찾는다 — 그사이 다른 항목이 쌓였을 수 있다).
       local ref
-      ref=$(git stash list --format='%H %gd' | awk -v h="$stash_sha" '$1 == h { print $2; exit }')
+      ref=$(git stash list --format='%H %gd' | awk -v h="$stash_sha" '!f && $1 == h { print $2; f = 1 }')
       [[ -n "$ref" ]] && git stash drop -q "$ref"
     else
       echo "⚠︎ 작업 트리가 깨끗하지 않아 보관한 작업을 되돌리지 않았습니다. 정리 후 'git stash apply $stash_sha'를 실행하세요."
