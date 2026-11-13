@@ -32,6 +32,7 @@ scripts/release-with-prs.sh [PR번호 ...] [-- release-macos.sh 옵션]
 - macOS 공증 프로파일 기본값은 `cview-notarize`이며 `CVIEW_NOTARIZE_PROFILE`로 변경한다. `--no-notarize`는 사용자가 공증 생략을 명시적으로 허용한 경우에만 사용한다. 공증 실패를 피하려고 임의로 사용하지 않는다.
 - macOS(arm64)와 Windows(x64·arm64) 설치 파일 세 개를 같은 버전으로 함께 게시한다. 배포에서 `CVIEW_SKIP_WINDOWS`는 금지하고, arm64만 빼고 게시하는 경로도 없다. Windows 미서명/SmartScreen 안내를 설명에 유지한다.
 - Windows arm64 교차 빌드에는 llvm-mingw(`~/.local/opt/llvm-mingw`, 또는 `CVIEW_LLVM_MINGW`)와 `rustup target add aarch64-pc-windows-gnullvm`이 필요하다. 없으면 버전을 올리기 전에 멈춘다.
+- Windows 설치 파일은 `WebView2Loader.dll`(GNU 타깃은 동적 링크)을 `cview-app.exe` 옆에 넣어야 실행된다. 빌드 후 `scripts/windows-installer.py check`가 설치 파일을 `7zz`(`brew install sevenzip`)로 풀어 exe·DLL이 부르는 DLL이 모두 시스템 DLL이거나 같은 폴더에 있는지 확인한다.
 - 사용자에게 보여 줄 변경 사항은 UTF-8 파일로 작성하고 `CVIEW_RELEASE_NOTES_FILE=/절대/경로/notes.txt`로 전달한다. 생략하면 Git 변경 목록이 사용된다.
 - 게시 실패 시 버전을 다시 올리지 않는다. 보존된 파일과 `dist/CView_<버전>_notes.txt`로 다음 명령을 재실행한다.
 

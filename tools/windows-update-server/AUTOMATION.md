@@ -34,12 +34,16 @@ CVIEW_RELEASE_NOTES_FILE=/절대/경로/notes.txt scripts/release-macos.sh --dmg
 
 | 설치 파일 | Rust 타깃 | 도구 |
 | --- | --- | --- |
-| `CView_<버전>_x64-setup.exe` | `x86_64-pc-windows-gnu` | Homebrew `mingw-w64`, `nsis` |
-| `CView_<버전>_arm64-setup.exe` | `aarch64-pc-windows-gnullvm` | [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)(clang·lld·llvm-windres·aarch64 CRT), `nsis` |
+| `CView_<버전>_x64-setup.exe` | `x86_64-pc-windows-gnu` | Homebrew `mingw-w64`, `nsis`, `sevenzip`(`7zz`) |
+| `CView_<버전>_arm64-setup.exe` | `aarch64-pc-windows-gnullvm` | [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)(clang·lld·llvm-windres·llvm-readobj·aarch64 CRT), `nsis`, `sevenzip`(`7zz`) |
 
 Homebrew `mingw-w64`에는 aarch64가 없어 arm64는 llvm-mingw를 쓴다. 기본 위치는 `~/.local/opt/llvm-mingw`(macOS universal 릴리스를 풀고 이 이름으로 링크)이며 `CVIEW_LLVM_MINGW`로 바꾼다. 스크립트는 PATH를 바꾸지 않고 `CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_LINKER`, `CC_`·`AR_`·`RC_aarch64_pc_windows_gnullvm`으로 절대 경로만 넘긴다(macOS 빌드의 clang을 가리지 않게). 도구가 하나라도 없으면 버전을 올리기 전에 무엇을 설치할지 알려 주고 멈춘다.
 
-NSIS 설치 프로그램은 두 판 모두 x86 실행 파일이다. 스크립트는 번들 전 `cview-app.exe`의 PE Machine(x64 `0x8664`, ARM64 `0xaa64`)을 확인하고, `publish-update.py`는 두 Windows 설치 파일이 PE이고 서로 다른지 확인한다. arm64 판 WebView2 로더는 `webview2-com-sys`의 arm64 정적 라이브러리를 쓴다. gnullvm 타깃은 기본으로 `libunwind.dll`을 동적으로 부르는데 Windows에는 없으므로 `-C target-feature=+crt-static`로 정적 링크하고, 빌드 후 `llvm-objdump`로 `lib*.dll`(MinGW 런타임) 가져오기가 없는지 확인한다.
+NSIS 설치 프로그램은 두 판 모두 x86 실행 파일이다. 스크립트는 번들 전 `cview-app.exe`의 PE Machine(x64 `0x8664`, ARM64 `0xaa64`)을 확인하고, `publish-update.py`는 두 Windows 설치 파일이 PE이고 서로 다른지 확인한다. gnullvm 타깃은 기본으로 `libunwind.dll`을 동적으로 부르는데 Windows에는 없으므로 `-C target-feature=+crt-static`로 정적 링크한다.
+
+GNU 계열 타깃(x64·arm64 모두)에서 `webview2-com-sys`는 `WebView2Loader.dll`을 **동적으로** 링크한다(정적 라이브러리 `WebView2LoaderStatic.lib`는 MSVC 런타임 전용 기호를 요구해 MinGW로는 링크하지 않는다). 그래서 설치 파일이 아키텍처에 맞는 `WebView2Loader.dll`(Microsoft 서명, `webview2-com-sys`에 포함된 것)을 `cview-app.exe` 옆에 넣어야 한다. tauri-bundler는 타깃 이름이 `-gnu`로 끝날 때만 이 DLL을 넣으므로 x64는 자동으로 들어가고, arm64(`-gnullvm`)는 `scripts/windows-installer.py loader-config`가 Cargo.lock이 고른 `webview2-com-sys`의 `arm64/WebView2Loader.dll`을 `bundle.resources`로 넘긴다(`cargo tauri build --config`). arm64 설치 파일은 처음 나온 v0.1.71부터 v0.1.95까지 이 DLL이 빠져 Windows에서 시작되지 않았다(x64는 처음부터 들어 있었다).
+
+빌드 후 `scripts/windows-installer.py check`가 만든 설치 파일을 `7zz`로 풀어, `cview-app.exe`와 그 옆에 설치되는 DLL이 가져오는 DLL(지연 로드 포함, `llvm-readobj --coff-imports`)이 모두 Windows 시스템 DLL이거나 같은 폴더에 같은 PE Machine으로 들어 있는지 확인한다. 시스템 DLL 목록(`SYSTEM_DLLS`)에 없는 새 DLL을 부르게 되면 검사가 멈춘다 — Windows에 기본으로 들어 있는 DLL이면 목록에 더하고, 아니면 설치 파일에 넣는다. 앱 내 업데이트도 같은 NSIS 설치 파일을 `/P /R /UPDATE`로 실행하므로 DLL이 함께 설치된다.
 
 ## GitHub 릴리스 사본
 
