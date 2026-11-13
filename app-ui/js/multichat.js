@@ -181,9 +181,10 @@ export class MultiChatPage {
     el.querySelector('.chat-header').insertAdjacentHTML('beforeend', '<button class="icon-btn chat-hbtn" data-mc="remove" title="이 채널 닫기">✕</button>');
     el.querySelector('.mc-name').title = live.channelName || channelId;
     const entry = { channelId, name: live.channelName || channelId, image: live.channelImageUrl, color, chatChannelId: live.chatChannelId, panel, el, session, rate: [], isLive: live.isLive };
-    panel.appendHooks.push((msgs) => {
+    panel.appendHooks.push((msgs, fresh = msgs) => {
       const now = Date.now();
-      for (let i = 0; i < msgs.length; i++) entry.rate.push(now);
+      // 분당 속도는 지금 온 줄만(입장 때 받은 지난 기록 제외)
+      for (let i = 0; i < fresh.length; i++) entry.rate.push(now);
       if (this.search.value.trim()) this.filterTail(panel.list, msgs.length);
     });
     panel.inputHooks.push(() => this.updateMergedInput());

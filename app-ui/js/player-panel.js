@@ -55,7 +55,8 @@ export class PlayerPanel {
       if (!this.el.hidden && !this.el.contains(e.target) && !e.target.closest('#ctl-panel')) hideWithExit(this.el);
     });
     document.addEventListener('keydown', (e) => {
-      if (e.metaKey && e.altKey && e.key.toLowerCase() === 'r' && viewer.isPlaying) { e.preventDefault(); this.toggleRecording(); }
+      // 숨긴 시청 화면(다른 메뉴로 옮겨 재생만 이어지는 중)에서는 녹화를 켜고 끄지 않는다 — 보이지 않는 곳에서 녹화가 시작됐다.
+      if (e.metaKey && e.altKey && e.key.toLowerCase() === 'r' && viewer.isPlaying && !viewer.root.hidden) { e.preventDefault(); this.toggleRecording(); }
     });
     this.player.onMessage((type, data) => this.onPlayerMessage(type, data));
     api.equalizerPresets().then(([freqs, presets]) => { this.freqs = freqs; this.presets = presets; }).catch(() => {});
@@ -268,6 +269,14 @@ export class PlayerPanel {
   async onPlayerMessage(type, data) {
     if (type === 'playStarted') { this.rate = 1; this.applySaved(); return; }
     if (type === 'equalizer' && data && data.ok === false) toast('이퀄라이저를 켤 수 없습니다 — 이 방송은 오디오 처리를 쓸 수 없습니다');
+  }
+
+  /** 시청 화면을 닫을 때 — 녹화 표시·상태 확인 타이머를 바로 거둔다(예전엔 2초 확인을 기다려 빨간 점이 남았다). */
+  resetRecording() {
+    clearInterval(this.recTimer);
+    if (!this.recording) return;
+    this.recording = null;
+    this.setRecUi(false);
   }
 
   setRecUi(on) {

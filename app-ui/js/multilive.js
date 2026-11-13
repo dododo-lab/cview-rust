@@ -1053,7 +1053,37 @@ export class MultiLivePage {
         const scale = window.devicePixelRatio || 1;
         api.multiLiveStageSize(r.width * scale, r.height * scale).catch(() => {});
       }
+      this.syncChatOverlap();
     }, 200);
+  }
+
+  /**
+   * 멀티라이브 보기의 영상 위 채팅(그리드·한 채널 크게) 밑에 깔린 패인 — 위·아래 막대의 오른쪽 단추(⚙·⋯·닫기·전체 화면)와
+   * 패인 메뉴가 채팅에 가려 눌리지 않았다. 겹친 폭(--chat-overlap)만큼 막대·메뉴를 왼쪽으로 비킨다(multilive.css).
+   * 단독 보기는 채팅이 막대 사이(위 74px·아래 60px)에 떠 따로 처리한다. 배치·크기가 바뀐 뒤(reportStageSize)에만 잰다.
+   */
+  syncChatOverlap() {
+    const body = this.root.querySelector('.ml-body');
+    const chat = body && body.querySelector('.ml-chat');
+    const on = Boolean(chat) && body.classList.contains('chat-overlay') && this.watchSlot == null;
+    if (!on && !this.chatOverlapped) return;
+    const cr = on ? chat.getBoundingClientRect() : null;
+    let any = false;
+    for (const pane of this.panes.values()) {
+      let px = 0;
+      if (cr && cr.width && !pane.el.hidden) {
+        const r = pane.el.getBoundingClientRect();
+        if (r.right > cr.left && r.left < cr.right && r.bottom > cr.top && r.top < cr.bottom) {
+          // 패인이 거의 다 덮이면 단추 몇 개는 남도록 120px 은 남긴다.
+          px = Math.max(0, Math.min(Math.round(r.right - cr.left), Math.round(r.width - 120)));
+        }
+      }
+      pane.el.classList.toggle('under-chat', px > 0);
+      if (px > 0) pane.el.style.setProperty('--chat-overlap', `${px}px`);
+      else pane.el.style.removeProperty('--chat-overlap');
+      any ||= px > 0;
+    }
+    this.chatOverlapped = any;
   }
 
   // ── 동작 ───────────────────────────────────

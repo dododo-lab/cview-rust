@@ -1060,5 +1060,10 @@
 .mwi-react svg { width: 14px; height: 14px; }
 @media (prefers-reduced-motion: reduce) { .mwi-body, .mwi-dots i, .mwi-lightbox, .mwi-lightbox > img { animation: none; } .mwi-post, .mwi-post-img img, .mwi-mini { transition: none; } }
 :root[data-motion="reduced"] :is(.mwi-body, .mwi-dots i, .mwi-lightbox, .mwi-lightbox > img) { animation: none; }
-/* 단독 보기에서 채팅을 영상 위에 띄우면 영상 높이까지만(아래 정보 칸을 덮지 않게) — 높이는 multilive.js 가 잰다 */
-.page-multilive.as-watch .ml-body.chat-overlay .ml-chat { bottom: auto; height: calc(var(--ml-stage-h, 100%) - 24px); }
+/* 단독 보기에서 채팅을 영상 위에 띄우면 영상 안에서만 — 위 74px(채널 줄)·아래 60px(재생 막대)를 비우고, 아래 정보 칸을 덮지 않는다.
+   높이는 multilive.js 가 잰 무대 높이(--ml-stage-h)에서 뺀다. 예전엔 24px 만 빼 top 74px 만큼 무대 밖(재생 막대·정보 칸)으로 50px 넘쳤다. */
+.page-multilive.as-watch .ml-body.chat-overlay .ml-chat { bottom: auto; height: max(160px, calc(var(--ml-stage-h, 100%) - 134px)); }
+/* 멀티라이브 보기(그리드·한 채널 크게)의 영상 위 채팅 밑에 깔린 패인 — 막대 단추·메뉴를 채팅 왼쪽으로 비킨다(multilive.js syncChatOverlap).
+   예전엔 오른쪽 열 패인의 ⚙·⋯·닫기가 채팅(z 6) 밑에 깔려 눌리지 않았다. */
+.ml-stage .ml-pane.under-chat :is(.ml-pane-top, .ml-pane-bar) { padding-right: calc(var(--chat-overlap, 0px) + 8px); }
+.ml-stage .ml-pane.under-chat .ml-pane-menu { right: calc(var(--chat-overlap, 0px) + 8px); }

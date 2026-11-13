@@ -139,12 +139,20 @@ export function eventMeta(m) {
 }
 
 /** 후원·구독 카드 HTML — 모든 채팅 화면이 같은 모양을 쓴다(뷰어·멀티라이브·멀티채팅·통합·채팅 창). */
+/**
+ * 후원·구독한 사람 이름 — 익명이면 이름이 실려 와도 '익명'. 카드·영상 위 알림·이벤트 칩·TTS 가 같은 규칙을 쓴다.
+ * (백엔드 dto.rs 도 익명 후원의 닉네임을 '익명'으로 바꿔 보내지만, 화면도 anonymous 를 따로 확인한다.)
+ */
+export function donorName(m) {
+  return (m && !m.anonymous && m.nickname) || '익명';
+}
+
 export function eventCardHtml(m, { time = '', badges = '', nick = '', content = '', tag = '' } = {}) {
   const e = eventMeta(m);
   if (!e) return '';
   // 익명 후원자는 닉네임 자리에 '익명' 하나만 쓴다(영상 위 알림·이벤트 칩과 같다). 이름이 실려 와도 그리지 않는다.
   // 예전엔 작은 '익명' 꼬리표만 남겨 이름이 빠진 줄처럼 보였다.
-  const anon = m.anonymous || m.nickname === '익명';
+  const anon = donorName(m) === '익명';
   return `<div class="ev-card">
     <div class="ev-head">
       <span class="ev-icon">${EVENT_ICONS[e.icon] || ''}</span>
@@ -272,7 +280,7 @@ export class StreamAlerts {
       <span class="stream-alert-icon">${EVENT_ICONS[e.icon] || ''}</span>
       <span class="stream-alert-text">
         <span class="stream-alert-kicker">${esc(e.title)}${e.detail ? ` · ${esc(e.detail)}` : ''}</span>
-        <span class="stream-alert-title"><span class="stream-alert-nick">${esc(m.nickname || '익명')}</span>${e.value ? `<b>${esc(e.value)}</b>` : ''}</span>
+        <span class="stream-alert-title"><span class="stream-alert-nick">${esc(donorName(m))}</span>${e.value ? `<b>${esc(e.value)}</b>` : ''}</span>
         <span class="stream-alert-body">${e.extra ? `<span class="stream-alert-msg">${esc(e.extra)}</span>` : ''}${m.content ? `<span class="stream-alert-msg">${renderContent(m.content, m.emojis)}</span>` : ''}</span>
       </span>`;
     this.show(item, ALERT_MS);

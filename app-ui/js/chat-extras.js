@@ -5,7 +5,7 @@
 import { api } from './api.js';
 import { esc, toast } from './dom.js';
 import { chatPrefs, onChatPrefs, updateChatPrefs } from './chat-prefs.js';
-import { formatCheese, donationKindLabel, eventMeta, EVENT_ICONS } from './donations.js';
+import { formatCheese, donationKindLabel, eventMeta, EVENT_ICONS, donorName } from './donations.js';
 
 // 채팅 디자인은 카카오톡형 말풍선 하나(2026-10-23 통합). 라운지·치지직·하이브리드·iMessage·이전 스타일은 없앴고
 // 좋던 점(닉네임 해시색·호버 줄·아바타 색·"나를 언급"·둥근 입력창)은 이 말풍선에 넣었다. 저장된 designStyle 은 쓰지 않는다.
@@ -72,10 +72,10 @@ export function parseCommand(text) {
 
 /** 후원·구독 읽을 문장. */
 export function ttsText(m) {
-  if (m.kind === 'subscription') return `${m.nickname || '익명'}님이 ${m.subscriptionMonths ? `${m.subscriptionMonths}개월 ` : ''}구독했습니다. ${m.content || ''}`;
+  if (m.kind === 'subscription') return `${donorName(m)}님이 ${m.subscriptionMonths ? `${m.subscriptionMonths}개월 ` : ''}구독했습니다. ${m.content || ''}`;
   // 금액 비공개면 금액 없이("익명님이 채팅 후원했습니다.") — 빈 금액 자리에 공백이 두 번 들어가지 않게.
   const amount = formatCheese(m.donationAmount);
-  return `${m.nickname || '익명'}님이 ${amount ? `${amount} ` : ''}${donationKindLabel(m.donationType)}했습니다. ${m.content || ''}`;
+  return `${donorName(m)}님이 ${amount ? `${amount} ` : ''}${donationKindLabel(m.donationType)}했습니다. ${m.content || ''}`;
 }
 
 function stamp() {
@@ -105,7 +105,7 @@ export function installChatExtras(panel) {
     const html = events.slice(0, 12).map((m) => {
       const e = eventMeta(m);
       if (!e) return '';
-      return `<span class="event-chip ev-${e.tone} ev-tier-${e.tier} ev-lv-${e.level}" title="${esc(`${e.title} · ${m.content || ''}`)}"><span class="event-chip-icon">${EVENT_ICONS[e.icon] || ''}</span><b>${esc(m.nickname || '익명')}</b>${e.value ? `<span class="event-chip-value">${esc(e.value)}</span>` : ''}</span>`;
+      return `<span class="event-chip ev-${e.tone} ev-tier-${e.tier} ev-lv-${e.level}" title="${esc(`${e.title} · ${m.content || ''}`)}"><span class="event-chip-icon">${EVENT_ICONS[e.icon] || ''}</span><b>${esc(donorName(m))}</b>${e.value ? `<span class="event-chip-value">${esc(e.value)}</span>` : ''}</span>`;
     }).join('');
     if (html === railHtml) return;
     railHtml = html;
@@ -179,19 +179,24 @@ export function installChatExtras(panel) {
     speechSynthesis.speak(u);
   };
 
-  panel.appendHooks.push((messages) => {
+  // fresh — 지금 막 온 줄(입장 때 받은 지난 기록 제외). 통계(속도·참여자·합계)와 TTS 는 fresh 만, 이벤트 레일은 지난 후원도 보인다.
+  panel.appendHooks.push((messages, fresh = messages) => {
     const now = Date.now();
     let gotEvent = false;
+    const live = fresh === messages ? null : new Set(fresh);
     for (const m of messages) {
       if (m.kind === 'system') continue;
-      stats.times.push(now);
-      if (m.nickname) stats.users.set(m.nickname, (stats.users.get(m.nickname) || 0) + 1);
-      if (m.kind === 'donation') { stats.donations += 1; if (Number.isFinite(m.donationAmount) && m.donationAmount > 0) stats.cheese += m.donationAmount; }
-      if (m.kind === 'subscription') stats.subs += 1;
+      const isNew = !live || live.has(m);
+      if (isNew) {
+        stats.times.push(now);
+        if (m.nickname) stats.users.set(m.nickname, (stats.users.get(m.nickname) || 0) + 1);
+        if (m.kind === 'donation') { stats.donations += 1; if (Number.isFinite(m.donationAmount) && m.donationAmount > 0) stats.cheese += m.donationAmount; }
+        if (m.kind === 'subscription') stats.subs += 1;
+      }
       if (m.kind === 'donation' || m.kind === 'subscription') {
         events.unshift(m);
         gotEvent = true;
-        if (panel.active && root.offsetParent) speak(m);
+        if (isNew && panel.active && root.offsetParent) speak(m);
       }
     }
     if (stats.times.length > 5000) stats.times.splice(0, stats.times.length - 5000);

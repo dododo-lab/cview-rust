@@ -6,6 +6,7 @@ import { api } from './api.js';
 import { esc, toast, keyBelongsToTarget, hideWithExit } from './dom.js';
 import { matchPlainAction } from './shortcuts.js';
 import { kbd } from './platform.js';
+import { releaseForPip } from './background-saver.js';
 
 const ICON = {
   play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5-13-7.5Z"/></svg>',
@@ -517,13 +518,14 @@ export async function togglePipFor(v) {
   try {
     if (typeof v.webkitSetPresentationMode === 'function') {
       const next = v.webkitPresentationMode === 'picture-in-picture' ? 'inline' : 'picture-in-picture';
+      if (next === 'picture-in-picture') releaseForPip(v);
       v.webkitSetPresentationMode(next);
       return next === 'inline' ? 'PiP 끔' : 'PiP';
     }
     const doc = v.ownerDocument;
     if (doc.pictureInPictureEnabled || document.pictureInPictureEnabled) {
       if (doc.pictureInPictureElement) await doc.exitPictureInPicture();
-      else await v.requestPictureInPicture();
+      else { releaseForPip(v); await v.requestPictureInPicture(); }
       return '';
     }
     toast('이 환경에서는 PiP 를 쓸 수 없습니다');

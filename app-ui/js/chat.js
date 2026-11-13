@@ -36,6 +36,8 @@ const ICON = {
 const ROLE_CLASSES = new Set(['streamer', 'manager', 'channelManager']);
 // 창이 숨은 동안 채팅 줄을 모아 붙이는 간격(보일 때는 다음 프레임, 늦어도 250ms).
 const HIDDEN_FLUSH_MS = 1000;
+/** 입장 때 받은 지난 기록(ev.recent) 메시지 — append 가 표시하고 flushLines 가 읽는다. */
+const RECENT = new WeakSet();
 // 글자 수 표시 — 입력 제한(index.html maxlength, Rust MAX_CHAT_LENGTH 100)에 가까워지면 남은 글자를 보인다.
 const COUNT_FROM = 80;
 // 입력 기록(↑/↓)으로 되부를 수 있는 보낸 메시지 수
@@ -502,12 +504,18 @@ export class ChatPanel {
    * 메시지 추가 — 거르기·멘션 알림 같은 장부 일은 바로, DOM 넣기는 프레임마다 한 번으로 묶는다.
    * 붐비는 채널은 초당 수십 번 이벤트가 오는데, 매번 넣고 스크롤 위치를 읽고 쓰면 그때마다 레이아웃을 다시 계산한다.
    */
-  append(messages) {
+  /**
+   * @param {object[]} messages
+   * @param {{ recent?: boolean }} [opts] recent — 입장 때 받은 지난 기록. 그리기만 하고 '여기까지 읽음'·새 메시지 수·
+   *   멘션 알림·TTS·채팅 통계에는 넣지 않는다(지금 막 온 글이 아니다).
+   */
+  append(messages, { recent = false } = {}) {
     if (!messages || !messages.length) return;
     const prefs = chatPrefs();
     const shown = messages.filter((m) => passesFilters(m, prefs));
     if (!shown.length) return;
     for (const m of shown) {
+      if (recent) RECENT.add(m);
       if (m.nickname && m.kind !== 'system') this.recentNicks.set(m.nickname, Date.now());
       for (const [id, url] of Object.entries(m.emojis || {})) {
         if (emojiUrl(url) && !this.seenEmoji.has(id)) this.seenEmoji.set(id, url);
@@ -515,7 +523,7 @@ export class ChatPanel {
       if (prefs.highlightMentions && mentionsMe(m)) {
         this.mentions.push(m);
         // 멘션 알림 (SYS-05) — 앱이 뒤에 있을 때만, 라이브·멀티라이브 채팅에서만(멀티채팅 패널 여럿은 빼고).
-        if (prefs.mentionNotify !== false && !document.hasFocus() && this.active && this.mentionNotify) {
+        if (!recent && prefs.mentionNotify !== false && !document.hasFocus() && this.active && this.mentionNotify) {
           api.notifySend(`@${m.nickname} 님이 불렀어요`, String(m.content || '').slice(0, 140)).catch(() => {});
         }
       }
@@ -548,7 +556,9 @@ export class ChatPanel {
     const placeholder = this.list.querySelector('.empty');
     if (placeholder) placeholder.remove();
     const follow = prefs.autoScroll && this.follower.stuck;
-    if (!follow && !this.list.querySelector('.read-divider') && this.list.children.length) {
+    // 지난 기록(입장 직후 recent)은 읽을 글이 아니다 — 구분선·새 메시지 수·후크(TTS·통계)는 지금 온 줄만 센다.
+    const fresh = shown.some((m) => RECENT.has(m)) ? shown.filter((m) => !RECENT.has(m)) : shown;
+    if (!follow && fresh.length && !this.list.querySelector('.read-divider') && this.list.children.length) {
       this.list.insertAdjacentHTML('beforeend', '<div class="read-divider"><span>여기까지 읽음</span></div>');
       this.lastGroup = null; // 구분선 너머로는 묶지 않는다
     }
@@ -562,11 +572,11 @@ export class ChatPanel {
     if (globalThis.__cviewPerf) globalThis.__cviewPerf.chatLines += shown.length;
     this.renderMentionCount();
     for (const fn of this.appendHooks) {
-      try { fn(shown); } catch (e) { console.error(e); }
+      try { fn(shown, fresh); } catch (e) { console.error(e); }
     }
     this.trimLines();
     if (follow) this.follower.snap();
-    else { this.unread += shown.length; this.renderJump(); }
+    else if (fresh.length) { this.unread += fresh.length; this.renderJump(); }
   }
 
   /** 줄 상한(trimFront — 넘친 줄을 모았다가 한 번에 지운다). */
@@ -621,7 +631,7 @@ export class ChatPanel {
         this.setState('disconnected');
         break;
       case 'messages':
-        this.append(ev.messages);
+        this.append(ev.messages, { recent: Boolean(ev.recent) });
         if (!ev.recent && this.onHighlight) {
           for (const m of ev.messages || []) {
             if ((m.kind === 'donation' || m.kind === 'subscription') && passesFilters(m)) this.onHighlight(m);

@@ -249,6 +249,7 @@ export class Viewer {
     this.syncNowPlaying(null);
     clearInterval(this.uptimeTimer);
     this.alerts.clear();
+    this.panel.resetRecording();
     this.showOverlay('');
     await Promise.allSettled([api.playerStop(), this.chat.disconnect()]);
     if (!silent && token === this.startToken && this.onClose) this.onClose();

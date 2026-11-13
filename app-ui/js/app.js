@@ -598,8 +598,8 @@ function installPalette() {
     onPlay: openChannel,
     onSearch: (q) => navigate('search', { query: q }),
     actions: () => [
-      ...ROUTES.map((r) => ({ group: '화면', label: r.title, hint: '이동', run: () => (r.id === 'live' ? openLiveMenu() : navigate(r.id)) })),
-      { group: '화면', label: '검색', hint: '라이브·채널·다시보기', run: () => navigate('search') },
+      // 화면 목록(ROUTES)에 이미 '검색'이 있다 — 따로 더하면 팔레트에 두 번 떴다. 검색만 설명을 붙인다.
+      ...ROUTES.map((r) => ({ group: '화면', label: r.title, hint: r.id === 'search' ? '라이브·채널·다시보기' : '이동', run: () => (r.id === 'live' ? openLiveMenu() : navigate(r.id)) })),
       { group: '보관함', label: '보관함 개요', hint: '한눈에', run: () => navigate('library', { tab: 'overview' }) },
       { group: '보관함', label: '인기 클립', hint: '보관함', run: () => navigate('library', { tab: 'clips' }) },
       { group: '보관함', label: '이어 보기', hint: '다시보기', run: () => navigate('library', { tab: 'continue' }) },
