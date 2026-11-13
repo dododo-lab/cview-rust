@@ -158,7 +158,7 @@ export class MultiLivePage {
               <button class="ml-menu-item danger" role="menuitem" data-ml="stop-all"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>모두 닫기</button>
             </div>
           </div>
-          <button class="btn primary ml-add" data-ml="add" title="채널 추가" aria-label="채널 추가">${ICON_PLUS}<span class="ml-add-label"><span class="ml-add-long">채널 </span>추가</span><span class="ml-add-full" aria-hidden="true" hidden></span></button>
+          <button class="btn primary ml-add ch-add" data-ml="add" title="채널 추가" aria-label="채널 추가">${ICON_PLUS}<span class="ml-add-label"><span class="ml-add-long">채널 </span>추가</span><span class="ml-add-full" aria-hidden="true" hidden></span></button>
         </div>
       </header>
       <div class="page-body ml-body">
@@ -167,10 +167,10 @@ export class MultiLivePage {
           <div class="empty lg boxed ml-empty">
             <strong>여러 방송을 한 화면에서 보세요</strong>
             <span class="ml-empty-text">채널을 추가하면 최대 4개까지 나란히 재생합니다. 패인을 누르면 소리와 채팅이 그 방송으로 바뀝니다.</span>
-            <button class="btn primary lg" data-ml="add">${ICON_PLUS}<span>채널 추가</span></button>
+            <button class="btn primary lg ch-add" data-ml="add">${ICON_PLUS}<span>채널 추가</span></button>
             <button class="btn lg ml-restore" data-ml="restore" hidden>지난 구성 다시 열기</button>
           </div>
-          <button class="ml-focus-add" data-ml="add" hidden title="채널 추가" aria-label="채널 추가">${ICON_PLUS}<span>채널 추가</span></button>
+          <button class="ml-focus-add ch-add" data-ml="add" hidden title="채널 추가" aria-label="채널 추가">${ICON_PLUS}<span>채널 추가</span></button>
           <section class="ml-focus-info" aria-label="메인 채널 정보" hidden></section>
         </div>
         <section class="ml-watch-info" aria-label="채널 정보" hidden></section>
