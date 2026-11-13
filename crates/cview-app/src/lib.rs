@@ -398,6 +398,7 @@ pub fn run() {
             commands::media::vod_watch_later_set,
             commands::media::vod_watch_later_list,
             commands::content::channel_detail,
+            commands::content::channel_overview,
             commands::content::following_channels_all,
             commands::content::following_vods,
             commands::content::channel_vods,

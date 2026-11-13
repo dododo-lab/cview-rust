@@ -8,6 +8,7 @@ import { verifiedBadge } from './verified-badge.js';
 import { refreshVeiled } from './refresh-veil.js';
 import { syncTabs, bindTabKeys } from './a11y.js';
 import { bindLiveMotion, countUpIn, tabSwap, watchPulse, unwatchPulse } from './live-motion.js';
+import { infoTabHtml, fillOverview } from './channel-info.js';
 
 const ICON_STAR = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></svg>';
 const ICON_STAR_LINE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9L12 3Z"/></svg>';
@@ -86,6 +87,8 @@ export class ChannelPage {
     this.channelId = null;
     this.tab = 'info';
     this.detail = null;
+    this.overview = undefined; // 정보 탭 묶음(channel_overview) — undefined 받는 중, null 실패
+    this.overviewSeq = 0;
     this.seq = 0;
     this.pages = { vod: 0, clip: 0 };
     this.clipCursor = null; // 클립 다음 쪽 커서(앞 응답의 nextCursor)
@@ -109,6 +112,7 @@ export class ChannelPage {
       const detail = await api.channelDetail(this.channelId);
       if (seq !== this.seq) return;
       this.detail = detail;
+      this.overview = undefined; // 채널이 바뀌거나 새로 고치면 정보 탭 묶음도 다시 받는다
       this.render();
     } catch (e) {
       if (seq !== this.seq) return;
@@ -168,16 +172,8 @@ export class ChannelPage {
     if (!box) return;
     const d = this.detail;
     if (this.tab === 'info') {
-      const desc = d.channel.channelDescription;
-      box.innerHTML = `
-        <section class="settings-group channel-info">
-          <h2>채널 소개</h2>
-          <p class="channel-desc">${desc ? esc(desc) : '소개가 없습니다'}</p>
-        </section>
-        <section class="settings-group channel-info">
-          <h2>내 메모</h2>
-          <p class="channel-desc">${d.memo ? esc(d.memo) : '메모가 없습니다 — 오른쪽 위 메모 버튼으로 남길 수 있어요'}</p>
-        </section>`;
+      box.innerHTML = infoTabHtml(d, this.overview);
+      if (this.overview === undefined) this.loadOverview();
       return;
     }
     const kind = this.tab;
@@ -213,7 +209,30 @@ export class ChannelPage {
     }
   }
 
+  /** 정보 탭 묶음 — 마지막 방송·최근 다시보기·인기 클립·내 시청 기록·팔로우. 오면 카드 속만 채운다. */
+  async loadOverview() {
+    const seq = ++this.overviewSeq;
+    const id = this.channelId;
+    let ov;
+    try { ov = await api.channelOverview(id); } catch { ov = null; }
+    if (seq !== this.overviewSeq || id !== this.channelId) return;
+    this.overview = ov;
+    const box = this.body.querySelector('.channel-tab-body');
+    if (this.tab === 'info' && box && this.detail) fillOverview(box, this.detail, ov);
+  }
+
   async onClick(e) {
+    const ext = e.target.closest('a[data-ext]');
+    if (ext) {
+      e.preventDefault();
+      api.openExternal(ext.href).catch((er) => toast(er.message));
+      return;
+    }
+    const goto = e.target.closest('[data-ch-goto]');
+    if (goto) {
+      this.body.querySelector(`.channel-tabs [data-tab="${goto.dataset.chGoto}"]`)?.click();
+      return;
+    }
     const tab = e.target.closest('[data-tab]');
     if (tab) {
       const order = ['info', 'vod', 'clip'];
@@ -257,6 +276,13 @@ export class ChannelPage {
         break;
       }
       case 'memo': this.editMemo(); break;
+      case 'overview-retry': {
+        this.overview = undefined;
+        const box = this.body.querySelector('.channel-tab-body');
+        if (this.tab === 'info' && box) fillOverview(box, this.detail, undefined);
+        this.loadOverview();
+        break;
+      }
       case 'notify': this.editNotify(action); break;
       case 'more':
         // 받는 동안 두 번 눌러 쪽이 건너뛰거나 순서가 섞이지 않게

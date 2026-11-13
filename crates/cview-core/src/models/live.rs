@@ -69,6 +69,24 @@ pub struct LiveInfo {
     pub tv_app_viewing_policy_type: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub channel: Option<ChannelInfo>,
+    /// 채팅을 열어 두었나(`chatActive`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chat_active: Option<bool>,
+    /// 채팅 가능 대상(`chatAvailableGroup` — `ALL` · `FOLLOWER` · `MANAGER` · `SUBSCRIBER`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chat_available_group: Option<String>,
+    /// 채팅 조건(`chatAvailableCondition` — `NONE` · `REAL_NAME` …).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chat_available_condition: Option<String>,
+    /// 팔로워 채팅일 때 팔로우 후 기다려야 하는 분(`minFollowerMinute`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub min_follower_minute: Option<i64>,
+    /// 국내에서만 볼 수 있는 방송(`krOnlyViewing`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub kr_only_viewing: bool,
+    /// 시청자가 클립을 만들 수 있나(`clipActive`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clip_active: Option<bool>,
     /// [WatchCount 2026-07-17] 서버 지정 워치 하트비트 주기(ms) — `livePollingStatusJson` 의
     /// `callPeriodMilliSecond`. 파생 전용이라 인코딩하지 않는다.
     #[serde(skip)]
@@ -102,6 +120,12 @@ impl LiveInfo {
             watch_party_type: None,
             tv_app_viewing_policy_type: None,
             channel: None,
+            chat_active: None,
+            chat_available_group: None,
+            chat_available_condition: None,
+            min_follower_minute: None,
+            kr_only_viewing: false,
+            clip_active: None,
             watch_polling_interval_ms: None,
         }
     }
@@ -202,6 +226,16 @@ impl<'de> Deserialize<'de> for LiveInfo {
             watch_party_type: o.get("watchPartyType"),
             tv_app_viewing_policy_type: o.get("tvAppViewingPolicyType"),
             channel: o.get("channel"),
+            chat_active: o.get("chatActive"),
+            chat_available_group: o
+                .get::<String>("chatAvailableGroup")
+                .filter(|s| !s.trim().is_empty()),
+            chat_available_condition: o
+                .get::<String>("chatAvailableCondition")
+                .filter(|s| !s.trim().is_empty()),
+            min_follower_minute: o.get("minFollowerMinute"),
+            kr_only_viewing: o.get("krOnlyViewing").unwrap_or(false),
+            clip_active: o.get("clipActive"),
             watch_polling_interval_ms: Self::decode_call_period_ms(&o),
         })
     }

@@ -359,3 +359,56 @@ fn verified_badge_follows_mark_type() {
     }));
     assert_eq!(LiveCardDto::from_live_info(&plain).unwrap().badge, None);
 }
+
+#[test]
+fn live_detail_dto_carries_chat_policy_flags_and_qualities() {
+    let playback = json!({
+        "media": [
+            { "mediaId": "HLS", "path": "https://x/hls.m3u8", "encodingTrack": [
+                { "encodingTrackId": "720p", "videoHeight": 720, "videoFrameRate": "60.0" },
+                { "encodingTrackId": "480p", "videoHeight": 480, "videoFrameRate": "30.0" },
+                { "encodingTrackId": "1080p", "videoHeight": 1080, "videoFrameRate": "60.0" },
+                { "encodingTrackId": "alow.stream" }
+            ]},
+            { "mediaId": "LLHLS", "path": "https://x/ll.m3u8", "encodingTrack": [
+                { "encodingTrackId": "720p", "videoHeight": 720, "videoFrameRate": "60.0" }
+            ]}
+        ]
+    });
+    let info = live_info(json!({
+        "liveId": 1, "liveTitle": "t", "status": "OPEN", "categoryType": "GAME",
+        "chatActive": true, "chatAvailableGroup": "FOLLOWER", "chatAvailableCondition": "REAL_NAME",
+        "minFollowerMinute": 10, "krOnlyViewing": true, "clipActive": false, "timeMachineActive": true,
+        "livePlaybackJson": playback.to_string()
+    }));
+    let dto = LiveDetailDto::from_live_info(&info, "c");
+    assert_eq!(dto.category_type.as_deref(), Some("GAME"));
+    assert_eq!(dto.chat_active, Some(true));
+    assert_eq!(dto.chat_available_group.as_deref(), Some("FOLLOWER"));
+    assert_eq!(dto.chat_available_condition.as_deref(), Some("REAL_NAME"));
+    assert_eq!(dto.min_follower_minute, Some(10));
+    assert!(dto.kr_only_viewing);
+    assert_eq!(dto.clip_active, Some(false));
+    assert!(dto.time_machine_active);
+    assert_eq!(dto.qualities, vec!["1080p60", "720p60", "480p"]);
+}
+
+#[test]
+fn quality_labels_tolerate_missing_or_bad_json() {
+    assert!(quality_labels(None).is_empty());
+    assert!(quality_labels(Some("")).is_empty());
+    assert!(quality_labels(Some("{not json")).is_empty());
+}
+
+#[test]
+fn live_detail_dto_policy_fields_default_to_unknown() {
+    let dto = LiveDetailDto::from_live_info(
+        &live_info(json!({ "liveId": 2, "chatAvailableGroup": " " })),
+        "c",
+    );
+    assert_eq!(dto.chat_active, None);
+    assert_eq!(dto.chat_available_group, None);
+    assert_eq!(dto.min_follower_minute, None);
+    assert!(!dto.kr_only_viewing);
+    assert!(dto.qualities.is_empty());
+}

@@ -221,6 +221,7 @@ impl ChzzkApiClient {
             page,
             size,
             cursor: None,
+            popular: false,
         })
         .await
     }
@@ -237,6 +238,23 @@ impl ChzzkApiClient {
             page: 0,
             size,
             cursor: cursor.map(str::to_string),
+            popular: false,
+        })
+        .await
+    }
+
+    /// 채널 인기 클립(조회수 순) 첫 쪽 — 채널 정보 탭 미리보기.
+    pub async fn clip_list_popular(
+        &self,
+        channel_id: &str,
+        size: i64,
+    ) -> Result<ClipListPage, ApiError> {
+        self.request(&ChzzkEndpoint::ClipList {
+            channel_id: channel_id.into(),
+            page: 0,
+            size,
+            cursor: None,
+            popular: true,
         })
         .await
     }

@@ -64,7 +64,13 @@ export function mockTauri([origin, theme]) {
     search_videos: () => ({ items: vods, hasMore: true }),
     app_info: () => ({ version: '0.1.0', build: 1, os: 'macos', arch: 'aarch64' }),
     multilive_state: () => ({ sessions: [], layout: 'grid' }),
-    channel_detail: () => ({ channel: { ...ch(1), followerCount: 12000 }, live: null, isFavorite: false }),
+    channel_detail: () => ({ channel: { ...ch(1), followerCount: 12000, channelDescription: '매일 저녁 방송합니다.\nhttps://example.com/schedule' }, live: null, isFavorite: false }),
+    channel_overview: () => ({
+      lastLive: { liveTitle: titles[0], categoryName: cats[0], categoryType: 'GAME', tags: ['소통', '게임'], openDate: ago(1800), closeDate: ago(1500), accumulateCount: 4210, adult: false },
+      recentVods: vods.slice(0, 4), vodTotal: 37, popularClips: clips.slice(0, 6),
+      watch: { totalSeconds: 54000, last30Seconds: 7200, sessionCount: 12, firstWatchedAt: ago(200 * 1440), lastWatchedAt: ago(1440), topCategory: cats[0] },
+      follow: { following: true, followDate: ago(400 * 1440) },
+    }),
     channel_vods: () => ({ data: vods, totalPages: 1 }),
     channel_clips: () => ({ data: clips, next: null }),
   };
