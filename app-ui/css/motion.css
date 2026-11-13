@@ -187,10 +187,11 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 }
 :is(.nav-item, .side-live, .queue-item, .recent-item, .ml-addrow-open, .palette-item, .quality-item, .ml-menu-item, .design-item,
     .dense-row, .channel-row, .bookmark-row, .side-widget, .ac-item):active:not(:disabled) { scale: .985; transition-duration: var(--dur-1); }
-/* .btn 전환은 아래 "버튼 모션"이 맡는다 */
-.btn:active:not(:disabled) { transform: scale(.965); transition-duration: var(--dur-1); }
-.btn.primary:hover:not(:disabled) { box-shadow: 0 8px 22px var(--primary-glow); }
-.btn.primary:active:not(:disabled) { box-shadow: 0 3px 10px var(--primary-glow); filter: brightness(.97); }
+/* .btn 전환은 아래 "버튼 모션"이 맡는다. 채널 추가(.ch-add)는 글로우·누름을 끝의 "채널 추가 단추" 규칙이 따로 정한다
+   — :where() 로 빼서 다른 .btn 의 우선순위는 그대로다. */
+.btn:active:not(:disabled):where(:not(.ch-add)) { transform: scale(.965); transition-duration: var(--dur-1); }
+.btn.primary:hover:not(:disabled):where(:not(.ch-add)) { box-shadow: 0 8px 22px var(--primary-glow); }
+.btn.primary:active:not(:disabled):where(:not(.ch-add)) { box-shadow: 0 3px 10px var(--primary-glow); filter: brightness(.97); }
 
 /* ── 카드 — 올라오는 속도는 감속, 그림자는 같이 번진다 ── */
 .card { transition: transform var(--dur-3) var(--ease-out); }
@@ -630,9 +631,10 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
   transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), .3s, var(--dur-3);
   transition-timing-function: var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-spring), var(--ease-out);
 }
-.btn:hover:not(:disabled):not(:active) { translate: 0 -1px; }
-.btn:not(.ghost):hover:not(:disabled):not(:active) { box-shadow: var(--shadow-sm), 0 6px 16px -10px rgba(0, 0, 0, .35); }
-.btn.primary:hover:not(:disabled):not(:active) { box-shadow: 0 8px 22px var(--primary-glow); }
+/* 채널 추가(.ch-add)는 떠오름·번짐 없이 단추 안쪽 빛으로 — 끝의 "채널 추가 단추" */
+.btn:hover:not(:disabled):not(:active):where(:not(.ch-add)) { translate: 0 -1px; }
+.btn:not(.ghost):hover:not(:disabled):not(:active):where(:not(.ch-add)) { box-shadow: var(--shadow-sm), 0 6px 16px -10px rgba(0, 0, 0, .35); }
+.btn.primary:hover:not(:disabled):not(:active):where(:not(.ch-add)) { box-shadow: 0 8px 22px var(--primary-glow); }
 :is(.icon-btn, .ml-tb-icon, .chat-hbtn, .ml-pane-btn, .ml-pane-close, .ml-watch-btn, .ip-toggle, .mwi-btn, .side-quick-btn, .back-btn) svg {
   transition: scale .32s var(--ease-spring), rotate .32s var(--ease-spring);
 }
@@ -928,3 +930,172 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
 :root[data-motion="reduced"] .channel-hero-bg { transform: scale(1.4) !important; }
 :root[data-motion="reduced"] .thumb.mo-tilting { transform: none !important; }
 :root[data-motion="reduced"] .mo-glare { display: none; }
+
+/* ══ 채널 추가 단추(.ch-add) — 빛을 받는 키 (2026-11-14) ═══════════════════════════════
+   대상: 멀티라이브 머리줄 .ml-add(라이브 단독 보기 포함)·빈 화면 큰 단추·멀티채팅 "+ 채널"·"+ 채널 추가"(.btn.primary.ch-add),
+         포커스 배치 서브 줄 끝 칸(.ml-focus-add.ch-add). 다른 .btn.primary 는 그대로다.
+   예전 호버는 단추 뒤로 브랜드색이 22px 번졌다 — 위 "버튼 모션"의 .btn.primary 글로우가 .ml-add 의 고리를 같은 우선순위로 덮었다
+   (사용자 요청 2026-11-14: 번짐 대신 요즘 방식의 호버). 이제 단추 밖에는 아무것도 그리지 않고 빛이 단추 "안"에 맺힌다:
+   - 쉼: 브랜드색 면 + 위 모서리 1px 빛 + 아래 1px 턱(키 옆면) + 단추 아래 3px 안에서 끝나는 접촉 그림자 — 머리줄의 "눌리는 단추"
+     (2026-11-12)를 모든 채널 추가 단추로 넓혔다. 빈 화면·멀티채팅 단추의 0 6px 18px 쉼 글로우도 이것으로 바뀐다.
+   - 호버·키보드 초점: 면 위쪽이 밝아지고 테두리 바로 안쪽 1px 에 빛이 맺힌다(::before 한 겹을 opacity 로). 턱은 2px 로.
+     잠깐 머물면 대각선 광택이 한 번 지나간다(::after transform 전환). 90ms 지연 — 커서가 머리줄을 스쳐 지나가면 시작 전에 빠져 지나가지 않고,
+     도중에 떠나면 띠가 멈춘 채 옅어진다. .18s 안에 다시 들어오면 띠가 멈춘 자리에서 서서히 밝아지며 이어 가고(이미 다 지나간 뒤였다면
+     다시 지나가지 않는다), 그 뒤에 들어오거나 같은 단추로 서랍을 닫아 열림이 풀리면 처음부터 한 번 더 지나간다. 서랍이 열리는 순간
+     띠는 바로 꺼진다(어두운 열린 칩 위에 흰 띠가 남지 않게). 터치로 탭하면 :hover 가 남아 빛이 켜진 채로 있고, 다시 탭해 닫을 때
+     광택이 한 번 지나간다 — 모션 줄이기에서는 없다.
+     단추는 제자리다(떠오름 없음). 예전의 1px 떠오름은 main 과 같은 느낌이라 빼고, 빛과 턱으로 "올라온 키" 를 보인다.
+   - 누름: 바로 가라앉아(.96·턱 없음·안쪽 그림자) 손을 떼면 --ease-spring 으로 돌아온다.
+   - 열림(aria-expanded — 추가 서랍이 열림, 누르면 닫힘): 눌려 잠긴 옅은 브랜드색 칩, + 가 × 로 돈다. 광택 없음.
+   - 가득 참(aria-disabled): 점선·흐린 글자, 호버·누름에 아무 변화 없음.
+   움직이는 것은 가상 요소의 opacity·transform 과 눌림 scale·× rotate 뿐(합성 단계). 그림자·색은 상태가 바뀔 때 한 번 다시 칠할 뿐
+   전환 목록에 없다. 크기·여백·위치가 그대로라 레이아웃을 부르지 않는다. JS 없음.
+   모양은 --ch-* 값으로 받는다 — 열림·가득 참·누름은 값만 바꾸고 칠하는 규칙은 하나다.
+   특이도: 글자 단추는 .btn.primary.ch-add(0,3,0)와 상태(0,4,0 이상)라 app.css 의 .btn:hover·.btn.primary·.btn.primary:hover·.btn:active 를
+   파일 순서와 상관없이 이긴다. 더 센 motion.css "버튼 모션"의 호버·누름 규칙(0,5,0)은 거기서 :where(:not(.ch-add)) 로 뺐다. */
+.ch-add {
+  /* 빛 — 면 색과 상관없는 흰빛이라 흰색(예전 .ml-add 하이라이트 rgba(255,255,255,.3)과 같은 방식) */
+  --ch-hi: rgba(255, 255, 255, .34);     /* 위 모서리 1px */
+  --ch-lit: rgba(255, 255, 255, .26);    /* 호버 윗빛 */
+  --ch-rim: rgba(255, 255, 255, .55);    /* 호버 — 테두리 바로 안쪽 1px 빛 */
+  --ch-sheen: rgba(255, 255, 255, .42);  /* 지나가는 광택 */
+  /* 테두리·턱·그림자 — 브랜드색과 그 위 글자색(--on-primary)을 섞어 다크·라이트를 따라간다 */
+  --ch-edge: color-mix(in srgb, var(--primary) 70%, var(--on-primary));
+  --ch-lip: color-mix(in srgb, var(--primary) 52%, var(--on-primary));
+  --ch-drop: color-mix(in srgb, var(--on-primary) 32%, transparent);
+  --ch-press: color-mix(in srgb, var(--primary) 88%, var(--on-primary));
+  /* 열림 칩 — 글자를 본문색 쪽으로 섞어 라이트 대비를 5:1 넘게. --primary-text 만이면 4.6 경계이고, 열림+호버의 윗물들임이나
+     멀티채팅 빈 화면에서 서랍 그림자가 겹치면 4.4 까지 내려갔다(85% 섞음도 4.42). 70% 면 그 장면에서도 5.4 이상 */
+  --ch-open-fg: color-mix(in srgb, var(--primary-text) 70%, var(--text-primary));
+  --ch-open-edge: color-mix(in srgb, var(--primary) 45%, transparent);
+  --ch-open-edge-hi: color-mix(in srgb, var(--primary) 70%, transparent);
+  --ch-tile-edge: color-mix(in srgb, var(--primary) 55%, transparent);   /* 끝 칸 호버 테두리 */
+}
+/* color-mix 이전 엔진(Safari 16.0·16.1 — 최소 사양 macOS 13.0 의 WKWebView) — var() 를 품은 color-mix 는 계산 시점에 무효가 되어
+   currentColor(글자색)로 떨어진다. 그래서 섞은 값은 모두 위 변수로만 쓰고 여기서 반투명 검정·기존 토큰으로 바꾼다.
+   열림 글자는 브랜드색(--primary-text)이면 라이트 열림+호버에서 4.3~4.4 라 본문색으로. */
+@supports not (color: color-mix(in srgb, red 50%, blue)) {
+  .ch-add {
+    --ch-edge: rgba(0, 0, 0, .2); --ch-lip: rgba(0, 0, 0, .38); --ch-drop: rgba(0, 0, 0, .24); --ch-press: var(--primary);
+    --ch-open-fg: var(--text-primary); --ch-open-edge: var(--primary-ring); --ch-open-edge-hi: var(--primary); --ch-tile-edge: var(--primary-ring);
+  }
+}
+
+/* ── 글자 단추(.btn.primary.ch-add) ── */
+.btn.primary.ch-add {
+  --ch-bg: var(--primary); --ch-fg: var(--on-primary); --ch-border: var(--ch-edge);
+  --ch-shadow: inset 0 1px 0 var(--ch-hi), 0 1px 0 var(--ch-lip), 0 1px 2px var(--ch-drop);
+  --ch-lit-end: 60%;
+  position: relative; isolation: isolate; overflow: hidden;   /* 빛·광택을 둥근 모서리 안에 가둔다 — 바깥 턱·초점 테두리는 잘리지 않는다 */
+  background: var(--ch-bg); color: var(--ch-fg); border: 1px solid var(--ch-border); box-shadow: var(--ch-shadow); filter: none;
+  transition: scale .34s var(--ease-spring);
+}
+/* app.css .btn.primary:hover 의 밝기 필터·.btn:active 의 scale(.98) — 면은 브랜드색 그대로, 눌림은 아래 scale 하나로 */
+.btn.primary.ch-add:is(:hover, :focus-visible, :active) { filter: none; transform: none; }
+.btn.primary.ch-add::before, .btn.primary.ch-add::after { content: ""; position: absolute; z-index: -1; pointer-events: none; }   /* 면 위·글자 아래 */
+.btn.primary.ch-add::before {   /* 윗빛 + 테두리 안쪽 빛 — 한 겹이라 opacity 하나로 들고 난다 */
+  inset: 0; border-radius: inherit;
+  background: linear-gradient(to bottom, var(--ch-lit), transparent var(--ch-lit-end));
+  box-shadow: inset 0 0 0 1px var(--ch-rim);
+  opacity: 0; transition: opacity var(--dur-2) var(--ease-out);
+}
+/* 광택 띠 — 쉴 때는 단추 왼쪽 바깥(잘려 안 보임)에 있다. 키프레임이 아니라 전환이다: 지나가는 도중 커서가 떠나면 띠가 그 자리에
+   멈춘 채 윗빛과 같은 .18s 에 옅어지고, 다 꺼진 뒤(지연 .18s) 안 보이게 제자리로 돌아간다(키프레임이면 한 프레임에 뚝 사라졌다). */
+.btn.primary.ch-add::after {
+  top: 0; bottom: 0; left: 0; width: 55%;
+  background: linear-gradient(105deg, transparent 20%, var(--ch-sheen) 50%, transparent 80%);
+  transform: translateX(-102%); opacity: 0;
+  transition: opacity var(--dur-2) var(--ease-out), transform 0s linear var(--dur-2);
+}
+.btn.primary.ch-add svg { transition: rotate .34s var(--ease-spring); }
+
+/* 호버·키보드 초점 — 같은 "켜진" 모양. 초점에는 2px 띄운 진한 테두리를 더한다(라이트에서도 3:1 넘는 --primary-text) */
+.btn.primary.ch-add:is(:hover, :focus-visible):not([aria-disabled="true"], [aria-expanded="true"]) {
+  --ch-shadow: inset 0 1px 0 var(--ch-hi), 0 2px 0 var(--ch-lip), 0 2px 2px -1px var(--ch-drop);
+}
+.btn.primary.ch-add:is(:hover, :focus-visible):not([aria-disabled="true"])::before { opacity: 1; }
+/* 90ms 지연 — 커서가 머리줄을 스쳐 지나가면(90ms 미만) 시작 전에 규칙이 빠져 지나가지 않는다. 띠의 opacity 도 같은 90ms 뒤
+   .18s 에 걸쳐 켠다: 처음에는 띠가 아직 왼쪽 밖이라 차이가 없고, 옅어지던 띠에 다시 들어오면 한 프레임에 튀지 않고 서서히 밝아진다. */
+.btn.primary.ch-add:is(:hover, :focus-visible):not([aria-disabled="true"], [aria-expanded="true"])::after {
+  opacity: 1; transform: translateX(190%);
+  transition: transform .65s var(--ease-in-out) 90ms, opacity var(--dur-2) linear 90ms;
+}
+.btn.primary.ch-add[aria-expanded="true"]::after { transition: none; }   /* 광택 도중 눌러 열면 띠를 바로 끈다 */
+.btn.primary.ch-add:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 2px; }
+
+/* 누름 — 들어갈 때는 짧게, 나올 때는 위 기본 전환(스프링). 열린 칩은 칩 모양 그대로 눌리기만 한다 */
+.btn.primary.ch-add:active:not([aria-disabled="true"]) { scale: .96; transition-duration: var(--dur-1); transition-timing-function: var(--ease-out); }
+.btn.primary.ch-add:active:not([aria-disabled="true"], [aria-expanded="true"]) { --ch-bg: var(--ch-press); --ch-shadow: inset 0 1px 2px var(--ch-drop); }
+
+/* 열림 — 서랍이 열려 있는 동안 눌려 잠긴 키. 호버하면 테두리가 진해지고 위쪽이 한 겹 더 물든다(45% 에서 다 옅어진다 —
+   글자 윗부분에 살짝 닿으므로 글자색 --ch-open-fg 를 그만큼 진하게 잡았다) */
+.btn.primary.ch-add[aria-expanded="true"] {
+  --ch-bg: var(--primary-dim); --ch-fg: var(--ch-open-fg); --ch-border: var(--ch-open-edge); --ch-shadow: inset 0 1px 2px var(--ch-drop);
+  --ch-lit: var(--primary-dim); --ch-lit-end: 45%; --ch-rim: transparent;
+}
+.btn.primary.ch-add[aria-expanded="true"]:not([aria-disabled="true"]):is(:hover, :focus-visible) { --ch-border: var(--ch-open-edge-hi); }
+.btn.primary.ch-add[aria-expanded="true"] svg { rotate: 45deg; }
+
+/* 가득 참 — 탭 순서에 남지만(누르면 안내) 호버·누름에 반응하지 않는다. 서랍이 열려 있으면 × 로 닫을 수 있다.
+   opacity 1 — 점선·흐린 글자가 이미 "못 누름" 이라, 빈 화면 단추에 multilive.css 의 .ml-empty .btn[aria-disabled] opacity .55 가
+   겹치면 글자 대비가 2.2~2.7 까지 떨어졌다(이제 머리줄과 같은 수준 — 다크 약 6.2, 라이트 약 5.4). */
+.btn.primary.ch-add[aria-disabled="true"] {
+  --ch-bg: transparent; --ch-fg: var(--text-tertiary); --ch-border: var(--border); --ch-shadow: none;
+  border-style: dashed; cursor: not-allowed; translate: none; scale: none; transform: none; opacity: 1;
+}
+.btn.primary.ch-add[aria-disabled="true"]::before, .btn.primary.ch-add[aria-disabled="true"]::after { content: none; }
+.btn.primary.ch-add[aria-disabled="true"][aria-expanded="true"] { --ch-fg: var(--text-secondary); cursor: pointer; }
+
+/* ── 포커스 서브 줄 끝 칸(.ml-focus-add.ch-add) — 넓은 점선 칸은 옅게 물들고, 가운데 + 가 같은 빛을 받는 작은 키가 된다.
+   키의 빛·테두리 빛은 배경 그림으로 그린다 — svg 의 box-shadow 를 바꾸면 Chromium 이 넘침 영역을 다시 재느라 레이아웃이 돈다. ── */
+.ml-focus-add.ch-add {
+  position: relative; isolation: isolate;
+  transition: color var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);
+}
+.ml-focus-add.ch-add::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--primary-dim); opacity: 0; transition: opacity var(--dur-2) var(--ease-out); }
+.ml-focus-add.ch-add svg {
+  transition: background-color var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out), rotate .34s var(--ease-spring), scale .34s var(--ease-spring);
+}
+.ml-focus-add.ch-add:is(:hover, :focus-visible):not([aria-disabled="true"])::before { opacity: 1; }
+/* 글자는 --primary-text 대신 본문색 — 라이트 물든 칸 위 --primary-text 는 4.4 였다. 브랜드색은 + 키와 테두리가 맡는다 */
+.ml-focus-add.ch-add:is(:hover, :focus-visible):not([aria-disabled="true"], [aria-expanded="true"]) { color: var(--text-primary); border-color: var(--ch-tile-edge); }
+.ml-focus-add.ch-add:is(:hover, :focus-visible):not([aria-disabled="true"], [aria-expanded="true"]) svg {
+  background: radial-gradient(closest-side, transparent calc(100% - 1.5px), var(--ch-rim) calc(100% - 1px)), linear-gradient(to bottom, var(--ch-lit), transparent 60%), var(--primary);
+  color: var(--on-primary);
+}
+.ml-focus-add.ch-add:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 2px; box-shadow: none; }
+.ml-focus-add.ch-add:active { scale: none; }   /* 넓은 칸은 그대로 — 키만 눌린다 */
+.ml-focus-add.ch-add:active:not([aria-disabled="true"]) svg { scale: .9; transition-duration: var(--dur-1); transition-timing-function: var(--ease-out); }
+.ml-focus-add.ch-add:active:not([aria-disabled="true"], [aria-expanded="true"]) svg { background: var(--ch-press); color: var(--on-primary); }
+/* 열림 — 머리줄 단추와 같이 이 칸도 "누르면 닫힘" 이다. 실선 테두리 + 잠긴 키(×). 큰 칸이라 물들이는 것은 호버 때만 */
+.ml-focus-add.ch-add[aria-expanded="true"]:not([aria-disabled="true"]) { color: var(--ch-open-fg); border-style: solid; border-color: var(--ch-open-edge); }
+.ml-focus-add.ch-add[aria-expanded="true"]:not([aria-disabled="true"]):is(:hover, :focus-visible) { border-color: var(--ch-open-edge-hi); }
+.ml-focus-add.ch-add[aria-expanded="true"]:not([aria-disabled="true"]) svg { background: var(--primary-dim); color: var(--primary-text); }
+.ml-focus-add.ch-add[aria-expanded="true"] svg { rotate: 45deg; }
+.ml-focus-add.ch-add[aria-disabled="true"][aria-expanded="true"] { cursor: pointer; }
+
+/* ── 모션 줄이기(시스템·앱 설정 둘 다) — 눌림·광택·회전 동작을 없애고 색·빛 상태만 바로 바뀐다(떠오름은 처음부터 없다).
+   전역 규칙은 시간을 0.01ms 로 줄일 뿐이라 광택이 한 프레임 번쩍일 수 있어 따로 끈다. 안쪽 글자·아이콘도 끈다 — 기본
+   transition-property 가 all 이라 0.01ms 색 전환이 생기고, WebKit 은 안쪽 요소의 빈 ::before/::after 에도 만든다.
+   남는 정적 표시: 윗빛·테두리 안쪽 빛·2px 턱(호버·초점), 칩(열림). 열림의 × 는 상태라 남는다(돌지 않고 바로). ── */
+@media (prefers-reduced-motion: reduce) {
+  .ch-add, .ch-add::before, .ch-add::after, .ch-add *, .ch-add *::before, .ch-add *::after { transition: none !important; animation: none !important; }
+  .ch-add, .ch-add svg { scale: none !important; }
+  .btn.primary.ch-add::after { content: none; }
+}
+:root[data-motion="reduced"] .ch-add, :root[data-motion="reduced"] .ch-add::before, :root[data-motion="reduced"] .ch-add::after,
+:root[data-motion="reduced"] .ch-add *, :root[data-motion="reduced"] .ch-add *::before, :root[data-motion="reduced"] .ch-add *::after { transition: none !important; animation: none !important; }
+:root[data-motion="reduced"] .ch-add, :root[data-motion="reduced"] .ch-add svg { scale: none !important; }
+:root[data-motion="reduced"] .btn.primary.ch-add::after { content: none; }
+
+/* ── 고대비(Windows 고대비 테마 — WebView2 forced-colors) — 흰빛·광택은 시스템 색을 따르지 않으니 끄고,
+   호버·초점은 시스템 강조색 테두리로 남긴다(초점은 그 위에 outline). 끝 칸의 + 키는 svg 라 UA 기본(preserve-parent-color)으로는
+   브랜드색 면·흰빛 그림이 그대로 칠해진다 — 강제 색을 따르게 하고, 호버·초점 때 키를 시스템 강조색으로 채운다. ── */
+@media (forced-colors: active) {
+  .ch-add::before, .ch-add::after { display: none; }
+  .btn.primary.ch-add:not([aria-disabled="true"]):is(:hover, :focus-visible),
+  .ml-focus-add.ch-add:not([aria-disabled="true"]):is(:hover, :focus-visible) { border-color: Highlight; border-style: solid; }
+  /* 바탕·글자색 전환은 뺀다 — 보간 중간값은 시스템 색이 아니라 강제 색으로 칠해져, Highlight 바탕 위에 흰 + 가 .18s 남았다 */
+  .ml-focus-add.ch-add svg { forced-color-adjust: auto; transition: rotate .34s var(--ease-spring), scale .34s var(--ease-spring); }
+  .ml-focus-add.ch-add:not([aria-disabled="true"], [aria-expanded="true"]):is(:hover, :focus-visible) svg { background: Highlight; color: HighlightText; }
+}

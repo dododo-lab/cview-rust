@@ -49,9 +49,16 @@ export function mockTauri([origin, theme]) {
     heatmap: Array.from({ length: 7 }, (_, d) => Array.from({ length: 24 }, (_, h) => ((h + d) % 5) * 600)), series: cats.slice(0, 3), trend,
     lengths: [600, 1800, 3600, 7200, 14400, null].map((max, i) => ({ maxSeconds: max, count: i + 1, seconds: (i + 1) * 3000 })),
   });
+  // 플레이어 설정은 저장을 흉내 낸다(선명도 이전·설정 화면이 settings_update 로 쓴 값을 다음 settings_get 이 돌려준다).
+  const store = { player: {} };
+  window.__mockStore = store;
   const handlers = {
     auth_status: () => ({ loggedIn: true, state: 'loggedIn', nickname: '도도', profileImageUrl: img('avatar', 3) }),
-    settings_get: () => ({ multiLive: { maxConcurrentSessions: 4, maxLiveChannels: 5 }, multiChat: {}, player: {}, chat: {}, general: {}, appearance: { theme } }),
+    settings_get: () => ({ multiLive: { maxConcurrentSessions: 4, maxLiveChannels: 5 }, multiChat: {}, player: { ...store.player }, chat: {}, general: {}, appearance: { theme } }),
+    settings_update: ({ domain, patch }) => {
+      if (domain === 'player') store.player = { ...store.player, ...patch };
+      return handlers.settings_get();
+    },
     following_lives: () => lives.slice(0, 6), popular_lives: () => lives, popular_clips: () => clips, following_vods: () => vods,
     following_channels_all: () => channels, recent_channels: ({ limit } = {}) => channels.slice(0, limit || 8), favorites_list: () => channels.slice(0, 3),
     vod_continue_list: () => cont, vod_watch_later_list: () => cont.slice(0, 2),

@@ -8,7 +8,6 @@
 import { api, listen, listenHere, Events } from './api.js';
 import { playPreroll, cancelPreroll } from './ads.js';
 import { noteConnectorLimit } from './live-connector.js';
-import { setPicture, setSharpenDefault } from './picture.js';
 import { esc, safeUrl, toast, imageSrc, streamEndedArt, dismiss, hideWithExit } from './dom.js';
 import { PlayerBridge } from './player.js';
 import { ChatPanel } from './chat.js';
@@ -159,7 +158,7 @@ export class MultiLivePage {
               <button class="ml-menu-item danger" role="menuitem" data-ml="stop-all"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>모두 닫기</button>
             </div>
           </div>
-          <button class="btn primary ml-add" data-ml="add" title="채널 추가" aria-label="채널 추가">${ICON_PLUS}<span class="ml-add-label"><span class="ml-add-long">채널 </span>추가</span><span class="ml-add-full" aria-hidden="true" hidden></span></button>
+          <button class="btn primary ml-add ch-add" data-ml="add" title="채널 추가" aria-label="채널 추가">${ICON_PLUS}<span class="ml-add-label"><span class="ml-add-long">채널 </span>추가</span><span class="ml-add-full" aria-hidden="true" hidden></span></button>
         </div>
       </header>
       <div class="page-body ml-body">
@@ -168,10 +167,10 @@ export class MultiLivePage {
           <div class="empty lg boxed ml-empty">
             <strong>여러 방송을 한 화면에서 보세요</strong>
             <span class="ml-empty-text">채널을 추가하면 최대 4개까지 나란히 재생합니다. 패인을 누르면 소리와 채팅이 그 방송으로 바뀝니다.</span>
-            <button class="btn primary lg" data-ml="add">${ICON_PLUS}<span>채널 추가</span></button>
+            <button class="btn primary lg ch-add" data-ml="add">${ICON_PLUS}<span>채널 추가</span></button>
             <button class="btn lg ml-restore" data-ml="restore" hidden>지난 구성 다시 열기</button>
           </div>
-          <button class="ml-focus-add" data-ml="add" hidden title="채널 추가" aria-label="채널 추가">${ICON_PLUS}<span>채널 추가</span></button>
+          <button class="ml-focus-add ch-add" data-ml="add" hidden title="채널 추가" aria-label="채널 추가">${ICON_PLUS}<span>채널 추가</span></button>
           <section class="ml-focus-info" aria-label="메인 채널 정보" hidden></section>
         </div>
         <section class="ml-watch-info" aria-label="채널 정보" hidden></section>
@@ -483,7 +482,6 @@ export class MultiLivePage {
     pane = { el, bridge, sessionId: null };
     pane.controls = new PaneControls(pane, {
       makeAudible: () => this.makeAudible(pane),
-      applySharpenAll: (on) => this.applySharpenAll(on),
       flash: (text) => this.watch.flash(text),
     });
     this.panes.set(slot, pane);
@@ -595,7 +593,7 @@ export class MultiLivePage {
       // 그 속성을 보고 패인 클릭을 "라이브로 열기"로 바꿔 포커스 전환 대신 라이브 단독 보기로 넘어갔다.
       pane.el.dataset.perfChannel = s.channelId;
       pane.controls?.setChannel(s.channelId);
-      // 라이브 단독 보기의 무대 패인만 배속·화면 비율·자동 보정/업스케일·이퀄라이저를 쓴다(ml-pane-controls.js).
+      // 라이브 단독 보기의 무대 패인만 배속·화면 비율·자동 밝기·색 보정·이퀄라이저를 쓰고, 선명도의 확대(업스케일)를 허용한다.
       pane.controls?.setStage(this.watchSlot === s.slot);
       this.renderPane(pane, s, order.indexOf(s.id), s.id === state.selectedId);
     }
@@ -952,17 +950,6 @@ export class MultiLivePage {
     pane.zeroSince = now;
     toast(`${s.channelName || '패인'} 영상이 시작되지 않아 다시 연결합니다`, 2200);
     this.run(api.multiLiveRetry(s.id));
-  }
-
-  /** "모든 패인에 적용" — 지금 패인들의 선명한 화면을 같게 하고, 처음 보는 채널의 기본값도 그렇게 둔다. */
-  applySharpenAll(on) {
-    setSharpenDefault(on);
-    for (const pane of this.panes.values()) {
-      if (!pane.sessionId || !pane.controls?.channelId) continue;
-      setPicture(pane.controls.channelId, { sharpen: Boolean(on) });
-      pane.controls.applyPicture();
-    }
-    toast(on ? '모든 패인을 선명한 화면으로' : '모든 패인의 선명한 화면을 껐습니다', 1500);
   }
 
   /** 패인 볼륨을 올리면 그 패인 소리를 켠다(여러 소리 모드면 더하고, 아니면 선택). */

@@ -369,17 +369,30 @@ await check('채널 추가 단추: 넓으면 "채널 추가", 좁으면 "추가"
   await settle();
 });
 
-await check('채널 추가 단추: 올리면 떠오르고 초점은 호버와 다른 테두리', async () => {
+// 바깥으로 번지는 픽셀 자체는 channel-add-hover.mjs CH03 이 잰다. 여기서는 계산값으로 — 위치 그대로, filter 없음, 바깥 그림자 흐림 6px 이하.
+await check('채널 추가 단추: 올리면 제자리(위치·filter 그대로)에서 안쪽에 빛이 맺히고 바깥 그림자 흐림 6px 이하, 키보드 초점은 같은 켜짐 + 테두리', async () => {
   const add = page.locator('.ml-toolbar .ml-add');
-  const look = () => add.evaluate((b) => { const cs = getComputedStyle(b); return { translate: cs.translate, shadow: cs.boxShadow, outline: cs.outlineStyle }; });
+  const look = () => add.evaluate((b) => {
+    const cs = getComputedStyle(b);
+    // 바깥 그림자 중 가장 큰 흐림(px) — inset 은 단추 안이라 뺀다
+    const blur = Math.max(0, ...cs.boxShadow.split(/,(?![^(]*\))/).filter((s) => !/inset/.test(s))
+      .map((s) => parseFloat((s.replace(/rgba?\([^)]*\)|color\([^)]*\)/g, '').match(/-?[\d.]+px/g) || [])[2]) || 0));
+    const r = b.getBoundingClientRect();
+    return { translate: cs.translate, shadow: cs.boxShadow, outline: cs.outlineStyle, filter: cs.filter, blur, lit: getComputedStyle(b, '::before').opacity, x: r.x, y: r.y };
+  });
+  await page.evaluate(() => document.activeElement?.blur());   // 앞 검사가 남긴 초점이면 쉼 모양이 아니다(초점 = 호버와 같은 켜짐)
   await page.mouse.move(640, 600);
   await page.waitForTimeout(250);
   const rest = await look();
   await add.hover();
   await page.waitForTimeout(250);
   const hover = await look();
-  assert.notEqual(hover.shadow, rest.shadow, '호버 그림자가 바뀐다');
-  assert.notEqual(hover.translate, rest.translate, '호버하면 떠오른다');
+  assert.notEqual(hover.shadow, rest.shadow, '호버하면 턱·그림자가 바뀐다');
+  assert.equal(hover.translate, rest.translate, '단추는 제자리(떠오르지 않는다)');
+  assert.ok(Math.abs(hover.x - rest.x) < 0.25 && Math.abs(hover.y - rest.y) < 0.25, `위치 그대로: (${rest.x},${rest.y}) → (${hover.x},${hover.y})`);
+  assert.equal(hover.filter, 'none', '호버 filter 없음(drop-shadow·brightness 도 아님)');
+  assert.ok(hover.blur <= 6, `바깥 그림자 흐림 ${hover.blur}px`);
+  if (hover.lit !== '') assert.notEqual(hover.lit, rest.lit, '호버하면 안쪽 빛이 켜진다');   // WebKit 은 가상 요소 계산값이 빌 수 있다
   await page.mouse.move(640, 600);
   await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('Tab');
@@ -387,6 +400,7 @@ await check('채널 추가 단추: 올리면 떠오르고 초점은 호버와 �
   await page.waitForTimeout(250);
   const focus = await look();
   assert.equal(focus.outline, 'solid', '키보드 초점 테두리');
+  assert.equal(focus.lit, hover.lit, '키보드 초점도 호버와 같은 켜짐');
   if (shot) await page.screenshot({ path: path.join(shot, 'add-focus.png'), clip: { x: 0, y: 0, width: 1280, height: 70 } });
   await page.evaluate(() => document.activeElement.blur());
 });

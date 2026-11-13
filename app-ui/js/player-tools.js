@@ -1,7 +1,9 @@
 // 플레이어 도구 — 시청 화면 고급 패널(player-panel.js)과 라이브 단독 보기 패인 ⚙(ml-pane-controls.js)가 같이 쓴다.
 //
-// - 화면 비율 강제·자동 화질 보정·업스케일·픽셀 그대로 확대·이퀄라이저는 전역 플레이어 설정(`player`)에 저장하고,
+// - 화면 비율 강제·자동 밝기·색 보정·픽셀 그대로 확대·이퀄라이저는 전역 플레이어 설정(`player`)에 저장하고,
 //   새 재생(playStarted)·새 플레이어 문서(ready)·단독 보기에 들어올 때마다 `applyPlayerTools` 로 다시 건다.
+// - 업스케일은 선명한 화면과 함께 '선명도'(sharpness.js)로 합쳤다 — 여기서는 setPictureEnhancement 에 auto 만 보낸다
+//   (upscale 키를 보내면 플레이어가 예전 방식으로 돌아간다).
 // - 배속은 저장하지 않는다 — 라이브는 1배속이 기본이고, 새 재생·LIVE(따라잡기)마다 1배속으로 돌아간다.
 //   플레이어(player.html)는 사용자 배속이 1 이 아니면 지연 따라잡기(1.03배)를 걸지 않는다.
 import { api } from './api.js';
@@ -67,7 +69,7 @@ export function eqOnPatch(p, presets = []) {
  */
 export function applyPlayerTools(bridge, p) {
   if (!bridge || !p) return false;
-  bridge.call('setPictureEnhancement', { auto: Boolean(p.autoPictureEnhancement), upscale: Boolean(p.videoUpscaling) });
+  bridge.call('setPictureEnhancement', { auto: Boolean(p.autoPictureEnhancement) });
   bridge.call('setForcedAspectRatio', p.aspectRatio === 'fill');
   bridge.call('setSharpPixelScaling', Boolean(p.sharpPixelScaling));
   if (!eqWanted(p)) return false;
@@ -75,10 +77,10 @@ export function applyPlayerTools(bridge, p) {
   return true;
 }
 
-/** 건 도구를 기본으로 되돌린다(단독 보기에서 그리드로 돌아간 패인). `eq` 면 이퀄라이저도 평탄하게 끈다. */
+/** 건 도구를 기본으로 되돌린다(단독 보기에서 그리드로 돌아간 패인). `eq` 면 이퀄라이저도 평탄하게 끈다. 선명도는 그대로(그리드 규칙으로 다시 건다). */
 export function clearPlayerTools(bridge, { eq = false } = {}) {
   if (!bridge) return;
-  bridge.call('setPictureEnhancement', { auto: false, upscale: false });
+  bridge.call('setPictureEnhancement', { auto: false });
   bridge.call('setForcedAspectRatio', false);
   bridge.call('setSharpPixelScaling', false);
   if (eq) bridge.call('setEqualizerEnabled', false);

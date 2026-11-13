@@ -1,11 +1,14 @@
 // 플레이어 고급 패널(⚙) — 원본 PlayerAdvancedSettingsView / MLEqualizerTab / MLVideoTab.
 // PLY-04 재생 속도, PLY-05 고급 패널(재생·화면·이퀄라이저·도구 탭), PLY-06 이퀄라이저(프리셋·프리앰프·10밴드),
-// PLY-07 비디오 보정(밝기·대비·채도·색조·감마)·선명한 화면·자동 보정·업스케일, PLY-08 화면 비율 강제,
+// PLY-07 색 보정(밝기·대비·채도·색조·감마)·선명도(예전 선명한 화면 + 업스케일, sharpness.js)·자동 밝기·색 보정, PLY-08 화면 비율 강제,
 // PLY-10 녹화 시작·중지(MediaRecorder 조각 → Rust 파일). 값은 플레이어 설정에 저장하고 새 재생마다 다시 건다.
 import { api } from './api.js';
 import { esc, toast, hideWithExit } from './dom.js';
 import { kbd } from './platform.js';
-import { applyPicture, pictureFor, setPicture } from './picture.js';
+import {
+  SHARPNESS_LEVELS, SHARPNESS_HELP, ENLARGED_ONLY_LABEL, ENLARGED_ONLY_HELP,
+  sharpnessState, sharpnessReady, sharpnessArgs, setSharpness, sharpnessNote,
+} from './sharpness.js';
 import { RATES, RATE_NOTE, EQ_SUPPORTED, EQ_FREQS, freqLabel, loadEqPresets, loadPlayerSettings, savePlayerSettings, applyPlayerTools, eqOnPatch } from './player-tools.js';
 
 // 다른 모듈·검사가 예전처럼 여기서 가져갈 수 있게 다시 내보낸다.
@@ -53,6 +56,12 @@ export class PlayerPanel {
       if (e.metaKey && e.altKey && e.key.toLowerCase() === 'r' && viewer.isPlaying && !viewer.root.hidden) { e.preventDefault(); this.toggleRecording(); }
     });
     this.player.onMessage((type, data) => this.onPlayerMessage(type, data));
+    this.sharpMsg = null;
+    // 선명도는 전역 — 다른 화면(멀티라이브 ⚙·설정)에서 바꿔도 이 시청 화면에 바로 다시 건다.
+    window.addEventListener('cview:sharpness', () => {
+      this.applySharpness();
+      this.syncSharpness();
+    });
     loadEqPresets().then(({ freqs, presets }) => { this.freqs = freqs; this.presets = presets; });
   }
 
@@ -63,7 +72,8 @@ export class PlayerPanel {
 
   /**
    * 새 재생이 시작되면 저장된 보정·이퀄라이저·비율을 다시 건다.
-   * 비율·자동 보정·업스케일·픽셀 확대·이퀄라이저는 라이브 단독 보기 패인과 같은 함수(player-tools.js)로 건다.
+   * 비율·자동 밝기·색 보정·픽셀 확대·이퀄라이저는 라이브 단독 보기 패인과 같은 함수(player-tools.js)로 건다.
+   * 선명도(sharpness.js)는 확대(업스케일)를 허용해 건다 — 시청 화면은 늘 한 화면을 크게 본다.
    */
   async applySaved(cached = null) {
     const p = cached || await this.loadSettings();
@@ -72,9 +82,43 @@ export class PlayerPanel {
       saturation: p.videoSaturation, hue: p.videoHue, gamma: p.videoGamma,
     });
     applyPlayerTools(this.player, p);
-    // 선명한 화면은 채널마다(멀티라이브 패인과 같은 기억) — 색 보정은 위의 전역 보정이 맡는다.
-    applyPicture(this.player, pictureFor(this.viewer.channelId), { adjust: false });
+    await sharpnessReady();
+    this.applySharpness();
     if (this.rate !== 1) this.player.call('setRate', this.rate);
+  }
+
+  /** 이 시청 화면 플레이어에 선명도를 건다(확대 허용). */
+  applySharpness() {
+    this.player.call('setSharpness', ...sharpnessArgs(true));
+  }
+
+  /** 선명도 묶음만 제자리에서 맞춘다 — 통째로 다시 그리면 키보드로 누른 단추의 초점이 사라진다. */
+  syncSharpness() {
+    if (this.el.hidden || this.tab !== 'video') return;
+    const s = sharpnessState();
+    for (const b of this.el.querySelectorAll('.pp-sharp [data-sharpness]')) {
+      const on = Number(b.dataset.sharpness) === s.level;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-pressed', String(on));
+    }
+    const chk = this.el.querySelector('[data-pp="sharpnessEnlarged"]');
+    if (chk) {
+      chk.checked = s.enlargedOnly;
+      chk.disabled = !s.level;
+      chk.closest('.pp-row')?.classList.toggle('disabled', !s.level);
+    }
+    const note = this.el.querySelector('.pp-sharpness-note');
+    if (note) note.textContent = sharpnessNote(this.sharpMsg);
+  }
+
+  /** '화면' 탭의 선명도 묶음 — 멀티라이브 ⚙ 와 같은 이름·같은 값. */
+  sharpnessHtml() {
+    const s = sharpnessState();
+    return `
+        <div class="pp-row"><span title="${esc(SHARPNESS_HELP)}">선명도</span><div class="segmented pp-sharp" role="group" aria-label="선명도">${SHARPNESS_LEVELS.map((l) => `<button class="seg${l.value === s.level ? ' active' : ''}" data-sharpness="${l.value}" aria-pressed="${l.value === s.level}" title="${esc(l.help)}">${l.label}</button>`).join('')}</div></div>
+        <p class="pp-note pp-sharpness-note">${esc(sharpnessNote(this.sharpMsg))}</p>
+        <label class="pp-row${s.level ? '' : ' disabled'}" title="${esc(ENLARGED_ONLY_HELP)}"><span>${ENLARGED_ONLY_LABEL}</span><span class="toggle"><input type="checkbox" data-pp="sharpnessEnlarged" ${s.enlargedOnly ? 'checked' : ''} ${s.level ? '' : 'disabled'}><span></span></span></label>
+        <p class="pp-note">선명한 화면과 업스케일을 합쳤어요 — 모든 라이브 화면에 함께 적용됩니다</p>`;
   }
 
   async save(patch) {
@@ -99,14 +143,13 @@ export class PlayerPanel {
         <label class="pp-row"><span>화면 꽉 채우기(비율 무시)</span><span class="toggle"><input type="checkbox" data-pp="aspect" ${p.aspectRatio === 'fill' ? 'checked' : ''}><span></span></span></label>`;
     } else if (this.tab === 'video') {
       body = `
-        <label class="pp-row"><span>비디오 보정</span><span class="toggle"><input type="checkbox" data-pp="videoAdjustEnabled" ${p.videoAdjustEnabled ? 'checked' : ''}><span></span></span></label>
+        ${this.sharpnessHtml()}
+        <label class="pp-row"><span>자동 밝기·색 보정</span><span class="toggle"><input type="checkbox" data-pp="autoPictureEnhancement" ${p.autoPictureEnhancement ? 'checked' : ''}><span></span></span></label>
+        <label class="pp-row" title="확대할 때 픽셀을 부드럽게 하지 않습니다 — 선명도가 처리하는 동안에는 보이지 않습니다"><span>픽셀 그대로 확대</span><span class="toggle"><input type="checkbox" data-pp="sharpPixelScaling" ${p.sharpPixelScaling ? 'checked' : ''}><span></span></span></label>
+        <label class="pp-row"><span>색 보정</span><span class="toggle"><input type="checkbox" data-pp="videoAdjustEnabled" ${p.videoAdjustEnabled ? 'checked' : ''}><span></span></span></label>
         ${ADJUST.map(([k, label, min, max, step, def]) => `
           <label class="pp-row slider"><span>${label}</span><input type="range" min="${min}" max="${max}" step="${step}" value="${esc(p[k] ?? def)}" data-adjust="${k}" ${p.videoAdjustEnabled ? '' : 'disabled'}><output>${esc(p[k] ?? def)}</output></label>`).join('')}
-        <button class="link-btn" data-pp-reset="video">보정 초기화</button>
-        <label class="pp-row" title="치지직과 같은 언샤프 마스크로 윤곽을 또렷하게 합니다 — 이 채널에 기억합니다"><span>선명한 화면</span><span class="toggle"><input type="checkbox" data-pp="sharpen" ${pictureFor(this.viewer.channelId).sharpen ? 'checked' : ''}><span></span></span></label>
-        <label class="pp-row" title="확대할 때 픽셀을 부드럽게 하지 않습니다"><span>픽셀 그대로 확대</span><span class="toggle"><input type="checkbox" data-pp="sharpPixelScaling" ${p.sharpPixelScaling ? 'checked' : ''}><span></span></span></label>
-        <label class="pp-row"><span>자동 화질 보정</span><span class="toggle"><input type="checkbox" data-pp="autoPictureEnhancement" ${p.autoPictureEnhancement ? 'checked' : ''}><span></span></span></label>
-        <label class="pp-row"><span>업스케일</span><span class="toggle"><input type="checkbox" data-pp="videoUpscaling" ${p.videoUpscaling ? 'checked' : ''}><span></span></span></label>`;
+        <button class="link-btn" data-pp-reset="video">보정 초기화</button>`;
     } else if (this.tab === 'eq') {
       const bands = p.equalizerBands && p.equalizerBands.length === 10 ? p.equalizerBands : new Array(10).fill(0);
       const on = Boolean(p.equalizerPreset) && EQ_SUPPORTED;
@@ -138,6 +181,12 @@ export class PlayerPanel {
   onClick(e) {
     const t = e.target.closest('[data-pp-tab]');
     if (t) { this.tab = t.dataset.ppTab; this.render(); return; }
+    const sh = e.target.closest('[data-sharpness]');
+    if (sh) {
+      const level = Number(sh.dataset.sharpness);
+      if (level !== sharpnessState().level) setSharpness(level);
+      return;
+    }
     const r = e.target.closest('[data-rate]');
     if (r) {
       this.rate = Number(r.dataset.rate);
@@ -209,9 +258,9 @@ export class PlayerPanel {
       this.render();
       return;
     }
-    if (key === 'sharpen') {
-      setPicture(this.viewer.channelId, { sharpen: t.checked });
-      applyPicture(this.player, pictureFor(this.viewer.channelId), { adjust: false });
+    if (key === 'sharpnessEnlarged') {
+      const s = sharpnessState();
+      if (s.level) setSharpness(s.level, t.checked);
       return;
     }
     if (key === 'aspect') {
@@ -262,6 +311,12 @@ export class PlayerPanel {
 
   async onPlayerMessage(type, data) {
     if (type === 'playStarted') { this.rate = 1; this.applySaved(); return; }
+    if (type === 'sharpness') {
+      this.sharpMsg = data;
+      const note = this.el.querySelector('.pp-sharpness-note');
+      if (note) note.textContent = sharpnessNote(data);
+      return;
+    }
     if (type === 'equalizer' && data && data.ok === false) toast('이퀄라이저를 켤 수 없습니다 — 이 방송은 오디오 처리를 쓸 수 없습니다');
   }
 

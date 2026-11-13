@@ -41,17 +41,14 @@
   min-width: 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
   border: 1px dashed var(--border); border-radius: var(--radius-ms); background: color-mix(in srgb, var(--surface-elevated) 55%, transparent);
   color: var(--text-secondary); font: inherit; font-size: var(--fs-footnote); font-weight: 600; cursor: pointer; overflow: hidden;
-  transition: background .15s var(--ease-out), color .15s var(--ease-out), border-color .15s var(--ease-out);
 }
 .ml-focus-add[hidden], .ml-stage.ml-single .ml-focus-add { display: none; }
-.ml-focus-add svg { width: 18px; height: 18px; padding: 9px; box-sizing: content-box; flex: none; border-radius: 50%; background: var(--hover); transition: background .15s var(--ease-out), color .15s var(--ease-out); }
+.ml-focus-add svg { width: 18px; height: 18px; padding: 9px; box-sizing: content-box; flex: none; border-radius: 50%; background: var(--hover); }
 .ml-focus-add span { white-space: nowrap; }
 /* 좁거나 낮은 칸(위·아래 포커스의 좁은 서브 줄) — '채널 추가'가 '채널 추'처럼 잘렸다. 칸에 다 안 들어가면 + 만 보인다(이름은 aria-label·title). */
 .ml-focus-add { container: ml-focus-add / size; }
 @container ml-focus-add (max-width: 78px) or (max-height: 74px) { .ml-focus-add span { display: none; } }
-.ml-focus-add:hover { color: var(--primary-text); border-color: color-mix(in srgb, var(--primary) 55%, transparent); background: var(--primary-dim); }
-.ml-focus-add:hover svg { background: var(--primary); color: var(--on-primary); }
-.ml-focus-add:focus-visible { box-shadow: var(--focus-ring); }
+/* 호버·초점·누름·열림은 .ch-add(motion.css 끝 "채널 추가 단추")가 맡는다 — 칸이 옅게 물들고 가운데 + 가 빛을 받는 작은 키가 되어 눌린다. */
 
 /* 메인 왼쪽·오른쪽 포커스 — 메인 영상은 폭에 맞는 16:9 높이로 위에 붙이고, 아래 남는 칸에 메인 채널 정보(라이브 단독 보기와
    같은 카드·탭)를 둔다. 높이·열은 multilive.js syncFocusInfo 가 정한다(남는 칸이 낮으면 has-info 없이 예전 배치). */
@@ -91,6 +88,11 @@
 
 .ml-empty { grid-column: 1 / -1; grid-row: 1 / -1; padding: var(--sp-xl); } /* 모양은 .empty.lg.boxed */
 .ml-empty .btn { margin-top: var(--sp-sm); }
+/* 빈 화면 채널 추가 — + 아이콘에 크기가 없어 단추가 큰 + 아래 글자가 놓인 네모가 됐다. 머리줄처럼 한 줄(+ 채널 추가)로.
+   .ch-add 열림(× 로 45° 회전·옅은 칩)과 한 묶음이다 — 이 두 줄만 지우면 서랍이 열릴 때 큰 칩 안에 큰 × 가 생긴다.
+   예전 모양으로 돌리려면 multilive.js 의 빈 화면 단추에서 ch-add 도 함께 뺀다(그러면 그 단추 호버는 예전 방식). */
+.ml-empty .ch-add { display: inline-flex; align-items: center; gap: 6px; }
+.ml-empty .ch-add svg { width: 16px; height: 16px; flex: none; }
 /* 한국어 안내문은 어절 중간에서 꺾지 않는다 */
 .ml-addbar-notice, .ml-addbar-list .empty { word-break: keep-all; overflow-wrap: anywhere; }
 
@@ -346,31 +348,15 @@
 .ml-tb-icon:active { background: var(--active); }
 .ml-tb-icon.active { color: var(--primary-text); background: var(--primary-dim); border-color: color-mix(in srgb, var(--primary) 45%, transparent); }
 .ml-tb-icon[aria-expanded="true"] { background: var(--active); color: var(--text-primary); }
-.ml-toolbar .ml-add { height: 30px; padding: 0 12px 0 10px; border-radius: var(--radius-sm); display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-size: var(--fs-footnote); font-weight: 600; margin-left: 2px;
-  transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), translate var(--dur-2) var(--ease-out), transform var(--dur-1) var(--ease-out); }
-.ml-toolbar .ml-add svg { margin: 0; width: 14px; height: 14px; flex: none; stroke-width: 2.4; transition: transform .25s var(--ease-out); }
+/* 채널 추가 — ⋯ 버튼과 같은 30px·9px 모양. 여기는 크기·배치만 정한다. 색·그림자·호버·누름·열림(×)·가득 참은
+   모든 채널 추가 단추가 같이 쓰는 .ch-add(motion.css 끝 "채널 추가 단추")가 맡는다. */
+.ml-toolbar .ml-add { height: 30px; padding: 0 12px 0 10px; border-radius: var(--radius-sm); display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-size: var(--fs-footnote); font-weight: 600; margin-left: 2px; }
+.ml-toolbar .ml-add svg { margin: 0; width: 14px; height: 14px; flex: none; stroke-width: 2.4; }
 .ml-toolbar .ml-add-full[hidden] { display: none; }
-/* 채널 추가 — ⋯ 버튼과 같은 30px·9px 모양. 공통 .btn:hover 의 회색 배경과 큰 글로우가 섞여 탁해 보였다(사용자 요청 2026-10-23):
-   늘 브랜드색 위에서 밝기만 바꾼다. 쉴 때도 아래 그림자·위 하이라이트로 "눌리는 단추" 로 보이고(2026-11-12),
-   올리면 1px 떠오르며 브랜드색 고리가 생기고, 누르면 가라앉는다. 사이드바가 열려 있으면 옅은 브랜드색 칩으로 바뀌고 + 가 × 로 돈다. */
-.page-multilive .ml-toolbar .ml-add:not([aria-disabled="true"]) { background: var(--primary); color: var(--on-primary); border: 1px solid color-mix(in srgb, var(--primary) 70%, #000); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3), 0 1px 0 color-mix(in srgb, var(--primary) 45%, #000), 0 2px 6px var(--primary-glow); filter: none; }
-.page-multilive .ml-toolbar .ml-add:not([aria-disabled="true"]):hover { background: color-mix(in srgb, var(--primary) 82%, #fff); translate: 0 -1px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 0 0 3px var(--primary-dim), 0 4px 14px var(--primary-glow); }
-.page-multilive .ml-toolbar .ml-add:not([aria-disabled="true"]):active { background: color-mix(in srgb, var(--primary) 85%, #000); translate: 0 0; box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.28); transform: scale(.97); filter: none; }
-.page-multilive .ml-toolbar .ml-add[aria-expanded="true"]:not([aria-disabled="true"]) { background: var(--primary-dim); color: var(--primary-text); border-color: color-mix(in srgb, var(--primary) 45%, transparent); box-shadow: none; }
-.page-multilive .ml-toolbar .ml-add[aria-expanded="true"]:not([aria-disabled="true"]):hover { background: color-mix(in srgb, var(--primary) 22%, transparent); translate: none; box-shadow: none; }
-.page-multilive .ml-toolbar .ml-add[aria-expanded="true"] svg { transform: rotate(45deg); }
-/* 키보드 초점 — 호버 고리(옅은 브랜드색)와 헷갈리지 않게 2px 띄운 진한 테두리 */
-.page-multilive .ml-toolbar .ml-add:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 2px; }
 /* 가득 참 — disabled 대신 aria-disabled: 탭 순서에 남고, 누르면 "가득 찼어요" 안내(multilive.js). 사이드바가 열려 있으면 × 로 닫는다.
-   점선 테두리·흐린 글자로 "지금은 못 누름" 을 보이고, 끝의 n/최대 로 이유를 보인다(라이브 단독 보기는 개수 칩이 없다). 호버해도 바뀌지 않는다. */
-.ml-toolbar .ml-add[aria-disabled="true"] { opacity: 1; background: transparent; color: var(--text-tertiary); border: 1px dashed var(--border); box-shadow: none; cursor: not-allowed; translate: none; transform: none; }
-.ml-toolbar .ml-add[aria-disabled="true"]:hover { background: transparent; color: var(--text-tertiary); box-shadow: none; filter: none; }
+   점선 테두리·흐린 글자(.ch-add)로 "지금은 못 누름" 을 보이고, 끝의 n/최대 로 이유를 보인다(라이브 단독 보기는 개수 칩이 없다). 호버해도 바뀌지 않는다. */
 .ml-toolbar .ml-add[aria-disabled="true"] .ml-add-full { margin-left: 2px; padding: 1px 6px; border-radius: var(--radius-pill); font-size: var(--fs-micro); font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-secondary);
   background: color-mix(in srgb, var(--accent-orange) 18%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-orange) 50%, transparent); }
-.ml-toolbar .ml-add[aria-disabled="true"][aria-expanded="true"] { cursor: pointer; color: var(--text-secondary); }
-/* 모션 줄이기 — 떠오름·눌림 크기 변화 없이 색만 */
-@media (prefers-reduced-motion: reduce) { .page-multilive .ml-toolbar .ml-add:is(:hover, :active) { translate: none !important; transform: none !important; } }
-:root[data-motion="reduced"] .page-multilive .ml-toolbar .ml-add:is(:hover, :active) { translate: none !important; transform: none !important; }
 .ml-empty .btn[aria-disabled="true"], .ml-focus-add[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; }
 /* 더 보기 메뉴 */
 .ml-more { position: relative; flex: none; }
@@ -755,7 +741,7 @@
 /* 영상 위 오버레이 채팅은 그림자가 영상에 번지기만 한다. */
 .ml-body.chat-overlay .ml-chat { box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35); }
 
-/* 패인 ⚙ 메뉴 — 화면 보정(선명한 화면·밝기·대비·채도) */
+/* 패인 ⚙ 메뉴 — 선명도(끔·약·중·강, sharpness.js)·색 보정(밝기·대비·채도) */
 .ml-pane-menu .ml-check { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .ml-switch { position: relative; flex: none; width: 28px; height: 16px; border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.28); transition: background 0.15s ease; }
 .ml-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--text-on-media, #fff); transition: transform 0.15s ease; }
@@ -764,13 +750,17 @@
 .ml-adjust-row { display: grid; grid-template-columns: 34px 1fr 38px; align-items: center; gap: 6px; padding: 3px 9px; color: var(--text-on-media, #fff); font-size: var(--fs-tiny); }
 .ml-adjust-row input[type="range"] { width: 100%; accent-color: var(--ml-media-accent, #00ffa3); }
 .ml-adjust-row output { text-align: right; font-variant-numeric: tabular-nums; opacity: 0.8; }
-/* 단독 보기 무대 패인 ⚙ — 배속·화면 꽉 채우기·자동 보정/업스케일·이퀄라이저(ml-pane-controls.js setStage) */
+/* 단독 보기 무대 패인 ⚙ — 배속·화면 꽉 채우기·자동 밝기·색 보정·이퀄라이저(ml-pane-controls.js setStage) */
 .ml-gear-menu.ml-stage-tools { min-width: 236px; }
 .ml-rate-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; padding: 2px 4px; }
 .ml-pane-menu .ml-rate-row .ml-menu-item { justify-content: center; padding: 5px 0; font-size: var(--fs-tiny); font-variant-numeric: tabular-nums; }
 .ml-pane-menu .ml-rate-row .ml-menu-item.active { background: rgba(255, 255, 255, 0.14); font-weight: 700; }
 .ml-pane-menu .ml-rate-row .ml-menu-item.active::after { content: none; }
 .ml-menu-note { margin: 0; padding: 1px 9px 4px; font-size: var(--fs-micro); color: rgba(255, 255, 255, 0.62); }
+/* 선명도 단계 — 배속 줄과 같은 모양, 네 칸. 끔이면 '크게 볼 때만'은 흐리게(누르면 아무 일 없음). 상태 줄은 두 줄까지 감싼다. */
+.ml-rate-row.ml-sharp-row { grid-template-columns: repeat(4, 1fr); }
+.ml-pane-menu .ml-check.is-disabled { opacity: 0.45; cursor: default; }
+.ml-menu-note.ml-sharpness-note { max-width: 240px; line-height: 1.35; }
 .ml-adjust-row.ml-eq-row { grid-template-columns: 46px 1fr 38px; }
 .ml-eq-row select { grid-column: 2 / 4; min-width: 0; padding: 3px 4px; border-radius: var(--radius-sm); border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.08); color: inherit; font: inherit; }
 .ml-eq-row select option { color: initial; }
