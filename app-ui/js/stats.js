@@ -5,7 +5,7 @@ import { api } from './api.js';
 import { esc, safeUrl, toast, imageSrc, dismiss } from './dom.js';
 import { emptyState, loadingState, errorState } from './cards.js';
 import { relativeDate } from './channel.js';
-import { syncTabs, bindTabKeys } from './a11y.js';
+import { syncTabs, bindTabKeys, trapFocus } from './a11y.js';
 import { refreshVeiled } from './refresh-veil.js';
 
 export const statsIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>';
@@ -49,10 +49,12 @@ export function confirmCleanup(kind) {
     </form>`;
     document.body.append(scrim);
     const form = scrim.querySelector('form');
+    const release = trapFocus(form); // 초점을 가두고, 닫으면 '정리' 단추로 돌려준다
     let done = false;
     const finish = (value) => {
       if (done) return;
       done = true;
+      release();
       dismiss(scrim);
       resolve(value);
     };
@@ -175,6 +177,17 @@ export function bucketLabels(trend, unit, now = new Date()) {
   });
 }
 
+/** 보이는 축 글자를 끝(최근)부터 세어 하나 건너 표시(odd) — 좁은 차트(CSS 컨테이너 쿼리)는 odd 를 숨겨 글자가 겹치지 않는다. 순수 함수. */
+export function markOddLabels(labels) {
+  let k = 0;
+  for (let i = labels.length - 1; i >= 0; i--) {
+    if (!labels[i].label) continue;
+    labels[i].odd = k % 2 === 1;
+    k += 1;
+  }
+  return labels;
+}
+
 /**
  * 세로 막대(쌓기) 차트 — cols: [{ label, total, parts }]. 높이는 가장 큰 칸(또는 평균선)에 맞춘 보기 좋은 눈금.
  * 값은 풍선(마우스·키보드)으로 읽는다. 그래프 자체는 role=img 가 아니라 화살표로 칸을 옮기는 묶음이다.
@@ -192,7 +205,7 @@ function barChart(id, cols, { seriesCount = 0, avg = 0, avgLabel = '', aria = ''
       ${avg > 0 ? `<span class="chart-avg" style="bottom:${pct(avg)}"><em>${esc(avgLabel)}</em></span>` : ''}
       <div class="chart-cols">${cols.map((c, i) => `<div class="chart-col" data-i="${i}">${c.total > 0 ? `<span class="chart-stack" style="height:${pct(c.total)}">${c.parts.map((p, k) => (p > 0 ? `<i class="${seriesCount ? SERIES_CLASS(k, seriesCount) : 'mono'}" style="flex-grow:${p.toFixed(1)}"></i>` : '')).join('')}</span>` : ''}</div>`).join('')}</div>
     </div>
-    <div class="chart-x" aria-hidden="true">${cols.map((c) => `<span>${esc(c.label)}</span>`).join('')}</div>
+    <div class="chart-x" aria-hidden="true">${cols.map((c) => `<span${c.odd ? ' class="x-odd"' : ''}>${esc(c.label)}</span>`).join('')}</div>
   </div>`;
 }
 
@@ -341,7 +354,7 @@ export class StatsPage {
 
   /** 추이 차트(쌓기) + 범례. */
   trendCard(r) {
-    const labels = bucketLabels(r.trend, r.unit);
+    const labels = markOddLabels(bucketLabels(r.trend, r.unit));
     const elapsed = r.trend.filter((b) => new Date(b.start) <= new Date(r.rangeEnd)).length || 1;
     const avg = r.unit === 'hour' ? 0 : r.total / elapsed;
     const unitName = { hour: '시간', day: '하루', week: '주', month: '달' }[r.unit];
@@ -357,7 +370,7 @@ export class StatsPage {
     };
     const range = r.unit === 'hour' ? '오늘 0시부터' : `${mdLong(new Date(r.rangeStart))} ~ ${mdLong(new Date(r.rangeEnd))}`;
     return `<section class="stats-card"><div class="card-head"><h2>시청 추이</h2><span class="stats-meta">${esc(range)} · ${esc(unitName)} 단위</span></div>
-      ${barChart('trend', r.trend.map((b, i) => ({ label: labels[i].label, total: b.seconds, parts: b.parts })),
+      ${barChart('trend', r.trend.map((b, i) => ({ label: labels[i].label, odd: labels[i].odd, total: b.seconds, parts: b.parts })),
     { seriesCount: r.series.length, avg, avgLabel: `${unitName} 평균 ${durationText(avg)}`, aria: `${this.periodName()} 시청 추이`, active })}
       ${legend(names, r.series.length, avg > 0 ? '<li><i class="sw avg"></i>평균</li>' : '')}</section>`;
   }

@@ -381,7 +381,7 @@ export class SearchPage {
     this.body.innerHTML = '<div class="discovery-top"></div><div class="discovery"></div>';
     this.body.querySelector('.discovery-top').innerHTML = recent.length
       ? `<div class="section-head"><h2 class="section-title">최근 검색어</h2><div class="grow"></div><button class="link-btn" data-recent-clear>모두 지우기</button></div>
-         <div class="chips">${recent.map((q) => `<span class="chip recent-chip"><button class="link-btn" data-recent="${esc(q)}">${esc(q)}</button><button class="chip-x" data-recent-remove="${esc(q)}" title="지우기">✕</button></span>`).join('')}</div>`
+         <div class="chips">${recent.map((q) => `<span class="chip recent-chip"><button class="link-btn" data-recent="${esc(q)}">${esc(q)}</button><button class="chip-x" data-recent-remove="${esc(q)}" title="지우기" aria-label="${esc(`최근 검색어 ${q} 지우기`)}">✕</button></span>`).join('')}</div>`
       : emptyState('검색어를 입력하세요', '채널 이름, 방송 제목, 다시보기로 찾을 수 있습니다');
   }
 

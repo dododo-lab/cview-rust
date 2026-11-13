@@ -1,5 +1,6 @@
 import { kbd } from './platform.js';
 import { dismiss } from './dom.js';
+import { trapFocus } from './a11y.js';
 // 스플래시·부트 진행(SYS-10, 원본 SplashView/BootProgress)과 첫 실행 환영 안내(SYS-11, 원본 WelcomeOverlay).
 const WELCOME_KEY = 'cview.welcomed.v1';
 
@@ -57,6 +58,7 @@ export function showWelcome({ force = false, onLogin } = {}) {
   };
   const close = () => {
     try { localStorage.setItem(WELCOME_KEY, String(Date.now())); } catch { /* 무시 */ }
+    release();
     dismiss(scrim);
     document.removeEventListener('keydown', onKey, true);
   };
@@ -75,6 +77,7 @@ export function showWelcome({ force = false, onLogin } = {}) {
   });
   document.addEventListener('keydown', onKey, true);
   document.body.append(scrim);
+  const release = trapFocus(scrim);
   render();
 }
 

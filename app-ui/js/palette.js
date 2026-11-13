@@ -2,6 +2,7 @@
 // 찾아 실행한다. 일치가 없으면 "검색" 으로 넘긴다 (NAV-12).
 import { api } from './api.js';
 import { esc, safeUrl, imageSrc, hideWithExit } from './dom.js';
+import { trapFocus } from './a11y.js';
 
 /** 간단한 일치 점수(높을수록 앞) — 앞부분 일치 > 단어 시작 > 포함. 순수 함수. */
 export function matchScore(text, query) {
@@ -65,6 +66,8 @@ export class CommandPalette {
     this.openingTimer = setTimeout(() => this.el.classList.remove('opening'), 500);
     this.input.value = '';
     this.input.focus();
+    // Tab 이 뒤 화면으로 빠지지 않게(팔레트 안 초점은 입력란 하나다). 초점 되돌리기는 close 가 따로 한다.
+    if (!this.releaseTrap) this.releaseTrap = trapFocus(this.el.querySelector('.palette'), { restore: false });
     this.render();
     // 채널 후보: 방송 중 팔로잉 + 즐겨찾기 + 최근 시청
     const [live, fav, recent] = await Promise.allSettled([
@@ -85,6 +88,8 @@ export class CommandPalette {
 
   close() {
     if (this.el.hidden) return;
+    this.releaseTrap?.();
+    this.releaseTrap = null;
     hideWithExit(this.el);
     // 연 곳으로 초점을 돌려준다(숨으며 body 로 떨어진다). 실행한 동작이 화면을 바꿨으면 그쪽이 초점을 정한다.
     const back = this.returnFocus;

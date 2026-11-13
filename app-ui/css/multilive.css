@@ -46,6 +46,9 @@
 .ml-focus-add[hidden], .ml-stage.ml-single .ml-focus-add { display: none; }
 .ml-focus-add svg { width: 18px; height: 18px; padding: 9px; box-sizing: content-box; flex: none; border-radius: 50%; background: var(--hover); transition: background .15s var(--ease-out), color .15s var(--ease-out); }
 .ml-focus-add span { white-space: nowrap; }
+/* 좁거나 낮은 칸(위·아래 포커스의 좁은 서브 줄) — '채널 추가'가 '채널 추'처럼 잘렸다. 칸에 다 안 들어가면 + 만 보인다(이름은 aria-label·title). */
+.ml-focus-add { container: ml-focus-add / size; }
+@container ml-focus-add (max-width: 78px) or (max-height: 74px) { .ml-focus-add span { display: none; } }
 .ml-focus-add:hover { color: var(--primary-text); border-color: color-mix(in srgb, var(--primary) 55%, transparent); background: var(--primary-dim); }
 .ml-focus-add:hover svg { background: var(--primary); color: var(--on-primary); }
 .ml-focus-add:focus-visible { box-shadow: var(--focus-ring); }
@@ -654,7 +657,7 @@
 
 /* ── 채널 칩 미리보기 말풍선(ml-chip-peek.js) — 칩 바로 아래, 꼬리가 칩 가운데를 가리킨다 ── */
 .ml-peek {
-  position: fixed; z-index: 1000; pointer-events: none; box-sizing: border-box;
+  position: fixed; z-index: var(--z-overlay); pointer-events: none; box-sizing: border-box;
   --peek-bg: var(--surface-overlay); --peek-line: var(--border);
   padding: 6px; border-radius: var(--radius-ml); background: var(--peek-bg); border: 1px solid var(--peek-line);
   box-shadow: var(--shadow-lg); transform-origin: var(--tail-x, 50%) -10px;
@@ -987,7 +990,7 @@
 
 /* 사진 크게 보기 */
 .mwi-lightbox {
-  position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 48px 72px;
+  position: fixed; inset: 0; z-index: var(--z-overlay); display: grid; place-items: center; padding: 48px 72px;
   background: rgba(6, 7, 9, .86); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   animation: mo-fade .18s var(--ease-out) both;
 }

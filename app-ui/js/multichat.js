@@ -31,22 +31,57 @@ export function lineMatches(text, query) {
   return !query || String(text || '').toLowerCase().includes(String(query).toLowerCase());
 }
 
+/** 검색할 줄 글 — 보이는 글자 + 이모티콘 이름(img alt). 예전엔 textContent 만 봐 이모티콘 이름으로 찾지 못했다. */
+export function lineSearchText(line) {
+  let text = line.textContent;
+  for (const img of line.querySelectorAll('img.emoji')) if (img.alt) text += ` ${img.alt}`;
+  return text;
+}
+
+const BLIND_TEXT = '관리자에 의해 삭제된 메시지입니다.';
+
 /** 통합(머지) 채팅 줄 — 채널 태그를 붙인 한 타임라인. 채팅 설정(차단·금지어·후원 필터·이모티콘)을 따른다.
- *  멀티라이브 멀티채팅도 쓴다. `style` 은 줄의 색 변수(--mc-color 등). */
-export function mergedLinesHtml(messages, { name, style }) {
+ *  멀티라이브 멀티채팅도 쓴다. `style` 은 줄의 색 변수(--mc-color 등), `src` 는 관리자 삭제(blinded)를 찾을 출처 키. */
+export function mergedLinesHtml(messages, { name, style, src = '' }) {
   const tag = name ? `<span class="mc-tag">${esc(name)}</span>` : '';
   const prefs = chatPrefs();
   return (messages || []).filter((m) => m.kind !== 'system' && passesFilters(m, prefs)).map((m) => {
     const ev = eventClasses(m);
+    const ids = `${m.id ? ` data-id="${esc(m.id)}"` : ''}${src ? ` data-src="${esc(src)}"` : ''}`;
+    const blinded = m.isBlinded ? ' blinded' : '';
     const nick = `<span class="nick${['streamer', 'manager', 'channelManager'].includes(m.role) ? ` ${m.role}` : ''}${nickColorClass(m.nickname, m.role)}">${esc(m.nickname || '익명')}</span>`;
     if (ev.length) {
       const body = m.content && m.content.trim() ? renderContent(m.content, m.emojis, prefs.emoticonEnabled) : '';
-      return `<div class="chat-line merged-line ${ev.join(' ')}" style="${style}">${eventCardHtml(m, { tag, nick, content: body })}</div>`;
+      return `<div class="chat-line merged-line ${ev.join(' ')}${blinded}"${ids} style="${style}">${eventCardHtml(m, { tag, nick, content: body })}</div>`;
     }
     return `
-      <div class="chat-line merged-line" style="${style}">${tag}${nick}<span class="text">${renderContent(m.content, m.emojis, prefs.emoticonEnabled)}</span></div>`;
+      <div class="chat-line merged-line${blinded}"${ids} style="${style}">${tag}${nick}<span class="text">${renderContent(m.content, m.emojis, prefs.emoticonEnabled)}</span></div>`;
   }).join('');
 }
+
+/**
+ * 관리자 삭제(blinded) — 통합 줄의 글을 지운 글로 바꾼다(단일 채팅 ChatPanel.blind 와 같은 모양).
+ * 예전엔 통합·멀티라이브 멀티채팅이 blinded 를 받지 않아 지워진 메시지가 그대로 남았다. 바꾼 줄 수를 돌려준다.
+ */
+export function blindMergedLines(lists, src, messageId, blindText) {
+  if (!messageId) return 0;
+  let n = 0;
+  const sel = `.merged-line[data-id="${CSS.escape(messageId)}"]${src ? `[data-src="${CSS.escape(src)}"]` : ''}`;
+  for (const list of lists) {
+    if (!list) continue;
+    for (const line of list.querySelectorAll(sel)) {
+      line.classList.add('blinded');
+      line.classList.remove('emote-only');
+      const el = line.querySelector('.text, .ev-body');
+      if (el) el.textContent = blindText || BLIND_TEXT;
+      n += 1;
+    }
+  }
+  return n;
+}
+
+/** 보이지 않는 동안 모아 둘 통합 채팅 메시지 수 — 다시 보면 한 번에 붙인다(그 사이 공백이 생기지 않게). */
+const MERGED_BACKLOG = 600;
 
 export class MultiChatPage {
   /** @param {{ isLoggedIn: () => boolean, onPlay?: (channelId: string) => void }} opts onPlay — 채널 추가 줄을 누르면 라이브로 */
@@ -143,6 +178,7 @@ export class MultiChatPage {
       } catch { /* 처음 */ }
     }
     this.render();
+    this.flushBacklog();
   }
 
   persist() {
@@ -267,10 +303,48 @@ export class MultiChatPage {
 
   // ── 통합 채팅 (MUL-02) ──
   onSessionEvent(p) {
-    if (!p || !p.event || p.event.type !== 'messages' || this.root.hidden || this.layout !== 'merged') return;
+    if (!p || !p.event || this.layout !== 'merged') return;
     const c = this.channels.find((x) => x.session === p.session);
     if (!c) return;
-    const html = mergedLinesHtml(p.event.messages, { name: c.name, style: `--mc-color:${c.color}` });
+    const ev = p.event;
+    if (ev.type === 'blinded') {
+      blindMergedLines([this.mergedList], c.channelId, ev.messageId, ev.blindText);
+      // 아직 붙이지 않은(화면을 떠나 있는 동안 모은) 메시지도
+      for (const [bc, msgs] of this.backlog || []) {
+        if (bc !== c) continue;
+        const i = msgs.findIndex((x) => x.id === ev.messageId);
+        if (i >= 0) msgs[i] = { ...msgs[i], isBlinded: true, content: ev.blindText || BLIND_TEXT, emojis: {} };
+      }
+      return;
+    }
+    if (ev.type !== 'messages') return;
+    // 다른 화면에 가 있는 동안은 그리지 않고 모아 둔다 — 예전엔 버려 돌아오면 통합 타임라인에 공백이 생겼다.
+    if (this.root.hidden) { this.queueBacklog(c, ev.messages); return; }
+    this.appendMerged(mergedLinesHtml(ev.messages, { name: c.name, style: `--mc-color:${c.color}`, src: c.channelId }));
+  }
+
+  queueBacklog(c, messages) {
+    if (!messages || !messages.length) return;
+    this.backlog ??= [];
+    this.backlog.push([c, messages.slice()]);
+    this.backlogCount = (this.backlogCount || 0) + messages.length;
+    while (this.backlog.length > 1 && this.backlogCount - this.backlog[0][1].length >= MERGED_BACKLOG) {
+      this.backlogCount -= this.backlog.shift()[1].length;
+    }
+  }
+
+  /** 화면에 돌아왔을 때 — 모아 둔 통합 메시지를 한 번에 붙인다(닫힌 채널 것은 버린다). */
+  flushBacklog() {
+    const list = this.backlog || [];
+    this.backlog = [];
+    this.backlogCount = 0;
+    if (this.layout !== 'merged' || !list.length) return;
+    const html = list.filter(([c]) => this.channels.includes(c))
+      .map(([c, msgs]) => mergedLinesHtml(msgs.slice(-MERGED_BACKLOG), { name: c.name, style: `--mc-color:${c.color}`, src: c.channelId })).join('');
+    this.appendMerged(html);
+  }
+
+  appendMerged(html) {
     if (!html) return;
     const follower = chatFollower(this.mergedList);
     const follow = follower.stuck;
@@ -281,7 +355,7 @@ export class MultiChatPage {
     const q = this.search.value.trim();
     if (q) {
       for (let line = before ? before.nextElementSibling : this.mergedList.firstElementChild; line; line = line.nextElementSibling) {
-        const ok = lineMatches(line.textContent, q);
+        const ok = lineMatches(lineSearchText(line), q);
         line.classList.toggle('search-hidden', !ok);
         line.classList.toggle('search-hit', ok);
       }
@@ -305,7 +379,7 @@ export class MultiChatPage {
     let hits = 0;
     for (const box of boxes) {
       for (const line of box.querySelectorAll('.chat-line')) {
-        const ok = lineMatches(line.textContent, q);
+        const ok = lineMatches(lineSearchText(line), q);
         line.classList.toggle('search-hidden', !ok);
         line.classList.toggle('search-hit', Boolean(q) && ok);
         if (q && ok) hits += 1;
@@ -321,7 +395,7 @@ export class MultiChatPage {
     let line = list.lastElementChild;
     for (let i = 0; i < n && line; line = line.previousElementSibling) {
       if (!line.classList.contains('chat-line')) continue;
-      const ok = lineMatches(line.textContent, q);
+      const ok = lineMatches(lineSearchText(line), q);
       line.classList.toggle('search-hidden', !ok);
       line.classList.toggle('search-hit', ok);
       i += 1;

@@ -17,13 +17,20 @@
 // UR14 [P2-6] 단축키 도움말에 ⌥⌘1~6 작업 공간, 북마크 줄 한 번. 설정 검색 중엔 탭이 켜져 보이지 않고, 가져오기는 여러 줄 칸,
 //      가져오기 뒤 테마·설정 변경을 알린다.
 // UR15 [P2-7] 미리보기 소스 조회 오류는 15초 뒤 다시 묻고(없음은 5분), 팔로잉 팔로워 수 조회 실패는 30초 뒤 다시 묻는다.
+// UR16 [P2-1] 통합 멀티채팅 — 관리자 삭제(blinded)가 통합 줄에도 걸리고, 이모티콘 이름으로 찾고, 다른 화면에 가 있는 동안 온 메시지가
+//      돌아오면 붙는다(지운 것은 지운 글로).
+// UR17 [P3-1] 시트·팔레트에서 Tab 이 뒤 화면으로 빠지지 않고, 시트를 닫으면 연 자리로 초점이 돌아간다.
+// UR18 [P3-2] 기호뿐인 버튼('✕')도 title 이 aria-label 이 된다. 홈 히어로 넘김 탭은 화살표로 옮긴다(roving tabindex).
+// UR19 [P3-3] 오프라인 띠·위험 단추 호버 글자 대비 4.5:1 이상(다크·라이트), 앱 전체 층(z-index ≥ 100)은 --z-* 토큰.
+// UR20 [P3-4] 360px 통계 창 축 글자가 겹치지 않는다, 좁은 '채널 추가' 칸은 글자 대신 + 만, 지우는 중인 북마크는 다시 그려도
+//      나오지 않는다, 다운로드 진행은 줄을 다시 쓰지 않고 막대만 바꾼다, 실패 알림에 '다시 시도'.
 // 저장소 루트에서: node tools/ui-regression/ui-review.mjs   (Playwright 가 필요하다)
 //   CVIEW_UI_SHOTS=<폴더> 면 단독 보기·그리드 장면을 PNG 로 남긴다.
 import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { server, base, openApp } from './mock-app.mjs';
+import { server, base, openApp, go, mockTauri } from './mock-app.mjs';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
@@ -603,6 +610,241 @@ await check('UR15 [P2-7] preview source errors retry after 15s; follower lookups
   assert.equal(asked.info, 2, `실패한 팔로워 조회를 다시 묻지 않았다 ${asked.info}`);
   assert.deepEqual(errors, []);
   await ctx.close();
+});
+
+await check('UR16 [P2-1] merged multichat: blinded, emoji-name search, backlog while away', async () => {
+  const { ctx, page, errors } = await openApp(browser, { width: 1280, height: 900 });
+  const r = await page.evaluate(async () => {
+    const { MultiChatPage, mergedLinesHtml, blindMergedLines, lineSearchText, lineMatches } = await import('/js/multichat.js');
+    const msg = (id, content, emojis = {}) => ({ id, kind: 'normal', role: 'common_user', nickname: `n${id}`, userId: `u${id}`, content, emojis, badges: [] });
+    // 순수 함수 — 두 채널의 같은 id 는 출처(src)로 가른다
+    const box = document.createElement('div');
+    box.innerHTML = mergedLinesHtml([msg('m1', '욕설'), msg('m2', '안녕 {:d_1:}', { d_1: 'https://ssl.pstatic.net/a.png' })], { name: 'A', style: '', src: 'chA' })
+      + mergedLinesHtml([msg('m1', '다른 채널 글')], { name: 'B', style: '', src: 'chB' });
+    const n = blindMergedLines([box], 'chA', 'm1', '');
+    const lines = [...box.querySelectorAll('.merged-line')];
+    const pure = { n, a: lines[0].querySelector('.text').textContent, blinded: lines[0].classList.contains('blinded'), b: lines[2].querySelector('.text').textContent, emoji: lineMatches(lineSearchText(lines[1]), 'd_1') };
+    // 페이지 동작 — 화면을 떠나 있는 동안 모았다가 돌아오면 붙인다
+    const page = Object.create(MultiChatPage.prototype);
+    const root = document.createElement('section');
+    root.hidden = true;
+    const list = document.createElement('div');
+    root.append(list);
+    document.body.append(root);
+    const c = { channelId: 'chA', name: 'A', color: '#0f0', session: 'mc:chA' };
+    Object.assign(page, { root, mergedList: list, layout: 'merged', channels: [c], search: { value: '' }, queueSearchNote() {} });
+    page.onSessionEvent({ session: 'mc:chA', event: { type: 'messages', messages: [msg('x1', '떠나 있는 동안 1'), msg('x2', '떠나 있는 동안 2')] } });
+    page.onSessionEvent({ session: 'mc:chA', event: { type: 'blinded', messageId: 'x2', blindText: '' } });
+    const away = list.querySelectorAll('.merged-line').length;
+    root.hidden = false;
+    page.flushBacklog();
+    const back = [...list.querySelectorAll('.merged-line')].map((l) => l.querySelector('.text').textContent);
+    page.onSessionEvent({ session: 'mc:chA', event: { type: 'messages', messages: [msg('x3', '지금 온 글')] } });
+    page.onSessionEvent({ session: 'mc:chA', event: { type: 'blinded', messageId: 'x3', blindText: '' } });
+    const live = list.lastElementChild.querySelector('.text').textContent;
+    root.remove();
+    return { pure, away, back, live };
+  });
+  assert.equal(r.pure.n, 1, '다른 채널의 같은 id 까지 지웠다');
+  assert.match(r.pure.a, /삭제된 메시지/);
+  assert.equal(r.pure.blinded, true);
+  assert.equal(r.pure.b, '다른 채널 글');
+  assert.equal(r.pure.emoji, true, '이모티콘 이름으로 찾지 못했다');
+  assert.equal(r.away, 0, '떠나 있는 동안 그렸다');
+  assert.equal(r.back.length, 2, `돌아와도 붙지 않았다 ${JSON.stringify(r.back)}`);
+  assert.match(r.back[1], /삭제된 메시지/, '떠나 있는 동안 지운 글이 그대로다');
+  assert.match(r.live, /삭제된 메시지/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('UR17 [P3-1] sheet/palette trap Tab and return focus on close', async () => {
+  const { ctx, page, errors } = await openApp(browser, { width: 1280, height: 900 });
+  await page.evaluate(async () => {
+    const b = document.createElement('button');
+    b.id = 'opener';
+    b.textContent = '열기';
+    document.body.append(b);
+    b.focus();
+    const { showShortcuts } = await import('/js/app-sheets.js');
+    showShortcuts();
+  });
+  const sheet = await page.evaluate(() => ({ modal: document.querySelector('.app-sheet .sheet').getAttribute('aria-modal'), named: Boolean(document.querySelector('.app-sheet .sheet').getAttribute('aria-labelledby')) }));
+  assert.deepEqual(sheet, { modal: 'true', named: true });
+  for (let i = 0; i < 6; i++) await page.keyboard.press('Tab');
+  assert.equal(await page.evaluate(() => Boolean(document.activeElement.closest('.app-sheet'))), true, 'Tab 이 시트 밖으로 빠졌다');
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Shift+Tab');
+  assert.equal(await page.evaluate(() => Boolean(document.activeElement.closest('.app-sheet'))), true, '⇧Tab 이 시트 밖으로 빠졌다');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'opener', '닫은 뒤 연 자리로 초점이 돌아가지 않았다');
+  await page.keyboard.press('Meta+k');
+  await page.waitForSelector('.palette-item');
+  for (let i = 0; i < 3; i++) await page.keyboard.press('Tab');
+  assert.equal(await page.evaluate(() => Boolean(document.activeElement.closest('.palette'))), true, 'Tab 이 팔레트 밖으로 빠졌다');
+  await page.keyboard.press('Escape');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('UR18 [P3-2] symbol-only buttons get aria-label; hero queue arrow keys', async () => {
+  const { ctx, page, errors } = await openApp(browser, { width: 1280, height: 900 });
+  const lab = await page.evaluate(async () => {
+    const d = document.createElement('div');
+    d.innerHTML = '<button class="chip-x" title="지우기">✕</button><button title="설명">설정</button>';
+    document.body.append(d);
+    await new Promise((res) => setTimeout(res, 50));
+    return [...d.querySelectorAll('button')].map((b) => b.getAttribute('aria-label'));
+  });
+  assert.deepEqual(lab, ['지우기', null]);
+  await page.waitForSelector('.hero-queue [role="tab"]');
+  const tabs0 = await page.$$eval('.hero-queue [role="tab"]', (els) => els.map((e) => e.tabIndex));
+  assert.equal(tabs0.filter((t) => t === 0).length, 1, `탭 순서에 든 탭 ${tabs0}`);
+  await page.focus('.hero-queue [role="tab"][aria-selected="true"]');
+  await page.keyboard.press('ArrowRight');
+  const after = await page.evaluate(() => ({ sel: document.querySelector('.hero-queue [aria-selected="true"]')?.dataset.heroIndex, focus: document.activeElement?.dataset.heroIndex }));
+  assert.deepEqual(after, { sel: '1', focus: '1' });
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('UR19 [P3-3] banner/danger contrast ≥ 4.5 in dark and light; z-index layers use tokens', async () => {
+  const ratio = (a, b) => {
+    const lum = ([r, g, bl]) => { const f = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(bl); };
+    const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+    return (x + 0.05) / (y + 0.05);
+  };
+  for (const theme of ['dark', 'light']) {
+    const { ctx, page, errors } = await openApp(browser, { width: 1280, height: 900, theme });
+    const cols = await page.evaluate(() => {
+      const rgb = (s) => s.match(/\d+(\.\d+)?/g).slice(0, 3).map(Number);
+      const banner = document.querySelector('.offline-banner');
+      banner.hidden = false;
+      const cs = getComputedStyle(banner);
+      const out = { banner: [rgb(cs.color), rgb(cs.backgroundColor)] };
+      banner.hidden = true;
+      const root = getComputedStyle(document.documentElement);
+      const probe = document.createElement('div');
+      probe.style.cssText = 'color: var(--on-danger); background: var(--danger-fill)';
+      document.body.append(probe);
+      const ps = getComputedStyle(probe);
+      out.danger = [rgb(ps.color), rgb(ps.backgroundColor)];
+      out.yellow = root.getPropertyValue('--accent-yellow').trim();
+      probe.remove();
+      return out;
+    });
+    assert.ok(ratio(...cols.banner) >= 4.5, `${theme} 오프라인 띠 대비 ${ratio(...cols.banner).toFixed(2)}`);
+    assert.ok(ratio(...cols.danger) >= 4.5, `${theme} 위험 단추 대비 ${ratio(...cols.danger).toFixed(2)}`);
+    assert.ok(cols.yellow, '--accent-yellow 가 정의되지 않았다');
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+  for (const f of ['app-ui/css/app.css', 'app-ui/css/multilive.css', 'app-ui/css/motion.css']) {
+    const raw = fs.readFileSync(f, 'utf8').match(/z-index:\s*\d{3,}/g) || [];
+    assert.deepEqual(raw, [], `${f} 에 숫자 z-index(≥100): ${raw.join(', ')}`);
+  }
+});
+
+await check('UR20 [P3-4] narrow stats axis, focus add cell, pending bookmark delete, download progress patching', async () => {
+  // 360px 보조 통계 창 — 30일 추이 축 글자
+  const ctx = await browser.newContext({ viewport: { width: 360, height: 900 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await page.addInitScript(mockTauri, [base, 'dark']);
+  await page.addInitScript(() => {
+    const inv = window.__TAURI__.core.invoke;
+    window.__TAURI__.core.invoke = async (c, a) => {
+      const r = await inv(c, a);
+      if (c === 'insights_report') { r.unit = 'day'; r.trend = Array.from({ length: 30 }, (_, i) => ({ start: new Date(Date.now() - (30 - i) * 864e5).toISOString(), seconds: 1000 + i * 40, parts: [500, 500] })); }
+      return r;
+    };
+  });
+  await page.goto(`${base}?w=stats`);
+  await page.waitForSelector('.bar-chart .chart-x span');
+  await page.waitForTimeout(500);
+  const overlaps = await page.evaluate(() => {
+    const els = [...document.querySelectorAll('.bar-chart .chart-x span')].filter((e) => e.textContent.trim() && getComputedStyle(e).visibility !== 'hidden');
+    const rs = els.map((e) => { const r = document.createRange(); r.selectNodeContents(e); return r.getBoundingClientRect(); });
+    let n = 0;
+    for (let i = 1; i < rs.length; i++) if (rs[i].left < rs[i - 1].right + 2) n += 1;
+    return { n, shown: els.length };
+  });
+  assert.equal(overlaps.n, 0, `축 글자 ${overlaps.n}곳이 겹친다`);
+  assert.ok(overlaps.shown >= 3, `축 글자가 너무 적다 ${overlaps.shown}`);
+  await ctx.close();
+  // 좁은 '채널 추가' 칸 · 북마크 · 다운로드
+  const app = await openApp(browser, { width: 1280, height: 900 });
+  const r = await app.page.evaluate(async () => {
+    const out = {};
+    const add = document.createElement('button');
+    add.className = 'ml-focus-add';
+    add.innerHTML = '<svg viewBox="0 0 24 24"></svg><span>채널 추가</span>';
+    add.style.cssText = 'position:fixed;left:0;top:0;width:60px;height:120px';
+    document.body.append(add);
+    const span = add.querySelector('span');
+    out.addNarrow = getComputedStyle(span).display;
+    add.style.width = '140px';
+    await new Promise((res) => requestAnimationFrame(res));
+    out.addWide = getComputedStyle(span).display;
+    add.remove();
+    return out;
+  });
+  assert.equal(r.addNarrow, 'none', '좁은 칸에서 글자가 잘린 채 보인다');
+  assert.notEqual(r.addWide, 'none');
+  await go(app.page, 'library', { tab: 'bookmarks' });
+  await app.page.waitForSelector('[data-lib="bookmark-delete"]');
+  await app.page.click('[data-lib="bookmark-delete"]');
+  await go(app.page, 'library', { tab: 'overview' });
+  await app.page.waitForTimeout(300);
+  await go(app.page, 'library', { tab: 'bookmarks' });
+  await app.page.waitForTimeout(500);
+  assert.equal(await app.page.locator('[data-bookmark-id="b1"]:not([hidden])').count(), 0, '지우는 중인 북마크가 다시 나왔다');
+  await app.ctx.close();
+  // 다운로드 — 모듈이 거는 download 이벤트 구독을 붙잡아 진행·실패를 보낸다
+  const dctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const dpage = await dctx.newPage();
+  dpage.on('pageerror', (e) => errors.push(String(e)));
+  await dpage.addInitScript(mockTauri, [base, 'dark']);
+  await dpage.addInitScript(() => {
+    window.__ev = {};
+    window.__TAURI__.event.listen = async (name, fn) => { (window.__ev[name] ||= []).push(fn); return () => {}; };
+    const inv = window.__TAURI__.core.invoke;
+    window.__job = (p, state = 'downloading') => ({ id: 'j1', kind: 'vod', target: '500', title: '다시보기', channelName: '채널', state, progress: p, bytes: p * 1e8, error: state === 'failed' ? '네트워크' : null });
+    window.__TAURI__.core.invoke = async (c, a) => (c === 'download_list' ? { folder: '/tmp/dl', jobs: [window.__job(0.1)], history: [] } : inv(c, a));
+  });
+  await dpage.goto(base);
+  await dpage.waitForSelector('[data-page]', { state: 'attached' });
+  const dl = await dpage.evaluate(async () => {
+    const { mountDownloads } = await import('/js/downloads.js');
+    const box = document.createElement('div');
+    document.body.append(box);
+    await mountDownloads(box);
+    const row1 = box.querySelector('.dl-row');
+    const name = Object.keys(window.__ev).find((k) => k.includes('download'));
+    const send = (jobs) => { for (const fn of window.__ev[name] || []) fn({ payload: { folder: '/tmp/dl', jobs, history: [] } }); };
+    send([window.__job(0.1)]); // 직전 상태를 맞춘다(실패 알림은 상태가 바뀔 때)
+    send([window.__job(0.5)]);
+    const row2 = box.querySelector('.dl-row');
+    const out = { same: row1 === row2, p: row2.querySelector('.dl-fill').style.getPropertyValue('--p'), text: row2.querySelector('.dl-status').textContent };
+    send([window.__job(0.5, 'assembling')]);
+    out.assembling = box.querySelector('.dl-status').textContent;
+    out.indeterminate = box.querySelector('.dl-fill').classList.contains('indeterminate');
+    send([window.__job(0.5, 'failed')]);
+    await new Promise((res) => setTimeout(res, 50));
+    out.toastAction = [...document.querySelectorAll('.toast button, .toast [role="button"]')].map((b) => b.textContent.trim());
+    return out;
+  });
+  assert.equal(dl.same, true, '진행이 바뀔 때마다 줄을 새로 썼다');
+  assert.equal(dl.p, '0.5');
+  assert.match(dl.text, /50%/);
+  assert.match(dl.assembling, /합치는 중 · \d/, `합치는 중에 용량이 없다: ${dl.assembling}`);
+  assert.equal(dl.indeterminate, true);
+  assert.ok(dl.toastAction.includes('다시 시도'), `실패 알림 동작 ${JSON.stringify(dl.toastAction)}`);
+  await dctx.close();
+  assert.deepEqual(errors, []);
+  assert.deepEqual(app.errors, []);
 });
 
 await browser.close();

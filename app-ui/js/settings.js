@@ -362,7 +362,7 @@ export class SettingsPage {
     const range = (key, label, min, max, step) => `
       <label class="setting" data-search="${esc(label)}"><span class="setting-label">${esc(label)}</span>
         <span class="range-field"><input type="range" min="${min}" max="${max}" step="${step}" value="${esc(p[key])}" data-chat="${key}"><output>${esc(p[key])}</output></span></label>`;
-    const words = (p.blockedWords || []).map((w) => `<span class="word-chip">${esc(w)}<button data-remove-word="${esc(w)}" title="지우기">✕</button></span>`).join('');
+    const words = (p.blockedWords || []).map((w) => `<span class="word-chip">${esc(w)}<button data-remove-word="${esc(w)}" title="지우기" aria-label="${esc(`금지어 ${w} 지우기`)}">✕</button></span>`).join('');
     const users = (p.blockedUsers || []).map((u) => `<span class="word-chip">${esc(blockedLabel(u))}<button data-unblock="${esc(u)}" title="차단 해제">해제</button></span>`).join('');
     return `
       <section class="settings-group" data-g="chat"><h2>채팅 표시</h2>
