@@ -251,7 +251,10 @@ pub struct ChatTitle {
 /// 후원 정보.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct DonationInfo {
-    pub amount: i64,
+    /// 후원 금액(치즈). 후원자가 금액을 비공개로 했으면 `None` — 치지직은 그때 `payAmount` 를
+    /// 빼거나 0·숫자 아닌 값으로 보낸다. 화면은 금액 자리를 비운다("0치즈"로 그리지 않는다).
+    #[serde(default)]
+    pub amount: Option<i64>,
     pub currency: String,
     pub r#type: String,
 }
@@ -260,7 +263,7 @@ impl DonationInfo {
     /// Swift 기본값: `currency = "KRW"`, `type = "CHAT"`.
     pub fn new(amount: i64) -> Self {
         Self {
-            amount,
+            amount: Some(amount),
             currency: "KRW".into(),
             r#type: "CHAT".into(),
         }
@@ -451,7 +454,7 @@ mod tests {
                 donation: Some(DonationInfo::new(1000)),
                 ..Default::default()
             });
-        assert_eq!(m.extras.unwrap().donation.unwrap().amount, 1000);
+        assert_eq!(m.extras.unwrap().donation.unwrap().amount, Some(1000));
     }
 
     #[test]

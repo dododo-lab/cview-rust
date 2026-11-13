@@ -144,13 +144,18 @@ impl ChatMessageParser {
             _ => MessageType::Normal,
         };
 
-        // 익명 후원: isAnonymous 플래그 또는 닉네임이 비었거나 "Unknown".
+        // 익명 후원: isAnonymous 플래그, 사용자 ID 가 "anonymous", 또는 프로필이 없어(null) 닉네임이
+        // 비었거나 "Unknown". msgTypeCode 10 으로만 후원임을 알리는 줄(금액 비공개 등)도 같은 규칙을 쓴다.
         let mut nickname = parsed_profile.nickname;
-        if parsed_extras.is_donation
-            && (parsed_extras.is_anonymous || nickname.is_empty() || nickname == "Unknown")
-        {
-            nickname = "익명".into();
+        let is_anonymous_donation = message_type == MessageType::Donation
+            && (parsed_extras.is_anonymous
+                || uid.eq_ignore_ascii_case("anonymous")
+                || nickname.trim().is_empty()
+                || nickname == "Unknown");
+        if is_anonymous_donation {
+            nickname = Self::ANONYMOUS_NICKNAME.into();
         }
+        let is_anonymous = parsed_extras.is_anonymous || is_anonymous_donation;
 
         let profile = ChatProfile::new(
             nickname.clone(),
@@ -162,18 +167,26 @@ impl ChatMessageParser {
             parsed_profile.activity_badges,
         );
 
-        // 가려진 메시지는 원문·이모티콘·후원 extras 를 비운다(누출 방지).
-        let extras = (!is_blinded).then(|| ChatExtras {
-            emojis: (!parsed_extras.emojis.is_empty()).then_some(parsed_extras.emojis),
-            os_type: None,
-            streaming_channel_id: None,
-            donation: parsed_extras.donation,
-            subscription: parsed_extras.subscription,
-            gift_type: parsed_extras.gift_type,
-            gift_count: parsed_extras.gift_count,
-            mission_text: parsed_extras.mission_text,
-            is_anonymous: parsed_extras.is_anonymous.then_some(true),
-        });
+        // 가려진 메시지는 원문·이모티콘·후원 extras 를 비운다(누출 방지). 익명 표시만은 남겨
+        // 화면이 그 줄을 사용자 동작(말풍선·차단) 대상으로 삼지 않게 한다.
+        let extras = if is_blinded {
+            is_anonymous.then(|| ChatExtras {
+                is_anonymous: Some(true),
+                ..ChatExtras::default()
+            })
+        } else {
+            Some(ChatExtras {
+                emojis: (!parsed_extras.emojis.is_empty()).then_some(parsed_extras.emojis),
+                os_type: None,
+                streaming_channel_id: None,
+                donation: parsed_extras.donation,
+                subscription: parsed_extras.subscription,
+                gift_type: parsed_extras.gift_type,
+                gift_count: parsed_extras.gift_count,
+                mission_text: parsed_extras.mission_text,
+                is_anonymous: is_anonymous.then_some(true),
+            })
+        };
 
         ChatMessage {
             id: msg_id,
@@ -295,14 +308,18 @@ fn parse_extras(object: Option<&Dict>) -> ParsedExtras {
     }
 
     // Donation — payAmount 는 정수 / 실수 / "1000" / "1,000" 모두 가능.
-    if let Some(pay) = ChatMessageParser::parse_amount(dict.get("payAmount")).filter(|p| *p > 0) {
+    // 금액 비공개 후원은 payAmount 가 없거나 0·숫자 아닌 값이다. 그때도 donationType(CHAT/VIDEO/MISSION…)
+    // 이 있으면 후원으로 보고 금액만 비운다(`amount: None`). 둘 다 없으면 일반 채팅(예전 그대로).
+    let pay = ChatMessageParser::parse_amount(dict.get("payAmount")).filter(|p| *p > 0);
+    let donation_type = ns_str(dict.get("donationType"))
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    if pay.is_some() || donation_type.is_some() {
         result.is_donation = true;
         result.donation = Some(DonationInfo {
             amount: pay,
             currency: "KRW".into(),
-            r#type: ns_str(dict.get("donationType"))
-                .unwrap_or("CHAT")
-                .to_owned(),
+            r#type: donation_type.unwrap_or("CHAT").to_owned(),
         });
     }
 

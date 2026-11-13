@@ -759,6 +759,41 @@ fn incremental_stats_and_stream_alert_merge() {
 }
 
 #[test]
+fn private_amount_and_anonymous_stream_alerts() {
+    use cview_app_core::viewmodels::chat::processing::stream_alert_from_item;
+    let vm = ChatViewModel::new();
+    let mut s = vm.lock();
+    // 금액 비공개 두 건(같은 사람)을 합쳐도 금액은 비공개 그대로 — "0" 이 되지 않는다
+    let mut p1 = item("p1", "u1", "a");
+    p1.r#type = MessageType::Donation;
+    let mut p2 = item("p2", "u1", "b");
+    p2.r#type = MessageType::Donation;
+    s.commit_backlog_messages(vec![p1.clone(), p2.clone()]);
+    assert_eq!(s.donation_count, 2);
+    assert_eq!(s.total_donation_amount, 0);
+    s.enqueue_stream_alert(stream_alert_from_item(&p1).unwrap());
+    s.enqueue_stream_alert(stream_alert_from_item(&p2).unwrap());
+    assert_eq!(s.stream_alerts.len(), 1);
+    assert_eq!(s.stream_alerts[0].donation_amount, None);
+    // 익명 후원은 닉네임이 같아도 다른 사람일 수 있어 합치지 않는다
+    let mut a1 = item("a1", "", "x");
+    a1.r#type = MessageType::Donation;
+    a1.nickname = "익명".into();
+    a1.donation_amount = Some(1000);
+    let mut a2 = a1.clone();
+    a2.id = "a2".into();
+    s.enqueue_stream_alert(stream_alert_from_item(&a1).unwrap());
+    s.enqueue_stream_alert(stream_alert_from_item(&a2).unwrap());
+    let anon: Vec<_> = s
+        .stream_alerts
+        .iter()
+        .filter(|a| a.nickname == "익명")
+        .collect();
+    assert_eq!(anon.len(), 2);
+    assert!(anon.iter().all(|a| a.donation_amount == Some(1000)));
+}
+
+#[test]
 fn drop_notice_is_rate_limited() {
     let vm = ChatViewModel::new();
     let mut s = vm.lock();

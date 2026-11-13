@@ -1,6 +1,8 @@
 // 후원·구독 표시 — 원본 ChatEventCard / ChatDonationRankingHeader / StreamAlertItem.
 //
 // - 채팅 줄: 후원은 종류(채팅·영상·미션)와 치즈 금액, 금액 구간별 강조. 구독은 개월 수와 티어.
+//   익명 후원자는 닉네임 자리에 '익명'(백엔드가 사용자 ID 를 비워 보내 말풍선·차단이 붙지 않는다).
+//   금액을 비공개로 한 후원은 금액 자리를 통째로 뺀다('0치즈'·빈 배지를 그리지 않는다).
 // - 색 단계(ev-lv-1~6): 치지직 초록에서 시작해 금액(구독은 개월 수, 선물은 인원)이 클수록
 //   청록 → 파랑 → 보라 → 핑크·주황 → 금빛 무지개로 올라간다. 채팅 카드·칩·영상 위 알림이 같은 단계를 쓴다.
 // - 주간 후원 랭킹: 채팅 패널 위 칩 줄(`chat_donation_ranking`).
@@ -99,7 +101,7 @@ export function isGiftEvent(m) {
  */
 export function eventMeta(m) {
   if (m.kind === 'donation') {
-    const amount = m.donationAmount || 0;
+    const amount = Number.isFinite(m.donationAmount) && m.donationAmount > 0 ? m.donationAmount : 0;
     const tier = donationTier(amount);
     const type = String(m.donationType || 'chat').toLowerCase();
     const level = donationLevel(amount);
@@ -111,7 +113,8 @@ export function eventMeta(m) {
       level,
       icon: type === 'video' ? 'play' : type === 'mission' ? 'flag' : type === 'party' ? 'party' : ['', 'heart', 'flame', 'crown'][tier],
       title: typed ? donationKindLabel(type) : tierLabel,
-      value: formatCheese(amount) || '후원 메시지',
+      // 금액 비공개면 빈 문자열 — 그리는 쪽이 금액 칸을 뺀다.
+      value: formatCheese(amount),
       detail: typed && tier >= 3 ? tierLabel : '',
       extra: m.missionText ? `미션 · ${m.missionText}` : '',
     };
@@ -139,17 +142,17 @@ export function eventMeta(m) {
 export function eventCardHtml(m, { time = '', badges = '', nick = '', content = '', tag = '' } = {}) {
   const e = eventMeta(m);
   if (!e) return '';
+  // 익명 후원자는 닉네임 자리에 '익명' 하나만 쓴다(영상 위 알림·이벤트 칩과 같다). 이름이 실려 와도 그리지 않는다.
+  // 예전엔 작은 '익명' 꼬리표만 남겨 이름이 빠진 줄처럼 보였다.
   const anon = m.anonymous || m.nickname === '익명';
-  // 닉네임 자리도 "익명"이면 배지와 "익명"이 두 번 붙는다 — 그때는 배지만 남긴다(D-4).
-  const anonNick = anon && (!m.nickname || m.nickname === '익명');
   return `<div class="ev-card">
     <div class="ev-head">
       <span class="ev-icon">${EVENT_ICONS[e.icon] || ''}</span>
       <span class="ev-title">${esc(e.title)}</span>
       ${e.detail ? `<span class="ev-detail">${esc(e.detail)}</span>` : ''}
-      <span class="ev-value">${esc(e.value)}</span>
+      ${e.value ? `<span class="ev-value">${esc(e.value)}</span>` : ''}
     </div>
-    <div class="ev-from">${tag}${badges}${anonNick ? '' : nick}${anon ? '<span class="ev-anon">익명</span>' : ''}${time}</div>
+    <div class="ev-from">${tag}${badges}${anon ? '<span class="nick anon">익명</span>' : nick}${time}</div>
     ${e.extra ? `<div class="ev-extra">${esc(e.extra)}</div>` : ''}
     ${content ? `<div class="ev-body">${content}</div>` : ''}
   </div>`;
@@ -172,7 +175,7 @@ export function setStreamAlertsEnabled(on) {
 /** 옛 머리 표시 — 호환용(외부 코드가 쓰면). 새 카드는 eventCardHtml. */
 export function eventHead(m) {
   const e = eventMeta(m);
-  return e ? { classes: eventClasses(m), head: `<span class="ev-title">${esc(e.title)}</span><span class="ev-value">${esc(e.value)}</span>` } : null;
+  return e ? { classes: eventClasses(m), head: `<span class="ev-title">${esc(e.title)}</span>${e.value ? `<span class="ev-value">${esc(e.value)}</span>` : ''}` } : null;
 }
 
 /** 주간 후원 랭킹 칩 줄. */
@@ -269,7 +272,7 @@ export class StreamAlerts {
       <span class="stream-alert-icon">${EVENT_ICONS[e.icon] || ''}</span>
       <span class="stream-alert-text">
         <span class="stream-alert-kicker">${esc(e.title)}${e.detail ? ` · ${esc(e.detail)}` : ''}</span>
-        <span class="stream-alert-title"><span class="stream-alert-nick">${esc(m.nickname || '익명')}</span><b>${esc(e.value)}</b></span>
+        <span class="stream-alert-title"><span class="stream-alert-nick">${esc(m.nickname || '익명')}</span>${e.value ? `<b>${esc(e.value)}</b>` : ''}</span>
         <span class="stream-alert-body">${e.extra ? `<span class="stream-alert-msg">${esc(e.extra)}</span>` : ''}${m.content ? `<span class="stream-alert-msg">${renderContent(m.content, m.emojis)}</span>` : ''}</span>
       </span>`;
     this.show(item, ALERT_MS);

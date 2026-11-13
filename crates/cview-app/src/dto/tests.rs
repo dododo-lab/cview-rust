@@ -412,3 +412,44 @@ fn live_detail_dto_policy_fields_default_to_unknown() {
     assert!(!dto.kr_only_viewing);
     assert!(dto.qualities.is_empty());
 }
+
+/// 익명 후원자는 사용자 ID 를 비우고 닉네임을 '익명'으로, 금액 비공개는 donationAmount 를 null 로 싣는다.
+#[test]
+fn anonymous_and_private_amount_donation_dto() {
+    use cview_core::models::chat::{ChatExtras, DonationInfo, MessageType};
+    let donation = |nick: &str, uid: &str, amount: Option<i64>, anonymous: bool| {
+        let mut m = ChatMessage::new(nick, "고마워요");
+        m.user_id = Some(uid.into());
+        m.r#type = MessageType::Donation;
+        let mut d = DonationInfo::new(0);
+        d.amount = amount;
+        d.r#type = "VIDEO".into();
+        m.extras = Some(ChatExtras {
+            donation: Some(d),
+            is_anonymous: anonymous.then_some(true),
+            ..ChatExtras::default()
+        });
+        ChatMessageDto::from_message(&m, false)
+    };
+    // 익명 + 금액 공개 — 실제 ID 가 실려 와도 화면에는 넘기지 않는다
+    let a = donation("익명", "real-hash", Some(1000), true);
+    assert_eq!((a.user_id.as_str(), a.nickname.as_str()), ("", "익명"));
+    assert!(a.anonymous);
+    assert_eq!(a.donation_amount, Some(1000));
+    // 실명 + 금액 비공개
+    let p = donation("실명", "u1", None, false);
+    assert_eq!((p.user_id.as_str(), p.nickname.as_str()), ("u1", "실명"));
+    assert_eq!(p.donation_amount, None);
+    assert_eq!(p.donation_type.as_deref(), Some("video"));
+    let json = serde_json::to_value(&p).unwrap();
+    assert!(json["donationAmount"].is_null());
+    // 익명 + 금액 비공개
+    let ap = donation("Unknown", "anonymous", None, true);
+    assert_eq!((ap.user_id.as_str(), ap.nickname.as_str()), ("", "익명"));
+    assert_eq!(ap.donation_amount, None);
+    // 일반은 그대로
+    let n = donation("일반", "u2", Some(5000), false);
+    assert_eq!((n.user_id.as_str(), n.nickname.as_str()), ("u2", "일반"));
+    assert!(!n.anonymous);
+    assert_eq!(n.donation_amount, Some(5000));
+}

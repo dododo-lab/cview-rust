@@ -1211,7 +1211,6 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .ev-from .nick { margin: 0; font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ev-from .badges { display: inline-flex; }
 .ev-from .chat-time { order: 9; margin-left: auto; font-size: var(--fs-micro); color: var(--text-tertiary); }
-.ev-anon { font-size: var(--fs-micro); color: var(--text-tertiary); padding: 0 5px; border-radius: var(--radius-xxs); border: 1px solid var(--border); }
 .ev-extra { font-size: var(--fs-footnote); color: var(--text-secondary); padding: 5px 8px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--ev) 10%, transparent); }
 .ev-body { font-size: var(--fs-caption); line-height: 1.5; color: var(--text-primary); word-break: break-word; }
 /* 금액 단계별 강조(ev-lv-N)는 아래 「후원 색 단계」 묶음 */
@@ -1825,8 +1824,8 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .up-item.danger { color: var(--error); }
 .up-item:disabled { color: var(--text-tertiary); cursor: default; }
 /* 닉네임·아바타는 누를 수 있다 — 말풍선이 떠 있는 동안 누른 닉네임에 밑줄 */
-.chat-list .chat-line[data-uid] :is(.nick, .chat-avatar) { cursor: pointer; }
-.chat-list .chat-line[data-uid] .nick:hover, .chat-list .nick.up-anchor { text-decoration: underline; text-underline-offset: 2px; }
+.chat-list .chat-line[data-uid]:not([data-uid=""]) :is(.nick, .chat-avatar) { cursor: pointer; }
+.chat-list .chat-line[data-uid]:not([data-uid=""]) .nick:hover, .chat-list .nick.up-anchor { text-decoration: underline; text-underline-offset: 2px; }
 /* 이 사람 채팅만 보기 — 다른 줄과 읽음 구분선을 감춘다(시스템 알림은 남긴다) */
 .chat-list.solo > :is(.chat-line:not(.solo-match, .system), .read-divider) { display: none; }
 .chat-solo {
