@@ -754,7 +754,7 @@
 /* 영상 위 오버레이 채팅은 그림자가 영상에 번지기만 한다. */
 .ml-body.chat-overlay .ml-chat { box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35); }
 
-/* 패인 ⚙ 메뉴 — 화면 보정(선명한 화면·밝기·대비·채도) */
+/* 패인 ⚙ 메뉴 — 선명도(끔·약·중·강, sharpness.js)·색 보정(밝기·대비·채도) */
 .ml-pane-menu .ml-check { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .ml-switch { position: relative; flex: none; width: 28px; height: 16px; border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.28); transition: background 0.15s ease; }
 .ml-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--text-on-media, #fff); transition: transform 0.15s ease; }
@@ -763,13 +763,17 @@
 .ml-adjust-row { display: grid; grid-template-columns: 34px 1fr 38px; align-items: center; gap: 6px; padding: 3px 9px; color: var(--text-on-media, #fff); font-size: var(--fs-tiny); }
 .ml-adjust-row input[type="range"] { width: 100%; accent-color: var(--ml-media-accent, #00ffa3); }
 .ml-adjust-row output { text-align: right; font-variant-numeric: tabular-nums; opacity: 0.8; }
-/* 단독 보기 무대 패인 ⚙ — 배속·화면 꽉 채우기·자동 보정/업스케일·이퀄라이저(ml-pane-controls.js setStage) */
+/* 단독 보기 무대 패인 ⚙ — 배속·화면 꽉 채우기·자동 밝기·색 보정·이퀄라이저(ml-pane-controls.js setStage) */
 .ml-gear-menu.ml-stage-tools { min-width: 236px; }
 .ml-rate-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 2px; padding: 2px 4px; }
 .ml-pane-menu .ml-rate-row .ml-menu-item { justify-content: center; padding: 5px 0; font-size: var(--fs-tiny); font-variant-numeric: tabular-nums; }
 .ml-pane-menu .ml-rate-row .ml-menu-item.active { background: rgba(255, 255, 255, 0.14); font-weight: 700; }
 .ml-pane-menu .ml-rate-row .ml-menu-item.active::after { content: none; }
 .ml-menu-note { margin: 0; padding: 1px 9px 4px; font-size: var(--fs-micro); color: rgba(255, 255, 255, 0.62); }
+/* 선명도 단계 — 배속 줄과 같은 모양, 네 칸. 끔이면 '크게 볼 때만'은 흐리게(누르면 아무 일 없음). 상태 줄은 두 줄까지 감싼다. */
+.ml-rate-row.ml-sharp-row { grid-template-columns: repeat(4, 1fr); }
+.ml-pane-menu .ml-check.is-disabled { opacity: 0.45; cursor: default; }
+.ml-menu-note.ml-sharpness-note { max-width: 240px; line-height: 1.35; }
 .ml-adjust-row.ml-eq-row { grid-template-columns: 46px 1fr 38px; }
 .ml-eq-row select { grid-column: 2 / 4; min-width: 0; padding: 3px 4px; border-radius: var(--radius-sm); border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.08); color: inherit; font: inherit; }
 .ml-eq-row select option { color: initial; }

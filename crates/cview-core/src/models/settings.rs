@@ -82,12 +82,27 @@ pub struct PlayerSettings {
     pub video_saturation: f32,
     pub video_hue: f32,
     pub video_gamma: f32,
-    /// 선명한 화면 — nearest-neighbor 스케일링
+    /// 픽셀 그대로 확대(nearest-neighbor) — 아주 예전 이름이 '선명한 화면'이었다.
+    /// 지금의 선명한 화면(언샤프)·업스케일은 `sharpness_level` 하나로 합쳤다.
     pub sharp_pixel_scaling: bool,
-    /// 화질 자동 보정
+    /// 자동 밝기·색 보정(화면에서 어두운·뿌연 장면을 천천히 맞춘다)
     pub auto_picture_enhancement: bool,
-    /// 업스케일링
+    /// 구버전 호환 거울 — 예전 '업스케일' 스위치. 새 앱은 동작에 읽지 않고(`sharpness_level` 이 맡는다)
+    /// 설정 이전·구버전으로 되돌렸을 때의 모습(선명도 '크게 볼 때만'이면 true)에만 쓴다.
     pub video_upscaling: bool,
+    /// 선명도(0 끔·1 약·2 중·3 강) — 예전 '선명한 화면'(채널별)과 '업스케일'(전역)을 합친 값.
+    /// 저장본에 키가 없으면 `None` — 화면(app-ui/js/sharpness.js)이 예전 값에서 한 번 옮겨 쓴다.
+    /// 기본값(초기화)은 `Some(0)` = 명시적으로 끔(초기화 뒤 예전 값에서 다시 살아나지 않게).
+    /// 숫자는 반올림해 0..=3 으로 맞추고, 숫자가 아니면 `None` 으로 흡수한다(도메인 디코딩 실패 → 저장 차단 방지).
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "de_sharpness_level"
+    )]
+    pub sharpness_level: Option<u8>,
+    /// 선명도를 '영상보다 크게 볼 때(단독 보기 무대·시청 화면)'에만 건다 — 여러 패인 보기는 원본 그대로.
+    #[serde(deserialize_with = "de_lenient_bool")]
+    pub sharpness_enlarged_only: bool,
     /// 하드웨어 디코딩 — **현재 어떤 엔진도 읽지 않는다.** 저장 호환을 위해 필드만 유지.
     pub hardware_decoding: bool,
     /// 화면 비율 (`None` = 기본, "16:9" 등)
@@ -160,6 +175,8 @@ impl Default for PlayerSettings {
             sharp_pixel_scaling: false,
             auto_picture_enhancement: false,
             video_upscaling: false,
+            sharpness_level: Some(0),
+            sharpness_enlarged_only: false,
             hardware_decoding: true,
             aspect_ratio: None,
             latency_preset: LatencyPreset::MatchWeb.raw_value().into(),
@@ -191,6 +208,21 @@ fn de_kd<'de, D: Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
 
 fn de_alert_scale<'de, D: Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
     Ok(f64::deserialize(d)?.clamp(0.7, 1.7))
+}
+
+/// 선명도 단계 — 숫자면 반올림해 0..=3, 숫자가 아니면(null·문자열 등) `None`(화면이 다시 정한다).
+fn de_sharpness_level<'de, D: Deserializer<'de>>(d: D) -> Result<Option<u8>, D::Error> {
+    let v = serde_json::Value::deserialize(d)?;
+    Ok(v.as_f64()
+        .filter(|x| x.is_finite())
+        .map(|x| x.round().clamp(0.0, 3.0) as u8))
+}
+
+/// 불리언이 아니면 false — 새 키 하나 때문에 player 도메인 전체가 디코딩 실패하지 않게.
+fn de_lenient_bool<'de, D: Deserializer<'de>>(d: D) -> Result<bool, D::Error> {
+    Ok(serde_json::Value::deserialize(d)?
+        .as_bool()
+        .unwrap_or(false))
 }
 
 fn de_rewind_window<'de, D: Deserializer<'de>>(d: D) -> Result<i64, D::Error> {
@@ -928,9 +960,12 @@ mod tests {
 
     #[test]
     fn empty_json_decodes_to_defaults() {
+        // 선명도만 예외 — 저장본에 키가 없으면 None(화면이 예전 값에서 옮겨 쓴다), 초기화 기본값은 Some(0).
+        let mut player = PlayerSettings::default();
+        player.sharpness_level = None;
         assert_eq!(
             serde_json::from_str::<PlayerSettings>("{}").unwrap(),
-            PlayerSettings::default()
+            player
         );
         assert_eq!(
             serde_json::from_str::<GeneralSettings>("{}").unwrap(),
@@ -980,6 +1015,56 @@ mod tests {
         assert_eq!(s.stream_alert_scale, 1.7);
         assert_eq!(s.live_rewind_window_minutes, 30);
         assert_eq!(s.live_rewind_disk_budget_mb, 2_048);
+    }
+
+    #[test]
+    fn sharpness_level_is_lenient() {
+        let lvl = |json: &str| {
+            serde_json::from_str::<PlayerSettings>(json)
+                .unwrap()
+                .sharpness_level
+        };
+        assert_eq!(lvl(r#"{"sharpnessLevel":2}"#), Some(2));
+        assert_eq!(lvl(r#"{"sharpnessLevel":9}"#), Some(3));
+        assert_eq!(lvl(r#"{"sharpnessLevel":-1}"#), Some(0));
+        assert_eq!(lvl(r#"{"sharpnessLevel":0.4}"#), Some(0));
+        assert_eq!(lvl(r#"{"sharpnessLevel":2.6}"#), Some(3));
+        // 숫자가 아니면 None 으로 흡수 — 디코딩은 성공해야 한다(실패하면 그 세션의 설정 저장이 막힌다).
+        for bad in [r#""high""#, "true", "{}", "null", "[]"] {
+            assert_eq!(lvl(&format!(r#"{{"sharpnessLevel":{bad}}}"#)), None, "{bad}");
+        }
+        let s: PlayerSettings =
+            serde_json::from_str(r#"{"sharpnessEnlargedOnly":"x","volumeLevel":0.5}"#).unwrap();
+        assert!(!s.sharpness_enlarged_only);
+        assert_eq!(s.volume_level, 0.5);
+        let on: PlayerSettings =
+            serde_json::from_str(r#"{"sharpnessEnlargedOnly":true}"#).unwrap();
+        assert!(on.sharpness_enlarged_only);
+    }
+
+    #[test]
+    fn sharpness_reset_is_explicit_off_and_none_is_not_serialized() {
+        // 초기화(default)는 명시적 끔 — 화면이 예전 값(구버전 거울)에서 다시 켜지 않는다.
+        let d = PlayerSettings::default();
+        assert_eq!(d.sharpness_level, Some(0));
+        let v = serde_json::to_value(&d).unwrap();
+        assert_eq!(v["sharpnessLevel"], serde_json::json!(0));
+        assert_eq!(v["sharpnessEnlargedOnly"], serde_json::json!(false));
+        // 키가 없는 저장본(구버전)은 None — 다시 쓸 때도 키를 만들지 않는다.
+        let old: PlayerSettings = serde_json::from_str(r#"{"videoUpscaling":true}"#).unwrap();
+        assert_eq!(old.sharpness_level, None);
+        assert!(old.video_upscaling);
+        assert!(serde_json::to_value(&old)
+            .unwrap()
+            .get("sharpnessLevel")
+            .is_none());
+        // 왕복
+        let mut s = PlayerSettings::default();
+        s.sharpness_level = Some(3);
+        s.sharpness_enlarged_only = true;
+        let back: PlayerSettings =
+            serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert_eq!(back, s);
     }
 
     #[test]
