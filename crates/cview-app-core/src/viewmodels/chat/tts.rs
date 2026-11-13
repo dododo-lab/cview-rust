@@ -29,14 +29,18 @@ impl ChatTts for NoopTts {
 pub fn format_tts_text(message: &ChatMessageItem) -> Option<String> {
     match message.r#type {
         MessageType::Donation => {
-            let amount = message.donation_amount?;
             let content = if message.content.is_empty() {
                 String::new()
             } else {
                 format!(". {}", message.content)
             };
+            // 금액 비공개 후원은 금액 없이 읽는다("0원"·건너뛰기 대신).
+            let amount = match message.donation_amount {
+                Some(a) if a > 0 => format!("{a}원 "),
+                _ => String::new(),
+            };
             Some(format!(
-                "{}님이 {}원 후원{}",
+                "{}님이 {}후원{}",
                 message.nickname, amount, content
             ))
         }
@@ -121,7 +125,8 @@ mod tests {
     #[test]
     fn formats() {
         let mut d = msg(MessageType::Donation);
-        assert_eq!(format_tts_text(&d), None);
+        // 금액 비공개 후원은 금액 없이 읽는다
+        assert_eq!(format_tts_text(&d).unwrap(), "닉님이 후원. 고마워요");
         d.donation_amount = Some(1000);
         assert_eq!(format_tts_text(&d).unwrap(), "닉님이 1000원 후원. 고마워요");
         let mut s = msg(MessageType::Subscription);

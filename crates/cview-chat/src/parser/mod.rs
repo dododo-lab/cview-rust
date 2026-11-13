@@ -33,6 +33,8 @@ impl ChatMessageParser {
     pub const CLEAN_BOT_BLIND_TEXT: &'static str = "클린봇이 부적절한 표현을 감지했습니다.";
     /// 관리자 blind / `HIDDEN` 안내 문구.
     pub const ADMIN_BLIND_TEXT: &'static str = "관리자에 의해 삭제된 메시지입니다.";
+    /// 익명 후원자의 닉네임 자리 표시.
+    pub const ANONYMOUS_NICKNAME: &'static str = "익명";
 
     pub fn new() -> Self {
         Self {

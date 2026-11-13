@@ -9,6 +9,7 @@ use chrono::Duration as ChronoDuration;
 use cview_core::models::stream_alert::{StreamAlertItem, StreamAlertType};
 
 use super::ChatState;
+use cview_chat::parser::ChatMessageParser;
 
 impl ChatState {
     pub const MAX_VISIBLE_ALERTS: usize = 3;
@@ -21,8 +22,11 @@ impl ChatState {
             return;
         }
         let window = ChronoDuration::seconds(Self::ALERT_MERGE_WINDOW_SECS);
+        // 익명 후원은 닉네임이 모두 "익명"이라 다른 사람끼리 합쳐지므로 합치지 않는다.
+        let mergeable = alert.nickname != ChatMessageParser::ANONYMOUS_NICKNAME;
         if let Some(idx) = self.stream_alerts.iter().rposition(|a| {
-            a.nickname == alert.nickname
+            mergeable
+                && a.nickname == alert.nickname
                 && a.alert_type == alert.alert_type
                 && alert.timestamp - a.timestamp < window
         }) {
@@ -82,7 +86,11 @@ impl ChatState {
                 | StreamAlertType::MissionDonation
         );
         let amount = if is_donation {
-            Some(existing.donation_amount.unwrap_or(0) + newer.donation_amount.unwrap_or(0))
+            // 금액 비공개끼리 합치면 비공개 그대로(None) — "0" 으로 만들지 않는다.
+            match (existing.donation_amount, newer.donation_amount) {
+                (None, None) => None,
+                (a, b) => Some(a.unwrap_or(0) + b.unwrap_or(0)),
+            }
         } else {
             newer.donation_amount
         };

@@ -73,7 +73,9 @@ export function parseCommand(text) {
 /** 후원·구독 읽을 문장. */
 export function ttsText(m) {
   if (m.kind === 'subscription') return `${m.nickname || '익명'}님이 ${m.subscriptionMonths ? `${m.subscriptionMonths}개월 ` : ''}구독했습니다. ${m.content || ''}`;
-  return `${m.nickname || '익명'}님이 ${formatCheese(m.donationAmount)} ${donationKindLabel(m.donationType)}했습니다. ${m.content || ''}`;
+  // 금액 비공개면 금액 없이("익명님이 채팅 후원했습니다.") — 빈 금액 자리에 공백이 두 번 들어가지 않게.
+  const amount = formatCheese(m.donationAmount);
+  return `${m.nickname || '익명'}님이 ${amount ? `${amount} ` : ''}${donationKindLabel(m.donationType)}했습니다. ${m.content || ''}`;
 }
 
 function stamp() {
@@ -103,7 +105,7 @@ export function installChatExtras(panel) {
     const html = events.slice(0, 12).map((m) => {
       const e = eventMeta(m);
       if (!e) return '';
-      return `<span class="event-chip ev-${e.tone} ev-tier-${e.tier} ev-lv-${e.level}" title="${esc(`${e.title} · ${m.content || ''}`)}"><span class="event-chip-icon">${EVENT_ICONS[e.icon] || ''}</span><b>${esc(m.nickname || '익명')}</b><span class="event-chip-value">${esc(e.value)}</span></span>`;
+      return `<span class="event-chip ev-${e.tone} ev-tier-${e.tier} ev-lv-${e.level}" title="${esc(`${e.title} · ${m.content || ''}`)}"><span class="event-chip-icon">${EVENT_ICONS[e.icon] || ''}</span><b>${esc(m.nickname || '익명')}</b>${e.value ? `<span class="event-chip-value">${esc(e.value)}</span>` : ''}</span>`;
     }).join('');
     if (html === railHtml) return;
     railHtml = html;
@@ -184,7 +186,7 @@ export function installChatExtras(panel) {
       if (m.kind === 'system') continue;
       stats.times.push(now);
       if (m.nickname) stats.users.set(m.nickname, (stats.users.get(m.nickname) || 0) + 1);
-      if (m.kind === 'donation') { stats.donations += 1; stats.cheese += m.donationAmount || 0; }
+      if (m.kind === 'donation') { stats.donations += 1; if (Number.isFinite(m.donationAmount) && m.donationAmount > 0) stats.cheese += m.donationAmount; }
       if (m.kind === 'subscription') stats.subs += 1;
       if (m.kind === 'donation' || m.kind === 'subscription') {
         events.unshift(m);

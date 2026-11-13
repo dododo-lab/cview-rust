@@ -408,10 +408,20 @@ impl ChatMessageDto {
         } else {
             message_kind(item.r#type)
         };
+        // 익명 후원자는 사용자 ID 를 싣지 않는다 — 화면은 ID 없는 줄에 말풍선·줄 메뉴·차단·사진 찾기를
+        // 붙이지 않는다. 치지직이 익명 후원에도 실제 ID 를 실어 보내면 말풍선으로 신원이 드러날 수 있다.
+        let (user_id, nickname) = if anonymous {
+            (
+                String::new(),
+                cview_chat::parser::ChatMessageParser::ANONYMOUS_NICKNAME.to_string(),
+            )
+        } else {
+            (item.user_id, item.nickname)
+        };
         Self {
             id: item.id,
-            user_id: item.user_id,
-            nickname: item.nickname,
+            user_id,
+            nickname,
             content: item.content,
             timestamp: item.timestamp.timestamp_millis(),
             kind: kind.into(),

@@ -83,7 +83,9 @@ impl ChatMessageItem {
                 .and_then(|p| p.badge.as_ref())
                 .and_then(|b| b.image_url.clone()),
             emojis,
-            donation_amount: extras.and_then(|e| e.donation.as_ref()).map(|d| d.amount),
+            donation_amount: extras
+                .and_then(|e| e.donation.as_ref())
+                .and_then(|d| d.amount),
             donation_type: extras
                 .and_then(|e| e.donation.as_ref())
                 .map(|d| d.r#type.clone()),

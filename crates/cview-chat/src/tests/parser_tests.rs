@@ -10,7 +10,7 @@ use crate::engine::ChatEngine;
 use crate::error::ChatError;
 use crate::parser::ChatMessageParser;
 use crate::protocol::{ChatEvent, ChatProtocolMessage, ChzzkChatCommand};
-use cview_core::models::chat::{ChatMessage, EmojiMap, MessageType};
+use cview_core::models::chat::{ChatExtras, ChatMessage, EmojiMap, MessageType};
 
 fn parser() -> ChatMessageParser {
     ChatMessageParser::with_os_version("macOS/15.0.0")
@@ -239,7 +239,7 @@ fn parse_donation_with_amount() {
     assert_eq!(m[0].content, "donation msg");
     assert_eq!(m[0].r#type, MessageType::Donation);
     let d = m[0].extras.as_ref().unwrap().donation.as_ref().unwrap();
-    assert_eq!(d.amount, 1000);
+    assert_eq!(d.amount, Some(1000));
     assert_eq!(d.currency, "KRW");
     // 닉네임 없는 후원은 익명.
     assert_eq!(m[0].nickname, "익명");
@@ -286,20 +286,20 @@ fn parse_donation_nested_extras_and_double_amounts() {
             .as_ref()
             .unwrap()
             .amount,
-        5000
+        Some(5000)
     );
 
     let m = donations(parse(
         r#"{"cmd":93102,"bdy":[{"msg":"double amount","uid":"d2","msgTime":3000,"extras":{"payAmount":2500.0,"donationType":"VIDEO"}}]}"#,
     ));
     let d = m[0].extras.as_ref().unwrap().donation.as_ref().unwrap();
-    assert_eq!((d.amount, d.r#type.as_str()), (2500, "VIDEO"));
+    assert_eq!((d.amount, d.r#type.as_str()), (Some(2500), "VIDEO"));
 
     let m = donations(parse(
         r#"{"cmd":93102,"bdy":[{"msg":"mission","uid":"d3","msgTime":4000,"extras":{"payAmount":10000,"donationType":"MISSION"}}]}"#,
     ));
     let d = m[0].extras.as_ref().unwrap().donation.as_ref().unwrap();
-    assert_eq!((d.amount, d.r#type.as_str()), (10000, "MISSION"));
+    assert_eq!((d.amount, d.r#type.as_str()), (Some(10000), "MISSION"));
 }
 
 #[test]
@@ -327,7 +327,105 @@ fn anonymous_flag_overrides_nickname() {
             .as_ref()
             .unwrap()
             .amount,
-        1000
+        Some(1000)
+    );
+}
+
+/// 익명·금액 비공개 네 경우. 치지직 후원 줄은 msgTypeCode 10 과 extras(isAnonymous·payAmount·donationType)로 온다.
+/// 익명이면 uid 가 "anonymous" 이고 profile 이 null 이기도 하다. 금액 비공개면 payAmount 가 없거나 0 이다.
+#[test]
+fn anonymous_and_private_amount_donations() {
+    let donation_of = |m: &ChatMessage| m.extras.as_ref().unwrap().donation.clone();
+    let anon = |m: &ChatMessage| m.extras.as_ref().and_then(|e| e.is_anonymous) == Some(true);
+
+    // 1) 익명 + 금액 공개: profile 이 "null" 문자열, uid "anonymous"
+    let m = donations(parse(
+        r#"{"cmd":93102,"bdy":[{"msg":"응원해요","uid":"anonymous","msgTime":1,"msgTypeCode":10,"profile":"null","extras":{"payAmount":2000,"donationType":"CHAT","isAnonymous":true}}]}"#,
+    ));
+    assert_eq!(m[0].r#type, MessageType::Donation);
+    assert_eq!(m[0].nickname, ChatMessageParser::ANONYMOUS_NICKNAME);
+    assert!(anon(&m[0]));
+    assert_eq!(donation_of(&m[0]).unwrap().amount, Some(2000));
+
+    // 플래그 없이 uid 만 "anonymous" 여도 익명
+    let m = donations(parse(
+        r#"{"cmd":93102,"bdy":[{"msg":"x","uid":"anonymous","msgTime":1,"msgTypeCode":10,"profile":{"nickname":"남은이름"},"extras":{"payAmount":1000}}]}"#,
+    ));
+    assert_eq!(m[0].nickname, "익명");
+    assert!(anon(&m[0]));
+
+    // 2) 실명 + 금액 비공개: payAmount 없음, donationType 은 있음 → 후원, 금액 None, 종류 유지
+    let m = donations(parse(
+        r#"{"cmd":93102,"bdy":[{"msg":"영상 보세요","uid":"u-real","msgTime":1,"profile":{"nickname":"실명후원자"},"extras":{"donationType":"VIDEO","isAnonymous":false}}]}"#,
+    ));
+    assert_eq!(m[0].r#type, MessageType::Donation);
+    assert_eq!(m[0].nickname, "실명후원자");
+    assert!(!anon(&m[0]));
+    let d = donation_of(&m[0]).unwrap();
+    assert_eq!((d.amount, d.r#type.as_str()), (None, "VIDEO"));
+
+    // payAmount 0·null·숫자 아님도 비공개(종류가 있거나 msgTypeCode 10 이면 후원)
+    for pay in [r#"0"#, r#"null"#, r#""비공개""#] {
+        let json = format!(
+            r#"{{"cmd":93102,"bdy":[{{"msg":"m","uid":"u1","msgTime":1,"msgTypeCode":10,"profile":{{"nickname":"닉"}},"extras":{{"payAmount":{pay}}}}}]}}"#
+        );
+        let m = donations(parse(&json));
+        assert_eq!(m[0].r#type, MessageType::Donation, "payAmount={pay}");
+        assert_eq!(m[0].nickname, "닉", "payAmount={pay}");
+        assert_eq!(
+            donation_of(&m[0]).and_then(|d| d.amount),
+            None,
+            "payAmount={pay}"
+        );
+    }
+    let m = donations(parse(
+        r#"{"cmd":93102,"bdy":[{"msg":"m","uid":"u1","msgTime":1,"profile":{"nickname":"닉"},"extras":{"payAmount":0,"donationType":"CHAT"}}]}"#,
+    ));
+    assert_eq!(m[0].r#type, MessageType::Donation);
+    assert_eq!(donation_of(&m[0]).unwrap().amount, None);
+
+    // 3) 익명 + 금액 비공개: msgTypeCode 10 만으로 후원임을 알고, 프로필 없음 → 익명
+    let m = donations(parse(
+        r#"{"cmd":93102,"bdy":[{"msg":"","uid":"anonymous","msgTime":1,"msgTypeCode":10,"profile":null,"extras":{"isAnonymous":true,"donationType":"MISSION","missionText":"춤"}}]}"#,
+    ));
+    assert_eq!(m[0].r#type, MessageType::Donation);
+    assert_eq!(m[0].nickname, "익명");
+    assert!(anon(&m[0]));
+    assert_eq!(donation_of(&m[0]).unwrap().amount, None);
+    // msgTypeCode 10 인데 extras 에 후원 정보가 전혀 없어도 닉네임 없으면 익명
+    let m = donations(parse(
+        r#"{"cmd":93102,"bdy":[{"msg":"m","uid":"x","msgTime":1,"msgTypeCode":10}]}"#,
+    ));
+    assert_eq!(m[0].nickname, "익명");
+    assert!(anon(&m[0]));
+
+    // 4) 일반(실명 + 금액 공개)은 그대로
+    let m = donations(parse(
+        r#"{"cmd":93102,"bdy":[{"msg":"hi","uid":"u2","msgTime":1,"msgTypeCode":10,"profile":{"nickname":"일반"},"extras":{"payAmount":"1,500","donationType":"CHAT"}}]}"#,
+    ));
+    assert_eq!(m[0].nickname, "일반");
+    assert!(!anon(&m[0]));
+    assert_eq!(donation_of(&m[0]).unwrap().amount, Some(1500));
+
+    // 일반 채팅의 isAnonymous 없는 닉네임 없는 줄은 익명으로 바꾸지 않는다(후원만)
+    let m = messages(parse(
+        r#"{"cmd":93101,"bdy":[{"msg":"hi","uid":"u3","msgTime":1}]}"#,
+    ));
+    assert_eq!(m[0].nickname, "Unknown");
+}
+
+#[test]
+fn blinded_anonymous_donation_keeps_only_anonymous_flag() {
+    let m = donations(parse(
+        r#"{"cmd":93102,"bdy":[{"msg":"원문","uid":"anonymous","msgTime":1,"msgTypeCode":10,"msgStatusType":"HIDDEN","extras":{"payAmount":1000,"isAnonymous":true,"emojis":{"x":"https://example.com/x"}}}]}"#,
+    ));
+    assert!(m[0].is_blinded);
+    assert_eq!(m[0].nickname, "익명");
+    let e = m[0].extras.as_ref().unwrap();
+    assert_eq!(e.is_anonymous, Some(true));
+    assert!(
+        e.donation.is_none() && e.emojis.is_none(),
+        "원문·금액은 비운다"
     );
 }
 
@@ -971,7 +1069,16 @@ fn hidden_messages_never_expose_payload() {
         assert_eq!(items.len(), 1);
         assert!(items[0].is_blinded);
         assert_eq!(items[0].content, "관리자에 의해 삭제된 메시지입니다.");
-        assert!(items[0].extras.is_none());
+        // 프로필 없는 후원 줄이라 익명 표시만 남는다 — 원문·이모티콘·금액은 없다.
+        let e = items[0].extras.clone().unwrap_or_default();
+        assert!(e.donation.is_none() && e.emojis.is_none() && e.mission_text.is_none());
+        assert_eq!(
+            e,
+            ChatExtras {
+                is_anonymous: e.is_anonymous,
+                ..ChatExtras::default()
+            }
+        );
         assert_eq!(items[0].r#type, MessageType::Normal);
     }
 }
