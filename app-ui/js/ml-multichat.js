@@ -11,7 +11,10 @@
 //   칸 머리를 누르면 그 패인을 선택한다(포커스면 그 칸이 커진다).
 import { api, listen } from './api.js';
 import { esc } from './dom.js';
-import { mergedLinesHtml, blindMergedLines } from './multichat.js';
+import { mergedItemsHtml, blindMergedLines, applyMergedStyle, mergedChatStyle, setMergedChatStyle } from './multichat.js';
+import { MergedLineHost } from './merged-lines.js';
+import { mentionInto } from './chat-composer.js';
+import { panelOf } from './chat.js';
 import { applyChatSkin } from './chat-extras.js';
 import { onChatPrefs } from './chat-prefs.js';
 import { chatFollower, followAppend, trimFront } from './chat-follow.js';
@@ -38,6 +41,16 @@ const AUX_WINDOW = new URLSearchParams(location.search).has('w');
 const ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h11a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H9l-4 3v-3H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z"/><path d="M19 9h1a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-1v3l-4-3h-4"/></svg>';
 
 const sessionKey = (id) => `mlx:${id}`;
+const BLIND_TEXT = '관리자에 의해 삭제된 메시지입니다.';
+
+/** 입력창이 켜질 때까지(최대 ms) 기다렸다 부른다 — 다른 패인을 고르면 채팅이 다시 연결되는 동안 입력이 꺼진다. */
+function whenEnabled(input, fn, ms = 4000) {
+  if (!input || !input.disabled) { fn(); return; }
+  const done = () => { mo.disconnect(); clearTimeout(timer); };
+  const mo = new MutationObserver(() => { if (!input.disabled) { done(); fn(); } });
+  const timer = setTimeout(() => { done(); fn(); }, ms);
+  mo.observe(input, { attributes: true, attributeFilter: ['disabled'] });
+}
 
 function loadMode() {
   try {
@@ -50,6 +63,7 @@ function loadMode() {
 
 /** 칸에 붙이고 넘치면 앞에서 지운다 — 바닥에 있었으면 계속 바닥을 따라간다. */
 function appendTo(list, html, max) {
+  if (!html) return;
   followAppend(list, () => {
     const empty = list.querySelector(':scope > .empty');
     if (empty) empty.remove();
@@ -77,21 +91,32 @@ export class MultiLiveMergedChat {
     this.grid = document.createElement('div');
     this.grid.className = 'ml-mc-grid';
     this.panelList.after(this.list, this.grid);
-    const skin = () => { applyChatSkin(this.list); applyChatSkin(this.grid); };
-    onChatPrefs(skin);
-    skin();
+    this.pending = []; // [conn, messages] — 프레임마다 한 번 붙인다
+    this.pendingCount = 0;
     this.title = chatEl.querySelector('.chat-header strong');
 
     const header = chatEl.querySelector('.chat-header');
     const wrap = document.createElement('div');
     wrap.className = 'ml-mc-view';
     wrap.innerHTML = `<button type="button" class="icon-btn chat-hbtn ml-merge-btn" aria-haspopup="menu" aria-expanded="false">${ICON}</button>
-      <div class="ml-more-menu ml-mc-menu" role="menu" hidden>${MODES.map((m) => `<button type="button" class="ml-menu-item" role="menuitemradio" data-mc-view="${m.id}">${esc(m.label)}</button>`).join('')}</div>`;
+      <div class="ml-more-menu ml-mc-menu" role="menu" hidden>${MODES.map((m) => `<button type="button" class="ml-menu-item" role="menuitemradio" data-mc-view="${m.id}">${esc(m.label)}</button>`).join('')}
+        <div class="ml-menu-sep" role="separator"></div>
+        <button type="button" class="ml-menu-item" role="menuitemcheckbox" data-mc-bubble title="통합·칸 목록을 단일 채팅처럼 프로필 사진과 말풍선으로 — 끄면 한 줄에 촘촘하게">프로필·말풍선으로 보기</button></div>`;
     // 채팅 패널의 도구 서랍('⋯') 맨 앞에 둔다 — 다른 머리 아이콘과 함께 접힌다.
     const tools = header.querySelector('.chat-tools-inner');
     if (tools) tools.prepend(wrap); else header.append(wrap);
     this.button = wrap.querySelector('.ml-merge-btn');
     this.menu = wrap.querySelector('.ml-mc-menu');
+    this.bubbleItem = this.menu.querySelector('[data-mc-bubble]');
+    // 통합 목록도 채팅 디자인을 따른다. 줄 모양(촘촘·말풍선)은 멀티채팅 통합과 같은 설정 chat.mergedChatStyle.
+    const skin = () => {
+      applyChatSkin(this.list); applyChatSkin(this.grid);
+      applyMergedStyle(this.list); applyMergedStyle(this.grid);
+      this.bubbleItem.setAttribute('aria-checked', String(mergedChatStyle() === 'bubble'));
+      this.bubbleItem.classList.toggle('active', mergedChatStyle() === 'bubble');
+    };
+    onChatPrefs(skin);
+    skin();
     // 키보드 — 키보드로 열면 지금 보기(없으면 첫 항목)로, ↑↓ 이동, 고르거나 Esc 로 닫으면 연 버튼으로 초점을 돌려준다.
     bindMenuKeys(this.menu);
     this.button.addEventListener('click', (e) => {
@@ -104,9 +129,26 @@ export class MultiLiveMergedChat {
       }
     });
     this.menu.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-mc-view]');
-      if (b) { this.setMode(b.dataset.mcView); this.openMenu(false); }
+      // 채팅 상자(.ml-chat)에도 data-mc-view 가 붙어 있다 — 메뉴 항목만 본다
+      const b = e.target.closest('button[data-mc-view]');
+      if (b) { this.setMode(b.dataset.mcView); this.openMenu(false); return; }
+      if (e.target.closest('[data-mc-bubble]')) { setMergedChatStyle(mergedChatStyle() === 'bubble' ? 'compact' : 'bubble'); this.openMenu(false); }
     });
+    // 통합 줄·칸 줄 동작 — 닉네임 말풍선·줄 메뉴·최근 메시지(merged-lines.js). 칸 줄은 칸 묶음(.ml-mc-grid)이 한꺼번에 받는다.
+    // 멘션은 그 줄의 패인을 골라(입력은 선택 패인으로 간다) 다시 연결되면 넣는다.
+    const lineOpts = {
+      resolve: (src) => this.conns.get(String(src).slice(4)) || null,
+      input: () => chatEl.querySelector('.chat-input input'),
+      isLoggedIn: () => Boolean(panelOf(chatEl)?.isLoggedIn()),
+      mention: (nick, src) => {
+        const id = String(src).slice(4);
+        const input = chatEl.querySelector('.chat-input input');
+        if ((this.getState() || {}).selectedId !== id && this.conns.has(id)) this.onSelect(id);
+        whenEnabled(input, () => { const p = panelOf(chatEl); if (p) p.mention(nick); else mentionInto(input, nick); });
+      },
+    };
+    this.lines = new MergedLineHost(this.list, lineOpts);
+    this.cellLines = new MergedLineHost(this.grid, lineOpts);
     document.addEventListener('pointerdown', (e) => { if (!this.menu.hidden && !e.target.closest('.ml-mc-view')) this.openMenu(false); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !this.menu.hidden) this.openMenu(false); });
     this.grid.addEventListener('click', (e) => {
@@ -145,6 +187,9 @@ export class MultiLiveMergedChat {
       b.setAttribute('aria-checked', String(cur));
     }
     this.chatEl.dataset.mcView = this.mode;
+    // 보기를 바꾸면 열린 닉네임 말풍선·이 사람만 보기를 걷는다(감춘 목록의 띠가 남지 않게)
+    this.lines?.reset();
+    this.cellLines?.reset();
     this.panelList.hidden = this.on;
     this.list.hidden = this.mode !== 'merged';
     this.grid.hidden = this.mode !== 'grid' && this.mode !== 'focus';
@@ -188,6 +233,7 @@ export class MultiLiveMergedChat {
       }
     }
     for (const [id, c] of this.conns) if (!keep.has(id)) this.drop(id, c);
+    if (!sessions.length) { this.lines.reset(); this.cellLines.reset(); }
     this.layoutCells(sessions, state.selectedId);
   }
 
@@ -259,21 +305,60 @@ export class MultiLiveMergedChat {
       return;
     }
     if (state === 'connected' || state === 'connecting' || state === 'reconnecting') { clearTimeout(c.retry); c.retry = null; return; }
-    // 관리자 삭제 — 통합 줄과 칸 줄 모두(예전엔 받지 않아 지워진 메시지가 남았다)
-    if (ev.type === 'blinded') { blindMergedLines([this.list, c.list], c.key, ev.messageId, ev.blindText); return; }
+    // 관리자 삭제 — 통합 줄과 칸 줄 모두(예전엔 받지 않아 지워진 메시지가 남았다). 아직 붙이지 않은 것도.
+    if (ev.type === 'blinded') {
+      blindMergedLines([this.list, c.list], c.key, ev.messageId, ev.blindText);
+      for (const [pc, msgs] of this.pending) {
+        if (pc !== c) continue;
+        const i = msgs.findIndex((m) => m.id === ev.messageId);
+        if (i >= 0) msgs[i] = { ...msgs[i], isBlinded: true, content: ev.blindText || BLIND_TEXT, emojis: {} };
+      }
+      return;
+    }
     if (ev.type !== 'messages') return;
     clearTimeout(c.retry);
     c.retry = null;
     if (ev.recent && c.skipRecent) { c.skipRecent = false; return; }
     c.skipRecent = false;
-    const style = `--lh:${Number(c.hue) || 0}`;
-    const tagged = mergedLinesHtml(ev.messages, { name: c.name, style, src: c.key });
-    if (!tagged) return;
-    appendTo(this.list, tagged, MAX_LINES);
-    appendTo(c.list, mergedLinesHtml(ev.messages, { name: '', style, src: c.key }), MAX_CELL_LINES);
+    if (!ev.messages || !ev.messages.length) return;
+    // 모았다가 프레임마다 한 번 붙인다 — 예전엔 패인마다 이벤트가 올 때마다 두 목록에 붙이고 바닥을 맞췄다(패인 4개면 프레임에 8번).
+    this.pending.push([c, ev.messages.slice()]);
+    this.pendingCount += ev.messages.length;
+    while (this.pending.length > 1 && this.pendingCount - this.pending[0][1].length >= MAX_LINES) this.pendingCount -= this.pending.shift()[1].length;
+    if (!this.flushScheduled) {
+      this.flushScheduled = true;
+      const run = () => this.flush();
+      this.flushRaf = requestAnimationFrame(run);
+      this.flushTimer = setTimeout(run, document.hidden ? 1000 : 250);
+    }
+  }
+
+  /** 모아 둔 메시지를 통합 목록과 칸에 붙인다 — 단일 채팅과 같은 줄 렌더러(묶음·아바타·이모티콘 단독 확대·줄 메뉴). */
+  flush() {
+    cancelAnimationFrame(this.flushRaf);
+    clearTimeout(this.flushTimer);
+    this.flushScheduled = false;
+    const batch = this.pending;
+    this.pending = [];
+    this.pendingCount = 0;
+    const items = [];
+    const cells = new Map();
+    for (const [c, msgs] of batch) {
+      if (!this.conns.has(c.key.slice(4)) || this.conns.get(c.key.slice(4)) !== c) continue; // 그사이 닫힌 패인
+      const style = `--lh:${Number(c.hue) || 0}`;
+      for (const m of msgs) items.push({ m, name: c.name, style, src: c.key });
+      if (!cells.has(c)) cells.set(c, []);
+      for (const m of msgs) cells.get(c).push({ m, style, src: c.key });
+    }
+    if (!items.length) return;
+    appendTo(this.list, mergedItemsHtml(items, this.list.lastElementChild), MAX_LINES);
+    for (const [c, cellItems] of cells) appendTo(c.list, mergedItemsHtml(cellItems, c.list.lastElementChild), MAX_CELL_LINES);
+    this.lines.afterAppend();
+    this.cellLines.afterAppend();
   }
 
   system(c, text) {
+    if (this.pending.length) this.flush(); // 앞서 온 메시지 뒤에
     const line = `<div class="chat-line system">${esc(text)}</div>`;
     appendTo(this.list, line, MAX_LINES);
     if (c.list) appendTo(c.list, line, MAX_CELL_LINES);

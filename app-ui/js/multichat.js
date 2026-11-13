@@ -4,11 +4,11 @@
 // 채널마다 Rust 추가 채팅 세션(`mc:<channelId>`)을 연다.
 import { api, listen } from './api.js';
 import { esc, safeUrl, toast, imageSrc } from './dom.js';
-import { ChatPanel, renderContent } from './chat.js';
-import { eventCardHtml, eventClasses } from './donations.js';
+import { ChatPanel, lineHtml, groupKey } from './chat.js';
+import { ChatComposer } from './chat-composer.js';
+import { MergedLineHost } from './merged-lines.js';
 import { applyChatSkin } from './chat-extras.js';
-import { nickColorClass } from './nick-color.js';
-import { chatPrefs, onChatPrefs, passesFilters } from './chat-prefs.js';
+import { chatPrefs, onChatPrefs, passesFilters, updateChatPrefs } from './chat-prefs.js';
 import { kbd } from './platform.js';
 import { chatFollower, trimFront } from './chat-follow.js';
 import { MultiLiveAddDrawer } from './ml-add-drawer.js';
@@ -40,23 +40,51 @@ export function lineSearchText(line) {
 
 const BLIND_TEXT = '관리자에 의해 삭제된 메시지입니다.';
 
-/** 통합(머지) 채팅 줄 — 채널 태그를 붙인 한 타임라인. 채팅 설정(차단·금지어·후원 필터·이모티콘)을 따른다.
- *  멀티라이브 멀티채팅도 쓴다. `style` 은 줄의 색 변수(--mc-color 등), `src` 는 관리자 삭제(blinded)를 찾을 출처 키. */
-export function mergedLinesHtml(messages, { name, style, src = '' }) {
-  const tag = name ? `<span class="mc-tag">${esc(name)}</span>` : '';
+/**
+ * 통합 목록의 줄 모양 — 'compact'(기본, 촘촘: 한 줄에 태그·닉네임·글) · 'bubble'(단일 채팅처럼 아바타·말풍선).
+ * 통합 목록은 여러 채널이 한 줄씩 섞여 같은 사람의 묶음이 거의 생기지 않는다. 말풍선은 줄마다 이름 줄 + 말풍선 두 줄과
+ * 아바타 자리를 써서 같은 높이에 보이는 메시지가 절반쯤으로 줄어든다(검사 MC05 가 잰다) — 그래서 기본은 촘촘하게 두고 고를 수 있게 한다.
+ */
+export function mergedChatStyle(p = chatPrefs()) {
+  return p.mergedChatStyle === 'bubble' ? 'bubble' : 'compact';
+}
+
+/** 통합 목록 상자에 줄 모양을 입힌다(채팅 디자인 applyChatSkin 위에). */
+export function applyMergedStyle(el, p = chatPrefs()) {
+  el.classList.toggle('mc-compact', mergedChatStyle(p) === 'compact');
+}
+
+/** 줄 모양 바꾸기 — 설정(chat.mergedChatStyle)에 저장되어 멀티채팅·멀티라이브 통합 목록이 함께 바뀐다. */
+export function setMergedChatStyle(style) {
+  updateChatPrefs({ mergedChatStyle: style === 'bubble' ? 'bubble' : 'compact' });
+}
+
+/**
+ * 통합(머지) 채팅 줄 여러 개 — 단일 채팅과 같은 줄 렌더러(chat.js lineHtml: 말풍선 묶음·아바타·이모티콘 단독 확대·
+ * 줄 메뉴용 data-uid)에 출처 태그를 붙인다. 채팅 설정(차단·금지어·후원 필터·이모티콘)을 따른다.
+ * @param {{ m: object, name?: string, style?: string, src?: string }[]} items 붙일 순서대로. name — 태그(없으면 태그 없음),
+ *   style — 줄의 색 변수, src — 관리자 삭제(blinded)를 찾을 출처 키.
+ * @param {Element|null} [prev] 이 줄들이 붙을 목록의 지금 마지막 줄 — 같은 출처·같은 사람·같은 분이면 묶음을 잇는다
+ *   (그 줄에 has-next 를 붙인다). 출처가 다르면 같은 사람이어도 묶지 않는다.
+ */
+export function mergedItemsHtml(items, prev = null) {
   const prefs = chatPrefs();
-  return (messages || []).filter((m) => m.kind !== 'system' && passesFilters(m, prefs)).map((m) => {
-    const ev = eventClasses(m);
-    const ids = `${m.id ? ` data-id="${esc(m.id)}"` : ''}${src ? ` data-src="${esc(src)}"` : ''}`;
-    const blinded = m.isBlinded ? ' blinded' : '';
-    const nick = `<span class="nick${['streamer', 'manager', 'channelManager'].includes(m.role) ? ` ${m.role}` : ''}${nickColorClass(m.nickname, m.role)}">${esc(m.nickname || '익명')}</span>`;
-    if (ev.length) {
-      const body = m.content && m.content.trim() ? renderContent(m.content, m.emojis, prefs.emoticonEnabled) : '';
-      return `<div class="chat-line merged-line ${ev.join(' ')}${blinded}"${ids} style="${style}">${eventCardHtml(m, { tag, nick, content: body })}</div>`;
-    }
-    return `
-      <div class="chat-line merged-line${blinded}"${ids} style="${style}">${tag}${nick}<span class="text">${renderContent(m.content, m.emojis, prefs.emoticonEnabled)}</span></div>`;
-  }).join('');
+  const shown = (items || []).filter(({ m }) => m && m.kind !== 'system' && passesFilters(m, prefs));
+  if (!shown.length) return '';
+  const keys = shown.map(({ m, src = '' }) => { const k = groupKey(m); return k ? `${src}|${k}` : ''; });
+  const prevKey = (prev && prev.dataset && prev.dataset.g) || '';
+  const cont = keys.map((k, i) => Boolean(k) && k === (i ? keys[i - 1] : prevKey));
+  if (cont[0] && prev) prev.classList.add('has-next');
+  // 촘촘이면 아바타는 사진을 찾지 않는 아이콘으로만 둔다(CSS 가 감춘다) — 말풍선으로 바꾸면 지난 줄에도 바로 보인다.
+  const mode = prefs.chatAvatars === 'off' ? 'off' : (mergedChatStyle(prefs) === 'bubble' ? (prefs.chatAvatars || 'photo') : 'icon');
+  return shown.map(({ m, name, style = '', src = '' }, i) => lineHtml(m, prefs, {
+    merged: true, cont: cont[i], next: cont[i + 1], tag: name ? `<span class="mc-tag">${esc(name)}</span>` : '', src, style, g: keys[i], avatars: mode,
+  })).join('');
+}
+
+/** 한 채널의 메시지 묶음을 통합 줄로 — `mergedItemsHtml` 의 짧은 형태. 멀티라이브 멀티채팅도 쓴다. */
+export function mergedLinesHtml(messages, { name, style, src = '', prev = null }) {
+  return mergedItemsHtml((messages || []).map((m) => ({ m, name, style, src })), prev);
 }
 
 /**
@@ -98,6 +126,7 @@ export class MultiChatPage {
         <div class="grow"></div>
         <input type="search" class="mc-search" aria-label="메시지 검색" placeholder="${kbd('메시지 검색 (⌥⌘F)')}">
         <div class="segmented"><button class="seg" data-mc-layout="tabs">탭</button><button class="seg" data-mc-layout="grid">그리드</button><button class="seg" data-mc-layout="merged">통합</button></div>
+        <div class="segmented mc-style" role="group" aria-label="통합 목록 줄 모양" hidden><button class="seg" data-mc-style="compact" title="한 줄에 채널·닉네임·글 — 한 화면에 많이">촘촘</button><button class="seg" data-mc-style="bubble" title="단일 채팅처럼 프로필 사진과 말풍선">말풍선</button></div>
         <button class="btn primary" data-mc="add">+ 채널</button>
         <button class="btn ghost" data-mc="close-all">모두 닫기</button>
       </header>
@@ -117,8 +146,14 @@ export class MultiChatPage {
     this.overview = this.root.querySelector('.mc-overview');
     this.merged = this.root.querySelector('.mc-merged');
     this.mergedList = this.root.querySelector('.mc-merged-list');
-    // 통합 목록도 채팅 디자인 스타일을 따른다.
-    const skin = () => applyChatSkin(this.merged);
+    this.styleSeg = this.root.querySelector('.mc-style');
+    // 통합 목록도 채팅 디자인 스타일을 따른다. 줄 모양(촘촘·말풍선)은 설정 chat.mergedChatStyle.
+    const skin = () => {
+      applyChatSkin(this.merged);
+      applyMergedStyle(this.merged);
+      const style = mergedChatStyle();
+      for (const b of this.styleSeg.querySelectorAll('[data-mc-style]')) b.classList.toggle('active', b.dataset.mcStyle === style);
+    };
     onChatPrefs(skin);
     skin();
     this.target = this.root.querySelector('.mc-target');
@@ -126,6 +161,20 @@ export class MultiChatPage {
     this.searchNote = this.root.querySelector('.mc-search-note');
     this.mergedForm = this.root.querySelector('.mc-merged-input');
     this.mergedBanner = this.root.querySelector('.mc-merged-banner');
+    this.mergedInput = this.mergedForm.querySelector('input');
+    // 통합 입력 — 단일 채팅과 같은 입력부(이모티콘 선택기·:/@ 자동완성·글자 수·입력 기록). 이모티콘·닉네임은 '보낼 채널' 패널의 것.
+    this.composer = new ChatComposer(this.mergedForm, { source: () => this.targetEntry()?.panel || null, host: this.merged });
+    // 통합 줄 동작 — 닉네임 말풍선·줄 메뉴·최근 메시지. 멘션은 그 줄의 채널을 보낼 채널로 고르고 넣는다.
+    this.lines = new MergedLineHost(this.mergedList, {
+      resolve: (src) => this.channels.find((c) => c.channelId === src) || null,
+      input: () => this.mergedInput,
+      isLoggedIn,
+      mention: (nick, src) => {
+        const c = this.channels.find((x) => x.channelId === src);
+        if (c && this.target.value !== c.session) { this.target.value = c.session; this.onTargetChange(); }
+        this.composer.mention(nick);
+      },
+    });
     this.channels = []; // { channelId, name, image, color, chatChannelId, panel, el, rate: [] }
     this.active = null;
     this.layout = 'tabs';
@@ -145,8 +194,8 @@ export class MultiChatPage {
 
     this.root.addEventListener('click', (e) => this.onClick(e));
     this.search.addEventListener('input', () => this.applySearch());
-    this.mergedForm.addEventListener('submit', (e) => { e.preventDefault(); this.sendMerged(); });
-    this.target.addEventListener('change', () => this.updateMergedInput());
+    this.mergedForm.addEventListener('submit', (e) => { e.preventDefault(); if (!this.composer.choosing) this.sendMerged(); });
+    this.target.addEventListener('change', () => this.onTargetChange());
     this.mergedBanner.addEventListener('click', (e) => { if (e.target.closest('[data-login]')) window.dispatchEvent(new Event('cview:login')); });
     listen('chat://session-event', (p) => this.onSessionEvent(p));
     document.addEventListener('keydown', (e) => {
@@ -258,6 +307,7 @@ export class MultiChatPage {
     this.panesBox.className = `mc-panes layout-${this.layout}`;
     this.panesBox.hidden = this.layout === 'merged' || n === 0;
     this.merged.hidden = this.layout !== 'merged' || n === 0;
+    this.styleSeg.hidden = this.layout !== 'merged';
     for (const c of this.channels) c.el.hidden = this.layout === 'tabs' && c.channelId !== this.active;
     this.target.innerHTML = this.channels.map((c) => `<option value="${esc(c.session)}" ${c.channelId === this.active ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
     this.renderOverview();
@@ -269,14 +319,27 @@ export class MultiChatPage {
    * 통합 입력 — 고른 채널 패널의 로그인·연결·보내기 권한을 그대로 따른다(탭·그리드와 같게).
    * 예전엔 비로그인이어도 입력·보내기가 켜져 있었다(서버는 막지만 보낼 수 있는 것처럼 보였다).
    */
+  /** 통합 입력의 보낼 채널. */
+  targetEntry() {
+    return this.channels.find((x) => x.session === this.target.value) || null;
+  }
+
+  /** 보낼 채널을 바꾸면 — 이모티콘·닉네임 후보가 그 채널 것으로 바뀐다. */
+  onTargetChange() {
+    this.composer.setAutocompleteOpen(false);
+    if (!this.composer.picker.hidden) this.composer.renderPicker();
+    this.updateMergedInput();
+  }
+
   updateMergedInput() {
-    const c = this.channels.find((x) => x.session === this.target.value);
+    const c = this.targetEntry();
     const loggedIn = this.isLoggedIn();
     const p = c && c.panel;
     const enabled = Boolean(loggedIn && p && p.connected && p.canSend);
-    const input = this.mergedForm.querySelector('input');
+    const input = this.mergedInput;
     input.disabled = !enabled;
-    this.mergedForm.querySelector('button').disabled = !enabled;
+    this.mergedForm.querySelector('button[type="submit"], button:not([type])').disabled = !enabled;
+    this.composer.setEnabled(enabled);
     this.target.disabled = !loggedIn || !this.channels.length;
     input.placeholder = loggedIn ? '선택한 채널로 보내기' : '로그인 후 채팅 참여 가능';
     let html = '';
@@ -318,9 +381,19 @@ export class MultiChatPage {
       return;
     }
     if (ev.type !== 'messages') return;
+    // 모아 두었다가 프레임마다 한 번 붙인다(채널 8개가 따로 보내도 한 번에) — 단일 채팅 flushLines 와 같은 방식.
     // 다른 화면에 가 있는 동안은 그리지 않고 모아 둔다 — 예전엔 버려 돌아오면 통합 타임라인에 공백이 생겼다.
-    if (this.root.hidden) { this.queueBacklog(c, ev.messages); return; }
-    this.appendMerged(mergedLinesHtml(ev.messages, { name: c.name, style: `--mc-color:${c.color}`, src: c.channelId }));
+    this.queueBacklog(c, ev.messages);
+    if (!this.root.hidden) this.scheduleFlush();
+  }
+
+  scheduleFlush() {
+    if (this.flushScheduled) return;
+    this.flushScheduled = true;
+    // 보이면 다음 프레임, 창이 숨어 rAF 가 멈춰도 타이머로 결국 붙인다(가려진 창은 덜 자주).
+    const run = () => this.flushBacklog();
+    this.flushRaf = requestAnimationFrame(run);
+    this.flushTimer = setTimeout(run, document.hidden ? 1000 : 250);
   }
 
   queueBacklog(c, messages) {
@@ -335,22 +408,33 @@ export class MultiChatPage {
 
   /** 화면에 돌아왔을 때 — 모아 둔 통합 메시지를 한 번에 붙인다(닫힌 채널 것은 버린다). */
   flushBacklog() {
+    cancelAnimationFrame(this.flushRaf);
+    clearTimeout(this.flushTimer);
+    this.flushScheduled = false;
     const list = this.backlog || [];
     this.backlog = [];
     this.backlogCount = 0;
     if (this.layout !== 'merged' || !list.length) return;
-    const html = list.filter(([c]) => this.channels.includes(c))
-      .map(([c, msgs]) => mergedLinesHtml(msgs.slice(-MERGED_BACKLOG), { name: c.name, style: `--mc-color:${c.color}`, src: c.channelId })).join('');
-    this.appendMerged(html);
+    const items = [];
+    for (const [c, msgs] of list) {
+      if (!this.channels.includes(c)) continue;
+      const style = `--mc-color:${c.color}`;
+      for (const m of msgs) items.push({ m, name: c.name, style, src: c.channelId });
+    }
+    this.appendMerged(items.slice(-MERGED_BACKLOG));
   }
 
-  appendMerged(html) {
-    if (!html) return;
+  /** @param {{ m: object, name: string, style: string, src: string }[]} items */
+  appendMerged(items) {
+    if (!items.length) return;
     const follower = chatFollower(this.mergedList);
     const follow = follower.stuck;
     this.mergedList.querySelector(':scope > .empty')?.remove(); // 첫 메시지가 오면 "기다리는 중" 안내를 걷는다
     const before = this.mergedList.lastElementChild;
+    const html = mergedItemsHtml(items, before);
+    if (!html) { if (!before) this.mergedList.innerHTML = '<div class="empty">새 메시지를 기다리는 중…</div>'; return; }
     this.mergedList.insertAdjacentHTML('beforeend', html);
+    this.lines?.afterAppend();
     // 검색 중이면 새로 붙은 줄만 거른다(예전엔 메시지 묶음마다 600줄 + 모든 패널을 다시 훑었다).
     const q = this.search.value.trim();
     if (q) {
@@ -366,10 +450,15 @@ export class MultiChatPage {
   }
 
   async sendMerged() {
-    const input = this.mergedForm.querySelector('input');
+    const input = this.mergedInput;
     const text = input.value.trim();
     if (!text || input.disabled) return;
-    try { await api.chatSend(text, this.target.value); input.value = ''; } catch (e) { toast(e.message); }
+    try {
+      await api.chatSend(text, this.target.value);
+      input.value = '';
+      this.composer.remember(text);
+    } catch (e) { toast(e.message); }
+    this.composer.renderCount();
   }
 
   // ── 검색 (MUL-03) ──
@@ -433,7 +522,9 @@ export class MultiChatPage {
     const f = e.target.closest('[data-mc-focus]');
     if (f) { this.focus(f.dataset.mcFocus); return; }
     const l = e.target.closest('[data-mc-layout]');
-    if (l) { this.layout = l.dataset.mcLayout; if (this.layout === 'merged') { this.mergedList.innerHTML = '<div class="empty">새 메시지를 기다리는 중…</div>'; chatFollower(this.mergedList).stuck = true; } this.render(); this.persist(); return; }
+    if (l) { this.layout = l.dataset.mcLayout; if (this.layout === 'merged') { this.lines.reset(); this.mergedList.innerHTML = '<div class="empty">새 메시지를 기다리는 중…</div>'; chatFollower(this.mergedList).stuck = true; } this.render(); this.persist(); return; }
+    const st = e.target.closest('[data-mc-style]');
+    if (st) { setMergedChatStyle(st.dataset.mcStyle); return; }
     const a = e.target.closest('[data-mc]');
     if (!a) return;
     if (a.dataset.mc === 'add') this.addBar.toggle();
