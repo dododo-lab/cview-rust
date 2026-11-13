@@ -2624,6 +2624,9 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .confirm-check { display: flex; align-items: flex-start; gap: 10px; font-size: var(--fs-footnote); cursor: pointer; }
 .confirm-check > span:last-child { display: flex; flex-direction: column; gap: 2px; }
 .confirm-check small { color: var(--text-tertiary); }
+/* 두 번 누르기(confirm.js armConfirm) — 첫 누름 뒤 '한 번 더 누르면 …' 상태. 움직임 없이 색과 테두리만 바꾼다 */
+.btn[data-armed="1"], .link-btn[data-armed="1"] { color: var(--error); box-shadow: inset 0 0 0 1px currentColor; }
+.btn[data-armed="1"]:hover, .link-btn[data-armed="1"]:hover { background: var(--danger-fill); color: var(--on-danger); }
 .muted.small { font-size: var(--fs-micro); word-break: break-all; }
 
 /* ── 다운로드 (VOD-06·07) ───────────────── */

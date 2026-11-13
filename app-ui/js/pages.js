@@ -6,6 +6,7 @@ import { liveGrid, liveCard, lacksThumbs, THUMB_FILL_DELAY_MS, THUMB_FILL_TRIES,
 import { FOLLOW_SORTS, FOLLOW_FILTERS, arrangeFollowed, followedInsights, followBadges, followAgeText, parseFollowDate, FollowExtras } from './following-info.js';
 import { vodCard, clipCard } from './channel.js';
 import { verifiedBadge } from './verified-badge.js';
+import { armConfirm } from './confirm.js';
 import { withRefreshVeil, refreshVeiled } from './refresh-veil.js';
 
 const loginAction = '<button class="btn primary" data-action="login">로그인</button>';
@@ -320,7 +321,14 @@ export class SearchPage {
       }
       const dc = e.target.closest('[data-discover-cat]');
       if (dc) { window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: 'categories', params: { category: dc.dataset.discoverCat } } })); return; }
-      if (e.target.closest('[data-recent-clear]')) { try { localStorage.removeItem(RECENT_SEARCH_KEY); } catch { /* 무시 */ } this.renderIdle(); return; }
+      const rc = e.target.closest('[data-recent-clear]');
+      if (rc) {
+        // 최근 검색어 전체 — 되돌릴 수 없지만 가볍고 다시 쌓이는 목록이라 두 번 누르기(confirm.js 규칙 3). 한 개 ✕ 는 바로 지운다.
+        if (!armConfirm(rc, { armedLabel: '한 번 더 누르면 모두 지웁니다', what: '최근 검색어' })) return;
+        try { localStorage.removeItem(RECENT_SEARCH_KEY); } catch { /* 무시 */ }
+        this.renderIdle();
+        return;
+      }
       const rs = e.target.closest('[data-search-retry]');
       if (rs) { e.stopPropagation(); this.retrySource(rs.dataset.searchRetry); return; }
       if (e.target.closest('[data-vod-more]')) { e.stopPropagation(); this.loadMoreVideos(); return; }
