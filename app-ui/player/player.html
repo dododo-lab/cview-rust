@@ -5186,7 +5186,14 @@ function _reconcileUpscaler() {
         }
         postToSwift('pictureEnhance', { gpuBackend: _upscaler.backend });
     }
-    if (_upscaler.active) { if (_levelMode) _applyComposedFilter(); return; }
+    if (_upscaler.active) {
+        if (_levelMode) {
+            _applyComposedFilter();
+            // 일시정지 중에는 새 영상 프레임(rVFC)이 오지 않는다 — 단계·경로를 바꿨으면 지금 프레임을 새 값으로 다시 그린다.
+            if (video.paused) { try { _drawUpscaledFrame(); } catch (e) { /* 다음 콜백에서 */ } }
+        }
+        return;
+    }
     _upscaler.active = true;
     _upscaler.verify = { drawn: 0, next: GPU_VERIFY_FIRST_FRAME, tries: 0, done: false };
     _applyComposedFilter(); // 영상·캔버스 모두 색 보정만(선명화는 캔버스가)

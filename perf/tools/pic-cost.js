@@ -1,3 +1,4 @@
+// [선명도 통합 2026-11-14] setSharpen 은 플레이어의 '예전 방식' API 다(앱은 setSharpness 를 쓴다) — 예전 경로 비용 비교용으로 남긴다.
 (async function(){ if (location.search) return; const post=(t)=>fetch('http://127.0.0.1:47999/',{method:'POST',body:t});const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));const I=window.__TAURI__.core.invoke;
 try{ localStorage.removeItem('cview.picture.v1'); }catch{}
 let lives=[]; for(let i=0;i<20&&lives.length<8;i++){ try{ lives=await I('popular_lives',{size:30,refresh:i>0}); }catch{} if(lives.length<8) await sleep(500); }

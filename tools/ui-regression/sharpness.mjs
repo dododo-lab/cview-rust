@@ -431,6 +431,22 @@ await check('S02 per-level processing in the real player (stage: 1/2/4 passes; g
     assert.deepEqual([st[3].plan.path, st[3].plan.cas, st[3].plan.post, st[3].programs.join(',')], ['upscale', 0.55, 0.5, 'catmull,cas,blur,unsharp'], `강 무대 ${JSON.stringify(st[3])}`);
     for (const L of [1, 2, 3]) assert.equal(st[L].canvas, '', `무대 ${L}: GPU 캔버스가 보이지 않는다`);
     assert.ok(st[1].edge < st[2].edge && st[2].edge < st[3].edge, `무대 경계 세기가 단계마다 커지지 않는다 ${[1, 2, 3].map((L) => st[L].edge.toFixed(1))}`);
+    // 일시정지 중에 단계를 바꾸면(새 영상 프레임이 오지 않는다) 지금 프레임을 새 값으로 바로 다시 그린다
+    await page.evaluate((sel) => {
+      const w = document.querySelector(`${sel} iframe`).contentWindow;
+      w.video.pause();
+      const gl = w.eval('_upscaler.gl');
+      w.__draws = 0;
+      const o = gl.drawArrays;
+      gl.drawArrays = function () { w.__draws += 1; return o.apply(gl, arguments); };
+    }, pane(0));
+    await page.waitForTimeout(150);
+    await page.evaluate((sel) => { document.querySelector(`${sel} iframe`).contentWindow.__draws = 0; }, pane(0));
+    await openGear(page, 0);
+    await clickItem(page, 0, '[data-mp="sharpness"][data-sharpness="2"]');
+    await closeGear(page, 0);
+    const pausedDraws = await page.evaluate((sel) => { const w = document.querySelector(`${sel} iframe`).contentWindow; const n = w.__draws; w.video.play(); return { n, cas: w.eval('_plan.cas') }; }, pane(0));
+    assert.ok(pausedDraws.n >= 2 && pausedDraws.cas === 0.55, `일시정지 중 단계를 바꿨는데 다시 그리지 않았다 ${JSON.stringify(pausedDraws)}`);
     // 그리드 — 패인이 영상보다 크지 않고 확대도 허용하지 않는다 → 언샤프
     await page.evaluate(() => { window.__ml.state.watchId = null; window.__ml.emit(); });
     await page.waitForTimeout(500);

@@ -153,6 +153,12 @@ SCENARIOS = [
     ("4 panes sharpen | old webgl", "old/player.html", 4, 640, 360, SHARP),
     ("4 panes sharpen | new webgl", "new/player.html?gpu=webgl", 4, 640, 360, SHARP),
     ("4 panes sharpen | new auto", "new/player.html", 4, 640, 360, SHARP),
+    # [선명도 통합 2026-11-14] 앱이 지금 부르는 setSharpness(단계, {upscale}) — 무대는 확대 허용, 그리드 패인은 언샤프만.
+    ("sharpness L1 stage | new webgl", "new/player.html?gpu=webgl", 1, 1280, 720, "setSharpness(1,{upscale:true})"),
+    ("sharpness L2 stage | new webgl", "new/player.html?gpu=webgl", 1, 1280, 720, "setSharpness(2,{upscale:true})"),
+    ("sharpness L3 stage | new webgl", "new/player.html?gpu=webgl", 1, 1280, 720, "setSharpness(3,{upscale:true})"),
+    ("4 panes sharpness L2 | new webgl", "new/player.html?gpu=webgl", 4, 640, 360, "setSharpness(2,{upscale:false})"),
+    ("4 panes L2 enlargedOnly | new webgl", "new/player.html?gpu=webgl", 4, 640, 360, "setSharpness(2,{upscale:false,enlargedOnly:true})"),
     ("overlay blur", "new/player.html", 1, 1280, 720, OVERLAY % "backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)"),
     ("overlay no blur", "new/player.html", 1, 1280, 720, OVERLAY % "text-shadow:0 1px 2px rgba(0,0,0,.55)"),
 ]

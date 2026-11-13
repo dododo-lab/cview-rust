@@ -24,7 +24,7 @@ export const SHARPNESS_LEVELS = [
 ];
 export const SHARPNESS_HELP = '선명한 화면과 업스케일을 하나로 합쳤어요. 영상보다 크게 볼 때(단독 보기·시청 화면)는 GPU 로 키우고, 그 밖에는 윤곽을 또렷하게 합니다. 모든 라이브 화면에 함께 적용됩니다.';
 export const ENLARGED_ONLY_LABEL = '크게 볼 때만 적용';
-export const ENLARGED_ONLY_HELP = '단독 보기·시청 화면에서 영상보다 크게 볼 때만 처리합니다. 여러 패인 보기와 작은 창은 원본 그대로 — GPU 를 아낍니다.';
+export const ENLARGED_ONLY_HELP = '라이브 단독 보기·시청 화면에서 영상보다 크게 볼 때만 처리합니다. 멀티라이브 패인과 작은 창은 원본 그대로 — GPU 를 아낍니다.';
 const NOTICE_KEY = 'cview.sharpness.notice.v1';
 
 const clampLevel = (v) => Math.max(0, Math.min(3, Math.round(Number(v) || 0)));
@@ -211,14 +211,14 @@ export function sharpnessNote(msg, s = state) {
   switch (msg.path) {
     case 'upscale': return `지금: 업스케일 ${vh}p → ${oh}p${s.level === 1 ? ' (부드럽게)' : ''}`;
     case 'sharpen': return msg.reason === 'grid'
-      ? '지금: 윤곽 선명화 — 여러 패인 보기에서는 업스케일하지 않아요'
+      ? '지금: 윤곽 선명화 — 업스케일은 라이브 단독 보기·시청 화면에서만 해요'
       : '지금: 윤곽 선명화 — 영상보다 1.15배 이상 크게 보면 업스케일해요';
     case 'sharpen-css': return '지금: 윤곽 선명화(간단 모드 — GPU 를 쓸 수 없음)';
     default: break;
   }
   switch (msg.reason) {
     case 'not-enlarged': return '쉬는 중 — 영상보다 1.15배 이상 크게 볼 때만 처리해요';
-    case 'grid-enlarged-only': return "쉬는 중 — '크게 볼 때만'이라 여러 패인 보기에서는 원본 그대로예요";
+    case 'grid-enlarged-only': return "쉬는 중 — '크게 볼 때만'은 라이브 단독 보기·시청 화면에서만 처리해요";
     case 'gpu-unavailable': return '쉬는 중 — 이 환경에서는 GPU 처리를 쓸 수 없어요';
     case 'hidden': return '쉬는 중 — 화면에 보이지 않아요';
     case 'off': return '꺼짐 — 원본 그대로';
