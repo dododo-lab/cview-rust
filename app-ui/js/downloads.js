@@ -5,6 +5,7 @@ import { esc, toast, keepFocus } from './dom.js';
 import { emptyState } from './cards.js';
 import { relativeDate } from './channel.js';
 import { bytesText } from './stats.js';
+import { armConfirm } from './confirm.js';
 
 const STATE_LABEL = {
   queued: '대기 중', preparing: '주소 확인 중', downloading: '받는 중', assembling: '합치는 중',
@@ -120,7 +121,8 @@ export async function mountDownloads(container) {
         case 'open': await api.openPath(b.dataset.path); break;
         case 'folder': await api.revealPath(b.dataset.path); break;
         case 'remove': render(await api.downloadClear([id])); break;
-        case 'clear': render(await api.downloadClear(null)); break;
+        // 끝난 항목 전체 — 파일은 남지만 기록은 되돌릴 수 없어 두 번 누르기(confirm.js 규칙 3). 한 줄 ✕ 는 바로 지운다.
+        case 'clear': if (armConfirm(b, { armedLabel: '한 번 더 누르면 모두 지웁니다', what: '끝난 다운로드 기록' })) render(await api.downloadClear(null)); break;
         default: break;
       }
     } catch (er) { toast(er.message); }

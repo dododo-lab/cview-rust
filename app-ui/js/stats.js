@@ -2,10 +2,11 @@
 // AppState+StoreRecovery / LocalDataHygiene(데이터 관리 탭).
 // DAT-04 통계 화면, DSN-05 차트·랭킹 바, DAT-06 저장소 상태·정리·백업.
 import { api } from './api.js';
-import { esc, safeUrl, toast, imageSrc, dismiss } from './dom.js';
+import { esc, safeUrl, toast, imageSrc } from './dom.js';
 import { emptyState, loadingState, errorState } from './cards.js';
 import { relativeDate } from './channel.js';
-import { syncTabs, bindTabKeys, trapFocus } from './a11y.js';
+import { syncTabs, bindTabKeys } from './a11y.js';
+import { confirmDialog } from './confirm.js';
 import { refreshVeiled } from './refresh-veil.js';
 
 export const statsIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>';
@@ -29,40 +30,21 @@ export const DESTRUCTIVE_CLEANUPS = {
 
 /**
  * 정리 확인 시트 — 취소·Esc·바깥 클릭이면 null, 확인이면 { backup } (지우기 전에 백업할지).
- * 초점은 처음에 "취소"에 둔다(Enter 한 번으로 지워지지 않게).
+ * 공용 확인 모달(confirm.js confirmDialog)을 쓴다. 보관함 › 최근 시청의 '지우기…'도 이것을 부른다(같은 데이터는 같은 확인).
  */
-export function confirmCleanup(kind) {
+export async function confirmCleanup(kind) {
   const info = DESTRUCTIVE_CLEANUPS[kind];
-  return new Promise((resolve) => {
-    const scrim = document.createElement('div');
-    scrim.className = 'sheet-scrim cleanup-confirm';
-    scrim.innerHTML = `<form class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="cleanup-title" aria-describedby="cleanup-desc">
-      <h2 id="cleanup-title">${esc(info.title)}</h2>
-      <dl class="confirm-facts" id="cleanup-desc">
-        <dt>지울 대상</dt><dd>${esc(info.target)}</dd>
-        <dt>영향</dt><dd>${esc(info.effect)}</dd>
-        <dt>복구</dt><dd>지운 뒤에는 앱 안에서 되돌릴 수 없습니다. 지우기 전에 백업해 두면 앱을 끈 뒤 백업 폴더의 파일로 바꿔 복원할 수 있습니다.</dd>
-      </dl>
-      <label class="confirm-check"><span class="toggle"><input type="checkbox" data-backup checked><span></span></span>
-        <span>지우기 전에 지금 상태를 백업 <small>백업은 최근 2개만 남깁니다 · 백업에 실패하면 지우지 않습니다</small></span></label>
-      <div class="sheet-actions"><button type="button" class="btn" data-cancel>취소</button><button type="submit" class="btn danger">지우기</button></div>
-    </form>`;
-    document.body.append(scrim);
-    const form = scrim.querySelector('form');
-    const release = trapFocus(form); // 초점을 가두고, 닫으면 '정리' 단추로 돌려준다
-    let done = false;
-    const finish = (value) => {
-      if (done) return;
-      done = true;
-      release();
-      dismiss(scrim);
-      resolve(value);
-    };
-    scrim.addEventListener('click', (e) => { if (e.target === scrim || e.target.closest('[data-cancel]')) finish(null); });
-    scrim.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(null); } });
-    form.addEventListener('submit', (e) => { e.preventDefault(); finish({ backup: form.querySelector('[data-backup]').checked }); });
-    scrim.querySelector('[data-cancel]').focus();
+  const ok = await confirmDialog({
+    title: info.title,
+    className: 'cleanup-confirm',
+    facts: [
+      ['지울 대상', info.target],
+      ['영향', info.effect],
+      ['복구', '지운 뒤에는 앱 안에서 되돌릴 수 없습니다. 지우기 전에 백업해 두면 앱을 끈 뒤 백업 폴더의 파일로 바꿔 복원할 수 있습니다.'],
+    ],
+    check: { label: '지우기 전에 지금 상태를 백업', hint: '백업은 최근 2개만 남깁니다 · 백업에 실패하면 지우지 않습니다' },
   });
+  return ok && { backup: ok.checked };
 }
 
 const TABS = [
