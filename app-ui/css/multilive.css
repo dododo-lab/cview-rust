@@ -124,6 +124,7 @@
    2026-10-24 리디자인: 머리(제목·남은 자리 + 자리 칸) · 찾기/출처(개수)/정렬 · 줄(큰 썸네일·배지·프로필·카테고리) · 키 안내.
    모션: 열 때만 줄이 차례로 떠오르고(.entering), 추가하면 체크가 톡(.just-added). 모션 줄이기면 끝 상태로 바로. */
 .ml-addbar {
+  container: addbar / inline-size;
   position: absolute; top: 0; right: 0; bottom: 0; z-index: 30; width: min(var(--ml-addbar-w, 360px), 100%);
   display: flex; flex-direction: column; overflow: hidden;
   background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 5%, var(--surface-popover)) 0, var(--surface-popover) 132px);
@@ -144,7 +145,7 @@
 .ml-addbar-refresh:disabled { cursor: default; }
 .ml-addbar-slots { flex: none; display: flex; gap: 3px; padding: 2px 14px 10px; }
 .ml-addbar-slots:empty { display: none; }
-.ml-addbar-slots i { flex: 1; height: 4px; border-radius: 2px; background: var(--surface-overlay); transition: background var(--dur-3) var(--ease-out); }
+.ml-addbar-slots i { flex: 1; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--text-primary) 12%, transparent); /* 다크에서 surface-overlay 는 바탕과 같아 빈 칸이 사라졌다 */ transition: background var(--dur-3) var(--ease-out); }
 .ml-addbar-slots i.on { background: var(--primary); }
 .ml-addbar-slots.full i.on { background: var(--accent-orange); }
 
@@ -176,12 +177,14 @@
 .ml-addbar-keys { flex: none; display: inline-flex; align-items: center; gap: 3px; white-space: nowrap; }
 .ml-addbar-keys kbd { font: inherit; font-size: var(--fs-micro); min-width: 16px; padding: 0 4px; border-radius: var(--radius-xxs); text-align: center; color: var(--text-secondary); background: var(--surface-elevated); border: 1px solid var(--border-subtle); }
 .ml-addbar-keys kbd:not(:first-child) { margin-left: 5px; }
-@media (max-width: 1100px) { .ml-addbar-keys { display: none; } }
+/* 서랍 폭은 창 폭과 따로 논다(채팅 폭·최소 320) — 창이 아니라 서랍 폭으로 키 안내를 접는다. */
+@container addbar (max-width: 299px) { .ml-addbar-keys { display: none; } }
 
 /* 한 줄 = [열기(썸네일·이름) | +]. 열기는 라이브로 보기, + 는 추가. */
 .ml-addrow { position: relative; display: flex; align-items: center; gap: 4px; padding-right: 8px; border-radius: var(--radius-md); }
 .ml-addrow + .ml-addrow { margin-top: 2px; }
-.ml-addrow:hover, .ml-addrow:focus-within { background: var(--surface-elevated); }
+/* 다크의 surface-elevated(#222328)는 서랍 바탕(#26282d)보다 어두워 호버가 거의 안 보였다 — 공용 --hover 로. */
+.ml-addrow:hover, .ml-addrow:focus-within { background: var(--hover); }
 .ml-addrow-open {
   flex: 1; min-width: 0; display: flex; align-items: center; gap: 11px; padding: 7px; border: 0; border-radius: var(--radius-md);
   background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
@@ -190,8 +193,9 @@
 .ml-addrow-open:disabled { cursor: default; }
 .ml-addrow.full:not(.added):not(.busy) .ml-addrow-act { opacity: 0.45; }
 .ml-addrow:not(.added):not(.busy) .ml-addrow-open:disabled { opacity: 0.5; }
-.ml-addrow.added :is(.ml-addrow-thumb, .ml-addrow-text) { opacity: 0.55; }
-.ml-addrow.added .ml-addrow-open:hover:not(:disabled) :is(.ml-addrow-thumb, .ml-addrow-text) { opacity: 0.85; }
+/* 추가한 줄 — 썸네일만 물리고 글자는 그대로(흐린 글자는 대비가 떨어졌다). "추가됨" 꼬리표가 상태를 말한다. */
+.ml-addrow.added .ml-addrow-thumb { opacity: 0.5; filter: saturate(0.6); }
+.ml-addrow.added .ml-addrow-open:hover:not(:disabled) .ml-addrow-thumb { opacity: 0.85; filter: none; }
 .ml-addrow-open:hover:not(:disabled) .ml-addrow-name .ellipsis { text-decoration: underline; text-underline-offset: 2px; }
 
 .ml-addrow-thumb { position: relative; width: 116px; aspect-ratio: 16 / 9; flex: none; border-radius: var(--radius-sm); overflow: hidden; background: var(--surface-overlay); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05); }
@@ -205,20 +209,37 @@
 .ml-addrow-thumb > span { position: absolute; display: inline-flex; align-items: center; gap: 3px; height: 16px; padding: 0 5px; border-radius: var(--radius-xxs); font-size: var(--fs-micro); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; color: #fff; background: rgba(0, 0, 0, 0.66); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .ml-addrow-viewers { left: 4px; bottom: 4px; }
 .ml-addrow-viewers .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--live-badge, #e5262b); }
-.ml-addrow-uptime { right: 4px; bottom: 4px; }
 .ml-addrow-adult { left: 4px; top: 4px; background: var(--live-badge, #e5262b) !important; }
 
 .ml-addrow-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .ml-addrow-name { display: flex; align-items: center; gap: 6px; min-width: 0; font-weight: 650; font-size: var(--fs-caption); }
 .ml-addrow-name .ellipsis { min-width: 0; }
 .ml-addrow-avatar { flex: none; width: 18px; height: 18px; border-radius: 50%; object-fit: cover; background: var(--surface-overlay); }
+/* 프로필이 없을 때 — 이름 첫 글자 */
+.ml-addrow-initial { display: inline-grid; place-items: center; font-size: var(--fs-micro); font-weight: 700; line-height: 1; color: var(--text-secondary); }
+.ml-addrow-thumb b.ml-addrow-initial { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; border-radius: 50%; translate: -50% -50%; font-size: var(--fs-caption); color: var(--text-primary); background: var(--surface-elevated); box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-primary) 14%, transparent); }
 .ml-addrow-tag { flex: none; display: inline-grid; place-items: center; width: 14px; height: 14px; color: #ff4d6d; }
 .ml-addrow-tag svg { width: 12px; height: 12px; }
 .ml-addrow-title {
   color: var(--text-secondary); font-size: var(--fs-footnote); line-height: 1.35;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word;
 }
-.ml-addrow-cat { align-self: flex-start; max-width: 100%; padding: 1px 7px; border-radius: var(--radius-pill); font-size: var(--fs-micro); font-weight: 600; color: var(--text-tertiary); background: var(--surface-overlay); }
+/* 꼬리표 줄 — 추가됨 · 카테고리 · 방송 시간. 방송 시간은 썸네일 위에 있다가 시청자 수와 부딪혀(116px 에 "15,000"+"1시간 11분") 이리로. */
+.ml-addrow-meta { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ml-addrow-uptime { flex: none; display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-micro); color: var(--text-tertiary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ml-addrow-cat + .ml-addrow-uptime::before, .ml-addrow-added + .ml-addrow-uptime::before { content: ""; width: 2px; height: 2px; border-radius: 50%; background: currentColor; opacity: .8; }
+/* 추가한 줄은 방송 시간보다 카테고리가 남는 게 낫다 */
+.ml-addrow.added .ml-addrow-uptime { display: none; }
+/* 좁은 서랍(채팅 폭 320 근처) — 썸네일을 줄여 꼬리표 줄(카테고리·방송 시간)이 잘리지 않게 */
+@container addbar (max-width: 329px) {
+  .ml-addrow-thumb, .ml-addrow-sk > .sk { width: 96px; }
+  .ml-addrow-open, .ml-addrow-sk { gap: 9px; }
+  /* 그래도 모자라면(WebKit 한글 폭이 더 넓다) 방송 시간을 다음 줄로 — 점은 줄 머리에 남지 않게 뺀다 */
+  .ml-addrow-meta { flex-wrap: wrap; row-gap: 2px; }
+  .ml-addrow-meta .ml-addrow-uptime::before { display: none; }
+}
+.ml-addrow-added { flex: none; padding: 1px 7px; border-radius: var(--radius-pill); font-size: var(--fs-micro); font-weight: 700; color: var(--primary-text); background: var(--primary-dim); }
+.ml-addrow-cat { flex: 0 1 auto; min-width: 0; max-width: 100%; padding: 1px 7px; border-radius: var(--radius-pill); font-size: var(--fs-micro); font-weight: 600; color: var(--text-tertiary); background: var(--surface-overlay); }
 
 .ml-addrow-act {
   flex: none; width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%;
@@ -226,7 +247,13 @@
 }
 .ml-addrow-act svg { width: 15px; height: 15px; }
 .ml-addrow-act .spinner { --s: 16px; }
-.ml-addrow-act:hover:not(:disabled), .ml-addrow-act:focus-visible { background: var(--primary); color: var(--on-primary); outline: 0; box-shadow: 0 4px 12px var(--primary-glow); }
+.ml-addrow-act { transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out); }
+/* 줄에 올리면 + 가 먼저 브랜드색을 띤다 — 이 줄의 동작이 + 임을 미리 보여 준다. */
+:where(.ml-addrow:is(:hover, :focus-within):not(.added):not(.full)) .ml-addrow-act:not(:disabled) { color: var(--primary-text); background: var(--primary-dim); }
+.ml-addrow .ml-addrow-act:hover:not(:disabled), .ml-addrow .ml-addrow-act:focus-visible:not(:disabled) { background: var(--primary); color: var(--on-primary); outline: 0; box-shadow: 0 4px 12px var(--primary-glow); }
+/* (위 규칙의 outline: 0 은 마우스 호버용 — 키보드 초점은 아래가 이긴다) */
+/* 키보드 초점은 호버와 구별되게 고리를 더 둔다 */
+.ml-addrow .ml-addrow-act:focus-visible:not(:disabled) { outline: 2px solid var(--primary); outline-offset: 2px; }
 .ml-addrow-act:disabled { cursor: default; background: transparent; }
 .ml-addrow.added .ml-addrow-act { color: var(--primary); background: var(--primary-dim); }
 

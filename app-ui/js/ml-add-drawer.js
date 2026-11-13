@@ -118,7 +118,8 @@ export class MultiLiveAddDrawer {
     this.sort = ADD_SORTS.some((s) => s.id === saved.sort) ? saved.sort : 'viewers';
     this.source = ADD_SOURCES.some((s) => s.id === saved.source) ? saved.source : 'all';
 
-    this.el = document.createElement('aside');
+    // <aside> 에는 role=dialog 를 붙일 수 없다(axe aria-allowed-role) — 역할이 없는 div 에 단다.
+    this.el = document.createElement('div');
     this.el.className = 'ml-addbar';
     this.el.setAttribute('role', 'dialog');
     this.el.setAttribute('aria-label', '채널 추가');
@@ -261,7 +262,8 @@ export class MultiLiveAddDrawer {
     const n = (st.sessions || []).length;
     const max = st.maxSessions ?? 4;
     const left = Math.max(0, max - n);
-    this.countEl.textContent = st.canAdd === false || !left ? `${n} / ${max} · 가득 찼어요` : `${n} / ${max} · ${left}개 더 볼 수 있어요`;
+    // 멀티채팅에도 쓰므로 '볼 수' 가 아니라 '추가할 수'.
+    this.countEl.textContent = st.canAdd === false || !left ? `${n} / ${max} · 가득 찼어요` : `${n} / ${max} · ${left}개 더 추가할 수 있어요`;
     // 자리 칸 — 쓴 칸은 채우고 빈 칸은 비운다(꽉 차면 주황)
     const slots = Array.from({ length: max }, (_, i) => `<i${i < n ? ' class="on"' : ''}></i>`).join('');
     if (this.slotsHtml !== slots) { this.slotsEl.innerHTML = slots; this.slotsHtml = slots; }
@@ -335,7 +337,8 @@ export class MultiLiveAddDrawer {
 
   renderStatus() {
     if (this.loading) { this.status.textContent = '불러오는 중…'; return; }
-    if (this.failed && !this.items.length) { this.status.textContent = this.failed; return; }
+    // 본문 빈 상태가 이미 오류 문구를 크게 보여 준다 — 바닥줄은 짧게(같은 문장 두 번 X).
+    if (this.failed && !this.items.length) { this.status.textContent = '불러오지 못했어요'; return; }
     // 목록은 있는데 다시 받기가 실패했으면 — 낡은 목록이라는 것을 알린다(새로 고침 버튼으로 다시).
     if (this.failed) { this.status.textContent = `갱신하지 못했습니다 · ${relTime(this.loadedAt)} 목록`; return; }
     const shown = this.list.querySelectorAll('.ml-addrow').length;
@@ -370,7 +373,9 @@ export class MultiLiveAddDrawer {
       const isAdded = added.has(l.channelId);
       const busy = this.adding.has(l.channelId);
       const uptime = uptimeText(l.openDate);
-      const tag = l.following ? `<span class="ml-addrow-tag" title="팔로잉">${ICON_HEART}</span>` : '';
+      const tag = l.following ? `<span class="ml-addrow-tag" title="팔로잉" aria-label="팔로잉" role="img">${ICON_HEART}</span>` : '';
+      // 프로필·썸네일이 없을 때 빈 동그라미 대신 이름 첫 글자.
+      const initial = esc([...(l.channelName || '').trim()][0] || '?');
       const id = esc(l.channelId);
       const name = esc(l.channelName || '');
       const actTitle = isAdded ? '이미 추가했어요' : busy ? '추가하는 중…' : canAdd ? this.addLabel : '자리가 없어요';
@@ -380,14 +385,14 @@ export class MultiLiveAddDrawer {
           <button class="ml-addrow-open" data-add="${this.onOpen ? 'open' : 'pick'}" data-channel-id="${id}"
             ${!this.onOpen && (isAdded || busy || !canAdd) ? 'disabled' : ''} title="${esc(this.onOpen ? `${l.channelName || ''} — 라이브로 보기` : (l.liveTitle || l.channelName || ''))}">
           <span class="ml-addrow-thumb${thumb ? '' : ' no-thumb'}">${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">`
-            : avatar ? `<img class="ml-addrow-ph-bg" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer"><img class="ml-addrow-ph" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
+            : avatar ? `<img class="ml-addrow-ph-bg" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer"><img class="ml-addrow-ph" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer">`
+              : `<b class="ml-addrow-ph ml-addrow-initial" aria-hidden="true">${initial}</b>`}
             <span class="ml-addrow-viewers"><i class="dot"></i>${esc(l.viewerCountText ?? String(l.viewerCount ?? ''))}</span>
-            ${uptime ? `<span class="ml-addrow-uptime">${esc(uptime)}</span>` : ''}
             ${l.adult ? '<span class="ml-addrow-adult">19</span>' : ''}</span>
           <span class="ml-addrow-text">
-            <span class="ml-addrow-name">${avatar ? `<img class="ml-addrow-avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="ml-addrow-avatar"></span>'}<span class="ellipsis">${esc(l.channelName)}</span>${verifiedBadge(l, 'sm')}${tag}</span>
+            <span class="ml-addrow-name">${avatar ? `<img class="ml-addrow-avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="ml-addrow-avatar ml-addrow-initial" aria-hidden="true">${initial}</span>`}<span class="ellipsis">${esc(l.channelName)}</span>${verifiedBadge(l, 'sm')}${tag}</span>
             <span class="ml-addrow-title">${esc(l.liveTitle || '제목 없음')}</span>
-            ${l.categoryName ? `<span class="ml-addrow-cat ellipsis">${esc(l.categoryName)}</span>` : ''}
+            ${isAdded || l.categoryName || uptime ? `<span class="ml-addrow-meta">${isAdded ? '<span class="ml-addrow-added">추가됨</span>' : ''}${l.categoryName ? `<span class="ml-addrow-cat ellipsis">${esc(l.categoryName)}</span>` : ''}${uptime ? `<span class="ml-addrow-uptime" title="방송 시간">${esc(uptime)}</span>` : ''}</span>` : ''}
           </span>
           </button>
           <button class="ml-addrow-act" data-add="pick" data-channel-id="${id}" ${isAdded || busy || !canAdd ? 'disabled' : ''}
