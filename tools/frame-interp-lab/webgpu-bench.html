@@ -1,0 +1,172 @@
+<!doctype html>
+<!-- CView 프레임 보간 연구: WebView 안 WebGPU 블록 매칭 보간의 처리 시간·화질 측정 (앱 코드와 무관).
+     장면을 캔버스에 그려 이전/현재/실제 중간 프레임을 만들고,
+     양방향 블록 매칭(16×16 블록, ±R 탐색) + 움직임 보상 섞기를 WGSL 로 돌린다.
+     결과는 window.__result(JSON) 에 담긴다. run-webgpu.swift 가 WKWebView 로 띄워 읽는다. -->
+<meta charset="utf-8">
+<body style="margin:0;background:#000">
+<canvas id="c" width="1920" height="1080" style="display:none"></canvas>
+<script>
+const P = new URLSearchParams(location.search);
+const W = +(P.get('w') || 1920), H = +(P.get('h') || 1080), R = +(P.get('r') || 48), ITER = +(P.get('iter') || 60);
+const IN_FPS = +(P.get('fps') || 30);
+const cv = document.getElementById('c'); cv.width = W; cv.height = H;
+const g = cv.getContext('2d', { willReadFrequently: true });
+const s = W / 1920;
+const chat = ['치즈냥: ㅋㅋㅋㅋㅋ 방금 그거 뭐야', '하늘별: 와 컨트롤 미쳤다', 'dododo: 1080p60 보간 테스트 중', '고양이발: 다음 판 가자!!'];
+function scene(t) {  // bench.m 의 합성 장면을 단순화한 것(팬·회전·빠른 공·타이머·채팅)
+  const pan = (t * 1200 * s) % (64 * 40 * s);
+  for (let i = -1; i < 41; i++) {
+    const x = i * 64 * s - pan; const h = ((i % 40 + 40) % 40 * 2654435761) >>> 0;
+    g.fillStyle = `rgb(${40 + ((h >> 8) & 127)},${50 + ((h >> 16) & 100)},${90 + (h & 80)})`;
+    g.fillRect(x, 0, 64 * s + 1, H);
+    g.fillStyle = 'rgba(255,255,255,.25)';
+    for (let y = 0; y < H; y += 48 * s) g.fillRect(x + 8 * s, y, 4 * s, 24 * s);
+  }
+  g.save(); g.translate(W * .3, H * .24); g.rotate(t * Math.PI); g.fillStyle = '#f2bf1a'; g.fillRect(-260 * s, -22 * s, 520 * s, 44 * s); g.restore();
+  const span = W * .76 - 120 * s, ph = (t * 2400 * s) % (2 * span), bx = ph < span ? ph : 2 * span - ph;
+  g.fillStyle = '#e61a33'; g.beginPath(); g.arc(bx + 55 * s, H * .4 + 61 * s, 55 * s, 0, 7); g.fill();
+  g.fillStyle = 'rgba(0,0,0,.75)'; g.fillRect(W * .02, H * .02, W * .22, H * .07);
+  g.fillStyle = '#fff'; g.font = `${44 * s}px "Apple SD Gothic Neo"`;
+  const ms = Math.round(t * 1000); g.fillText(`LIVE 00:${String(Math.floor(ms / 1000) % 60).padStart(2, '0')}.${String(ms % 1000).padStart(3, '0')}`, W * .02 + 16 * s, H * .075);
+  g.fillStyle = 'rgba(0,0,0,.55)'; g.fillRect(W * .78, H * .08, W * .2, H * .62);
+  g.font = `${24 * s}px "Apple SD Gothic Neo"`; g.fillStyle = '#fff';
+  const off = (t * 60 * s) % (40 * s);
+  for (let i = 0; i < 16; i++) g.fillText(chat[i % 4], W * .78 + 12 * s, H * .08 + 40 * s * (i + 1) - off);
+}
+
+const ME = /* wgsl */`
+@group(0) @binding(0) var A: texture_2d<f32>;
+@group(0) @binding(1) var B: texture_2d<f32>;
+@group(0) @binding(2) var<storage, read_write> mv: array<vec2<i32>>;
+override R: i32 = 48;
+const BS: i32 = 16;
+var<workgroup> bestCost: array<f32, 64>;
+var<workgroup> bestV: array<vec2<i32>, 64>;
+fn luma(t: texture_2d<f32>, p: vec2<i32>) -> f32 {
+  let d = vec2<i32>(textureDimensions(t)) - 1;
+  let c = textureLoad(t, clamp(p, vec2<i32>(0), d), 0).rgb;
+  return dot(c, vec3<f32>(0.299, 0.587, 0.114));
+}
+@compute @workgroup_size(64)
+fn main(@builtin(workgroup_id) wg: vec3<u32>, @builtin(local_invocation_index) li: u32, @builtin(num_workgroups) nw: vec3<u32>) {
+  let org = vec2<i32>(wg.xy) * BS;
+  let side = R + 1;              // 짝수 벡터만(중간 프레임 기준 대칭) → (-R..R step 2)
+  let n = side * side;
+  var best = 1e9; var bv = vec2<i32>(0);
+  for (var i = i32(li); i < n; i += 64) {
+    let v = vec2<i32>(i % side, i / side) * 2 - R;
+    let h = v / 2;
+    var sad = 0.0;
+    for (var y = 0; y < BS; y += 2) { for (var x = 0; x < BS; x += 2) {
+      let p = org + vec2<i32>(x, y);
+      sad += abs(luma(A, p - h) - luma(B, p + h));
+    } }
+    sad += 0.0005 * f32(abs(v.x) + abs(v.y));   // 작은 움직임을 약간 선호
+    if (sad < best) { best = sad; bv = v; }
+  }
+  bestCost[li] = best; bestV[li] = bv;
+  workgroupBarrier();
+  for (var st = 32u; st > 0u; st >>= 1u) {
+    if (li < st && bestCost[li + st] < bestCost[li]) { bestCost[li] = bestCost[li + st]; bestV[li] = bestV[li + st]; }
+    workgroupBarrier();
+  }
+  if (li == 0u) { mv[wg.y * nw.x + wg.x] = bestV[0]; }
+}`;
+const WARP = /* wgsl */`
+@group(0) @binding(0) var A: texture_2d<f32>;
+@group(0) @binding(1) var B: texture_2d<f32>;
+@group(0) @binding(2) var<storage, read> mv: array<vec2<i32>>;
+@group(0) @binding(3) var O: texture_storage_2d<rgba8unorm, write>;
+@group(0) @binding(4) var S: sampler;
+@compute @workgroup_size(8, 8)
+fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
+  let dim = textureDimensions(A);
+  if (gid.x >= dim.x || gid.y >= dim.y) { return; }
+  let nbx = (dim.x + 15u) / 16u; let nby = (dim.y + 15u) / 16u;
+  // 블록 벡터를 쌍선형으로 섞어 경계 계단을 줄인다
+  let bp = (vec2<f32>(gid.xy) + 0.5) / 16.0 - 0.5;
+  let b0 = vec2<i32>(floor(bp)); let f = bp - floor(bp);
+  var v = vec2<f32>(0.0);
+  for (var k = 0; k < 4; k++) {
+    let o = vec2<i32>(k & 1, k >> 1);
+    let bb = clamp(b0 + o, vec2<i32>(0), vec2<i32>(i32(nbx) - 1, i32(nby) - 1));
+    let w = select(1.0 - f.x, f.x, o.x == 1) * select(1.0 - f.y, f.y, o.y == 1);
+    v += w * vec2<f32>(mv[u32(bb.y) * nbx + u32(bb.x)]);
+  }
+  let p = vec2<f32>(gid.xy) + 0.5; let sz = vec2<f32>(dim);
+  let a = textureSampleLevel(A, S, (p - v * 0.5) / sz, 0.0);
+  let b = textureSampleLevel(B, S, (p + v * 0.5) / sz, 0.0);
+  textureStore(O, gid.xy, vec4<f32>(mix(a.rgb, b.rgb, 0.5), 1.0));
+}`;
+
+function psnr(x, y) {
+  let se = 0, n = 0;
+  for (let i = 0; i < x.length; i += 4) {
+    const a = .299 * x[i] + .587 * x[i + 1] + .114 * x[i + 2], b = .299 * y[i] + .587 * y[i + 1] + .114 * y[i + 2];
+    se += (a - b) ** 2; n++;
+  }
+  return 10 * Math.log10(255 * 255 / (se / n));
+}
+
+(async () => {
+  const out = { w: W, h: H, r: R, iter: ITER };
+  try {
+    const ad = await navigator.gpu.requestAdapter();
+    const dev = await ad.requestDevice();
+    const mk = (usage) => dev.createTexture({ size: [W, H], format: 'rgba8unorm', usage });
+    const TU = GPUTextureUsage;
+    const tA = mk(TU.TEXTURE_BINDING | TU.COPY_DST | TU.RENDER_ATTACHMENT), tB = mk(TU.TEXTURE_BINDING | TU.COPY_DST | TU.RENDER_ATTACHMENT);
+    const tO = mk(TU.STORAGE_BINDING | TU.COPY_SRC);
+    const nbx = Math.ceil(W / 16), nby = Math.ceil(H / 16);
+    const mvBuf = dev.createBuffer({ size: nbx * nby * 8, usage: GPUBufferUsage.STORAGE });
+    const sampler = dev.createSampler({ magFilter: 'linear', minFilter: 'linear' });
+    const pME = dev.createComputePipeline({ layout: 'auto', compute: { module: dev.createShaderModule({ code: ME }), entryPoint: 'main', constants: { R } } });
+    const pW = dev.createComputePipeline({ layout: 'auto', compute: { module: dev.createShaderModule({ code: WARP }), entryPoint: 'main' } });
+    const bgME = dev.createBindGroup({ layout: pME.getBindGroupLayout(0), entries: [{ binding: 0, resource: tA.createView() }, { binding: 1, resource: tB.createView() }, { binding: 2, resource: { buffer: mvBuf } }] });
+    const bgW = dev.createBindGroup({ layout: pW.getBindGroupLayout(0), entries: [{ binding: 0, resource: tA.createView() }, { binding: 1, resource: tB.createView() }, { binding: 2, resource: { buffer: mvBuf } }, { binding: 3, resource: tO.createView() }, { binding: 4, resource: sampler }] });
+    const bpr = Math.ceil(W * 4 / 256) * 256;
+    const rb = dev.createBuffer({ size: bpr * H, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+
+    const dt = 1 / (IN_FPS * 2);
+    const upload = (t, tex) => { scene(t); dev.queue.copyExternalImageToTexture({ source: cv }, { texture: tex }, [W, H]); };
+    const run = () => {
+      const e = dev.createCommandEncoder();
+      const c = e.beginComputePass();
+      c.setPipeline(pME); c.setBindGroup(0, bgME); c.dispatchWorkgroups(nbx, nby);
+      c.setPipeline(pW); c.setBindGroup(0, bgW); c.dispatchWorkgroups(Math.ceil(W / 8), Math.ceil(H / 8));
+      c.end(); dev.queue.submit([e.finish()]);
+    };
+    // 화질: 여러 시점에서 보간 vs 실제 중간, 단순 섞기 vs 실제 중간
+    const ps = [], pb = [], ph = [];
+    for (let k = 0; k < 8; k++) {
+      const t0 = 0.4 + k * 0.137;
+      upload(t0, tA); const prev = g.getImageData(0, 0, W, H).data.slice();
+      upload(t0 + 2 * dt, tB); const cur = g.getImageData(0, 0, W, H).data.slice();
+      scene(t0 + dt); const truth = g.getImageData(0, 0, W, H).data.slice();
+      run();
+      const e = dev.createCommandEncoder(); e.copyTextureToBuffer({ texture: tO }, { buffer: rb, bytesPerRow: bpr }, [W, H]); dev.queue.submit([e.finish()]);
+      await rb.mapAsync(GPUMapMode.READ);
+      const raw = new Uint8Array(rb.getMappedRange()); const img = new Uint8ClampedArray(W * H * 4);
+      for (let y = 0; y < H; y++) img.set(raw.subarray(y * bpr, y * bpr + W * 4), y * W * 4);
+      rb.unmap();
+      const blend = new Uint8ClampedArray(W * H * 4); for (let i = 0; i < blend.length; i++) blend[i] = (prev[i] + cur[i]) >> 1;
+      ps.push(psnr(img, truth)); pb.push(psnr(blend, truth)); ph.push(psnr(prev, truth));
+      if (k === 0 && P.get('dump')) { const id = new ImageData(img, W, H); g.putImageData(id, 0, 0); out.png = cv.toDataURL('image/png'); }
+    }
+    const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+    out.psnr = { interp: avg(ps), hold: avg(ph), blend: avg(pb) };
+    // 속도: GPU 작업만(업로드 제외) 반복
+    await dev.queue.onSubmittedWorkDone();
+    const times = [];
+    for (let i = 0; i < ITER; i++) { const t = performance.now(); run(); await dev.queue.onSubmittedWorkDone(); times.push(performance.now() - t); }
+    times.sort((a, b) => a - b);
+    out.gpu_ms = { p50: times[times.length >> 1], p95: times[Math.floor(times.length * .95)], min: times[0] };
+    // 캔버스 → 텍스처 업로드 비용(실제로는 <video> → importExternalTexture 이 대신함)
+    const up = [];
+    for (let i = 0; i < 20; i++) { const t = performance.now(); dev.queue.copyExternalImageToTexture({ source: cv }, { texture: tA }, [W, H]); await dev.queue.onSubmittedWorkDone(); up.push(performance.now() - t); }
+    up.sort((a, b) => a - b); out.upload_ms_p50 = up[10];
+  } catch (e) { out.error = String(e && e.stack || e); }
+  window.__result = JSON.stringify(out);
+})();
+</script>
