@@ -127,13 +127,13 @@ export class MultiChatPage {
         <input type="search" class="mc-search" aria-label="메시지 검색" placeholder="${kbd('메시지 검색 (⌥⌘F)')}">
         <div class="segmented"><button class="seg" data-mc-layout="tabs">탭</button><button class="seg" data-mc-layout="grid">그리드</button><button class="seg" data-mc-layout="merged">통합</button></div>
         <div class="segmented mc-style" role="group" aria-label="통합 목록 줄 모양" hidden><button class="seg" data-mc-style="compact" title="한 줄에 채널·닉네임·글 — 한 화면에 많이">촘촘</button><button class="seg" data-mc-style="bubble" title="단일 채팅처럼 프로필 사진과 말풍선">말풍선</button></div>
-        <button class="btn primary" data-mc="add">+ 채널</button>
+        <button class="btn primary ch-add" data-mc="add" title="채널 추가" aria-label="채널 추가">+ 채널</button>
         <button class="btn ghost" data-mc="close-all">모두 닫기</button>
       </header>
       <div class="mc-overview"></div>
       <div class="mc-search-note" role="status" hidden></div>
       <div class="mc-body">
-        <div class="empty lg boxed mc-empty"><span class="empty-icon" aria-hidden="true">${multiChatIcon}</span><strong>여러 채널의 채팅을 한 화면에서</strong><span>최대 ${MAX_CHANNELS}개 채널을 추가해 탭·그리드로 보거나 하나의 타임라인으로 합쳐 볼 수 있어요.</span><button class="btn primary lg" data-mc="add">+ 채널 추가</button></div>
+        <div class="empty lg boxed mc-empty"><span class="empty-icon" aria-hidden="true">${multiChatIcon}</span><strong>여러 채널의 채팅을 한 화면에서</strong><span>최대 ${MAX_CHANNELS}개 채널을 추가해 탭·그리드로 보거나 하나의 타임라인으로 합쳐 볼 수 있어요.</span><button class="btn primary lg ch-add" data-mc="add">+ 채널 추가</button></div>
         <div class="mc-panes"></div>
         <div class="mc-merged" hidden>
           <div class="chat-list mc-merged-list"></div>
