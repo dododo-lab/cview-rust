@@ -2172,6 +2172,71 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .chat-skin .read-divider { color: var(--live); }
 .chat-skin .read-divider span { padding: 2px 10px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--live) 14%, var(--cs-canvas)); }
 
+/* ── 줄 동작·검색·입력 보조 (chat-actions.js · chat.js) ──
+   동작 막대는 패널에 하나뿐이고 호버(또는 키보드로 고른) 줄에 옮겨 붙는다 — 줄마다 그리지 않는다(P04).
+   줄에는 애니메이션을 걸지 않는다는 규칙대로 막대도 나타날 때 움직이지 않는다. */
+.chat-line:is(.msg, .ev, .notice-line) { position: relative; }
+.chat-actions {
+  position: absolute; top: 0; right: 6px; z-index: 3; display: flex; gap: 1px; padding: 2px; transform: translateY(-35%);
+  border-radius: var(--radius-sm); background: var(--surface-popover); border: 1px solid var(--border-subtle); box-shadow: var(--shadow-md);
+}
+.chat-actions.on-left { right: auto; left: 6px; }
+.chat-actions .ca-btn {
+  display: grid; place-items: center; width: 26px; height: 24px; padding: 0; border: 0; border-radius: var(--radius-xs);
+  background: transparent; color: var(--text-secondary); cursor: pointer;
+}
+.chat-actions .ca-btn:hover:not(:disabled) { background: var(--hover); color: var(--text-primary); }
+.chat-actions .ca-btn:disabled { opacity: 0.4; cursor: default; }
+.chat-actions .ca-btn[hidden] { display: none; }
+.chat-actions .ca-btn svg { width: 15px; height: 15px; }
+/* 맨 위 줄은 막대가 목록 위로 잘리지 않게 줄 안쪽으로 */
+.chat-list > .chat-line:first-child > .chat-actions { transform: none; }
+/* 키보드로 고른 줄 — 초점 고리와 같은 색의 테두리 */
+.chat-list:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--primary); }
+.chat-line.kb-cur { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: var(--radius-ms); }
+.ctx-item:focus-visible { outline: none; background: var(--primary); color: var(--on-primary); }
+.ctx-item.danger:focus-visible { background: var(--error); color: #fff; }
+
+/* 검색 — 고정·'이 사람만' 줄 아래. 맞는 줄만 남긴다. */
+.chat-search {
+  display: flex; align-items: center; gap: 6px; margin: 0 var(--sp-sm) var(--sp-sm); padding: 0 4px 0 10px; height: 34px;
+  border-radius: var(--radius-ms); background: var(--surface-elevated); border: 1px solid var(--border-subtle);
+}
+.chat-search[hidden] { display: none; }
+.chat-search:focus-within { border-color: var(--primary); }
+.chat-search .cs-icon { display: grid; color: var(--text-tertiary); }
+.chat-search .cs-icon svg { width: 15px; height: 15px; }
+.chat-search .cs-input { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; color: var(--text-primary); outline: none; font-size: var(--fs-footnote); }
+.chat-search .cs-input:focus { border: 0; box-shadow: none; } /* 테두리는 감싼 칸(:focus-within)이 그린다 */
+.chat-search .cs-count { flex: none; color: var(--text-tertiary); font-size: var(--fs-micro); font-variant-numeric: tabular-nums; }
+.chat-search .cs-close { width: 26px; height: 26px; color: var(--text-tertiary); }
+.chat-search .cs-close svg { width: 13px; height: 13px; }
+.chat-list.searching > :is(.chat-line:not(.search-match, .system), .read-divider) { display: none; }
+.chat-hbtn[aria-pressed="true"] { color: var(--primary-text); background: var(--primary-dim); }
+
+/* 연결이 끊기거나 실패하면 상태 옆에 '다시 연결' */
+.chat-retry { flex: none; padding: 0 2px; color: var(--primary-text); font-size: var(--fs-micro); font-weight: 700; }
+.chat-retry[hidden] { display: none; }
+.chat-header.tools-open .chat-retry { display: none; }
+
+/* 입력 배너 — 실패·거절·제한은 경고 색 */
+.chat-input-banner.warn { color: var(--error); background: color-mix(in srgb, var(--error) 10%, var(--surface-elevated)); }
+/* 남은 글자 수 — 입력칸 오른쪽 안에 */
+.chat-count {
+  position: absolute; right: calc(var(--sp-md) + 64px); top: 50%; transform: translateY(-50%); pointer-events: none;
+  font-size: var(--fs-micro); font-weight: 600; color: var(--text-tertiary); font-variant-numeric: tabular-nums;
+}
+.chat-count[hidden] { display: none; }
+.chat-count.full { color: var(--error); }
+.chat.has-count .chat-input > input { padding-right: 52px; }
+
+/* 블라인드 — 말풍선 스킨의 글 색(.chat-skin .chat-line .text)이 덮지 않게 */
+.chat-skin .chat-line.blinded :is(.text, .ev-body) { color: var(--cs-time); font-style: italic; }
+
+/* 넓은 채팅 칸 — 말풍선이 칸 끝까지 늘어나 긴 문장을 읽기 어려웠다. 글자 크기에 맞춰 한 줄 길이를 묶는다. */
+.chat-skin .msg-main { max-width: min(calc(100% - 8px - var(--cs-av)), calc(560px * var(--chat-scale, 1))); }
+.chat-skin .chat-line.own .msg-main { max-width: min(82%, calc(520px * var(--chat-scale, 1))); }
+
 /* ── 읽기 폭 (원본 ChatReadingWidthMenu) ── */
 .chat-skin[data-read-width] .chat-list > .chat-line { max-width: var(--chat-read-width); margin-left: auto; margin-right: auto; }
 .chat-skin[data-read-width] .chat-list > .chat-line.own { margin-right: 0; }
