@@ -2,9 +2,10 @@
 // 단독 보기 무대 패인의 ⚙ 에도 있는지, 고르면 그 패인 플레이어에 맞는 호출이 가는지, 저장 값이 다시 걸리는지 본다.
 // 모의 IPC·헤드리스 Chromium(실제 서비스·데이터는 건드리지 않는다). 플레이어 호출은 PlayerBridge.call 을 감싸
 // "플레이어 문서가 준비돼 실제로 전달된 호출"만 기록한다(준비 전 호출은 플레이어에 닿지 않으므로 세지 않는다).
-// W01 단독 보기 ⚙ 에 배속·화면 꽉 채우기·자동 화질 보정·업스케일·픽셀 그대로 확대가 있다(그리드 패인 ⚙ 에 없는 것은 W04).
+// W01 단독 보기 ⚙ 에 배속·화면 꽉 채우기·자동 밝기·색 보정·픽셀 그대로 확대가 있다(그리드 패인 ⚙ 에 없는 것은 W04).
+//     업스케일은 선명한 화면과 함께 '선명도' 하나로 합쳤다(따로 된 스위치가 없다 — 선명도 검사는 sharpness.mjs).
 // W02 배속을 고르면 무대 패인에 setRate·OSD, 메뉴에 고른 배속. LIVE(L)·무대에서 내려오면 1배속으로.
-// W03 화면 꽉 채우기·자동 보정·업스케일·픽셀 확대 — 무대 패인에 setForcedAspectRatio·setPictureEnhancement·setSharpPixelScaling,
+// W03 화면 꽉 채우기·자동 밝기·색 보정·픽셀 확대 — 무대 패인에 setForcedAspectRatio·setPictureEnhancement({auto})·setSharpPixelScaling,
 //     플레이어 설정(player)에 저장. 영상 object-fit 이 실제로 fill.
 // W04 저장 값이 다시 걸린다 — 단독 보기에서 나오면 되돌리고, 다른 패인으로 다시 열면·새 패인(새 iframe)이 무대가 되면·
 //     새 재생(playStarted)마다 다시 건다. 그리드 패인에는 걸지 않는다.
@@ -131,6 +132,7 @@ const menuInfo = (page, slot) => page.evaluate((sel) => {
     rates: [...m.querySelectorAll('[data-mp="rate"]')].map((b) => b.dataset.rate),
     activeRate: m.querySelector('[data-mp="rate"].active')?.dataset.rate || null,
     aspect: sw('aspectRatio'), auto: sw('autoPictureEnhancement'), upscale: sw('videoUpscaling'), pixel: sw('sharpPixelScaling'),
+    sharp: [...m.querySelectorAll('[data-mp="sharpness"]')].map((b) => b.dataset.sharpness),
     eq: m.querySelector('[data-mp="eq"]') ? m.querySelector('[data-mp="eq"]').getAttribute('aria-checked') === 'true' : null,
     bands: m.querySelectorAll('[data-eq-band]').length, preset: m.querySelector('[data-eq-preset]')?.value ?? null,
     text: m.textContent.replace(/\s+/g, ' '),
@@ -162,7 +164,7 @@ const shot = async (page, name) => {
 {
   const { ctx, page, errors } = await openMl({ watchId: 's0' });
 
-  await check('W01 watch gear lists rate, aspect, auto/upscale/pixel (grid gear: W04)', async () => {
+  await check('W01 watch gear lists rate, aspect, auto/pixel + one 선명도 row (grid gear: W04)', async () => {
     // 사진은 큰 창에서 — 메뉴가 무대 높이에서 잘리지 않고 한 번에 보이게
     if (SHOTS) { await page.setViewportSize({ width: 1680, height: 1050 }); await page.waitForTimeout(500); }
     await openGear(page, 0);
@@ -171,11 +173,13 @@ const shot = async (page, name) => {
     assert.deepEqual(m.rates, ['0.5', '0.75', '1', '1.25', '1.5', '2'], `배속 항목 ${JSON.stringify(m.rates)}`);
     assert.equal(m.activeRate, '1', '처음엔 1배속');
     assert.equal(m.aspect, false, '화면 꽉 채우기 스위치가 없다');
-    assert.equal(m.auto, false, '자동 화질 보정 스위치가 없다');
-    assert.equal(m.upscale, false, '업스케일 스위치가 없다');
+    assert.equal(m.auto, false, '자동 밝기·색 보정 스위치가 없다');
+    assert.equal(m.upscale, null, '업스케일이 아직 따로 된 스위치다(선명도로 합쳤어야 한다)');
     assert.equal(m.pixel, false, '픽셀 그대로 확대 스위치가 없다');
+    assert.deepEqual(m.sharp, ['0', '1', '2', '3'], `선명도 단계 ${JSON.stringify(m.sharp)}`);
     assert.match(m.text, /화질/, '기존 화질 항목이 사라졌다');
-    assert.match(m.text, /선명한 화면/, '기존 화면 보정 항목이 사라졌다');
+    assert.match(m.text, /자동 밝기·색 보정/, '자동 보정 이름');
+    assert.doesNotMatch(m.text, /선명한 화면|업스케일/, '예전 이름(선명한 화면·업스케일)이 메뉴에 남았다');
     await closeGear(page, 0);
     if (SHOTS) { await page.setViewportSize({ width: 1280, height: 800 }); await page.waitForTimeout(500); }
   });
@@ -211,22 +215,22 @@ const shot = async (page, name) => {
     await page.waitForTimeout(300);
   });
 
-  await check('W03 aspect/auto/upscale/pixel apply to the stage pane and save to player settings', async () => {
+  await check('W03 aspect/auto/pixel apply to the stage pane and save to player settings', async () => {
     await clearCalls(page);
     await openGear(page, 0);
     await clickItem(page, 0, '[data-key="aspectRatio"]');
     assert.deepEqual((await lastCall(page, 0, 'setForcedAspectRatio'))?.args, [true]);
     assert.equal(await objectFit(page, 0), 'fill', '영상이 꽉 채워지지 않았다');
     await clickItem(page, 0, '[data-key="autoPictureEnhancement"]');
-    await clickItem(page, 0, '[data-key="videoUpscaling"]');
-    assert.deepEqual((await lastCall(page, 0, 'setPictureEnhancement'))?.args, [{ auto: true, upscale: true }]);
+    assert.deepEqual((await lastCall(page, 0, 'setPictureEnhancement'))?.args, [{ auto: true }], '자동 밝기·색 보정만 보낸다(업스케일은 선명도가 맡는다)');
     await clickItem(page, 0, '[data-key="sharpPixelScaling"]');
     assert.deepEqual((await lastCall(page, 0, 'setSharpPixelScaling'))?.args, [true]);
     const m = await menuInfo(page, 0);
-    assert.deepEqual([m.aspect, m.auto, m.upscale, m.pixel], [true, true, true, true], '스위치가 켜져 보이지 않는다');
+    assert.deepEqual([m.aspect, m.auto, m.pixel], [true, true, true], '스위치가 켜져 보이지 않는다');
     assert.equal(await page.evaluate(() => !document.querySelector('.ml-pane[data-slot="0"] .ml-gear-menu').hidden), true, '스위치를 누르면 메뉴가 닫혔다');
     const store = await page.evaluate(() => window.__ml.store.player);
-    assert.deepEqual(store, { aspectRatio: 'fill', autoPictureEnhancement: true, videoUpscaling: true, sharpPixelScaling: true }, `저장 ${JSON.stringify(store)}`);
+    // sharpnessLevel·sharpnessEnlargedOnly 는 첫 실행 이전(예전 값이 없으니 끔)이 써 둔 값
+    assert.deepEqual(store, { sharpnessLevel: 0, sharpnessEnlargedOnly: false, aspectRatio: 'fill', autoPictureEnhancement: true, sharpPixelScaling: true }, `저장 ${JSON.stringify(store)}`);
     assert.deepEqual((await calls(page)).filter((c) => c.slot !== 0 && c.name !== 'getLevels'), [], '다른 패인에 호출이 갔다');
     await closeGear(page, 0);
   });
@@ -236,24 +240,25 @@ const shot = async (page, name) => {
     await page.evaluate(() => { window.__ml.state.watchId = null; window.__ml.emit(); });
     await page.waitForTimeout(250);
     assert.deepEqual((await lastCall(page, 0, 'setForcedAspectRatio'))?.args, [false], '그리드로 돌아와도 꽉 채우기가 남았다');
-    assert.deepEqual((await lastCall(page, 0, 'setPictureEnhancement'))?.args, [{ auto: false, upscale: false }], '그리드 패인에 업스케일이 남았다');
+    assert.deepEqual((await lastCall(page, 0, 'setPictureEnhancement'))?.args, [{ auto: false }], '그리드 패인에 자동 보정이 남았다');
     assert.equal(await objectFit(page, 0), 'contain');
     // 그리드 패인 ⚙ 에는 새 항목이 없다
     await openGear(page, 1);
     const g = await menuInfo(page, 1);
     assert.deepEqual([g.rates.length, g.aspect, g.auto], [0, null, null], `그리드 패인 ⚙ 에 단독 보기 항목이 있다 ${JSON.stringify(g)}`);
+    assert.deepEqual(g.sharp, ['0', '1', '2', '3'], '그리드 패인 ⚙ 에도 선명도는 있다');
     await closeGear(page, 1);
     // 다른 패인으로 단독 보기 — 저장 값이 그 패인에 걸린다
     await clearCalls(page);
     await page.evaluate(() => { window.__ml.state.watchId = 's1'; window.__ml.emit(); });
     await page.waitForTimeout(300);
     assert.deepEqual((await lastCall(page, 1, 'setForcedAspectRatio'))?.args, [true], '다시 연 단독 보기에 꽉 채우기가 걸리지 않았다');
-    assert.deepEqual((await lastCall(page, 1, 'setPictureEnhancement'))?.args, [{ auto: true, upscale: true }]);
+    assert.deepEqual((await lastCall(page, 1, 'setPictureEnhancement'))?.args, [{ auto: true }]);
     assert.deepEqual((await lastCall(page, 1, 'setSharpPixelScaling'))?.args, [true]);
-    assert.deepEqual((await calls(page)).filter((c) => c.slot !== 1 && ['setForcedAspectRatio', 'setPictureEnhancement'].includes(c.name) && c.args[0] !== false && c.args[0]?.upscale !== false), [], '무대가 아닌 패인에 도구가 걸렸다');
+    assert.deepEqual((await calls(page)).filter((c) => c.slot !== 1 && ((c.name === 'setForcedAspectRatio' && c.args[0] !== false) || (c.name === 'setPictureEnhancement' && c.args[0]?.auto))), [], '무대가 아닌 패인에 도구가 걸렸다');
     await openGear(page, 1);
     const m = await menuInfo(page, 1);
-    assert.deepEqual([m.aspect, m.auto, m.upscale, m.pixel], [true, true, true, true], '다시 연 단독 보기 메뉴가 저장 값을 보이지 않는다');
+    assert.deepEqual([m.aspect, m.auto, m.pixel], [true, true, true], '다시 연 단독 보기 메뉴가 저장 값을 보이지 않는다');
     await closeGear(page, 1);
     // 새 재생(playStarted) — 다시 건다
     await clearCalls(page);
@@ -266,7 +271,7 @@ const shot = async (page, name) => {
     await waitPlayers(page);
     await page.waitForFunction(() => window.__pcalls.some((c) => c.slot === 4 && c.name === 'setForcedAspectRatio'), null, { timeout: 5000 }).catch(() => {});
     assert.deepEqual((await lastCall(page, 4, 'setForcedAspectRatio'))?.args, [true], '새 패인에 꽉 채우기가 걸리지 않았다');
-    assert.deepEqual((await lastCall(page, 4, 'setPictureEnhancement'))?.args, [{ auto: true, upscale: true }], '새 패인에 업스케일이 걸리지 않았다');
+    assert.deepEqual((await lastCall(page, 4, 'setPictureEnhancement'))?.args, [{ auto: true }], '새 패인에 자동 보정이 걸리지 않았다');
     assert.equal(await objectFit(page, 4), 'fill');
     assert.deepEqual((await lastCall(page, 1, 'setForcedAspectRatio'))?.args, [false], '앞 무대 패인을 되돌리지 않았다');
     // macOS — 이퀄라이저는 메뉴에도 없고 호출도 없다

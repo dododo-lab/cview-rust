@@ -5,13 +5,19 @@
 // - 들리는 패인은 Rust 가 setVolume(0/1) 로 정한다. 패인 볼륨은 그 위에 곱하는 배율이라
 //   여러 소리 모드와 함께 써도 서로 덮어쓰지 않는다.
 // - 마우스를 움직이면 나타나고 재생 중 2.5초 가만히 있으면 커서와 함께 숨는다. 일시정지·메뉴 열림이면 계속 보인다.
+// - 모든 패인 ⚙ 에 '선명도'(끔·약·중·강 + 크게 볼 때만 적용, sharpness.js) — 예전 '선명한 화면'과 '업스케일'을
+//   합친 전역 설정이다. 단독 보기 무대 패인만 확대(업스케일)를 허용하고, 그리드 패인은 윤곽만 또렷하게 한다.
 // - 라이브 단독 보기의 무대 패인(setStage)은 ⚙ 에 예전 시청 화면 고급 패널의 재생 도구를 더 보인다 —
-//   배속·화면 꽉 채우기·자동 화질 보정·업스케일·픽셀 그대로 확대·이퀄라이저(Windows). 배속 말고는 전역 플레이어
+//   배속·화면 꽉 채우기·자동 밝기·색 보정·픽셀 그대로 확대·이퀄라이저(Windows). 배속 말고는 전역 플레이어
 //   설정(player-tools.js)이라 시청 화면과 같은 값을 쓰고, 무대에 오를 때·새 재생마다 다시 걸고 내려오면 되돌린다.
-//   그리드 패인은 작고 여러 개라(업스케일은 패인마다 GPU 를 쓴다) 화질·지연·채널별 화면 보정만 둔다.
+//   그리드 패인은 작고 여러 개라 화질·지연·선명도·채널별 색 보정만 둔다.
 import { esc, toast, hideWithExit } from './dom.js';
 import { qualityOptions, liveBadgeState, togglePipFor, installVolumeReveal, toggleFullscreenOn } from './viewer-controls.js';
 import { ADJUST_RANGES, applyPicture, pictureFor, resetAdjust, setPicture } from './picture.js';
+import {
+  SHARPNESS_LEVELS, SHARPNESS_HELP, ENLARGED_ONLY_LABEL, ENLARGED_ONLY_HELP,
+  sharpnessState, sharpnessReady, sharpnessArgs, setSharpness, sharpnessNote, sharpnessShort,
+} from './sharpness.js';
 import { watchBarHtml, watchBarEndHtml, WATCH_ICON } from './ml-watch.js';
 import {
   RATES, RATE_NOTE, EQ_SUPPORTED, EQ_FREQS, freqLabel, loadEqPresets, loadPlayerSettings, savePlayerSettings,
@@ -22,13 +28,12 @@ const IDLE_MS = 2500;
 
 // 단독 보기 ⚙ 의 전역 플레이어 설정 스위치 — [설정 키, 이름, 설명]
 const STAGE_TOOLS = [
-  ['autoPictureEnhancement', '자동 화질 보정', '어두운·흐린 장면의 밝기·대비·채도를 자동으로 맞춥니다'],
-  ['videoUpscaling', '업스케일', '영상보다 큰 화면에서 GPU 로 또렷하게 키웁니다'],
-  ['sharpPixelScaling', '픽셀 그대로 확대', '확대할 때 픽셀을 부드럽게 하지 않습니다'],
+  ['autoPictureEnhancement', '자동 밝기·색 보정', '어둡거나 뿌연 장면의 밝기·대비·채도를 천천히 맞춥니다'],
+  ['sharpPixelScaling', '픽셀 그대로 확대', '확대할 때 픽셀을 부드럽게 하지 않습니다 — 선명도가 처리하는 동안에는 보이지 않습니다'],
 ];
 const GLOBAL_NOTE = '플레이어 설정 — 시청 화면과 단독 보기에 함께 적용';
 // 다시 그린 메뉴에서 같은 항목으로 초점을 되돌릴 때 보는 속성
-const FOCUS_KEYS = ['data-mp', 'data-level', 'data-rate', 'data-key', 'data-adj', 'data-eq-band', 'data-eq-preamp', 'data-eq-preset'];
+const FOCUS_KEYS = ['data-mp', 'data-level', 'data-rate', 'data-sharpness', 'data-key', 'data-adj', 'data-eq-band', 'data-eq-preamp', 'data-eq-preset'];
 
 /** 메뉴 안에서 보이는(누를 수 있는) 항목 — 숨은 좁은 화면 전용 항목은 뺀다. */
 function menuItems(menu) {
@@ -130,6 +135,8 @@ export class PaneControls {
     this.settingsSeq = 0;
     this.eqApplied = false;
     this.eq = { freqs: EQ_FREQS, presets: [] };
+    this.sharpMsg = null; // 이 패인 플레이어가 마지막으로 알린 선명도 경로('sharpness')
+    this.sharpSent = null; // 준비된 플레이어 문서에 마지막으로 보낸 setSharpness 인자(같으면 다시 보내지 않는다)
     this.playButton = this.el.querySelector('.ml-pane-bar [data-mp="play"]');
     this.liveButton = this.el.querySelector('[data-mp="live"]');
     this.gearMenu = this.el.querySelector('.ml-gear-menu');
@@ -146,6 +153,13 @@ export class PaneControls {
     this.volumeReveal = installVolumeReveal(this.el.querySelector('.ml-vol'), this.range);
     this.syncRangeFill();
     this.bridge.onMessage((type, data) => this.onMessage(type, data));
+    // 선명도는 전역 — 어느 화면(다른 패인 ⚙·시청 화면·설정)에서 바꿔도 이 패인에 바로 다시 건다.
+    window.addEventListener('cview:sharpness', () => {
+      this.applySharpness();
+      if (!this.gearMenu.hidden) this.renderGear();
+      this.syncGearTitle();
+    });
+    sharpnessReady().then(() => { this.applySharpness(); this.syncGearTitle(); });
     // 플레이어 문서가 새로 뜨면 볼륨 배율을 다시 걸고, 영상 위 휠을 받는다.
     this.bridge.iframe.addEventListener('load', () => { this.patchVolume(); this.hookWheel(); });
     this.el.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
@@ -208,9 +222,13 @@ export class PaneControls {
       if (typeof data.latency === 'number') this.latency = data.latency;
     } else if (type === 'playbackState') {
       this.el.classList.toggle('buffering', data.state === 'stalled');
+    } else if (type === 'sharpness') {
+      this.sharpMsg = data;
+      this.syncSharpnessNote();
     } else if (type === 'playStarted' || type === 'ready') {
       this.patchVolume();
       this.applyPicture();
+      this.applySharpness(true); // 새 플레이어 문서·새 재생 — 앞 문서에 보낸 값은 사라졌다
       if (this.stage) {
         // 새 재생·새 플레이어 문서는 1배속(예전 시청 화면과 같다) — 메뉴가 고른 배속과 어긋나지 않게 맞춘다.
         if (this.rate !== 1) this.normalRate();
@@ -296,8 +314,8 @@ export class PaneControls {
       case 'pip': togglePipFor(this.video); break;
       case 'fullscreen': this.toggleFullscreen(); break;
       case 'level': this.chooseLevel(Number(action.dataset.level)); break;
-      case 'sharpen': this.setSharpen(!pictureFor(this.channelId).sharpen); break;
-      case 'sharpen-all': this.hooks.applySharpenAll?.(pictureFor(this.channelId).sharpen); break;
+      case 'sharpness': this.chooseSharpness(Number(action.dataset.sharpness)); break;
+      case 'sharpness-enlarged': this.toggleEnlargedOnly(); break;
       case 'adjust-reset': resetAdjust(this.channelId); this.applyPicture(); this.renderGear(); break;
       case 'rate': this.setRate(Number(action.dataset.rate)); break;
       case 'tool': this.toggleTool(action.dataset.key); break;
@@ -365,6 +383,7 @@ export class PaneControls {
       <div class="ml-menu-head">지연 <span>${lat}</span></div>
       <button class="ml-menu-item" data-mp="live"><span>라이브로 이동 (따라잡기)</span></button>
       ${this.stage ? this.playMenuHtml() : ''}
+      ${this.sharpnessMenuHtml()}
       ${this.pictureMenuHtml()}
       ${this.stage ? this.stageToolsHtml() : ''}
       ${this.stage && EQ_SUPPORTED ? this.eqMenuHtml() : ''}`;
@@ -389,6 +408,7 @@ export class PaneControls {
     this.stage = stage;
     // 무대에 오르고 내릴 때 패인 크기·자리가 크게 바뀐다 — 열린 메뉴는 닫는다(항목도 달라진다).
     if (this.menuOpen) this.closeMenus();
+    this.applySharpness(); // 무대는 확대를 허용하고, 그리드는 윤곽만(선명도 자체는 끄지 않는다)
     if (!stage) {
       if (this.rate !== 1) this.normalRate(); // 지연 따라잡기(1.03)는 그리드에서도 그대로 둔다
       clearPlayerTools(this.bridge, { eq: this.eqApplied });
@@ -474,7 +494,7 @@ export class PaneControls {
     const p = this.playerSettings || {};
     return `
       <div class="ml-menu-sep"></div>
-      <div class="ml-menu-head" title="${esc(GLOBAL_NOTE)}">자동 보정·확대 <span>플레이어 설정</span></div>${STAGE_TOOLS.map(([key, label, help]) => `
+      <div class="ml-menu-head" title="${esc(GLOBAL_NOTE)}">화면 도구 <span>플레이어 설정</span></div>${STAGE_TOOLS.map(([key, label, help]) => `
       <button class="ml-menu-item ml-check" role="menuitemcheckbox" aria-checked="${Boolean(p[key])}" data-mp="tool" data-key="${key}" data-keep-open title="${esc(`${help} · ${GLOBAL_NOTE}`)}"><span>${label}</span><span class="ml-switch${p[key] ? ' on' : ''}"></span></button>`).join('')}`;
   }
 
@@ -531,7 +551,61 @@ export class PaneControls {
     }
   }
 
-  // ── 화면 보정(선명한 화면·밝기·대비·채도) — 채널마다 기억(picture.js) ──
+  // ── 선명도(전역, sharpness.js) — 예전 '선명한 화면'·'업스케일'을 합친 하나 ──
+
+  /** 이 패인 플레이어에 선명도를 건다 — 무대 패인만 확대 허용. 준비된 문서에 같은 값을 이미 보냈으면 건너뛴다. */
+  applySharpness(force = false) {
+    const args = sharpnessArgs(this.stage);
+    const key = JSON.stringify(args);
+    if (!force && key === this.sharpSent) return;
+    if (!this.bridge.ready) { this.sharpSent = null; return; } // 문서가 준비되면 ready 에서 다시 온다
+    this.bridge.call('setSharpness', ...args);
+    this.sharpSent = key;
+  }
+
+  chooseSharpness(level) {
+    if (!Number.isInteger(level) || level < 0 || level > 3) return;
+    const s = sharpnessState();
+    if (s.level === level) return;
+    setSharpness(level, s.enlargedOnly);
+    const name = SHARPNESS_LEVELS[level].label;
+    toast(`선명도 '${name}' — 모든 라이브 화면에 적용했어요`, 1500);
+  }
+
+  toggleEnlargedOnly() {
+    const s = sharpnessState();
+    if (!s.level) return; // 끔이면 쓸 일이 없다(aria-disabled)
+    setSharpness(s.level, !s.enlargedOnly);
+  }
+
+  sharpnessMenuHtml() {
+    const s = sharpnessState();
+    const off = !s.level;
+    return `
+      <div class="ml-menu-sep"></div>
+      <div class="ml-menu-head" title="${esc(SHARPNESS_HELP)}">선명도 <span>모든 라이브 화면</span></div>
+      <div class="ml-rate-row ml-sharp-row" role="group" aria-label="선명도">${SHARPNESS_LEVELS.map((l) => `<button class="ml-menu-item ml-sharp${l.value === s.level ? ' active' : ''}" role="menuitemradio" aria-checked="${l.value === s.level}" data-mp="sharpness" data-sharpness="${l.value}" data-keep-open aria-label="선명도 ${l.label}" title="${esc(l.help)}">${l.label}</button>`).join('')}</div>
+      <button class="ml-menu-item ml-check${off ? ' is-disabled' : ''}" role="menuitemcheckbox" aria-checked="${s.enlargedOnly}" aria-disabled="${off}" data-mp="sharpness-enlarged" data-keep-open title="${esc(ENLARGED_ONLY_HELP)}"><span>${ENLARGED_ONLY_LABEL}</span><span class="ml-switch${s.enlargedOnly ? ' on' : ''}"></span></button>
+      <p class="ml-menu-note ml-sharpness-note">${esc(sharpnessNote(this.sharpMsg))}</p>`;
+  }
+
+  /** 상태 줄만 고친다(메뉴를 다시 그리지 않아 초점이 그대로다). */
+  syncSharpnessNote() {
+    const note = this.gearMenu.querySelector('.ml-sharpness-note');
+    const text = sharpnessNote(this.sharpMsg);
+    if (note && note.textContent !== text) note.textContent = text;
+    this.syncGearTitle();
+  }
+
+  /** ⚙ 단추 title — 열지 않아도 지금 선명도가 무엇을 하는지 보인다. */
+  syncGearTitle() {
+    const btn = this.el.querySelector('.ml-pane-bar [data-mp="gear"]');
+    if (!btn) return;
+    const title = `화질·지연·선명도 (선명도: ${sharpnessShort(this.sharpMsg)})`;
+    if (btn.title !== title) btn.title = title;
+  }
+
+  // ── 색 보정(밝기·대비·채도) — 채널마다 기억(picture.js) ──
 
   pictureMenuHtml() {
     if (!this.channelId) return '';
@@ -542,14 +616,12 @@ export class PaneControls {
         <output>${Math.round(p[key] * 100)}%</output></label>`).join('');
     return `
       <div class="ml-menu-sep"></div>
-      <div class="ml-menu-head">화면</div>
-      <button class="ml-menu-item ml-check" role="menuitemcheckbox" aria-checked="${p.sharpen}" data-mp="sharpen" data-keep-open title="치지직과 같은 언샤프 마스크로 윤곽을 또렷하게 합니다"><span>선명한 화면</span><span class="ml-switch${p.sharpen ? ' on' : ''}"></span></button>
-      <button class="ml-menu-item" data-mp="sharpen-all"><span>모든 패인에 ${p.sharpen ? '선명하게' : '선명하게 끄기'}</span></button>
+      <div class="ml-menu-head">색 보정 <span>이 채널</span></div>
       ${sliders}
       <button class="ml-menu-item" data-mp="adjust-reset" data-keep-open><span>보정 기본값</span></button>`;
   }
 
-  /** 이 패인에 지금 채널을 알린다 — 바뀌면 그 채널의 화면 보정을 건다. */
+  /** 이 패인에 지금 채널을 알린다 — 바뀌면 그 채널의 색 보정을 건다. */
   setChannel(channelId) {
     if (this.channelId === channelId) return;
     this.channelId = channelId || null;
@@ -558,12 +630,6 @@ export class PaneControls {
 
   applyPicture() {
     if (this.channelId) applyPicture(this.bridge, pictureFor(this.channelId));
-  }
-
-  setSharpen(on) {
-    setPicture(this.channelId, { sharpen: Boolean(on) });
-    this.applyPicture();
-    if (!this.gearMenu.hidden) this.renderGear();
   }
 
   onAdjustInput(e) {

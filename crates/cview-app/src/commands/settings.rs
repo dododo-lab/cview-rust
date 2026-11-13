@@ -281,7 +281,8 @@ pub async fn settings_reset(
 ) -> CmdResult<SettingsDto> {
     let s = &services.settings;
     let reset = |d: &str| match d {
-        "player" => s.set_player(PlayerSettings::default()),
+        // 선명도는 명시적 끔 — 기본값(None)이면 화면이 예전 값에서 다시 이전해 초기화가 먹지 않는다.
+        "player" => s.set_player(PlayerSettings::reset_defaults()),
         "general" => s.set_general(GeneralSettings::default()),
         "appearance" => s.set_appearance(AppearanceSettings::default()),
         "chat" => s.set_chat(Value::Object(Default::default())),
@@ -373,6 +374,29 @@ mod tests {
         assert_eq!(patched.low_latency_mode, !base.low_latency_mode);
         assert_eq!(patched.volume_level, base.volume_level);
         assert!(apply_patch::<PlayerSettings>(&base, json!({"volumeLevel": "loud"})).is_err());
+    }
+
+    #[test]
+    fn patch_sharpness_settings() {
+        // 화면(sharpness.js)이 보내는 선명도 패치 — 값은 0..=3 으로 맞추고, null 은 '다시 이전하라'(None).
+        let base = PlayerSettings::default();
+        let set: PlayerSettings = apply_patch(
+            &base,
+            json!({ "sharpnessLevel": 3, "sharpnessEnlargedOnly": true, "videoUpscaling": true }),
+        )
+        .unwrap();
+        assert_eq!(set.sharpness_level, Some(3));
+        assert!(set.sharpness_enlarged_only);
+        assert!(set.video_upscaling);
+        let clamped: PlayerSettings = apply_patch(&set, json!({ "sharpnessLevel": 7 })).unwrap();
+        assert_eq!(clamped.sharpness_level, Some(3));
+        let cleared: PlayerSettings =
+            apply_patch(&set, json!({ "sharpnessLevel": null })).unwrap();
+        assert_eq!(cleared.sharpness_level, None);
+        assert!(serde_json::to_value(&cleared)
+            .unwrap()
+            .get("sharpnessLevel")
+            .is_none());
     }
 }
 

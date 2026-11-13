@@ -15,6 +15,7 @@ import { chatPrefs, updateChatPrefs, blockedLabel, loadChatPrefs } from './chat-
 import { BACKGROUNDS, READING_WIDTHS } from './chat-extras.js';
 import { kbd, IS_WINDOWS } from './platform.js';
 import { thumbPreviewEnabled, setThumbPreviewEnabled } from './hover-preview.js';
+import { SHARPNESS_LEVELS, SHARPNESS_HELP, ENLARGED_ONLY_LABEL, ENLARGED_ONLY_HELP, sharpnessState, setSharpness } from './sharpness.js';
 import { checkForUpdate, lastUpdateResult, updateSummary, downloadTarget, openDownload, currentVersionText, canInstall, installUpdate, progressHtml, renderProgress } from './update-check.js';
 
 const opt = (pairs) => pairs.map(([value, label]) => ({ value, label }));
@@ -55,10 +56,12 @@ export const SCHEMA = [
     { d: 'player', k: 'experimentalMatchWebV2', label: '웹 지연 맞춤 v2(실험)', type: 'toggle' },
   ]],
   ['watch', '화면 · 비디오 · 스크린샷', [
-    { d: 'player', k: 'sharpPixelScaling', label: '픽셀 그대로 확대', help: '확대할 때 픽셀을 부드럽게 하지 않습니다(선명한 화면은 영상 ⚙ 메뉴에서 채널마다)', type: 'toggle' },
-    { d: 'player', k: 'autoPictureEnhancement', label: '자동 화질 보정', type: 'toggle' },
-    { d: 'player', k: 'videoUpscaling', label: '업스케일', type: 'toggle' },
-    { d: 'player', k: 'videoAdjustEnabled', label: '비디오 보정 사용', help: '시청 화면의 ⚙ 패널에서 밝기·대비 등을 조절합니다', type: 'toggle' },
+    // 선명도 — 예전 '선명한 화면'(영상 ⚙, 채널별)과 '업스케일'을 합친 전역 값(sharpness.js). 저장은 setSharpness 로(구버전 거울까지).
+    { d: 'player', k: 'sharpnessLevel', label: '선명도', help: SHARPNESS_HELP, type: 'select', options: opt(SHARPNESS_LEVELS.map((l) => [l.value, l.option])), get: () => sharpnessState().level },
+    { d: 'player', k: 'sharpnessEnlargedOnly', label: ENLARGED_ONLY_LABEL, help: ENLARGED_ONLY_HELP, type: 'toggle', get: () => sharpnessState().enlargedOnly, disabled: () => !sharpnessState().level },
+    { d: 'player', k: 'autoPictureEnhancement', label: '자동 밝기·색 보정', help: '어둡거나 뿌연 장면의 밝기·대비·채도를 천천히 맞춥니다(단독 보기·시청 화면)', type: 'toggle' },
+    { d: 'player', k: 'sharpPixelScaling', label: '픽셀 그대로 확대', help: '확대할 때 픽셀을 부드럽게 하지 않습니다 — 선명도가 처리하는 동안에는 보이지 않습니다', type: 'toggle' },
+    { d: 'player', k: 'videoAdjustEnabled', label: '색 보정 사용(시청 화면)', help: '시청 화면의 ⚙ 패널에서 밝기·대비 등을 조절합니다', type: 'toggle' },
     { d: 'player', k: 'screenshotFormat', label: '스크린샷 형식', type: 'select', options: opt([['png', 'PNG'], ['jpeg', 'JPEG']]) },
     { d: 'player', k: 'screenshotPath', label: '스크린샷 폴더', type: 'text' },
     { local: 'streamAlerts', label: '후원·구독 알림', help: '시청 화면 위에 새 후원과 구독을 잠깐 띄웁니다', type: 'toggle' },
@@ -181,7 +184,8 @@ function fmt(item, v) {
 
 /** 항목 하나 HTML. */
 function itemHtml(item, values) {
-  const v = item.local ? LOCAL_GET[item.local]() : (values[item.d] || {})[item.k];
+  const v = item.local ? LOCAL_GET[item.local]() : (item.get ? item.get(values) : (values[item.d] || {})[item.k]);
+  const off = item.disabled && item.disabled(values) ? ' disabled' : '';
   const attrs = item.local ? `data-local="${item.local}"` : `data-domain="${item.d}" data-key="${item.k}"`;
   const label = `<span class="setting-label">${esc(item.label)}${item.help ? `<small>${esc(item.help)}</small>` : ''}</span>`;
   const search = esc(`${item.label} ${item.help || ''} ${item.k || ''}`.toLowerCase());
@@ -190,7 +194,7 @@ function itemHtml(item, values) {
     case 'action':
       return `<div class="setting" data-search="${search}">${label}<button class="btn" data-setting-action="${esc(item.action)}">${esc(item.button)}</button></div>`;
     case 'toggle':
-      return wrap(`<span class="toggle"><input type="checkbox" ${attrs} ${v ? 'checked' : ''}><span></span></span>`);
+      return wrap(`<span class="toggle"><input type="checkbox" ${attrs} ${v ? 'checked' : ''}${off}><span></span></span>`);
     case 'select':
       return wrap(`<select class="select" ${attrs}>${item.options.map((o) => `<option value="${esc(o.value)}" ${String(o.value) === String(v) ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select>`);
     case 'range':
@@ -214,6 +218,7 @@ export class SettingsPage {
     this.query = '';
     this.showAdvanced = false;
     this.body.addEventListener('change', (e) => this.onChange(e.target));
+    window.addEventListener('cview:sharpness', () => this.syncSharpnessControls());
     this.body.addEventListener('input', (e) => {
       if (e.target.matches('.settings-search')) this.onSearch(e.target);
       if (e.target.type === 'range') {
@@ -506,6 +511,7 @@ export class SettingsPage {
     }
     const { domain, key } = target.dataset;
     if (!domain || !key) return;
+    if (domain === 'player' && (key === 'sharpnessLevel' || key === 'sharpnessEnlargedOnly')) { await this.changeSharpness(key, target); return; }
     let value;
     if (target.type === 'checkbox') value = target.checked;
     else if (target.type === 'range' || target.type === 'number') value = Number(target.value);
@@ -521,6 +527,25 @@ export class SettingsPage {
     }
   }
 
+  /** 선명도 — setSharpness 로 저장한다(모든 라이브 화면에 바로 걸고 구버전 거울도 쓴다). */
+  async changeSharpness(key, target) {
+    const s = sharpnessState();
+    const ok = key === 'sharpnessLevel'
+      ? await setSharpness(Number(target.value), s.enlargedOnly)
+      : await setSharpness(s.level, target.checked);
+    if (ok) toast('설정을 저장했습니다', 1200);
+    this.syncSharpnessControls();
+  }
+
+  /** 다른 곳(영상 ⚙·시청 화면)에서 바꾼 선명도를 이 화면의 칸에 맞춘다. */
+  syncSharpnessControls() {
+    const s = sharpnessState();
+    const sel = this.body.querySelector('select[data-key="sharpnessLevel"]');
+    if (sel && sel.value !== String(s.level)) sel.value = String(s.level);
+    const chk = this.body.querySelector('input[data-key="sharpnessEnlargedOnly"]');
+    if (chk) { chk.checked = s.enlargedOnly; chk.disabled = !s.level; }
+  }
+
   async onSubmit(e) {
     const form = e.target;
     if (form.matches('[data-word-form]')) {
@@ -532,7 +557,15 @@ export class SettingsPage {
     } else if (form.matches('[data-import]')) {
       e.preventDefault();
       try {
-        const skipped = await api.settingsImport(form.querySelector('textarea, input').value);
+        const text = form.querySelector('textarea, input').value;
+        const skipped = await api.settingsImport(text);
+        // 선명도 이전 전 백업(선명도 키 없음) — 가져온 예전 값(업스케일)으로 선명도를 다시 정하게 비운다.
+        try {
+          const imported = JSON.parse(text);
+          if (imported && imported.player && typeof imported.player === 'object' && !('sharpnessLevel' in imported.player)) {
+            await api.settingsUpdate('player', { sharpnessLevel: null });
+          }
+        } catch { /* 형식 오류는 위 가져오기가 이미 알린다 */ }
         this.settings = await api.settingsGet();
         toast(skipped.length ? `가져왔습니다 (건너뜀: ${skipped.join(', ')})` : '설정을 가져왔습니다', 2500);
         this.render();

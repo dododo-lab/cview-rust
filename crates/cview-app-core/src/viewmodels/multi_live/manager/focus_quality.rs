@@ -133,6 +133,10 @@ impl ManagerState {
     /// 자동 개선은 켜져 있는 동안 영상에 CSS 필터를 걸어 영상 프레임마다 GPU 로 거르고, 2초마다 프레임을
     /// 읽어 간다. 작은 보조 패인에서는 보정이 거의 보이지 않는데 패인 수만큼 그 비용이 늘었다(GPU 최적화
     /// 2026-10-24). 메인이 바뀌면 `reconcile_focus_quality` 가 다시 나눈다.
+    ///
+    /// ⚠ 지금은 잠든 경로다 — Tauri 엔진(WebViewHlsEngine)이 `set_picture_enhancement` 를 구현하지 않아
+    /// 페이지에 닿지 않고, 실제 적용은 화면(JS)이 한다. `video_upscaling` 은 이제 선명도(`sharpness_level`)의
+    /// 구버전 호환 거울일 뿐이니, 엔진에 연결하면 JS(무대 패인 기준)와 다른 기준으로 업스케일이 켜져 서로 다툰다.
     pub fn picture_enhancement(&self, session_id: Uuid, ps: &PlayerSettings) -> (bool, bool) {
         let main = Some(session_id) == self.rewind_main_session_id();
         (

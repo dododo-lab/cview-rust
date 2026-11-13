@@ -210,6 +210,8 @@ let _deferredFatalRecoveryAction = null;
 // 기본값은 원본 비율을 보존하는 contain이며, 강제 비율 해제 시 즉시 원복한다.
 function setForcedAspectRatio(enabled) {
     video.style.objectFit = enabled ? 'fill' : 'contain';
+    // 선명도 GPU 캔버스가 영상 사각형(_containRect)을 새 비율로 다시 잡게 — 꽉 채우기면 요소 전체.
+    if (typeof _reconcileUpscaler === 'function') _reconcileUpscaler();
 }
 // ─── [Stall Recovery v3 / 2026-05-10] 강화 단일 state machine ─────────────────
 //
@@ -4143,7 +4145,95 @@ function _clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 let _sharpen = 0; // 0 = 끔, 그 밖 = 세기(가우시안 σ)
 const SHARPEN_FILTER_ID = 'cview-unsharp';
 
-function _ensureSharpenSvg(sigma) {
+// ─── [선명도 통합 2026-11-14] '선명한 화면'과 '업스케일'을 '선명도' 하나(0 끔·1 약·2 중·3 강)로 ───
+//   앱(JS)은 setSharpness(level, {upscale, enlargedOnly}) 하나만 부른다. 경로는 enhancePlan(순수 함수)이 정한다.
+//   영상보다 크게 보이면(무대·시청 화면, 표시 높이×dpr ≥ 영상 높이×1.15) Catmull-Rom 확대 + CAS(출력 해상도),
+//   아니면 출력 해상도에서 치지직식 언샤프(σ=1 CSS px). 처리 순서는 늘 '확대 → 출력 해상도에서 선명화'다
+//   (헤일로 폭이 화면 기준으로 일정 — 먼저 선명화하면 확대 배율만큼 헤일로가 넓어진다).
+//   예전처럼 둘을 함께 켜면 Catmull 링잉 → CAS → 한쪽 언샤프(1배)가 겹쳐 밝은 헤일로·잡티가 커졌다(4패스).
+//   · 단계(같은 프레임 실측, 2026-11-14 · PR 본문 참고):
+//     약 = 언샤프 0.5배 / 확대는 Catmull-Rom 만(1패스)
+//     중 = 예전 '선명한 화면'(언샤프 1배)·예전 '업스케일'(CAS 0.55)과 화소가 같다
+//     강 = 언샤프 1.5배 / 확대는 CAS 0.55 뒤에 언샤프 0.5배(post) — 예전 '둘 다'(post 1배)보다 헤일로가 작다.
+//   · upscale=false(그리드 패인)는 확대하지 않는다 — 패인마다 GPU 확대 비용이 붙는다.
+//   · enlargedOnly 면 확대할 때만 처리하고 그 밖에는 원본 그대로(GPU 0).
+//   · 예전 API(setSharpen·setPictureEnhancement({upscale}))를 부르면 '예전 방식'(_levelMode=false)으로 돌아가
+//     예전과 같은 판정·4패스를 그린다 — perf/tools·metal-bench 비교용. 앱은 더는 부르지 않는다.
+const SHARPNESS_PLANS = [null, { amount: 0.5, cas: null, post: 0 }, { amount: 1, cas: 0.55, post: 0 }, { amount: 1.5, cas: 0.55, post: 0.5 }];
+const UPSCALE_EXIT_RATIO = 1.10; // 이미 확대 중이면 여기까지 유지 — 창 크기 경계에서 경로가 깜빡이지 않게
+let _levelMode = false;
+let _sharpness = { level: 0, upscale: false, enlargedOnly: false };
+let _plan = { path: 'off', reason: 'off', amount: 0, cas: null, post: 0 };
+let _planPosted = '';
+
+// 순수 함수 — 선명도 경로를 정한다(JS 검사가 직접 부른다).
+//   i: { level, upscale, enlargedOnly, ratio, gpu(언샤프 GPU 가능), gpuUp(확대 GPU 가능), visible, hasVideo, prevPath }
+//   반환 { path: 'off'|'upscale'|'sharpen'|'sharpen-css', reason, amount(언샤프 세기), cas(CAS 세기·없으면 Catmull 만), post(확대 뒤 언샤프) }
+function enhancePlan(i) {
+    const level = Math.max(0, Math.min(3, Math.round(Number(i.level) || 0)));
+    if (!level) return { path: 'off', reason: 'off', amount: 0, cas: null, post: 0 };
+    if (!i.hasVideo) return { path: 'off', reason: 'wait', amount: 0, cas: null, post: 0 };
+    if (!i.visible) return { path: 'off', reason: 'hidden', amount: 0, cas: null, post: 0 };
+    const p = SHARPNESS_PLANS[level];
+    const enter = i.prevPath === 'upscale' ? UPSCALE_EXIT_RATIO : UPSCALE_MIN_RATIO;
+    if (i.upscale && i.gpu && i.gpuUp && i.ratio >= enter) return { path: 'upscale', reason: 'enlarged', amount: p.amount, cas: p.cas, post: p.post || 0 };
+    if (i.enlargedOnly) {
+        const why = !i.upscale ? 'grid-enlarged-only' : (i.gpu && i.gpuUp ? 'not-enlarged' : 'gpu-unavailable');
+        return { path: 'off', reason: why, amount: 0, cas: null, post: 0 };
+    }
+    if (i.gpu) return { path: 'sharpen', reason: i.upscale ? 'stage' : 'grid', amount: p.amount, cas: null, post: 0 };
+    return { path: 'sharpen-css', reason: 'gpu-unavailable', amount: p.amount, cas: null, post: 0 };
+}
+
+/**
+ * 선명도 — 앱이 부르는 유일한 화질 향상 API.
+ * @param {number} level 0 끔 · 1 약 · 2 중 · 3 강
+ * @param {{upscale?: boolean, enlargedOnly?: boolean}} opts upscale = 확대를 허용하는 화면(단독 보기 무대·시청 화면)
+ */
+function setSharpness(level, opts) {
+    const o = opts || {};
+    _levelMode = true;
+    _sharpness = {
+        level: Math.max(0, Math.min(3, Math.round(Number(level) || 0))),
+        upscale: !!o.upscale,
+        enlargedOnly: !!o.enlargedOnly
+    };
+    _sharpen = _sharpness.level ? 1 : 0; // σ 는 1 CSS px 고정(치지직과 같다) — 단계는 amount 로
+    if (_sharpness.level) _ensureSharpenSvg(1, (SHARPNESS_PLANS[_sharpness.level] || {}).amount || 1);
+    _reconcileUpscaler();
+    _applyComposedFilter();
+}
+
+// 지금 상태로 경로를 다시 정한다(level 모드). 바뀌면 화면에 'sharpness' 를 알린다.
+function _replanSharpness() {
+    const rect = video ? _containRect() : null;
+    const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+    const vh = (video && video.videoHeight) || 0;
+    const prev = _plan.path;
+    _plan = enhancePlan({
+        level: _sharpness.level, upscale: _sharpness.upscale, enlargedOnly: _sharpness.enlargedOnly,
+        ratio: rect && vh ? (rect.h * dpr) / vh : 0,
+        gpu: !_sharpenGpuFailed && !!(video && video.requestVideoFrameCallback),
+        gpuUp: !_upscalerFailed,
+        visible: !(typeof document !== 'undefined' && document.visibilityState === 'hidden') && !!rect,
+        hasVideo: !!vh,
+        prevPath: prev
+    });
+    // 실제 출력 높이 — GPU 캔버스는 3840×2160 을 넘으면 비율대로 줄여 그린다(_gpuGeometry). 판정(ratio)은 상한 전 값.
+    let outHeight = rect ? Math.round(rect.h * dpr) : 0;
+    if (rect && video.clientWidth && video.clientHeight) {
+        const over = (video.clientWidth * dpr * video.clientHeight * dpr) / UPSCALE_MAX_OUTPUT_PIXELS;
+        if (over > 1) outHeight = Math.round(outHeight / Math.sqrt(over));
+    }
+    const key = [_sharpness.level, _plan.path, _plan.reason, vh, outHeight].join('|');
+    if (key !== _planPosted) {
+        _planPosted = key;
+        postToSwift('sharpness', { level: _sharpness.level, path: _plan.path, reason: _plan.reason,
+            videoHeight: vh, outHeight: outHeight });
+    }
+}
+
+function _ensureSharpenSvg(sigma, amount) {
     let svg = document.getElementById(SHARPEN_FILTER_ID + '-svg');
     if (!svg) {
         const NS = 'http://www.w3.org/2000/svg';
@@ -4162,12 +4252,17 @@ function _ensureSharpenSvg(sigma) {
     }
     const blur = svg.querySelector('feGaussianBlur');
     if (blur && blur.getAttribute('stdDeviation') !== String(sigma)) blur.setAttribute('stdDeviation', String(sigma));
+    // 경계 더하기 세기(선명도 단계) — 마지막 합성의 k2. 1 이면 치지직과 같다.
+    const add = svg.querySelector('feComposite[in="edge"]');
+    const k2 = String(amount > 0 ? amount : 1);
+    if (add && add.getAttribute('k2') !== k2) add.setAttribute('k2', k2);
 }
 
-/** 선명한 화면 켜고 끄기. strength 는 흐림 반경(기본 1 — 치지직과 같다). */
+/** [예전 방식] 선명한 화면 켜고 끄기. strength 는 흐림 반경(기본 1 — 치지직과 같다). 앱은 setSharpness 를 쓴다. */
 function setSharpen(on, strength) {
     const next = on ? (Number.isFinite(strength) && strength > 0 ? Math.min(3, strength) : 1) : 0;
-    if (next) _ensureSharpenSvg(next);
+    _levelMode = false;
+    if (next) _ensureSharpenSvg(next, 1);
     _sharpen = next;
     _reconcileUpscaler();
     _applyComposedFilter();
@@ -4194,7 +4289,9 @@ function _composeVideoFilter() {
     // [선명한 화면 GPU 2026-10-23] WebGL 캔버스가 선명화를 맡고 있으면 SVG 필터는 걸지 않는다(색 보정만).
     //   SVG 참조 필터(url())는 WebKit 에서 GPU 합성으로 못 넘겨, 영상 프레임마다 화면 크기 래스터를
     //   CPU 로 흐리고 빼서 다시 올렸다 — 1080p·60fps·패인 여러 개면 메인 스레드와 CPU 를 크게 먹었다.
-    if (_sharpen && !_gpuSharpenActive()) return 'url(#' + SHARPEN_FILTER_ID + ')' + (color ? ' ' + color : '');
+    //   선명도(level 모드)는 경로가 'sharpen-css'(GPU 를 쓸 수 없음)일 때만 — 확대 중 캔버스가 덮을 때는 걸지 않는다.
+    const svg = _levelMode ? _plan.path === 'sharpen-css' : (_sharpen && !_gpuSharpenActive());
+    if (svg) return 'url(#' + SHARPEN_FILTER_ID + ')' + (color ? ' ' + color : '');
     return color;
 }
 
@@ -4315,17 +4412,20 @@ function _sampleAutoEnhance() {
     });
 }
 
-// <video> 의 object-fit: contain 사각형(CSS px).
+// <video> 의 영상 사각형(CSS px) — object-fit: contain, '화면 꽉 채우기'(fill)면 요소 전체.
+//   예전엔 늘 contain 으로 계산해 꽉 채우기와 GPU 캔버스를 함께 쓰면 처리한 화면이 가운데 레터박스 크기로만 그려졌다.
 function _containRect() {
     const w = video.clientWidth || 0, h = video.clientHeight || 0;
     const vw = video.videoWidth || 0, vh = video.videoHeight || 0;
     if (!w || !h || !vw || !vh) return null;
+    if (video.style.objectFit === 'fill') return { x: 0, y: 0, w: w, h: h };
     const scale = Math.min(w / vw, h / vh);
     const dw = vw * scale, dh = vh * scale;
     return { x: (w - dw) / 2, y: (h - dh) / 2, w: dw, h: dh };
 }
 
 function _upscaleNeeded() {
+    if (_levelMode) return _plan.path === 'upscale';
     if (!_pictureEnhance.upscale || _upscalerFailed || !video || !video.videoHeight) return false;
     if (!video.requestVideoFrameCallback) return false;
     // 숨은 페이지(가려진 창 등)에서는 그리지 않는다 — WebKit 은 숨은 페이지에서도 프레임 콜백을 줄 수 있다.
@@ -4339,13 +4439,21 @@ function _upscaleNeeded() {
 // 선명한 화면을 WebGL 로 그릴 수 있나 — 업스케일과 같은 캔버스·같은 프레임 콜백을 쓴다.
 let _sharpenGpuFailed = false;
 function _sharpenGpuWanted() {
+    if (_levelMode) return _plan.path === 'sharpen';
     if (!_sharpen || _sharpenGpuFailed || !video || !video.videoHeight) return false;
     if (!video.requestVideoFrameCallback) return false;
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return false;
     return !!_containRect();
 }
 function _gpuWanted() { return _upscaleNeeded() || _sharpenGpuWanted(); }
-function _gpuSharpenActive() { return !!(_sharpen && _upscaler && _upscaler.active && !_sharpenGpuFailed); }
+// 캔버스가 언샤프를 그리고 있나 — level 모드는 확대 경로에서 언샤프를 더하지 않는다(선명화기는 하나).
+function _gpuSharpenActive() {
+    if (_levelMode) {
+        const want = _plan.path === 'sharpen' || (_plan.path === 'upscale' && _plan.post > 0 && _plan.cas != null);
+        return !!(want && _upscaler && _upscaler.active && !_sharpenGpuFailed);
+    }
+    return !!(_sharpen && _upscaler && _upscaler.active && !_sharpenGpuFailed);
+}
 
 const _UPSCALE_VERTEX = '#version 300 es\n' +
     'in vec2 p; out vec2 uv;\n' +
@@ -4392,10 +4500,10 @@ const _GPU_BLUR = '#version 300 es\nprecision highp float;\n' +
     '  float w = exp(float(i * i) * k); acc += texture(t, c + dir * float(i)).rgb * w; ws += w;\n' +
     ' }\n' +
     ' o = vec4(acc / ws, 1.0);\n}';
-// 세로 흐림 + 언샤프 마스크 합성 — SVG 판과 같은 식: edge = clamp(원본 − 흐림, 0, 1), 결과 = clamp(원본 + edge).
-//   (feComposite arithmetic 결과는 0..1 로 잘린다 — 그래서 경계는 밝아지는 쪽으로만 더해진다.)
+// 세로 흐림 + 언샤프 마스크 합성 — SVG 판과 같은 식: edge = clamp(원본 − 흐림, 0, 1), 결과 = clamp(원본 + amount·edge).
+//   (feComposite arithmetic 결과는 0..1 로 잘린다 — 그래서 경계는 밝아지는 쪽으로만 더해진다.) amount 1 = 치지직.
 const _GPU_BLUR_UNSHARP = '#version 300 es\nprecision highp float;\n' +
-    'in vec2 uv; out vec4 o; uniform sampler2D t; uniform sampler2D b; uniform vec2 dir; uniform float sigma; uniform int radius; uniform float flip;\n' +
+    'in vec2 uv; out vec4 o; uniform sampler2D t; uniform sampler2D b; uniform vec2 dir; uniform float sigma; uniform int radius; uniform float flip; uniform float amount;\n' +
     'void main(){\n' +
     ' vec3 acc = vec3(0.0); float ws = 0.0; float k = -0.5 / (sigma * sigma);\n' +
     ' for (int i = -12; i <= 12; i++) {\n' +
@@ -4404,7 +4512,7 @@ const _GPU_BLUR_UNSHARP = '#version 300 es\nprecision highp float;\n' +
     ' }\n' +
     ' vec3 s = texture(b, flip > 0.5 ? vec2(uv.x, 1.0 - uv.y) : uv).rgb;\n' +
     ' vec3 e = clamp(s - acc / ws, 0.0, 1.0);\n' +
-    ' o = vec4(clamp(s + e, 0.0, 1.0), 1.0);\n}';
+    ' o = vec4(clamp(s + amount * e, 0.0, 1.0), 1.0);\n}';
 
 function _compileUpscaleProgram(gl, fragment) {
     function shader(type, source) {
@@ -4461,7 +4569,7 @@ function _createUpscaler() {
             catmull: _uniforms(gl, up.catmull, ['t', 'size'], { t: 0 }),
             cas: _uniforms(gl, up.cas, ['t', 'texel', 'sharp'], { t: 0 }),
             blur: _uniforms(gl, up.blur, ['t', 'dir', 'sigma', 'radius', 'flip'], { t: 0 }),
-            blurUnsharp: _uniforms(gl, up.blurUnsharp, ['t', 'b', 'dir', 'sigma', 'radius', 'flip'], { t: 0, b: 1 })
+            blurUnsharp: _uniforms(gl, up.blurUnsharp, ['t', 'b', 'dir', 'sigma', 'radius', 'flip', 'amount'], { t: 0, b: 1 })
         };
         const quad = gl.createBuffer();
         gl.bindBuffer(gl.ARRAY_BUFFER, quad);
@@ -4480,6 +4588,7 @@ function _createUpscaler() {
             _upscalerFailed = true;
             _sharpenGpuFailed = true; // 선명한 화면은 SVG 필터로 돌아간다
             _deactivateUpscaler();
+            if (_levelMode) _replanSharpness(); // 선명도: 언샤프는 SVG(sharpen-css), '크게 볼 때만'이면 끔
             _applyComposedFilter();
             postToSwift('pictureEnhance', { upscale: false, error: 'WEBGL_CONTEXT_LOST' });
         });
@@ -4541,6 +4650,10 @@ function _drawUpscaledFrameGL(up) {
     const vw = g.vw, vh = g.vh;
     const upscale = _upscaleNeeded();
     const sharpen = _gpuSharpenActive();
+    // 선명도(level 모드)는 단계별 CAS 세기·언샤프 세기를 쓰고, 확대 경로에서는 언샤프를 더하지 않는다(sharpen=false).
+    const cas = _levelMode ? _plan.cas : UPSCALE_SHARPNESS;
+    const amount = _levelMode ? (upscale ? _plan.post : _plan.amount) : 1;
+    if (_levelMode && !upscale && !sharpen) { _clearUpscaledFrameGL(up); return; } // 재판정 직전의 과도 상태
     // 1) 영상 → 원본 텍스처
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, up.source);
@@ -4561,6 +4674,15 @@ function _drawUpscaledFrameGL(up) {
     };
     // 선명화가 읽을 원본: 확대면 CAS 결과(작업 텍스처 0), 아니면 영상 텍스처 그대로(행 순서만 뒤집어 읽는다).
     let base = up.source, flip = 1;
+    if (upscale && cas == null) {
+        // 선명도 '약' 확대 — Catmull-Rom 만 화면에 바로(1패스, 출력 크기 텍스처 없음)
+        toScreen();
+        gl.useProgram(up.catmull);
+        gl.bindTexture(gl.TEXTURE_2D, up.source);
+        gl.uniform2f(L.catmull.size, video.videoWidth, video.videoHeight);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        return;
+    }
     if (upscale) {
         // 2) 출력 크기 텍스처로 Catmull-Rom 확대
         if (up.fboW !== vw || up.fboH !== vh) {
@@ -4582,7 +4704,7 @@ function _drawUpscaledFrameGL(up) {
         gl.useProgram(up.cas);
         gl.bindTexture(gl.TEXTURE_2D, up.scaled);
         gl.uniform2f(L.cas.texel, 1 / vw, 1 / vh);
-        gl.uniform1f(L.cas.sharp, UPSCALE_SHARPNESS);
+        gl.uniform1f(L.cas.sharp, cas);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
         if (!sharpen) return;
     }
@@ -4600,6 +4722,7 @@ function _drawUpscaledFrameGL(up) {
     gl.uniform1f(L.blurUnsharp.sigma, g.sigma);
     gl.uniform1i(L.blurUnsharp.radius, g.radius);
     gl.uniform1f(L.blurUnsharp.flip, flip);
+    gl.uniform1f(L.blurUnsharp.amount, amount);
     gl.uniform2f(L.blurUnsharp.dir, 0, 1 / vh);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, base);
@@ -4783,7 +4906,7 @@ fn vblur(c: vec2f) -> vec3f {
 }
 fn unsharp(s: vec3f, bl: vec3f) -> vec4f {
   let e = clamp(s - bl, vec3f(0.0), vec3f(1.0));
-  return vec4f(clamp(s + e, vec3f(0.0), vec3f(1.0)), 1.0);
+  return vec4f(clamp(s + u.b.x * e, vec3f(0.0), vec3f(1.0)), 1.0);
 }
 @fragment fn unsharpExt(v: V) -> @location(0) vec4f { return unsharp(ex(v.uv), vblur(v.uv)); }
 @fragment fn unsharpTex(v: V) -> @location(0) vec4f { return unsharp(sa(v.uv), vblur(v.uv)); }
@@ -4885,6 +5008,9 @@ function _drawUpscaledFrameWebGPU(up) {
     const vw = g.vw, vh = g.vh;
     const upscale = _upscaleNeeded();
     const sharpen = _gpuSharpenActive();
+    const cas = _levelMode ? _plan.cas : UPSCALE_SHARPNESS;
+    const amount = _levelMode ? (upscale ? _plan.post : _plan.amount) : 1; // 언샤프 세기 — u.b.x(넘기지 않으면 0 이 되니 늘 넘긴다)
+    if (_levelMode && !upscale && !sharpen) { _clearUpscaledFrameWebGPU(up); return; }
     // 디코더 프레임을 복사 없이 — 이 프레임 콜백 안에서만 유효하다.
     const ext = up.device.importExternalTexture({ source: video });
     const screenView = up.ctx.getCurrentTexture().createView();
@@ -4895,21 +5021,24 @@ function _drawUpscaledFrameWebGPU(up) {
     // 크게 줄일 때 출력 픽셀 하나에 들어가는 영상 화소 수만큼 표본(최대 4×4) — WebGL 판의 밉맵 대신.
     const ratio = video.videoWidth / vw;
     const n = upscale ? 1 : Math.max(1, Math.min(4, Math.round(ratio)));
-    if (upscale) {
+    if (upscale && cas == null) {
+        // 선명도 '약' 확대 — Catmull-Rom 만 화면에 바로(1패스)
+        _wgpuPass(up, enc, 'resample', 0, [video.videoWidth, video.videoHeight, 1, 1, tx, ty], { ext: ext }, null, g, screenView);
+    } else if (upscale) {
         _wgpuPass(up, enc, 'resample', 0, [video.videoWidth, video.videoHeight, 1, 1, tx, ty], { ext: ext }, A, g);
-        _wgpuPass(up, enc, 'cas', 1, [tx, ty, UPSCALE_SHARPNESS, 0], { ta: A }, sharpen ? C : null, g, screenView);
+        _wgpuPass(up, enc, 'cas', 1, [tx, ty, cas, 0], { ta: A }, sharpen ? C : null, g, screenView);
         if (sharpen) {
             _wgpuPass(up, enc, 'blurTex', 2, [tx, 0, g.sigma, g.radius], { ta: C }, B, g);
-            _wgpuPass(up, enc, 'unsharpTex', 3, [0, ty, g.sigma, g.radius], { ta: C, tb: B }, null, g, screenView);
+            _wgpuPass(up, enc, 'unsharpTex', 3, [0, ty, g.sigma, g.radius, amount], { ta: C, tb: B }, null, g, screenView);
         }
     } else if (n === 1) {
         // 같은 크기·조금 줄일 때: 영상에서 바로 가로 흐림, 세로 흐림 + 합성 → 2패스
         _wgpuPass(up, enc, 'blurExt', 0, [tx, 0, g.sigma, g.radius], { ext: ext }, B, g);
-        _wgpuPass(up, enc, 'unsharpExt', 1, [0, ty, g.sigma, g.radius], { ext: ext, tb: B }, null, g, screenView);
+        _wgpuPass(up, enc, 'unsharpExt', 1, [0, ty, g.sigma, g.radius, amount], { ext: ext, tb: B }, null, g, screenView);
     } else {
         _wgpuPass(up, enc, 'resample', 0, [video.videoWidth, video.videoHeight, n, 0, tx, ty], { ext: ext }, A, g);
         _wgpuPass(up, enc, 'blurTex', 1, [tx, 0, g.sigma, g.radius], { ta: A }, B, g);
-        _wgpuPass(up, enc, 'unsharpTex', 2, [0, ty, g.sigma, g.radius], { ta: A, tb: B }, null, g, screenView);
+        _wgpuPass(up, enc, 'unsharpTex', 2, [0, ty, g.sigma, g.radius, amount], { ta: A, tb: B }, null, g, screenView);
     }
     up.device.queue.submit([enc.finish()]);
 }
@@ -4944,6 +5073,7 @@ function _gpuBackendFailed(up, code, detail) {
     _upscalerFailed = true;
     _sharpenGpuFailed = true;
     _deactivateUpscaler();
+    if (_levelMode) _replanSharpness();
     _applyComposedFilter(); // 선명한 화면은 SVG 필터로
     postToSwift('pictureEnhance', { upscale: false, error: 'WEBGL_' + code, detail: String(detail || '').slice(0, 120) });
 }
@@ -5031,10 +5161,13 @@ function _deactivateUpscaler() {
 }
 
 function _reconcileUpscaler() {
+    // 선명도(level 모드)는 먼저 경로를 다시 정한다 — 창 크기·영상 해상도·가려짐·GPU 실패가 바뀔 때마다 여기로 온다.
+    if (_levelMode) _replanSharpness();
     if (!_gpuWanted()) {
         const wasSharpening = _gpuSharpenActive();
         _deactivateUpscaler();
-        if (wasSharpening) _applyComposedFilter(); // 선명화가 켜져 있으면 SVG 필터로 넘긴다(가려진 창 등)
+        // 선명화가 켜져 있으면 SVG 필터로 넘긴다(가려진 창 등). 선명도는 경로가 바뀌었을 수 있어 늘 맞춘다(같으면 그대로).
+        if (wasSharpening || _levelMode) _applyComposedFilter();
         return;
     }
     if (!_upscaler) {
@@ -5046,13 +5179,21 @@ function _reconcileUpscaler() {
         if (!_upscaler) {
             _upscalerFailed = true;
             _sharpenGpuFailed = true;
+            if (_levelMode) _replanSharpness();
             _applyComposedFilter();
             postToSwift('pictureEnhance', { upscale: false, error: 'WEBGL_UNAVAILABLE' });
             return;
         }
         postToSwift('pictureEnhance', { gpuBackend: _upscaler.backend });
     }
-    if (_upscaler.active) return;
+    if (_upscaler.active) {
+        if (_levelMode) {
+            _applyComposedFilter();
+            // 일시정지 중에는 새 영상 프레임(rVFC)이 오지 않는다 — 단계·경로를 바꿨으면 지금 프레임을 새 값으로 다시 그린다.
+            if (video.paused) { try { _drawUpscaledFrame(); } catch (e) { /* 다음 콜백에서 */ } }
+        }
+        return;
+    }
     _upscaler.active = true;
     _upscaler.verify = { drawn: 0, next: GPU_VERIFY_FIRST_FRAME, tries: 0, done: false };
     _applyComposedFilter(); // 영상·캔버스 모두 색 보정만(선명화는 캔버스가)
@@ -5069,11 +5210,16 @@ function _clearUpscaledFrame() {
     _deactivateUpscaler();
 }
 
+// 자동 밝기·색 보정(auto)과 [예전 방식] 업스케일(upscale). 앱은 { auto } 만 보낸다 — 업스케일은 선명도(setSharpness)가 맡는다.
+//   upscale 키를 주면 예전 방식(_levelMode=false)으로 돌아간다(perf/tools·metal-bench 비교용).
 function setPictureEnhancement(opts) {
-    const auto = !!(opts && opts.auto), upscale = !!(opts && opts.upscale);
+    const o = opts || {};
+    const hasUpscale = Object.prototype.hasOwnProperty.call(o, 'upscale');
+    const auto = !!o.auto, upscale = hasUpscale ? !!o.upscale : _pictureEnhance.upscale;
+    if (hasUpscale) _levelMode = false;
     _pictureEnhance = { auto: auto, upscale: upscale };
     if (!auto) _autoGain = { b: 1, c: 1, s: 1 };
-    if (!upscale) _upscalerFailed = false;
+    if (hasUpscale && !upscale) _upscalerFailed = false;
     _applyComposedFilter();
     _reconcileUpscaler();
     postToSwift('pictureEnhance', {
@@ -6348,6 +6494,8 @@ function collectMetrics() {
         sharpen: _sharpen,
         pictureAutoEnhance: !!_pictureEnhance.auto,
         pictureUpscaleActive: !!(_upscaler && _upscaler.active),
+        sharpnessLevel: _levelMode ? _sharpness.level : -1,
+        sharpnessPath: _levelMode ? _plan.path : 'legacy',
         bandwidthEstimateBps: bandwidthEstimateBps,
         currentLevelBitrateBps: currentLevelBitrateBps,
         latency: latency,

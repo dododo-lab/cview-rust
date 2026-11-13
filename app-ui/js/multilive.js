@@ -8,7 +8,6 @@
 import { api, listen, listenHere, Events } from './api.js';
 import { playPreroll, cancelPreroll } from './ads.js';
 import { noteConnectorLimit } from './live-connector.js';
-import { setPicture, setSharpenDefault } from './picture.js';
 import { esc, safeUrl, toast, imageSrc, streamEndedArt, dismiss, hideWithExit } from './dom.js';
 import { PlayerBridge } from './player.js';
 import { ChatPanel } from './chat.js';
@@ -483,7 +482,6 @@ export class MultiLivePage {
     pane = { el, bridge, sessionId: null };
     pane.controls = new PaneControls(pane, {
       makeAudible: () => this.makeAudible(pane),
-      applySharpenAll: (on) => this.applySharpenAll(on),
       flash: (text) => this.watch.flash(text),
     });
     this.panes.set(slot, pane);
@@ -595,7 +593,7 @@ export class MultiLivePage {
       // 그 속성을 보고 패인 클릭을 "라이브로 열기"로 바꿔 포커스 전환 대신 라이브 단독 보기로 넘어갔다.
       pane.el.dataset.perfChannel = s.channelId;
       pane.controls?.setChannel(s.channelId);
-      // 라이브 단독 보기의 무대 패인만 배속·화면 비율·자동 보정/업스케일·이퀄라이저를 쓴다(ml-pane-controls.js).
+      // 라이브 단독 보기의 무대 패인만 배속·화면 비율·자동 밝기·색 보정·이퀄라이저를 쓰고, 선명도의 확대(업스케일)를 허용한다.
       pane.controls?.setStage(this.watchSlot === s.slot);
       this.renderPane(pane, s, order.indexOf(s.id), s.id === state.selectedId);
     }
@@ -952,17 +950,6 @@ export class MultiLivePage {
     pane.zeroSince = now;
     toast(`${s.channelName || '패인'} 영상이 시작되지 않아 다시 연결합니다`, 2200);
     this.run(api.multiLiveRetry(s.id));
-  }
-
-  /** "모든 패인에 적용" — 지금 패인들의 선명한 화면을 같게 하고, 처음 보는 채널의 기본값도 그렇게 둔다. */
-  applySharpenAll(on) {
-    setSharpenDefault(on);
-    for (const pane of this.panes.values()) {
-      if (!pane.sessionId || !pane.controls?.channelId) continue;
-      setPicture(pane.controls.channelId, { sharpen: Boolean(on) });
-      pane.controls.applyPicture();
-    }
-    toast(on ? '모든 패인을 선명한 화면으로' : '모든 패인의 선명한 화면을 껐습니다', 1500);
   }
 
   /** 패인 볼륨을 올리면 그 패인 소리를 켠다(여러 소리 모드면 더하고, 아니면 선택). */

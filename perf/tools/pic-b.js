@@ -1,3 +1,5 @@
+// [선명도 통합 2026-11-14] 예전 채널별 '선명한 화면'(data-mp="sharpen"·cview.picture.v1 의 sharpen)을 실제 앱에서 확인하던 스크립트다.
+// 선명한 화면과 업스케일이 전역 '선명도'로 합쳐진 뒤로는 맞지 않는다 — 지금 동작은 tools/ui-regression/sharpness.mjs 가 본다.
 (async function(){ if (location.search) return; const post=(t)=>fetch('http://127.0.0.1:47999/',{method:'POST',body:t});const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));const I=window.__TAURI__.core.invoke;
 const vid=(f)=>{try{return f.contentDocument.getElementById('video')}catch{return null}};
 const filt=(f)=>{const v=vid(f); return v?v.style.filter:'-';};
