@@ -4,7 +4,7 @@
 // UR02 [P1-2] 단독 보기의 영상 위 채팅 — 무대 안(아래 재생 막대 위)에서 끝나 아래 정보 칸·재생 막대를 덮지 않는다.
 // UR03 [P1-3] 그리드의 영상 위 채팅 — 오른쪽 열 패인의 ⚙·⋯·닫기 단추가 채팅에 가리지 않는다.
 // UR04 [P1-4] 입장 때 받은 지난 기록(recent) — '여기까지 읽음'·새 메시지 수·TTS·채팅 통계에 들지 않는다. 그 뒤 온 글은 든다.
-// UR05 [P1-5] 익명 후원 — 이름이 실려 와도 카드·영상 위 알림·이벤트 칩·TTS 모두 '익명'.
+// UR05 [P1-5] 익명 후원 — 이름이 실려 와도 카드·영상 위 알림·후원 목록·TTS 모두 '익명'.
 // UR06 [P1-6] 숨긴 시청 화면에서 ⌥⌘R 은 녹화를 켜지 않는다. 녹화 표시는 resetRecording 으로 바로 걷힌다.
 // UR07 [P1-7] 백그라운드 절약 상한이 걸린 뒤 PiP 로 띄운 영상도 창이 다시 보이면 상한이 풀린다.
 // UR08 [P2-6] ⌘K 팔레트에 '검색'이 한 번만 나온다.
@@ -209,7 +209,7 @@ await check('UR04 [P1-4] recent history is drawn but not counted as unread, TTS 
   await ctx.close();
 });
 
-await check('UR05 [P1-5] anonymous donor is "익명" in card, stream alert, chip and TTS', async () => {
+await check('UR05 [P1-5] anonymous donor is "익명" in card, stream alert, donation list and TTS', async () => {
   const { ctx, page, errors } = await openChat();
   const r = await page.evaluate(async () => {
     const { ttsText } = await import('/js/chat-extras.js');
@@ -223,11 +223,13 @@ await check('UR05 [P1-5] anonymous donor is "익명" in card, stream alert, chip
     await new Promise((res) => setTimeout(res, 50));
     window.__panel.onEvent({ type: 'messages', messages: [m] });
     window.__panel.flushLines();
-    return { name: donorName(m), tts: ttsText(m), card: eventCardHtml(m, { nick: '<b>홍길동</b>' }), alert: host.textContent, rail: document.querySelector('.event-chip')?.textContent || '' };
+    window.__panel.donations.open(); // 후원 목록(예전 이벤트 칩 줄)
+    return { name: donorName(m), tts: ttsText(m), card: eventCardHtml(m, { nick: '<b>홍길동</b>' }), alert: host.textContent, rail: document.querySelector('.dp-panel .dp-item')?.textContent || '' };
   });
   assert.equal(r.name, '익명');
   for (const [k, v] of Object.entries(r)) assert.ok(!String(v).includes('홍길동'), `${k} 에 이름이 드러난다: ${v}`);
   assert.match(r.tts, /^익명님이/);
+  assert.match(r.rail, /익명/, '후원 목록 항목에 익명이 없다');
   assert.deepEqual(errors, []);
   await ctx.close();
 });

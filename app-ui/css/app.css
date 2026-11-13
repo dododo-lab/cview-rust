@@ -1289,6 +1289,8 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .rank-chip.top1 .rank-no { color: var(--donation); }
 .rank-chip .rank-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .rank-chip .rank-amount { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+/* 1위 칩의 금빛 바탕 위에서는 옅은 회색 금액이 대비 3.9:1 이었다 */
+.rank-chip.top1 .rank-amount { color: var(--text-secondary); }
 
 /* 스트림 알림(플레이어 위) — 유리 카드 + 톤 색.
    크기는 늘 같다 — 너비·높이·글자 크기를 픽셀로 고정하고, 긴 닉네임·메시지는 말줄임으로 자른다.
@@ -2835,11 +2837,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .mc-merged.chat-skin { border-radius: var(--radius-lg); overflow: hidden; }
 
 /* 이벤트 톤 — 줄·알림·칩 공통(기본 --ev 선언보다 뒤, 같은 구체성) */
-:is(.chat-line, .stream-alert, .event-chip).ev-donation { --ev: var(--donation); }
-:is(.chat-line, .stream-alert, .event-chip).ev-video { --ev: var(--accent-pink); }
-:is(.chat-line, .stream-alert, .event-chip).ev-mission { --ev: var(--accent-orange); }
-:is(.chat-line, .stream-alert, .event-chip).ev-subscription { --ev: var(--subscription); }
-:is(.chat-line, .stream-alert, .event-chip).ev-gift { --ev: var(--accent-cyan); }
+:is(.chat-line, .stream-alert, .event-chip, .dp-item).ev-donation { --ev: var(--donation); }
+:is(.chat-line, .stream-alert, .event-chip, .dp-item).ev-video { --ev: var(--accent-pink); }
+:is(.chat-line, .stream-alert, .event-chip, .dp-item).ev-mission { --ev: var(--accent-orange); }
+:is(.chat-line, .stream-alert, .event-chip, .dp-item).ev-subscription { --ev: var(--subscription); }
+:is(.chat-line, .stream-alert, .event-chip, .dp-item).ev-gift { --ev: var(--accent-cyan); }
 
 /* ══ 후원 색 단계 — 치지직 초록에서 시작해 금액이 클수록 더 화려하게(donations.js donationLevel) ══
    1 <1천 치지직 초록 · 2 1천~ 청록 · 3 5천~ 파랑 · 4 1만~ 보라(그라데이션) · 5 5만~ 핑크·주황(빛 테두리)
@@ -2879,12 +2881,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
   }
 }
 /* 단계 색 — 종류별 톤(위)보다 뒤에 둬서 단계가 이긴다. 종류는 아이콘·제목으로 구분된다. */
-:is(.chat-line, .stream-alert, .event-chip).ev-lv-1 { --ev: var(--don-1); --ev2: var(--don-1b); }
-:is(.chat-line, .stream-alert, .event-chip).ev-lv-2 { --ev: var(--don-2); --ev2: var(--don-2b); }
-:is(.chat-line, .stream-alert, .event-chip).ev-lv-3 { --ev: var(--don-3); --ev2: var(--don-3b); }
-:is(.chat-line, .stream-alert, .event-chip).ev-lv-4 { --ev: var(--don-4); --ev2: var(--don-4b); }
-:is(.chat-line, .stream-alert, .event-chip).ev-lv-5 { --ev: var(--don-5); --ev2: var(--don-5b); }
-:is(.chat-line, .stream-alert, .event-chip).ev-lv-6 { --ev: var(--don-6); --ev2: var(--don-6b); }
+:is(.chat-line, .stream-alert, .event-chip, .dp-item).ev-lv-1 { --ev: var(--don-1); --ev2: var(--don-1b); }
+:is(.chat-line, .stream-alert, .event-chip, .dp-item).ev-lv-2 { --ev: var(--don-2); --ev2: var(--don-2b); }
+:is(.chat-line, .stream-alert, .event-chip, .dp-item).ev-lv-3 { --ev: var(--don-3); --ev2: var(--don-3b); }
+:is(.chat-line, .stream-alert, .event-chip, .dp-item).ev-lv-4 { --ev: var(--don-4); --ev2: var(--don-4b); }
+:is(.chat-line, .stream-alert, .event-chip, .dp-item).ev-lv-5 { --ev: var(--don-5); --ev2: var(--don-5b); }
+:is(.chat-line, .stream-alert, .event-chip, .dp-item).ev-lv-6 { --ev: var(--don-6); --ev2: var(--don-6b); }
 :is(.stream-alerts, .chat-mode-overlay, .ml-body.chat-overlay) .ev-lv-1 { --ev: var(--don-hi-1); --ev2: var(--don-hi-1b); }
 :is(.stream-alerts, .chat-mode-overlay, .ml-body.chat-overlay) .ev-lv-2 { --ev: var(--don-hi-2); --ev2: var(--don-hi-2b); }
 :is(.stream-alerts, .chat-mode-overlay, .ml-body.chat-overlay) .ev-lv-3 { --ev: var(--don-hi-3); --ev2: var(--don-hi-3b); }
@@ -3311,3 +3313,83 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
   .ad-overlay.in-host .ad-btn { padding: 4px 8px; }
   .ad-overlay.in-host .ad-cheat { display: none; }
 }
+
+/* ══ 후원 목록 (donation-list.js) — 채팅 머리의 후원 단추 + 채팅 위에 펼쳐지는 목록 ═══════
+   예전엔 머리 아래에 후원 칩 띠(.chat-events)가 늘 붙어 채팅 자리를 차지했다. 이제는 단추의 배지로 새 후원을 알리고,
+   눌러야 목록이 뜬다(설정 chat.donationList 'strip' 이면 예전 띠도 보인다). 금액 색 단계는 아이콘 원이 따른다. */
+.dp-btn.has-new { color: var(--donation); }
+.dp-btn.open { color: var(--primary-text); background: var(--primary-dim); }
+.dp-badge {
+  position: absolute; top: -3px; right: -4px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: var(--radius-pill);
+  background: var(--donation); color: var(--surface-base); font-size: var(--fs-nano); font-weight: 800; line-height: 16px; text-align: center;
+  font-variant-numeric: tabular-nums; pointer-events: none;
+}
+.dp-badge[hidden] { display: none; }
+/* 새 후원이 오면 단추가 두 번 톡 튄다(모션 줄이기면 배지만) */
+.dp-btn.ping svg { animation: dp-ping .46s cubic-bezier(.3, 1.6, .5, 1) 2; }
+@keyframes dp-ping { 0%, 100% { transform: none; } 45% { transform: scale(1.28) rotate(-12deg); } }
+
+.dp-panel {
+  position: absolute; z-index: 30; left: 8px; right: 8px; top: 64px; max-height: 70%; min-height: 0;
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface-popover); border: 1px solid var(--border-subtle); border-radius: var(--radius-ml); box-shadow: var(--shadow-lg);
+  color: var(--text-primary); text-shadow: none;
+}
+.dp-panel[hidden] { display: none; }
+.dp-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 8px 6px 6px 12px; }
+.dp-title { flex: none; font-size: var(--fs-caption); font-weight: 700; }
+.dp-sum { flex: 1; min-width: 0; color: var(--text-secondary); font-size: var(--fs-footnote); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dp-close { flex: none; width: 28px; height: 28px; color: var(--text-tertiary); }
+.dp-close svg { width: 14px; height: 14px; }
+.dp-panel .donation-rank { flex: none; border-bottom: 0; padding: 0 12px 8px; }
+.dp-controls { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 10px 8px; border-bottom: 1px solid var(--border-subtle); }
+.dp-filter.chips { flex: 1 1 auto; min-width: 0; gap: 4px; margin: 0; }
+.dp-panel .chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; font-size: var(--fs-footnote); line-height: 16px; }
+.dp-count { font-variant-numeric: tabular-nums; font-weight: 400; }
+.dp-sort.segmented { flex: none; padding: 2px; }
+.dp-sort .seg { padding: 2px 8px; font-size: var(--fs-footnote); }
+.dp-list { flex: 1 1 auto; min-height: 0; margin: 0; padding: 4px; list-style: none; overflow-y: auto; overscroll-behavior: contain; }
+.dp-list[hidden] { display: none; }
+.dp-row { margin: 0; }
+.dp-item {
+  --ev: var(--donation);
+  width: 100%; display: flex; align-items: flex-start; gap: 9px; padding: 7px 8px; border: 0; border-radius: var(--radius-sm);
+  background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.dp-item:hover { background: var(--hover); }
+.dp-item:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.dp-item.gone { cursor: default; }
+.dp-icon { flex: none; width: 24px; height: 24px; margin-top: 1px; border-radius: 50%; display: grid; place-items: center; color: var(--ev); background: color-mix(in srgb, var(--ev) 18%, transparent); }
+.dp-icon svg { width: 13px; height: 13px; }
+.dp-item:is(.ev-lv-2, .ev-lv-3, .ev-lv-4, .ev-lv-5) .dp-icon { color: #fff; background: linear-gradient(135deg, var(--ev), var(--ev2)); }
+.dp-item.ev-lv-6 .dp-icon { color: #1a1205; background: var(--don-holo); }
+.dp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.dp-top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.dp-nick { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-caption); font-weight: 700; color: var(--text-primary); }
+.dp-value { flex: none; margin-left: auto; font-size: var(--fs-caption); font-weight: 800; color: var(--text-primary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dp-meta { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: var(--fs-micro); color: var(--text-tertiary); white-space: nowrap; }
+.dp-kind { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.dp-src { min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; font-weight: 700; color: var(--text-secondary); }
+.ml-chat .dp-src { color: hsl(var(--lh, 0) var(--mc-s) var(--mc-l)); }
+.dp-time { flex: none; margin-left: auto; font-variant-numeric: tabular-nums; }
+.dp-gone { flex: none; padding: 0 5px; border-radius: var(--radius-pill); background: var(--surface-elevated); color: var(--text-secondary); }
+.dp-msg { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: var(--fs-footnote); line-height: 1.4; color: var(--text-secondary); }
+.dp-msg img.emoji { height: 1.5em; width: auto; vertical-align: middle; }
+.dp-extra { font-weight: 600; color: var(--text-primary); }
+.dp-empty { margin: 0; padding: 24px 16px; text-align: center; color: var(--text-tertiary); font-size: var(--fs-footnote); word-break: keep-all; }
+.dp-cap { flex: none; margin: 0; padding: 6px 12px 8px; text-align: center; color: var(--text-tertiary); font-size: var(--fs-micro); }
+.dp-empty[hidden], .dp-cap[hidden] { display: none; }
+/* 영상 위 채팅(오버레이) 안 — 채팅 글자가 밝게 고정돼 있어 패널도 어두운 면으로(라이트 테마에서 흰 면에 흰 글자가 됐다) */
+:is(.viewer.chat-mode-overlay .chat, .ml-body.chat-overlay .ml-chat) .dp-panel {
+  --surface-popover: #1d1e23; --surface-base: #15161a; --surface-elevated: #2a2c32; --background: #0f1012;
+  --border-subtle: rgba(255, 255, 255, 0.12); --hover: rgba(255, 255, 255, 0.07); --active: rgba(255, 255, 255, 0.1);
+  --primary-text: #00ffa3;
+}
+/* 오버레이 머리의 단추·배지도 어두운 바탕용 밝은 금색(라이트 테마의 짙은 금색은 영상 위에서 묻혔다) */
+:is(.viewer.chat-mode-overlay .chat, .ml-body.chat-overlay .ml-chat) .dp-btn { --donation: #ffcc33; }
+:is(.viewer.chat-mode-overlay .chat, .ml-body.chat-overlay .ml-chat) .dp-badge { color: #1a1205; }
+/* 목록에서 고른 채팅 줄 — 잠깐 후원 색으로 비춘다 */
+.chat-line.dp-flash { border-radius: var(--radius-xs); background: color-mix(in srgb, var(--donation) 22%, transparent); box-shadow: inset 0 0 0 2px var(--donation); animation: dp-flash 2.2s ease-out both; }
+@keyframes dp-flash { 0%, 35% { background: color-mix(in srgb, var(--donation) 22%, transparent); box-shadow: inset 0 0 0 2px var(--donation); } 100% { background: transparent; box-shadow: inset 0 0 0 2px transparent; } }
+@media (prefers-reduced-motion: reduce) { .dp-btn.ping svg, .chat-line.dp-flash { animation: none; } }
+:root[data-motion="reduced"] :is(.dp-btn.ping svg, .chat-line.dp-flash) { animation: none; }

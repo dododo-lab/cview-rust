@@ -11,6 +11,8 @@ export const CHAT_DEFAULTS = Object.freeze({
   chatAvatars: 'photo',
   // 멀티채팅·멀티라이브 통합 목록의 줄 모양 — 'compact'(촘촘: 한 줄에 태그·닉네임·글) · 'bubble'(아바타·말풍선)
   mergedChatStyle: 'compact',
+  // 후원 목록 표시 — 'button'(머리의 후원 단추로 여는 목록, 위쪽 띠 없음) · 'strip'(예전처럼 머리 아래 후원 칩 띠·랭킹 줄도)
+  donationList: 'button',
   highlightMentions: true,
   mentionNotify: true,
   nicknameColors: true,

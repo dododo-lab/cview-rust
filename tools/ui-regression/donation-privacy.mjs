@@ -6,7 +6,8 @@
 //      '익명' 하나만(이름·해시·'Unknown' 없음, 누를 수 있는 모양 아님). 일반 후원은 예전처럼 이름과 금액.
 // DP03 익명 줄의 사용자 동작 — 닉네임·카드를 누르거나 더블클릭·우클릭해도 말풍선·줄 메뉴·동작 막대가 뜨지 않고 오류도 없다.
 //      /block 익명 은 '찾지 못했습니다'로 끝난다. 실명 줄은 예전처럼 말풍선이 뜬다.
-// DP04 영상 위 알림·이벤트 칩 줄 — 비공개면 금액 <b>·칩 금액 칸이 없고, 익명은 '익명'.
+// DP04 영상 위 알림·후원 목록(채팅 머리의 후원 단추, donation-list.js — 예전 이벤트 칩 줄) — 비공개면 금액 <b>·목록 금액 칸이 없고,
+//      익명은 '익명'.
 // DP05 통합(멀티)채팅 줄도 같은 카드 규칙.
 // 저장소 루트에서: node tools/ui-regression/donation-privacy.mjs   (Playwright 가 필요하다. CVIEW_UI_SHOTS=<폴더> 면 PNG 를 남긴다)
 //   CVIEW_UI_BROWSER=webkit 이면 앱과 같은 WebKit 엔진으로 돈다.
@@ -194,7 +195,7 @@ await check('DP03 anonymous lines open no user pop, menu or action bar; named li
 });
 
 // ── DP04 영상 위 알림·이벤트 칩 ──
-await check('DP04 stream alerts and event chips drop the amount slot when private', async () => {
+await check('DP04 stream alerts and donation list items drop the amount slot when private', async () => {
   const { ctx, page, errors } = await openChat();
   await page.evaluate((cases) => window.__say(Object.values(cases)), CASES);
   const r = await page.evaluate(async (cases) => {
@@ -213,7 +214,8 @@ await check('DP04 stream alerts and event chips drop the amount slot when privat
       const card = alerts.el.lastElementChild;
       out[k] = { b: card.querySelector('.stream-alert-title b')?.textContent ?? null, nick: card.querySelector('.stream-alert-nick').textContent, text: card.textContent };
     }
-    const chips = [...window.__panel.root.querySelectorAll('.chat-events .event-chip')].map((c) => ({ nick: c.querySelector('b').textContent, value: c.querySelector('.event-chip-value')?.textContent ?? null }));
+    window.__panel.donations.open();
+    const chips = [...window.__panel.root.querySelectorAll('.dp-panel .dp-item')].map((c) => ({ nick: c.querySelector('.dp-nick').textContent, value: c.querySelector('.dp-value')?.textContent ?? null }));
     return { out, chips };
   }, CASES);
   if (SHOTS) await page.locator('#dpstage').screenshot({ path: path.join(SHOTS, 'donation-privacy-alerts.png') });
@@ -225,7 +227,7 @@ await check('DP04 stream alerts and event chips drop the amount slot when privat
   assert.equal(r.out.anonPrivate.nick, '익명');
   assert.equal(r.out.normal.b, '5,000치즈');
   for (const [k, x] of Object.entries(r.out)) assert.ok(!BAD.test(x.text), `${k} 알림에 잘못된 글자: ${x.text}`);
-  // 칩은 최신이 앞
+  // 목록은 최신이 앞
   assert.deepEqual(r.chips, [
     { nick: '일반후원자', value: '5,000치즈' },
     { nick: '익명', value: null },
