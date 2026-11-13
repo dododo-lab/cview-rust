@@ -26,6 +26,9 @@ pub struct ChannelInfo {
     pub channel_description: Option<String>,
     /// 현재 라이브 방송 중 여부 (검색/팔로잉 응답에 포함)
     pub open_live: bool,
+    /// 구독할 수 있는 채널인가(`subscriptionAvailability`) — 채널 정보 응답에만 있다.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub subscription_availability: bool,
 }
 
 impl ChannelInfo {
@@ -40,6 +43,7 @@ impl ChannelInfo {
             follower_count: 0,
             channel_description: None,
             open_live: false,
+            subscription_availability: false,
         }
     }
 
@@ -68,6 +72,7 @@ impl<'de> Deserialize<'de> for ChannelInfo {
             follower_count: o.get("followerCount").unwrap_or(0),
             channel_description: o.get("channelDescription"),
             open_live: o.get("openLive").unwrap_or(false),
+            subscription_availability: o.get("subscriptionAvailability").unwrap_or(false),
         })
     }
 }
@@ -245,6 +250,26 @@ mod tests {
         assert!(ch.verified_mark);
         assert_eq!(ch.follower_count, 12345);
         assert_eq!(ch.channel_description.as_deref(), Some("소개글"));
+    }
+
+    #[test]
+    fn subscription_availability_decodes_and_is_omitted_when_false() {
+        let on: ChannelInfo = serde_json::from_str(
+            r#"{"channelId":"a","channelName":"b","subscriptionAvailability":true}"#,
+        )
+        .unwrap();
+        assert!(on.subscription_availability);
+        assert_eq!(
+            serde_json::to_value(&on).unwrap()["subscriptionAvailability"],
+            serde_json::json!(true)
+        );
+        let off: ChannelInfo =
+            serde_json::from_str(r#"{"channelId":"a","channelName":"b"}"#).unwrap();
+        assert!(!off.subscription_availability);
+        assert!(serde_json::to_value(&off)
+            .unwrap()
+            .get("subscriptionAvailability")
+            .is_none());
     }
 
     #[test]

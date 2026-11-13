@@ -185,6 +185,53 @@ pub struct LiveDetailDto {
     pub close_date: Option<String>,
     pub adult: bool,
     pub tags: Vec<String>,
+    /// 카테고리 종류(`GAME` · `SPORTS` · `ETC` …).
+    pub category_type: Option<String>,
+    /// 채팅을 열어 두었나 — 모르면 `None`.
+    pub chat_active: Option<bool>,
+    /// 채팅 가능 대상(`ALL` · `FOLLOWER` · `MANAGER` · `SUBSCRIBER`).
+    pub chat_available_group: Option<String>,
+    /// 채팅 조건(`NONE` · `REAL_NAME` …).
+    pub chat_available_condition: Option<String>,
+    /// 팔로워 채팅일 때 팔로우 후 기다릴 분.
+    pub min_follower_minute: Option<i64>,
+    pub kr_only_viewing: bool,
+    pub clip_active: Option<bool>,
+    pub time_machine_active: bool,
+    /// 볼 수 있는 화질(`1080p60` · `720p` …, 높은 것부터) — 재생 JSON 이 없으면 비어 있다.
+    pub qualities: Vec<String>,
+}
+
+/// 재생 JSON 의 인코딩 트랙 → `1080p60` 같은 화질 이름(높은 해상도·프레임부터, 중복 없이). 오디오 전용은 뺀다.
+pub fn quality_labels(playback_json: Option<&str>) -> Vec<String> {
+    let Some(raw) = playback_json.filter(|s| !s.is_empty()) else {
+        return Vec::new();
+    };
+    let Ok(playback) = serde_json::from_str::<cview_core::models::live::LivePlayback>(raw) else {
+        return Vec::new();
+    };
+    let mut tracks: Vec<(i64, i64)> = playback
+        .media
+        .iter()
+        .flat_map(|m| m.encoding_track.iter().flatten())
+        .filter_map(|t| {
+            let h = t.video_height.filter(|h| *h > 0)?;
+            let fps = t.video_frame_rate.unwrap_or(0.0);
+            Some((h, if fps >= 50.0 { 60 } else { 30 }))
+        })
+        .collect();
+    tracks.sort_unstable_by(|a, b| b.cmp(a));
+    tracks.dedup();
+    tracks
+        .into_iter()
+        .map(|(h, fps)| {
+            if fps == 60 {
+                format!("{h}p60")
+            } else {
+                format!("{h}p")
+            }
+        })
+        .collect()
 }
 
 impl LiveDetailDto {
@@ -215,6 +262,15 @@ impl LiveDetailDto {
             close_date: rfc3339(info.close_date),
             adult: info.adult,
             tags: info.tags.clone(),
+            category_type: category(info.category_type.as_deref()),
+            chat_active: info.chat_active,
+            chat_available_group: info.chat_available_group.clone(),
+            chat_available_condition: info.chat_available_condition.clone(),
+            min_follower_minute: info.min_follower_minute,
+            kr_only_viewing: info.kr_only_viewing,
+            clip_active: info.clip_active,
+            time_machine_active: info.time_machine_active,
+            qualities: quality_labels(info.live_playback_json.as_deref()),
         }
     }
 }

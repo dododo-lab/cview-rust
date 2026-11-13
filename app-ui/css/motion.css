@@ -723,13 +723,16 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
 :is(.channel-hero, .mwi-hero).mo-enter ~ :is(.channel-tabs, .mwi-tabbar) { animation: mo-in-up var(--dur-4) var(--ease-emph) .3s backwards; }
 /* 탭 내용 — 머리가 막 떠오르는 중이면 그 뒤로(--mo-base), 탭을 바꿔 그린 것은 바로 */
 :is(.channel-hero, .mwi-hero).mo-enter ~ :is(.channel-tab-body, .mwi-body) { --mo-base: .32s; }
-:is(.channel-tab-body.mo-enter > :is(.channel-info, .grid > .card:nth-child(-n+12)), .mwi-tiles > .mwi-tile, .mwi-card, .mwi-grid > .card:nth-child(-n+12)) {
+:is(.channel-tab-body.mo-enter > :is(.channel-info, .grid > .card:nth-child(-n+12)), .channel-tab-body.mo-enter > .ci-grid > .ci-card, .mwi-tiles > .mwi-tile, .mwi-card, .mwi-grid > .card:nth-child(-n+12)) {
   animation: mo-in-up .38s var(--ease-emph) backwards; animation-delay: calc(var(--mo-base, 0s) + var(--mo-n, 0) * 45ms);
 }
 .mwi-tags > span:nth-child(-n+12) { animation: mo-in-pop .34s var(--ease-spring) backwards; animation-delay: calc(var(--mo-base, 0s) + .26s + var(--mo-n, 0) * 30ms); }
-:is(.channel-tab-body > .channel-info, :is(.channel-tab-body, .mwi-body) .grid > .card, .mwi-tiles > .mwi-tile, .mwi-tags > span):nth-child(2) { --mo-n: 1; }
-:is(.channel-tab-body > .channel-info, :is(.channel-tab-body, .mwi-body) .grid > .card, .mwi-tiles > .mwi-tile, .mwi-tags > span):nth-child(3) { --mo-n: 2; }
-:is(.channel-tab-body > .channel-info, :is(.channel-tab-body, .mwi-body) .grid > .card, .mwi-tiles > .mwi-tile, .mwi-tags > span):nth-child(4) { --mo-n: 3; }
+:is(.channel-tab-body > .channel-info, .ci-grid > .ci-card, :is(.channel-tab-body, .mwi-body) .grid > .card, .mwi-tiles > .mwi-tile, .mwi-tags > span):nth-child(2) { --mo-n: 1; }
+:is(.channel-tab-body > .channel-info, .ci-grid > .ci-card, :is(.channel-tab-body, .mwi-body) .grid > .card, .mwi-tiles > .mwi-tile, .mwi-tags > span):nth-child(3) { --mo-n: 2; }
+:is(.channel-tab-body > .channel-info, .ci-grid > .ci-card, :is(.channel-tab-body, .mwi-body) .grid > .card, .mwi-tiles > .mwi-tile, .mwi-tags > span):nth-child(4) { --mo-n: 3; }
+.ci-grid > .ci-card:nth-child(5) { --mo-n: 4; }
+.ci-grid > .ci-card:nth-child(6) { --mo-n: 5; }
+.ci-grid > .ci-card:nth-child(n+7) { --mo-n: 6; }
 :is(:is(.channel-tab-body, .mwi-body) .grid > .card, .mwi-tags > span):nth-child(5) { --mo-n: 4; }
 :is(:is(.channel-tab-body, .mwi-body) .grid > .card, .mwi-tags > span):nth-child(6) { --mo-n: 5; }
 :is(:is(.channel-tab-body, .mwi-body) .grid > .card, .mwi-tags > span):nth-child(7) { --mo-n: 6; }

@@ -99,6 +99,118 @@ pub async fn channel_detail(
     })
 }
 
+/// 채널 정보 탭의 이 앱 시청 요약.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelWatchDto {
+    pub total_seconds: f64,
+    pub last30_seconds: f64,
+    pub session_count: usize,
+    pub first_watched_at: Option<String>,
+    pub last_watched_at: Option<String>,
+    pub top_category: Option<String>,
+}
+
+impl From<cview_persistence::store::watch_history_sync::ChannelWatchSummary> for ChannelWatchDto {
+    fn from(s: cview_persistence::store::watch_history_sync::ChannelWatchSummary) -> Self {
+        Self {
+            total_seconds: s.total_seconds,
+            last30_seconds: s.last30_seconds,
+            session_count: s.session_count,
+            first_watched_at: s.first_watched_at.map(|d| d.to_rfc3339()),
+            last_watched_at: s.last_watched_at.map(|d| d.to_rfc3339()),
+            top_category: s.top_category,
+        }
+    }
+}
+
+/// 로그인한 시청자의 이 채널 팔로우 상태.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelFollowDto {
+    pub following: bool,
+    /// 팔로우한 시각(RFC 3339, KST) — 응답에 없으면 `None`.
+    pub follow_date: Option<String>,
+}
+
+/// 치지직 `followDate`(`2024-02-19 23:28:11`, KST) → `2024-02-19T23:28:11+09:00`. 형식이 다르면 `None`.
+pub fn kst_to_rfc3339(raw: &str) -> Option<String> {
+    let t = chrono::NaiveDateTime::parse_from_str(raw.trim(), "%Y-%m-%d %H:%M:%S").ok()?;
+    let kst = chrono::FixedOffset::east_opt(9 * 3600)?;
+    Some(t.and_local_timezone(kst).single()?.to_rfc3339())
+}
+
+/// 채널 정보 탭 묶음 — 각 칸은 따로 실패한다(`None` = 못 받음/해당 없음).
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelOverviewDto {
+    /// 방송 중이 아니면 마지막 방송(제목·카테고리·시작·종료·시청자).
+    pub last_live: Option<crate::dto::LiveDetailDto>,
+    /// 최근 다시보기 몇 개 — `None` 이면 불러오지 못했다.
+    pub recent_vods: Option<Vec<VodInfo>>,
+    pub vod_total: Option<i64>,
+    /// 인기 클립(조회수 순) 몇 개 — `None` 이면 불러오지 못했다.
+    pub popular_clips: Option<Vec<ClipInfo>>,
+    /// 이 앱에서 본 기록 — 저장소가 없으면 `None`.
+    pub watch: Option<ChannelWatchDto>,
+    /// 팔로우 상태 — 비로그인이거나 받지 못하면 `None`.
+    pub follow: Option<ChannelFollowDto>,
+}
+
+const OVERVIEW_VODS: i64 = 4;
+const OVERVIEW_CLIPS: i64 = 6;
+
+#[tauri::command]
+pub async fn channel_overview(
+    services: State<'_, AppServices>,
+    channel_id: String,
+) -> CmdResult<ChannelOverviewDto> {
+    let api = &services.api;
+    let logged_in = services.auth.is_authenticated();
+    let last_live = async {
+        api.live_detail(&channel_id, false)
+            .await
+            .ok()
+            .filter(|l| l.status != LiveStatus::Open && (l.live_id > 0 || !l.live_title.is_empty()))
+            .map(|l| crate::dto::LiveDetailDto::from_live_info(&l, &channel_id))
+    };
+    let vods = api.vod_list(&channel_id, 0, OVERVIEW_VODS, false);
+    let clips = api.clip_list_popular(&channel_id, OVERVIEW_CLIPS);
+    let follow = async {
+        if !logged_in {
+            return None;
+        }
+        let s = api.channel_follow_status(&channel_id).await.ok()?;
+        Some(ChannelFollowDto {
+            following: s.following?,
+            follow_date: s.follow_date.as_deref().and_then(kst_to_rfc3339),
+        })
+    };
+    let (last_live, vods, clips, follow) = tokio::join!(last_live, vods, clips, follow);
+    let (recent_vods, vod_total) = match vods {
+        Ok(p) => (Some(p.data), p.total_count),
+        Err(_) => (None, None),
+    };
+    let popular_clips = clips.ok().map(|mut p| {
+        p.data.truncate(OVERVIEW_CLIPS as usize);
+        p.data
+    });
+    let watch = services.data_store.as_ref().and_then(|store| {
+        store
+            .channel_watch_summary(&channel_id, Utc::now())
+            .ok()
+            .map(ChannelWatchDto::from)
+    });
+    Ok(ChannelOverviewDto {
+        last_live,
+        recent_vods,
+        vod_total,
+        popular_clips,
+        watch,
+        follow,
+    })
+}
+
 #[tauri::command]
 pub async fn channel_vods(
     services: State<'_, AppServices>,
@@ -812,6 +924,20 @@ pub async fn open_external(url: String) -> CmdResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn follow_date_kst_becomes_rfc3339_with_offset() {
+        assert_eq!(
+            kst_to_rfc3339("2024-02-19 23:28:11").as_deref(),
+            Some("2024-02-19T23:28:11+09:00")
+        );
+        assert_eq!(
+            kst_to_rfc3339(" 2024-02-19 23:28:11 ").as_deref(),
+            Some("2024-02-19T23:28:11+09:00")
+        );
+        assert_eq!(kst_to_rfc3339("2024-02-19"), None);
+        assert_eq!(kst_to_rfc3339(""), None);
+    }
 
     #[test]
     fn save_file_only_allows_known_kinds_and_extensions() {

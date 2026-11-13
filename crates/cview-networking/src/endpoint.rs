@@ -94,6 +94,8 @@ pub enum ChzzkEndpoint {
         size: i64,
         /// 다음 쪽 커서(`page.next.clipUID`). 서버는 `page` 를 무시하고 이것으로만 넘긴다.
         cursor: Option<String>,
+        /// 조회수 순(`orderType=POPULAR`) — 아니면 서버 기본(최신 순).
+        popular: bool,
     },
     ClipDetail {
         clip_uid: String,
@@ -248,9 +250,17 @@ impl EndpointProtocol for ChzzkEndpoint {
                 q("sortType", "LATEST"),
             ]),
             ClipList {
-                page, size, cursor, ..
+                page,
+                size,
+                cursor,
+                popular,
+                ..
             } => {
                 let mut items = vec![q("page", page), q("size", size)];
+                if *popular {
+                    items.push(q("filterType", "ALL"));
+                    items.push(q("orderType", "POPULAR"));
+                }
                 if let Some(c) = cursor.as_deref().filter(|c| !c.is_empty()) {
                     items.push(q("clipUID", c));
                 }
@@ -482,6 +492,7 @@ mod tests {
                 page: 0,
                 size: 20,
                 cursor: Some("XNkbif0uJm".into()),
+                popular: false,
             }),
             "page=0&size=20&clipUID=XNkbif0uJm"
         );
@@ -491,8 +502,19 @@ mod tests {
                 page: 0,
                 size: 20,
                 cursor: None,
+                popular: false,
             }),
             "page=0&size=20"
+        );
+        assert_eq!(
+            query_string(&ChzzkEndpoint::ClipList {
+                channel_id: "c".into(),
+                page: 0,
+                size: 6,
+                cursor: None,
+                popular: true,
+            }),
+            "page=0&size=6&filterType=ALL&orderType=POPULAR"
         );
         assert_eq!(
             query_string(&ChzzkEndpoint::SearchLive {

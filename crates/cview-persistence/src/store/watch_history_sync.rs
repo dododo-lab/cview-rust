@@ -40,6 +40,21 @@ pub struct AggregatedInsights {
     pub last_updated_at: Option<Date>,
 }
 
+/// 한 채널의 이 앱 시청 요약 — 채널 정보 탭 "내 시청 기록".
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct ChannelWatchSummary {
+    /// 전체 시청 시간(초).
+    pub total_seconds: TimeInterval,
+    /// 최근 30일 시청 시간(초).
+    pub last30_seconds: TimeInterval,
+    /// 시청 시간이 있는 기록 수.
+    pub session_count: usize,
+    pub first_watched_at: Option<Date>,
+    pub last_watched_at: Option<Date>,
+    /// 가장 오래 본 카테고리(표시 이름) — 분류 없는 기록만 있으면 `None`.
+    pub top_category: Option<String>,
+}
+
 /// 인사이트 집계 입력 지문(`WatchHistoryFingerprint`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -64,6 +79,44 @@ fn top_n(
     });
     rows.truncate(n);
     rows
+}
+
+/// [`DataStore::channel_watch_summary`] 의 순수 집계 — `rows` 는 한 채널의 기록.
+pub fn summarize_channel(rows: &[WatchHistory], now: Date) -> ChannelWatchSummary {
+    let cutoff = adding(&now, -30.0 * 86_400.0);
+    let mut out = ChannelWatchSummary::default();
+    let mut cats: HashMap<String, TimeInterval> = HashMap::new();
+    for r in rows {
+        let d = r.effective_duration(now);
+        if d <= 0.0 {
+            continue;
+        }
+        out.total_seconds += d;
+        out.session_count += 1;
+        if r.started_at >= cutoff {
+            out.last30_seconds += d;
+        }
+        out.first_watched_at = Some(
+            out.first_watched_at
+                .map_or(r.started_at, |f| f.min(r.started_at)),
+        );
+        out.last_watched_at = Some(
+            out.last_watched_at
+                .map_or(r.started_at, |l| l.max(r.started_at)),
+        );
+        if let Some(c) = r
+            .category_name
+            .as_deref()
+            .map(str::trim)
+            .filter(|c| !c.is_empty())
+        {
+            *cats
+                .entry(LiveChannelItem::display_category_name(Some(c)))
+                .or_insert(0.0) += d;
+        }
+    }
+    out.top_category = top_n(cats, 1).into_iter().next().map(|(name, _)| name);
+    out
 }
 
 impl DataStore {
@@ -138,6 +191,22 @@ impl DataStore {
             }
             Ok(top_n(bucket, limit))
         })
+    }
+
+    /// 한 채널의 시청 요약 — 시청 시간이 0인 기록은 세지 않는다.
+    pub fn channel_watch_summary(
+        &self,
+        channel_id: &str,
+        now: Date,
+    ) -> Result<ChannelWatchSummary> {
+        let rows = self.read(|conn| {
+            Ok(db::fetch::<WatchHistory>(
+                conn,
+                "WHERE channelId = ? ORDER BY startedAt ASC, id ASC",
+                &[Value::Text(channel_id.into())],
+            )?)
+        })?;
+        Ok(summarize_channel(&rows, now))
     }
 
     /// 연속 시청 일수 — 오늘부터 거꾸로, 오늘 결석 1회 허용. 14일 달력 창을 최신→과거로 걷는다.
@@ -424,5 +493,45 @@ pub(crate) fn aggregate(
         unique_channel_count: channel_map.len(),
         active_session_count,
         last_updated_at,
+    }
+}
+
+#[cfg(test)]
+mod channel_summary_tests {
+    use super::*;
+
+    fn row(category: Option<&str>, days_ago: f64, secs: f64, now: Date) -> WatchHistory {
+        let started = adding(&now, -days_ago * 86_400.0);
+        let mut r = WatchHistory::new("c1", "채널", None, category.map(String::from), started);
+        r.ended_at = Some(adding(&started, secs));
+        r.duration = secs;
+        r.updated_at = r.ended_at;
+        r
+    }
+
+    #[test]
+    fn summarize_counts_time_sessions_dates_and_top_category() {
+        let now = crate::time::now();
+        let rows = vec![
+            row(Some("마인크래프트"), 40.0, 3600.0, now),
+            row(Some("저스트 채팅"), 3.0, 1200.0, now),
+            row(Some("마인크래프트"), 1.0, 600.0, now),
+            row(None, 0.5, 0.0, now), // 시청 시간 0 — 세지 않는다
+        ];
+        let s = summarize_channel(&rows, now);
+        assert_eq!(s.session_count, 3);
+        assert!((s.total_seconds - 5400.0).abs() < 1e-6);
+        assert!((s.last30_seconds - 1800.0).abs() < 1e-6);
+        assert_eq!(s.first_watched_at, Some(rows[0].started_at));
+        assert_eq!(s.last_watched_at, Some(rows[2].started_at));
+        assert_eq!(s.top_category.as_deref(), Some("마인크래프트"));
+    }
+
+    #[test]
+    fn summarize_empty_is_default() {
+        assert_eq!(
+            summarize_channel(&[], crate::time::now()),
+            ChannelWatchSummary::default()
+        );
     }
 }
