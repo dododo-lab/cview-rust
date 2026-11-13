@@ -2,7 +2,7 @@
 import { api } from './api.js';
 import { esc, safeUrl, imageSrc, icons } from './dom.js';
 import { motionReduced, swapContent } from './motion.js';
-import { liveGrid, liveCard, lacksThumbs, THUMB_FILL_DELAY_MS, THUMB_FILL_TRIES, channelRow, fallbackAvatar, emptyState, loadingState, compactCount, skeletonGrid, freshnessText, errorState, friendlyError, uptimeText } from './cards.js';
+import { liveGrid, liveCard, cardOpenButton, liveLabel, lacksThumbs, THUMB_FILL_DELAY_MS, THUMB_FILL_TRIES, channelRow, fallbackAvatar, emptyState, loadingState, compactCount, skeletonGrid, freshnessText, errorState, friendlyError, uptimeText } from './cards.js';
 import { FOLLOW_SORTS, FOLLOW_FILTERS, arrangeFollowed, followedInsights, followBadges, followAgeText, parseFollowDate, FollowExtras } from './following-info.js';
 import { vodCard, clipCard } from './channel.js';
 import { verifiedBadge } from './verified-badge.js';
@@ -235,8 +235,9 @@ export function followingInsights(lives, shown, now = Date.now()) {
 
 function denseRow(l) {
   const avatar = safeUrl(l.channelImageUrl);
-  return `<div class="dense-row live-dense card" tabindex="0" data-channel-id="${esc(l.channelId)}" data-channel-name="${esc(l.channelName)}" data-channel-image="${esc(avatar)}">
-    <span class="card-avatar" data-open-channel>${avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}</span>
+  return `<div class="dense-row live-dense card" data-channel-id="${esc(l.channelId)}" data-channel-name="${esc(l.channelName)}" data-channel-image="${esc(avatar)}">
+    ${cardOpenButton(liveLabel(l))}
+    <button type="button" class="card-avatar" data-open-channel aria-label="${esc(l.channelName)} 채널 정보">${avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}</button>
     <span class="dense-name ellipsis"><b>${esc(l.channelName)}</b>${verifiedBadge(l)} <span>${esc(l.categoryName || '')}</span></span>
     <span class="dense-title ellipsis">${esc(l.liveTitle || '')}</span>
     ${l.openDate ? `<span class="dense-uptime" title="방송 경과 시간">${esc(uptimeText(l.openDate))}</span>` : '<span></span>'}
@@ -248,8 +249,11 @@ function followedRow(c) {
   const avatar = safeUrl(c.channelImageUrl);
   const followed = parseFollowDate(c.followDate);
   const since = followAgeText(followed);
-  return `<div class="dense-row follow-row${c.isLive ? ' card' : ''}" tabindex="0" data-fid="${esc(c.channelId)}" data-live="${c.isLive ? 1 : 0}" ${c.isLive ? `data-channel-id="${esc(c.channelId)}"` : `data-open-channel-id="${esc(c.channelId)}"`}>
-    <span class="card-avatar" ${c.isLive ? 'data-open-channel' : ''}>${avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}</span>
+  const avatarImg = avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>';
+  // 방송 중이면 줄은 방송을 열고 아바타는 채널 정보 — 꺼져 있으면 줄 전체가 채널 정보다(아바타는 그림일 뿐).
+  return `<div class="dense-row follow-row${c.isLive ? ' card' : ''}" data-fid="${esc(c.channelId)}" data-live="${c.isLive ? 1 : 0}" ${c.isLive ? `data-channel-id="${esc(c.channelId)}"` : `data-open-channel-id="${esc(c.channelId)}"`}>
+    ${cardOpenButton(c.isLive ? liveLabel(c) : `${c.channelName}, 오프라인, 채널 정보`)}
+    ${c.isLive ? `<button type="button" class="card-avatar" data-open-channel aria-label="${esc(c.channelName)} 채널 정보">${avatarImg}</button>` : `<span class="card-avatar">${avatarImg}</span>`}
     <span class="dense-name ellipsis"><b>${esc(c.channelName)}</b>${followBadges(c)} <span>${c.isLive ? esc(c.categoryName || '방송 중') : '오프라인'}</span></span>
     <span class="dense-title ellipsis${c.isLive ? '' : ' fx-last'}">${esc(c.liveTitle || '')}</span>
     <span class="follow-meta"><span class="fx-followers"></span>${since ? `<span class="fx-since" title="팔로우한 날 ${esc(new Date(followed).toLocaleDateString('ko-KR'))}">${esc(since)}</span>` : ''}</span>

@@ -3,6 +3,22 @@ import { esc, safeUrl, imageSrc, icons } from './dom.js';
 import { previewAttr } from './hover-preview.js';
 import { verifiedBadge } from './verified-badge.js';
 
+/**
+ * 카드를 여는 주 동작 — 카드 전체를 덮는 투명한 진짜 단추(Tab 초점·Enter·Space·화면 낭독기 이름).
+ * 예전엔 카드(`article[tabindex=0]`) 자체가 초점을 받고 그 안에 +·채널 정보 단추가 들어 있어(대화형 요소 중첩)
+ * 화면 낭독기·키보드에 무엇을 누르는지 모호했다. 이제 카드는 초점을 받지 않고 이 단추와 보조 단추(+·아바타)가 형제다.
+ * 마우스는 단추를 지나 그대로 카드 속 요소가 받는다(CSS pointer-events: none — 호버 미리보기·+·아바타가 그대로 동작),
+ * 클릭은 예전처럼 카드 위임(`bindCardOpen`)이 연다. 초점 고리는 카드에 그린다(app.css `.card:has(> .card-open:focus-visible)`).
+ */
+export function cardOpenButton(label) {
+  return `<button type="button" class="card-open" aria-label="${esc(label)}"></button>`;
+}
+
+/** 라이브 카드 주 동작의 이름 — 방송 제목, 채널 이름. */
+export function liveLabel(live) {
+  return [live.liveTitle || '제목 없음', live.channelName].filter(Boolean).join(', ');
+}
+
 /** 라이브 카드 한 장 (LiveCardDto). */
 export function liveCard(live) {
   const thumb = safeUrl(live.thumbnailUrl);
@@ -10,17 +26,18 @@ export function liveCard(live) {
   const uptime = uptimeText(live.openDate);
   const category = live.categoryName ? `<span class="category"> · ${esc(live.categoryName)}</span>` : '';
   return `
-    <article class="card" tabindex="0" data-channel-id="${esc(live.channelId)}" data-channel-name="${esc(live.channelName)}" data-channel-image="${esc(avatar)}" title="${esc(live.liveTitle)}">
+    <article class="card" data-channel-id="${esc(live.channelId)}" data-channel-name="${esc(live.channelName)}" data-channel-image="${esc(avatar)}" title="${esc(live.liveTitle)}">
+      ${cardOpenButton(liveLabel(live))}
       <div class="thumb"${live.isLive && !live.adult ? previewAttr('live', live.channelId) : ''}>
         ${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
         ${live.isLive ? '<span class="badge-live">LIVE</span>' : ''}
         ${live.adult ? '<span class="badge-adult">19</span>' : ''}
         <span class="badge-viewers"><i class="dot"></i>${esc(live.viewerCountText)}명</span>
-        ${live.isLive ? '<button class="card-ml-add" data-ml-add title="멀티라이브에 추가" aria-label="멀티라이브에 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></button>' : ''}
+        ${live.isLive ? '<button type="button" class="card-ml-add" data-ml-add title="멀티라이브에 추가" aria-label="멀티라이브에 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></button>' : ''}
         ${uptime ? `<span class="badge-uptime">${esc(uptime)}</span>` : ''}
       </div>
       <div class="card-body">
-        <span class="card-avatar" data-open-channel title="채널 정보">${avatar ? `<img class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<div class="avatar"></div>'}</span>
+        <button type="button" class="card-avatar" data-open-channel title="채널 정보" aria-label="${esc(live.channelName)} 채널 정보">${avatar ? `<img class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}</button>
         <div class="card-text">
           <div class="card-title">${esc(live.liveTitle || '제목 없음')}</div>
           <div class="card-meta ellipsis">${esc(live.channelName)}${verifiedBadge(live)}${category}</div>
@@ -53,7 +70,8 @@ export function channelRow(channel) {
   const avatar = safeUrl(channel.channelImageUrl);
   const initial = Array.from(String(channel.channelName || '').trim())[0] || '?';
   return `
-    <div class="channel-row card${channel.openLive ? ' is-live' : ''}" tabindex="0" data-channel-id="${esc(channel.channelId)}" data-channel-name="${esc(channel.channelName)}" data-channel-image="${esc(avatar)}" data-open-live="${channel.openLive ? '1' : ''}">
+    <div class="channel-row card${channel.openLive ? ' is-live' : ''}" data-channel-id="${esc(channel.channelId)}" data-channel-name="${esc(channel.channelName)}" data-channel-image="${esc(avatar)}" data-open-live="${channel.openLive ? '1' : ''}">
+      ${cardOpenButton(channel.openLive ? `${channel.channelName}, 방송 중` : `${channel.channelName} 채널 정보`)}
       <span class="cr-avatar${avatar ? '' : ' fallback'}">${avatar ? `<img class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}<span class="cr-initial" aria-hidden="true">${esc(initial.toUpperCase())}</span></span>
       <div class="card-text">
         <div class="cr-name"><strong class="ellipsis">${esc(channel.channelName)}</strong>${verifiedBadge(channel)}${channel.openLive ? '<span class="cr-live">LIVE</span>' : ''}</div>
@@ -175,8 +193,8 @@ export function bindCardOpen(root, onOpen) {
   };
   root.addEventListener('click', (e) => open(e.target));
   root.addEventListener('keydown', (e) => {
-    // 카드(.card[tabindex])는 a11y.js 가, 버튼·링크는 브라우저가 Enter 를 click 으로 바꾼다 — 여기서 또 열면
-    // 채널이 두 번 열리고(재생 시작 두 번), 카드 안 + 버튼의 Enter 가 라이브로도 넘어간다.
+    // 카드의 주 동작(.card-open)·+·아바타는 진짜 단추라 브라우저가, 예전 방식 카드(.card[tabindex])는 a11y.js 가
+    // Enter 를 click 으로 바꾼다 — 여기서 또 열면 채널이 두 번 열리고(재생 시작 두 번), + 의 Enter 가 라이브로도 넘어간다.
     if (e.key !== 'Enter' || e.target.closest('button, a[href], .card[tabindex]')) return;
     open(e.target);
   });

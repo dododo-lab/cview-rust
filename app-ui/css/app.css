@@ -580,9 +580,19 @@ a { color: var(--primary); }
   display: grid; gap: var(--sp-lg) var(--sp-lg);
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
 }
-.card { cursor: pointer; border-radius: var(--radius-md); } /* 전환은 motion.css */
+.card { position: relative; cursor: pointer; border-radius: var(--radius-md); } /* 전환은 motion.css */
 .card:hover { transform: translateY(-2px); }
 .card:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+/* 카드를 여는 주 동작(cards.js cardOpenButton) — 카드 전체를 덮는 투명 단추. 마우스는 지나가게 두어 호버 미리보기·+·아바타가
+   그대로 받고 클릭은 카드 위임(bindCardOpen)이 연다. 초점 고리는 단추가 아니라 카드에 그린다 — 예전 .card:focus-visible 과
+   같은 모양이고, 히어로처럼 overflow: hidden 인 카드에서도 잘리지 않는다. 고리가 조여 드는 애니메이션·썸네일 재생 표시(motion.css)도
+   같은 조건으로 켠다(애니메이션은 :where 로 예전과 같은 우선순위 — 풍부 모드 등장 애니메이션을 덮지 않는다). */
+.card-open { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
+.card-open:focus-visible { outline: none; animation: none; }
+:is(.card, .top-item):has(> .card-open:focus-visible) { outline: 2px solid var(--primary); outline-offset: 3px; }
+:where(.card, .top-item):has(> :where(.card-open):focus-visible) { animation: mo-focus-ring .24s var(--ease-out); }
+.card:has(> .card-open:focus-visible) .thumb::after { opacity: 1; }
+.card:has(> .card-open:focus-visible) .thumb::before { opacity: .95; scale: 1; }
 .thumb {
   position: relative; aspect-ratio: 16 / 9; border-radius: var(--radius-md); overflow: hidden;
   background: var(--surface-elevated);
@@ -975,7 +985,6 @@ select.select {
 /* 지금 인기 TOP 10 — 큰 순위 숫자(윤곽선) 옆에 카드 */
 .top-shelf { grid-auto-columns: minmax(270px, calc((100% - 2 * var(--sp-lg)) / 3)); }
 .top-item { position: relative; display: flex; align-items: flex-end; min-width: 0; cursor: pointer; scroll-snap-align: start; border-radius: var(--radius-lg); }
-.top-item:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
 .top-rank {
   flex: none; width: 58px; margin-right: -10px; align-self: flex-start; padding-top: 4px;
   font-size: 92px; font-weight: 900; line-height: 0.9; letter-spacing: -6px; text-align: right;
@@ -1526,6 +1535,8 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .clip-grid { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
 .clip-grid .thumb { aspect-ratio: 9 / 16; }
 .card-avatar { flex: none; border-radius: 50%; }
+.card-body > .card-avatar { align-self: flex-start; } /* 단추는 내용을 세로 가운데로 모은다 — 늘어나지 않게 해 아바타를 예전처럼 위에 둔다 */
+.card-body > .card-avatar > .avatar:not(img) { display: block; }
 .card-avatar:hover .avatar { box-shadow: 0 0 0 2px var(--primary); }
 .stage-top .viewer-avatar, .stage-top .viewer-title { cursor: pointer; }
 
@@ -1892,7 +1903,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .chip-count { font-size: var(--fs-micro); opacity: 0.7; margin-left: 2px; font-variant-numeric: tabular-nums; }
 .dense-list { display: flex; flex-direction: column; gap: 2px; }
 .dense-row {
-  display: grid; grid-template-columns: auto minmax(160px, 260px) 1fr auto; align-items: center; gap: var(--sp-md);
+  position: relative; display: grid; grid-template-columns: auto minmax(160px, 260px) 1fr auto; align-items: center; gap: var(--sp-md);
   padding: 7px 10px; border-radius: var(--radius-md); cursor: pointer; transition: background 0.15s var(--ease-out);
 }
 .dense-row:hover { background: var(--hover); transform: none; }
@@ -1957,7 +1968,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .cr-followers { color: var(--text-primary); font-weight: 600; font-variant-numeric: tabular-nums; }
 .cr-go { flex: none; display: grid; color: var(--text-tertiary); opacity: 0; transition: opacity 0.16s var(--ease-out); }
 .cr-go svg { width: 16px; height: 16px; }
-.channel-row:hover .cr-go, .channel-row:focus-visible .cr-go { opacity: 1; }
+.channel-row:hover .cr-go, .channel-row:focus-visible .cr-go, .channel-row:has(> .card-open:focus-visible) .cr-go { opacity: 1; }
 .recent-chip { display: inline-flex; align-items: center; gap: 2px; padding: 3px 4px 3px 12px; }
 .recent-chip .link-btn { padding: 0; color: var(--text-primary); }
 .chip-x { border: 0; background: transparent; color: var(--text-tertiary); font-size: var(--fs-micro); padding: 3px 6px; border-radius: var(--radius-pill); }
@@ -2736,6 +2747,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
   outline: 2px solid var(--primary); outline-offset: 2px;
 }
 .dense-row:focus-visible { outline-offset: -2px; }
+.dense-row:has(> .card-open:focus-visible) { outline: 2px solid var(--primary); outline-offset: -2px; } /* 주 동작 단추에 초점 — 위 .card 규칙보다 뒤에 */
 
 /* ── 스플래시 (SYS-10)·환영 안내 (SYS-11) ───────── */
 .splash { position: fixed; inset: 0; z-index: var(--z-splash);   /* .toast-stack(200)보다 위 */ display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: var(--background); transition: opacity .32s var(--ease-out); }
