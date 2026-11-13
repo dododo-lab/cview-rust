@@ -299,7 +299,10 @@ await check('F08 F09 F12 multichat', async () => {
     const mc = window.__mc;
     mc.onSessionEvent({ session: 'mc:m', event: { type: 'messages', messages: [{ kind: 'chat', nickname: 'n', content: '안녕', emojis: {} }] } });
   });
-  assert.equal(await page.$('#mc-test .mc-merged-list > .empty'), null, '대기 안내가 남음');
+  // 통합 목록은 프레임마다 한 번 붙인다(multichat.js scheduleFlush) — 다음 프레임을 기다린다.
+  // 불리언으로 비교한다: ElementHandle 을 null 과 비교하다 실패하면 assert 의 차이 그리기가 끝나지 않아 검사가 멈췄다.
+  await settle();
+  assert.equal(await page.$eval('#mc-test .mc-merged-list', (l) => Boolean(l.querySelector(':scope > .empty'))), false, '대기 안내가 남음');
   await page.fill('#mc-test .mc-search', 'cview-no-message-match');
   await settle();
   await shot('f09-merged-no-match');
