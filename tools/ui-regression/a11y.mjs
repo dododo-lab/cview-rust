@@ -96,7 +96,9 @@ for (const theme of ['dark', 'light']) {
         const r = await page.evaluate(() => {
           const el = document.activeElement;
           if (!el || el === document.body) return null;
-          const snap = () => [el, ...el.querySelectorAll('*')].slice(0, 6).map((n) => { const cs = getComputedStyle(n); return [cs.outlineStyle, cs.outlineWidth, cs.outlineColor, cs.boxShadow, cs.backgroundColor, cs.borderColor].join('|'); }).join(';');
+          // 카드의 주 동작 단추(.card-open)는 고리를 자기 대신 카드(부모)에 그린다 — card-structure.mjs CS07
+          const host = el.matches('.card-open') ? el.parentElement : el;
+          const snap = () => [host, ...host.querySelectorAll('*')].slice(0, 6).map((n) => { const cs = getComputedStyle(n); return [cs.outlineStyle, cs.outlineWidth, cs.outlineColor, cs.boxShadow, cs.backgroundColor, cs.borderColor].join('|'); }).join(';');
           const focused = snap();
           el.blur();
           const plain = snap();

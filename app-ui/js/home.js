@@ -4,7 +4,7 @@
 // 데이터(팔로잉·인기 라이브)와 로컬 최근 시청 기록만으로 그린다.
 import { api } from './api.js';
 import { esc, safeUrl, icons, imageSrc } from './dom.js';
-import { liveCard, lacksThumbs, THUMB_FILL_DELAY_MS, THUMB_FILL_TRIES, emptyState, errorState, friendlyError, liveGrid, recentChannels, uptimeText, compactCount } from './cards.js';
+import { liveCard, cardOpenButton, liveLabel, lacksThumbs, THUMB_FILL_DELAY_MS, THUMB_FILL_TRIES, emptyState, errorState, friendlyError, liveGrid, recentChannels, uptimeText, compactCount } from './cards.js';
 import { clipCard } from './channel.js';
 import { continueCard } from './media.js';
 import { motionReduced, swapContent } from './motion.js';
@@ -97,7 +97,8 @@ function heroSlide(live, source) {
   const thumb = safeUrl(live.thumbnailUrl);
   const up = uptimeText(live.openDate);
   return `
-    <article class="hero-main card" tabindex="0" ${channelData(live)}>
+    <article class="hero-main card" ${channelData(live)}>
+      ${cardOpenButton(liveLabel(live))}
       <div class="hero-media"${live.adult ? '' : previewAttr('live', live.channelId)}>
         ${thumb ? `<img fetchpriority="high" decoding="async" src="${esc(imageSrc(thumb, 'hero'))}" alt="" referrerpolicy="no-referrer">` : ''}
       </div>
@@ -116,8 +117,8 @@ function heroSlide(live, source) {
           <div class="ellipsis"><strong>${esc(live.channelName)}</strong>${verifiedBadge(live)}${live.categoryName ? `<span> · ${esc(live.categoryName)}</span>` : ''}</div>
         </div>
         <div class="hero-actions">
-          <span class="btn primary lg hero-cta">${icons.play}시청하기</span>
-          <button class="btn lg hero-ghost" data-ml-add title="멀티라이브에 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg>멀티라이브</button>
+          <span class="btn primary lg hero-cta" aria-hidden="true">${icons.play}시청하기</span>
+          <button type="button" class="btn lg hero-ghost" data-ml-add title="멀티라이브에 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg>멀티라이브</button>
         </div>
       </div>
     </article>`;
@@ -150,14 +151,15 @@ function topRail(lives) {
   const items = lives.map((l, i) => {
     const thumb = safeUrl(l.thumbnailUrl);
     return `
-      <article class="top-item" tabindex="0" ${channelData(l)} title="${esc(l.liveTitle)}">
+      <article class="top-item" ${channelData(l)} title="${esc(l.liveTitle)}">
+        ${cardOpenButton(liveLabel(l))}
         <span class="top-rank" aria-hidden="true">${i + 1}</span>
         <div class="top-card">
           <div class="thumb"${l.adult ? '' : previewAttr('live', l.channelId)}>
             ${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
             <span class="badge-live">LIVE</span>
             <span class="badge-viewers"><i class="dot"></i>${esc(l.viewerCountText)}명</span>
-            <button class="card-ml-add" data-ml-add title="멀티라이브에 추가" aria-label="멀티라이브에 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></button>
+            <button type="button" class="card-ml-add" data-ml-add title="멀티라이브에 추가" aria-label="멀티라이브에 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></button>
           </div>
           <div class="top-text">
             <div class="top-title">${esc(l.liveTitle || '제목 없음')}</div>
@@ -443,7 +445,10 @@ export class HomePage {
     this.heroIndex = (index + this.hero.length) % this.hero.length;
     const slot = this.body.querySelector('.hero-slot');
     if (!slot) return;
+    // 키보드 초점이 히어로 카드에 있던 채 자동으로 넘어가면 초점이 문서 처음으로 떨어졌다 — 새 장의 같은 단추로 옮긴다.
+    const focused = slot.contains(document.activeElement) ? (document.activeElement.matches('[data-ml-add]') ? '[data-ml-add]' : '.card-open') : '';
     slot.innerHTML = heroSlide(this.hero[this.heroIndex], this.heroSource);
+    if (focused) slot.querySelector(focused)?.focus({ preventScroll: true });
     const ambient = this.body.querySelector('.hero-ambient');
     if (ambient) ambient.innerHTML = heroAmbient(this.hero[this.heroIndex]);
     for (const q of this.body.querySelectorAll('.queue-item')) {
