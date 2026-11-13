@@ -98,8 +98,9 @@ await check('업데이트 확인 실패: 오류 문구와 다시 시도', async 
 
 await check('채팅 자동 스크롤 메뉴: 설정을 뒤집어 저장', async () => {
   await menu('chat-autoscroll');
-  await page.waitForFunction(() => window.__mock.calls.some((c) => c.cmd === 'settings_update'));
-  const call = await page.evaluate(() => window.__mock.calls.find((c) => c.cmd === 'settings_update'));
+  // 첫 실행이면 선명도 이전(player 도메인)도 settings_update 를 부른다 — 채팅 설정 저장만 본다.
+  await page.waitForFunction(() => window.__mock.calls.some((c) => c.cmd === 'settings_update' && c.args?.domain === 'chat'));
+  const call = await page.evaluate(() => window.__mock.calls.find((c) => c.cmd === 'settings_update' && c.args?.domain === 'chat'));
   assert.equal(JSON.stringify(call.args).includes('"autoScroll":false'), true, JSON.stringify(call.args));
 });
 
