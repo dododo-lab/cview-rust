@@ -4,6 +4,7 @@
 //! - `cview://live?channelId=XYZ[&mode=watch|multi|chatonly]`
 //! - `cview://channel?channelId=XYZ`
 //! - `cview://following[?mode=explore|watch|multi|search|popular|category]`
+//! - `cview://popular[?tab=live|clips]` — 방송&클립 화면(방송·클립 탭)
 //! - `cview://multilive`, `cview://home`, `cview://search[?q=keyword]`, `cview://clip?id=UID`,
 //!   `cview://login`
 //!
@@ -30,6 +31,10 @@ pub enum DeepLink {
     Following {
         mode: Option<FollowingHubMode>,
     },
+    /// 방송&클립 화면. `tab` 이 없으면 마지막으로 고른 탭.
+    Popular {
+        tab: Option<PopularTab>,
+    },
     MultiLive,
     Home,
     Search {
@@ -39,6 +44,34 @@ pub enum DeepLink {
         uid: String,
     },
     Login,
+}
+
+/// 방송&클립 화면의 탭.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PopularTab {
+    /// 인기 라이브(방송).
+    Live,
+    /// 인기 클립.
+    Clips,
+}
+
+impl PopularTab {
+    /// URL 토큰(대소문자 무시) — `live`·`broadcast`·`방송`, `clips`·`clip`·`클립`.
+    pub fn from_token(token: &str) -> Option<Self> {
+        match token.trim().to_lowercase().as_str() {
+            "live" | "lives" | "broadcast" | "broadcasts" | "방송" => Some(Self::Live),
+            "clips" | "clip" | "클립" => Some(Self::Clips),
+            _ => None,
+        }
+    }
+
+    /// 프런트에 넘기는 토큰.
+    pub fn token(self) -> &'static str {
+        match self {
+            Self::Live => "live",
+            Self::Clips => "clips",
+        }
+    }
 }
 
 /// `%XX` 디코딩(`+` 는 그대로 — `URLComponents.queryItems` 와 같다). 잘못된 UTF-8 은 None.
@@ -145,6 +178,9 @@ impl DeepLink {
             "following" => Some(Self::Following {
                 mode: q("mode").and_then(|m| FollowingHubMode::from_deep_link_token(&m)),
             }),
+            "popular" => Some(Self::Popular {
+                tab: q("tab").and_then(|t| PopularTab::from_token(&t)),
+            }),
             "multilive" => Some(Self::MultiLive),
             "home" | "" => Some(Self::Home),
             "search" => {
@@ -192,6 +228,7 @@ impl DeepLink {
                 channel_id: channel_id.clone(),
             }),
             Self::Following { mode } => mode.map(CViewAction::SwitchLiveMode),
+            Self::Popular { .. } => Some(CViewAction::SwitchLiveMode(FollowingHubMode::Popular)),
             Self::MultiLive => Some(CViewAction::SwitchLiveMode(FollowingHubMode::Multi)),
             Self::Home => Some(CViewAction::OpenHome),
             Self::Search { query } => Some(CViewAction::OpenSearch {
@@ -250,6 +287,7 @@ impl DeepLinkRouter {
             DeepLink::Following { mode } => {
                 host.open_live_section(mode.unwrap_or(FollowingHubMode::Explore), router)
             }
+            DeepLink::Popular { .. } => host.open_live_section(FollowingHubMode::Popular, router),
             DeepLink::MultiLive => router.navigate_to_multi_live(),
             DeepLink::Home => {
                 router.select_sidebar(SidebarItem::Home);
@@ -319,6 +357,26 @@ mod tests {
             Some(DeepLink::Search {
                 query: Some("hi".into())
             })
+        );
+        assert_eq!(
+            DeepLink::parse("cview://popular?tab=clips"),
+            Some(DeepLink::Popular {
+                tab: Some(PopularTab::Clips)
+            })
+        );
+        assert_eq!(
+            DeepLink::parse("cview://popular?tab=LIVE"),
+            Some(DeepLink::Popular {
+                tab: Some(PopularTab::Live)
+            })
+        );
+        assert_eq!(
+            DeepLink::parse("cview://popular?tab=nope"),
+            Some(DeepLink::Popular { tab: None })
+        );
+        assert_eq!(
+            DeepLink::parse("cview://popular"),
+            Some(DeepLink::Popular { tab: None })
         );
         assert_eq!(DeepLink::parse("cview://"), Some(DeepLink::Home));
         assert_eq!(DeepLink::parse("cview://home/"), Some(DeepLink::Home));

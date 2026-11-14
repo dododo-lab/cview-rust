@@ -102,7 +102,7 @@ impl FollowingHubMode {
             Self::Watch => "시청",
             Self::Multi => "멀티",
             Self::Search => "검색",
-            Self::Popular => "인기",
+            Self::Popular => "방송&클립",
             Self::Category => "카테고리",
         }
     }

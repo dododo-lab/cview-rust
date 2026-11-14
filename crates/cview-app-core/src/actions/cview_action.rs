@@ -85,7 +85,7 @@ impl CViewAction {
                 FollowingHubMode::Watch => "시청 모드",
                 FollowingHubMode::Multi => "멀티 모드",
                 FollowingHubMode::Search => "검색 모드",
-                FollowingHubMode::Popular => "인기 탭",
+                FollowingHubMode::Popular => "방송&클립 탭",
                 FollowingHubMode::Category => "카테고리 탭",
             },
             Self::OpenSearch { .. } => "검색 열기",

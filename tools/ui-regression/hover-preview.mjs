@@ -241,26 +241,27 @@ await check('P08 clicking stops the preview at once', async () => {
 });
 
 for (const [route, sel, kind] of [
-  ['popular', '[data-page="popular"] .thumb[data-preview]', 'live'],
+  ['popular', '[data-page="popular"] .pop-panel[data-panel="live"] .thumb[data-preview]', 'live'],
+  ['popular-clips', '[data-page="popular"] .pop-panel[data-panel="clips"] .thumb[data-preview]', 'clip'],
   ['following', '[data-page="following"] .thumb[data-preview]', 'live'],
   ['categories', '[data-page="categories"] .category-art[data-preview]', 'live'],
-  ['library', '[data-page="library"] .thumb[data-preview]', 'clip'],
 ]) {
   await check(`P09 ${route} thumbnails preview (${kind})`, async () => {
-    await go(p, route, route === 'library' ? { tab: 'clips' } : {}); // 보관함 첫 탭은 개요 — 썸네일은 인기 클립 탭에
+    // 인기 클립은 보관함에서 방송&클립 › 클립 탭으로 옮겼다
+    await go(p, route === 'popular-clips' ? 'popular' : route, route === 'popular-clips' ? { tab: 'clips' } : route === 'popular' ? { tab: 'live' } : {});
     await p.waitForSelector(sel, { timeout: 4000 });
     await hover(p, sel);
     await waitPlaying(p);
     const [v] = await activeVideos(p);
     assert.ok(v && v.host.startsWith(`${kind}:`), JSON.stringify(v));
   });
-  await shot(p, `after-${route}`, `[data-page="${route}"] :is(.card, .category-card):has(.preview-on)`);
+  await shot(p, `after-${route}`, `[data-page="${route.replace('-clips', '')}"] :is(.card, .category-card):has(.preview-on)`);
   await p.mouse.move(5, 890);
   await p.waitForTimeout(300);
 }
 
 await check('P10 leaving the screen cleans up', async () => {
-  await go(p, 'popular');
+  await go(p, 'popular', { tab: 'live' });
   await p.waitForSelector('[data-page="popular"] .thumb[data-preview]');
   await hover(p, '[data-page="popular"] .thumb[data-preview]');
   await waitPlaying(p);
@@ -286,8 +287,8 @@ await shot(off.page, 'before-home-grid', '.popular-grid .card:hover');
 await hover(off.page, '.top-shelf .top-item:nth-child(1) .thumb[data-preview]');
 await off.page.waitForTimeout(500);
 await shot(off.page, 'before-home-top10', '.top-shelf .top-item:nth-child(1)');
-for (const [route, sel] of [['popular', '[data-page="popular"] .thumb[data-preview]'], ['following', '[data-page="following"] .thumb[data-preview]'], ['categories', '[data-page="categories"] .category-art[data-preview]'], ['library', '[data-page="library"] .thumb[data-preview]']]) {
-  await go(off.page, route, route === 'library' ? { tab: 'clips' } : {});
+for (const [route, sel] of [['popular', '[data-page="popular"] .pop-panel[data-panel="live"] .thumb[data-preview]'], ['following', '[data-page="following"] .thumb[data-preview]'], ['categories', '[data-page="categories"] .category-art[data-preview]']]) {
+  await go(off.page, route, route === 'popular' ? { tab: 'live' } : {});
   await off.page.waitForSelector(sel, { timeout: 4000 }).catch(() => {});
   await hover(off.page, sel).catch(() => {});
   await off.page.waitForTimeout(500);

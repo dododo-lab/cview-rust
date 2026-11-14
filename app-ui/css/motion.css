@@ -55,7 +55,7 @@
 /* ── 메뉴 전환 — 짧은 페이드 + 8px 슬라이드, 불러온 내용은 살짝 떠오르며 ── */
 .page:not([hidden]) { animation: page-in .26s cubic-bezier(.2, .8, .2, 1) both; }
 .viewer:not([hidden]) .viewer-main { animation: page-in .26s cubic-bezier(.2, .8, .2, 1) both; }
-.page-body > .grid, .page-body > .channel-list, .page-body > section, .insight-panel .ip-scroll > * { animation: content-in .32s cubic-bezier(.2, .8, .2, 1) both; }
+.page-body > .grid, .pop-panel > .grid, .pop-clip-body > .grid, .page-body > .channel-list, .page-body > section, .insight-panel .ip-scroll > * { animation: content-in .32s cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes page-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes content-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
@@ -401,7 +401,7 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 :root[data-motion="balanced"] :is(.grid, .shelf, .category-grid) > :nth-child(8) { animation-delay: 120ms; }
 
 /* ── 다시 그린 목록 — 이미 보이던 내용을 갈아 끼운 것(motion.js swapContent)은 떠오르지 않는다 ── */
-.no-enter > :is(.grid, .channel-list, section), .no-enter :is(.grid, .shelf, .category-grid) > *,
+.no-enter > :is(.grid, .channel-list, section), .no-enter .pop-clip-body > .grid, .no-enter :is(.grid, .shelf, .category-grid) > *,
 .no-enter .empty:not(.loading), .no-enter .empty:not(.loading) > .empty-logo, .ip-scroll.no-enter > * { animation: none !important; }
 
 /* ── 명령 팔레트 — 열 때만 항목이 차례로(palette.js 가 .opening 을 잠깐 단다) ── */
@@ -1102,3 +1102,22 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
   .ml-focus-add.ch-add svg { forced-color-adjust: auto; transition: rotate .34s var(--ease-spring), scale .34s var(--ease-spring); }
   .ml-focus-add.ch-add:not([aria-disabled="true"], [aria-expanded="true"]):is(:hover, :focus-visible) svg { background: Highlight; color: HighlightText; }
 }
+
+/* ── 방송&클립 탭 전환 — 들어오는 패널은 고른 쪽에서 미끄러져 들어오고, 나가는 패널은 반대쪽으로 비켜나며 흐려진다(교차) ──
+   --pop-dir: 1(오른쪽 탭으로) · -1(왼쪽으로). pages.js PopularPage.syncTabs 가 .entering·.leaving 을 잠깐 단다.
+   transform 계열(translate)·opacity 만. 모션 줄이기면 JS 가 클래스를 달지 않고 바로 바꾼다(전역 규칙도 시간을 0 으로). */
+.pop-panel.entering { animation: pop-panel-in .34s var(--ease-emph) both; }
+.pop-panel.leaving { animation: pop-panel-out .2s var(--ease-in) both; pointer-events: none; }
+@keyframes pop-panel-in { from { opacity: 0; translate: calc(var(--pop-dir, 1) * 28px) 0; } to { opacity: 1; translate: 0 0; } }
+@keyframes pop-panel-out { from { opacity: 1; translate: 0 0; } to { opacity: 0; translate: calc(var(--pop-dir, 1) * -18px) 0; } }
+/* 탭 아이콘 — 고르면 톡 */
+.pop-tabs .seg.active .pop-tab-icon svg { animation: mo-pop .36s var(--ease-spring) both; }
+/* 클립 카드 — 세로 썸네일이 살짝 더 떠오르고 그림자가 깊어진다(누르면 기본 .card:active 로 눌림) */
+.pop-clip-grid .card .thumb { transition: box-shadow var(--dur-2) var(--ease-out), translate var(--dur-3) var(--ease-emph); }
+.pop-clip-grid .card:hover .thumb { translate: 0 -2px; }
+@media (prefers-reduced-motion: reduce) {
+  .pop-panel.entering, .pop-panel.leaving, .pop-tabs .seg.active .pop-tab-icon svg { animation: none !important; }
+  .pop-clip-grid .card:hover .thumb { translate: none; }
+}
+:root[data-motion="reduced"] :is(.pop-panel.entering, .pop-panel.leaving, .pop-tabs .seg.active .pop-tab-icon svg) { animation: none !important; }
+:root[data-motion="reduced"] .pop-clip-grid .card:hover .thumb { translate: none; }

@@ -1,4 +1,4 @@
-// 사이드바 화면들 — 팔로잉 / 인기 / 검색 / 설정. 홈은 home.js.
+// 사이드바 화면들 — 팔로잉 / 방송&클립 / 검색 / 설정. 홈은 home.js.
 import { api } from './api.js';
 import { esc, safeUrl, imageSrc, icons } from './dom.js';
 import { motionReduced, swapContent } from './motion.js';
@@ -8,12 +8,54 @@ import { vodCard, clipCard } from './channel.js';
 import { verifiedBadge } from './verified-badge.js';
 import { armConfirm } from './confirm.js';
 import { withRefreshVeil, refreshVeiled } from './refresh-veil.js';
+import { bindTabKeys } from './a11y.js';
 
 const loginAction = '<button class="btn primary" data-action="login">로그인</button>';
 
-// 인기 — 원본 AllBroadcastsView: 30개씩 더 보기, 정렬(시청자·최근 시작), 카테고리 필터 (NAV-03).
+// 방송&클립 — 사이드바 한 메뉴에 두 탭. 경로 id 는 예전 그대로 'popular'(작업 공간·딥링크·단축키가 쓰는 영속 키).
+// - 방송: 원본 AllBroadcastsView — 30개씩 더 보기, 정렬(시청자·최근 시작), 카테고리 필터 (NAV-03).
+// - 클립: 원본 PopularClipsView — 기간(오늘·7일)·정렬(인기순·추천순) (VOD-04). 예전엔 보관함의 '인기 클립' 탭이었다.
+// 탭마다 패널을 따로 두어 오가도 목록·필터가 그대로 남고, 스크롤 위치는 탭마다 기억해 되돌린다. 고른 탭은 기억한다(POPULAR_TAB_KEY).
 const POPULAR_PAGE = 30;
 const POPULAR_MAX = 300;
+/** 탭 [id, 이름]. 순서가 곧 화살표 키 순서. */
+export const POPULAR_TABS = [['live', '방송'], ['clips', '클립']];
+export const POPULAR_TAB_KEY = 'cview.popular.tab';
+export const CLIP_FILTERS = [['WITHIN_1_DAY', '오늘'], ['WITHIN_7_DAYS', '7일']];
+export const CLIP_ORDERS = [['POPULAR', '인기순'], ['RECOMMEND', '추천순']];
+/** 같은 기간·정렬의 인기 클립은 잠깐 기억해 탭을 오갈 때 다시 받지 않는다. */
+const CLIP_CACHE_MS = 60_000;
+const POPULAR_TAB_IDS = new Set(POPULAR_TABS.map(([id]) => id));
+const TAB_ICONS = {
+  live: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="m8 2.5 4 3.5 4-3.5"/><circle cx="12" cy="12.5" r="1.6" fill="currentColor" stroke="none"/></svg>',
+  clips: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="3" width="12" height="18" rx="3"/><path d="m10.5 9.5 4 2.5-4 2.5z"/></svg>',
+};
+
+/**
+ * 열 탭 고르기 — 경로 매개변수(딥링크·다른 화면의 진입점)가 먼저, 없으면 마지막으로 고른 탭, 그것도 없으면 방송. 순수 함수.
+ * 예전 이름도 받는다(보관함의 'clips' 경로가 그대로 넘어오므로).
+ */
+export function popularTabFor(param, saved) {
+  const norm = (v) => ({ broadcast: 'live', lives: 'live', clip: 'clips' }[v] || v);
+  if (POPULAR_TAB_IDS.has(norm(param))) return norm(param);
+  if (POPULAR_TAB_IDS.has(norm(saved))) return norm(saved);
+  return 'live';
+}
+
+/** 방송&클립 › 클립 탭 머리 설명. 순수 함수. */
+export function clipsSubtitle(filter, order) {
+  const f = filter === 'WITHIN_1_DAY' ? '오늘' : '최근 7일';
+  const o = (CLIP_ORDERS.find(([v]) => v === order) || CLIP_ORDERS[0])[1];
+  return `${f} · ${o}`;
+}
+
+const readTab = () => { try { return localStorage.getItem(POPULAR_TAB_KEY); } catch { return null; } };
+const writeTab = (tab) => { try { localStorage.setItem(POPULAR_TAB_KEY, tab); } catch { /* 무시 */ } };
+
+/** 클립 격자 자리 스켈레톤 — 세로(9:16) 썸네일 꼴로. */
+function clipSkeleton(n = 10) {
+  return `<div class="loading-row" role="status"><div class="spinner" aria-hidden="true"></div><span>불러오는 중…</span></div><div class="grid clip-grid" aria-hidden="true">${Array.from({ length: n }, () => '<div class="sk-card clip"><div class="sk thumb-sk"></div><div class="sk line"></div><div class="sk line short"></div></div>').join('')}</div>`;
+}
 
 /** 정렬·카테고리 필터 — 순수 함수. */
 export function arrangeLives(lives, { sort = 'viewers', category = '' } = {}) {
@@ -23,7 +65,7 @@ export function arrangeLives(lives, { sort = 'viewers', category = '' } = {}) {
   return list;
 }
 
-/** 인기 화면 머리 설명 — 정렬과 카테고리 필터. 순수 함수. */
+/** 방송&클립 › 방송 탭 머리 설명 — 정렬과 카테고리 필터. 순수 함수. */
 export function popularSubtitle(sort, category = '') {
   const order = sort === 'recent' ? '최근 시작한 순' : '시청자 많은 순';
   return category ? `${category} · ${order}` : order;
@@ -45,33 +87,150 @@ export function categoryGroups(lives) {
 export class PopularPage {
   constructor(root) {
     this.root = root;
-    this.body = root.querySelector('.page-body');
+    this.acceptsParams = true;
     this.limit = POPULAR_PAGE;
     this.sort = 'viewers';
     this.category = '';
     this.lives = [];
-    this.seq = 0;
-    root.querySelector('[data-action="refresh"]')?.addEventListener('click', () => withRefreshVeil(root, () => this.show(true)));
-    this.body.addEventListener('click', (e) => {
+    this.clips = null;
+    this.clipFilter = 'WITHIN_7_DAYS';
+    this.clipOrder = 'POPULAR';
+    this.clipCache = new Map();
+    this.seq = { live: 0, clips: 0 };
+    this.scrolls = {};
+    this.tab = popularTabFor(null, readTab());
+    root.querySelector(':scope > .page-header').insertAdjacentHTML('afterend', `
+      <div class="segmented page-tabs pop-tabs" role="tablist" aria-label="방송&amp;클립">${POPULAR_TABS.map(([id, label]) => `<button class="seg" type="button" role="tab" data-tab="${id}"><span class="pop-tab-icon">${TAB_ICONS[id]}</span><span>${label}</span></button>`).join('')}</div>`);
+    this.tabs = root.querySelector('.pop-tabs');
+    const outer = root.querySelector('.page-body');
+    outer.classList.add('pop-panels');
+    outer.innerHTML = POPULAR_TABS.map(([id]) => `<div class="pop-panel" data-panel="${id}" id="pop-panel-${id}" role="tabpanel" aria-labelledby="pop-tab-${id}" tabindex="-1" hidden></div>`).join('');
+    this.panels = Object.fromEntries(POPULAR_TABS.map(([id]) => [id, outer.querySelector(`[data-panel="${id}"]`)]));
+    this.body = this.panels.live; // 방송 탭 — 예전 화면 코드·검사가 쓰는 이름
+    this.syncTabs(false);
+    bindTabKeys(this.tabs);
+    this.tabs.addEventListener('click', (e) => {
+      const t = e.target.closest('[role="tab"]');
+      if (t) this.select(t.dataset.tab);
+    });
+    root.querySelector('[data-action="refresh"]')?.addEventListener('click', () => withRefreshVeil(root, () => this.show({ refresh: true })));
+    this.panels.live.addEventListener('click', (e) => {
       const s = e.target.closest('[data-sort]');
       if (s) { this.sort = s.dataset.sort; this.render(); return; }
       const c = e.target.closest('[data-cat]');
       if (c) { this.category = c.dataset.cat; this.render(); return; }
-      if (e.target.closest('[data-more]')) { this.limit = Math.min(POPULAR_MAX, this.limit + POPULAR_PAGE); this.show(); }
+      if (e.target.closest('[data-more]')) { this.limit = Math.min(POPULAR_MAX, this.limit + POPULAR_PAGE); this.loadLive(); }
+    });
+    this.panels.clips.addEventListener('click', (e) => {
+      const f = e.target.closest('[data-clip-filter]');
+      if (f) { if (f.dataset.clipFilter !== this.clipFilter) { this.clipFilter = f.dataset.clipFilter; this.loadClips(); } return; }
+      const o = e.target.closest('[data-clip-order]');
+      if (o) { if (o.dataset.clipOrder !== this.clipOrder) { this.clipOrder = o.dataset.clipOrder; this.loadClips(); } return; }
+      const clip = e.target.closest('[data-clip-uid]');
+      if (clip) window.dispatchEvent(new CustomEvent('cview:open-clip', { detail: { clipUid: clip.dataset.clipUid } }));
     });
   }
 
-  async show(refresh = false) {
-    const seq = ++this.seq;
-    if (!this.lives.length || (refresh && !refreshVeiled(this.root))) this.body.innerHTML = skeletonGrid(12);
+  /**
+   * 화면 열기·새로고침. params: { tab?, period?, refresh? } — 자동 새로고침(prefs-effects)은 false·true 를 넘긴다.
+   * tab 을 주면 그 탭으로 열고 기억한다. 안 주면 마지막 탭.
+   */
+  show(params = {}) {
+    const p = params && typeof params === 'object' ? params : { refresh: params === true };
+    // 새로고침은 지금 탭·기간 그대로(연 때의 매개변수로 되돌리지 않는다)
+    const tab = p.refresh ? this.tab : popularTabFor(p.tab, this.tab);
+    if (tab !== this.tab) { this.tab = tab; writeTab(tab); }
+    // 기간을 정해 들어오면(홈 '오늘의 인기 클립' 전체 보기) 그 기간으로
+    if (!p.refresh && CLIP_FILTERS.some(([v]) => v === p.period)) this.clipFilter = p.period;
+    this.syncTabs(false);
+    return this.load(p.refresh === true);
+  }
+
+  /** 오류 화면의 "다시 시도" — 지금 탭만 다시 받는다. */
+  retry() {
+    if (this.tab === 'clips') this.clipCache.clear();
+    return this.load(true);
+  }
+
+  load(refresh = false) {
+    return this.tab === 'clips' ? this.loadClips(refresh) : this.loadLive(refresh);
+  }
+
+  /** 탭 바꾸기(누르기·←/→·Home/End) — 고른 칸 판이 미끄러지고 패널이 그 방향으로 교차해 바뀐다. */
+  select(tab) {
+    if (!POPULAR_TAB_IDS.has(tab) || tab === this.tab) return;
+    this.tab = tab;
+    writeTab(tab);
+    this.syncTabs(true);
+    this.load(false);
+  }
+
+  /** 탭 상태(aria-selected·tabindex·active)와 패널 보이기를 맞춘다. animate 면 바뀌는 두 패널이 교차한다. */
+  syncTabs(animate) {
+    const order = POPULAR_TABS.map(([id]) => id);
+    for (const b of this.tabs.querySelectorAll('[role="tab"]')) {
+      const on = b.dataset.tab === this.tab;
+      b.id = `pop-tab-${b.dataset.tab}`;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-selected', String(on));
+      b.setAttribute('aria-controls', `pop-panel-${b.dataset.tab}`);
+      b.tabIndex = on ? 0 : -1;
+    }
+    this.root.dataset.popTab = this.tab;
+    const sub = this.root.querySelector('.page-subtitle');
+    if (sub) sub.textContent = this.tab === 'clips' ? clipsSubtitle(this.clipFilter, this.clipOrder) : popularSubtitle(this.sort, this.category);
+    const next = this.panels[this.tab];
+    const prev = Object.values(this.panels).find((x) => x !== next && !x.hidden);
+    clearTimeout(this.leaveTimer);
+    // 스크롤은 화면(.page)이 하므로 탭마다 따로 기억해 되돌린다. 나가는 패널 안에 초점이 있으면 고른 탭으로 옮긴다(inert·숨김에 body 로 떨어지지 않게).
+    if (prev) {
+      this.scrolls[prev.dataset.panel] = this.root.scrollTop;
+      if (prev.contains(document.activeElement)) this.tabs.querySelector('[aria-selected="true"]')?.focus({ preventScroll: true });
+    }
+    for (const x of Object.values(this.panels)) {
+      if (x !== next && x !== prev) { x.hidden = true; x.classList.remove('entering', 'leaving'); x.inert = false; }
+    }
+    if (!prev || !animate || motionReduced() || this.root.hidden) {
+      if (prev) { prev.hidden = true; prev.classList.remove('entering', 'leaving'); prev.inert = false; }
+      next.classList.remove('entering', 'leaving');
+      next.inert = false;
+      next.hidden = false;
+      if (prev) this.root.scrollTop = this.scrolls[this.tab] || 0;
+      return;
+    }
+    // 오른쪽 탭으로 가면 새 패널이 오른쪽에서, 왼쪽이면 왼쪽에서. 나가는 패널은 반대로 비켜나며 흐려진다.
+    const dir = order.indexOf(this.tab) > order.indexOf(prev.dataset.panel) ? 1 : -1;
+    this.root.style.setProperty('--pop-dir', String(dir));
+    prev.inert = true;
+    prev.classList.remove('entering');
+    prev.classList.add('leaving');
+    next.inert = false;
+    next.classList.remove('leaving', 'no-enter');
+    next.hidden = false;
+    next.classList.remove('entering');
+    void next.offsetWidth; // 같은 패널로 빨리 되돌아와도 들어오는 모션을 다시
+    next.classList.add('entering');
+    this.root.scrollTop = this.scrolls[this.tab] || 0;
+    this.leaveTimer = setTimeout(() => {
+      prev.hidden = true;
+      prev.inert = false;
+      prev.classList.remove('leaving');
+      next.classList.remove('entering');
+    }, 340);
+  }
+
+  async loadLive(refresh = false) {
+    const seq = ++this.seq.live;
+    const panel = this.panels.live;
+    if (!this.lives.length || (refresh && !refreshVeiled(this.root))) panel.innerHTML = skeletonGrid(12);
     try {
       const lives = await api.popularLives(this.limit, refresh);
-      if (seq !== this.seq) return;
+      if (seq !== this.seq.live) return;
       this.lives = lives;
       this.loadedAt = Date.now();
       this.render();
     } catch (e) {
-      if (seq === this.seq) this.body.innerHTML = errorState('불러오지 못했습니다', e);
+      if (seq === this.seq.live) panel.innerHTML = errorState('불러오지 못했습니다', e);
     }
   }
 
@@ -80,8 +239,8 @@ export class PopularPage {
     const list = arrangeLives(this.lives, { sort: this.sort, category: this.category });
     // 머리 설명도 지금 정렬·필터를 따른다(예전엔 '최근 시작'을 골라도 '시청자 많은 순'으로 남았다)
     const sub = this.root.querySelector('.page-subtitle');
-    if (sub) sub.textContent = popularSubtitle(this.sort, this.category);
-    swapContent(this.body, `
+    if (sub && this.tab === 'live') sub.textContent = popularSubtitle(this.sort, this.category);
+    swapContent(this.panels.live, `
       <div class="list-toolbar">
         <div class="segmented"><button class="seg${this.sort === 'viewers' ? ' active' : ''}" data-sort="viewers">시청자순</button><button class="seg${this.sort === 'recent' ? ' active' : ''}" data-sort="recent">최근 시작</button></div>
         <span class="freshness">${esc(freshnessText(this.loadedAt))}</span>
@@ -92,6 +251,48 @@ export class PopularPage {
       </div>
       ${list.length ? liveGrid(list) : emptyState('라이브 채널이 없습니다')}
       ${this.lives.length >= this.limit && this.limit < POPULAR_MAX ? '<button class="btn load-more" data-more>더 보기</button>' : ''}`);
+  }
+
+  /** 인기 클립 — 같은 기간·정렬은 잠깐 기억한다(탭을 오가거나 보관함·홈에서 들어와도 다시 받지 않게). */
+  fetchClips(refresh) {
+    const key = `${this.clipFilter}:${this.clipOrder}`;
+    const hit = this.clipCache.get(key);
+    if (!refresh && hit && Date.now() - hit.at < CLIP_CACHE_MS) return hit.promise;
+    const promise = api.popularClips(this.clipFilter, this.clipOrder);
+    this.clipCache.set(key, { at: Date.now(), promise });
+    promise.catch(() => { if (this.clipCache.get(key)?.promise === promise) this.clipCache.delete(key); });
+    return promise;
+  }
+
+  async loadClips(refresh = false) {
+    const seq = ++this.seq.clips;
+    const panel = this.panels.clips;
+    const sub = this.root.querySelector('.page-subtitle');
+    if (sub && this.tab === 'clips') sub.textContent = clipsSubtitle(this.clipFilter, this.clipOrder);
+    const key = `${this.clipFilter}:${this.clipOrder}`;
+    const veiled = refresh && refreshVeiled(this.root);
+    // 처음·기간/정렬을 바꿀 때는 도구 줄은 두고 격자 자리에 스켈레톤. 같은 목록 새로고침(덮개)이면 보던 목록을 그대로 둔다.
+    if (!veiled && (refresh || this.clipsKey !== key || !this.clips)) {
+      panel.classList.remove('no-enter');
+      panel.innerHTML = `${this.clipToolbar()}<div class="pop-clip-body">${clipSkeleton()}</div>`;
+    }
+    try {
+      const list = await this.fetchClips(refresh);
+      if (seq !== this.seq.clips) return;
+      this.clips = list;
+      this.clipsKey = key;
+      this.clipsAt = Date.now();
+      swapContent(panel, `${this.clipToolbar()}<div class="pop-clip-body">${list.length
+        ? `<div class="grid clip-grid pop-clip-grid">${list.map(clipCard).join('')}</div>`
+        : emptyState('클립이 없습니다', this.clipFilter === 'WITHIN_1_DAY' ? '기간을 7일로 넓히면 더 많은 클립을 볼 수 있어요' : '잠시 뒤 다시 확인해 주세요')}</div>`);
+    } catch (e) {
+      if (seq === this.seq.clips) panel.innerHTML = `${this.clipToolbar()}<div class="pop-clip-body">${errorState('클립을 불러오지 못했습니다', e)}</div>`;
+    }
+  }
+
+  clipToolbar() {
+    const seg = (list, cur, attr, label) => `<div class="segmented" role="group" aria-label="${label}">${list.map(([v, l]) => `<button class="seg${v === cur ? ' active' : ''}" ${attr}="${v}">${l}</button>`).join('')}</div>`;
+    return `<div class="list-toolbar pop-clip-toolbar">${seg(CLIP_FILTERS, this.clipFilter, 'data-clip-filter', '기간')}${seg(CLIP_ORDERS, this.clipOrder, 'data-clip-order', '정렬')}<span class="freshness">${esc(freshnessText(this.clipsAt))}</span></div>`;
   }
 }
 

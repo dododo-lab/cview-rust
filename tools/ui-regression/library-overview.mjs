@@ -9,7 +9,8 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { chromium } = require('playwright');
+const pw = require('playwright');
+const ENGINE = process.env.CVIEW_UI_BROWSER === 'webkit' ? 'webkit' : 'chromium'; // CVIEW_UI_BROWSER=webkit 이면 앱과 같은 WebKit
 
 const ROOT = path.resolve('app-ui');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.json': 'application/json' };
@@ -64,10 +65,10 @@ function mockTauri(mode) {
     },
     event: { listen: async () => () => {} },
   };
-  try { localStorage.setItem('cview.onboarded', '1'); } catch { /* 무시 */ }
+  try { localStorage.setItem('cview.welcomed.v1', String(Date.now())); } catch { /* 무시 */ } // 환영 안내를 띄우지 않는다(onboarding.js)
 }
 
-const browser = await chromium.launch();
+const browser = await pw[ENGINE].launch();
 const results = [];
 async function check(id, fn) {
   try { await fn(); results.push({ id, ok: true }); } catch (e) { results.push({ id, ok: false, error: e.message }); }
@@ -112,7 +113,6 @@ const settled = (page) => page.waitForFunction(() => !document.querySelector('[d
 
   await check('L02 counts, metrics and recent items per tab', async () => {
     const count = (s) => text(page, `${card(s)} .lib-ov-count`);
-    assert.equal(await count('clips'), '5개');
     assert.equal(await count('vods'), '4개');
     assert.equal(await count('continue'), '2개');
     assert.equal(await count('later'), '1개');
@@ -120,7 +120,7 @@ const settled = (page) => page.waitForFunction(() => !document.querySelector('[d
     assert.equal(await count('recent'), '60+곳');
     assert.equal(await count('bookmarks'), '2개');
     assert.equal(await count('downloads'), '2개');
-    assert.match(await metrics(page, 'clips'), /최고 조회 6만/);
+    assert.match(await metrics(page, 'vods'), /채널 4곳/);
     assert.match(await metrics(page, 'continue'), /남은 시간 40분.*평균 진행 50%/);
     assert.match(await metrics(page, 'later'), /전체 길이 1시간 30분/);
     assert.match(await metrics(page, 'downloads'), /받는 중 1개.*용량 3(\.0)? MB/);
@@ -130,19 +130,17 @@ const settled = (page) => page.waitForFunction(() => !document.querySelector('[d
     assert.equal(await page.$eval(`${card('continue')} .lib-ov-thumb i`, (i) => i.style.width), '50%');
   });
 
-  await check('L03 clicking a card opens that tab (no refetch for cached clips)', async () => {
-    const before = await calls(page, 'popular_clips');
-    await page.click(`${card('clips')} .lib-ov-items`);
-    await page.waitForSelector('[data-page="library"] .clip-grid');
-    assert.equal(await page.getAttribute('[data-page="library"] [data-tab="clips"]', 'aria-selected'), 'true');
-    assert.equal(await calls(page, 'popular_clips'), before, '개요에서 받은 클립을 다시 받음');
-    // 탭 안의 내용(클립 카드·필터)은 제 할 일을 한다 — 루트 속성이 탭 단추로 잡히면 안 된다
-    await page.evaluate(() => { window.__opened = null; window.addEventListener('cview:open-clip', (e) => { window.__opened = e.detail.clipUid; }, { once: true }); });
-    await page.click('[data-page="library"] .clip-grid [data-clip-uid]');
-    assert.equal(await page.evaluate(() => window.__opened), 'c0', '클립 카드를 눌러도 열리지 않음');
-    await go(page, 'library', { tab: 'clips' });
-    await page.click('[data-page="library"] [data-clip-filter="WITHIN_1_DAY"]');
-    await page.waitForFunction(() => window.__mock.calls.some((c) => c.cmd === 'popular_clips' && c.args?.filter === 'WITHIN_1_DAY'));
+  await check('L03 clicking a card opens that tab (no refetch for cached follow VODs)', async () => {
+    const before = await calls(page, 'following_vods');
+    await page.click(`${card('vods')} .lib-ov-items`);
+    await page.waitForSelector('[data-page="library"] [data-vod-no]');
+    assert.equal(await page.getAttribute('[data-page="library"] [data-tab="vods"]', 'aria-selected'), 'true');
+    assert.equal(await calls(page, 'following_vods'), before, '개요에서 받은 다시보기를 다시 받음');
+    // 탭 안의 내용(다시보기 카드)은 제 할 일을 한다 — 루트 속성이 탭 단추로 잡히면 안 된다
+    await page.evaluate(() => { window.__opened = null; window.addEventListener('cview:open-vod', (e) => { window.__opened = e.detail.videoNo; }, { once: true }); });
+    await page.click('[data-page="library"] .grid [data-vod-no]');
+    assert.equal(await page.evaluate(() => window.__opened), 100, '다시보기 카드를 눌러도 열리지 않음');
+    await go(page, 'library', { tab: 'vods' });
     await page.click('[data-page="library"] [data-tab="overview"]');
     await settled(page);
     await page.focus(`${card('bookmarks')} .lib-ov-title`);
@@ -190,8 +188,25 @@ const settled = (page) => page.waitForFunction(() => !document.querySelector('[d
     await page.evaluate(() => { window.__delay = {}; });
   });
 
-  // 폭별 열 수 — 묶음(넷)마다 1 · 2 · 4 열만(3열로 한 장이 남지 않게), 같은 줄 카드는 높이가 같다.
-  for (const [width, cols] of [[2700, 4], [2000, 4], [1280, 2], [420, 1]]) {
+  await check('L03b popular clips moved out: no clips tab/card; the media group link and the old route open 방송&클립 › 클립', async () => {
+    await go(page, 'library', { tab: 'overview' });
+    await settled(page);
+    assert.equal(await page.$('[data-page="library"] [data-tab="clips"]'), null);
+    assert.equal(await page.$(card('clips')), null);
+    await page.click('[data-page="library"] [data-ov-group="media"] [data-goto-popular="clips"]');
+    await page.waitForFunction(() => !document.querySelector('[data-page="popular"]').hidden);
+    assert.equal(await page.getAttribute('[data-page="popular"] [role="tab"][data-tab="clips"]', 'aria-selected'), 'true');
+    await go(page, 'popular', { tab: 'live' });
+    await go(page, 'library', { tab: 'clips' });
+    await page.waitForFunction(() => !document.querySelector('[data-page="popular"]').hidden && document.querySelector('[data-page="library"]').hidden);
+    assert.equal(await page.getAttribute('[data-page="popular"] [role="tab"][data-tab="clips"]', 'aria-selected'), 'true');
+    await go(page, 'library', { tab: 'overview' });
+    await settled(page);
+  });
+
+  // 폭별 열 수 — 넷 묶음(채널과 저장한 것)은 1 · 2 · 4, 셋 묶음(영상)은 1 · 2(첫 장이 한 줄 전체) · 3 — 빈칸 없이. 같은 줄 카드는 높이가 같다.
+  // cols: [영상 첫 줄 장 수, 채널과 저장한 것 첫 줄 장 수]
+  for (const [width, cols] of [[2700, [3, 4]], [2000, [3, 4]], [1280, [1, 2]], [420, [1, 1]]]) {
     await check(`L13 ${cols} column(s) and even rows at ${width}px`, async () => {
       await page.setViewportSize({ width, height: 1000 });
       await go(page, 'library', { tab: 'overview' });
@@ -204,8 +219,8 @@ const settled = (page) => page.waitForFunction(() => !document.querySelector('[d
         return { cols: rects.filter((x) => Math.round(x.top) === tops[0]).length, heights: tops.map((t) => [...new Set(rects.filter((x) => Math.round(x.top) === t).map((x) => Math.round(x.height)))]) };
       }));
       assert.equal(r.length, 2, '묶음 둘');
-      for (const g of r) {
-        assert.equal(g.cols, cols);
+      for (const [i, g] of r.entries()) {
+        assert.equal(g.cols, cols[i], `묶음 ${i} 열`);
         for (const h of g.heights) assert.equal(h.length, 1, `같은 줄 카드 높이가 다름 ${h}`);
       }
     });
@@ -271,14 +286,14 @@ const settled = (page) => page.waitForFunction(() => !document.querySelector('[d
   await shot(page, 'library-overview-empty');
 
   await check('L09 empty sections show a short empty note with zero count', async () => {
-    assert.equal(await text(page, `${card('clips')} .lib-ov-count`), '0개');
+    assert.equal(await text(page, `${card('continue')} .lib-ov-count`), '0개');
     assert.match(await text(page, `${card('bookmarks')} .lib-ov-note`), /북마크가 없습니다/);
     assert.match(await text(page, `${card('downloads')} .lib-ov-note`), /받은 파일이 없습니다/);
     // 빈 카드도 데이터 있는 카드와 같은 자리를 채운다(아이콘 · 안내 · 도움말)
     assert.match(await text(page, `${card('bookmarks')} .lib-ov-note small`), /B 키/);
     const hs = await page.$$eval('[data-page="library"] .lib-ov-card', (cs) => [...new Set(cs.map((c) => Math.round(c.getBoundingClientRect().height)))]);
     assert.equal(hs.length, 1, `빈 카드 높이가 제각각 ${hs}`);
-    assert.equal(await page.$(`${card('clips')} .lib-ov-metrics`), null);
+    assert.equal(await page.$(`${card('continue')} .lib-ov-metrics`), null);
   });
 
   await check('L10 logged out: follow VODs card asks to log in without fetching', async () => {

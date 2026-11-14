@@ -138,7 +138,7 @@ impl SidebarItem {
     pub fn title(self) -> &'static str {
         match self {
             Self::Following => "팔로잉",
-            Self::AllBroadcasts => "인기",
+            Self::AllBroadcasts => "방송&클립",
             other => other.raw_value(),
         }
     }
@@ -1053,7 +1053,7 @@ mod tests {
 
     #[test]
     fn titles_and_resident_flags() {
-        assert_eq!(SidebarItem::AllBroadcasts.title(), "인기");
+        assert_eq!(SidebarItem::AllBroadcasts.title(), "방송&클립");
         assert_eq!(SidebarItem::AllBroadcasts.raw_value(), "전체방송");
         assert!(SidebarItem::Category.keeps_resident_detail());
         assert!(!SidebarItem::Library.keeps_resident_detail());

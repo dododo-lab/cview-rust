@@ -1723,6 +1723,22 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 @media (max-width: 1100px) { .media-layout { flex-direction: column; } .media-side { width: 100%; } }
 
 /* ══ 보관함 (library.js) ═══════════════════════════════════════ */
+/* 방송&클립(pages.js PopularPage) — 방송·클립 두 탭. 고른 칸 판(.seg-glider)이 미끄러지고 패널은 같은 칸에 겹쳐 교차한다(motion.css). */
+.pop-tabs { margin-bottom: var(--sp-lg); }
+.pop-tabs .seg { display: inline-flex; align-items: center; gap: 7px; min-width: 92px; justify-content: center; padding: 6px 18px; font-size: var(--fs-body); }
+.pop-tab-icon { display: grid; place-items: center; color: var(--text-tertiary); transition: color var(--dur-2, .18s) var(--ease-out); }
+.pop-tab-icon svg { width: 15px; height: 15px; display: block; }
+.pop-tabs .seg:hover .pop-tab-icon { color: var(--text-secondary); }
+.pop-tabs .seg.active .pop-tab-icon { color: var(--primary-text); }
+.pop-panels { display: grid; grid-template-columns: minmax(0, 1fr); }
+.pop-panels:has(> .entering, > .leaving) { overflow-x: clip; }   /* 옆으로 미끄러지는 동안 가로 스크롤 막대가 생기지 않게 */
+.pop-panel { grid-area: 1 / 1; min-width: 0; }
+.pop-panel:focus { outline: none; }
+.pop-panel[hidden] { display: none; }
+.pop-clip-toolbar .freshness { margin-left: auto; }
+.sk-card.clip .thumb-sk { aspect-ratio: 9 / 16; }
+.pop-clip-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.pop-clip-grid .card-title { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; white-space: normal; }
 .lib-tabs { margin-bottom: var(--sp-sm); }
 .lib-filters { display: flex; gap: var(--sp-sm); margin-bottom: var(--sp-lg); min-height: 0; }
 .lib-filters:empty { display: none; }
@@ -1737,13 +1753,21 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .bookmark-text span { color: var(--text-tertiary); font-size: var(--fs-footnote); }
 
 /* 보관함 개요(library-overview.js) — 홈·검색처럼 구역 제목(.section-head) 아래 카드 격자, 카드는 통계 .stats-card 와 같은 면·테두리.
-   묶음마다 카드가 넷이라 열은 1 · 2 · 4 만 쓴다(3열이면 한 장이 남는다). 열 수는 창이 아니라 개요 폭으로 정한다(인사이트 패널·멀티라이브 옆 화면). */
+   카드 넷 묶음은 열 1 · 2 · 4, 셋 묶음(영상 — 인기 클립을 방송&클립으로 옮긴 뒤)은 1 · 2(첫 장이 한 줄 전체) · 3 — 어느 폭에서도 빈칸이 남지 않는다.
+   열 수는 창이 아니라 개요 폭으로 정한다(인사이트 패널·멀티라이브 옆 화면). */
 .lib-ov { container: libov / inline-size; display: flex; flex-direction: column; gap: var(--sp-xxl); padding: var(--sp-md) 0 var(--sp-xxl); }
 .lib-ov-group { min-width: 0; }
 .lib-ov-group .section-head { margin-bottom: var(--sp-md); }
 .lib-ov-grid { display: grid; gap: var(--sp-md); grid-template-columns: minmax(0, 1fr); align-items: stretch; }
 @container libov (min-width: 620px) { .lib-ov-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @container libov (min-width: 1240px) { .lib-ov-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-lg); } }
+@container libov (min-width: 620px) { .lib-ov-grid[data-ov-count="3"] > :first-child { grid-column: 1 / -1; } }
+@container libov (min-width: 900px) {
+  .lib-ov-grid[data-ov-count="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .lib-ov-grid[data-ov-count="3"] > :first-child { grid-column: auto; }
+}
+.lib-ov-group .section-head { align-items: center; }
+.lib-ov-group .section-head > .link-btn { margin-left: auto; flex: none; color: var(--primary-text); font-weight: 600; }
 .lib-ov-card {
   --ov-thumb-h: 54px; --ov-row-gap: 10px;
   display: flex; flex-direction: column; gap: 14px; min-width: 0; padding: 16px 18px; cursor: pointer;
@@ -1753,7 +1777,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .lib-ov-card:hover { border-color: var(--border); background: color-mix(in srgb, var(--surface-elevated) 92%, var(--text-primary)); }
 .lib-ov-card:focus-within { border-color: var(--primary-ring); }
 /* 머리 — 아이콘 칩(인사이트 구역 아이콘과 같은 꼴) · 제목 › · 오른쪽 큰 개수(kpi-value 와 같은 크기) */
-.lib-ov-head { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 30px; }
+.lib-ov-head { display: flex; align-items: center; gap: 10px; min-width: 0; min-height: 32px; }   /* 개수(큰 숫자)가 없는 카드(로그인 필요·불러오는 중)도 같은 높이 — 한 줄을 혼자 차지해도 옆 카드와 맞게 */
 .lib-ov-icon { flex: none; width: 28px; height: 28px; border-radius: var(--radius-sm); display: grid; place-items: center; color: var(--primary-text); background: var(--primary-dim); }
 .lib-ov-icon svg { width: 15px; height: 15px; }
 .lib-ov-title {

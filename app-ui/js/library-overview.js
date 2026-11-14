@@ -39,18 +39,6 @@ export function summarizeSection(tab, data, now = Date.now()) {
   const list = Array.isArray(data) ? data : [];
   const base = { count: list.length, countText: String(list.length), unit: '개', metrics: [], items: [], empty: '', hint: '' };
   switch (tab) {
-    case 'clips': {
-      const top = list.reduce((m, c) => Math.max(m, Number(c.readCount) || 0), 0);
-      return {
-        ...base,
-        metrics: list.length ? [['최고 조회', compactCount(top)], ['채널', `${distinct(list, (c) => c.channel?.channelId || c.channel?.channelName)}곳`]] : [],
-        items: list.slice(0, OVERVIEW_ITEMS).map((c) => ({
-          thumb: c.thumbnailImageUrl, shape: 'clip', title: c.clipTitle || '제목 없음',
-          meta: `${c.channel?.channelName ? `${c.channel.channelName} · ` : ''}조회 ${compactCount(c.readCount || 0)}`,
-        })),
-        empty: '클립이 없습니다', hint: '기간을 바꾸면 다른 클립을 볼 수 있어요',
-      };
-    }
     case 'vods': {
       const sorted = [...list].sort((a, b) => (toMs(b.publishDate) || 0) - (toMs(a.publishDate) || 0));
       const fresh = list.filter((v) => now - toMs(v.publishDate) < DAY_MS).length;
@@ -150,7 +138,6 @@ export function summarizeSection(tab, data, now = Date.now()) {
 const ic = (d) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 /** 탭마다 카드 머리 아이콘. */
 export const SECTION_ICONS = {
-  clips: ic('<rect x="6" y="3" width="12" height="18" rx="3"/><path d="m10.5 9.5 4 2.5-4 2.5z"/>'),
   vods: ic('<rect x="3" y="5" width="18" height="13" rx="3"/><path d="m10.5 9 4 2.5-4 2.5zM8 21h8"/>'),
   continue: ic('<circle cx="12" cy="12" r="8.5"/><path d="m10.5 9 4 3-4 3z"/>'),
   later: ic('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
@@ -206,17 +193,21 @@ export function overviewCard(tab, label, state = { status: 'loading' }) {
     </article>`;
 }
 
-/** 개요 묶음 — 탭 순서 그대로 넷씩 나눠 홈·검색처럼 구역 제목 아래 카드 격자로 둔다. */
+/**
+ * 개요 묶음 — 탭 순서 그대로 나눠 홈·검색처럼 구역 제목 아래 카드 격자로 둔다.
+ * 영상은 셋(인기 클립은 방송&클립으로 옮겼다), 채널과 저장한 것은 넷 — 격자 열은 묶음의 카드 수(data-ov-count)를 따라 빈칸 없이 맞춘다.
+ * 넷째 칸은 묶음 머리의 바로가기(있으면) — 영상 묶음은 옮겨 간 인기 클립으로 가는 길을 남긴다.
+ */
 export const OVERVIEW_GROUPS = [
-  ['media', '영상', '클립 · 다시보기 · 보다 만 영상', ['clips', 'vods', 'continue', 'later']],
-  ['saved', '채널과 저장한 것', '즐겨찾기 · 최근 시청 · 북마크 · 다운로드', ['favorites', 'recent', 'bookmarks', 'downloads']],
+  ['media', '영상', '팔로우 다시보기 · 이어 보기 · 나중에 보기', ['vods', 'continue', 'later'], '<button class="link-btn" data-goto-popular="clips">인기 클립은 방송&amp;클립에서</button>'],
+  ['saved', '채널과 저장한 것', '즐겨찾기 · 최근 시청 · 북마크 · 다운로드', ['favorites', 'recent', 'bookmarks', 'downloads'], ''],
 ];
 
 /** 개요 화면 틀(모든 카드를 로딩 상태로). labels: Map(탭 → 이름). */
 export function overviewLayout(labels) {
-  return `<div class="lib-ov">${OVERVIEW_GROUPS.map(([id, title, sub, tabs]) => `
+  return `<div class="lib-ov">${OVERVIEW_GROUPS.map(([id, title, sub, tabs, more]) => `
     <section class="lib-ov-group" data-ov-group="${esc(id)}" aria-label="${esc(title)}">
-      <div class="section-head"><div class="section-titles"><h2 class="section-title">${esc(title)}</h2><span class="section-sub">${esc(sub)}</span></div></div>
-      <div class="lib-ov-grid">${tabs.map((t) => overviewCard(t, labels.get(t) || t)).join('')}</div>
+      <div class="section-head"><div class="section-titles"><h2 class="section-title">${esc(title)}</h2><span class="section-sub">${esc(sub)}</span></div>${more}</div>
+      <div class="lib-ov-grid" data-ov-count="${tabs.length}">${tabs.map((t) => overviewCard(t, labels.get(t) || t)).join('')}</div>
     </section>`).join('')}</div>`;
 }

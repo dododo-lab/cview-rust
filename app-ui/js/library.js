@@ -1,10 +1,11 @@
-// 보관함 — 원본 LibraryHubView / PopularClipsView / VODBrowseView / RecentFavoritesView / 북마크 목록.
-// VOD-04 인기 클립(기간·정렬), VOD-01 팔로우 채널 다시보기·이어 보기·나중에 보기, NAV-08 허브,
+// 보관함 — 원본 LibraryHubView / VODBrowseView / RecentFavoritesView / 북마크 목록.
+// VOD-01 팔로우 채널 다시보기·이어 보기·나중에 보기, NAV-08 허브,
 // NAV-09 즐겨찾기·최근 시청(DB, 지우기), PLY-17 북마크 목록·삭제. 첫 탭 "개요"는 나머지 탭 전부를 카드로 요약한다.
+// 인기 클립(VOD-04)은 사이드바 '방송&클립' › 클립 탭으로 옮겼다(pages.js). 옛 경로 library?tab=clips 는 app.js navigate 가 그리로 보낸다.
 import { api } from './api.js';
 import { esc, safeUrl, toast, imageSrc } from './dom.js';
 import { emptyState, loadingState, errorState } from './cards.js';
-import { vodCard, clipCard, relativeDate, formatDuration } from './channel.js';
+import { vodCard, relativeDate, formatDuration } from './channel.js';
 import { continueCard } from './media.js';
 import { mountDownloads } from './downloads.js';
 import { syncTabs, bindTabKeys } from './a11y.js';
@@ -17,7 +18,6 @@ export const libraryIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d
 
 const TABS = [
   ['overview', '개요'],
-  ['clips', '인기 클립'],
   ['vods', '팔로우 다시보기'],
   ['continue', '이어 보기'],
   ['later', '나중에 보기'],
@@ -26,8 +26,6 @@ const TABS = [
   ['bookmarks', '북마크'],
   ['downloads', '다운로드'],
 ];
-const CLIP_FILTERS = [['WITHIN_1_DAY', '오늘'], ['WITHIN_7_DAYS', '7일']];
-const CLIP_ORDERS = [['POPULAR', '인기순'], ['RECOMMEND', '추천순']];
 const TAB_IDS = new Set(TABS.map(([id]) => id));
 /** 개요 카드 순서 — 탭 순서 그대로(개요 자신은 빼고). */
 const SECTIONS = TABS.filter(([id]) => id !== 'overview');
@@ -68,8 +66,6 @@ export class LibraryPage {
     this.onOpenChannel = onOpenChannel;
     this.acceptsParams = true;
     this.tab = 'overview';
-    this.clipFilter = 'WITHIN_7_DAYS';
-    this.clipOrder = 'POPULAR';
     this.root = document.createElement('section');
     this.root.className = 'page';
     this.root.dataset.page = 'library';
@@ -77,7 +73,7 @@ export class LibraryPage {
     this.root.innerHTML = `
       <header class="page-header" data-tauri-drag-region>
         <h1 class="page-title">보관함</h1>
-        <span class="page-subtitle">클립 · 다시보기 · 즐겨찾기 · 북마크</span>
+        <span class="page-subtitle">다시보기 · 즐겨찾기 · 북마크 · 다운로드</span>
       </header>
       <div class="segmented page-tabs lib-tabs" role="tablist" aria-label="보관함">${TABS.map(([id, label]) => `<button class="seg" data-tab="${id}" role="tab">${label}</button>`).join('')}</div>
       <div class="lib-filters"></div>
@@ -110,10 +106,9 @@ export class LibraryPage {
     return this.load();
   }
 
-  /** 탭 하나의 데이터. 인기 클립·팔로우 다시보기는 잠깐 기억해 둔다(같은 인자일 때만). */
+  /** 탭 하나의 데이터. 팔로우 다시보기는 잠깐 기억해 둔다. */
   fetchTab(tab) {
     const net = {
-      clips: [`clips:${this.clipFilter}:${this.clipOrder}`, () => api.popularClips(this.clipFilter, this.clipOrder)],
       vods: ['vods', () => api.followingVods(24, 3)],
     }[tab];
     if (net) {
@@ -158,14 +153,8 @@ export class LibraryPage {
   }
 
   renderFilters() {
-    if (this.tab !== 'clips') {
-      this.filters.innerHTML = this.tab === 'recent'
-        ? '<button class="btn ghost" data-lib="recent-clear" aria-haspopup="dialog">최근 시청 기록 지우기…</button>' : '';
-      return;
-    }
-    this.filters.innerHTML = `
-      <div class="segmented">${CLIP_FILTERS.map(([v, l]) => `<button class="seg${v === this.clipFilter ? ' active' : ''}" data-clip-filter="${v}">${l}</button>`).join('')}</div>
-      <div class="segmented">${CLIP_ORDERS.map(([v, l]) => `<button class="seg${v === this.clipOrder ? ' active' : ''}" data-clip-order="${v}">${l}</button>`).join('')}</div>`;
+    this.filters.innerHTML = this.tab === 'recent'
+      ? '<button class="btn ghost" data-lib="recent-clear" aria-haspopup="dialog">최근 시청 기록 지우기…</button>' : '';
   }
 
   async load({ keep = false } = {}) {
@@ -182,11 +171,6 @@ export class LibraryPage {
     let html = '';
     try {
       switch (this.tab) {
-        case 'clips': {
-          const list = await this.fetchTab('clips');
-          html = list.length ? `<div class="grid clip-grid">${list.map(clipCard).join('')}</div>` : emptyState('클립이 없습니다');
-          break;
-        }
         case 'vods': {
           const list = await this.fetchTab('vods');
           html = list.length ? `<div class="grid">${list.map(vodCard).join('')}</div>` : emptyState('최근 다시보기가 없습니다');
@@ -236,6 +220,9 @@ export class LibraryPage {
   }
 
   async onClick(e) {
+    // 개요 '영상' 묶음 머리의 '인기 클립' — 방송&클립 › 클립 탭으로
+    const out = e.target.closest('[data-goto-popular]');
+    if (out) { window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: 'popular', params: { tab: out.dataset.gotoPopular } } })); return; }
     const again = e.target.closest('[data-ov-retry]');
     if (again) { this.renderOverview(this.seq, { only: again.dataset.ovRetry }); return; }
     // 개요 카드 — 안의 다른 단추(로그인 등)가 아니면 카드 어디를 눌러도 그 탭으로
@@ -252,10 +239,6 @@ export class LibraryPage {
       this.show();
       return;
     }
-    const f = e.target.closest('[data-clip-filter]');
-    if (f) { this.clipFilter = f.dataset.clipFilter; this.load(); return; }
-    const o = e.target.closest('[data-clip-order]');
-    if (o) { this.clipOrder = o.dataset.clipOrder; this.load(); return; }
     const vod = e.target.closest('[data-vod-no]');
     if (vod) { window.dispatchEvent(new CustomEvent('cview:open-vod', { detail: { videoNo: Number(vod.dataset.vodNo) } })); return; }
     const clip = e.target.closest('[data-clip-uid]');
