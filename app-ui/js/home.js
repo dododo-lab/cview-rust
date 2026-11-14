@@ -241,6 +241,9 @@ export class HomePage {
     this.favorites = [];
     // 맨 위 "방송 중인 팔로잉" — 홈을 다시 그려도 이 요소는 옮겨 붙인다(정렬·펼침·초점 유지, 같은 칸은 다시 그리지 않음).
     this.liveStrip = new LiveFollowingStrip();
+    // 홈을 떠나면(단축키·메뉴로 다른 화면 — 포인터는 그대로) 미리보기 카드를 닫는다. 남으면 숨은 홈의 카드가 다음 화면의 첫 Esc 를 삼켰다.
+    new MutationObserver(() => { if (root.hidden) this.liveStrip.onHidden(); })
+      .observe(root, { attributes: true, attributeFilter: ['hidden'] });
     // 첫 내용이 그려지면 풀린다 — 시작 로딩 화면이 이걸 기다렸다가 걷힌다(app.js).
     this.firstRender = new Promise((resolve) => { this.resolveFirstRender = resolve; });
 

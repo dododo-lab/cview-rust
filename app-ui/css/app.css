@@ -898,7 +898,9 @@ select.select {
   background: var(--lf-tile); color: var(--text-primary); font: inherit; text-align: left; cursor: pointer;
 }
 .lf-open:hover, .lf-item.peeking .lf-open, .lf-item:has(> .lf-add:hover) .lf-open { --lf-tile: var(--surface-elevated); border-color: var(--border); }
-.lf-open:focus-visible, .lf-more:focus-visible, .lf-add:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 2px; }
+/* 키보드로 다루는 중(data-input, live-following.js setInput)이면 :focus 에도 — WebKit 은 마우스로 누른 뒤 화살표로 옮긴 초점을 :focus-visible 로 치지 않는다 */
+.lf-open:focus-visible, .lf-more:focus-visible, .lf-add:focus-visible,
+.lf[data-input="keyboard"] :is(.lf-open, .lf-more, .lf-add):focus { outline: 2px solid var(--primary-text); outline-offset: 2px; }
 .lf-ava {
   position: relative; flex: none; width: 46px; height: 46px; padding: 2px; border-radius: 50%;
   background: conic-gradient(from 210deg, var(--primary), var(--accent-cyan), var(--primary));
@@ -1005,7 +1007,7 @@ select.select {
 @media (forced-colors: active) {
   :is(.lf-open, .lf-more, .lf-add, .lf-empty, .lf-peek) { border-color: CanvasText; }
   :is(.lf-open:hover, .lf-item.peeking .lf-open, .lf-more:hover, .lf-add:hover) { border-color: Highlight; }
-  :is(.lf-open, .lf-more, .lf-add):focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+  :is(.lf-open, .lf-more, .lf-add):focus-visible, .lf[data-input="keyboard"] :is(.lf-open, .lf-more, .lf-add):focus { outline: 2px solid Highlight; outline-offset: 2px; }
   .lf-ava, .lf .dot { forced-color-adjust: none; }   /* 바탕색으로 그린 점은 시스템 색이면 사라져 빈칸만 남았다 */
   .lf-adult { outline: 1px solid CanvasText; outline-offset: -1px; }   /* 안쪽 그림자 테두리는 엔진이 지운다 */
   .lf-item:is(:hover, :focus-within, .peeking) .lf-text { -webkit-mask-image: none; mask-image: none; }
