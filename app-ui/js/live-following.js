@@ -257,6 +257,8 @@ export class LiveFollowingStrip {
       // 칸이 가만있는 포인터 아래에서 밀려나며(사이드바 펼침·방송 종료) 온 pointerout 은 합성이라 걸렀다 — 그 뒤 실제로 움직인 곳이
       // 칸·카드가 아니면 그때 떠난 것으로 본다(Chromium, 예전엔 카드가 남아 히어로를 가렸다). 구역 밖(사이드바)도 여기서 본다.
       if (this.ptrMoved && this.hoverKey && e.pointerType !== 'touch' && !this.isStripTarget(e.target)) this.leaveTile();
+      // 미룬 자리 바꿈 — 칸 메뉴가 닫힌 뒤 WebKit 은 pointerenter 없이 :hover 만 되돌려, 구역의 pointerleave 가 오지 않는다(checkStripMenu)
+      if (this.ptrMoved && this.reorderPending && !this.el.contains(e.target)) this.settle();
     };
     document.addEventListener('pointerdown', onDocPointer, { capture: true, passive: true });
     document.addEventListener('pointermove', onDocPointer, { capture: true, passive: true });
@@ -265,8 +267,11 @@ export class LiveFollowingStrip {
     document.addEventListener('keydown', (e) => {
       this.navKey = NAV_KEYS.has(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey;
     }, { capture: true, passive: true });
-    // 칸에서 연 카드 메뉴(우클릭·Shift+F10)가 떠 있는 동안은 바쁘다 — watchStripMenu
-    el.addEventListener('contextmenu', (e) => { if (e.target.closest && e.target.closest('.lf-item')) this.watchStripMenu(); });
+    // 칸·미리보기 카드에서 연 카드 메뉴(우클릭·Shift+F10)가 떠 있는 동안은 바쁘다 — watchStripMenu. app.js installCardMenu 처럼
+    // 채널 표지([data-channel-id])가 있는 곳만 — '+N 더 보기'를 우클릭하면 메뉴가 뜨지 않아, 그동안 다른 곳의 메뉴를 제 것으로 알았다.
+    el.addEventListener('contextmenu', (e) => {
+      if (e.target.closest && e.target.closest('.lf-item[data-channel-id], .lf-peek[data-channel-id]')) this.watchStripMenu();
+    });
     // 엔진에 따라 pointerleave 를 보내는 순간 :hover 가 아직 남아 있다 — 한 틱 뒤에 본다.
     el.addEventListener('pointerleave', () => setTimeout(() => this.settle(), 0));
     // 칸 수는 격자 폭으로 정한다 — 창·사이드바 폭이 바뀌면 접힌 줄 수에 맞춰 다시 숨긴다(다시 그리지 않는다).
@@ -409,7 +414,11 @@ export class LiveFollowingStrip {
     if (this.stripMenu || this.menuWait || !this.menuObs) return;
     this.menuObs.disconnect();
     this.menuObs = null;
-    this.settle(); // 메뉴가 닫혔다 — Esc·Tab 으로 닫았으면 초점은 이미 칸에 돌아왔다(chat.js close(true))
+    // 메뉴가 닫혔다 — Esc·Tab 으로 닫았으면 초점은 이미 칸에 돌아왔다(chat.js close(true)). 막 떼어 낸 메뉴 자리의 :hover 는 엔진이
+    // 다시 재기 전이라 body 에 남아 있다 — 포인터가 아직 구역 위면 지금 자리를 바꾸지 않고, 실제로 떠날 때(pointerleave·문서 pointermove).
+    const at = Number.isFinite(this.ptrX) ? document.elementFromPoint(this.ptrX, this.ptrY) : null;
+    if (at && this.el.contains(at)) return;
+    this.settle();
   }
 
   render({ force = false } = {}) {
@@ -779,6 +788,8 @@ export class LiveFollowingStrip {
     const to = e.relatedTarget;
     if (to && this.el.contains(to)) return;
     if (!this.el.matches(':hover')) this.hidePeek();
+    // 마우스가 구역 위에 있어 카드는 두더라도, 떠난 초점의 열기 예약은 끝낸다 — 남으면 초점도 포인터도 없는 칸의 카드가 떴다.
+    else if (this.pendingFrom === 'focus') { clearTimeout(this.timers.show); this.pendingFrom = null; }
     // 키보드가 목록을 떠났다 — 미뤄 둔 자리 바꿈(마우스가 없다면)
     queueMicrotask(() => this.settle());
   }
@@ -828,8 +839,11 @@ export class LiveFollowingStrip {
   }
 
   onPointerOut(e) {
-    if (e.pointerType === 'touch' || this.isSynthetic(e)) return;
+    if (e.pointerType === 'touch') return;
     const to = e.relatedTarget;
+    // relatedTarget 이 없으면 포인터가 문서를 떠났다(펜을 들었다·가만있는 커서 위로 다른 창이 왔다) — 같은 자리라도 진짜 떠남이다.
+    // 스크롤·배치가 만든 합성 이벤트는 늘 문서 안의 relatedTarget 이 있다. 자리를 잊어 머묾 예약의 elementFromPoint 확인도 실패하게 한다.
+    if (to === null) { this.ptrX = NaN; this.ptrY = NaN; } else if (this.isSynthetic(e)) return;
     const from = e.target.closest('.lf-item, .lf-peek');
     if (!from || (to instanceof Node && from.contains(to))) return;
     if (to instanceof Node && this.peek.contains(to)) return;
