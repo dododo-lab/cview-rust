@@ -74,9 +74,10 @@ function auditNesting(scope) {
     if (inner) nested.push(`${name(el)} > ${name(inner)}`);
   }
   const fake = [...root.querySelectorAll('[data-open-channel], [data-ml-add]')].filter((el) => el.tagName !== 'BUTTON').map(name);
-  // 단추 자체가 동작인 줄(방송 중 스트립·최근 시청)은 카드가 아니다
+  // 단추 자체가 동작인 줄(최근 시청)은 카드가 아니다. 홈 "방송 중인 팔로잉" 타일(live-following.js)은 주 동작이
+  // 글자를 품은 진짜 단추(.lf-open)이고 + 가 형제 단추다 — 카드와 같은 구조라 그 단추를 주 동작으로 본다.
   const cards = [...root.querySelectorAll('[data-channel-id]:not(button), .dense-row[data-open-channel-id]')];
-  const noOpen = cards.filter((c) => !c.querySelector(':scope > button.card-open')).map(name);
+  const noOpen = cards.filter((c) => !c.querySelector(':scope > button.card-open, :scope > button.lf-open')).map(name);
   return { nested: [...new Set(nested)], fake: [...new Set(fake)], noOpen: [...new Set(noOpen)], cards: cards.length };
 }
 

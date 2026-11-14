@@ -130,6 +130,10 @@ async function refreshSidebarFollowing() {
       failed = true;
     }
     sidebar.setLiveCount(sideData.following ? sideData.following.length : null);
+    // 홈 맨 위 "방송 중인 팔로잉"도 같은 주기로 고친다 — 바뀐 칸만(홈 전체를 다시 그리지 않아 깜박이지 않는다)
+    if (!failed && sideData.following && pages.home) {
+      try { pages.home.updateLiveFollowing(sideData.following, sideData.favorites); } catch (e) { console.warn('홈 팔로잉 갱신 실패', e); }
+    }
   }
   paintSidebarList();
   // 여러 호출이 겹쳐도 주기 타이머는 하나만(예전엔 겹친 호출마다 타이머가 늘었다).
@@ -1012,7 +1016,10 @@ async function loadHomeBehindSplash() {
   if (dataResult === 'timeout') return;
   // 첫 화면에 보이는 썸네일 — 막 그린 홈 위에서 그림이 하나씩 떠오르지 않게 잠깐 더 기다린다.
   splashStep('화면 그리는 중…', 0.9);
-  await new Promise((r) => requestAnimationFrame(() => r())); // 배치(크기·위치)가 정해진 뒤 고른다
+  // 배치(크기·위치)가 정해진 뒤 고른다 — 두 프레임: 첫 프레임의 ResizeObserver 가 홈 맨 위 "방송 중인 팔로잉"의 접힌
+  // 칸(칸 수에 맞춰 숨김)을 고친 뒤여야 한다. 한 프레임 뒤에 고르면 곧 숨겨질 칸의 아바타(lazy — 숨으면 받지 않는다)까지
+  // 기다려 시작 화면이 그림 상한(1.5초)을 다 채웠다.
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
   const images = home.aboveFoldImages().filter((img) => !img.complete);
   if (!images.length) return;
   const loaded = images.map((img) => new Promise((resolve) => {

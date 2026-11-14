@@ -11,6 +11,7 @@ import { motionReduced, swapContent } from './motion.js';
 import { previewAttr } from './hover-preview.js';
 import { verifiedBadge } from './verified-badge.js';
 import { withRefreshVeil, refreshVeiled } from './refresh-veil.js';
+import { LiveFollowingStrip, liveFollowingSkeleton } from './live-following.js';
 
 const HERO_SIZE = 5;
 // 자동 넘김 — 대기열 진행 막대(CSS `queue-progress`, 7초)가 끝나면 다음 장으로. 호버 중엔 CSS 가 멈춘다.
@@ -74,22 +75,6 @@ function loginBanner() {
         <span>방송 중인 팔로잉 채널, 채팅 참여, 맞춤 추천이 열립니다</span>
       </div>
       <button class="btn primary lg" data-action="login">네이버 로그인</button>
-    </section>`;
-}
-
-/** 방송 중인 팔로잉 — 원형 아바타 스트립. */
-function followingStrip(lives) {
-  const items = lives.map((l) => `
-    <button class="strip-item" ${channelData(l)} title="${esc(l.liveTitle)}">
-      <span class="strip-ring">${avatarImg(l.channelImageUrl)}</span>
-      <span class="strip-live">LIVE</span>
-      <span class="strip-name ellipsis">${esc(l.channelName)}${verifiedBadge(l, 'sm')}</span>
-      <span class="strip-meta ellipsis">${esc(l.categoryName || `${l.viewerCountText}명`)}</span>
-    </button>`).join('');
-  return `
-    <section class="home-section">
-      ${sectionHead(`방송 중인 팔로잉 <span class="count">${lives.length}</span>`, '', '<button class="link-btn" data-goto="following">전체 보기</button>')}
-      <div class="strip">${items}</div>
     </section>`;
 }
 
@@ -224,10 +209,11 @@ function popularGrid(popular, category, limit = GRID_STEP) {
   return liveGrid(all.slice(0, limit)) + more;
 }
 
-export function homeSkeleton() {
+export function homeSkeleton(loggedIn = false) {
   const card = '<div class="sk-card"><div class="sk thumb-sk"></div><div class="sk line"></div><div class="sk line short"></div></div>';
   return `
     <div class="home">
+      ${loggedIn ? liveFollowingSkeleton(12) : ''}
       <div class="hero"><div class="sk hero-sk"></div><div class="hero-queue">${'<div class="sk queue-sk"></div>'.repeat(5)}</div></div>
       <div class="sk title-sk"></div>
       <div class="grid">${card.repeat(8)}</div>
@@ -252,6 +238,9 @@ export class HomePage {
     this.hero = [];
     this.heroSource = 'popular';
     this.heroIndex = 0;
+    this.favorites = [];
+    // 맨 위 "방송 중인 팔로잉" — 홈을 다시 그려도 이 요소는 옮겨 붙인다(정렬·펼침·초점 유지, 같은 칸은 다시 그리지 않음).
+    this.liveStrip = new LiveFollowingStrip();
     // 첫 내용이 그려지면 풀린다 — 시작 로딩 화면이 이걸 기다렸다가 걷힌다(app.js).
     this.firstRender = new Promise((resolve) => { this.resolveFirstRender = resolve; });
 
@@ -288,20 +277,29 @@ export class HomePage {
   async show(refresh = false) {
     const seq = ++this.seq;
     this.renderGreeting();
-    // 직접 새로고침(덮개 아래)이면 보던 홈을 흐리게 둔 채 바꾼다 — 스켈레톤으로 비우지 않는다.
-    if (!this.body.querySelector('.home') || (refresh && !refreshVeiled(this.root))) this.body.innerHTML = homeSkeleton();
     const loggedIn = this.isLoggedIn();
+    // 직접 새로고침(덮개 아래)이면 보던 홈을 흐리게 둔 채 바꾼다 — 스켈레톤으로 비우지 않는다.
+    if (!this.body.querySelector('.home') || (refresh && !refreshVeiled(this.root))) {
+      // 초점 자리를 기억하고(붙어 있을 때만 — 아니면 앞서 기억한 것을 덮는다) 옛 홈에서 떼어 낸다(옛 트리를 붙잡지 않게).
+      if (this.liveStrip.el.isConnected) this.liveStrip.beforeSwap();
+      this.liveStrip.detach();
+      this.body.innerHTML = homeSkeleton(loggedIn);
+      this.liveStrip.watch(this.body.querySelector('.lf-skeleton .lf-grid'));
+    }
     // 시작 로딩 화면(app.js)이 단계마다 진행을 보여 줄 수 있게 요청 하나가 끝날 때마다 알린다.
     const step = (name) => (v) => { if (this.onLoadStep) this.onLoadStep(name); return v; };
     const tracked = (name, p) => p.then(step(name), (e) => { step(name)(); throw e; });
-    const [following, popular, recent] = await Promise.allSettled([
+    const [following, popular, recent, favorites] = await Promise.allSettled([
       loggedIn ? tracked('following', api.followingLives(refresh)) : Promise.resolve([]),
       tracked('popular', api.popularLives(POPULAR_SIZE, refresh)),
       tracked('recent', api.recentChannels(8)),
+      // 즐겨찾기(로컬 DB) — 맨 위 구역의 추천 순서. 못 받으면 즐겨찾기 없이 그린다.
+      loggedIn ? api.favoritesList() : Promise.resolve([]),
     ]);
     if (seq !== this.seq) return;
     // 최근 시청은 DB(재생할 때 기록)가 원본 — 비어 있으면 예전 localStorage 기록을 쓴다.
     this.dbRecent = recent.status === 'fulfilled' ? recent.value : [];
+    if (favorites.status === 'fulfilled' && Array.isArray(favorites.value)) this.favorites = favorites.value;
     this.render(loggedIn, following, popular);
     this.resolveFirstRender();
     this.loadRails(seq);
@@ -348,6 +346,18 @@ export class HomePage {
     this.summary.innerHTML = parts.length ? parts.join('') : '지금 볼 만한 라이브를 모았어요';
   }
 
+  /**
+   * 사이드바 주기 갱신(app.js, 2분마다)이 받은 팔로잉 라이브로 맨 위 구역과 인사 요약만 고친다 — 홈 전체를 다시 그리지 않아
+   * 깜박이지 않고, 새로 시작한 방송은 나타나고 끝난 방송은 빠진다. 홈을 아직 그리지 않았거나 로그아웃이면 아무것도 않는다.
+   * @param {Array} lives @param {Set<string>|Array} [favorites]
+   */
+  updateLiveFollowing(lives, favorites) {
+    if (!this.isLoggedIn() || !Array.isArray(lives) || !this.liveStrip.el.isConnected) return;
+    if (favorites) this.favorites = [...favorites];
+    this.liveStrip.update(lives, { favorites: this.favorites });
+    this.renderGreeting(lives, this.popular);
+  }
+
   render(loggedIn, followingRes, popularRes) {
     const following = followingRes.status === 'fulfilled' ? [...(followingRes.value || [])].sort(byViewers) : [];
     const popular = popularRes.status === 'fulfilled' ? popularRes.value || [] : [];
@@ -367,8 +377,10 @@ export class HomePage {
     else if (followingRes.status === 'rejected') {
       // 원문 대신 쉬운 안내 + 다시 시도(app.js 가 홈을 다시 불러온다) — 다른 화면의 실패와 같게
       html += `<div class="home-notice" role="alert">팔로잉 라이브를 불러오지 못했습니다 · ${esc(friendlyError(followingRes.reason))} <button class="link-btn" data-retry>다시 시도</button></div>`;
-    } else if (following.length) {
-      html += followingStrip(following);
+    } else {
+      // 맨 위 "방송 중인 팔로잉"(live-following.js) — 아무도 방송하지 않아도 한 줄 안내로 자리를 지킨다. 아래에서 옮겨 붙인다.
+      html += '<div data-lf-slot></div>';
+      this.liveStrip.update(following, { favorites: this.favorites, recent });
     }
 
     if (this.hero.length) {
@@ -406,8 +418,54 @@ export class HomePage {
     }
     html += '<section class="home-section" data-rail="clips" hidden></section>';
     html += '</div>';
-    swapContent(this.body, html);
+    this.swapKeepingStrip(html);
     this.preloadNextHero();
+  }
+
+  /**
+   * 홈 본문을 바꾼다. 맨 위 구역(liveStrip)이 이미 홈에 붙어 있고 새 홈에도 자리가 있으면 그 요소는 문서에서 빼지 않고
+   * 앞뒤 형제만 갈아 끼운다 — 떼었다 붙이면 초점·호버가 풀리고, 세그먼트 판(motion.js)이 다시 재며 강제 레이아웃을 일으켰다.
+   * 처음(스켈레톤 다음)이면 swapContent 로 그리고 자리에 붙인다.
+   */
+  swapKeepingStrip(html) {
+    const strip = this.liveStrip.el;
+    const home = strip.parentElement;
+    if (home && home.parentElement === this.body && home.classList.contains('home') && html.includes('data-lf-slot')) {
+      const tpl = document.createElement('template');
+      tpl.innerHTML = html;
+      const fresh = tpl.content.querySelector('.home');
+      const slot = fresh && fresh.querySelector(':scope > [data-lf-slot]');
+      if (slot) {
+        // swapContent 와 같은 규칙 — 보이던 내용을 갈아 끼운 것이라 떠오르지 않는다
+        this.body.classList.toggle('no-enter', !this.body.querySelector('.sk, .ip-skeleton, .empty.loading'));
+        const before = [];
+        const after = [];
+        let seen = false;
+        for (const n of [...fresh.childNodes]) {
+          if (n === slot) { seen = true; continue; }
+          (seen ? after : before).push(n);
+        }
+        for (const n of [...home.childNodes]) if (n !== strip) n.remove();
+        strip.before(...before);
+        strip.after(...after);
+        return;
+      }
+    }
+    // 처음 붙일 때 — 문서에 넣기 전에 템플릿 안에서 자리를 구역으로 바꿔 한 번에 붙인다. 빈 자리를 먼저 넣고 바꾸면
+    // 세그먼트 판(motion.js)의 MutationObserver 가 같은 묶음에서 .home 과 구역을 두 번 훑어 "다시 붙음"으로 보고
+    // 시작 중 판을 동기로 다시 쟀다(강제 레이아웃 약 30ms — perf.mjs P01).
+    // 초점 자리는 구역이 붙어 있을 때만 기억한다 — 스켈레톤을 거쳐 왔으면 그때 기억한 것을 덮지 않게(예전엔 늘 덮어 복원이 실패했다).
+    if (strip.isConnected) this.liveStrip.beforeSwap();
+    else this.liveStrip.hidePeek();
+    const tpl = document.createElement('template');
+    tpl.innerHTML = html;
+    const slot = tpl.content.querySelector('[data-lf-slot]');
+    if (slot) this.liveStrip.mount(slot);
+    else this.liveStrip.detach({ forget: true }); // 자리가 없다(로그아웃·팔로잉 실패) — 옛 홈 트리를 붙잡지 않게 뗀다
+    // swapContent 와 같은 규칙(보이던 내용을 갈아 끼우면 떠오르지 않는다)
+    this.body.classList.toggle('no-enter', this.body.childElementCount > 0 && !this.body.querySelector('.sk, .ip-skeleton, .empty.loading'));
+    this.body.replaceChildren(tpl.content);
+    if (slot) this.liveStrip.restoreFocus();
   }
 
   /** 다음 히어로 장의 큰 썸네일(720)을 미리 받아 둔다 — 자동 넘김 때 빈 칸이 잠깐 보이지 않게.

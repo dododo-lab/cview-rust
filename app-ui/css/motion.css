@@ -179,13 +179,13 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 }
 .link-btn:active:not(:disabled) { scale: .97; transition-duration: var(--dur-1); }
 /* 넓은 줄·카드는 덜 들어가게 */
-:is(.nav-item, .side-live, .queue-item, .recent-item, .strip-item, .ml-addrow, .ml-addrow-open, .palette-item, .ctx-item, .quality-item, .ml-menu-item,
+:is(.nav-item, .side-live, .queue-item, .recent-item, .lf-open, .lf-more, .ml-addrow, .ml-addrow-open, .palette-item, .ctx-item, .quality-item, .ml-menu-item,
     .design-item, .dense-row, .channel-row, .bookmark-row, .side-widget, .ml-focus-add, .ac-item, .tray-item) {
   transition-property: background, color, border-color, box-shadow, opacity, scale;
   transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), .3s;
   transition-timing-function: var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-spring);
 }
-:is(.nav-item, .side-live, .queue-item, .recent-item, .ml-addrow-open, .palette-item, .quality-item, .ml-menu-item, .design-item,
+:is(.nav-item, .side-live, .queue-item, .recent-item, .lf-open, .lf-more, .ml-addrow-open, .palette-item, .quality-item, .ml-menu-item, .design-item,
     .dense-row, .channel-row, .bookmark-row, .side-widget, .ac-item):active:not(:disabled) { scale: .985; transition-duration: var(--dur-1); }
 /* .btn 전환은 아래 "버튼 모션"이 맡는다. 채널 추가(.ch-add)는 글로우·누름을 끝의 "채널 추가 단추" 규칙이 따로 정한다
    — :where() 로 빼서 다른 .btn 의 우선순위는 그대로다.
@@ -209,8 +209,6 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 .recent-item:hover, .channel-row:hover, .bookmark-row:hover { translate: 0 -1px; }
 .recent-item, .channel-row, .bookmark-row { transition-property: background, color, border-color, box-shadow, scale, translate; transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), .3s, var(--dur-3); }
 .bookmark-row { transition-timing-function: var(--ease-out); }
-.strip-ring { transition: transform .32s var(--ease-spring), box-shadow var(--dur-2) var(--ease-out); }
-.strip-item:active .strip-ring { transform: scale(.96); transition-duration: var(--dur-1); }
 .rail-item { transition: transform .3s var(--ease-spring); }
 
 /* ── 썸네일 — 받아지면 부드럽게(motion.js 가 is-loaded 를 단다. 캐시에 있던 것은 그리기 전에, 실패해도 단다).
@@ -661,10 +659,10 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
 
 /* ── 모션 줄이기 — transform 으로 하는 누름·호버 크기도 없앤다(위 규칙들은 scale·translate 만 없앴다 — 시간 0 이면 크기가 뚝 바뀌었다) ── */
 @media (prefers-reduced-motion: reduce) {
-  :is(.btn, .card, .category-card):active:not(:disabled), .strip-item:active .strip-ring,
+  :is(.btn, .card, .category-card):active:not(:disabled),
   .card:hover .thumb img, .category-card:hover .category-art img { transform: none !important; }
 }
-:root[data-motion="reduced"] :is(.btn:active, .card:active, .category-card:active, .strip-item:active .strip-ring, .card:hover .thumb img, .category-card:hover .category-art img) { transform: none !important; }
+:root[data-motion="reduced"] :is(.btn:active, .card:active, .category-card:active, .card:hover .thumb img, .category-card:hover .category-art img) { transform: none !important; }
 
 /* ── 키보드 초점 — 고리가 바깥에서 조여 들며 나타난다(outline-offset·색만, 초점이 옮겨 갈 때 한 번) ── */
 @keyframes mo-focus-ring { from { outline-color: transparent; outline-offset: 6px; } }
