@@ -229,8 +229,11 @@ await check('CS05 arrow keys move focus to the next card\'s main action (grid, t
   const GRID = '[data-page="popular"] .grid .card';
   await go(page, 'popular');
   await page.waitForSelector(GRID);
-  const ids = await page.$$eval(GRID, (cs) => cs.map((c) => [c.dataset.channelId, Math.round(c.getBoundingClientRect().left), Math.round(c.getBoundingClientRect().top)]));
-  const perRow = ids.filter(([, , t]) => t === ids[0][2]).length;
+  // 한 줄 카드 수는 레이아웃 위치(offsetTop)로 센다. 격자가 나타나자마자 카드마다 늦춤이 다른 등장 애니메이션(motion.css mo-rise,
+  // translate·scale)이 돌아 getBoundingClientRect().top 은 같은 줄이라도 카드마다 달랐다 — 부하가 걸리면 '한 줄 카드 1' 로 실패.
+  // offsetTop 은 transform·translate·scale 의 영향을 받지 않는다(카드는 모두 같은 격자 안이라 offsetParent 도 같다).
+  const ids = await page.$$eval(GRID, (cs) => cs.map((c) => [c.dataset.channelId, c.offsetTop]));
+  const perRow = ids.filter(([, t]) => t === ids[0][1]).length;
   assert.ok(perRow >= 2, `한 줄 카드 ${perRow}`);
   await focusIn(page, `${GRID}:nth-child(1) > .card-open`);
   await page.keyboard.press('ArrowRight');
