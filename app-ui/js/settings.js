@@ -144,7 +144,8 @@ const GROUPS = [
   ['general', '일반'], ['link', '연동'], ['advanced', '고급'], ['about', '정보'],
 ];
 // 정보 › 업데이트 묶음의 토글 — 예전엔 일반 탭에 있었다(update-notify.js 가 읽는 general.autoCheckUpdates 그대로).
-const AUTO_CHECK = { d: 'general', k: 'autoCheckUpdates', label: '자동으로 업데이트 확인', help: '실행할 때와 6시간마다 새 버전을 확인해 사이드바와 알림으로 알려 줍니다', type: 'toggle' };
+// keywords — 예전 이름('업데이트 자동 확인')으로 찾아도 나오게.
+const AUTO_CHECK = { d: 'general', k: 'autoCheckUpdates', label: '자동으로 업데이트 확인', help: '실행할 때와 6시간마다 새 버전을 확인해 사이드바와 알림으로 알려 줍니다', keywords: '업데이트 자동 확인 · 자동 업데이트', type: 'toggle' };
 const NETWORK_PRESETS = [['auto', '자동'], ['balanced', '밸런스'], ['stability', '안정 우선'], ['lowLatency', '저지연 우선'], ['performance', '고성능']];
 
 /** 프리셋 줄 설명 — 자동이면 지금 고른 프리셋을 적는다. */
@@ -190,7 +191,7 @@ function itemHtml(item, values) {
   const off = item.disabled && item.disabled(values) ? ' disabled' : '';
   const attrs = item.local ? `data-local="${item.local}"` : `data-domain="${item.d}" data-key="${item.k}"`;
   const label = `<span class="setting-label">${esc(item.label)}${item.help ? `<small>${esc(item.help)}</small>` : ''}</span>`;
-  const search = esc(`${item.label} ${item.help || ''} ${item.k || ''}`.toLowerCase());
+  const search = esc(`${item.label} ${item.help || ''} ${item.keywords || ''} ${item.k || ''}`.toLowerCase());
   const wrap = (inner) => `<label class="setting${item.adv ? ' adv' : ''}" data-search="${search}">${label}${inner}</label>`;
   switch (item.type) {
     case 'action':
@@ -277,13 +278,46 @@ export class SettingsPage {
     if (!row) return;
     const u = lastUpdateResult();
     const status = row.querySelector('.update-status');
-    if (u) status.textContent = updateSummary(u);
+    // 확인하는 중에 다시 그렸으면(탭 이동·검색) 그 상태를 이어 보이고 단추로 또 시작하지 못하게 한다.
+    // disabled 대신 aria-disabled — 누른 단추가 초점을 잃지 않는다(checkUpdateNow 가 막는다).
+    const check = row.querySelector('[data-sys="update"]');
+    if (this.updateChecking) status.textContent = '업데이트 서버를 확인하는 중…';
+    else if (u) status.textContent = updateSummary(u);
+    if (this.updateChecking) check.setAttribute('aria-disabled', 'true'); else check.removeAttribute('aria-disabled');
     row.querySelector('[data-sys="update-install"]').hidden = !canInstall(u);
     row.querySelector('[data-sys="update-download"]').hidden = !(u && u.newer && downloadTarget(u)) || canInstall(u);
     row.querySelector('[data-sys="update-page"]').hidden = !(u && u.newer && u.url);
     const info = await currentAppInfo();
     const v = row.isConnected && row.querySelector('.update-version');
     if (v) v.textContent = `CView ${info ? info.version : ''}`.trim();
+  }
+
+  /**
+   * 정보 › [업데이트 확인] — 결과(최신·새 버전·실패)를 한 번만 알린다. 보이는 업데이트 줄이 있으면 그 상태 글(role=status)로,
+   * 없으면(기다리는 동안 다른 탭·다른 화면으로 갔거나 검색에 걸러짐) 토스트로. 둘 다 하면 화면 낭독기가 두 번 읽었고,
+   * 예전 줄(다시 그려 떨어져 나간 노드)에만 쓰면 아무도 듣지 못했다. 확인이 겹치지 않게 한 번에 하나만.
+   */
+  async checkUpdateNow() {
+    if (this.updateChecking) return;
+    this.updateChecking = true;
+    this.showUpdate();
+    let msg;
+    let failed = false;
+    try {
+      msg = updateSummary(await checkForUpdate());
+    } catch (er) {
+      failed = true;
+      msg = `확인하지 못했습니다 — ${er.message || er}`;
+    } finally {
+      this.updateChecking = false;
+    }
+    const live = this.body.querySelector('.update-row .update-status');
+    const visible = Boolean(live) && !this.root.hidden && !live.closest('[hidden]');
+    const shown = this.showUpdate();
+    // 실패는 lastUpdateResult 에 남지 않아 showUpdate 가 옛 결과로 덮는다 — 그 뒤에 실패 글을 쓴다.
+    if (failed && live) live.textContent = msg;
+    if (!visible) toast(msg, 4000);
+    await shown;
   }
 
   /** 설정 줄에서 업데이트 설치 — 상태 글씨 아래에 진행 막대. 실패하면 다운로드 단추도 보인다. */
@@ -655,19 +689,10 @@ export class SettingsPage {
   }
 
   async onSystem(b) {
+    if (b.dataset.sys === 'update') { await this.checkUpdateNow(); return; }
     b.disabled = true;
     try {
-      if (b.dataset.sys === 'update') {
-        const status = this.body.querySelector('.update-status');
-        if (status) status.textContent = '업데이트 서버를 확인하는 중…';
-        try {
-          await checkForUpdate();
-        } catch (er) {
-          if (status) status.textContent = `확인하지 못했습니다 — ${er.message || er}`;
-          throw er;
-        }
-        this.showUpdate();
-      } else if (b.dataset.sys === 'update-install') {
+      if (b.dataset.sys === 'update-install') {
         await this.installUpdate(b);
         return;
       } else if (b.dataset.sys === 'update-download') {

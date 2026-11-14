@@ -1,14 +1,18 @@
 // 설정 › 정보 탭 회귀 검사 — 모의 IPC·헤드리스 브라우저(실제 업데이트 서버·클립보드·Finder·브라우저는 건드리지 않는다).
 // SA01 탭·머리말 — '정보'가 맨 끝 탭(End 키로도 간다), 아이콘(장식)·이름·'버전 X.Y.Z (빌드 N)'·한 줄 소개.
 // SA02 업데이트 줄 — 'CView 0.1.103' + [업데이트 확인]. 결과(최신·새 버전·실패)를 상태 글(role=status)로, 새 버전이면 설치 단추.
+//      실패는 상태 글로만 알린다(토스트까지 띄우면 화면 낭독기가 두 번 읽는다). 확인 중에 다시 그려도 지금 줄에 알린다.
 //      개요 탭에는 업데이트 줄이 더 없다(한 곳에만).
 // SA03 '자동으로 업데이트 확인' 토글 — general.autoCheckUpdates 를 읽고 쓴다. 일반 탭에서 옮겨 와 설정 전체에 한 줄뿐.
+//      예전 이름('업데이트 자동 확인'·'업데이트 자동'·'자동 확인')으로 찾아도 나온다.
 // SA04 '0.1.103의 새로운 기능' [보기…] — 릴리스 노트 시트(제목·게시일·노트·GitHub에서 보기), 실패면 다시 시도, 노트 없음 안내.
-//      Esc 로 닫으면 초점이 [보기…]로 돌아온다.
+//      Esc 로 닫으면 초점이 [보기…]로 돌아온다. 노트를 자체 서버에서 받았으면 단추 이름이 '업데이트 서버에서 보기'.
 // SA05 피드백·링크 — [작성…]은 저장소 이슈 양식, 아래 띠 링크(웹사이트·변경 내역·소스 코드)는 기본 브라우저로(웹뷰는 그대로).
+//      링크는 href 없는 단추라 가운데 클릭·문맥 메뉴 '링크 열기'로 앱 안에서 열릴 길이 없다.
 //      지어낸 메일 주소·제작자 이름·개인정보 처리방침 링크가 없다.
 // SA06 진단 보고서 — 설명에 빼는 개인 정보(쿠키·토큰·계정·채팅·팔로잉)를 적고, [보고서 복사]는 백엔드 글을 그대로 클립보드에.
 //      ClipboardItem(Promise) → writeText 순으로 시도, 둘 다 안 되면 글을 고른 채 시트로. 누른 단추는 초점을 잃지 않는다.
+//      쓰기는 click 처리 안에서 바로 시작한다(WebKit 은 누름 중에 시작한 쓰기만 받는다 — click 수신자를 감싸 동기 구간에서 불렸는지 확인).
 // SA07 사용 데이터 — macOS 'Finder에서 보기' · Windows '탐색기에서 보기', 앱 데이터 폴더(dataDir)를 연다.
 // SA08 검색 — 정보 탭 줄도 찾고, 검색 중엔 머리말·링크 띠를 그리지 않는다.
 // SA09 axe(WCAG 2.1 A·AA + best-practice, 글자 대비 포함) — 정보 탭 라이트·다크와 두 시트.
@@ -49,14 +53,17 @@ function installAboutMocks([report, dataDir, notesPage]) {
     cfg.calls.push([c, a]);
     if (c === 'app_info') return { name: 'CView', version: '0.1.103', build: '103', os: 'macos', arch: 'aarch64', dataDir };
     if (c === 'update_check') {
+      if (cfg.update === 'slow-fail') { await new Promise((r) => setTimeout(r, cfg.delay || 700)); throw new Error('업데이트 서버에 연결하지 못했습니다'); }
+      if (cfg.update === 'slow-latest') { await new Promise((r) => setTimeout(r, 700)); return { current: '0.1.103', latest: '0.1.103', newer: false }; }
       if (cfg.update === 'fail') throw new Error('업데이트 서버에 연결하지 못했습니다');
       if (cfg.update === 'newer') return { current: '0.1.103', latest: '0.1.104', newer: true, url: 'https://github.com/dododo-lab/cview-rust/releases/tag/v0.1.104', downloadUrl: 'https://github.com/x/CView_0.1.104_arm64.dmg', downloadName: 'CView_0.1.104_arm64.dmg', autoInstall: true, signed: true };
       return { current: '0.1.103', latest: '0.1.103', newer: false, url: notesPage, autoInstall: false, signed: false };
     }
     if (c === 'release_notes') {
       if (cfg.notes === 'fail') throw new Error('업데이트 서버에 연결하지 못했습니다');
-      if (cfg.notes === 'none') return { version: '0.1.103', notes: null, publishedAt: null, pageUrl: 'https://github.com/dododo-lab/cview-rust/releases' };
-      return { version: '0.1.103', notes: 'CView 0.1.103 (빌드 103)\n\n- 홈 맨 위 "방송 중인 팔로잉"을 새로 바꿨습니다.', publishedAt: '2026-11-14T09:00:10Z', pageUrl: notesPage };
+      if (cfg.notes === 'none') return { version: '0.1.103', notes: null, publishedAt: null, pageUrl: 'https://github.com/dododo-lab/cview-rust/releases', source: 'github' };
+      if (cfg.notes === 'server') return { version: '0.1.103', notes: '서버 노트', publishedAt: null, pageUrl: 'https://cv.dododo.app/releases/0.1.103/', source: 'server' };
+      return { version: '0.1.103', notes: 'CView 0.1.103 (빌드 103)\n\n- 홈 맨 위 "방송 중인 팔로잉"을 새로 바꿨습니다.', publishedAt: '2026-11-14T09:00:10Z', pageUrl: notesPage, source: 'github' };
     }
     if (c === 'diagnostic_report') { if (cfg.report === 'fail') throw new Error('보고서 실패'); return report; }
     if (c === 'open_external' || c === 'reveal_path') return null;
@@ -68,13 +75,40 @@ function installAboutMocks([report, dataDir, notesPage]) {
     }
     return inv(c, a);
   };
+  // 앱이 거는 click 수신자를 감싸 동기 실행 구간만 센다 — 함수가 돌아오면(첫 await 에서도) 바로 내려간다.
+  // 호출 스택 이름으로 재면 async 함수가 await 뒤에 다시 시작한 프레임도 이름이 남아 구별하지 못했다.
+  const wrapped = new WeakMap();
+  const add = EventTarget.prototype.addEventListener;
+  const remove = EventTarget.prototype.removeEventListener;
+  EventTarget.prototype.addEventListener = function (type, fn, opts) {
+    if (type !== 'click' || typeof fn !== 'function') return add.call(this, type, fn, opts);
+    let w = wrapped.get(fn);
+    if (!w) {
+      w = function (...a) { cfg.inClick = (cfg.inClick || 0) + 1; try { return fn.apply(this, a); } finally { cfg.inClick -= 1; } };
+      wrapped.set(fn, w);
+    }
+    return add.call(this, type, w, opts);
+  };
+  EventTarget.prototype.removeEventListener = function (type, fn, opts) {
+    return remove.call(this, type, (type === 'click' && typeof fn === 'function' && wrapped.get(fn)) || fn, opts);
+  };
   const clip = {
-    async write(items) {
+    write(items) {
+      // click 수신자가 동기로 도는 중인가(아래 감싸기가 센다). await 를 하나라도 지나면 — 마이크로태스크든 IPC 뒤든,
+      // onAboutClick 위든 아래든 — 0 이다. WebKit 은 누름 중에 시작하지 않은 쓰기를 거절한다.
+      cfg.writeSync = [...(cfg.writeSync || []), (cfg.inClick || 0) > 0];
+      return this.writeAsync(items);
+    },
+    async writeAsync(items) {
       if (cfg.clip !== 'ok') throw new Error('NotAllowedError');
       const blob = await items[0].getType('text/plain');
       cfg.clipped.push(['write', await blob.text()]);
     },
-    async writeText(t) {
+    writeText(t) {
+      cfg.writeTextSync = [...(cfg.writeTextSync || []), (cfg.inClick || 0) > 0];
+      return this.writeTextAsync(t);
+    },
+    async writeTextAsync(t) {
       if (cfg.clip === 'none') throw new Error('NotAllowedError');
       cfg.clipped.push(['writeText', t]);
     },
@@ -150,6 +184,8 @@ await check('SA01 정보 탭이 맨 끝이고 머리말에 아이콘·이름·�
 
 await check('SA02 업데이트 줄 — 앱 이름·버전, 확인 결과(최신·새 버전·실패), 개요 탭엔 더 없음', async () => {
   const { ctx, page, errors } = await open();
+  // 앱의 자동 확인(시작 15초 뒤, update-notify.js)이 끼어들어 요청 수를 흐리지 않게 끈다
+  await setMock(page, { general: { autoCheckUpdates: false } });
   const row = `${S} .update-row`;
   await page.waitForFunction((r) => document.querySelector(r)?.querySelector('.update-version')?.textContent === 'CView 0.1.103', row);
   assert.equal(await page.getAttribute(`${row} .update-status`, 'role'), 'status');
@@ -167,6 +203,50 @@ await check('SA02 업데이트 줄 — 앱 이름·버전, 확인 결과(최신�
   await page.click(`${row} [data-sys="update"]`);
   await page.waitForFunction((r) => /확인하지 못했습니다/.test(document.querySelector(`${r} .update-status`).textContent), row);
   assert.match(await status(), /^확인하지 못했습니다 — 업데이트 서버에 연결하지 못했습니다/);
+  await page.waitForTimeout(200);
+  assert.equal(await page.locator('.toast-stack .toast:has-text("업데이트 서버에 연결하지 못했습니다")').count(), 0, '실패를 토스트로 또 알리지 않는다');
+  assert.equal(await page.isDisabled(`${row} [data-sys="update"]`), false, '실패 뒤 다시 누를 수 있다');
+  // 확인하는 동안 탭을 옮겼다 돌아와(다시 그림) 실패해도, 지금 보이는 줄에 한 번 알린다(예전 줄에 써서 아무도 못 듣던 문제)
+  await setMock(page, { update: 'slow-fail' });
+  await page.evaluate(() => { document.querySelector('.update-status').textContent = '이전 상태'; });
+  await page.click(`${row} [data-sys="update"]`);
+  await page.click(`${S} .settings-tabs [data-group="general"]`);
+  await aboutTab(page);
+  await page.waitForFunction((r) => /확인하지 못했습니다/.test(document.querySelector(`${r} .update-status`)?.textContent || ''), row);
+  await page.waitForTimeout(200);
+  assert.equal(await page.locator('.toast-stack .toast:has-text("업데이트 서버에 연결하지 못했습니다")').count(), 0, '다시 그린 뒤에도 토스트 없이 상태 글 한 번');
+  // 확인하는 중에는 겹쳐 시작하지 않는다 — 다시 그린 단추도 aria-disabled, 눌러도 요청은 하나
+  const checksNow = async () => (await calls(page, 'update_check')).length;
+  await setMock(page, { delay: 4000 }); // 탭을 옮겼다 돌아와 또 누를 때까지 확인이 끝나지 않게
+  const before = await checksNow();
+  await page.click(`${row} [data-sys="update"]`);
+  await page.click(`${S} .settings-tabs [data-group="general"]`);
+  await aboutTab(page);
+  assert.equal(await page.getAttribute(`${row} [data-sys="update"]`, 'aria-disabled'), 'true', '확인 중에 다시 그린 단추');
+  assert.match(await status(), /확인하는 중/);
+  // Playwright 는 aria-disabled 단추를 누를 수 있을 때까지 기다리므로 강제로 눌러 앱의 막음을 본다
+  await page.click(`${row} [data-sys="update"]`, { force: true });
+  await page.waitForFunction((r) => /확인하지 못했습니다/.test(document.querySelector(`${r} .update-status`)?.textContent || ''), row);
+  assert.equal(await checksNow() - before, 1, '확인 중에 또 누르면 요청을 겹치지 않는다');
+  assert.equal(await page.getAttribute(`${row} [data-sys="update"]`, 'aria-disabled'), null, '끝나면 다시 누를 수 있다');
+  await setMock(page, { delay: 700 });
+  // 기다리는 동안 다른 화면으로 가면(설정 페이지가 hidden) 줄이 안 보이니 토스트로 한 번
+  const toasts = (t) => page.locator(`.toast-stack .toast:has-text("${t}")`).count();
+  await page.click(`${row} [data-sys="update"]`);
+  await go(page, 'home');
+  await page.waitForFunction(() => [...document.querySelectorAll('.toast-stack .toast')].some((x) => /업데이트 서버에 연결하지 못했습니다/.test(x.textContent)));
+  assert.equal(await toasts('업데이트 서버에 연결하지 못했습니다'), 1, '안 보이면 토스트 한 번');
+  await page.evaluate(() => document.querySelectorAll('.toast-stack .toast').forEach((x) => x.remove()));
+  await go(page, 'settings');
+  await page.waitForSelector(`${row}`);
+  await page.waitForTimeout(300);
+  // 검색에 걸러져 줄이 숨어도 토스트로. 성공 결과도 같은 규칙(최신이면 '최신 버전입니다' 토스트)
+  await setMock(page, { update: 'slow-latest' });
+  await page.click(`${row} [data-sys="update"]`);
+  await page.fill(`${S} .settings-search`, '테마');
+  await page.waitForFunction(() => [...document.querySelectorAll('.toast-stack .toast')].some((x) => /최신 버전입니다/.test(x.textContent)));
+  assert.equal(await toasts('최신 버전입니다'), 1, '걸러져 숨은 줄 대신 토스트 한 번');
+  await page.fill(`${S} .settings-search`, '');
   // 개요 탭 — 업데이트 줄은 정보 탭 한 곳에만
   await page.click(`${S} .settings-tabs [data-group="overview"]`);
   await page.waitForSelector(`${S} .settings-group[data-g="overview"]`);
@@ -190,9 +270,11 @@ await check('SA03 자동으로 업데이트 확인 토글 — 실제 설정(gene
   await aboutTab(page);
   assert.equal(await page.isChecked(input), false);
   // 검색 — 설정 전체에서 한 줄
-  await page.fill(`${S} .settings-search`, '자동으로 업데이트');
-  await page.waitForTimeout(100);
-  assert.equal(await page.locator(`${S} .setting:not([hidden]) [data-key="autoCheckUpdates"]`).count(), 1);
+  for (const q of ['자동으로 업데이트', '업데이트 자동 확인', '업데이트 자동', '자동 확인']) {
+    await page.fill(`${S} .settings-search`, q);
+    await page.waitForTimeout(100);
+    assert.equal(await page.locator(`${S} .setting:not([hidden]) [data-key="autoCheckUpdates"]`).count(), 1, `"${q}" 로 찾기`);
+  }
   await ctx.close();
 });
 
@@ -213,6 +295,7 @@ await check('SA04 새로운 기능 — 릴리스 노트 시트, GitHub에서 보
   assert.match(sheet.notes, /방송 중인 팔로잉/);
   assert.equal(sheet.tab, '0', '스크롤되는 노트는 키보드로도 닿는다');
   assert.match(sheet.date, /2026.*게시/);
+  assert.equal((await page.textContent('.sheet [data-notes="page"]')).trim(), 'GitHub에서 보기');
   await page.click('.sheet [data-notes="page"]');
   assert.deepEqual((await calls(page, 'open_external')).at(-1), { url: NOTES_PAGE });
   await page.keyboard.press('Escape');
@@ -234,8 +317,18 @@ await check('SA04 새로운 기능 — 릴리스 노트 시트, GitHub에서 보
   await setMock(page, { notes: 'none' });
   await page.click(btn);
   await page.waitForFunction(() => /릴리스 노트가 없습니다/.test(document.querySelector('.sheet .update-body')?.textContent || ''));
+  assert.equal((await page.textContent('.sheet [data-notes="page"]')).trim(), 'GitHub에서 보기');
   await page.click('.sheet [data-notes="page"]');
   assert.deepEqual((await calls(page, 'open_external')).at(-1), { url: 'https://github.com/dododo-lab/cview-rust/releases' });
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.sheet-scrim.app-sheet', { state: 'detached' });
+  // 자체 서버(manifest)에서 받은 노트 → 단추 이름도 그곳
+  await setMock(page, { notes: 'server' });
+  await page.click(btn);
+  await page.waitForSelector('.notes-sheet pre.release-notes');
+  assert.equal((await page.textContent('.sheet [data-notes="page"]')).trim(), '업데이트 서버에서 보기');
+  await page.click('.sheet [data-notes="page"]');
+  assert.deepEqual((await calls(page, 'open_external')).at(-1), { url: 'https://cv.dododo.app/releases/0.1.103/' });
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -245,14 +338,17 @@ await check('SA05 피드백·아래 띠 링크 — 공개된 주소를 기본 �
   await page.click(`${S} [data-about="feedback"]`);
   assert.deepEqual((await calls(page, 'open_external')).at(-1), { url: 'https://github.com/dododo-lab/cview-rust/issues/new/choose' });
   const before = page.url();
-  const links = await page.$$eval(`${S} .about-links a`, (as) => as.map((a) => [a.textContent.trim(), a.getAttribute('href')]));
+  const links = await page.$$eval(`${S} .about-links > *`, (as) => as.map((a) => [a.textContent.trim(), a.dataset.extUrl]));
+  // href 가 있는 링크면 가운데 클릭·문맥 메뉴 '링크 열기'로 앱 안에서 열린다 — 단추여야 한다
+  assert.deepEqual(await page.$$eval(`${S} .settings-groups.about-tab a[href]`, (as) => as.length), 0, '정보 탭에 href 링크가 없다');
+  assert.ok(await page.$$eval(`${S} .about-links > *`, (as) => as.every((a) => a.tagName === 'BUTTON' && a.type === 'button')));
   assert.deepEqual(links, [
     ['웹사이트', 'https://cv.dododo.app/'],
     ['변경 내역', 'https://github.com/dododo-lab/cview-rust/releases'],
     ['소스 코드', 'https://github.com/dododo-lab/cview-rust'],
   ]);
   for (const [text, href] of links) {
-    await page.click(`${S} .about-links a:text-is("${text}")`);
+    await page.click(`${S} .about-links button:text-is("${text}")`);
     assert.deepEqual((await calls(page, 'open_external')).at(-1), { url: href }, text);
   }
   assert.equal(page.url(), before, '웹뷰는 다른 주소로 가지 않는다');
@@ -273,6 +369,7 @@ await check('SA06 진단 보고서 — 빼는 개인 정보 안내, 복사(Clipb
   await page.keyboard.press('Enter');
   await page.waitForFunction(() => window.__about.clipped.length === 1);
   assert.deepEqual(await page.evaluate(() => window.__about.clipped[0]), ['write', REPORT], 'ClipboardItem 으로 백엔드 글 그대로');
+  assert.deepEqual(await page.evaluate(() => window.__about.writeSync), [true], '클립보드 쓰기는 click 처리 안에서 바로(동기로) 시작한다');
   await page.waitForSelector('.toast-stack :text("진단 보고서를 복사했습니다")');
   assert.equal(await page.evaluate(() => document.activeElement?.dataset.about), 'report-copy', '누른 단추에 초점이 남는다');
   assert.equal(await page.getAttribute(copy, 'aria-disabled'), null, '끝나면 다시 누를 수 있다');
@@ -281,6 +378,9 @@ await check('SA06 진단 보고서 — 빼는 개인 정보 안내, 복사(Clipb
   await page.click(copy);
   await page.waitForFunction(() => window.__about.clipped.length === 2);
   assert.deepEqual(await page.evaluate(() => window.__about.clipped[1]), ['writeText', REPORT]);
+  // writeText 대체는 보고서를 다 받은 뒤(누름 밖)에 부른다 — Chromium/WebView2 는 받지만 WebKit 은 거절할 수 있고,
+  // 그때는 아래처럼 글을 고른 시트로 넘어간다. 이 단계는 WebKit 에서 성공한다는 보장이 아니다.
+  assert.deepEqual(await page.evaluate(() => window.__about.writeTextSync), [false]);
   // 둘 다 막히면 글을 고른 채 시트로
   await setMock(page, { clip: 'none' });
   await page.click(copy);
@@ -301,8 +401,11 @@ await check('SA06 진단 보고서 — 빼는 개인 정보 안내, 복사(Clipb
   await page.click(`${S} [data-about="report-view"]`);
   await page.waitForSelector('.report-sheet .report-text');
   assert.match(await page.textContent('.report-note'), /쿠키·토큰/);
+  const nSync = await page.evaluate(() => window.__about.writeSync.length);
   await page.click('.sheet [data-report-copy]');
   await page.waitForFunction(() => window.__about.clipped.length === 3);
+  assert.deepEqual(await page.evaluate((n) => window.__about.writeSync.slice(n), nSync), [true], '시트의 [복사]가 이번 누름에서 ClipboardItem 쓰기를 동기로 시작했다');
+  assert.equal((await page.evaluate(() => window.__about.clipped[2]))[0], 'write');
   assert.equal((await page.evaluate(() => window.__about.clipped[2]))[1], REPORT);
   await page.keyboard.press('Escape');
   await page.waitForSelector('.sheet-scrim.app-sheet', { state: 'detached' });
@@ -383,24 +486,17 @@ await check('SA10 키보드 — Tab 이 단추·토글·링크를 차례로 지�
     const ring = (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) >= 1) || (cs.boxShadow && cs.boxShadow !== 'none');
     return { id: e.dataset.sys || e.dataset.about || e.dataset.key || e.textContent.trim(), ring, inTab: Boolean(e.closest('.settings-groups.about-tab')) };
   });
-  // WebKit 은 기본 설정에서 Tab 이 링크를 건너뛴다(Safari '탭으로 링크 이동' 꺼짐) — 링크는 아래에서 따로 잰다.
-  const expect = WEBKIT ? want.filter((w) => !LINKS.includes(w)) : want;
+  // 아래 띠 링크는 단추라 WebKit(Safari '탭으로 링크 이동' 꺼짐)에서도 Tab 이 지난다.
   await page.focus(`${S} .settings-search`);
   const seen = [];
-  for (let i = 0; i < expect.length; i++) {
+  for (let i = 0; i < want.length; i++) {
     await page.keyboard.press('Tab');
     const f = await focused();
     assert.ok(f.inTab, `Tab ${i + 1} 이 정보 탭 밖(${f.id})`);
     assert.ok(f.ring, `${f.id} 초점 표시 없음`);
     seen.push(f.id);
   }
-  assert.deepEqual(seen, expect);
-  for (const text of LINKS) {
-    await page.keyboard.press('Shift'); // 마지막 입력이 키보드 — :focus-visible
-    await page.focus(`${S} .about-links a:text-is("${text}")`);
-    const f = await focused();
-    assert.ok(f.ring, `${text} 초점 표시 없음`);
-  }
+  assert.deepEqual(seen, want);
   await ctx.close();
 });
 

@@ -189,26 +189,61 @@ fn is_host(seg: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
 }
 
-/// 요청 경로(`api.chzzk.naver.com/service/v1/…`) — 쿼리를 떼고, 호스트·영문 낱말(`live-detail`)·API 판(`v2`)이 아닌
-/// 마디는 `:id` 로 바꾼다. 호스트로 시작하지 않으면(파일 경로일 수 있다 — 사용자 이름이 든다) 통째로 `:path`.
+/// 바로 뒤 조각이 식별자인 API 묶음 — 채널 ID·클립 UID·영상 번호·사용자 해시 등. 그 조각은 생김새와 상관없이 가린다
+/// (숫자 없는 클립 UID `OJNtHwJTCm` 처럼 낱말로 보이는 식별자가 있다).
+const ID_COLLECTIONS: &[&str] = &[
+    "channels",
+    "clips",
+    "videos",
+    "lives",
+    "users",
+    "chats",
+    "emoticon-packs",
+    "emoji-packs",
+    "members",
+    "id",
+];
+/// 위 묶음 뒤에 와도 식별자가 아닌 낱말 — `channels/followings`·`users/me`·`chats/access-token`.
+const NOT_IDS: &[&str] = &["followings", "me", "access-token"];
+/// camelCase 라 아래 규칙에 안 맞지만 남길 API 낱말(cview-networking 이 부르는 경로). 대소문자 섞인 조각은
+/// 클립 UID 같은 base62 식별자와 구별할 수 없어 규칙으로 열지 않고 하나씩 적는다.
+const KNOWN_WORDS: &[&str] = &["getUserStatus"];
+
+/// 남겨도 되는 경로 낱말 — 소문자 kebab/snake(`live-detail`), API 판(`v1`·`v1.1`), 대문자 상수(`CHANNEL_POST`).
+fn path_word(seg: &str) -> bool {
+    let lower = seg.len() <= 32
+        && seg.starts_with(|c: char| c.is_ascii_lowercase())
+        && seg
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c == '-' || c == '_');
+    let api_version = seg.len() <= 6
+        && seg.strip_prefix('v').is_some_and(|v| {
+            !v.is_empty()
+                && v.split('.')
+                    .all(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
+        });
+    let constant = seg.len() <= 32
+        && seg.contains('_')
+        && seg.chars().all(|c| c.is_ascii_uppercase() || c == '_');
+    lower || api_version || constant || KNOWN_WORDS.contains(&seg)
+}
+
+/// 요청 경로(`api.chzzk.naver.com/service/v1/…`) — 쿼리를 떼고, 식별자 묶음 바로 뒤 조각과 남겨도 되는 낱말([`path_word`])이
+/// 아닌 조각은 `:id` 로 바꾼다. 호스트로 시작하지 않으면(파일 경로일 수 있다 — 사용자 이름이 든다) 통째로 `:path`.
 pub fn normalize_path(path: &str) -> String {
     let path = path.split(['?', '#']).next().unwrap_or_default();
     if !path.split('/').next().is_some_and(is_host) {
         return ":path".into();
     }
-    path.split('/')
+    let segs: Vec<&str> = path.split('/').collect();
+    segs.iter()
         .enumerate()
         .map(|(i, seg)| {
-            let host = i == 0;
-            let word = seg.len() <= 24
-                && seg
-                    .chars()
-                    .all(|c| c.is_ascii_alphabetic() || c == '-' || c == '_');
-            let api_version = seg.len() > 1
-                && seg.len() <= 4
-                && seg.starts_with('v')
-                && seg[1..].chars().all(|c| c.is_ascii_digit());
-            if seg.is_empty() || host || word || api_version {
+            if i == 0 || seg.is_empty() {
+                return seg.to_string();
+            }
+            let after_collection = ID_COLLECTIONS.contains(&segs[i - 1]) && !NOT_IDS.contains(seg);
+            if !after_collection && path_word(seg) {
                 seg.to_string()
             } else {
                 ":id".to_string()
@@ -471,6 +506,54 @@ mod tests {
         assert_eq!(
             normalize_path("api.chzzk.naver.com/search/%ED%95%9C"),
             "api.chzzk.naver.com/search/:id"
+        );
+        // 숫자 없는 클립 UID(대소문자 섞인 base62)도 위치로 가린다
+        assert_eq!(
+            normalize_path("api.chzzk.naver.com/service/v1/clips/OJNtHwJTCm/inkey"),
+            "api.chzzk.naver.com/service/v1/clips/:id/inkey"
+        );
+        assert_eq!(
+            normalize_path("api.chzzk.naver.com/service/v1/clips/ojntwabcde/detail"),
+            "api.chzzk.naver.com/service/v1/clips/:id/detail"
+        );
+        // 묶음 밖이라도 대소문자 섞인 조각·숫자 섞인 조각은 낱말이 아니다
+        assert_eq!(
+            normalize_path("api.chzzk.naver.com/service/v1/OJNtHwJTCm/x9"),
+            "api.chzzk.naver.com/service/v1/:id/:id"
+        );
+        // 식별자가 아닌 묶음 뒤 낱말·API 판·상수는 남긴다
+        assert_eq!(
+            normalize_path("api.chzzk.naver.com/service/v1/channels/followings"),
+            "api.chzzk.naver.com/service/v1/channels/followings"
+        );
+        assert_eq!(
+            normalize_path(
+                "api.chzzk.naver.com/service/v1.1/channels/abcdefabcdef/live-playback-json"
+            ),
+            "api.chzzk.naver.com/service/v1.1/channels/:id/live-playback-json"
+        );
+        assert_eq!(
+            normalize_path(
+                "comm-api.game.naver.com/nng_main/v1/chats/ab12/users/ZZ9x/profile-card"
+            ),
+            "comm-api.game.naver.com/nng_main/v1/chats/:id/users/:id/profile-card"
+        );
+        assert_eq!(
+            normalize_path("apis.naver.com/nng_main/v1/type/CHANNEL_POST/id/abc/comments"),
+            "apis.naver.com/nng_main/v1/type/CHANNEL_POST/id/:id/comments"
+        );
+        // 알려진 camelCase 엔드포인트 낱말은 남긴다(그 밖의 대소문자 섞인 조각은 식별자로 본다)
+        assert_eq!(
+            normalize_path("comm-api.game.naver.com/nng_main/v1/user/getUserStatus"),
+            "comm-api.game.naver.com/nng_main/v1/user/getUserStatus"
+        );
+        assert_eq!(
+            normalize_path("comm-api.game.naver.com/nng_main/v1/user/getUserStatusX"),
+            "comm-api.game.naver.com/nng_main/v1/user/:id"
+        );
+        assert_eq!(
+            normalize_path("api.chzzk.naver.com/service/v1/emoticon-packs/hello"),
+            "api.chzzk.naver.com/service/v1/emoticon-packs/:id"
         );
         // 호스트가 없으면 파일 경로일 수 있다 — 사용자 이름이 남지 않게 통째로 가린다.
         assert_eq!(normalize_path("/Users/someone/Library/x.log"), ":path");

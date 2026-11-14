@@ -30,9 +30,9 @@ export function aboutHtml({ autoCheckHtml = '', updateText = '', searching = fal
     </header>`;
   const foot = searching ? '' : `<footer class="about-foot" data-g="about">
       <nav class="about-links" aria-label="CView 링크">
-        <a href="${ABOUT_LINKS.website}" data-ext title="cv.dododo.app">웹사이트</a>
-        <a href="${ABOUT_LINKS.releases}" data-ext title="GitHub 릴리스">변경 내역</a>
-        <a href="${ABOUT_LINKS.source}" data-ext title="GitHub 저장소 (GPL-3.0)">소스 코드</a>
+        <button type="button" class="about-link" data-ext-url="${ABOUT_LINKS.website}" title="브라우저에서 cv.dododo.app 열기">웹사이트</button>
+        <button type="button" class="about-link" data-ext-url="${ABOUT_LINKS.releases}" title="브라우저에서 GitHub 릴리스 열기">변경 내역</button>
+        <button type="button" class="about-link" data-ext-url="${ABOUT_LINKS.source}" title="브라우저에서 GitHub 저장소 열기 (GPL-3.0)">소스 코드</button>
       </nav>
       <span class="about-credit">개인이 만든 비공식 앱 · NAVER·치지직과 관련 없음</span>
     </footer>`;
@@ -75,12 +75,14 @@ export async function fillAbout(root) {
   if (notes) notes.textContent = `${info.version}의 새로운 기능`;
 }
 
-/** 정보 탭의 누름 — 처리했으면 true. 링크(a[data-ext])는 웹뷰가 아니라 기본 브라우저로 연다. */
+/**
+ * 정보 탭의 누름 — 처리했으면 true. 아래 띠 링크는 href 없는 단추다(data-ext-url) — <a href> 였을 때는 가운데 클릭(WebView2)·
+ * 문맥 메뉴 '링크 열기'(WKWebView)가 앱 안에서 그 주소를 열었다. 누르면 기본 브라우저로만 연다.
+ */
 export function onAboutClick(e) {
-  const link = e.target.closest('a[data-ext]');
+  const link = e.target.closest('button[data-ext-url]');
   if (link) {
-    e.preventDefault();
-    api.openExternal(link.href).catch((er) => toast(er.message || String(er)));
+    api.openExternal(link.dataset.extUrl).catch((er) => toast(er.message || String(er)));
     return true;
   }
   const b = e.target.closest('button[data-about]');
@@ -152,7 +154,8 @@ function showReport(text, { copyFailed = false } = {}) {
   actions.insertAdjacentHTML('afterbegin', '<button class="btn" data-report-copy>복사</button>');
   const area = scrim.querySelector('.report-text');
   if (copyFailed) { area.focus(); area.select(); }
-  actions.querySelector('[data-report-copy]').addEventListener('click', () => {
+  // 쓰기는 이 누름 처리 안에서 바로 시작한다(WebKit — UI 검사 SA06 이 동기 구간인지 잰다).
+  actions.querySelector('[data-report-copy]').addEventListener('click', function copyClicked() {
     copyText(Promise.resolve(text)).then(
       () => toast('진단 보고서를 복사했습니다 — 이슈에 붙여 넣어 주세요', 3500),
       () => { area.focus(); area.select(); toast(`복사하지 못했습니다 — ${kbd('⌘C')} 로 복사해 주세요`); },
@@ -169,6 +172,9 @@ async function showReleaseNotes() {
   const actions = scrim.querySelector('.sheet-actions');
   const closeBtn = actions.querySelector('[data-close]');
   let page = ABOUT_LINKS.releases;
+  let source = 'github';
+  // 단추 이름은 여는 곳에 맞춘다 — 노트를 자체 업데이트 서버(manifest)에서 받았으면 그 서버의 릴리스 페이지를 연다.
+  const pageButton = () => `<button class="btn" data-notes="page">${source === 'server' ? '업데이트 서버에서 보기' : 'GitHub에서 보기'}</button>`;
   // 누른 단추([다시 시도])를 지우면 초점이 문서로 빠져 Esc·Tab 이 시트에 닿지 않는다 — 그때는 시트로 옮긴다.
   const setButtons = (html) => {
     const old = [...actions.querySelectorAll('[data-notes]')];
@@ -184,16 +190,19 @@ async function showReleaseNotes() {
     try { r = await api.releaseNotes(); } catch (er) {
       if (!scrim.isConnected) return;
       body.innerHTML = `<p class="update-summary">릴리스 노트를 받지 못했습니다</p><p class="muted small">${esc(er.message || String(er))}</p>`;
-      setButtons('<button class="btn" data-notes="page">GitHub에서 보기</button><button class="btn" data-notes="retry">다시 시도</button>');
+      page = ABOUT_LINKS.releases;
+      source = 'github';
+      setButtons(`${pageButton()}<button class="btn" data-notes="retry">다시 시도</button>`);
       return;
     }
     if (!scrim.isConnected) return;
     page = r.pageUrl || ABOUT_LINKS.releases;
+    source = r.pageUrl && r.source === 'server' ? 'server' : 'github';
     const date = dateText(r.publishedAt);
     body.innerHTML = r.notes
       ? `${date ? `<p class="muted small">${esc(date)} 게시</p>` : ''}<pre class="update-notes release-notes" tabindex="0" aria-label="릴리스 노트">${esc(r.notes.trim())}</pre>`
       : '<p class="update-summary">이 버전의 릴리스 노트가 없습니다</p><p class="muted small">개발 빌드이거나 아직 게시하지 않은 버전입니다. 지난 버전의 변경 내역은 GitHub에서 볼 수 있습니다.</p>';
-    setButtons('<button class="btn" data-notes="page">GitHub에서 보기</button>');
+    setButtons(pageButton());
   };
   scrim.addEventListener('click', (e) => {
     const b = e.target.closest('[data-notes]');

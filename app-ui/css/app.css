@@ -2224,9 +2224,9 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
   background: var(--surface-base); border: 1px solid var(--border-subtle);
 }
 .about-links { display: flex; flex-wrap: wrap; gap: 4px 16px; }
-.about-links a { color: var(--primary-text); font-size: var(--fs-caption); font-weight: 600; text-decoration: none; border-radius: var(--radius-xs); }
-.about-links a:hover { text-decoration: underline; text-underline-offset: 3px; }
-.about-links a:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 2px; }
+.about-link { border: 0; background: none; padding: 0; color: var(--primary-text); font-size: var(--fs-caption); font-weight: 600; border-radius: var(--radius-xs); cursor: pointer; }
+.about-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.about-link:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 2px; }
 .about-credit { font-size: var(--fs-footnote); color: var(--text-tertiary); word-break: keep-all; }
 .notes-sheet .update-notes { max-height: min(52vh, 420px); }
 .report-sheet { display: flex; flex-direction: column; gap: 8px; }
