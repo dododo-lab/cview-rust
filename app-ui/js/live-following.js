@@ -257,8 +257,9 @@ export class LiveFollowingStrip {
       // 칸이 가만있는 포인터 아래에서 밀려나며(사이드바 펼침·방송 종료) 온 pointerout 은 합성이라 걸렀다 — 그 뒤 실제로 움직인 곳이
       // 칸·카드가 아니면 그때 떠난 것으로 본다(Chromium, 예전엔 카드가 남아 히어로를 가렸다). 구역 밖(사이드바)도 여기서 본다.
       if (this.ptrMoved && this.hoverKey && e.pointerType !== 'touch' && !this.isStripTarget(e.target)) this.leaveTile();
-      // 미룬 자리 바꿈 — 칸 메뉴가 닫힌 뒤 WebKit 은 pointerenter 없이 :hover 만 되돌려, 구역의 pointerleave 가 오지 않는다(checkStripMenu)
-      if (this.ptrMoved && this.reorderPending && !this.el.contains(e.target)) this.settle();
+      // 미룬 자리 바꿈 — 칸 메뉴가 닫힌 뒤 WebKit 은 pointerenter 없이 :hover 만 되돌려, 구역의 pointerleave 가 오지 않는다(checkStripMenu).
+      // 포인터가 가만있어도 스크롤 뒤 WebKit 이 같은 자리로 보내는 가짜 pointermove 도 센다 — settle 은 busy() 로 다시 확인한다.
+      if (this.reorderPending && !this.el.contains(e.target)) this.settle();
     };
     document.addEventListener('pointerdown', onDocPointer, { capture: true, passive: true });
     document.addEventListener('pointermove', onDocPointer, { capture: true, passive: true });
@@ -788,8 +789,13 @@ export class LiveFollowingStrip {
     const to = e.relatedTarget;
     if (to && this.el.contains(to)) return;
     if (!this.el.matches(':hover')) this.hidePeek();
-    // 마우스가 구역 위에 있어 카드는 두더라도, 떠난 초점의 열기 예약은 끝낸다 — 남으면 초점도 포인터도 없는 칸의 카드가 떴다.
-    else if (this.pendingFrom === 'focus') { clearTimeout(this.timers.show); this.pendingFrom = null; }
+    else {
+      // 마우스가 구역 위라도 그 칸·카드 위가 아니면(머리줄·정렬·빈틈·다른 칸) 떠난 초점이 연 카드는 함께 닫는다 — 남기면 포인터를
+      // 치워도 닫히지 않았다. 포인터 아래 칸의 마우스 예약은 남긴다.
+      if (this.peekKey && this.peekKey !== this.hoverKey && !this.peek.matches(':hover')) this.hidePeek({ keepPending: this.pendingFrom === 'hover' });
+      // 떠난 초점의 열기 예약도 끝낸다 — 남으면 초점도 포인터도 없는 칸의 카드가 떴다.
+      if (this.pendingFrom === 'focus') { clearTimeout(this.timers.show); this.pendingFrom = null; }
+    }
     // 키보드가 목록을 떠났다 — 미뤄 둔 자리 바꿈(마우스가 없다면)
     queueMicrotask(() => this.settle());
   }
@@ -841,9 +847,10 @@ export class LiveFollowingStrip {
   onPointerOut(e) {
     if (e.pointerType === 'touch') return;
     const to = e.relatedTarget;
-    // relatedTarget 이 없으면 포인터가 문서를 떠났다(펜을 들었다·가만있는 커서 위로 다른 창이 왔다) — 같은 자리라도 진짜 떠남이다.
-    // 스크롤·배치가 만든 합성 이벤트는 늘 문서 안의 relatedTarget 이 있다. 자리를 잊어 머묾 예약의 elementFromPoint 확인도 실패하게 한다.
-    if (to === null) { this.ptrX = NaN; this.ptrY = NaN; } else if (this.isSynthetic(e)) return;
+    // relatedTarget 이 없으면 포인터가 문서를 떠났다(펜을 들었다·가만있는 커서 위로 다른 창이 왔다) — 같은 자리라도 진짜 떠남이다
+    // (leaveTile 이 머묾 예약을 지우고 카드를 닫는다). 스크롤·배치가 만든 합성 이벤트는 늘 문서 안의 relatedTarget 이 있다.
+    // 마지막 자리는 그대로 둔다 — 지우면 커서가 움직이지 않고 돌아올 때의 같은 자리 pointermove 가 실제 움직임으로 보여 키보드 카드를 빼앗았다.
+    if (to !== null && this.isSynthetic(e)) return;
     const from = e.target.closest('.lf-item, .lf-peek');
     if (!from || (to instanceof Node && from.contains(to))) return;
     if (to instanceof Node && this.peek.contains(to)) return;
