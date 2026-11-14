@@ -64,7 +64,12 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 24px 60px rgba(0, 0, 0, 0.55);
-  --focus-ring: 0 0 0 3px var(--primary-ring);
+  /* 초점 고리 — 테두리(outline)를 못 쓰는 곳의 box-shadow 판. 다른 초점 테두리와 같은 2px 단색 --primary-text 라 다크·라이트 모두
+     뒤 바탕과 3:1 을 넘는다(예전 3px 반투명 --primary-ring 은 라이트에서 1.4~1.5:1 이었다). */
+  --focus-ring: 0 0 0 2px var(--primary-text);
+  /* 페이지 바탕의 초점 테두리색 — 여기(:root)서 값을 굳힌다. 히어로처럼 스스로 --primary-text 를 밝은 초록으로 바꾸는 요소도
+     테두리는 제 바깥 페이지 바탕에 그리니 이 값을 쓴다(라이트에서 밝은 초록은 1.1~1.3:1 이었다). */
+  --focus-page: var(--primary-text);
 
   --sp-xs: 4px;
   --sp-sm: 8px;
@@ -236,7 +241,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 /* 기본 버튼 초기화 — 어떤 버튼도 시스템 기본 모양(회색 면·볼록 테두리)으로 떨어지지 않게 */
 button { cursor: pointer; -webkit-appearance: none; appearance: none; border: 0; background: none; margin: 0; padding: 0; line-height: inherit; text-align: inherit; }
 button:disabled { cursor: default; opacity: 0.5; }
-button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+button:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 2px; }
 /* 글자 입력 기본 — 클래스별 규칙이 없으면 토큰 모양을 쓴다(:where 로 구체성 0) */
 :where(input:not([type]), input[type="text"], input[type="search"], input[type="password"], input[type="number"], input[type="url"], textarea) {
   -webkit-appearance: none; appearance: none; min-width: 0;
@@ -244,7 +249,9 @@ button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
   border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 6px 10px;
   transition: border-color .15s var(--ease-out), box-shadow .15s var(--ease-out);
 }
-:where(input:not([type]), input[type="text"], input[type="search"], input[type="password"], input[type="number"], input[type="url"], textarea):focus { outline: none; border-color: var(--primary); box-shadow: var(--focus-ring); }
+/* 글자 칸의 초점 표시는 테두리색 + 아래 "키보드 포커스 (DSN-06)"의 outline 하나 — 글자 칸은 클릭해도 :focus-visible 이라 늘 outline 이 선다.
+   예전엔 여기 box-shadow 고리까지 겹쳤다(반투명일 땐 옅은 번짐, 단색 2px 이 되자 outline 과 붙어 5px 띠). 설정·멀티채팅·시트 칸도 같다. */
+:where(input:not([type]), input[type="text"], input[type="search"], input[type="password"], input[type="number"], input[type="url"], textarea):focus { outline: none; border-color: var(--primary-text); }
 :where(input, textarea)::placeholder { color: var(--text-tertiary); }
 input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
 :where(input[type="range"]) { accent-color: var(--primary); }
@@ -344,7 +351,7 @@ a { color: var(--primary); }
   min-width: 20px; height: 18px; padding: 0 6px; border-radius: var(--radius-sm); display: grid; place-items: center;
   font-size: var(--fs-tiny); font-weight: 700; color: var(--on-primary); background: var(--primary);
 }
-.nav-item:focus-visible, .side-live:focus-visible, .quick-search:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.nav-item:focus-visible, .side-live:focus-visible, .quick-search:focus-visible { outline: 2px solid var(--primary-text); outline-offset: -2px; }
 
 /* 방송 중인 팔로잉 */
 .sidebar-live { display: flex; flex-direction: column; gap: 1px; min-height: 0; overflow-y: auto; scrollbar-width: none; }
@@ -392,7 +399,7 @@ a { color: var(--primary); }
   transition: background var(--dur-2, 0.15s) var(--ease-out, ease-out);
 }
 .update-pill-main:hover { background: var(--hover); }
-.update-pill-main:focus-visible, .update-pill-close:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.update-pill-main:focus-visible, .update-pill-close:focus-visible { outline: 2px solid var(--primary-text); outline-offset: -2px; }
 .update-pill-icon {
   position: relative; flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--radius-sm);
   color: var(--on-primary); background: var(--primary); box-shadow: 0 3px 10px var(--primary-glow);
@@ -583,14 +590,15 @@ a { color: var(--primary); }
 }
 .card { position: relative; cursor: pointer; border-radius: var(--radius-md); } /* 전환은 motion.css */
 .card:hover { transform: translateY(-2px); }
-.card:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.card:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 3px; }
 /* 카드를 여는 주 동작(cards.js cardOpenButton) — 카드 전체를 덮는 투명 단추. 마우스는 지나가게 두어 호버 미리보기·+·아바타가
    그대로 받고 클릭은 카드 위임(bindCardOpen)이 연다. 초점 고리는 단추가 아니라 카드에 그린다 — 예전 .card:focus-visible 과
    같은 모양이고, 히어로처럼 overflow: hidden 인 카드에서도 잘리지 않는다. 고리가 조여 드는 애니메이션·썸네일 재생 표시(motion.css)도
    같은 조건으로 켠다(애니메이션은 :where 로 예전과 같은 우선순위 — 풍부 모드 등장 애니메이션을 덮지 않는다). */
 .card-open { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; }
 .card-open:focus-visible { outline: none; animation: none; }
-:is(.card, .top-item):has(> .card-open:focus-visible) { outline: 2px solid var(--primary); outline-offset: 3px; }
+:is(.card, .top-item):has(> .card-open:focus-visible) { outline: 2px solid var(--primary-text); outline-offset: 3px; }
+.hero-main.card:is(:focus-visible, :has(> .card-open:focus-visible)) { outline-color: var(--focus-page); }   /* 히어로는 안쪽 글자용으로 --primary-text 를 바꿔 둔다 — 위 --focus-page */
 :where(.card, .top-item):has(> :where(.card-open):focus-visible) { animation: mo-focus-ring .24s var(--ease-out); }
 .card:has(> .card-open:focus-visible) .thumb::after { opacity: 1; }
 .card:has(> .card-open:focus-visible) .thumb::before { opacity: .95; scale: 1; }
@@ -679,7 +687,7 @@ a { color: var(--primary); }
   background: var(--surface-base); border: 1px solid var(--border); border-radius: var(--radius-md);
   height: 40px; max-width: 560px; flex: 1;
 }
-.search-field:focus-within { border-color: var(--primary); }
+.search-field:focus-within { border-color: var(--primary-text); }
 .search-field input { flex: 1; border: 0; background: transparent; outline: none; font-size: var(--fs-body); }
 .search-field svg { width: 16px; height: 16px; flex: none; color: var(--text-tertiary); }
 
@@ -779,7 +787,7 @@ select.select {
   flex: 1; height: 36px; border-radius: var(--radius-sm); border: 0.1px solid var(--border);
   background: var(--surface-elevated); padding: 0 var(--sp-md); outline: none;
 }
-.chat-input input:focus { border-color: var(--primary); }
+.chat-input input:focus { border-color: var(--primary-text); }
 .chat-input input:disabled { opacity: 0.6; }
 
 /* ── 토스트 ───────────────────────────────── */
@@ -1095,7 +1103,7 @@ html, body {
     radial-gradient(1100px 420px at 15% -12%, var(--primary-dim), transparent 62%),
     var(--deck);
 }
-:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; } /* 전역 기본 초점 링 — 개별 규칙이 없는 요소도 키보드 초점이 보이게(예전엔 outline: none 으로 지웠다) */
+:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 2px; } /* 전역 기본 초점 링 — 개별 규칙이 없는 요소도 키보드 초점이 보이게(예전엔 outline: none 으로 지웠다) */
 .btn, .icon-btn, .chip, .seg, .link-btn, .nav-item, .queue-item, .recent-item, select.select {
   transition: background 0.16s var(--ease-out), color 0.16s var(--ease-out), border-color 0.16s var(--ease-out),
     box-shadow 0.16s var(--ease-out), transform 0.16s var(--ease-out);
@@ -1143,7 +1151,7 @@ html, body {
 .channel-row:hover { background: var(--surface-elevated); border-color: var(--border); }
 
 .search-field { border-radius: var(--radius-md); border-color: var(--border-subtle); transition: border-color 0.16s, box-shadow 0.16s; }
-.search-field:focus-within { border-color: var(--primary); box-shadow: var(--focus-ring); }
+.search-field:focus-within { border-color: var(--primary-text); box-shadow: var(--focus-ring); }
 .chat-input input { border-radius: var(--radius-md); border-color: var(--border-subtle); transition: border-color 0.16s, box-shadow 0.16s; }
 .chat-input input:focus { box-shadow: none; }
 select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color: var(--border-subtle); }
@@ -1478,7 +1486,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .ci-about { max-height: 16em; overflow: auto; overscroll-behavior: contain; }
 .ci-link { color: var(--primary-text); text-decoration: underline; text-underline-offset: 2px; }
 .ci-link:hover { text-decoration-thickness: 2px; }
-.ci-link:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: var(--radius-xxs); }
+.ci-link:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 2px; border-radius: var(--radius-xxs); }
 .ci-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .ci-chip {
   display: inline-flex; align-items: center; padding: 2px 9px; border-radius: var(--radius-pill); line-height: 20px;
@@ -1555,7 +1563,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
   background: var(--surface-base); color: var(--text-primary); font: inherit; resize: vertical; outline: none;
 }
 .sheet textarea { min-height: 140px; }
-.sheet textarea:focus, .sheet input:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
+.sheet textarea:focus, .sheet input:focus { border-color: var(--primary-text); }
 .sheet-actions { display: flex; justify-content: flex-end; gap: var(--sp-sm); }
 
 /* ══ 다시보기·클립 플레이어 (media.js) ═══════════════════════ */
@@ -1898,7 +1906,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 /* 설정 가져오기 — 여러 줄 JSON 을 붙여 넣는다(예전 한 줄 입력칸은 붙인 내용을 볼 수 없었다) */
 .import-form { align-items: flex-end; }
 .import-form textarea { flex: 1; min-height: 84px; resize: vertical; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--surface-base); color: var(--text-primary); padding: 8px 10px; outline: none; font: var(--fs-footnote)/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
-.import-form textarea:focus-visible { border-color: var(--primary); }
+.import-form textarea:focus-visible { border-color: var(--primary-text); }
 
 /* ══ 탐색 (pages.js·categories.js·palette.js) ═════════════════ */
 .list-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-sm); margin-bottom: var(--sp-lg); }
@@ -2052,7 +2060,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .settings-top { display: flex; align-items: center; gap: var(--sp-md); flex-wrap: wrap; margin-bottom: var(--sp-lg); max-width: 1320px; }
 .settings-tabs { margin: 0; flex: 0 1 auto; }
 .settings-search { width: 220px; height: var(--control-md); border-radius: var(--radius-ms); border: 1px solid var(--border-subtle); background: var(--surface-base); padding: 0 12px; outline: none; }
-.settings-search:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
+.settings-search:focus { border-color: var(--primary-text); }
 .settings-search-empty { padding: 48px 16px; } /* 모양은 .empty */
 /* 넓은 창 — 예전엔 860px 한 단에 왼쪽으로 쏠려 오른쪽이 비었다. 카드 두 단(단 최소 420px)이 들어가면 두 단으로 흘린다(위→아래, 왼쪽 단 먼저). */
 .settings-groups { columns: 2 420px; column-gap: var(--sp-lg); max-width: 1320px; }
@@ -2063,7 +2071,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .num-input, .text-input { height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--surface-base); padding: 0 10px; outline: none; }
 .num-input { width: 96px; text-align: right; }
 .text-input { width: 300px; max-width: 50%; }
-.num-input:focus, .text-input:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
+.num-input:focus, .text-input:focus { border-color: var(--primary-text); }
 
 /* ══ 설정 효과 (prefs-effects.js) ═════════════════════════════ */
 .stream-alerts { left: calc(var(--alert-x, 0.5) * 100%); top: calc(var(--alert-y, 0.08) * 100%); transform: translateX(-50%) scale(var(--alert-scale, 1)); transform-origin: top center; }
@@ -2306,8 +2314,8 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 /* 맨 위 줄은 막대가 목록 위로 잘리지 않게 줄 안쪽으로 */
 .chat-list > .chat-line:first-child > .chat-actions { transform: none; }
 /* 키보드로 고른 줄 — 초점 고리와 같은 색의 테두리 */
-.chat-list:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--primary); }
-.chat-line.kb-cur { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: var(--radius-ms); }
+.chat-list:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--primary-text); }
+.chat-line.kb-cur { outline: 2px solid var(--primary-text); outline-offset: -2px; border-radius: var(--radius-ms); }
 .ctx-item:focus-visible { outline: none; background: var(--primary); color: var(--on-primary); }
 .ctx-item.danger:focus-visible { background: var(--danger-fill); color: var(--on-danger); }
 
@@ -2317,7 +2325,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
   border-radius: var(--radius-ms); background: var(--surface-elevated); border: 1px solid var(--border-subtle);
 }
 .chat-search[hidden] { display: none; }
-.chat-search:focus-within { border-color: var(--primary); }
+.chat-search:focus-within { border-color: var(--primary-text); }
 .chat-search .cs-icon { display: grid; color: var(--text-tertiary); }
 .chat-search .cs-icon svg { width: 15px; height: 15px; }
 .chat-search .cs-input { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; color: var(--text-primary); outline: none; font-size: var(--fs-footnote); }
@@ -2409,7 +2417,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .page-multichat { display: flex; flex-direction: column; overflow: hidden; }
 .mc-header { flex: none; }
 .mc-search { width: 200px; height: var(--control-md); border-radius: var(--radius-ms); border: 1px solid var(--border-subtle); background: var(--surface-base); padding: 0 10px; outline: none; }
-.mc-search:focus { border-color: var(--primary); box-shadow: var(--focus-ring); }
+.mc-search:focus { border-color: var(--primary-text); }
 .mc-overview { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: none; padding: 2px 0 10px; }
 .mc-overview:empty { display: none; }
 .mc-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px; border-radius: var(--radius-pill); border: 1px solid var(--border-subtle); background: var(--surface-base); flex: none; font-size: var(--fs-footnote); box-shadow: inset 3px 0 0 var(--mc-color); }
@@ -2775,13 +2783,23 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .channel-hero[style*="--tone"] .channel-hero-main .avatar { box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 70%, transparent); }
 
 /* ── 키보드 포커스 (DSN-06) ───────── */
+/* 초점 테두리색은 앱 어디서나 --primary-text — 라이트의 --primary(#00d38a, 채움색)는 밝은 바탕에서 1.5~1.9:1 이라 3:1 이 안 됐다.
+   다크는 두 값이 같다(#00ffa3). 영상 위 막대·히어로처럼 늘 어두운 곳은 그 자리에서 --primary-text 를 밝은 초록으로 다시 정해 둬서 따라간다. */
 .btn:focus-visible, .icon-btn:focus-visible, .chip:focus-visible, .seg:focus-visible, .link-btn:focus-visible,
 .side-quick-btn:focus-visible, .discover-item:focus-visible, .history-row:focus-visible, .dl-row button:focus-visible,
 input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:focus-visible {
-  outline: 2px solid var(--primary); outline-offset: 2px;
+  outline: 2px solid var(--primary-text); outline-offset: 2px;
 }
 .dense-row:focus-visible { outline-offset: -2px; }
-.dense-row:has(> .card-open:focus-visible) { outline: 2px solid var(--primary); outline-offset: -2px; } /* 주 동작 단추에 초점 — 위 .card 규칙보다 뒤에 */
+.dense-row:has(> .card-open:focus-visible) { outline: 2px solid var(--primary-text); outline-offset: -2px; } /* 주 동작 단추에 초점 — 위 .card 규칙보다 뒤에 */
+/* 고대비(Windows 고대비 테마 — WebView2 forced-colors) — 엔진이 box-shadow 를 지우고 바탕색을 시스템 색으로 바꿔,
+   초점을 고리(--focus-ring 등 box-shadow)나 바탕 채움으로만 보이던 곳은 초점이 사라졌다. 그 자리에 시스템 강조색 테두리를 둔다. */
+@media (forced-colors: active) {
+  :is(.account-trigger, .lib-ov-title, .up-item, .up-btn, .category-pin, .chart):focus-visible,
+  .ml-toolbar .ml-ratio input[type="range"]:focus-visible, .toggle input:focus-visible + span, .strip-item:focus-visible .strip-ring,
+  :is(.search-field, .ml-addbar-search):focus-within { outline: 2px solid Highlight; outline-offset: 2px; }
+  :is(.chat-list, .chat-splitter, .ctx-item, .ap-item):focus-visible { outline: 2px solid Highlight; outline-offset: -2px; }
+}
 
 /* ── 스플래시 (SYS-10)·환영 안내 (SYS-11) ───────── */
 .splash { position: fixed; inset: 0; z-index: var(--z-splash);   /* .toast-stack(200)보다 위 */ display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: var(--background); transition: opacity .32s var(--ease-out); }
@@ -2988,7 +3006,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
    초점 표시는 감싸는 필드의 링 하나로 충분하므로 안쪽 입력의 외곽선을 걷는다 */
 .search-field input:focus, .palette-input input:focus,
 .search-field input:focus-visible, .palette-input input:focus-visible { outline: none; box-shadow: none; }
-.search-field:focus-within { border-color: var(--primary); box-shadow: var(--focus-ring); }
+.search-field:focus-within { border-color: var(--primary-text); box-shadow: var(--focus-ring); }
 
 /* ══ 닉네임 색 — 원본 ChatNicknamePalette(역할색과 겹치지 않는 9색, 다크·라이트 각 4.5:1 이상) ══ */
 :root { --nc-0: #93cc3d; --nc-1: #c8bfa0; --nc-2: #ff9f0a; --nc-3: #bf5fff; --nc-4: #ff5fa0; --nc-5: #00e5cc; --nc-6: #ffd60a; --nc-7: #ff6b6b; --nc-8: #64d2ff; }
@@ -3223,7 +3241,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .wc-btn:active { background: color-mix(in srgb, var(--text-primary) 14%, transparent); }
 .wc-btn.wc-close:hover { background: var(--danger-fill); color: var(--on-danger); }
 .wc-btn.wc-close:active { background: #b3271a; color: #fff; }
-.wc-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.wc-btn:focus-visible { outline: 2px solid var(--primary-text); outline-offset: -2px; }
 .wc-sep { width: 1px; margin: 9px 2px; background: var(--border-subtle); }
 :root[data-platform="windows"] .sidebar { --sb-rail: 51px; } /* 72 − 10 ×2 − 1 */
 :root[data-platform="windows"] .sidebar.collapsed { width: 72px; padding-left: 10px; padding-right: 10px; } /* 신호등이 없으니 접힌 레일을 좁게 */
@@ -3360,7 +3378,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
   background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
 .dp-item:hover { background: var(--hover); }
-.dp-item:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.dp-item:focus-visible { outline: 2px solid var(--primary-text); outline-offset: -2px; }
 .dp-item.gone { cursor: default; }
 .dp-icon { flex: none; width: 24px; height: 24px; margin-top: 1px; border-radius: 50%; display: grid; place-items: center; color: var(--ev); background: color-mix(in srgb, var(--ev) 18%, transparent); }
 .dp-icon svg { width: 13px; height: 13px; }
