@@ -2205,6 +2205,35 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .settings-group :is(h2, h3) { display: flex; align-items: center; gap: 8px; }
 .adv-toggle { margin-left: auto; font-size: var(--fs-footnote); padding: 0 var(--sp-lg) 0 0; }
 .setting[hidden], .settings-group[hidden] { display: none; }
+/* 설정 › 정보 (settings-about.js) — 한 단. 머리말(아이콘·이름·버전·소개)은 가운데, 카드는 다른 탭과 같은 .settings-group,
+   맨 아래는 링크 띠. 단추가 여럿인 줄(업데이트 · 진단 보고서)은 좁으면 단추끼리 다음 줄로 넘긴다. */
+.settings-groups.about-tab { columns: auto; max-width: 720px; }
+.about-hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; padding: var(--sp-sm) var(--sp-lg) var(--sp-xl); }
+.about-icon { margin-bottom: var(--sp-sm); }
+.about-name { margin: 0; font-size: var(--fs-headline); font-weight: 700; color: var(--text-primary); letter-spacing: -0.01em; }
+.about-version { margin: 0; font-size: var(--fs-caption); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.about-tagline { margin: 0; font-size: var(--fs-footnote); color: var(--text-secondary); word-break: keep-all; }
+.settings-groups .setting-label { min-width: 0; }
+.setting-actions { flex-wrap: wrap; justify-content: flex-end; }
+.update-row .update-version { font-variant-numeric: tabular-nums; }
+.about-foot {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px var(--sp-md);
+  margin-bottom: var(--sp-xl); padding: 12px var(--sp-lg); border-radius: var(--radius-xl);
+  background: var(--surface-base); border: 1px solid var(--border-subtle);
+}
+.about-links { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.about-links a { color: var(--primary-text); font-size: var(--fs-caption); font-weight: 600; text-decoration: none; border-radius: var(--radius-xs); }
+.about-links a:hover { text-decoration: underline; text-underline-offset: 3px; }
+.about-links a:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 2px; }
+.about-credit { font-size: var(--fs-footnote); color: var(--text-tertiary); word-break: keep-all; }
+.notes-sheet .update-notes { max-height: min(52vh, 420px); }
+.report-sheet { display: flex; flex-direction: column; gap: 8px; }
+.report-sheet p.report-note { font-size: var(--fs-footnote); word-break: keep-all; }
+.sheet .report-text {
+  width: 100%; min-height: 240px; max-height: 56vh; resize: vertical; padding: 10px 12px; white-space: pre; overflow: auto;
+  border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--surface-elevated); color: var(--text-primary);
+  font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
 .num-input, .text-input { height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--surface-base); padding: 0 10px; outline: none; }
 .num-input { width: 96px; text-align: right; }
 .text-input { width: 300px; max-width: 50%; }

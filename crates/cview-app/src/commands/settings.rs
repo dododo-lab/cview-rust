@@ -82,7 +82,7 @@ fn to_value<T: Serialize>(v: &T) -> Value {
     serde_json::to_value(v).unwrap_or(Value::Null)
 }
 
-fn snapshot(services: &AppServices) -> SettingsDto {
+pub(crate) fn snapshot(services: &AppServices) -> SettingsDto {
     let s = &services.settings;
     SettingsDto {
         player: to_value(&s.player()),
@@ -456,6 +456,16 @@ pub struct AppInfoDto {
     pub arch: String,
 }
 
+/// 빌드 번호(CFBundleVersion) — tauri.conf.json bundle.macOS.bundleVersion, 배포 빌드마다 +1. 없으면 빈 글자.
+pub(crate) fn build_number<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> String {
+    app.config()
+        .bundle
+        .macos
+        .bundle_version
+        .clone()
+        .unwrap_or_default()
+}
+
 #[tauri::command]
 pub async fn app_info(app: tauri::AppHandle) -> CmdResult<AppInfoDto> {
     use tauri::Manager;
@@ -463,14 +473,7 @@ pub async fn app_info(app: tauri::AppHandle) -> CmdResult<AppInfoDto> {
     Ok(AppInfoDto {
         name: info.name.clone(),
         version: info.version.to_string(),
-        // 빌드 번호(CFBundleVersion) — tauri.conf.json bundle.macOS.bundleVersion, 배포 빌드마다 +1.
-        build: app
-            .config()
-            .bundle
-            .macos
-            .bundle_version
-            .clone()
-            .unwrap_or_default(),
+        build: build_number(&app),
         data_dir: app
             .path()
             .app_data_dir()

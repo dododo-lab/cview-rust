@@ -350,6 +350,74 @@ pub async fn update_check(app: AppHandle) -> CmdResult<UpdateCheckDto> {
     update_dto(fetch_current_release().await?, current)
 }
 
+/// 저장소의 릴리스 목록 — 버전별 페이지는 `…/tag/v<버전>`.
+const RELEASES_PAGE: &str = "https://github.com/dododo-lab/cview-rust/releases";
+
+/// 이 버전의 릴리스 노트를 받을 곳 — GitHub 릴리스에 붙인 그 버전의 피드(`latest.json`), 안 되면 자체 서버의
+/// 버전별 manifest. 둘 다 업데이트 피드와 같은 모양(`body` 가 노트)이다. 버전 글자는 숫자·영문·`.`·`-` 만.
+fn release_notes_urls(version: &str) -> Result<Vec<url::Url>, CommandError> {
+    if version.is_empty()
+        || !version
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+    {
+        return Err(CommandError("버전 형식이 올바르지 않습니다".into()));
+    }
+    [
+        format!("{RELEASES_PAGE}/download/v{version}/latest.json"),
+        format!("https://cv.dododo.app/releases/{version}/manifest.json"),
+    ]
+    .iter()
+    .map(|u| validated_update_url(u))
+    .collect()
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseNotesDto {
+    pub version: String,
+    /// 이 버전의 릴리스 노트. 게시되지 않은 버전(개발 빌드)이면 `None`.
+    pub notes: Option<String>,
+    pub published_at: Option<String>,
+    /// "GitHub에서 보기" — 노트를 찾았으면 그 릴리스 페이지, 못 찾았으면 릴리스 목록.
+    pub page_url: String,
+}
+
+/// 설정 › 정보 › "이 버전의 새로운 기능" — 지금 실행 중인 버전의 릴리스 노트(GitHub, 안 되면 자체 서버).
+/// 둘 다 연결에 실패하면 오류, 연결은 됐는데 그 버전이 없으면 노트 없이 돌려준다.
+#[tauri::command]
+pub async fn release_notes(app: AppHandle) -> CmdResult<ReleaseNotesDto> {
+    let version = app.package_info().version.to_string();
+    let mut failure = None;
+    let mut reached = false;
+    for url in release_notes_urls(&version)? {
+        match fetch_release(url).await {
+            Ok(Some(release)) if release.version_string() == version => {
+                return Ok(ReleaseNotesDto {
+                    page_url: release
+                        .html_url
+                        .map(|u| u.to_string())
+                        .unwrap_or_else(|| format!("{RELEASES_PAGE}/tag/v{version}")),
+                    notes: release.body.filter(|b| !b.trim().is_empty()),
+                    published_at: release.published_at.map(|d| d.to_rfc3339()),
+                    version,
+                });
+            }
+            Ok(_) => reached = true,
+            Err(e) => failure = Some(e),
+        }
+    }
+    match failure {
+        Some(e) if !reached => Err(e),
+        _ => Ok(ReleaseNotesDto {
+            version,
+            notes: None,
+            published_at: None,
+            page_url: RELEASES_PAGE.into(),
+        }),
+    }
+}
+
 /// 피드를 받는다. 공개된 릴리스가 없으면(404) `None`.
 pub(crate) async fn fetch_release(url: url::Url) -> CmdResult<Option<GitHubRelease>> {
     let client = reqwest::Client::builder()
@@ -547,6 +615,36 @@ mod tests {
             "invalid",
         ] {
             assert!(update_feed_urls(Some(bad), Some(embedded)).is_err());
+        }
+    }
+
+    #[test]
+    fn release_notes_sources() {
+        let urls: Vec<String> = release_notes_urls("0.1.103")
+            .unwrap()
+            .iter()
+            .map(|u| u.to_string())
+            .collect();
+        assert_eq!(
+            urls,
+            [
+                "https://github.com/dododo-lab/cview-rust/releases/download/v0.1.103/latest.json",
+                "https://cv.dododo.app/releases/0.1.103/manifest.json",
+            ]
+        );
+        for bad in ["", "../0.1.0", "0.1.0/../../x", "0.1.0?x=1", "0.1 0"] {
+            assert!(release_notes_urls(bad).is_err(), "{bad}");
+        }
+    }
+
+    /// 실제 버전별 노트(인터넷 연결 필요) — `cargo test -p cview-app -- --ignored live_release_notes`.
+    #[tokio::test]
+    #[ignore]
+    async fn live_release_notes() {
+        for url in release_notes_urls("0.1.103").unwrap() {
+            let release = fetch_release(url.clone()).await.unwrap().expect("release");
+            assert_eq!(release.version_string(), "0.1.103", "{url}");
+            assert!(release.body.is_some_and(|b| b.contains("0.1.103")), "{url}");
         }
     }
 

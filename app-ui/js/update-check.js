@@ -1,4 +1,4 @@
-// 업데이트 확인 — 앱 메뉴 "업데이트 확인…" 시트와 설정 › 앱 줄이 같이 쓴다.
+// 업데이트 확인 — 앱 메뉴 "업데이트 확인…" 시트와 설정 › 정보 › 업데이트 줄이 같이 쓴다.
 // 피드(GitHub 릴리스의 latest.json, 안 되면 자체 HTTPS 서버. CVIEW_UPDATE_URL 로 바꿀 수 있음)는 백엔드 `update_check` 가 고른다.
 // 설치는 백엔드 `update_install` — 받기·SHA-256·서명 확인·교체·재실행까지 하고 앱이 끝난다.
 import { api, listen } from './api.js';
@@ -12,12 +12,18 @@ export function versionText(info) {
   return info.build && info.build !== '0' ? `${info.version} (빌드 ${info.build})` : info.version;
 }
 
-/** 지금 앱 버전("0.1.20 (빌드 20)"). 앱 밖이면 null. */
-export async function currentVersionText() {
+/** 앱 정보({ version, build, os, arch, dataDir }) — 한 번 받아 둔다. 앱 밖이면 null. */
+export async function currentAppInfo() {
   if (!appInfo) {
     try { appInfo = await api.appInfo(); } catch { return null; }
   }
-  return versionText(appInfo);
+  return appInfo;
+}
+
+/** 지금 앱 버전("0.1.20 (빌드 20)"). 앱 밖이면 null. */
+export async function currentVersionText() {
+  const info = await currentAppInfo();
+  return info ? versionText(info) : null;
 }
 
 export function lastUpdateResult() { return last; }
@@ -53,7 +59,7 @@ function sizeText(bytes) {
   return mb >= 1 ? `${mb.toFixed(1)}MB` : `${Math.max(1, Math.round(bytes / 1024))}KB`;
 }
 
-function dateText(iso) {
+export function dateText(iso) {
   const d = iso ? new Date(iso) : null;
   return d && !Number.isNaN(d.getTime()) ? d.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric' }) : '';
 }

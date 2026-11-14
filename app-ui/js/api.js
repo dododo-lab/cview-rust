@@ -165,6 +165,10 @@ export const api = {
   imageCacheClear: () => invoke('image_cache_clear'),
   updateCheck: () => invoke('update_check'),
   updateInstall: () => invoke('update_install'),
+  /** 지금 버전의 릴리스 노트 — { version, notes, publishedAt, pageUrl } (설정 › 정보). */
+  releaseNotes: () => invoke('release_notes'),
+  /** 이슈에 붙일 진단 보고서 글(개인 정보 없음) — 설정 › 정보 › 보고서 복사. */
+  diagnosticReport: () => invoke('diagnostic_report'),
   windowOpen: (kind, params) => invoke('window_open', { kind, params: params || null }),
   windowCloseSelf: () => invoke('window_close_self'),
   windowMenuPopup: (x, y) => invoke('window_menu_popup', { x, y }),
