@@ -43,17 +43,25 @@ const TILE_GAP = 8;
 const NAV_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'Tab', 'Enter', ' ', 'ContextMenu', 'F10']);
 /**
  * 카드보다 위에 떠서 제 Esc 를 받는 것들 — app.js escapeTaken 의 ESC_POPUPS·ESC_LAYERS 와 계정·사용자 말풍선, 메뉴·대화상자 역할 전반.
- * 숨었거나(hidden·숨은 화면 안) 닫히는 중인 것은 escTakenAbove 가 거른다.
+ * 숨었거나(자신·조상의 hidden·inert, 숨은 화면 안) 닫히는 중인(.exit-ghost·.leaving 조상) 것은 escTakenAbove 가 거른다.
  */
 const ESC_ABOVE = '.ctx-menu, .design-menu, .account-pop, .user-pop, .notify-pop, .sheet-scrim, .palette-scrim, '
   + '.quality-menu, .player-panel, .emoji-picker, .chat-tray, .dp-panel, .chat-autocomplete, .ml-pane-menu, .ml-more-menu, '
   + '[role="menu"], [role="dialog"], [role="alertdialog"], [role="listbox"], [aria-modal="true"]';
 
+/**
+ * 제 안에 초점이 있을 때만 Esc 를 받는 팝업 — 보이기만 해서는 카드의 Esc 를 넘기지 않는다. 마우스로 연 계정 메뉴·알림 설정 말풍선은
+ * 닫을 Esc 처리가 없어, 넘기면 카드도 메뉴도 Esc 로 닫히지 않았다.
+ */
+const ESC_FOCUS_ONLY = '.account-pop, .notify-pop';
+/** 숨었거나 닫히는 중인 팝업의 조상 표시 — hideWithExit 의 .exit-ghost 사본·dismiss 의 .leaving 시트는 바깥 상자에만 붙는다. */
+const ESC_GONE = '[hidden], [inert], .exit-ghost, .leaving';
+
 /** 이번 Esc 를 카드 대신 위에 뜬 다른 팝업이 받아야 하나 — 초점이 그 안에 있거나, 보이는 것이 하나라도 있다. */
 function escTakenAbove(target, own) {
   if (target instanceof Element && !own.contains(target) && target.closest(ESC_ABOVE)) return true;
   for (const el of document.querySelectorAll(ESC_ABOVE)) {
-    if (own.contains(el) || el.hidden || el.classList.contains('exit-ghost') || el.classList.contains('leaving')) continue;
+    if (own.contains(el) || el.matches(ESC_FOCUS_ONLY) || el.closest(ESC_GONE)) continue;
     if (el.getClientRects().length) return true; // 그려져 있다(display: none 인 조상 아래가 아니다)
   }
   return false;
@@ -197,6 +205,9 @@ export class LiveFollowingStrip {
     this.ptrY = NaN;
     this.ptrMoved = false;
     this.selfFocus = false; // 이 구역이 스크립트로 옮기는 초점 — 입력 방식을 바꾸지 않는다
+    this.navKey = false; // 마지막 키가 탐색 키였나(문서 전체) — 들어온 초점의 :focus-visible 을 믿을지
+    this.stripMenu = null; // 칸에서 연 카드 메뉴(.ctx-menu) — 떠 있는 동안은 바쁘다(watchStripMenu)
+    this.menuWait = false;
     this.uid = `lf-${Math.random().toString(36).slice(2, 8)}`;
     this.build();
   }
@@ -236,16 +247,26 @@ export class LiveFollowingStrip {
     el.addEventListener('pointerover', (e) => this.onPointerOver(e));
     el.addEventListener('pointerout', (e) => this.onPointerOut(e));
     el.addEventListener('pointermove', (e) => this.onPointerMove(e), { passive: true });
-    // 누름·실제 움직임은 문서 전체에서 본다 — 구역 밖을 누른 것도 마우스로 돌아간 것이고, 포인터가 구역 밖에 있다가 스크롤로
-    // 구역이 그 아래로 온 것도 합성 이벤트로 가려야 한다. 리스너 둘이 숫자 몇 개만 적는다.
+    // 누름·실제 움직임·키는 문서 전체에서 본다 — 구역 밖을 누른 것도 마우스로 돌아간 것이고, 포인터가 구역 밖에 있다가 스크롤로
+    // 구역이 그 아래로 온 것도 합성 이벤트로 가려야 한다. 리스너들은 값 몇 개만 적는다.
     const onDocPointer = (e) => {
-      if (e.type === 'pointerdown') { this.input = 'pointer'; return; }
+      if (e.type === 'pointerdown') { this.setInput('pointer'); this.navKey = false; return; }
       this.ptrMoved = e.clientX !== this.ptrX || e.clientY !== this.ptrY;
       this.ptrX = e.clientX;
       this.ptrY = e.clientY;
+      // 칸이 가만있는 포인터 아래에서 밀려나며(사이드바 펼침·방송 종료) 온 pointerout 은 합성이라 걸렀다 — 그 뒤 실제로 움직인 곳이
+      // 칸·카드가 아니면 그때 떠난 것으로 본다(Chromium, 예전엔 카드가 남아 히어로를 가렸다). 구역 밖(사이드바)도 여기서 본다.
+      if (this.ptrMoved && this.hoverKey && e.pointerType !== 'touch' && !this.isStripTarget(e.target)) this.leaveTile();
     };
     document.addEventListener('pointerdown', onDocPointer, { capture: true, passive: true });
     document.addEventListener('pointermove', onDocPointer, { capture: true, passive: true });
+    // 마지막 키 — 다른 곳(카드 메뉴·팔레트·시트)이 Esc 로 닫히며 초점을 돌려줄 때 Chromium 은 그 초점도 :focus-visible 로 친다.
+    // 탐색 키 다음에 들어온 초점만 키보드로 센다(밖에서 Tab 으로 들어오는 것은 Tab 이 탐색 키라 그대로 센다).
+    document.addEventListener('keydown', (e) => {
+      this.navKey = NAV_KEYS.has(e.key) && !e.metaKey && !e.ctrlKey && !e.altKey;
+    }, { capture: true, passive: true });
+    // 칸에서 연 카드 메뉴(우클릭·Shift+F10)가 떠 있는 동안은 바쁘다 — watchStripMenu
+    el.addEventListener('contextmenu', (e) => { if (e.target.closest && e.target.closest('.lf-item')) this.watchStripMenu(); });
     // 엔진에 따라 pointerleave 를 보내는 순간 :hover 가 아직 남아 있다 — 한 틱 뒤에 본다.
     el.addEventListener('pointerleave', () => setTimeout(() => this.settle(), 0));
     // 칸 수는 격자 폭으로 정한다 — 창·사이드바 폭이 바뀌면 접힌 줄 수에 맞춰 다시 숨긴다(다시 그리지 않는다).
@@ -338,6 +359,7 @@ export class LiveFollowingStrip {
    */
   busy() {
     if (!this.el.isConnected || this.el.closest('[hidden]')) return false;
+    if (this.stripMenu && this.stripMenu.isConnected) return true; // 칸에서 연 카드 메뉴 — 닫히면 settle
     if (this.el.matches(':hover')) return true;
     const a = document.activeElement;
     return Boolean(a && this.el.contains(a) && this.input === 'keyboard');
@@ -347,6 +369,47 @@ export class LiveFollowingStrip {
   onHidden() {
     this.hidePeek();
     this.hoverKey = null;
+  }
+
+  /** 마지막 입력 방식 — 구역에도 적어 둔다(data-input). WebKit 은 마우스로 누른 뒤 화살표로 옮긴 스크립트 초점을 :focus-visible 로 치지 않아
+   *  초점 테두리가 없었다 — app.css 가 키보드일 때 :focus 에도 테두리를 그린다. */
+  setInput(mode) {
+    if (this.input === mode) return;
+    this.input = mode;
+    this.el.dataset.input = mode;
+  }
+
+  /**
+   * 칸에서 연 카드 메뉴(app.js installCardMenu → chat.js showMenu, body 에 붙는다)가 떠 있는 동안은 바쁘다. 초점·포인터가 메뉴로 옮겨 가
+   * 구역을 떠난 것처럼 보여, 미뤄 둔 자리 바꿈이 열린 메뉴 아래에서 일어났다 — 연 칸이 '+N 더 보기' 뒤로 숨고, Esc 로 닫으면 숨은 칸으로
+   * 초점을 돌려주지 못해 body 로 떨어졌다. 메뉴는 즐겨찾기 목록을 받은 뒤 붙으니 잠시 기다리고, 닫히면 미룬 자리 바꿈을 한다.
+   */
+  watchStripMenu() {
+    this.menuWait = true;
+    clearTimeout(this.menuWaitTimer);
+    this.menuWaitTimer = setTimeout(() => { this.menuWait = false; this.checkStripMenu(); }, 2000); // 끝내 뜨지 않으면
+    if (this.menuObs) return;
+    this.menuObs = new MutationObserver((recs) => {
+      for (const r of recs) {
+        for (const n of r.addedNodes) {
+          if (this.menuWait && n.nodeType === 1 && n.classList.contains('ctx-menu')) {
+            this.stripMenu = n;
+            this.menuWait = false;
+            clearTimeout(this.menuWaitTimer);
+          }
+        }
+      }
+      this.checkStripMenu();
+    });
+    this.menuObs.observe(document.body, { childList: true });
+  }
+
+  checkStripMenu() {
+    if (this.stripMenu && !this.stripMenu.isConnected) this.stripMenu = null;
+    if (this.stripMenu || this.menuWait || !this.menuObs) return;
+    this.menuObs.disconnect();
+    this.menuObs = null;
+    this.settle(); // 메뉴가 닫혔다 — Esc·Tab 으로 닫았으면 초점은 이미 칸에 돌아왔다(chat.js close(true))
   }
 
   render({ force = false } = {}) {
@@ -363,6 +426,8 @@ export class LiveFollowingStrip {
     this.reorderPending = order.join('\n') !== want.join('\n');
 
     const focused = this.grid.contains(document.activeElement) ? document.activeElement : null;
+    const a0 = document.activeElement;
+    const kbdIn = this.input === 'keyboard' && a0 && this.el.contains(a0) && !this.peek.contains(a0);
     const focusedLi = focused && focused.closest('.lf-item');
     const focusedIndex = focusedLi ? [...this.grid.children].indexOf(focusedLi) : -1;
 
@@ -400,6 +465,14 @@ export class LiveFollowingStrip {
       const navs = this.navs();
       const next = navs[Math.min(Math.max(focusedIndex, 0), navs.length - 1)];
       if (next) this.focusNav(next, { scroll: false });
+    }
+    // 키보드 초점이 숨은 정렬 단추(셋 이하)·격자(0개)와 함께 사라졌다 — 첫 칸, 칸이 없으면 '전체 보기'로(body 로 떨어지지 않게).
+    // 마우스로 남은 초점은 그대로 둔다 — 다시 잡으면 바쁜 것으로 보여 자리 바꿈을 미뤘다.
+    const now = document.activeElement;
+    if (kbdIn && (!now || now === document.body || now.closest('[hidden]'))) {
+      const first = this.navs()[0];
+      if (first) this.focusNav(first, { scroll: false });
+      else this.focusQuiet(this.el.querySelector('.lf-all'));
     }
     if (this.peekKey) {
       if (this.byId.has(this.peekKey) && !this.items.get(this.peekKey).hidden) this.fillPeek(this.peekKey, { keepMedia: true });
@@ -644,7 +717,7 @@ export class LiveFollowingStrip {
   onKey(e) {
     // Esc 는 카드가 열린 동안 문서에서 먼저 받는다(onEscDoc) — 여기서는 다루지 않는다.
     if (e.metaKey || e.ctrlKey || e.altKey) return;
-    if (NAV_KEYS.has(e.key)) this.input = 'keyboard';
+    if (NAV_KEYS.has(e.key)) this.setInput('keyboard');
     const li = e.target.closest && e.target.closest('.lf-item');
     if (li && li !== this.moreItem && (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) {
       // 키보드 우클릭 — 카드 메뉴(app.js)를 칸 왼쪽 아래에 연다(엔진마다 좌표가 0,0 이거나 없다).
@@ -687,12 +760,12 @@ export class LiveFollowingStrip {
       const nav = li.firstElementChild;
       if (this.activeKey !== this.keyOf(nav)) { this.activeKey = this.keyOf(nav); this.syncRoving(); }
     }
-    // 키보드로 들어온 초점 — 밖에서 Tab 으로 들어오면 그 keydown 은 구역 밖이라 onKey 가 못 본다. 들어온 초점의 :focus-visible 로 안다.
-    // 이 구역이 스크립트로 옮긴 초점(focusQuiet)은 입력 방식을 바꾸지 않는다.
+    // 키보드로 들어온 초점 — 밖에서 Tab 으로 들어오면 그 keydown 은 구역 밖이라 onKey 가 못 본다. 탐색 키 바로 다음이고 :focus-visible 이면
+    // 키보드다. 이 구역이 스크립트로 옮긴 초점(focusQuiet), 다른 곳이 Esc 로 닫히며 돌려준 초점(navKey 아님)은 입력 방식을 바꾸지 않는다.
     let kbd = this.input === 'keyboard';
-    if (!kbd && !this.selfFocus) {
+    if (!kbd && !this.selfFocus && this.navKey) {
       try { kbd = t.matches(':focus-visible'); } catch { kbd = true; } // :focus-visible 이 없는 엔진은 예전처럼
-      if (kbd) this.input = 'keyboard';
+      if (kbd) this.setInput('keyboard');
     }
     if (!t.matches('.lf-open')) {
       if (t.matches('.lf-more') || !li) this.hidePeek();
@@ -716,7 +789,18 @@ export class LiveFollowingStrip {
    * 아래 칸의 카드가 뜨거나 아무것도 뜨지 않았다. 실제 움직임은 경계 이벤트가 pointermove 보다 먼저 오므로 자리가 다르다.
    */
   isSynthetic(e) {
+    // 아직 pointermove 를 하나도 못 봤으면 합성이다 — 앱이 뜨기 전부터 커서가 창 위에 있으면 Chromium 은 pointermove 없이 경계 이벤트만
+    // 보낸다. 처음 실제로 움직이면 그 pointermove 가 칸에 들어온 것으로 처리한다(onPointerMove).
+    if (Number.isNaN(this.ptrX)) return true;
     return e.clientX === this.ptrX && e.clientY === this.ptrY;
+  }
+
+  /** 포인터가 이 구역의 타일(더 보기 칸 빼고)이나 카드 위인가. */
+  isStripTarget(t) {
+    if (!(t instanceof Element)) return false;
+    if (this.peek.contains(t)) return true;
+    const li = t.closest('.lf-item');
+    return Boolean(li && li !== this.moreItem && this.grid.contains(li));
   }
 
   onPointerOver(e) {
@@ -732,9 +816,7 @@ export class LiveFollowingStrip {
     if (e.pointerType === 'touch' || !this.ptrMoved) return;
     const li = e.target.closest && e.target.closest('.lf-item');
     const key = li && li !== this.moreItem && this.grid.contains(li) ? li.dataset.key : null;
-    if (key === this.hoverKey) return;
-    if (key) this.hoverTile(li);
-    else if (!this.peek.contains(e.target)) this.hoverKey = null;
+    if (key && key !== this.hoverKey) this.hoverTile(li); // 칸·카드 밖으로의 실제 움직임은 문서 pointermove(leaveTile)가 맡는다
   }
 
   hoverTile(li) {
@@ -753,13 +835,18 @@ export class LiveFollowingStrip {
     if (to instanceof Node && this.peek.contains(to)) return;
     const toLi = to instanceof Element ? to.closest('.lf-item') : null;
     if (toLi && toLi !== this.moreItem && this.grid.contains(toLi)) return; // 옆 칸으로 — pointerover 가 맡는다
+    this.leaveTile();
+  }
+
+  /** 마우스가 칸·카드를 떠났다 — 마우스 열기 예약을 지우고 잠시 뒤 카드를 닫는다. 키보드 초점의 카드·예약은 남긴다. */
+  leaveTile() {
     this.hoverKey = null;
-    clearTimeout(this.timers.show);
-    // 키보드 초점이 그 칸에 있으면 카드는 남긴다
+    if (this.pendingFrom !== 'focus') clearTimeout(this.timers.show);
     const focusKey = document.activeElement && document.activeElement.closest && document.activeElement.closest('.lf-item')?.dataset.key;
     if (this.peekKey && focusKey === this.peekKey) return;
     clearTimeout(this.timers.hide);
-    this.timers.hide = setTimeout(() => this.hidePeek(), PEEK_HIDE_MS);
+    // 닫을 때도 그 사이 잡힌 키보드 초점의 열기 예약은 남긴다(포인터가 격자를 떠나는 길에 화살표를 누른 경우)
+    this.timers.hide = setTimeout(() => this.hidePeek({ keepPending: this.pendingFrom === 'focus' }), PEEK_HIDE_MS);
   }
 
   // ── 미리보기 카드 ───────────────────────────────
@@ -777,8 +864,12 @@ export class LiveFollowingStrip {
   showPeek(key, from) {
     const li = this.items.get(key);
     if (!li || li.hidden || !li.isConnected || !this.byId.has(key)) return;
-    // 마우스 예약은 그 칸이 아직 포인터 아래일 때만 — 기다리는 동안 스크롤로 칸이 밀려났으면 뜨지 않는다.
-    if (from === 'hover' && !li.matches(':hover')) return;
+    // 마우스 예약은 그 칸이 아직 포인터 아래일 때만 — 기다리는 동안 스크롤로 칸이 밀려났으면 뜨지 않는다. :hover 는 WebKit 에서 스크롤이
+    // 멈추고 약 100ms 뒤(가짜 mousemove)에야 바뀌어, 그 사이 시간이 되면 밀려난 칸의 카드가 떴다 — 마지막 포인터 자리를 지금 배치에 맞춰 본다.
+    if (from === 'hover') {
+      const at = Number.isFinite(this.ptrX) ? document.elementFromPoint(this.ptrX, this.ptrY) : null;
+      if (!at || !li.contains(at)) return;
+    }
     clearTimeout(this.timers.hide);
     const fresh = this.peek.hidden;
     this.fillPeek(key);
