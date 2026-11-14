@@ -290,7 +290,7 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 .chat-jump:not([hidden]) { animation: mo-pop-up .3s var(--ease-spring) backwards; }   /* both 면 끝난 뒤에도 scale: 1 을 붙들어 누름(.93)이 안 보였다 */
 .chat-reopen:not([hidden]), .ip-reopen:not([hidden]) { animation: mo-fade var(--dur-3) var(--ease-out) both; }
 .mention-count:not([hidden]) { animation: mo-pop .3s var(--ease-spring) both; }
-.chat-jump:hover { filter: brightness(1.06); box-shadow: 0 6px 18px var(--primary-glow); }
+/* '새 메시지' 호버(예전 밝기 필터 + 0 6px 18px 브랜드색 글로우)는 아래 "primary 단추 — 빛을 받는 키" */
 .chat-reopen:hover { background: var(--surface-popover); border-color: var(--border); }
 .toast-action:hover { background: color-mix(in srgb, var(--primary) 26%, transparent); }
 .ac-item:hover:not(.active) { background: var(--hover); }
@@ -677,6 +677,111 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
 }
 :root[data-motion="reduced"] :is(.btn:hover, .mwi-hero .mwi-btn:hover,
   :is(.icon-btn, .ml-tb-icon, .chat-hbtn, .ml-pane-btn, .ml-pane-close, .ml-watch-btn, .ip-toggle, .mwi-btn, .side-quick-btn, .back-btn):hover svg) { scale: none !important; translate: none !important; }
+
+/* ══ primary 단추 — 빛을 받는 키 (2026-11-14) ════════════════════════════════════════════
+   대상: 모든 .btn.primary · 채팅 '새 메시지'(.chat-jump) · 추가 서랍 줄의 +(.ml-addrow-act) · 단독 보기 '채널 홈'(.mwi-hero .mwi-btn[data-mwi=channel]).
+         뺀다: 채널 추가(.ch-add — motion.css 끝 "채널 추가 단추"가 정한다), 채팅 스킨의 노란 보내기 단추(납작한 그대로).
+         aria-disabled(가득 참 등 — 탭 순서에 남지만 누를 수 없음)는 쉼 모양 그대로, 호버·누름에 반응하지 않는다.
+   예전엔 단추 뒤로 브랜드색이 흐릿하게 번졌다 — .btn.primary 쉼 0 6px 18px·호버 0 8px 22px·누름 0 3px 10px, '새 메시지' 호버 0 6px 18px,
+   서랍 + 0 4px 12px, '채널 홈' 쉼·호버의 흰 그림자. 그리고 app.css 의 .btn:hover 회색 바탕·테두리가 .btn.primary 의 초록 채움을 덮어
+   다크 호버 글자 대비가 1.44 였다(6d80f5e~, app.css 에서 primary 를 뺐다).
+   이제 채널 추가 단추(PR #114, motion.css 끝 "채널 추가 단추")와 같은 말로 그린다 — 단추 밖에는 아무것도 그리지 않고 빛이 단추 "안"에 맺힌다:
+   - 쉼: 브랜드색 면 + 위 모서리 1px 빛 + 아래 1px 턱(키 옆면) + 단추 아래 3px 안에서 끝나는 접촉 그림자.
+     '새 메시지'는 채팅 위에 떠 있어 원래의 높이 그림자(--shadow-md, 무채색)를 그대로 둔다 — 호버해도 바뀌지 않는다.
+   - 호버·키보드 초점: 면 위쪽이 밝아지고 테두리 바로 안쪽 1px 에 빛이 맺힌다(::before 한 겹을 opacity 로). 턱은 2px. 제자리(떠오름 없음).
+     초점에는 2px 띄운 테두리를 --primary-text 로 — 라이트의 --primary(#00d38a)는 밝은 바탕에서 1.5~1.9:1 이라 3:1 이 안 됐다.
+   - 누름: 면이 조금 어두워지고 턱 대신 안쪽 그림자. 줄어드는 크기는 단추마다 원래 누름 규칙 그대로다(여기서 바꾸지 않는다).
+   - 꺼짐(:disabled): 쉼 모양 그대로 흐리게(app.css opacity .45), 호버·누름 변화 없음.
+   채널 추가의 광택 띠(::after)는 넣지 않는다 — 화면마다 여러 개 있는 단추라 지나가는 빛이 시끄럽다.
+   움직이는 것은 ::before 의 opacity 뿐(합성 단계). 그림자는 상태가 바뀔 때 한 번 다시 칠한다(.btn.primary 전환 목록에서 뺐다).
+   특이도: 위 "누름 피드백"·"호버" 의 .btn.primary 글로우 규칙과 같거나 높고 뒤에 있어 덮는다. 빼는 조건은 :where() 라 특이도를 더하지 않는다.
+   모양은 --pk-* 값으로 받는다 — '채널 홈'은 면(--pk-face)·그늘(--pk-shade)만 바꾼다. */
+:where(.btn.primary:not(.ch-add, .chat-skin .chat-input .btn), .chat-jump, .ml-addrow-act, .mwi-hero .mwi-btn[data-mwi="channel"]) {
+  --pk-face: var(--primary); --pk-shade: var(--on-primary);
+  /* 빛 — 면 색과 상관없는 흰빛(채널 추가 단추와 같은 값) */
+  --pk-hi: rgba(255, 255, 255, .34);     /* 위 모서리 1px */
+  --pk-lit: rgba(255, 255, 255, .26);    /* 호버 윗빛 */
+  --pk-rim: rgba(255, 255, 255, .55);    /* 호버 — 테두리 바로 안쪽 1px 빛 */
+  /* 테두리·턱·그림자·누름 면 — 면 색과 그 그늘색을 섞어 다크·라이트를 따라간다 */
+  --pk-edge: color-mix(in srgb, var(--pk-face) 70%, var(--pk-shade));
+  --pk-lip: color-mix(in srgb, var(--pk-face) 52%, var(--pk-shade));
+  --pk-drop: color-mix(in srgb, var(--pk-shade) 32%, transparent);
+  --pk-press: color-mix(in srgb, var(--pk-face) 88%, var(--pk-shade));
+  position: relative; isolation: isolate;   /* ::before 를 면 위·글자 아래에 둔다. :where() 라 따로 정한 position(.chat-jump 의 absolute)이 이긴다 */
+}
+/* '채널 홈' — 글자·바탕을 뒤집은 알약(다크 흰색, 라이트 검정). 그늘은 두 테마 모두 검정 쪽 */
+:where(.mwi-hero .mwi-btn[data-mwi="channel"]) { --pk-face: var(--text-primary); --pk-shade: #000; }
+/* color-mix 이전 엔진(Safari 16.0·16.1 — 최소 사양 macOS 13.0 의 WKWebView) — var() 를 품은 color-mix 는 쓰는 자리에서 무효가 되어
+   테두리는 글자색(currentColor)으로, 그림자는 none 으로 떨어진다. 섞은 값은 위 변수로만 쓰고 여기서 반투명 검정으로 바꾼다. */
+@supports not (color: color-mix(in srgb, red 50%, blue)) {
+  :where(.btn.primary:not(.ch-add, .chat-skin .chat-input .btn), .chat-jump, .ml-addrow-act, .mwi-hero .mwi-btn[data-mwi="channel"]) {
+    --pk-edge: rgba(0, 0, 0, .2); --pk-lip: rgba(0, 0, 0, .38); --pk-drop: rgba(0, 0, 0, .24); --pk-press: var(--pk-face);
+  }
+}
+/* 윗빛 + 테두리 안쪽 빛 — 한 겹이라 opacity 하나로 들고 난다. 면 위·글자 아래(z-index -1, 위 isolation) */
+:where(.btn.primary:not(.ch-add, .chat-skin .chat-input .btn), .chat-jump, .ml-addrow-act, .mwi-hero .mwi-btn[data-mwi="channel"])::before {
+  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(to bottom, var(--pk-lit), transparent 60%);
+  box-shadow: inset 0 0 0 1px var(--pk-rim);
+  opacity: 0; transition: opacity var(--dur-2) var(--ease-out);
+}
+
+/* ── 글자 단추(.btn.primary) ── */
+.btn.primary:where(:not(.ch-add, .chat-skin .chat-input .btn)) {
+  border-color: var(--pk-edge);
+  box-shadow: inset 0 1px 0 var(--pk-hi), 0 1px 0 var(--pk-lip), 0 1px 2px var(--pk-drop);
+  transition-property: background-color, color, border-color, transform, translate;
+  transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), .3s, var(--dur-3);
+  transition-timing-function: var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-spring), var(--ease-out);
+}
+.btn.primary:is(:hover, :focus-visible):not(:disabled):not(:active):where(:not(.ch-add, .chat-skin .chat-input .btn, [aria-disabled="true"])) {
+  box-shadow: inset 0 1px 0 var(--pk-hi), 0 2px 0 var(--pk-lip), 0 2px 2px -1px var(--pk-drop); translate: none; filter: none;
+}
+.btn.primary:is(:hover, :focus-visible):not(:disabled):where(:not(.ch-add, .chat-skin .chat-input .btn, [aria-disabled="true"]))::before { opacity: 1; }
+.btn.primary:active:not(:disabled):where(:not(.ch-add, .chat-skin .chat-input .btn, [aria-disabled="true"])) {
+  background-color: var(--pk-press); box-shadow: inset 0 1px 2px var(--pk-drop); filter: none;
+}
+/* aria-disabled — 위 "누름 피드백"·"호버" 의 글로우·떠오름·눌림이 그대로 걸리니 쉼 모양으로 되돌린다(누르면 안내만 뜬다) */
+.btn.primary[aria-disabled="true"]:is(:hover, :active):not(:disabled):where(:not(.ch-add, .chat-skin .chat-input .btn)) {
+  box-shadow: inset 0 1px 0 var(--pk-hi), 0 1px 0 var(--pk-lip), 0 1px 2px var(--pk-drop); translate: none; scale: none; transform: none; filter: none;
+}
+/* 초점 테두리색 — 스킨 보내기 단추도(굵기·띄움은 app.css "키보드 포커스") */
+.btn.primary:focus-visible:where(:not(.ch-add)) { outline-color: var(--primary-text); }
+
+/* ── '새 메시지'(.chat-jump) — 떠 있는 알약. 높이 그림자는 그대로, 빛만 안쪽에 ── */
+.chat-jump { box-shadow: inset 0 1px 0 var(--pk-hi), 0 1px 0 var(--pk-lip), var(--shadow-md); }
+.chat-jump:is(:hover, :focus-visible):not(:active) { box-shadow: inset 0 1px 0 var(--pk-hi), 0 2px 0 var(--pk-lip), var(--shadow-md); }
+.chat-jump:is(:hover, :focus-visible)::before { opacity: 1; }
+.chat-jump:active { background-color: var(--pk-press); box-shadow: inset 0 1px 2px var(--pk-drop), var(--shadow-md); }
+.chat-jump:focus-visible { outline-color: var(--primary-text); }
+
+/* ── 추가 서랍 줄의 +(.ml-addrow-act) — 줄에 올리면 옅게 물들고(multilive.css), 단추에 올리면 채워진 작은 키 ── */
+.ml-addrow .ml-addrow-act:is(:hover, :focus-visible):not(:disabled):not(:active) { box-shadow: inset 0 1px 0 var(--pk-hi), 0 2px 0 var(--pk-lip); }
+.ml-addrow .ml-addrow-act:is(:hover, :focus-visible):not(:disabled)::before { opacity: 1; }
+.ml-addrow .ml-addrow-act:active:not(:disabled) { background-color: var(--pk-press); color: var(--on-primary); box-shadow: inset 0 1px 2px var(--pk-drop); }
+
+/* ── 단독 보기 '채널 홈' — 뒤집은 알약도 같은 키. 면 색·호버 면 이동은 multilive.css ── */
+.mwi-hero .mwi-btn[data-mwi="channel"] { box-shadow: inset 0 1px 0 var(--pk-hi), 0 1px 0 var(--pk-lip), 0 1px 2px var(--pk-drop); }
+.mwi-hero .mwi-btn[data-mwi="channel"]:is(:hover, :focus-visible):not(:active) {
+  box-shadow: inset 0 1px 0 var(--pk-hi), 0 2px 0 var(--pk-lip), 0 2px 2px -1px var(--pk-drop); translate: none;
+}
+.mwi-hero .mwi-btn[data-mwi="channel"]:is(:hover, :focus-visible)::before { opacity: 1; }
+.mwi-hero .mwi-btn[data-mwi="channel"]:active { background-color: var(--pk-press); box-shadow: inset 0 1px 2px var(--pk-drop); }
+.mwi-hero .mwi-btn[data-mwi="channel"]:focus-visible { outline-color: var(--primary-text); }
+
+/* ── 모션 줄이기(시스템·앱 설정) — 빛은 바로 켜지고 꺼진다. 떠오름은 처음부터 없고 누름 크기는 위 전역 규칙(:active scale none)이 없앤다 ── */
+@media (prefers-reduced-motion: reduce) {
+  :where(.btn.primary:not(.ch-add, .chat-skin .chat-input .btn), .chat-jump, .ml-addrow-act, .mwi-hero .mwi-btn[data-mwi="channel"])::before { transition: none !important; }
+}
+:root[data-motion="reduced"] :where(.btn.primary:not(.ch-add, .chat-skin .chat-input .btn), .chat-jump, .ml-addrow-act, .mwi-hero .mwi-btn[data-mwi="channel"])::before { transition: none !important; }
+
+/* ── 고대비(Windows 고대비 테마 — WebView2 forced-colors) — 흰빛 층은 시스템 색을 따르지 않으니 끄고(그림자는 엔진이 없앤다),
+   호버·초점은 시스템 강조색으로 보인다: 글자 단추는 테두리, 테두리 없는 단추는 안쪽 윤곽(초점이면 바깥 초점 테두리가 맡는다). ── */
+@media (forced-colors: active) {
+  :where(.btn.primary:not(.ch-add, .chat-skin .chat-input .btn), .chat-jump, .ml-addrow-act, .mwi-hero .mwi-btn[data-mwi="channel"])::before { display: none; }
+  .btn.primary:is(:hover, :focus-visible):not(:disabled):where(:not(.ch-add, [aria-disabled="true"])) { border-color: Highlight; }
+  :is(.chat-jump, .ml-addrow .ml-addrow-act, .mwi-hero .mwi-btn[data-mwi="channel"]):hover:not(:disabled, :focus-visible) { outline: 2px solid Highlight; outline-offset: -2px; }
+}
 
 /* ── 썸네일 호버 미리보기(hover-preview.js) — 첫 장이 나오면 썸네일 위로 페이드인, 배지는 그 위에 ── */
 .thumb-preview {

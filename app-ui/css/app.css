@@ -569,9 +569,10 @@ a { color: var(--primary); }
   border: 1px solid var(--border); background: var(--surface-elevated);
   padding: 6px 12px; border-radius: var(--radius-sm); font-weight: 500; font-size: var(--fs-caption);
 }
-.btn:hover { background: var(--surface-overlay); }
+/* 회색 호버는 primary 를 뺀다 — 같은 우선순위의 뒤 줄이라 .btn.primary 의 초록 채움을 덮어 다크 호버 글자 대비가 1.44 였다(6d80f5e~).
+   :where() 라 우선순위는 그대로다. primary 의 호버·초점·누름은 motion.css "primary 단추 — 빛을 받는 키" 가 맡는다. */
+.btn:hover:where(:not(.primary)) { background: var(--surface-overlay); }
 .btn.primary { background: var(--primary); color: var(--on-primary); border-color: transparent; font-weight: 600; }
-.btn.primary:hover { filter: brightness(1.08); }
 .btn.ghost { background: transparent; border-color: transparent; color: var(--text-secondary); }
 .btn.ghost:hover { color: var(--text-primary); background: var(--surface-elevated); }
 .btn:disabled { opacity: 0.45; cursor: default; }
@@ -1108,9 +1109,9 @@ html, body {
     box-shadow 0.16s var(--ease-out), transform 0.16s var(--ease-out);
 }
 .btn { border-radius: var(--radius-ms); padding: 7px 14px; line-height: 20px; border-color: var(--border-subtle); box-shadow: var(--shadow-sm); } /* = --control-md, .btn.lg = --control-lg */
-.btn:hover { background: var(--surface-overlay); border-color: var(--border); }
+.btn:hover:where(:not(.primary)) { background: var(--surface-overlay); border-color: var(--border); }   /* primary 는 빼고 — 위 .btn:hover 참고 */
 .btn:active:not(:disabled) { transform: scale(0.98); }
-.btn.primary { box-shadow: 0 6px 18px var(--primary-glow); }
+/* .btn.primary 의 쉼 모양(예전 0 6px 18px 브랜드색 글로우)은 motion.css "primary 단추 — 빛을 받는 키" — 단추 밖으로 번지지 않는다 */
 .btn.ghost { box-shadow: none; }
 /* 초점 고리는 아래 '키보드 포커스 (DSN-06)'의 outline 하나만 — 예전엔 여기 box-shadow 고리까지 겹쳐 두 겹이 그려졌다(DF-1) */
 .icon-btn { border-radius: var(--radius-ms); }
@@ -2198,6 +2199,8 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .chat-skin .chat-input input::placeholder { color: var(--cs-time); }
 .chat-skin .chat-input .btn.primary { background: var(--cs-send); color: var(--cs-send-text); border-radius: var(--radius-lg); font-weight: 700; box-shadow: none; }
 .chat-skin .chat-input .btn.primary:hover:not(:disabled) { filter: brightness(0.96); box-shadow: none; }
+/* 누름 — motion.css .btn.primary 누름의 초록 글로우(0 3px 10px)가 노란 단추 밑으로 번졌다. 스킨 단추는 빛을 받는 키가 아니라 납작한 그대로다 */
+.chat-skin .chat-input .btn.primary:active:not(:disabled) { box-shadow: none; }
 .chat-skin .chat-line .text { color: var(--cs-ink); }
 
 /* 줄 — 아바타 · [이름 / 말풍선 + 시간] */
