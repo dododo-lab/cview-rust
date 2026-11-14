@@ -141,8 +141,8 @@ const settled = (page) => page.waitForFunction(() => !document.querySelector('[d
     await page.click('[data-page="library"] .clip-grid [data-clip-uid]');
     assert.equal(await page.evaluate(() => window.__opened), 'c0', '클립 카드를 눌러도 열리지 않음');
     await go(page, 'library', { tab: 'clips' });
-    await page.click('[data-page="library"] [data-clip-filter="WITHIN_30_DAYS"]');
-    await page.waitForFunction(() => window.__mock.calls.some((c) => c.cmd === 'popular_clips' && c.args?.filter === 'WITHIN_30_DAYS'));
+    await page.click('[data-page="library"] [data-clip-filter="WITHIN_1_DAY"]');
+    await page.waitForFunction(() => window.__mock.calls.some((c) => c.cmd === 'popular_clips' && c.args?.filter === 'WITHIN_1_DAY'));
     await page.click('[data-page="library"] [data-tab="overview"]');
     await settled(page);
     await page.focus(`${card('bookmarks')} .lib-ov-title`);

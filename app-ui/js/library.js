@@ -26,7 +26,7 @@ const TABS = [
   ['bookmarks', '북마크'],
   ['downloads', '다운로드'],
 ];
-const CLIP_FILTERS = [['WITHIN_1_DAY', '오늘'], ['WITHIN_7_DAYS', '7일'], ['WITHIN_30_DAYS', '30일']];
+const CLIP_FILTERS = [['WITHIN_1_DAY', '오늘'], ['WITHIN_7_DAYS', '7일']];
 const CLIP_ORDERS = [['POPULAR', '인기순'], ['RECOMMEND', '추천순']];
 const TAB_IDS = new Set(TABS.map(([id]) => id));
 /** 개요 카드 순서 — 탭 순서 그대로(개요 자신은 빼고). */

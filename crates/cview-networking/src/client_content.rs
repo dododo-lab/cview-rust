@@ -259,7 +259,7 @@ impl ChzzkApiClient {
         .await
     }
 
-    /// 홈 추천/인기 클립. `filter_type`: WITHIN_1_DAY / WITHIN_7_DAYS / WITHIN_30_DAYS / ALL_TIME,
+    /// 홈 추천/인기 클립. `filter_type`: WITHIN_1_DAY / WITHIN_7_DAYS,
     /// `order_type`: POPULAR / RECOMMEND.
     pub async fn home_popular_clips(
         &self,

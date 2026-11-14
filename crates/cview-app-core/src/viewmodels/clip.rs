@@ -86,7 +86,6 @@ pub enum TrendingFilter {
     Today,
     #[default]
     Week,
-    Month,
 }
 
 impl TrendingFilter {
@@ -94,14 +93,12 @@ impl TrendingFilter {
         match self {
             Self::Today => "오늘",
             Self::Week => "이번 주",
-            Self::Month => "이번 달",
         }
     }
     pub fn api_value(self) -> &'static str {
         match self {
             Self::Today => "WITHIN_1_DAY",
             Self::Week => "WITHIN_7_DAYS",
-            Self::Month => "WITHIN_30_DAYS",
         }
     }
 }

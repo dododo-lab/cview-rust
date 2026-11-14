@@ -297,7 +297,7 @@ pub async fn channel_posts(
     })
 }
 
-/// 인기 클립 — `filter`: `WITHIN_1_DAY` / `WITHIN_7_DAYS` / `WITHIN_30_DAYS`,
+/// 인기 클립 — 치지직 `/service/v1/home/recommended/clips` 는 `WITHIN_1_DAY` · `WITHIN_7_DAYS` 만 지원한다.
 /// `order`: `POPULAR` / `RECOMMEND` (원본 ClipBrowserSupport.apiValue).
 #[tauri::command]
 pub async fn popular_clips(
@@ -305,12 +305,13 @@ pub async fn popular_clips(
     filter: Option<String>,
     order: Option<String>,
 ) -> CmdResult<Vec<ClipInfo>> {
+    let filter = match filter.as_deref() {
+        Some("WITHIN_1_DAY") => "WITHIN_1_DAY",
+        _ => "WITHIN_7_DAYS",
+    };
     Ok(services
         .api
-        .home_popular_clips(
-            filter.as_deref().unwrap_or("WITHIN_7_DAYS"),
-            order.as_deref().unwrap_or("POPULAR"),
-        )
+        .home_popular_clips(filter, order.as_deref().unwrap_or("POPULAR"))
         .await?)
 }
 
