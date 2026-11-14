@@ -148,6 +148,10 @@ export function installSegmentGlider() {
   // 예전엔 MutationObserver 안에서 바로 offsetWidth 를 읽어 시작 중 강제 동기 레이아웃(전체 문서)을 일으켰다.
   // 다시 그린 목록이 옛 판 자리를 넘겨받아 미끄러지는 경우(handoff)만 지금 놓는다 — 그 전환은 같은 묶음 안에서 걸어야 한다.
   function track(box) {
+    // 판을 쓰지 않는 세그먼트 — 시작 화면에 늘 보이는 것(홈 "방송 중인 팔로잉" 정렬)은 첫 배치가 시작 프레임의
+    // ResizeObserver 에서 판 스타일을 써, 뒤이은 관찰자(멀티라이브 머리줄)가 크기를 읽다 강제 레이아웃을 일으켰다(perf P01).
+    // 고른 칸은 판 없이도 같은 면·그림자로 보인다(app.css .segmented .seg.active).
+    if (box.hasAttribute('data-no-glider')) return;
     if (tracked.has(box)) { place(box, false); return; }
     tracked.add(box);
     if (handoff.size && handoff.has(sigOf(box, box.closest('[data-page]')?.dataset.page || ''))) place(box, false);
