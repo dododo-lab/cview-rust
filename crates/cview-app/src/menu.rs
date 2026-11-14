@@ -40,7 +40,8 @@ const VIEW: &[Item] = &[
 const GO: &[Item] = &[
     ("nav-home", "홈", Some("CmdOrCtrl+1")),
     ("nav-following", "팔로잉", Some("CmdOrCtrl+2")),
-    ("nav-popular", "인기", Some("CmdOrCtrl+3")),
+    // 메뉴 제목의 `&` 하나는 니모닉(muda) — `&&` 로 써야 "&" 로 보인다.
+    ("nav-popular", "방송&&클립", Some("CmdOrCtrl+3")),
     ("nav-multilive", "멀티라이브", Some("CmdOrCtrl+4")),
     ("nav-live", "라이브", Some("CmdOrCtrl+5")),
     ("nav-library", "보관함", Some("CmdOrCtrl+6")),

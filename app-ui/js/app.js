@@ -49,7 +49,7 @@ import { initSharpness, flushSharpnessNotice } from './sharpness.js';
 const ROUTES = [
   { id: 'home', title: '홈', icon: icons.home },
   { id: 'following', title: '팔로잉', icon: icons.following },
-  { id: 'popular', title: '인기', icon: icons.popular },
+  { id: 'popular', title: '방송&클립', icon: icons.popular },
   { id: 'categories', title: '카테고리', icon: categoryIcon },
   { id: 'live', title: '라이브', icon: liveIcon },
   { id: 'multilive', title: '멀티라이브', icon: multiLiveIcon, sidebar: false },
@@ -314,6 +314,8 @@ let currentParams = {};
 const BACK_MAX = 50;
 
 async function navigate(route, params = {}, { push = true } = {}) {
+  // 인기 클립은 보관함에서 방송&클립 › 클립 탭으로 옮겼다 — 예전 경로(저장된 작업 공간·뒤로 가기 기록·옛 진입점)도 그리로.
+  if (route === 'library' && params && params.tab === 'clips') { route = 'popular'; params = { tab: 'clips' }; }
   if (!pages[route]) return;
   cancelRefreshVeil(); // 새로고침 덮개는 그 화면 것 — 옮기면 바로 걷는다
   if (push && current && !(current === route && JSON.stringify(currentParams) === JSON.stringify(params))) {
@@ -321,14 +323,15 @@ async function navigate(route, params = {}, { push = true } = {}) {
     if (backStack.length > BACK_MAX) backStack.shift();
   }
   current = route;
-  currentParams = params;
+  // 방송&클립은 고른 탭·기간을 스스로 기억한다 — 연 때의 탭·기간을 경로에 남기면 ⌘R·재연결·작업 공간 복원이 사용자가 바꾼 탭을 되돌렸다.
+  currentParams = route === 'popular' ? {} : params;
   if (route === 'multilive') keepTransient(); // 멀티라이브 화면에서 본 패인은 남긴다
   if (LIVE_MODES.includes(route)) lastLiveMode = route;
   sidebar.setActive(LIVE_MODES.includes(route) ? 'live' : route);
   refreshSidebarList();
   const watching = isWatching();
   if (insights) insights.show(route === 'live' && viewer && (viewer.isPlaying || watching) ? 'live' : route);
-  if (!AUX) saveWorkspace(route, params, viewer && viewer.isPlaying ? viewer.channelId : null);
+  if (!AUX) saveWorkspace(route, currentParams, viewer && viewer.isPlaying ? viewer.channelId : null);
   // 라이브 메뉴는 재생 중이면 시청 화면, 아니면 이어 볼 채널 목록이다.
   // 멀티라이브에 있는 채널을 라이브로 볼 때(시청 모드)는 멀티라이브 화면을 단독 무대로 보여 준다.
   const showViewer = route === 'live' && viewer.isPlaying;
@@ -606,7 +609,8 @@ function installPalette() {
       // 화면 목록(ROUTES)에 이미 '검색'이 있다 — 따로 더하면 팔레트에 두 번 떴다. 검색만 설명을 붙인다.
       ...ROUTES.map((r) => ({ group: '화면', label: r.title, hint: r.id === 'search' ? '라이브·채널·다시보기' : '이동', run: () => (r.id === 'live' ? openLiveMenu() : navigate(r.id)) })),
       { group: '보관함', label: '보관함 개요', hint: '한눈에', run: () => navigate('library', { tab: 'overview' }) },
-      { group: '보관함', label: '인기 클립', hint: '보관함', run: () => navigate('library', { tab: 'clips' }) },
+      { group: '방송&클립', label: '인기 방송', hint: '방송&클립', run: () => navigate('popular', { tab: 'live' }) },
+      { group: '방송&클립', label: '인기 클립', hint: '방송&클립', run: () => navigate('popular', { tab: 'clips' }) },
       { group: '보관함', label: '이어 보기', hint: '다시보기', run: () => navigate('library', { tab: 'continue' }) },
       { group: '보관함', label: '즐겨찾기', hint: '채널', run: () => navigate('library', { tab: 'favorites' }) },
       { group: '보관함', label: '북마크', hint: '방송 장면', run: () => navigate('library', { tab: 'bookmarks' }) },
@@ -1051,6 +1055,7 @@ function openDeepLink(p) {
       break;
     case 'channel': openChannelPage(p.channelId); break;
     case 'following': if (HUB_ROUTE[p.mode] === 'live') openLiveMenu(); else navigate(HUB_ROUTE[p.mode] || 'following'); break;
+    case 'popular': navigate('popular', p.tab ? { tab: p.tab } : {}); break;
     case 'multilive': navigate('multilive'); break;
     case 'home': navigate('home'); break;
     case 'search': navigate('search', p.query ? { query: p.query } : {}); break;

@@ -155,7 +155,7 @@ function topRail(lives) {
   }).join('');
   return `
     <section class="home-section">
-      ${sectionHead('지금 인기 TOP 10', '시청자 수 기준 실시간 순위', `${shelfNav}<button class="link-btn" data-goto="popular">인기 전체 보기</button>`)}
+      ${sectionHead('지금 인기 TOP 10', '시청자 수 기준 실시간 순위', `${shelfNav}<button class="link-btn" data-goto="popular" data-goto-tab="live">방송&amp;클립에서 보기</button>`)}
       <div class="shelf top-shelf">${items}</div>
     </section>`;
 }
@@ -412,7 +412,7 @@ export class HomePage {
       this.discover = discover;
       html += `
         <section class="home-section">
-          ${sectionHead(following.length ? '새로운 라이브 발견' : '더 많은 라이브', following.length ? '팔로우하지 않은 채널 중 지금 인기' : '카테고리로 골라 보기', '<button class="link-btn" data-goto="popular">인기 전체 보기</button>')}
+          ${sectionHead(following.length ? '새로운 라이브 발견' : '더 많은 라이브', following.length ? '팔로우하지 않은 채널 중 지금 인기' : '카테고리로 골라 보기', '<button class="link-btn" data-goto="popular" data-goto-tab="live">방송&amp;클립에서 보기</button>')}
           ${categoryChips(discover, this.category)}
           <div class="popular-grid">${discover.length ? popularGrid(discover, this.category, this.gridLimit) : emptyState('추천할 라이브 채널이 없습니다')}</div>
         </section>`;
@@ -491,14 +491,14 @@ export class HomePage {
   async loadRails(seq) {
     const [cont, clips] = await Promise.allSettled([api.vodContinueList(12), api.popularClips('WITHIN_1_DAY', 'POPULAR')]);
     if (seq !== this.seq) return;
-    const fill = (name, title, sub, html, goto) => {
+    const fill = (name, title, sub, html, more) => {
       const box = this.body.querySelector(`[data-rail="${name}"]`);
       if (!box || !html) return;
-      box.innerHTML = `${sectionHead(title, sub, `${shelfNav}<button class="link-btn" data-goto-lib="${goto}">전체 보기</button>`)}${html}`;
+      box.innerHTML = `${sectionHead(title, sub, `${shelfNav}${more}`)}${html}`;
       box.hidden = false;
     };
-    if (cont.status === 'fulfilled' && cont.value.length) fill('continue', '이어 보기', '보던 다시보기를 멈춘 곳부터', `<div class="shelf">${cont.value.map(continueCard).join('')}</div>`, 'continue');
-    if (clips.status === 'fulfilled' && clips.value.length) fill('clips', '오늘의 인기 클립', '하루 동안 가장 많이 본 순간', `<div class="shelf clip-shelf">${clips.value.slice(0, 16).map(clipCard).join('')}</div>`, 'clips');
+    if (cont.status === 'fulfilled' && cont.value.length) fill('continue', '이어 보기', '보던 다시보기를 멈춘 곳부터', `<div class="shelf">${cont.value.map(continueCard).join('')}</div>`, '<button class="link-btn" data-goto-lib="continue">전체 보기</button>');
+    if (clips.status === 'fulfilled' && clips.value.length) fill('clips', '오늘의 인기 클립', '하루 동안 가장 많이 본 순간', `<div class="shelf clip-shelf">${clips.value.slice(0, 16).map(clipCard).join('')}</div>`, '<button class="link-btn" data-goto="popular" data-goto-tab="clips" data-goto-period="WITHIN_1_DAY">전체 보기</button>');
   }
 
   setHero(index) {
@@ -553,7 +553,7 @@ export class HomePage {
     const lib = e.target.closest('[data-goto-lib]');
     if (lib) { window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: 'library', params: { tab: lib.dataset.gotoLib } } })); return; }
     const goto = e.target.closest('[data-goto]');
-    if (goto) window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: goto.dataset.goto } }));
+    if (goto) window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: goto.dataset.goto, params: { ...(goto.dataset.gotoTab ? { tab: goto.dataset.gotoTab } : {}), ...(goto.dataset.gotoPeriod ? { period: goto.dataset.gotoPeriod } : {}) } } }));
   }
 }
 

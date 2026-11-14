@@ -16,7 +16,7 @@ pub mod playback_surface;
 pub mod router;
 pub mod sidebar_destination;
 
-pub use deep_link::{DeepLink, DeepLinkHost, DeepLinkRouter};
+pub use deep_link::{DeepLink, DeepLinkHost, DeepLinkRouter, PopularTab};
 pub use deep_link_inbox::DeepLinkInbox;
 pub use hub_mode::{
     FollowingBrowserFilter, FollowingBrowserSortOrder, FollowingHubMode, LiveDiscoverySection,

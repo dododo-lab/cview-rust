@@ -13,7 +13,7 @@ export const HUBS = [
   ['2', 'live', '시청'],
   ['3', 'multilive', '멀티'],
   ['4', 'search', '검색'],
-  ['5', 'popular', '인기'],
+  ['5', 'popular', '방송&클립'],
   ['6', 'categories', '카테고리'],
 ];
 

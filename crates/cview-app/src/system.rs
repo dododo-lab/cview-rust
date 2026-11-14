@@ -50,6 +50,10 @@ pub fn deep_link_payload(link: &DeepLink) -> Value {
             "kind": "following",
             "mode": mode.as_ref().and_then(|m| serde_json::to_value(m).ok()),
         }),
+        DeepLink::Popular { tab } => json!({
+            "kind": "popular",
+            "tab": tab.map(|t| t.token()),
+        }),
         DeepLink::MultiLive => json!({ "kind": "multilive" }),
         DeepLink::Home => json!({ "kind": "home" }),
         DeepLink::Search { query } => json!({ "kind": "search", "query": query }),
@@ -808,6 +812,11 @@ mod tests {
         assert_eq!(p["mode"], "multi");
         let s = deep_link_payload(&DeepLink::parse("cview://search?q=%ED%95%9C").unwrap());
         assert_eq!(s["query"], "한");
+        let c = deep_link_payload(&DeepLink::parse("cview://popular?tab=clips").unwrap());
+        assert_eq!(c["kind"], "popular");
+        assert_eq!(c["tab"], "clips");
+        let n = deep_link_payload(&DeepLink::parse("cview://popular").unwrap());
+        assert!(n["tab"].is_null());
         assert!(DeepLink::parse("https://live?channelId=a").is_none());
     }
 }

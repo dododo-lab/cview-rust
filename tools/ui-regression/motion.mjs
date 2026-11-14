@@ -71,15 +71,18 @@ const anims = (sel) => page.$$eval(sel, (els) => els.map((e) => getComputedStyle
 
 // 처음 불러온 목록은 떠오르고, 정렬을 바꿔 다시 그린 목록은 떠오르지 않는다. 정렬 판은 옛 칸에서 미끄러진다.
 await check('popular: 처음만 떠오르고 다시 그리면 그대로, 판은 미끄러짐', async () => {
-  await go('popular');
+  await go('popular', { tab: 'live' });
   await page.waitForSelector('[data-page="popular"] .grid .card');
-  assert.ok((await anims('[data-page="popular"] .page-body > .grid')).every((n) => n === 'content-in'), '처음 목록에 등장 모션이 없음');
+  const grid = '[data-page="popular"] .pop-panel[data-panel="live"] > .grid';
+  const sortGlider = '[data-page="popular"] .pop-panel[data-panel="live"] .list-toolbar .seg-glider'; // 탭 줄(방송·클립)에도 판이 있다
+  assert.equal((await anims(grid)).length, 1, '방송 격자를 못 찾음');
+  assert.ok((await anims(grid)).every((n) => n === 'content-in'), '처음 목록에 등장 모션이 없음');
   await page.waitForTimeout(400);
-  const before = await page.$eval('[data-page="popular"] .seg-glider', (g) => g.style.translate);
+  const before = await page.$eval(sortGlider, (g) => g.style.translate);
   await page.click('[data-page="popular"] [data-sort="recent"]');
-  assert.ok((await anims('[data-page="popular"] .page-body > .grid')).every((n) => n === 'none'), '다시 그린 목록이 또 떠오름');
+  assert.ok((await anims(grid)).every((n) => n === 'none'), '다시 그린 목록이 또 떠오름');
   assert.ok((await anims('[data-page="popular"] .grid > .card')).every((n) => n === 'none'), '카드가 또 차례로 떠오름');
-  const g = await page.$eval('[data-page="popular"] .seg-glider', (el) => ({ t: el.style.translate, running: el.getAnimations().some((a) => a.transitionProperty === 'translate') }));
+  const g = await page.$eval(sortGlider, (el) => ({ t: el.style.translate, running: el.getAnimations().some((a) => a.transitionProperty === 'translate') }));
   assert.notEqual(g.t, before, '판이 새 칸으로 가지 않음');
   assert.ok(g.running, '판이 미끄러지지 않고 뚝 옮겨짐');
 });
