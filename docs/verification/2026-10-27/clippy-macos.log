@@ -1,0 +1,4 @@
+error: failed to write `/Volumes/data/project/Rust/CView/target/debug/.fingerprint/cview-app-446b7d09aa2f3f2c/lib-cview_app`
+
+Caused by:
+  No space left on device (os error 28)

@@ -1,0 +1,122 @@
+[
+  {
+    "file": "app-icons/build-icons.sh",
+    "ok": true,
+    "error": ""
+  },
+  {
+    "file": "perf/tools/after2.sh",
+    "ok": true,
+    "error": ""
+  },
+  {
+    "file": "perf/tools/analyze-log.py",
+    "ok": true
+  },
+  {
+    "file": "perf/tools/bgplay.sh",
+    "ok": true,
+    "error": ""
+  },
+  {
+    "file": "perf/tools/ev.sh",
+    "ok": true,
+    "error": ""
+  },
+  {
+    "file": "perf/tools/gpu-sample.py",
+    "ok": true
+  },
+  {
+    "file": "perf/tools/launch.sh",
+    "ok": true,
+    "error": ""
+  },
+  {
+    "file": "perf/tools/measure.py",
+    "ok": true
+  },
+  {
+    "file": "perf/tools/metal-bench/run.py",
+    "ok": true
+  },
+  {
+    "file": "perf/tools/metal-bench/run.sh",
+    "ok": true,
+    "error": ""
+  },
+  {
+    "file": "perf/tools/piccost.sh",
+    "ok": true,
+    "error": ""
+  },
+  {
+    "file": "perf/tools/picft.sh",
+    "ok": true,
+    "error": ""
+  },
+  {
+    "file": "perf/tools/pids.sh",
+    "ok": true,
+    "error": ""
+  },
+  {
+    "file": "perf/tools/recv.py",
+    "ok": true
+  },
+  {
+    "file": "perf/tools/run.sh",
+    "ok": true,
+    "error": ""
+  },
+  {
+    "file": "perf/tools/suite.sh",
+    "ok": true,
+    "error": ""
+  },
+  {
+    "file": "perf/tools/suite2.sh",
+    "ok": true,
+    "error": ""
+  },
+  {
+    "file": "perf/tools/thumbcmp2.sh",
+    "ok": true,
+    "error": ""
+  },
+  {
+    "file": "perf/tools/thumbft.sh",
+    "ok": true,
+    "error": ""
+  },
+  {
+    "file": "perf/tools/thumbone.sh",
+    "ok": true,
+    "error": ""
+  },
+  {
+    "file": "scripts/publish-update.py",
+    "ok": true
+  },
+  {
+    "file": "scripts/release-macos.sh",
+    "ok": true,
+    "error": ""
+  },
+  {
+    "file": "tools/windows-update-server/check_server.py",
+    "ok": true
+  },
+  {
+    "file": "tools/windows-update-server/publish.py",
+    "ok": true
+  },
+  {
+    "file": "tools/windows-update-server/release_gateway.py",
+    "ok": true
+  },
+  {
+    "file": "tools/windows-update-server/tests/test_release_automation.py",
+    "ok": true
+  }
+]

@@ -1,0 +1,2507 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.27
+   Compiling quote v1.0.47
+   Compiling libc v0.2.191
+   Compiling cfg-if v1.0.5
+   Compiling serde_core v1.0.229
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.14
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.18
+   Compiling litemap v0.8.3
+   Compiling writeable v0.6.4
+   Compiling utf8_iter v1.0.4
+   Compiling cc v1.8.0
+   Compiling icu_normalizer_data v2.3.0
+   Compiling icu_properties_data v2.3.0
+   Compiling parking_lot_core v0.9.12
+   Compiling zmij v1.0.23
+   Compiling scopeguard v1.2.0
+   Compiling bytes v1.12.1
+   Compiling lock_api v0.4.14
+   Compiling getrandom v0.4.3
+   Compiling version_check v0.9.5
+   Compiling smallvec v1.16.3
+   Compiling autocfg v1.5.1
+   Compiling stable_deref_trait v1.2.1
+   Compiling serde v1.0.229
+   Compiling once_cell v1.21.4
+   Compiling percent-encoding v2.3.2
+   Compiling pin-project-lite v0.2.17
+   Compiling errno v0.3.14
+   Compiling syn v3.0.9
+   Compiling syn v2.0.119
+   Compiling core-foundation-sys v0.8.7
+   Compiling form_urlencoded v1.2.2
+   Compiling signal-hook-registry v1.4.8
+   Compiling socket2 v0.6.5
+   Compiling mio v1.2.4
+   Compiling serde_json v1.0.154
+   Compiling parking_lot v0.12.5
+   Compiling generic-array v0.14.7
+   Compiling typenum v1.20.1
+   Compiling http v1.5.0
+   Compiling zerocopy v0.8.63
+   Compiling num-traits v0.2.19
+   Compiling time-core v0.1.9
+   Compiling num-conv v0.2.2
+   Compiling tracing-core v0.1.36
+   Compiling powerfmt v0.2.1
+   Compiling siphasher v1.0.4
+   Compiling cpufeatures v0.2.17
+   Compiling thiserror v1.0.69
+   Compiling base64 v0.23.1
+   Compiling iana-time-zone v0.1.65
+   Compiling tinyvec v1.13.3
+   Compiling bitflags v2.13.2
+   Compiling uuid v1.28.0
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling log v0.4.34
+   Compiling digest v0.10.7
+   Compiling unicode-normalization v0.1.26
+   Compiling aho-corasick v1.1.5
+   Compiling regex-syntax v0.8.11
+   Compiling base64 v0.22.1
+   Compiling sha2 v0.10.9
+   Compiling deranged v0.5.9
+   Compiling time-macros v0.2.32
+   Compiling futures-core v0.3.34
+   Compiling getrandom v0.2.17
+   Compiling ring v0.17.14
+   Compiling zeroize v1.9.1
+   Compiling rustls-pki-types v1.15.1
+   Compiling cookie v0.18.2
+   Compiling httparse v1.10.1
+   Compiling futures-sink v0.3.34
+   Compiling synstructure v0.14.0
+   Compiling untrusted v0.9.0
+   Compiling rustls v0.23.46
+   Compiling futures-task v0.3.34
+   Compiling slab v0.4.12
+   Compiling time v0.3.55
+   Compiling phf_shared v0.13.1
+   Compiling subtle v2.6.1
+   Compiling core-foundation v0.10.1
+   Compiling ahash v0.8.12
+   Compiling fastrand v2.5.0
+   Compiling phf_generator v0.13.1
+   Compiling rand_core v0.6.4
+   Compiling vcpkg v0.2.15
+   Compiling tracing-attributes v0.1.31
+   Compiling thiserror-impl v1.0.69
+   Compiling pkg-config v0.3.34
+   Compiling http-body v1.1.0
+   Compiling zerofrom-derive v0.1.8
+   Compiling yoke-derive v0.8.4
+   Compiling serde_derive v1.0.229
+   Compiling zerovec-derive v0.11.6
+   Compiling displaydoc v0.2.7
+   Compiling tokio-macros v2.7.2
+   Compiling tracing v0.1.44
+   Compiling tokio v1.53.3
+   Compiling async-trait v0.1.92
+   Compiling futures-macro v0.3.34
+   Compiling ppv-lite86 v0.2.21
+   Compiling zerofrom v0.1.8
+   Compiling rand_chacha v0.3.1
+   Compiling libsqlite3-sys v0.30.1
+   Compiling yoke v0.8.3
+   Compiling rand v0.8.8
+   Compiling futures-util v0.3.34
+   Compiling hashbrown v0.14.5
+   Compiling tower-service v0.3.3
+   Compiling try-lock v0.2.5
+   Compiling zerovec v0.11.8
+   Compiling zerotrie v0.2.5
+   Compiling want v0.3.2
+   Compiling fallible-iterator v0.3.0
+   Compiling hashlink v0.9.1
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling httpdate v1.0.3
+   Compiling atomic-waker v1.1.2
+   Compiling futures-channel v0.3.34
+   Compiling sync_wrapper v1.0.2
+   Compiling psl-types v2.0.11
+   Compiling tinystr v0.8.4
+   Compiling potential_utf v0.1.6
+   Compiling tower-layer v0.3.3
+   Compiling litrs v1.0.1
+   Compiling icu_collections v2.3.0
+   Compiling icu_locale_core v2.3.0
+   Compiling ipnet v2.12.2
+   Compiling document-features v0.2.12
+   Compiling webpki-roots v1.0.10
+   Compiling chrono v0.4.45
+   Compiling ryu v1.0.23
+   Compiling serde_urlencoded v0.7.1
+   Compiling http-body-util v0.1.5
+   Compiling regex-automata v0.4.18
+   Compiling phf_macros v0.13.1
+   Compiling icu_provider v2.3.1
+   Compiling security-framework-sys v2.17.0
+   Compiling objc2-encode v4.1.0
+   Compiling thiserror v2.0.21
+   Compiling icu_normalizer v2.3.0
+   Compiling icu_properties v2.3.0
+   Compiling security-framework v3.7.0
+   Compiling thiserror-impl v2.0.21
+   Compiling objc2-exception-helper v0.1.1
+   Compiling byteorder v1.5.0
+   Compiling rusqlite v0.32.1
+   Compiling idna_adapter v1.2.2
+   Compiling hyper v1.12.0
+   Compiling idna v1.1.0
+   Compiling tower v0.5.3
+   Compiling url v2.5.8
+   Compiling publicsuffix v2.3.0
+   Compiling tokio-util v0.7.20
+   Compiling phf_codegen v0.13.1
+   Compiling strsim v0.11.1
+   Compiling ident_case v1.0.1
+   Compiling winnow v1.0.4
+   Compiling rustls-webpki v0.103.16
+   Compiling cview-core v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-core)
+   Compiling hyper-util v0.1.21
+   Compiling tower-http v0.6.11
+   Compiling cookie_store v0.22.1
+   Compiling typeid v1.0.3
+   Compiling regex v1.13.1
+   Compiling toml_parser v1.1.5+spec-1.1.0
+   Compiling darling_core v0.24.1
+   Compiling toml_writer v1.1.3+spec-1.1.0
+   Compiling erased-serde v0.4.10
+   Compiling objc2 v0.6.5
+   Compiling web-time v1.1.0
+   Compiling fnv v1.0.7
+   Compiling new_debug_unreachable v1.0.6
+   Compiling phf v0.13.1
+   Compiling string_cache_codegen v0.6.1
+   Compiling alloc-no-stdlib v3.0.0
+   Compiling equivalent v1.0.3
+   Compiling precomputed-hash v0.1.1
+   Compiling hashbrown v0.17.1
+   Compiling alloc-stdlib v0.3.0
+   Compiling web_atoms v0.2.6
+   Compiling semver v1.0.28
+   Compiling block-padding v0.3.3
+   Compiling quick-xml v0.42.0
+   Compiling indexmap v2.14.2
+   Compiling anyhow v1.0.104
+   Compiling rustix v1.1.5
+   Compiling darling_macro v0.24.1
+   Compiling inout v0.1.4
+   Compiling string_cache v0.9.0
+   Compiling brotli-decompressor v6.0.1
+   Compiling keyring v3.6.3
+   Compiling darling v0.24.1
+   Compiling serde_spanned v1.1.2
+   Compiling toml_datetime v1.1.2+spec-1.1.0
+   Compiling same-file v1.0.6
+   Compiling dunce v1.0.5
+   Compiling dtoa v1.0.11
+   Compiling walkdir v2.5.0
+   Compiling toml v1.1.8+spec-1.1.0
+   Compiling dtoa-short v0.3.5
+   Compiling tokio-rustls v0.26.6
+   Compiling cview-persistence v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-persistence)
+   Compiling serde_with_macros v3.24.0
+   Compiling hyper-rustls v0.27.10
+   Compiling brotli v9.0.0
+   Compiling reqwest v0.12.28
+   Compiling cipher v0.4.4
+   Compiling objc2-core-foundation v0.3.2
+   Compiling tendril v0.5.1
+   Compiling selectors v0.38.0
+   Compiling derive_more-impl v2.1.1
+   Compiling cssparser-macros v0.7.1
+   Compiling sha1 v0.10.7
+   Compiling indexmap v1.9.3
+   Compiling camino v1.2.6
+   Compiling utf-8 v0.7.6
+   Compiling glob v0.3.4
+   Compiling ctor v1.0.13
+   Compiling data-encoding v2.11.1
+   Compiling tempfile v3.27.0
+   Compiling cssparser v0.37.0
+   Compiling cview-networking v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-networking)
+   Compiling tungstenite v0.24.0
+   Compiling derive_more v2.1.1
+   Compiling markup5ever v0.39.0
+   Compiling swift-rs v1.0.9
+   Compiling rustls-native-certs v0.8.5
+   Compiling servo_arc v0.4.3
+   Compiling serde_derive_internals v0.29.1
+   Compiling schemars v0.8.22
+   Compiling hashbrown v0.12.3
+   Compiling bit-vec v0.8.0
+   Compiling rustc-hash v2.1.3
+   Compiling bit-set v0.8.0
+   Compiling tokio-tungstenite v0.24.0
+   Compiling html5ever v0.39.0
+   Compiling schemars_derive v0.8.22
+   Compiling cview-auth v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-auth)
+   Compiling cfb v0.14.0
+   Compiling cbc v0.1.2
+   Compiling aes v0.8.4
+   Compiling block2 v0.6.2
+   Compiling jsonptr v0.7.1
+   Compiling cargo-platform v0.1.9
+   Compiling foldhash v0.2.0
+   Compiling dyn-clone v1.0.20
+   Compiling tauri-utils v2.10.2
+   Compiling base64 v0.21.7
+   Compiling cargo_metadata v0.19.2
+   Compiling dom_query v0.28.0
+   Compiling serde-untagged v0.1.9
+   Compiling urlpattern v0.6.0
+   Compiling json-patch v4.2.0
+   Compiling infer v0.22.0
+   Compiling serde_with v3.24.0
+   Compiling plist v1.10.1
+   Compiling simd-adler32 v0.3.10
+   Compiling objc2-foundation v0.3.2
+   Compiling cview-player v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-player)
+   Compiling cview-chat v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-chat)
+   Compiling adler2 v2.0.1
+   Compiling crc32fast v1.5.2
+   Compiling option-ext v0.2.0
+   Compiling miniz_oxide v0.9.1
+   Compiling miniz_oxide v0.8.9
+   Compiling dirs-sys v0.5.0
+   Compiling dirs v7.0.0
+   Compiling fdeflate v0.3.7
+   Compiling rustc_version v0.4.1
+   Compiling phf_shared v0.12.1
+   Compiling chrono-tz v0.10.4
+   Compiling embed-resource v3.0.12
+   Compiling phf v0.12.1
+   Compiling heck v0.5.0
+   Compiling cargo_toml v1.0.1
+   Compiling flate2 v1.1.10
+   Compiling tauri-winres v0.3.6
+   Compiling static_vcruntime v3.0.0
+   Compiling crossbeam-utils v0.8.23
+   Compiling dpi v0.1.2
+   Compiling raw-window-handle v0.6.2
+   Compiling getrandom v0.3.4
+   Compiling crossbeam-channel v0.5.17
+   Compiling foreign-types-macros v0.2.4
+   Compiling bitflags v1.3.2
+   Compiling foreign-types-shared v0.3.1
+   Compiling png v0.17.16
+   Compiling foreign-types v0.5.0
+   Compiling wry v0.57.0
+   Compiling cview-app-core v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app-core)
+   Compiling png v0.18.1
+   Compiling core-graphics-types v0.2.0
+   Compiling muda v0.20.0
+   Compiling tauri-runtime v2.12.2
+   Compiling core-graphics v0.25.0
+   Compiling ico v0.5.0
+   Compiling dispatch2 v0.3.1
+   Compiling keyboard-types v0.8.3
+   Compiling tray-icon v0.25.1
+   Compiling pxfm v0.1.30
+   Compiling tauri-runtime-wry v2.12.2
+   Compiling objc2-core-graphics v0.3.2
+   Compiling serialize-to-javascript-impl v0.1.2
+   Compiling bytemuck v1.25.2
+   Compiling byteorder-lite v0.1.0
+   Compiling serde_repr v0.1.21
+   Compiling mac-notification-sys v0.6.15
+   Compiling embed_plist v1.2.2
+   Compiling mime v0.3.17
+   Compiling rand_core v0.9.5
+   Compiling serialize-to-javascript v0.1.2
+   Compiling lazy_static v1.5.1
+   Compiling rand_chacha v0.9.0
+   Compiling objc2-io-kit v0.3.2
+   Compiling sharded-slab v0.1.7
+   Compiling matchers v0.2.0
+   Compiling rand v0.9.5
+   Compiling tracing-log v0.2.0
+   Compiling thread_local v1.1.10
+   Compiling nu-ansi-term v0.50.3
+   Compiling sysinfo v0.39.6
+   Compiling moxcms v0.8.1
+   Compiling tracing-subscriber v0.3.23
+   Compiling tauri-build v2.7.3
+   Compiling tauri-plugin v2.7.2
+   Compiling tauri-codegen v2.7.3
+   Compiling image v0.25.10
+   Compiling objc2-quartz-core v0.3.2
+   Compiling notify-rust v4.18.2
+   Compiling objc2-app-kit v0.3.2
+   Compiling tauri v2.12.4
+   Compiling tauri-plugin-deep-link v2.6.2
+   Compiling tauri-macros v2.7.3
+   Compiling tauri-plugin-notification v2.7.0
+   Compiling cview-app v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app)
+   Compiling objc2-web-kit v0.3.2
+   Compiling tao v0.37.1
+   Compiling window-vibrancy v0.8.1
+   Compiling tauri-plugin-single-instance v2.5.4
+    Finished `test` profile [unoptimized] target(s) in 52.95s
+     Running unittests src/lib.rs (target/verification-2026-10-27/debug/deps/cview_app-820655175cb5fec8)
+
+running 96 tests
+test commands::auth::tests::only_a_definite_server_logout_expires_the_session ... ok
+test commands::content::tests::page_has_more_follows_total_or_size ... ok
+test commands::media::tests::resume_skips_start_and_end ... ok
+test commands::chat::tests::outgoing_text_is_trimmed_and_capped ... ok
+test commands::auth::tests::network_and_server_errors_are_unknown ... ok
+test commands::content::tests::file_names_are_sanitized ... ok
+test commands::live::tests::keyword_normalization ... ok
+test commands::oauth::tests::callback_parsing_and_hint ... ok
+test commands::content::tests::openable_files_only_media_regular_files ... ok
+test commands::content::tests::save_dirs_and_unique_names ... ok
+test commands::recording::tests::recording_names_are_safe ... ok
+test commands::recording::tests::sniffs_container ... ok
+test commands::oauth::tests::failed_state_or_token_exchange_never_shows_success ... ok
+test commands::oauth::tests::success_page_only_after_completion_succeeds ... ok
+test commands::settings::tests::merge_is_shallow_and_keeps_other_keys ... ok
+test commands::settings::tests::domains_cover_dto_fields ... ok
+test commands::settings::tests::theme_maps_to_window_theme ... ok
+test commands::oauth::tests::user_denial_shows_failure_without_token_exchange ... ok
+test commands::tests::command_error_serializes_as_plain_string ... ok
+test dock_icon::tests::picks_icon_by_app_theme_and_os ... ok
+test dto::tests::auth_status_mapping ... ok
+test dto::tests::channel_dto ... ok
+test dto::tests::chat_events_are_tagged ... ok
+test dto::tests::chat_message_dto ... ok
+test dto::tests::donation_type_and_subscription_tier ... ok
+test commands::settings::tests::patch_player_settings ... ok
+test dto::tests::following_cards_keep_live_only_sorted_by_viewers ... ok
+test dto::tests::blank_category_is_none ... ok
+test dto::tests::live_card_from_live_info ... ok
+test dto::tests::player_events ... ok
+test dto::tests::tagged_chat_event_carries_chat_channel_id ... ok
+test dto::tests::live_detail_falls_back_to_requested_channel ... ok
+test dto::tests::live_without_channel_is_dropped_and_duplicates_collapse ... ok
+test engine::tests::latency_commands_are_gated_by_generation ... ok
+test engine::tests::play_sends_load_source_script ... ok
+test engine::tests::messages_drive_signals ... ok
+test engine::tests::view_model_settings_ride_on_next_load_source ... ok
+test commands::content::tests::concurrent_saves_get_distinct_new_files ... ok
+test image_service::tests::only_https_image_cdns_are_allowed ... ok
+test image_service::tests::redirect_hops_follow_the_same_policy ... ok
+test image_service::tests::request_paths_split_kind_and_url ... ok
+test image_service::tests::client_checks_every_redirect_hop_against_a_local_server ... ok
+test image_service::tests::misses_fail_offline_and_forbidden_hosts_never_fetch ... ok
+test menu::accel_tests::bindings_to_accelerators ... ok
+test menu::tests::ids_are_unique_and_known ... ok
+test menu::tests::separators_only_between_groups ... ok
+test menu::tests::shortcuts_are_unique ... ok
+test multi_live::tests::add_results_map_to_messages ... ok
+test multi_live::tests::engine_commands_carry_slot_and_caps ... ok
+test multi_live::tests::file_layout_store_round_trips ... ok
+test multi_live::tests::focus_layout_update_validates_and_clamps ... ok
+test multi_live::tests::layout_names_round_trip ... ok
+test multi_live::tests::pane_chat_keeps_channel_across_menu_suspend ... ok
+test multi_live::tests::pane_state_serializes_with_kind ... ok
+test multi_live::tests::pool_reuses_released_slots_and_respects_max ... ok
+test perf_log::tests::emit_is_noop_when_disabled ... ok
+test perf_log::tests::redact_hides_secret_keys_deeply ... ok
+test perf_log::tests::rotate_shifts_files ... ok
+test playback::tests::detects_encrypted_media ... ok
+test playback::tests::empty_media_is_no_hls_url ... ok
+test playback::tests::prefers_llhls_by_default ... ok
+test playback::tests::prefers_standard_hls_for_watch_party ... ok
+test playback::tests::resolve_video_then_radio_fallback ... ok
+test state::tests::chat_op_gate_last_request_wins ... ok
+test state::tests::chat_op_gate_serializes_admitted_sections ... ok
+test state::tests::chat_session_key_defaults_to_main ... ok
+test state::tests::corrupt_store_is_moved_aside_and_fresh_store_opens ... ok
+test state::tests::keychain_service_is_separate_from_swift_app ... ok
+test state::tests::release_app_keeps_its_keychain_service ... ok
+test system::tests::deep_link_payloads ... ok
+test system::tests::live_update_feed ... ignored
+test system::tests::platform_installer_selection ... ok
+test system::tests::update_endpoint_configuration ... ok
+test tray::tests::labels ... ok
+test updater::mac::e2e::updater_e2e_real_feed ... ignored
+test updater::tests::auto_install_needs_hash_and_matching_installer ... ok
+test updater::tests::bundle_paths ... ok
+test updater::tests::feed_asset_hash_is_read ... ok
+test updater::tests::requirement_pins_team_and_bundle ... ok
+test image_service::tests::concurrent_loads_share_one_request_and_then_hit_memory ... ok
+test updater::tests::sha256_parsing ... ok
+test updater::tests::version_shape ... ok
+test webview_store::tests::explicit_domain_and_path_are_kept ... ok
+test webview_store::tests::host_only_cookie_gets_fallback_domain ... ok
+test webview_store::tests::tauri_cookie_conversion ... ok
+test window_prefs::tests::plist_escapes_path ... ok
+test windows::tests::specs_and_queries ... ok
+test window_prefs::tests::frame_round_trip_and_sanity ... ok
+test commands::oauth::tests::no_callback_before_deadline_times_out ... ok
+test commands::content::tests::exhausted_names_fail_without_touching_existing_files ... ok
+test image_service::tests::offline_refresh_keeps_the_stale_image ... ok
+test image_service::tests::not_modified_marks_fresh_without_new_bytes ... ok
+test image_service::tests::clear_empties_memory_and_disk ... ok
+test image_service::tests::restart_serves_from_disk_without_network ... ok
+test image_service::tests::stale_is_served_immediately_and_refreshed_in_background ... ok
+test commands::oauth::tests::silent_and_unrelated_connections_do_not_block_the_callback ... ok
+
+test result: ok. 94 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+     Running unittests src/main.rs (target/verification-2026-10-27/debug/deps/cview_app-2b086fd474c52db2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/verification-2026-10-27/debug/deps/cview_app_core-71aab9b7ba932ab7)
+
+running 252 tests
+test actions::cview_action::tests::ids_are_stable ... ok
+test actions::platform::tests::store_open_line_has_only_counts_and_codes ... ok
+test actions::platform::tests::copy_always_announces ... ok
+test actions::cview_action::tests::validation_trims_and_rejects_blank ... ok
+test actions::registry::tests::invalid_action_is_ignored ... ok
+test actions::registry::tests::add_to_multi_chat_goes_to_host ... ok
+test actions::registry::tests::open_live_multi_reserves_mode_then_adds ... ok
+test actions::sidebar_quick_action::tests::toggle_chat_title_reflects_visibility ... ok
+test actions::registry::tests::open_home_resets_hub_mode ... ok
+test actions::sidebar_quick_action::tests::category_and_settings_commands ... ok
+test actions::sidebar_quick_action::tests::playback_commands_and_preset_draft ... ok
+test actions::sidebar_quick_action::tests::availability_and_stale_click ... ok
+test actions::platform::tests::notifications_fall_back_to_settings_root ... ok
+test app_state::tests::auth_follow_up_only_takes_oauth_refresh_and_final_expiry ... ok
+test actions::sidebar_quick_action::tests::content_commands ... ok
+test app_state::tests::live_section_routes_or_applies_mode ... ok
+test actions::sidebar_quick_action::tests::catalog_coverage ... ok
+test app_state::tests::notices ... ok
+test app_state::tests::profile_resync_signals_once_and_rearms_with_spacing ... ok
+test app_state::tests::sidebar_collapsed_persists ... ok
+test app_state::tests::profile_application_rules ... ok
+test app_state::tests::settle_rules ... ok
+test app_state::tests::local_clear_only_empties_mirrors_of_succeeded_steps ... ok
+test app_state::tests::reload_failures_keep_mirrors ... ok
+test app_state::tests::auth_boundary_rotates_scope_and_clears_account_state ... ok
+test app_state::tests::workspace_restore_only_applies_live_modes_without_explicit_navigation ... ok
+test app_state::tests::store_recovery_summary_and_restore_gate ... ok
+test caching::favorites_store::tests::hydrate_skips_same_set_and_apply_reports_change ... ok
+test app_state::tests::gate_noop_when_already_that_composition ... ok
+test app_state::tests::supersede_stops_running_apply ... ok
+test app_state::tests::account_cleanup_chain_keeps_order_and_skips_stale_prune ... ok
+test caching::following_store::tests::boundary_discards_late_result ... ok
+test caching::following_store::tests::concurrent_polls_share_one_flight ... ok
+test caching::following_store::tests::list_live_info_wins_over_stale_detail ... ok
+test caching::following_store::tests::following_set_change_is_reported ... ok
+test caching::following_store::tests::new_live_is_detected_and_fetched_first ... ok
+test caching::following_store::tests::reuse_age_follows_cadence_with_cap ... ok
+test caching::following_store::tests::notify_watch_fetches_every_poll ... ok
+test caching::following_store::tests::result_order_is_live_first_then_api_order ... ok
+test caching::following_store::tests::poll_finished_reports_success_flag ... ok
+test caching::live_catalog_promotion::tests::count_labels_by_quality ... ok
+test caching::following_store::tests::manual_after_scheduled_runs_again_but_manual_joins_manual ... ok
+test caching::live_catalog_promotion::tests::banners_keep_legacy_wording ... ok
+test caching::live_catalog_promotion::tests::event_outcome_names ... ok
+test caching::live_catalog_promotion::tests::exact_completion_always_promotes ... ok
+test caching::live_catalog_promotion::tests::interrupted_outcomes_are_discarded ... ok
+test caching::live_catalog_promotion::tests::keep_window_boundary ... ok
+test caching::following_store::tests::screen_entry_reuses_recent_result_and_retries_after_failure ... ok
+test caching::live_catalog_promotion::tests::stitched_verifier_rejects_old_generation_and_unproven_boundary ... ok
+test caching::live_catalog_promotion::tests::merge_by_channel_keeps_newest_live_and_first_position ... ok
+test app_state::tests::overlapping_applies_do_not_mix_and_keep_chain_origin ... ok
+test caching::live_catalog_promotion::tests::unverified_outcomes_keep_previous_or_become_provisional ... ok
+test caching::live_catalog_store::tests::pause_gate_matrix ... ok
+test caching::live_catalog_store::tests::home_demand_waits_while_summary_is_fresh_and_boot_grace ... ok
+test caching::live_catalog_store::tests::usable_summary_respects_one_day ... ok
+test caching::live_catalog_store::tests::demand_changes_share_one_sweep ... ok
+test caching::recent_channels_store::tests::clear_drops_late_hydrate_and_note_watch ... ok
+test caching::live_catalog_store::tests::partial_failure_reports_failure_and_unscheduled_callback ... ok
+test caching::live_catalog_store::tests::retry_cooldown_after_incomplete_sweep ... ok
+test caching::live_catalog_store::tests::search_landing_and_refused_demand_do_not_sweep ... ok
+test caching::live_catalog_store::tests::manual_request_skips_within_window ... ok
+test caching::recent_channels_store::tests::empty_avatar_keeps_existing_and_non_empty_replaces ... ok
+test caching::recent_channels_store::tests::merge_carries_avatar_from_older_row ... ok
+test caching::recent_channels_store::tests::older_watch_lands_in_time_order ... ok
+test caching::recent_channels_store::tests::watch_before_hydrate_wins_when_newer ... ok
+test caching::recent_channels_store::tests::hydrate_caps_at_thirty_newest ... ok
+test caching::recent_channels_store::tests::same_hydrate_keeps_the_array ... ok
+test caching::recent_channels_store::tests::unchanged_note_watch_does_not_reassign ... ok
+test caching::recent_channels_store::tests::first_time_channel_keeps_given_avatar ... ok
+test caching::recent_channels_store::tests::note_watch_moves_to_front_and_keeps_avatar ... ok
+test caching::workspace_value_cache::tests::lru_evicts_least_recently_used ... ok
+test logic::effective_playback_policy::tests::buffer_is_clamped ... ok
+test logic::category_groups::tests::type_filter_keeps_base_index_and_pins_partition ... ok
+test logic::effective_playback_policy::tests::default_prefers_source_with_rescue ... ok
+test logic::effective_playback_policy::tests::explicit_quality_is_preferred ... ok
+test logic::effective_playback_policy::tests::force_highest_locks_source ... ok
+test logic::category_groups::tests::groups_sorts_and_type_filters ... ok
+test logic::effective_playback_policy::tests::toggles_are_preserved ... ok
+test caching::workspace_snapshot::tests::round_trips_and_clears ... ok
+test logic::following_browser_query::tests::categories_and_search ... ok
+test logic::following_browser_query::tests::queue_candidates_skip_offline_active_and_duplicates ... ok
+test logic::following_browser_query::tests::paging_clamps_index_and_size ... ok
+test logic::following_browser_query::tests::recent_filter_keeps_watch_order_and_dedupes ... ok
+test logic::following_browser_query::tests::recommended_sort_live_then_favorite_then_viewers_then_name ... ok
+test logic::following_browser_query::tests::snapshot_cache_reuses_equal_input ... ok
+test logic::following_channel_sidebar::tests::cache_skips_recompute_for_same_input ... ok
+test logic::following_channel_sidebar::tests::ranking_demotes_active_only_in_multi ... ok
+test logic::following_channel_sidebar::tests::sort_orders ... ok
+test logic::following_overview_list_query::tests::ordering_is_total_and_stable_for_offline_ties ... ok
+test logic::following_overview_list_query::tests::prepare_reuses_previous_for_same_source ... ok
+test logic::following_overview_list_query::tests::slice_caps_and_live_only_lowers_bound ... ok
+test logic::merged_chat_merge_state::tests::reset_publishes_without_new_messages ... ok
+test logic::merged_chat_merge_state::tests::lost_anchor_and_late_arrival ... ok
+test logic::merged_chat_merge_state::tests::restructure_and_moderation_in_one_batch ... ok
+test navigation::deep_link::tests::as_action_mapping ... ok
+test logic::playback_guardrail::tests::chips ... ok
+test logic::pinned_category_decoder::tests::memoizes_by_raw_string ... ok
+test navigation::deep_link::tests::home_fallback_leaves_settings_mode ... ok
+test navigation::deep_link::tests::fallback_preserves_live_mode_without_registry ... ok
+test navigation::deep_link::tests::parses_supported_forms ... ok
+test navigation::hub_mode::tests::deep_link_tokens_round_trip_and_accept_korean_raw ... ok
+test navigation::deep_link::tests::rejects_ambiguous_or_unsafe_ids ... ok
+test navigation::hub_mode::tests::discovery_modes_are_not_live_workspace ... ok
+test navigation::hub_mode::tests::serde_uses_korean_raw_values ... ok
+test navigation::playback_surface::tests::nested_scope_restores_previous ... ok
+test navigation::playback_surface::tests::stale_disappear_does_not_clobber_newer_surface ... ok
+test navigation::router::tests::launch_starts_home_even_with_saved_sidebar ... ok
+test navigation::router::tests::browse_migration_rewrites_last_sidebar ... ok
+test navigation::router::tests::legacy_aliases_select_canonical_and_hub_tab ... ok
+test navigation::router::tests::menu_change_bumps_gate_epoch_only_on_change ... ok
+test navigation::router::tests::multi_live_routes_set_pending_hub_mode_and_clear_watch ... ok
+test navigation::router::tests::origin_not_restored_when_user_left_live ... ok
+test navigation::router::tests::search_route_sets_trimmed_pending_query ... ok
+test navigation::router::tests::select_sidebar_fires_will_change_once_and_pops ... ok
+test navigation::router::tests::settings_enter_and_exit_restore_previous ... ok
+test navigation::router::tests::sidebar_visibility_persists ... ok
+test navigation::router::tests::titles_and_resident_flags ... ok
+test navigation::deep_link_inbox::tests::validates_deduplicates_and_bounds_cold_start_queue ... ok
+test navigation::router::tests::vod_and_category_routes ... ok
+test navigation::router::tests::watch_from_home_has_no_origin_and_blank_is_ignored ... ok
+test logic::merged_chat_merge_state::tests::unchanged_ticks_and_first_eviction ... ok
+test navigation::router::tests::watch_request_records_workspace_origin ... ok
+test navigation::sidebar_destination::tests::current_normalizes_discovery_modes_on_live_route ... ok
+test navigation::sidebar_destination::tests::explore_switch_only_between_discover_items ... ok
+test navigation::sidebar_destination::tests::primary_rows_are_home_live_modes_multichat ... ok
+test navigation::sidebar_destination::tests::titles ... ok
+test services::app_lifecycle::tests::background_event_filter_follows_settings ... ok
+test services::app_lifecycle::tests::background_period_consume_resets ... ok
+test services::app_lifecycle::tests::background_recovery_rules ... ok
+test services::app_lifecycle::tests::in_flight_warning_text ... ok
+test services::app_lifecycle::tests::window_visibility_truth_table ... ok
+test services::background_update::tests::diff_detects_new_title_category_and_orders ... ok
+test services::background_update::tests::stale_epoch_failure_is_ignored_and_clear_snapshot_resets ... ok
+test services::boot_progress::tests::duplicate_calls_are_safe ... ok
+test services::background_update::tests::first_ingest_is_baseline_then_events_flow ... ok
+test services::boot_progress::tests::failed_settings_also_resolve ... ok
+test services::boot_progress::tests::needs_both_flags ... ok
+test services::boot_progress::tests::progress_is_monotonic ... ok
+test services::channel_header_hub::tests::live_status_read_through_order ... ok
+test services::channel_header_hub::tests::last_unsubscribe_cancels_loop ... ok
+test logic::merged_chat_merge_state::tests::trim_is_part_of_final_batch ... ok
+test services::channel_header_hub::tests::resubscribe_after_interval_replays_then_fetches_once ... ok
+test services::channel_header_hub::tests::invalidate_auth_scoped_refetches_ranking ... ok
+test services::channel_header_hub::tests::resubscribe_within_interval_reuses_cache ... ok
+test services::channel_header_hub::tests::two_subscribers_share_one_loop ... ok
+test services::download_history_store::tests::detail_line_parts ... ok
+test services::channel_preset_store::tests::delete ... ok
+test services::media_download::tests::folders ... ok
+test services::media_download::tests::job_id_round_trips ... ok
+test services::media_download::tests::trim_keeps_active_and_newest_finished ... ok
+test services::mention_inbox::tests::ring_buffer_caps_and_remove_by_stream_id ... ok
+test services::mention_inbox::tests::search_store_toggles ... ok
+test services::menu_transition_gate::tests::admit_dedupes_within_epoch ... ok
+test services::menu_transition_gate::tests::content_change_does_not_bump_epoch_and_extends ... ok
+test services::menu_transition_gate::tests::opens_and_expires_by_clock ... ok
+test services::menu_transition_gate::tests::reset_closes_window_but_keeps_epoch ... ok
+test services::menu_transition_gate::tests::short_follow_up_does_not_shorten ... ok
+test services::multi_chat_preferences::tests::cap_evicts_least_recently_touched ... ok
+test services::multi_chat_preferences::tests::keywords_mute_and_rule_cache ... ok
+test services::multi_chat_preferences::tests::last_read_skips_same_value ... ok
+test services::multi_chat_preferences::tests::scopes_are_independent ... ok
+test services::download_history_store::tests::removal_before_hydration_wins_and_missing_file_is_detected ... ok
+test services::multi_chat_workspace_store::tests::missing_file_without_settings_blocks_writes ... ok
+test services::multi_chat_workspace_store::tests::file_is_authoritative_and_clear_flag_keeps_layout ... ok
+test services::multi_chat_workspace_store::tests::size_budget_and_lossy_decode ... ok
+test services::download_history_store::tests::records_survive_restart_and_cap_at_capacity ... ok
+test services::multi_live_proposer::tests::detect_newly_live_rules ... ok
+test services::multi_live_proposer::tests::ingest_skips_baseline_and_caps_at_three ... ok
+test services::multi_live_proposer::tests::pruning_expires_and_drops_offline_but_not_on_empty_lookup ... ok
+test services::multi_chat_workspace_store::tests::updates_before_hydration_apply_after_file_values ... ok
+test services::network_path_monitor::tests::blip_shorter_than_debounce_never_shows_offline ... ok
+test services::network_path_monitor::tests::offline_is_debounced_and_recovery_is_immediate ... ok
+test services::notification_service::tests::response_routes_watch_actions_only ... ok
+test services::notification_service::tests::mention_respects_toggles ... ok
+test services::notification_service::tests::wording_guard_and_latch ... ok
+test services::multi_chat_workspace_store::tests::repeated_updates_write_once_and_scopes_are_isolated ... ok
+test services::channel_preset_store::tests::save_and_restore_keep_kind_and_position ... ok
+test services::pinned_notice_cache::tests::same_notice_is_not_rewritten_but_refreshed_after_a_day ... ok
+test services::pinned_notice_cache::tests::under_limit_keeps_everything ... ok
+test services::refresh_coordinator::tests::demand_sink_maps_u64_instances_onto_coordinator_holders ... ok
+test services::refresh_coordinator::tests::demands_are_counted_per_instance ... ok
+test services::channel_preset_store::tests::name_collision_gets_suffix ... ok
+test services::refresh_coordinator::tests::failed_run_backs_off ... ok
+test services::pinned_notice_cache::tests::corrupted_entries_evicted_first ... ok
+test services::channel_preset_store::tests::save_load_round_trip ... ok
+test services::channel_preset_store::tests::legacy_file_without_kind_reads_as_chat ... ok
+test services::refresh_coordinator::tests::logout_cancels_flights_and_keeps_demands ... ok
+test services::refresh_coordinator::tests::note_completed_defers_next_run ... ok
+test services::refresh_coordinator::tests::run_now_skips_gated_jobs ... ok
+test services::refresh_coordinator::tests::poke_wakes_the_loop ... ok
+test services::pinned_notice_cache::tests::over_limit_evicts_oldest_first ... ok
+test services::refresh_coordinator::tests::sleep_and_wake_settle ... ok
+test services::refresh_coordinator::tests::ticks_fire_for_unregistered_jobs ... ok
+test services::refresh_coordinator::tests::login_transition_seeds_last_run ... ok
+test services::channel_preset_store::tests::concurrent_stores_do_not_lose_updates ... ok
+test services::channel_preset_store::tests::unsupported_import_version_does_not_change_existing ... ok
+test services::support::tests::memory_store_round_trip ... ok
+test services::refresh_coordinator::tests::run_now_is_single_flight ... ok
+test services::support::tests::natural_compare_orders_numbers_and_case ... ok
+test services::update_service::tests::bundle_validation_rules ... ok
+test services::update_service::tests::version_and_build_parsing ... ok
+test services::refresh_coordinator::tests::sleep_during_wake_settle_cancels_resume ... ok
+test services::single_instance_guard::tests::second_engage_is_secondary_until_primary_drops ... ok
+test services::update_service::tests::check_for_updates_paths ... ok
+test services::refresh_coordinator::tests::sweep_is_zero_when_setting_off_and_only_home_visible ... ok
+test services::vod_feed::tests::classify_failure_kinds ... ok
+test services::vod_feed::tests::breaker_stops_new_requests_when_offline ... ok
+test services::vod_feed::tests::failure_retries_and_short_page_exhausts ... ok
+test services::support::tests::file_store_persists ... ok
+test services::vod_feed::tests::leftover_items_are_preserved_in_order ... ok
+test services::vod_feed::tests::next_page_continues_without_gap ... ok
+test services::vod_feed::tests::merged_local_rows_follow_store_rules ... ok
+test services::vod_feed::tests::overlapping_page_is_deduplicated ... ok
+test services::channel_preset_store::tests::export_import_round_trip ... ok
+test services::vod_playback_progress::tests::disposition_rules ... ok
+test services::vod_feed::tests::strict_mode_waits_for_exhausted_active_channel ... ok
+test services::vod_feed::tests::seed_computes_next_pages ... ok
+test services::vod_playback_progress::tests::player_values_before_hydrate_win ... ok
+test services::vod_sync_state::tests::cadence_tiers_and_boundaries ... ok
+test services::vod_sync_state::tests::due_rules ... ok
+test services::vod_feed::tests::fanout_keeps_concurrency_limit_and_covers_every_channel ... ok
+test services::vod_sync_state::tests::planner_orders_tiers ... ok
+test services::vod_sync_state::tests::subscription_tag_requires_allowed_scope ... ok
+test services::vod_sync_state::tests::state_normalizes_and_encodes_stably ... ok
+test services::vod_sync_store::tests::entry_window_budget ... ok
+test services::vod_sync_store::tests::failure_and_retain ... ok
+test services::vod_sync_store::tests::live_end_signals ... ok
+test services::vod_sync_store::tests::scope_of_tag_and_profiles ... ok
+test services::watch_heartbeat::tests::interval_backoff ... ok
+test services::watch_heartbeat::tests::ref_state_rules ... ok
+test services::watch_heartbeat::tests::reusable_status_window ... ok
+test sync::install_identity::tests::concurrent_callers_share_one_id_and_reuse_keychain ... ok
+test viewmodels::chat::pacing::tests::base_counts ... ok
+test sync::watch_history_sync::tests::failures_back_off_exponentially_and_disabled_is_noop ... ok
+test sync::watch_history_sync::tests::push_marks_only_accepted_rows ... ok
+test viewmodels::chat::pacing::tests::capped_respects_budget ... ok
+test sync::watch_history_sync::tests::overlapping_pushes_send_one_batch_then_rerun ... ok
+test viewmodels::chat::pacing::tests::load_aware_budget_sums_to_aggregate ... ok
+test viewmodels::chat::pacing::tests::drip_plan_single_row_until_lag_budget ... ok
+test viewmodels::chat::pacing::tests::merged_floor ... ok
+test viewmodels::chat::pacing::tests::soft_cap_has_floor_and_ceiling ... ok
+test viewmodels::chat::tts::tests::formats ... ok
+test viewmodels::chat::settings::tests::decodes_defaults_and_clamps ... ok
+test viewmodels::chat::tts::tests::queue_caps_at_five ... ok
+test viewmodels::support::tests::format_number_groups ... ok
+test viewmodels::support::tests::observed_bumps_revision_on_lock_drop ... ok
+test services::vod_sync_store::tests::round_trip ... ok
+test services::refresh_coordinator::tests::unchanged_update_does_not_poke ... ok
+test services::vod_sync_store::tests::scopes_are_isolated_and_reset_drops_pending_save ... ok
+test services::watch_heartbeat::tests::center_dedups_loops_and_suspends ... ok
+test viewmodels::chat::autocomplete::tests::detects_triggers ... ok
+test services::pinned_notice_cache::tests::dismissed_ids_are_fifo_capped ... ok
+
+test result: ok. 252 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/app_state_flow.rs (target/verification-2026-10-27/debug/deps/app_state_flow-5b94f3fd5740b69d)
+
+running 1 test
+test login_flow_then_workspace_round_trip ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/viewmodels_all_broadcasts.rs (target/verification-2026-10-27/debug/deps/viewmodels_all_broadcasts-980b5e46b10427e2)
+
+running 5 tests
+test category_browse_cache_keys ... ok
+test paging_loads_more_and_dedupes ... ok
+test refresh_first_page_only_when_pristine ... ok
+test stale_load_more_is_discarded ... ok
+test search_debounces_and_pages ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/viewmodels_channel_detail.rs (target/verification-2026-10-27/debug/deps/viewmodels_channel_detail-cdc4f9694bd0e3a9)
+
+running 18 tests
+test hint_live_decides_pending ... ok
+test invalidate_profile_keeps_lists_and_reloads_profile_only ... ok
+test hydrate_never_overwrites_network_content ... ok
+test hydrated_live_stays_pending_until_confirmed ... ok
+test background_hydrate_is_cancelled_by_invalidate ... ok
+test hydrate_fills_lists_only_when_empty ... ok
+test old_snapshot_profile_is_reloaded ... ok
+test invalidate_discards_late_hydrate ... ok
+test hydrate_stamps_ages_into_ttl ... ok
+test paging_needs_first_page ... ok
+test profile_invalidated_while_hydrating_keeps_lists ... ok
+test persist_snapshot_after_successful_load ... ok
+test partial_middle_page_stops_ordered_assembly ... ok
+test snapshot_beats_seed ... ok
+test ttl_and_failure_messages ... ok
+test profile_response_racing_invalidation_stays_due ... ok
+test unusable_timestamps_are_due_immediately ... ok
+test old_page_completion_preserves_newer_loading_flag ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/viewmodels_chat.rs (target/verification-2026-10-27/debug/deps/viewmodels_chat-1f2bc214798a4b3f)
+
+running 38 tests
+test drop_notice_is_rate_limited ... ok
+test background_unread_counts_and_resets ... ok
+test blind_across_all_buffers ... ok
+test blind_carries_server_reason_and_revision_only_on_mutation ... ok
+test backlog_commits_at_once_live_drips ... ok
+test empty_backlog_releases_hold ... ok
+test foreground_lease_overrides_background_request ... ok
+test early_rejection_then_register_reclaims_immediately ... ok
+test detach_takes_effect_before_awaiting_engine_close ... ok
+test backlog_precedes_queued_live_and_dedupes ... ok
+test dropped_pending_returns_with_reconnect_backlog ... ok
+test backlog_does_not_raise_mentions_unread_or_badge ... ok
+test incremental_stats_and_stream_alert_merge ... ok
+test internal_reconnect_backlog_follows_older_queue ... ok
+test kick_blocks_send_but_keeps_connection_state ... ok
+test late_finishing_older_connect_request_does_not_override_newer_channel ... ok
+test nil_or_unknown_tid_removes_nothing ... ok
+test event_loop_delivers_engine_events ... ok
+test outgoing_emojis_only_used ... ok
+test live_during_hold_keeps_mention_semantics ... ok
+test notice_removal_clears_banner_and_only_current_cache ... ok
+test purge_user_keeps_head_and_dead_prefix ... ok
+test reclaim_covers_pending_and_hold_and_closes_history_flag ... ok
+test reading_freezes_list_and_rejoins_on_exit ... ok
+test rejection_reclaims_only_the_named_echo ... ok
+test send_appends_local_echo_and_suppresses_server_echo ... ok
+test same_channel_reconnect_keeps_history_other_channel_clears ... ok
+test hot_session_gets_larger_share_and_recompute_is_throttled ... ok
+test settings_roundtrip ... ok
+test send_without_login_fails_and_commands_are_local ... ok
+test streamer_only_gate ... ok
+test welcome_shown_once ... ok
+test emoticon_autocomplete_index_rebuilds_lazily ... ok
+test autocomplete_mentions_and_apply ... ok
+test echo_table_is_bounded_and_has_expiry ... ok
+test hold_releases_on_timeout ... ok
+test penalty_timer_does_not_release_later_kick ... ok
+test penalty_messages_and_auto_release ... ok
+
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.31s
+
+     Running tests/viewmodels_clip.rs (target/verification-2026-10-27/debug/deps/viewmodels_clip-82a4306d0429292b)
+
+running 20 tests
+test channel_id_heuristic_accepts_only_hex ... ok
+test format_time_matches_vod_player ... ok
+test clip_player_empty_uid_errors ... ok
+test auto_refresh_keeps_trending_page ... ok
+test clip_tap_routes_to_preview_or_player ... ok
+test hub_page_lifecycle_effects ... ok
+test missing_api_reports_error ... ok
+test channel_suggestions_skip_ids_and_short_ascii_and_debounce ... ok
+test clip_player_note_extracted_rejects_blob_and_takes_first ... ok
+test clip_player_falls_back_to_inkey_stream_url ... ok
+test mood_matching_uses_title_and_category ... ok
+test clip_player_sets_embed_and_resolves_download_url ... ok
+test resolve_channel_id_falls_through_for_names ... ok
+test popular_channel_clips_keep_loaded_order ... ok
+test submit_invalid_channel_input_reports_error ... ok
+test mood_change_resets_trending_page_and_filters ... ok
+test watch_later_queue_and_recent_channels_persist ... ok
+test channel_pages_do_not_touch_clip_cache ... ok
+test trending_refresh_still_prunes_dropped_rows ... ok
+test channel_paging_retries_and_fills ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/viewmodels_following.rs (target/verification-2026-10-27/debug/deps/viewmodels_following-600afc9e14dd4667)
+
+running 17 tests
+test add_session_result_contract ... ok
+test hub_mode_change_invalidates_requests ... ok
+test in_menu_multi_add_chain_defers_rollback_until_last_finishes ... ok
+test hub_mode_presets_drive_layout_and_surfaces ... ok
+test defaults_migration_and_restore ... ok
+test hub_mode_tokens ... ok
+test docks_toggle ... ok
+test menu_epoch_change_invalidates_requests ... ok
+test duplicate_watch_navigation_is_ignored ... ok
+test failed_multi_navigation_with_no_new_session_restores_origin ... ok
+test failed_watch_navigation_rolls_back_to_origin ... ok
+test navigate_to_multi_success_and_capacity_error ... ok
+test navigate_to_watch_adds_session_and_activates_audio ... ok
+test navigate_to_watch_existing_session_commits_immediately ... ok
+test smart_queue_batch_returns_last_success ... ok
+test smart_queue_enqueue_and_undo ... ok
+test watch_navigation_superseded_by_newer_request ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/viewmodels_home.rs (target/verification-2026-10-27/debug/deps/viewmodels_home-975f5215c20a0151)
+
+running 29 tests
+test complete_requires_matching_exact_count ... ok
+test empty_inputs_have_zero_totals ... ok
+test catalog_count_labels ... ok
+test compact_count_preserves_quality ... ok
+test falls_back_to_live_and_dedupes_by_id ... ok
+test demand_sweep_decision_respects_spacing ... ok
+test catalog_totals_ignore_popular_list ... ok
+test following_failure_unauthorized_and_generic ... ok
+test auto_refresh_gate_tracks_holders ... ok
+test cancelled_sweep_restores_previous_quality ... ok
+test following_stats ... ok
+test freshness_display_rules ... ok
+test incomplete_retry_intervals_follow_policy ... ok
+test following_poll_publishes_and_throttles_viewer_only_changes ... ok
+test keep_window_boundary_and_wording ... ok
+test invalidate_following_authentication_clears_everything ... ok
+test legacy_cache_restores_as_truncated ... ok
+test boot_preload_does_not_override_network_or_other_scope ... ok
+test load_live_channels_failure_sets_error ... ok
+test popular_top_six_by_viewers ... ok
+test recommendation_scores ... ok
+test restore_commit_rejects_fresh_generation ... ok
+test promotion_matrix ... ok
+test load_live_channels_commits_revision_and_derived ... ok
+test sweep_result_keeps_previous_verified_rows_on_unverified_terminal ... ok
+test load_from_cache_respects_scope_and_generation ... ok
+test sweep_result_verified_completion_commits_rows ... ok
+test boot_preload_fills_popular_and_holds_following_until_allowed ... ok
+test provisional_boot_following_then_confirm_or_reject ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/viewmodels_multi_live.rs (target/verification-2026-10-27/debug/deps/viewmodels_multi_live-6f3ce875c8a92947)
+
+running 51 tests
+test eviction_victim_and_restart_policies ... ok
+test decode_rank_and_budget_policies ... ok
+test focus_entry_uses_selected_pane_as_main ... ok
+test double_tap_main_swaps_without_touching_focus_main ... ok
+test drop_onto_focus_main_promotes ... ok
+test auto_picture_enhancement_only_on_main_pane ... ok
+test background_mode_and_snapshot ... ok
+test emergency_downgrade_reaches_pinned_pane_and_releases_after ... ok
+test audible_peer_keeps_480_floor ... ok
+test drag_main_onto_secondary_and_empty_main_fallback ... ok
+test focus_quality_policy_geometry_and_hysteresis ... ok
+test focus_roles_control_decoder_target ... ok
+test focus_swap_restores_main_immediately ... ok
+test layout_exit_and_single_session_restore_full_quality ... ok
+test layout_mode_transition_and_apply ... ok
+test layout_prefs_round_trip_and_restore ... ok
+test many_panes_cap_secondary_at_360p ... ok
+test main_pane_gets_latency_margin_by_pane_count ... ok
+test live_detail_timeout_returns_engine ... ok
+test main_and_pip_are_protected_from_emergency_downgrade ... ok
+test measured_exhaustion_requests_lowest_level ... ok
+test multi_audio_selection_preserves_enabled_set ... ok
+test mute_before_append_avoids_audible_floor ... ok
+test pane_sizes_follow_roles ... ok
+test rate_budget_splits_twelve_percent ... ok
+test occluded_panes_stay_suspended_across_budget_refreshes ... ok
+test removal_and_missing_main_fall_back_to_first ... ok
+test repeated_focus_switch_uses_latest_role ... ok
+test rerouting_current_audio_and_audible_vs_enabled ... ok
+test add_session_selects_first_and_evicts_lru_in_watch_mode ... ok
+test removing_selection_keeps_independent_audio_and_manual_mute ... ok
+test memory_pressure_limits_budget_then_recovers ... ok
+test selection_and_pip_remain_protected ... ok
+test selection_reconciles_all_audio ... ok
+test session_plan_failure_and_missing_backend ... ok
+test smoothing_ignores_small_changes ... ok
+test session_start_plays_and_stop_resets ... ok
+test tile_drop_resolve_rules ... ok
+test thermal_and_occlusion_reasons_are_independent ... ok
+test thermal_serious_caps_secondaries_only ... ok
+test repeated_round_trips_restore_every_pane ... ok
+test stop_all_tears_down_and_resets_layout ... ok
+test unknown_capacity_releases_network_cap_and_resets_smoothing ... ok
+test toggle_semantics_single_and_multi ... ok
+test watch_entry_preflight_and_api_unavailable_keeps_sessions ... ok
+test watch_transition_rejects_closed_and_superseded_requests ... ok
+test watch_stage_limits_decode_to_keep_alive_set ... ok
+test session_poll_marks_offline_when_closed ... ok
+test zap_requests_are_capped_and_expire ... ok
+test watch_stage_handoff_then_exit_restores_every_pane ... ok
+test watch_stage_round_trip_restores_every_pane ... ok
+
+test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/viewmodels_player.rs (target/verification-2026-10-27/debug/deps/viewmodels_player-9dca3683a4d7a490)
+
+running 38 tests
+test jump_to_live_keeps_pause_on_snap ... ok
+test multi_live_menu_exposes_single_closest_1080p ... ok
+test latency_history_downsamples_by_input_sequence ... ok
+test first_step_counts_current_delay ... ok
+test access_reset_only_ends_server_time_machine ... ok
+test failure_event_clears_recording_indicator ... ok
+test demoted_session_returns_to_live_but_keeps_recording ... ok
+test jump_to_live_works_while_paused_and_rewound ... ok
+test equal_values_skip_invalidation ... ok
+test buffering_is_debounced_after_recent_playing ... ok
+test overlay_state_mapping ... ok
+test multi_live_watch_session_exposes_live_timeline ... ok
+test multi_live_quality_click_only_accepts_target ... ok
+test pre_amp_builds_graph_and_keeps_preset_bands ... ok
+test rapid_steps_accumulate_before_metrics_catch_up ... ok
+test reconnect_preserves_session_audio ... ok
+test recording_and_screenshot_status_are_independent ... ok
+test rewind_recording_config_follows_settings ... ok
+test rewind_requests_ignored_when_ended ... ok
+test rewind_source_none_or_server ... ok
+test screenshot_base_names ... ok
+test seconds_behind_falls_back_to_latency_without_window ... ok
+test set_multi_live_marks_pane_player ... ok
+test stored_bands_are_fitted ... ok
+test stored_equalizer_values_win_over_preset ... ok
+test stored_pre_amp_alone_is_restored_and_empty_leaves_state ... ok
+test time_formatting ... ok
+test time_machine_window_and_seek ... ok
+test video_adjust_follows_settings ... ok
+test user_volume_before_start_wins ... ok
+test time_shift_ended_event_clears_rewind_state ... ok
+test volume_writes_are_bounded ... ok
+test stop_path_checks_writer_failure ... ok
+test write_screenshot_creates_folder_and_never_overwrites ... ok
+test take_screenshot_reports_status ... ok
+test start_failure_surfaces_error_phase ... ok
+test start_success_follows_coordinator_events_and_stops ... ok
+test stream_event_tap_sees_current_session_events ... ok
+
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/viewmodels_search.rs (target/verification-2026-10-27/debug/deps/viewmodels_search-72b4a7e992fc813f)
+
+running 13 tests
+test landing_snapshot_skips_same_revision_and_recomputes_on_move ... ok
+test autocomplete_uses_recent_following_watched ... ok
+test query_change_clears_clip_sources ... ok
+test cold_search_is_four_requests ... ok
+test load_more_catches_up_before_paging ... ok
+test clip_tab_catches_up_remaining_sources ... ok
+test research_within_fresh_window_sends_nothing ... ok
+test result_cache_is_lru ... ok
+test scope_mapping_and_live_sort ... ok
+test load_more_fetches_only_unexhausted_next_page ... ok
+test snapshot_restore_keeps_clip_sources ... ok
+test debounce_runs_only_last_query ... ok
+test recent_searches_cap_and_persist ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/viewmodels_vod.rs (target/verification-2026-10-27/debug/deps/viewmodels_vod-31b594dcf7f90488)
+
+running 20 tests
+test format_time_matches_swift ... ok
+test disposition_keeps_continue_watching_contract ... ok
+test mirror_reflects_only_queued_values ... ok
+test completed_remove_keeps_generation_terminal ... ok
+test in_flight_remove_rejects_late_record_and_allows_next_generation ... ok
+test late_record_cannot_resurrect_pending_remove ... ok
+test dominating_channel_fetches_only_its_next_page ... ok
+test vod_player_quality_speed_mute_and_stop ... ok
+test vod_player_resolve_failure_sets_error ... ok
+test vod_player_resumes_saved_position_and_records_on_pause ... ok
+test writer_serializes_and_coalesces_without_cross_video_loss ... ok
+test watch_later_toggle_and_library ... ok
+test fresh_state_makes_no_requests ... ok
+test missing_channel_is_filled_from_follow_list ... ok
+test account_switch_invalidates_and_reads_new_account_copy ... ok
+test failures_keep_the_local_feed ... ok
+test load_more_adds_received_pages_only ... ok
+test unfollowed_channels_pruned_only_with_authoritative_list ... ok
+test cold_entry_stays_within_budget ... ok
+test search_debounces_and_pages ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.81s
+
+     Running tests/viewmodels_vod_library.rs (target/verification-2026-10-27/debug/deps/viewmodels_vod_library-c42699347ff2265d)
+
+running 8 tests
+test unencrypted_playback_keeps_selected_mode ... ok
+test encrypted_playback_requires_authenticated_key ... ok
+test empty_channel_is_empty_state ... ok
+test first_load_failure_is_error_not_empty ... ok
+test select_loads_first_page_and_pages_with_retry ... ok
+test finish_ignores_stale_token ... ok
+test resolve_falls_back_to_name_search ... ok
+test repeated_toggle_recovers_last_committed_membership ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (target/verification-2026-10-27/debug/deps/cview_auth-ed89f0b527f9043f)
+
+running 59 tests
+test cookie::tests::restore_empty_is_false ... ok
+test cookie::tests::no_cookies ... ok
+test cookie::tests::empty_value_ignored ... ok
+test cookie::tests::both_cookies_present ... ok
+test cookie::tests::expired_cookies_are_invisible ... ok
+test cookie::tests::domain_lookalikes_excluded ... ok
+test cookie::tests::ingest_broadcasts_naver_domain_copy ... ok
+test cookie::tests::auth_cookies_filter ... ok
+test cookie::tests::partial_cookies ... ok
+test cookie::tests::save_without_cookies_is_noop ... ok
+test cookie::tests::restore_skips_foreign_entries ... ok
+test cookie::tests::save_then_restore_into_fresh_jar ... ok
+test cookie::tests::save_writes_keychain_payload ... ok
+test cookie::tests::webview_sync_and_clear ... ok
+test cookie::tests::wrong_domain_ignored ... ok
+test credentials::tests::both_halves_required ... ok
+test cookie::tests::clear_removes_auth_cookies_only ... ok
+test credentials::tests::sanitizes_pasted_input ... ok
+test credentials::tests::environment_resolution ... ok
+test credentials::tests::corrupt_stored_value_is_missing_for_refresh ... ok
+test credentials::tests::save_validates_and_round_trips ... ok
+test csrf::tests::nil_url_rejected ... ok
+test csrf::tests::url_without_state_rejected ... ok
+test csrf::tests::mismatch_rejected ... ok
+test csrf::tests::matches ... ok
+test generation::tests::advance_and_check ... ok
+test csrf::tests::nil_callback_rejected ... ok
+test csrf::tests::empty_state_rejected ... ok
+test login_flow::tests::callback_error_falls_back_with_resync ... ok
+test login_flow::tests::callback_parsing ... ok
+test login_flow::tests::cookie_only_when_no_auth_url ... ok
+test login_flow::tests::oauth_code_flow ... ok
+test login_flow::tests::web_errors ... ok
+test oauth_models::tests::build_auth_url ... ok
+test oauth_models::tests::build_auth_url_custom_base ... ok
+test oauth_models::tests::build_auth_url_special_values_round_trip ... ok
+test oauth_models::tests::chzzk_preset ... ok
+test oauth_models::tests::custom_init_defaults ... ok
+test oauth_models::tests::build_auth_url_with_pkce ... ok
+test oauth_models::tests::expiration_rules ... ok
+test oauth_models::tests::expires_at_computed ... ok
+test oauth_models::tests::partial_profile_response ... ok
+test oauth_models::tests::profile_response ... ok
+test oauth_models::tests::keychain_round_trip ... ok
+test oauth_models::tests::token_response_error ... ok
+test oauth_models::tests::token_response_success ... ok
+test oauth_models::tests::token_response_without_refresh_token ... ok
+test oauth_models::tests::tokens_serde_round_trip ... ok
+test pkce::tests::base64url_alphabet ... ok
+test pkce::tests::generated_verifier_is_unreserved_and_unique ... ok
+test pkce::tests::rfc7636_appendix_b ... ok
+test refresh_failures::tests::messages ... ok
+test refresh_failures::tests::refresh_failure_classification ... ok
+test refresh_failures::tests::token_endpoint_status_mapping ... ok
+test secret_store::tests::env_override_for_system_keychain ... ok
+test secret_store::tests::percent_encoding_matches_swift_alphanumerics ... ok
+test secret_store::tests::vault_corrupt_original_is_backed_up_before_overwrite ... ok
+test secret_store::tests::vault_read_failure_is_not_retried ... ok
+test secret_store::tests::vault_reads_once_and_writes_only_on_change ... ok
+
+test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/auth_manager.rs (target/verification-2026-10-27/debug/deps/auth_manager-5f8ee18ffcd47313)
+
+running 34 tests
+test expire_ignores_oauth_and_logged_out_states ... ok
+test keychain_that_stays_locked_reports_logged_out_and_keeps_values ... ok
+test cookie_login_success_sets_cookie_state ... ok
+test expired_token_without_refresh_token_logs_out ... ok
+test missing_client_credentials_at_boot_logs_out ... ok
+test fetch_oauth_profile_sends_refreshed_token ... ok
+test failed_refresh_does_not_retry_on_every_request ... ok
+test fetch_oauth_profile_does_not_send_when_token_unavailable ... ok
+test locked_keychain_at_boot_is_retried_not_logged_out ... ok
+test missing_client_credentials_mid_session_drops_tokens ... ok
+test offline_boot_with_kept_tokens_stays_logged_in ... ok
+test offline_boot_then_recovery_never_reports_logged_out ... ok
+test offline_failure_keeps_backoff_short ... ok
+test new_login_clears_backoff ... ok
+test rejected_startup_refresh_clears_tokens ... ok
+test refresh_failure_falls_back_to_cookie_login ... ok
+test rejection_after_offline_boot_drops_tokens ... ok
+test server_logged_out_expires_cookie_session_without_wiping_keychain ... ok
+test restored_cookies_take_precedence_over_kept_tokens ... ok
+test stale_validation_cannot_expire_newer_login ... ok
+test transient_failure_after_boot_keeps_tokens ... ok
+test transient_startup_failure_keeps_tokens ... ok
+test delayed_startup_restore_cannot_replace_explicit_login_or_logout ... ok
+test transient_boot_failure_keeps_session ... ok
+test unreadable_credentials_at_boot_keep_session ... ok
+test transport_failures_keep_backoff_short ... ok
+test unclassified_boot_failure_logs_out_but_keeps_stored_tokens ... ok
+test unreadable_credentials_mid_session_keep_tokens ... ok
+test valid_stored_tokens_restore_without_refresh ... ok
+test late_exchange_cannot_undo_logout ... ok
+test token_provider_trait_reflects_state ... ok
+test old_exchange_failure_cannot_expire_newer_login ... ok
+test suspended_refresh_cannot_persist_after_logout ... ok
+test old_refresh_cannot_release_new_generation_slot ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/oauth_service.rs (target/verification-2026-10-27/debug/deps/oauth_service-b8eb0163026882fa)
+
+running 12 tests
+test static_config_carries_no_secret ... ok
+test no_auth_url_without_credentials ... ok
+test token_requests_fail_closed_without_credentials ... ok
+test resolved_credentials_reach_token_request ... ok
+test injected_config_wins ... ok
+test auth_url_uses_resolved_client_id_and_state_validates ... ok
+test token_request_empty_content_is_rejection_and_offline_is_transport ... ok
+test profile_and_validation_over_http ... ok
+test refresh_keeps_input_refresh_token_when_omitted ... ok
+test token_request_http_shape_and_success ... ok
+test pkce_verifier_sent_once_and_state_cleared ... ok
+test token_request_non_200_goes_through_status_mapping ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/secret_store.rs (target/verification-2026-10-27/debug/deps/secret_store-12c52f3318a40693)
+
+running 13 tests
+test failed_save_never_writes_plaintext ... ok
+test existing_keychain_wins_and_missing_returns_none ... ok
+test explicit_file_mode_does_not_touch_keychain ... ok
+test failed_migration_preserves_legacy_and_can_retry ... ok
+test file_mode_delete_also_clears_keychain ... ok
+test locked_keychain_does_not_read_or_promote_legacy ... ok
+test file_mode_delete_all_also_clears_keychain ... ok
+test persistence_checks_generation_inside_write_and_delete ... ok
+test file_store_restricts_permissions_and_preserves_other_services ... ok
+test delete_all_clears_everything ... ok
+test string_and_codable ... ok
+test special_character_keys_and_multiple_keys ... ok
+test crud_round_trips ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running unittests src/lib.rs (target/verification-2026-10-27/debug/deps/cview_chat-f19d7d667e8fc76e)
+
+running 157 tests
+test json::tests::fnv1a_reference_values ... ok
+test tests::engine_tests::connection_state_display_text ... ok
+test json::tests::nsnumber_bridging ... ok
+test tests::engine_tests::configuration_max_buffer ... ok
+test tests::engine_tests::configuration_server_url ... ok
+test json::tests::writer_matches_jsonserialization ... ok
+test tests::engine_tests::duplicates_within_one_batch_are_rejected ... ok
+test tests::engine_tests::cleared_ids_can_be_re_added ... ok
+test tests::engine_tests::duplicate_ids_are_rejected ... ok
+test tests::engine_tests::disconnect_is_idempotent_and_emits_state_changed ... ok
+test tests::engine_tests::clear_messages_emits_event ... ok
+test tests::engine_tests::empty_ids_bypass_dedupe ... ok
+test json::tests::key_order_is_numeric_and_case_insensitive ... ok
+test tests::engine_tests::background_mode_is_durable ... ok
+test tests::engine_tests::empty_token_is_rejected ... ok
+test tests::engine_tests::extra_token_can_become_none ... ok
+test tests::engine_tests::failure_keeps_previous_token ... ok
+test tests::engine_tests::initial_state ... ok
+test tests::engine_tests::first_attempt_does_not_refresh ... ok
+test tests::engine_tests::no_provider_keeps_initial_token ... ok
+test tests::engine_tests::notice_never_enters_message_buffer ... ok
+test tests::engine_tests::refreshes_on_every_retry ... ok
+test tests::engine_tests::order_is_preserved ... ok
+test tests::engine_tests::repeated_hidden_snapshot_updates_existing_message_once ... ok
+test tests::engine_tests::removed_id_can_be_re_added ... ok
+test tests::engine_tests::request_recent_messages_silently_returns_when_disconnected ... ok
+test tests::engine_tests::duplicate_bursts_do_not_reach_consumers_and_empty_recent_still_completes ... ok
+test tests::engine_tests::repeated_clean_bot_snapshot_carries_its_own_blind_text ... ok
+test tests::engine_tests::retries_refresh ... ok
+test tests::engine_tests::send_message_fails_when_disconnected ... ok
+test tests::moderation_tests::blocked_user_is_filtered ... ok
+test tests::moderation_tests::initial_blocked_users_applied ... ok
+test tests::moderation_tests::has_active_rules_union ... ok
+test tests::moderation_tests::disabled_filter_is_bypassed ... ok
+test tests::moderation_tests::clean_expired_mutes_prunes ... ok
+test tests::moderation_tests::empty_keyword_list_passes_all ... ok
+test tests::moderation_tests::command_parse_and_results ... ok
+test tests::moderation_tests::keyword_filter_matches ... ok
+test tests::moderation_tests::mute_command_clamps_hostile_duration ... ok
+test tests::moderation_tests::mute_immediately_expired ... ok
+test tests::moderation_tests::combined_rules_are_or ... ok
+test tests::moderation_tests::muted_user_blocked ... ok
+test tests::moderation_tests::privileged_messages_bypass_keyword_filter ... ok
+test tests::moderation_tests::set_keyword_filter_empty ... ok
+test tests::moderation_tests::remove_all_filters_clears_content_only ... ok
+test tests::moderation_tests::set_keyword_filter_enabled_false ... ok
+test tests::moderation_tests::set_keyword_filter_replaces ... ok
+test tests::moderation_tests::unblock_restores_messages ... ok
+test tests::moderation_tests::should_show_agrees_with_filter ... ok
+test tests::moderation_tests::unmute_restores ... ok
+test tests::parser_tests::anonymous_id_prefix_when_uid_missing ... ok
+test tests::moderation_tests::invalid_regex_is_silent_no_op ... ok
+test tests::parser_tests::build_connect_message_is_byte_exact ... ok
+test tests::parser_tests::anonymous_flag_overrides_nickname ... ok
+test tests::parser_tests::blind_kick_penalty_pong_system_emote_unknown ... ok
+test tests::parser_tests::build_recent_chat_and_pong ... ok
+test tests::parser_tests::command_codes ... ok
+test tests::parser_tests::clean_bot_blinded_message ... ok
+test tests::parser_tests::build_send_message_is_byte_exact ... ok
+test tests::parser_tests::connected_event_and_rejections ... ok
+test tests::parser_tests::core_command_mapping ... ok
+test tests::parser_tests::deterministic_message_id ... ok
+test tests::parser_tests::emoji_map_parsing ... ok
+test tests::parser_tests::inbound_commands_map_to_known_events ... ok
+test tests::engine_tests::trimmed_ids_can_be_re_added ... ok
+test tests::parser_tests::kick_target_fields_and_fallbacks ... ok
+test tests::parser_tests::equivalent_extras_have_same_identity ... ok
+test tests::parser_tests::multiple_and_empty_messages ... ok
+test tests::parser_tests::hidden_messages_never_expose_payload ... ok
+test tests::parser_tests::no_profile_defaults_to_unknown ... ok
+test tests::parser_tests::non_string_emoji_values_are_dropped ... ok
+test tests::parser_tests::normal_status_not_blinded ... ok
+test tests::parser_tests::notice_events ... ok
+test tests::parser_tests::notice_id_is_stable_by_content ... ok
+test tests::parser_tests::notice_removal_and_recent_snapshot_are_preserved ... ok
+test tests::parser_tests::numeric_fields_cannot_trap_or_misidentify ... ok
+test tests::parser_tests::parse_donation_nested_extras_and_double_amounts ... ok
+test tests::parser_tests::parse_donation_zero_amount_is_normal ... ok
+test tests::parser_tests::parse_donation_with_amount ... ok
+test tests::parser_tests::parse_mission_and_gift_extras ... ok
+test tests::parser_tests::parse_profile_json_string ... ok
+test tests::parser_tests::parse_raw_all_fields ... ok
+test tests::parser_tests::parse_raw_extracts_cmd ... ok
+test tests::parser_tests::parse_raw_body_shapes ... ok
+test tests::parser_tests::parse_manager_profile_keeps_raw_role ... ok
+test tests::parser_tests::parse_raw_rejects_invalid_input ... ok
+test tests::parser_tests::parse_raw_unicode ... ok
+test tests::parser_tests::parse_single_chat_with_profile ... ok
+test tests::parser_tests::parse_subscription_nested_extras ... ok
+test tests::parser_tests::parses_tid_in_both_formats ... ok
+test tests::moderation_tests::regex_case_insensitive ... ok
+test tests::parser_tests::self_kick_gate ... ok
+test tests::parser_tests::profile_representations_use_same_rules ... ok
+test tests::parser_tests::recent_chat_variants ... ok
+test tests::parser_tests::send_confirmed_variants ... ok
+test tests::parser_tests::server_message_id_preferred ... ok
+test tests::parser_tests::send_frame_tid_is_string_and_round_trips ... ok
+test tests::parser_tests::subscription_and_system_types_from_extras ... ok
+test tests::reconnection_tests::aggressive_configuration_values ... ok
+test tests::parser_tests::timestamp_conversion ... ok
+test tests::parser_tests::subscription_badge_from_streaming_property ... ok
+test tests::parser_tests::viewer_badges ... ok
+test tests::reconnection_tests::attempts_remaining_decreases ... ok
+test tests::reconnection_tests::backoff_curve_formula ... ok
+test tests::reconnection_tests::backoff_sequence ... ok
+test tests::reconnection_tests::backoff_with_multiplier_1_5 ... ok
+test tests::reconnection_tests::below_threshold_no_reset ... ok
+test tests::reconnection_tests::cancel_and_initial_state_idle ... ok
+test tests::moderation_tests::valid_regex_filters_matching_messages ... ok
+test tests::reconnection_tests::clamp_around_max_delay ... ok
+test tests::reconnection_tests::default_configuration_values ... ok
+test tests::reconnection_tests::delay_is_capped ... ok
+test tests::reconnection_tests::delays_never_exceed_max ... ok
+test tests::reconnection_tests::first_delay_equals_initial_delay ... ok
+test tests::reconnection_tests::delay_floor_is_0_1 ... ok
+test tests::reconnection_tests::mark_connected_does_not_immediately_reset ... ok
+test tests::reconnection_tests::mark_connected_preserves_attempts ... ok
+test tests::reconnection_tests::mark_connected_sets_connected ... ok
+test tests::reconnection_tests::reset_allows_reuse_after_exhaustion ... ok
+test tests::reconnection_tests::reset_sets_idle_and_restores ... ok
+test tests::reconnection_tests::jitter_within_bounds ... ok
+test tests::reconnection_tests::returns_none_after_max_attempts ... ok
+test tests::reconnection_tests::second_and_third_delay ... ok
+test tests::reconnection_tests::short_success_at_max_attempt_still_exhausts ... ok
+test tests::reconnection_tests::short_lived_connection_continues_delay ... ok
+test tests::reconnection_tests::stable_success_at_max_attempt_can_reset ... ok
+test tests::reconnection_tests::state_is_waiting_after_next_delay ... ok
+test tests::reconnection_tests::status_descriptions ... ok
+test tests::reconnection_tests::zero_jitter_is_exact ... ok
+test tests::reconnection_tests::zero_max_attempts_returns_none ... ok
+test tests::state_tests::background_policy_is_latest_wins ... ok
+test tests::state_tests::connect_ack_timeout_uses_per_handshake_nonce ... ok
+test tests::state_tests::immediate_close_after_open_preserves_failure ... ok
+test tests::state_tests::initial_failure_caller_attribution ... ok
+test tests::state_tests::reconnect_owner_only_finishes_itself ... ok
+test tests::state_tests::stale_send_completion_is_not_connected ... ok
+test tests::state_tests::timeouts_are_sane ... ok
+test tests::utils_tests::backpressure ... ok
+test tests::state_tests::web_socket_attempt_tokens_are_monotonic ... ok
+test tests::state_tests::watchdog_exceeds_every_effective_ping_interval ... ok
+test tests::utils_tests::buffer_map_in_place_replaces_only_changed_rows ... ok
+test tests::utils_tests::buffer_minimum_capacity_and_eviction ... ok
+test tests::utils_tests::capacity_policy ... ok
+test tests::utils_tests::buffer_remove_where_and_restructure_count ... ok
+test tests::utils_tests::buffer_resize_keeps_most_recent ... ok
+test tests::websocket_tests::refused_connection_throws_and_never_passes_through_connected ... ok
+test tests::websocket_tests::server_close_moves_service_out_of_connected ... ok
+test tests::websocket_tests::engine_rejected_handshake_is_failure ... ok
+test tests::websocket_tests::engine_handshake_recent_chat_and_send ... ok
+test tests::websocket_tests::service_round_trip_with_local_server ... ok
+test tests::parser_tests::large_recent_batch_within_receive_budget ... ok
+test tests::reconnection_tests::stable_connection_resets_once ... ok
+test tests::reconnection_tests::cancellation_stops_reconnection_loop ... ok
+test tests::moderation_tests::expired_mute_is_not_an_active_rule ... ok
+test tests::websocket_tests::engine_ack_timeout_is_failure ... ok
+test tests::reconnection_tests::success_marks_connected_and_keeps_attempts ... ok
+test tests::reconnection_tests::failing_action_exhausts ... ok
+
+test result: ok. 157 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+
+     Running unittests src/lib.rs (target/verification-2026-10-27/debug/deps/cview_core-95ceb119121c60dd)
+
+running 372 tests
+test error::tests::api_error_equality ... ok
+test error::tests::diagnostic_detail_stays_out_of_user_copy ... ok
+test error::tests::app_error_descriptions ... ok
+test error::tests::auth_chat_persistence_descriptions ... ok
+test error::tests::network_error_descriptions ... ok
+test error::tests::recovery_kinds ... ok
+test logic::latency_quality_band::tests::thresholds_and_labels ... ok
+test error::tests::api_error_user_copy ... ok
+test logic::live_breakpoint::tests::chat_max_ratio_ordering ... ok
+test logic::live_breakpoint::tests::boundaries ... ok
+test error::tests::app_error_recovery_suggestions ... ok
+test logic::live_breakpoint::tests::clamp_chat_width ... ok
+test logic::live_breakpoint::tests::default_chat_width_values ... ok
+test error::tests::player_error_descriptions ... ok
+test logic::live_breakpoint::tests::prefers_stage_over_chat ... ok
+test logic::mention_detector::tests::empty_rule_no_match ... ok
+test logic::mention_detector::tests::no_nickname_no_match ... ok
+test logic::search_scoring::tests::channel_score_follower ... ok
+test logic::latency_quality_band::tests::bands_carry_shape_and_label ... ok
+test logic::search_scoring::tests::empty_query ... ok
+test logic::mention_detector::tests::streamer_hi_priority ... ok
+test logic::search_scoring::tests::dedup ... ok
+test logic::mention_detector::tests::muted_channel_skips_non_streamer ... ok
+test logic::mention_detector::tests::nickname_match ... ok
+test logic::mention_detector::tests::keyword_match ... ok
+test logic::search_scoring::tests::priority ... ok
+test logic::search_scoring::tests::channel_score_order ... ok
+test logic::search_scoring::tests::watched_order ... ok
+test logic::two_up_split::tests::crossover_math_favors_horizontal_above_sixteen_by_nine ... ok
+test logic::two_up_split::tests::zero_height_prefers_horizontal ... ok
+test logic::search_scoring::tests::typo ... ok
+test logic::search_scoring::tests::korean_typo_and_limit ... ok
+test models::channel::tests::following_channel_is_live ... ok
+test models::channel::tests::hashable_equal ... ok
+test models::channel::tests::memberwise_init ... ok
+test models::channel::tests::json_decoding_defaults ... ok
+test models::channel::tests::json_decoding_requires_id_and_name ... ok
+test models::channel::tests::streamer_info ... ok
+test models::chat::emoticon::tests::chat_pattern_and_id ... ok
+test models::chat::emoticon::tests::deploy_all_packs_and_emoticons ... ok
+test models::channel::tests::lenient_wrong_types_fall_back ... ok
+test models::chat::emoticon::tests::segment_ids ... ok
+test models::chat::ident::tests::url_plausibility ... ok
+test models::chat::ident::tests::uuid_has_canonical_shape_and_is_unique ... ok
+test models::chat::item::tests::blinded_message_drops_emojis ... ok
+test models::chat::emoticon::tests::parser_cases ... ok
+test models::chat::emoticon::tests::json_decoding_key_mapping ... ok
+test models::chat::item::tests::from_message_maps_fields ... ok
+test models::chat::item::tests::badges_dedupe_and_subscription_fallback ... ok
+test models::chat::item::tests::equality ... ok
+test models::chat::item::tests::placeholder_content_shares_rule_without_fallback ... ok
+test models::channel::tests::json_decoding_full ... ok
+test models::channel::tests::round_trip ... ok
+test logic::mention_detector::tests::codable_schema_matches_swift ... ok
+test models::chat::item::tests::plain_text_preview_rules ... ok
+test models::chat::item::tests::regex_equivalent_replacement_edge_cases ... ok
+test models::chat::item::tests::formatted_time_is_hh_mm ... ok
+test models::chat::item::tests::system_message_defaults ... ok
+test models::chat::messages::tests::connection_state_display_text ... ok
+test models::chat::messages::tests::connection_state_is_connected ... ok
+test models::chat::messages::tests::message_stores_properties ... ok
+test models::chat::messages::tests::message_with_donation_extras ... ok
+test models::chat::messages::tests::user_role_from_code ... ok
+test models::chat::messages::tests::serde_keys_match_swift_codable ... ok
+test models::chat::notice_kind::tests::serde_uses_swift_raw_values ... ok
+test models::community::tests::closed_community_has_no_comments ... ok
+test models::clip::tests::best_hls_url_prefers_adhls ... ok
+test models::decode::tests::array_report_isolates_bad_elements ... ok
+test models::community::tests::decodes_posts_and_hides_deleted_or_secret ... ok
+test models::decode::tests::format_round_trips ... ok
+test models::clip::tests::clip_detail_decoding ... ok
+test models::decode::tests::iso8601_offsets_and_fractions ... ok
+test models::decode::tests::malformed_inputs_are_rejected ... ok
+test models::decode::tests::impossible_calendar_dates_and_leap_seconds_are_rejected ... ok
+test models::decode::tests::swift_reference_seconds ... ok
+test models::decode::tests::legacy_format_is_local_time ... ok
+test models::equalizer::tests::invariants ... ok
+test models::live::tests::channel_viewer_info_decoding ... ok
+test models::live::tests::chat_channel_id_and_close ... ok
+test models::live::tests::json_decoding_defaults ... ok
+test models::live::tests::json_decoding_basic ... ok
+test models::live::tests::live_image_url_placeholder ... ok
+test models::live::tests::live_info_round_trip_keeps_fields ... ok
+test models::live::tests::live_playback_json_nested_object ... ok
+test models::live::tests::live_playback_round_trip ... ok
+test models::live::tests::live_status_raw_values ... ok
+test models::live::tests::memberwise_init ... ok
+test models::live::tests::stream_quality ... ok
+test models::live::tests::time_machine_flags ... ok
+test models::live::tests::time_machine_playback_decoding ... ok
+test models::live::tests::unknown_status_falls_back_to_open ... ok
+test models::live::tests::watch_party_and_radio_flags ... ok
+test models::live::tests::watch_polling_interval_from_status_json ... ok
+test models::live_catalog::tests::quality_encoding ... ok
+test models::live_catalog::tests::row_keys_and_mapping ... ok
+test models::live_catalog::tests::summary_round_trip ... ok
+test models::live_channel_item::tests::dashboard_models ... ok
+test models::live_channel_item::tests::case_insensitive_and_title ... ok
+test models::live_channel_item::tests::category_toggle ... ok
+test models::live_channel_item::tests::diacritic_insensitive ... ok
+test models::live_channel_item::tests::display_category_name ... ok
+test models::live_channel_item::tests::empty_query_matches_all ... ok
+test models::live_channel_item::tests::item_round_trip ... ok
+test models::live_channel_item::tests::korean_substring ... ok
+test models::live_channel_item::tests::no_match ... ok
+test models::live_channel_item::tests::viewer_count_ladder ... ok
+test models::live_event_bus::tests::capacity_and_recent_order ... ok
+test models::live_event_bus::tests::ids_match_swift_format ... ok
+test models::match_web_v2::tests::resolve ... ok
+test models::media::tests::frame_rate_as_double ... ok
+test models::live_event_bus::tests::restore_only_into_empty_ring_and_dedups ... ok
+test models::media::tests::frame_rate_as_string ... ok
+test models::media::tests::frame_rate_missing_or_invalid ... ok
+test models::media::tests::full_decoding ... ok
+test models::media::tests::media_protocol_key_mapping ... ok
+test models::media::tests::missing_track_id_is_empty ... ok
+test models::media::tests::playback_detail_default ... ok
+test models::player::tests::default_state ... ok
+test models::player::tests::engine_type ... ok
+test models::player::tests::is_active_phases ... ok
+test models::player::tests::latency_points_have_unique_ids ... ok
+test models::player::tests::tool_status_headline ... ok
+test models::proxy_stats::tests::ratios ... ok
+test models::search::tests::autocomplete_stable_id ... ok
+test models::search::tests::clip_info_both_key_styles ... ok
+test models::search::tests::live_search_item_injects_channel ... ok
+test models::search::tests::search_result_defaults ... ok
+test models::search::tests::search_result_isolates_bad_elements ... ok
+test models::search::tests::search_type_raw ... ok
+test models::search::tests::video_search_item_injects_channel ... ok
+test models::search::tests::vod_formatted_duration ... ok
+test models::search::tests::vod_info_image_fallback_and_round_trip ... ok
+test models::search::tests::vod_info_strictness ... ok
+test models::settings::tests::chat_design_style_saved_values ... ok
+test models::settings::tests::appearance_clamps_sidebar ... ok
+test models::settings::tests::experimental_flags ... ok
+test models::settings::tests::empty_json_decodes_to_defaults ... ok
+test models::settings::tests::latency_presets ... ok
+test models::settings::tests::network_auto_choice ... ok
+test models::settings::tests::network_effective_values ... ok
+test models::settings::tests::network_presets_detect ... ok
+test models::settings::tests::player_settings_clamps_on_decode ... ok
+test models::settings::tests::present_but_wrong_type_is_an_error ... ok
+test models::settings::tests::removed_proxy_mode_is_absorbed ... ok
+test models::settings::tests::player_settings_round_trip ... ok
+test models::settings::tests::screenshot_format ... ok
+test models::settings::tests::unknown_keys_are_ignored ... ok
+test models::settings_ui::tests::channel_notifications ... ok
+test models::settings_ui::tests::multi_chat_panel_ratio_and_encoding ... ok
+test models::settings_ui::tests::multi_live_backfills_and_lifts_minimum ... ok
+test models::settings_ui::tests::shortcut_metadata ... ok
+test models::settings_ui::tests::sync_settings_migration ... ok
+test models::settings_ui::tests::shortcut_encoding_is_sorted_pairs ... ok
+test models::stream_alert::tests::donation_kinds ... ok
+test models::stream_proxy::tests::resolved_and_route ... ok
+test models::stream_proxy::tests::unknown_raw_value_falls_back_to_local_proxy ... ok
+test models::vod::tests::merge_dedups_sorts_and_limits ... ok
+test models::vod::tests::playback_speed_labels ... ok
+test protocols::tests::auth_state ... ok
+test protocols::tests::cache_policy_constants ... ok
+test models::vod::tests::vod_detail_decoding ... ok
+test protocols::tests::capabilities_option_set ... ok
+test protocols::tests::cookie_header ... ok
+test protocols::tests::default_implementations_fail_explicitly ... ok
+test protocols::tests::http_method_raw_values ... ok
+test utils::auto_refresh_gate::tests::category_demands_sweep_regardless_of_settings ... ok
+test utils::auto_refresh_gate::tests::concurrent_mounts_are_not_collapsed ... ok
+test utils::auto_refresh_gate::tests::gate_is_idempotent ... ok
+test utils::auto_refresh_gate::tests::idle_gate_is_inactive ... ok
+test utils::auto_refresh_gate::tests::legacy_live_name_maps_to_live_overview ... ok
+test utils::auto_refresh_gate::tests::reports_only_real_transitions ... ok
+test utils::auto_refresh_gate::tests::settings_off_home_only_keeps_light_but_not_sweep ... ok
+test utils::auto_refresh_gate::tests::settings_off_keeps_surface_poll ... ok
+test utils::auto_refresh_gate::tests::settings_on_home_keeps_both ... ok
+test utils::auto_refresh_gate::tests::shared_holder_survives_late_release ... ok
+test utils::bounded_concurrent_work::tests::budget_boundaries ... ok
+test utils::broadcast_display::tests::fallbacks ... ok
+test utils::catalog_sweep::tests::auto_refresh_off ... ok
+test utils::catalog_sweep::tests::battery_multiplier ... ok
+test utils::catalog_sweep::tests::boot_exception_for_empty_category ... ok
+test utils::catalog_sweep::tests::boot_grace ... ok
+test utils::bounded_concurrent_work::tests::empty_input_is_noop ... ok
+test utils::catalog_sweep::tests::checkpoint_in_decide ... ok
+test utils::catalog_sweep::tests::constants ... ok
+test utils::catalog_sweep::tests::first_fill_and_clock_skew ... ok
+test utils::catalog_sweep::tests::gate_order ... ok
+test utils::bounded_concurrent_work::tests::invalid_limit_runs_serially ... ok
+test utils::catalog_sweep::tests::interval_boundaries ... ok
+test utils::catalog_sweep::tests::low_power ... ok
+test utils::catalog_sweep::tests::non_demands ... ok
+test utils::catalog_sweep::tests::resume_boundaries ... ok
+test utils::catalog_sweep::tests::hour_category ... ok
+test utils::catalog_sweep::tests::retry_cooldowns ... ok
+test utils::catalog_sweep::tests::hour_home_only ... ok
+test utils::catalog_sweep::tests::hour_gated_zero ... ok
+test utils::channel_list_merge::tests::append_skips_duplicates ... ok
+test utils::channel_list_merge::tests::deletion_inside_first_page ... ok
+test utils::channel_list_merge::tests::fresh_values_win ... ok
+test utils::channel_list_merge::tests::front_insert_keeps_accumulated ... ok
+test utils::channel_list_merge::tests::no_overlap_replaces ... ok
+test utils::channel_list_merge::tests::jump_to_front_is_deduplicated ... ok
+test utils::channel_list_merge::tests::short_lists_replace ... ok
+test utils::data_freshness::tests::age_caption_cases ... ok
+test utils::channel_list_merge::tests::works_with_numeric_ids ... ok
+test utils::data_freshness::tests::aggregated_caption_two_digit_24h ... ok
+test utils::data_freshness::tests::band_boundaries_half_open ... ok
+test utils::data_freshness::tests::future_and_missing ... ok
+test utils::data_freshness::tests::next_band_change_lands_on_new_band ... ok
+test utils::data_freshness::tests::policy_table ... ok
+test utils::data_freshness::tests::section_caption_rules ... ok
+test utils::ewma::tests::converges ... ok
+test utils::ewma::tests::initial_state_is_zero ... ok
+test utils::ewma::tests::higher_alpha_responds_faster ... ok
+test utils::ewma::tests::output_is_convex_blend ... ok
+test utils::bounded_concurrent_work::tests::bounded_fanout ... ok
+test utils::ewma::tests::reset_clears_state ... ok
+test utils::ewma::tests::second_sample_no_inflation ... ok
+test utils::ewma::tests::single_sample_returns_value ... ok
+test utils::fast_date_parser::tests::hls_program_date_time ... ok
+test utils::fast_date_parser::tests::impossible_calendar_dates_rejected ... ok
+test utils::ewma::tests::rejects_zero_alpha - should panic ... ok
+test utils::fast_date_parser::tests::leap_second_rejected ... ok
+test utils::fast_date_parser::tests::iso8601_offsets_and_fractions ... ok
+test utils::fast_date_parser::tests::legacy_format_is_local_time ... ok
+test utils::fast_date_parser::tests::malformed_inputs_rejected ... ok
+test utils::fast_date_parser::tests::valid_inputs_take_fast_path ... ok
+test utils::fifo_memo_cache::tests::evicts_in_insertion_order ... ok
+test utils::fifo_memo_cache::tests::hit_skips_make ... ok
+test utils::fifo_memo_cache::tests::remove_all_clears ... ok
+test utils::following_poll::tests::immediate_reasons_and_clock_rollback ... ok
+test utils::following_poll::tests::live_detected_fields ... ok
+test utils::following_poll::tests::outcome_generation ... ok
+test utils::following_poll::tests::persist_throttle ... ok
+test utils::following_poll::tests::reason_properties ... ok
+test utils::following_poll::tests::result_live_count_skips_closed_rows ... ok
+test utils::fifo_memo_cache::tests::concurrent_miss_keeps_first_stored_value ... ok
+test utils::following_poll::tests::viewer_only_changes_publish_every_120_seconds ... ok
+test utils::following_poll::tests::structural_changes_publish_immediately ... ok
+test utils::levenshtein::tests::empty_sides ... ok
+test utils::levenshtein::tests::identical ... ok
+test utils::levenshtein::tests::insertion ... ok
+test utils::levenshtein::tests::korean_one_typo ... ok
+test utils::levenshtein::tests::substitution ... ok
+test utils::live_detail_refresh::tests::default_settings_watch_nothing ... ok
+test utils::live_detail_refresh::tests::background_boundary ... ok
+test utils::live_detail_refresh::tests::duplicate_rows_planned_once ... ok
+test utils::live_detail_refresh::tests::due_tie_keeps_list_order ... ok
+test utils::fast_date_parser::tests::randomized_equivalence ... ok
+test utils::live_detail_refresh::tests::future_meta_is_due ... ok
+test utils::live_detail_refresh::tests::due_cap_oldest_first ... ok
+test utils::live_detail_refresh::tests::manual_takes_all_live ... ok
+test utils::live_detail_refresh::tests::merge_detail_beats_meta ... ok
+test utils::live_detail_refresh::tests::merge_close_detail ... ok
+test utils::live_detail_refresh::tests::merge_falls_back_to_meta ... ok
+test utils::live_detail_refresh::tests::merge_list_wins ... ok
+test utils::live_detail_refresh::tests::merge_live_id_change_replaces_meta ... ok
+test utils::live_detail_refresh::tests::merge_partial_list_values ... ok
+test utils::live_detail_refresh::tests::fresh_meta_plans_nothing ... ok
+test utils::live_detail_refresh::tests::merge_same_live_carries_missing_fields ... ok
+test utils::live_detail_refresh::tests::merge_without_any_detail ... ok
+test utils::live_detail_refresh::tests::missing_meta_cap_visible_first ... ok
+test utils::live_detail_refresh::tests::no_live_rows_plans_nothing ... ok
+test utils::live_detail_refresh::tests::notify_watch_matches_sink_filter ... ok
+test utils::live_detail_refresh::tests::offline_drops_meta_then_restart_is_new_live ... ok
+test utils::live_detail_refresh::tests::notify_watch_only_without_list_live_info ... ok
+test utils::live_detail_refresh::tests::previous_live_none_versus_empty ... ok
+test utils::live_detail_refresh::tests::notify_watch_beyond_missing_meta_cap ... ok
+test utils::live_detail_refresh::tests::reason_ordering ... ok
+test utils::live_detail_refresh::tests::new_live_first_and_uncapped ... ok
+test utils::live_detail_refresh::tests::suspended_boundary ... ok
+test utils::live_detail_refresh::tests::visible_boundary ... ok
+test utils::local_data_deletion::tests::messages_mention_sync_and_login ... ok
+test utils::media_url_policy::tests::rejects_fragment_and_port ... ok
+test utils::menu_scope_effect_ledger::tests::alternating_phases_in_same_epoch_keep_admitting ... ok
+test utils::media_url_policy::tests::only_https_media_from_trusted_document ... ok
+test utils::menu_scope_effect_ledger::tests::different_phase_is_independent ... ok
+test utils::menu_scope_effect_ledger::tests::different_scope_is_independent ... ok
+test utils::menu_scope_effect_ledger::tests::fresh_ledger_admits ... ok
+test utils::menu_scope_effect_ledger::tests::next_epoch_admits_again ... ok
+test utils::menu_scope_effect_ledger::tests::same_epoch_same_phase_stays_blocked_across_scopes ... ok
+test utils::fifo_memo_cache::tests::concurrent_access_stays_consistent ... ok
+test utils::menu_scope_effect_ledger::tests::second_path_in_same_epoch_is_rejected ... ok
+test utils::menu_transition_timing::tests::duplicate_and_shorter_requests_coalesce ... ok
+test utils::menu_transition_timing::tests::expired_deadline_does_not_accumulate ... ok
+test utils::menu_transition_timing::tests::header_trailing_decision_is_order_independent ... ok
+test utils::menu_transition_timing::tests::header_trailing_keeps_debounce_for_same_route ... ok
+test utils::menu_transition_timing::tests::header_trailing_keeps_debounce_on_initial_mount ... ok
+test utils::menu_transition_timing::tests::header_trailing_skips_debounce_right_after_route_change ... ok
+test utils::menu_transition_timing::tests::invalid_durations_are_harmless ... ok
+test utils::menu_transition_timing::tests::rapid_changes_extend_to_latest_destination ... ok
+test utils::menu_transition_timing::tests::restore_delay_covers_remaining_gate_plus_margin ... ok
+test utils::menu_transition_timing::tests::restore_delay_is_zero_for_expired_gate ... ok
+test utils::menu_transition_timing::tests::restore_delay_is_zero_without_gate ... ok
+test utils::menu_transition_timing::tests::restore_delay_zero_margin_is_remaining_only ... ok
+test utils::multi_chat_panel_width::tests::clamps_persisted_ratio ... ok
+test utils::multi_chat_panel_width::tests::detects_insufficient_workspace_width ... ok
+test utils::multi_chat_panel_width::tests::direct_manipulation_uses_point_precision ... ok
+test utils::multi_chat_panel_width::tests::edge_preferences_survive_window_resize ... ok
+test utils::multi_chat_panel_width::tests::narrow_workspace_drag_respects_both_pane_minimums ... ok
+test utils::multi_chat_panel_width::tests::old_minimum_boundary_is_continuous ... ok
+test utils::multi_chat_panel_width::tests::reading_width_preset_converts_to_ratio ... ok
+test utils::multi_chat_panel_width::tests::reading_width_presets_respect_wide_and_narrow_geometry ... ok
+test utils::multi_chat_panel_width::tests::reading_width_presets_stay_in_planned_band ... ok
+test utils::multi_chat_panel_width::tests::direct_drag_is_monotonic_across_feasible_widths ... ok
+test utils::multi_chat_panel_width::tests::resolved_width_respects_layout_bounds ... ok
+test utils::multi_chat_panel_width::tests::reversing_at_edges_does_not_require_hidden_travel ... ok
+test utils::multi_chat_panel_width::tests::settings_use_tenth_percent_steps ... ok
+test utils::naver_cookie_policy::tests::accepts_naver ... ok
+test utils::naver_cookie_policy::tests::auth_cookie_names ... ok
+test utils::naver_cookie_policy::tests::rejects_other_domains ... ok
+test utils::pid::tests::derivative_responds ... ok
+test utils::pid::tests::integral_accumulates ... ok
+test utils::pid::tests::integral_windup_and_output_clamp ... ok
+test utils::pid::tests::negative_error_negative_output ... ok
+test utils::pid::tests::positive_error_positive_output ... ok
+test utils::pid::tests::proportional_scales_with_kp ... ok
+test utils::pid::tests::reset_clears_state ... ok
+test utils::pid::tests::zero_error_zero_output ... ok
+test utils::refresh_schedule::tests::backoff_due_timing ... ok
+test utils::refresh_schedule::tests::clip_and_insights ... ok
+test utils::refresh_schedule::tests::concurrency_limit ... ok
+test utils::refresh_schedule::tests::due_after_interval ... ok
+test utils::refresh_schedule::tests::due_ordering_and_immediate ... ok
+test utils::refresh_schedule::tests::every_job_has_interval ... ok
+test utils::refresh_schedule::tests::failure_backoff ... ok
+test utils::refresh_schedule::tests::following_logged_out_or_asleep ... ok
+test utils::refresh_schedule::tests::backoff_huge_streak ... ok
+test utils::refresh_schedule::tests::following_setting_no_visible_demand ... ok
+test utils::refresh_schedule::tests::following_setting_off ... ok
+test utils::refresh_schedule::tests::following_setting_with_home ... ok
+test utils::refresh_schedule::tests::following_short_setting ... ok
+test utils::refresh_schedule::tests::next_wake ... ok
+test utils::refresh_schedule::tests::offline_keeps_only_insights ... ok
+test utils::refresh_schedule::tests::next_wake_ignores_capped_jobs ... ok
+test utils::refresh_schedule::tests::popular_intervals ... ok
+test utils::refresh_schedule::tests::retain_release_keeps_last_run ... ok
+test utils::refresh_schedule::tests::running_not_due_again ... ok
+test utils::refresh_schedule::tests::suspended_with_notifications ... ok
+test utils::refresh_schedule::tests::suspended_without_notifications ... ok
+test utils::refresh_schedule::tests::sweep_gates ... ok
+test utils::refresh_schedule::tests::sweep_intervals ... ok
+test utils::relative_time::tests::korean_elapsed_cases ... ok
+test utils::split_resize::tests::chat_width_uses_stable_anchor ... ok
+test utils::split_resize::tests::focus_video_edge_has_no_reserved_handle ... ok
+test utils::split_resize::tests::frames_fit_and_do_not_overlap ... ok
+test utils::split_resize::tests::invalid_inputs_are_safe ... ok
+test utils::split_resize::tests::lengths_exactly_fit ... ok
+test utils::split_resize::tests::pointer_and_divider_travel_match ... ok
+test utils::split_resize::tests::two_chat_columns_include_handle ... ok
+test utils::stable_hash::tests::collision_sanity ... ok
+test utils::stable_hash::tests::determinism ... ok
+test utils::stable_hash::tests::empty_string_offset_basis ... ok
+test utils::stable_hash::tests::index_bounds ... ok
+test utils::stable_hash::tests::index_deterministic ... ok
+test utils::stable_hash::tests::known_vectors ... ok
+test utils::system_load::tests::decoder_thread_examples ... ok
+test utils::system_load::tests::mode_from_thermal_state ... ok
+test utils::thumbnail_tier::tests::hero_ceiling_allows_1080 ... ok
+test utils::thumbnail_tier::tests::hero_ceiling_upsizes_url ... ok
+test utils::thumbnail_tier::tests::does_not_upsize_url ... ok
+test utils::thumbnail_tier::tests::leaves_foreign_urls_alone ... ok
+test utils::thumbnail_tier::tests::never_exceeds_default_tier ... ok
+test utils::thumbnail_tier::tests::picks_smallest_sufficient_tier ... ok
+test utils::thumbnail_tier::tests::respects_minimum_tier ... ok
+test utils::thumbnail_tier::tests::retiers_url ... ok
+test utils::thumbnail_tier::tests::tier_is_monotonic ... ok
+test utils::time::tests::round_trip ... ok
+test utils::thumbnail_tier::tests::zero_request_is_noop ... ok
+test utils::watch_duration::tests::formats ... ok
+test utils::thumbnail_tier::tests::tier_is_always_supported ... ok
+test utils::thumbnail_tier::tests::retiered_url_always_uses_supported_tier ... ok
+test utils::bounded_concurrent_work::tests::cancellation_stops_refill ... ok
+
+test result: ok. 372 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running unittests src/lib.rs (target/verification-2026-10-27/debug/deps/cview_networking-90c765979a7dbf82)
+
+running 42 tests
+test cache::tests::purge_uses_per_entry_deadline ... ok
+test cache::tests::lru_eviction_keeps_recently_used ... ok
+test cache::tests::ttl_expiry_and_lookup_states ... ok
+test cache::tests::memory_pressure_halves_bytes ... ok
+test cache::tests::byte_budget ... ok
+test cache::tests::updating_existing_key_does_not_evict ... ok
+test cache::tests::set_and_get ... ok
+test cache::tests::deadline_caps_wider_stale_window ... ok
+test collector::tests::deduplicates_and_detects_cycle ... ok
+test collector::tests::decode_drops_and_zero_ids_are_partial ... ok
+test collector::tests::page_limit_missing_metadata_and_malformed_cursor ... ok
+test collector::tests::continues_beyond_legacy_forty_page_limit ... ok
+test collector::tests::pause_and_resume ... ok
+test collector::tests::progress_is_debounced ... ok
+test collector::tests::resume_from_start_and_boundary_checks ... ok
+test collector::tests::retries_once_then_partial_with_resume_point ... ok
+test collector::tests::seed_and_boundary ... ok
+test collector::tests::short_intermediate_page_continues_until_null_terminal ... ok
+test endpoint::tests::cache_and_auth_policy ... ok
+test endpoint::tests::methods_and_bodies ... ok
+test collector::tests::verifier_cases ... ok
+test endpoint::tests::paths ... ok
+test endpoint::tests::query_items ... ok
+test response::tests::collection_result_flags ... ok
+test gate::tests::cancellation_removes_waiter ... ok
+test response::tests::following_row_list_item ... ok
+test gate::tests::concurrency_limit_and_release ... ok
+test gate::tests::rate_spacing_and_clamps ... ok
+test response::tests::following_channel_follow_state ... ok
+test response::tests::chzzk_response_defensive ... ok
+test response::tests::live_page_info_next_states ... ok
+test response::tests::following_rows_decoding ... ok
+test response::tests::paged_content_page_states ... ok
+test response::tests::user_status_keys ... ok
+test transport::tests::header_set_replaces_case_insensitively ... ok
+test observer::tests::path_drops_query_and_observer_toggles ... ok
+test validator::tests::empty_data_is_malformed ... ok
+test validator::tests::invalid_json_is_decoding_failure ... ok
+test validator::tests::structure_warnings ... ok
+test validator::tests::valid_response_decodes ... ok
+test wait::tests::abandon_fires_when_last_waiter_leaves ... ok
+test wait::tests::waiters_share_result_and_stale_fallback ... ok
+
+test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/client_behavior.rs (target/verification-2026-10-27/debug/deps/client_behavior-ae28643d70f87d6b)
+
+running 33 tests
+test chat_access_token_uses_game_api ... ok
+test channel_posts_uses_comment_api_with_fixed_page_size ... ok
+test basic_emoticon_packs_reads_new_emoji_packs_shape ... ok
+test concurrent_gets_share_one_flight ... ok
+test global_basic_emoticons_is_empty_on_404_and_skips_afterwards ... ok
+test auth_required_paths ... ok
+test account_switch_discards_in_flight_result ... ok
+test invalidation_cancels_user_status_waiters ... ok
+test load_merged_emoticons_prefers_channel_values_and_keeps_cache_order ... ok
+test following_channels_keep_api_order_with_details ... ok
+test query_encoding_and_paths ... ok
+test rate_limit_uses_separate_budget_and_is_terminal ... ok
+test emoticon_negative_cache_per_generation ... ok
+test invalidation_changes_cache_namespace ... ok
+test live_catalog_traversal_requests_latest_and_verifies ... ok
+test fresh_cache_hit_avoids_second_send_and_headers ... ok
+test retry_count_and_network_settings_apply ... ok
+test stale_fallback_error_table ... ok
+test sole_caller_leaving_stops_retries ... ok
+test server_errors_retry_and_client_errors_do_not ... ok
+test resolve_live_session_ready_and_offline ... ok
+test user_status_first_caller_cancel_does_not_break_others ... ok
+test user_status_memo_and_single_flight ... ok
+test weekly_donation_ranking_decodes_chat_model ... ok
+test failed_revalidation_keeps_previous_value ... ok
+test following_rows_paginate_by_total_count_and_dedup ... ok
+test basic_emoticon_packs_falls_back_to_user_emoticons ... ok
+test soft_auth_401_retries_once_without_cookies ... ok
+test resolve_emoticon_packs_backfills_empty_packs_in_parallel ... ok
+test stale_while_revalidate_returns_old_value_and_refreshes ... ok
+test state_changing_methods_are_never_cached ... ok
+test user_status_without_hash_is_not_memoized_and_failures_are_not ... ok
+test prepare_connection_loads_token_uid_and_emoticons ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.32s
+
+     Running unittests src/lib.rs (target/verification-2026-10-27/debug/deps/cview_persistence-6b178b081d5e97ab)
+
+running 11 tests
+test image_cache::tests::kind_parsing ... ok
+test time::tests::db_round_trip_is_exact ... ok
+test time::tests::calendar_start_of_day_and_add_days ... ok
+test time::tests::swift_double_description_shape ... ok
+test image_cache::tests::oversized_or_empty_bodies_are_not_stored ... ok
+test image_cache::tests::missing_blob_is_a_miss_and_cleans_index ... ok
+test image_cache::tests::corrupt_index_is_rebuilt ... ok
+test image_cache::tests::put_then_get_round_trips_and_survives_reopen ... ok
+test image_cache::tests::clear_removes_everything ... ok
+test image_cache::tests::freshness_follows_kind_and_mark_fresh ... ok
+test image_cache::tests::evicts_least_recently_used_over_cap ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/datastore_core.rs (target/verification-2026-10-27/debug/deps/datastore_core-fe67d816aa7b82ad)
+
+running 19 tests
+test app_support_failure_skips_create ... ok
+test create_directory_failure_propagates ... ok
+test resolved_path_is_stable ... ok
+test file_in_place_of_directory_errors_then_recovers ... ok
+test player_settings_round_trip ... ok
+test memo_round_trip_and_empty_clears ... ok
+test save_channel_updates_name ... ok
+test stale_open_session_uses_persisted_duration ... ok
+test save_and_fetch_channel ... ok
+test aggregate_counts_active_open_session ... ok
+test favorite_items_sorted_by_name ... ok
+test recent_items_respect_limit ... ok
+test checkpoint_then_recover_keeps_checkpoint ... ok
+test cleanup_zero_days_empties ... ok
+test save_statistic_links_channel ... ok
+test start_watch_record_updates_recent ... ok
+test settings_round_trip ... ok
+test toggle_favorite ... ok
+test end_watch_record_sets_duration ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/favorites_and_live_cache.rs (target/verification-2026-10-27/debug/deps/favorites_and_live_cache-085449a9d0d19a16)
+
+running 24 tests
+test favorite_persists_for_already_watched_channel ... ok
+test batch_fetch_seeds_requested_sources_even_when_empty ... ok
+test clear_all_last_watched_keeps_favorites ... ok
+test prune_deletes_row_when_last_source_removed ... ok
+test identical_upsert_does_not_rewrite_fetched_at ... ok
+test delete_all_playback_history ... ok
+test batch_fetch_keeps_fetched_at_descending ... ok
+test prune_leaves_other_source_rows ... ok
+test batch_fetch_with_no_sources_is_empty ... ok
+test batch_fetch_matches_per_source_fetch ... ok
+test prune_only_stale_rows ... ok
+test prune_no_change_when_nothing_stale ... ok
+test replace_snapshot_preserves_other_source_membership ... ok
+test save_channel_is_favorite_ignored_for_existing_row ... ok
+test replace_snapshot_updates_changed_content_and_timestamp ... ok
+test prune_removes_stale_tag_but_keeps_row ... ok
+test save_channel_never_clobbers_existing_favorite ... ok
+test save_channel_does_not_erase_image_url ... ok
+test replace_snapshot_writes_only_membership_delta ... ok
+test set_favorite_fails_without_row_or_info ... ok
+test set_favorite_inserts_when_row_missing ... ok
+test unfavorite_persists ... ok
+test small_batch_upsert_updates_existing_rows ... ok
+test upsert_boundary_200_keeps_rows ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/image_cache_and_snapshots.rs (target/verification-2026-10-27/debug/deps/image_cache_and_snapshots-f943306b4da057e0)
+
+running 17 tests
+test delete_entries_handles_empty_and_unknown ... ok
+test prune_deletes_expired_and_skips_save_when_nothing ... ok
+test backfill_marker_round_trips ... ok
+test delete_all_entries_leaves_marker ... ok
+test expired_and_live_queries_are_disjoint ... ok
+test delete_all_entries_clears_index ... ok
+test baseline_picks_row_closest_to_one_hour_before ... ok
+test delete_entries_removes_only_requested ... ok
+test record_and_read_respects_min_spacing ... ok
+test record_and_read_treats_later_rows_as_inside_spacing ... ok
+test record_and_read_with_empty_inputs_only_reads ... ok
+test backfill_marker_does_not_survive_store_recreation ... ok
+test record_stamps_capture_time_and_reads_relative_to_reference ... ok
+test upsert_batch_does_not_regress_access_stats ... ok
+test touch_ignores_unknown_keys ... ok
+test touch_updates_only_batched_keys ... ok
+test touch_handles_more_than_one_chunk ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/insights_and_legacy.rs (target/verification-2026-10-27/debug/deps/insights_and_legacy-4f1ce389a04afe62)
+
+running 15 tests
+test fingerprint_json_round_trip ... ok
+test fingerprint_reflects_counts_and_latest_times ... ok
+test clear_all_last_watched_does_not_bump ... ok
+test empty_store_fingerprint ... ok
+test purge_legacy_home_cache_on_empty_store_writes_nothing ... ok
+test purge_legacy_home_cache_removes_only_cache_keys_and_is_idempotent ... ok
+test bookmark_save_and_delete_bump_but_missing_delete_does_not ... ok
+test purge_removes_category_stats_and_channel_tags_keeps_trending ... ok
+test every_aggregating_write_changes_fingerprint ... ok
+test delete_all_bumps_only_when_rows_deleted ... ok
+test cleanup_bumps_only_when_rows_deleted ... ok
+test purge_with_nothing_writes_only_marker ... ok
+test sync_mark_does_not_change_fingerprint ... ok
+test recover_bumps_only_when_rows_recovered ... ok
+test watch_lifecycle_bumps_and_missing_record_does_not ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/maintenance_records_rollback.rs (target/verification-2026-10-27/debug/deps/maintenance_records_rollback-848decc6714893df)
+
+running 10 tests
+test record_version_gate ... ok
+test record_missing_file ... ok
+test record_corrupt_inputs ... ok
+test failed_insertion_cannot_leak_into_later_write ... ok
+test failed_deletion_cannot_be_committed_by_later_write ... ok
+test record_round_trip_is_compact_and_sorted ... ok
+test record_replacement_is_atomic ... ok
+test record_same_bytes_skip_write ... ok
+test same_setting_value_does_not_write_again ... ok
+test purge_removes_history_and_keeps_data ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/precision_caches.rs (target/verification-2026-10-27/debug/deps/precision_caches-b21eda4fcbcfd56e)
+
+running 22 tests
+test clip_exact_tag_semantics_and_order ... ok
+test clip_zero_limit_and_empty_source_return_empty ... ok
+test clip_batch_stamp_is_latest_item_time_and_rank_follows_order ... ok
+test clip_partially_changed_batch_keeps_order_and_shares_stamp ... ok
+test clip_unchanged_upsert_keeps_fetched_at_and_retain_drops_missing ... ok
+test clip_fresh_batch_of_many_rows_keeps_order ... ok
+test clip_home_limit_one_finds_target_behind_200_newer_rows ... ok
+test playback_home_limit_one_skips_newer_ineligible_rows ... ok
+test playback_eligibility_boundaries ... ok
+test clip_substring_near_misses_fall_back ... ok
+test playback_collects_across_pages_and_stops_at_limit ... ok
+test playback_browse_limit_finds_eligible_behind_completed_rows ... ok
+test playback_tie_on_last_seen_is_deterministic_across_pages ... ok
+test playback_zero_limit_returns_empty ... ok
+test vod_exact_tag_and_zero_limit ... ok
+test clip_hydrate_default_limit_finds_rows_behind_800_newer ... ok
+test vod_scoped_tags_isolate_accounts ... ok
+test vod_unchanged_upsert_keeps_fetched_at_and_retain_drops_missing ... ok
+test vod_same_batch_keeps_newest_published_within_limit ... ok
+test vod_substring_near_misses_fall_back ... ok
+test clip_window_boundary_around_200 ... ok
+test vod_finds_subscription_rows_behind_newer_rows ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/precision_watch_history.rs (target/verification-2026-10-27/debug/deps/precision_watch_history-b49c9cf190be823c)
+
+running 26 tests
+test actively_updating_open_session_counts_today ... ok
+test missing_today_with_streak_crossing_first_window ... ok
+test only_midnight_session_on_first_window_day ... ok
+test gap_exactly_at_window_boundary_stops_there ... ok
+test ending_later_session_b_closes_only_b ... ok
+test future_row_is_ignored ... ok
+test ending_session_a_closes_only_a ... ok
+test checkpoint_applies_only_to_requested_session ... ok
+test repeated_end_and_checkpoint_of_closed_session_do_not_capture_neighbour ... ok
+test respects_limit_and_ascending_order ... ok
+test session_exactly_at_window_lower_bound_counts ... ok
+test merges_never_synced_and_stale_oldest_first ... ok
+test returned_started_at_matches_after_reopening_file_store ... ok
+test tied_merge_at_horizon_keeps_channel_id_order ... ok
+test tied_never_synced_cut_follows_channel_id_order ... ok
+test tied_non_padded_never_synced_cut_follows_byte_order ... ok
+test tied_non_padded_ids_use_byte_order ... ok
+test streak_lengths_around_window_seams ... ok
+test zero_limit_returns_empty ... ok
+test tied_stale_rows_behind_tied_synced_rows_are_fetched_in_order ... ok
+test stale_row_beyond_legacy_scan_cap_is_fetched ... ok
+test streak_beyond_legacy_row_cap_counts_older_day ... ok
+test zero_duration_flood_does_not_consume_streak ... ok
+test synced_prefix_does_not_starve_boundary_row ... ok
+test drain_converges_after_boundary ... ok
+test streak_not_truncated_by_dense_today ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+
+     Running tests/retention_offmain_dto.rs (target/verification-2026-10-27/debug/deps/retention_offmain_dto-acfe242625eee607)
+
+running 14 tests
+test channel_list_data_id_is_channel_id ... ok
+test watch_history_data_formatted_date ... ok
+test watch_history_data_formatted_duration ... ok
+test watch_history_data_id_format ... ok
+test off_main_without_cancellation_behaves_identically ... ok
+test start_watch_record_does_not_seed_avatar_with_live_frame ... ok
+test watch_history_cleanup_keeps_recent ... ok
+test watch_history_keeps_live_frame_thumbnail ... ok
+test playback_prune_deletes_only_expired_rows ... ok
+test start_watch_record_does_not_overwrite_avatar ... ok
+test mixed_direct_and_off_main_callers_do_not_deadlock ... ok
+test concurrent_writes_remain_consistent ... ok
+test off_main_body_is_all_or_nothing_under_mid_body_cancel ... ok
+test off_main_skips_body_when_cancelled_before_start ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/schema.rs (target/verification-2026-10-27/debug/deps/schema-50ccd1e85cf9d86c)
+
+running 15 tests
+test allowed_changes ... ok
+test forbids_required_without_default ... ok
+test forbids_optional_to_required ... ok
+test forbids_type_change ... ok
+test forbids_relationship_change ... ok
+test versions_strictly_increase_and_end_at_current ... ok
+test synthetic_table_shapes_follow_rule ... ok
+test v1_models_match_live_tables ... ok
+test opens_in_memory ... ok
+test migrate_is_idempotent_and_rejects_newer ... ok
+test v1_shape_matches_golden ... ok
+test live_schema_obeys_rule ... ok
+test v1_written_store_reopens ... ok
+test newer_store_is_unreadable_and_refused ... ok
+test legacy_nine_model_store_upgrades_without_losing_data ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/settings.rs (target/verification-2026-10-27/debug/deps/settings-403dcc09509e54af)
+
+running 26 tests
+test keyboard_decodes_legacy_arrays_and_round_trips ... ok
+test keyboard_keeps_unkeyed_array_sorted_by_raw_value ... ok
+test keyboard_same_content_same_bytes ... ok
+test encode_all_domains_is_deterministic ... ok
+test load_settings_raw_returns_only_requested_keys ... ok
+test load_settings_raw_matches_load_setting ... ok
+test has_any_setting_counts_domain_keys_only ... ok
+test load_settings_raw_chunks_beyond_limit ... ok
+test partial_decode_does_not_poison_snapshot ... ok
+test save_settings_leaves_unrelated_keys_untouched ... ok
+test snapshot_corrupt_inputs ... ok
+test snapshot_current_version_restores ... ok
+test snapshot_future_version_blocked ... ok
+test healthy_load_seeds_snapshot ... ok
+test domain_rows_win_over_snapshot ... ok
+test snapshot_missing_or_malformed_version_blocked ... ok
+test snapshot_older_version_still_restores ... ok
+test cache_only_store_restores_snapshot ... ok
+test failed_restore_write_blocks_persistence ... ok
+test save_completion_includes_snapshot ... ok
+test chat_domain_round_trips_through_db_and_mirror ... ok
+test save_after_restore_keeps_snapshot_values ... ok
+test unchanged_save_keeps_setting_rows ... ok
+test snapshot_non_domain_keys_are_ignored ... ok
+test unchanged_domains_skip_mirror_rewrite ... ok
+test overlapping_saves_keep_latest_snapshot ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/store_backup_and_health.rs (target/verification-2026-10-27/debug/deps/store_backup_and_health-af81603841985c9c)
+
+running 15 tests
+test missing_store_returns_none_without_backup_folder ... ok
+test consecutive_failures_accumulate_across_recorders ... ok
+test low_space_skips ... ok
+test copies_store_files_and_leaves_originals ... ok
+test manifest_has_no_absolute_path ... ok
+test interrupted_copy_leaves_no_visible_backup ... ok
+test succeeds_without_wal_and_shm ... ok
+test restore_rejects_unknown_entry ... ok
+test garbage_store_fails_then_recovers ... ok
+test keeps_two_newest ... ok
+test restore_rolls_back_on_copy_failure ... ok
+test restore_moves_current_aside ... ok
+test remove_all_clears_app_made_folders ... ok
+test preflight_classifies_stores ... ok
+test upgrade_backs_up_once_and_normal_launch_does_not ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+
+     Running tests/vod_stores.rs (target/verification-2026-10-27/debug/deps/vod_stores-7250dc6e363038dc)
+
+running 28 tests
+test playback_recent_filters_floor_and_completion ... ok
+test fetch_orders_newest_first_and_skips_rows_without_channel ... ok
+test legacy_and_malformed_tags_are_neither_read_nor_written ... ok
+test missing_channel_id_is_filled_from_page ... ok
+test followed_removes_unfollowed_channels ... ok
+test exhausted_or_empty_page_zero_drops_rest_of_channel ... ok
+test later_page_only_appends ... ok
+test page_zero_replaces_only_newer_side ... ok
+test per_channel_limit_drops_oldest ... ok
+test playback_recent_sorts_by_last_seen_desc ... ok
+test playback_remove_deletes_row ... ok
+test purge_empty_store_is_no_op ... ok
+test token_helpers ... ok
+test playback_record_updates_existing ... ok
+test playback_record_and_fetch_one ... ok
+test purge_without_keep_removes_only_legacy ... ok
+test purge_keeping_scope_deletes_legacy_and_other_accounts ... ok
+test purge_second_run_returns_zero_and_does_not_save ... ok
+test retention_maintenance_purges_legacy_rows ... ok
+test retention_maintenance_without_tag_keeps_account_tokens ... ok
+test watch_later_add_and_fetch ... ok
+test watch_later_duplicate_keeps_single_row ... ok
+test rows_shared_with_other_tokens_survive_untagging ... ok
+test watch_later_contains_and_remove ... ok
+test watch_later_fetch_ids ... ok
+test unchanged_apply_returns_zero_and_does_not_save ... ok
+test purge_malformed_keep_falls_back_to_legacy_only ... ok
+test watch_later_sorted_by_added_at_desc ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+     Running tests/watch_math.rs (target/verification-2026-10-27/debug/deps/watch_math-aa5f093e1f96cc80)
+
+running 19 tests
+test bucket_key_and_category_label ... ok
+test expired_open_record_keeps_persisted_share ... ok
+test channel_name_uses_latest_record_name ... ok
+test empty_input_yields_zeros ... ok
+test bucket_holds_persisted_share_and_insights_add_open_increment ... ok
+test streak_allows_missing_today_once ... ok
+test seoul_1k_matches_raw_reference ... ok
+test streak_counts_consecutive_days_from_today ... ok
+test row_changed_during_push_stays_queued ... ok
+test new_york_fall_back_window_matches_raw_reference ... ok
+test new_york_spring_forward_window_matches_raw_reference ... ok
+test streak_is_zero_when_gap_before_yesterday ... ok
+test unsynced_count_matches_row_state ... ok
+test zero_duration_day_does_not_extend_streak ... ok
+test rollup_matches_data_store_1k ... ok
+test streak_spans_many_rows ... ok
+test seoul_20k_matches_raw_reference ... ok
+test record_aggregate_insights_duration ... ok
+test rollup_matches_data_store_20k ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.39s
+
+     Running unittests src/lib.rs (target/verification-2026-10-27/debug/deps/cview_player-d9ed2bac58013cd4)
+
+running 296 tests
+test bandwidth_coordinator::tests::empty_and_unmeasured ... ok
+test bandwidth_coordinator::tests::inactive_and_stale_streams_are_excluded ... ok
+test bandwidth_coordinator::tests::batch_snapshot_is_atomic_and_records_once ... ok
+test bandwidth_coordinator::tests::exhausted_budget_remains_measured ... ok
+test bandwidth_coordinator::tests::deduplicates_within_session_and_merges_overlap ... ok
+test bandwidth_coordinator::tests::emergency_spares_selected_and_hysteresis ... ok
+test bandwidth_coordinator::tests::feasible_floor_does_not_overcommit ... ok
+test bandwidth_coordinator::tests::distinguishes_transfer_rate_from_consumption ... ok
+test bandwidth_coordinator::tests::batch_snapshot_is_order_independent ... ok
+test bandwidth_coordinator::tests::manual_reservation_matches_app_bypass ... ok
+test bandwidth_coordinator::tests::missing_or_expired_samples_do_not_invent_capacity ... ok
+test bandwidth_coordinator::tests::pane_size_capping ... ok
+test bandwidth_coordinator::tests::pane_size_level_cap_truth_table ... ok
+test bandwidth_coordinator::tests::reserves_protected_consumption ... ok
+test bandwidth_coordinator::tests::selected_gets_more_bandwidth ... ok
+test bandwidth_coordinator::tests::stale_revisions_are_ignored ... ok
+test bandwidth_coordinator::tests::unregister_removes_advice ... ok
+test coordinator::tests::buffer_health_approximately_equals ... ok
+test coordinator::tests::effective_quality_policy_prefers_explicit_policy ... ok
+test coordinator::tests::buffer_health_publish_is_deduplicated ... ok
+test coordinator::tests::authenticated_playback_never_falls_back_to_direct_url ... ok
+test coordinator::tests::automatic_mode_has_no_idle_target ... ok
+test coordinator::tests::enter_timeshift_requires_active_phase ... ok
+test coordinator::tests::collapsed_suspend_resume_repairs_latency_control_token ... ok
+test coordinator::tests::failing_engine_goes_to_error_phase ... ok
+test coordinator::tests::background_recovery_respects_suspend_intent ... ok
+test coordinator::tests::dvr_and_suspended_panes_defer_route_change ... ok
+test coordinator::tests::engine_self_suspension_stops_pid_and_resume_restarts_it ... ok
+test coordinator::tests::authentication_keeps_route_without_reloads ... ok
+test coordinator::tests::exhaustion_stops_engine ... ok
+test coordinator::tests::initial_state_is_idle ... ok
+test coordinator::tests::late_exhaustion_does_not_stop_success ... ok
+test coordinator::tests::late_first_frame_cannot_resurrect_stopped_stream ... ok
+test coordinator::tests::live_reload_ends_time_shift ... ok
+test coordinator::tests::latest_selection_wins_and_stop_cannot_restart ... ok
+test coordinator::tests::network_recovery_decisions ... ok
+test coordinator::tests::missing_engine_is_an_error_phase_not_a_throw ... ok
+test coordinator::tests::new_low_latency_session_resets_inherited_playback_rate ... ok
+test coordinator::tests::local_timeshift_enter_move_and_exit ... ok
+test coordinator::tests::pause_and_resume_wait_for_engine_playing ... ok
+test coordinator::tests::phases_equatable_and_resource_requirements ... ok
+test coordinator::tests::background_recovery_reconnects_when_resume_does_not_take ... ok
+test coordinator::tests::pause_rejects_late_playback_and_reconnect ... ok
+test coordinator::tests::pause_defers_route_change_until_playback_resumes ... ok
+test coordinator::tests::quality_info_basics ... ok
+test coordinator::tests::reconnect_after_stop_does_not_revive_playback ... ok
+test coordinator::tests::background_recovery_skips_refresh_when_lease_is_fresh ... ok
+test coordinator::tests::recovery_signal_mapping ... ok
+test coordinator::tests::reconnect_keeps_pinned_variant ... ok
+test coordinator::tests::reconnect_on_live_session_restarts ... ok
+test coordinator::tests::refresh_is_skipped_in_error_phase ... ok
+test coordinator::tests::refresh_failures_escalate_to_reconnect_on_fifth ... ok
+test coordinator::tests::first_frame_starts_pid_only_for_hlsjs_and_pause_stops_it ... ok
+test coordinator::tests::select_1080p60_priorities ... ok
+test coordinator::tests::select_initial_quality_rules ... ok
+test coordinator::tests::refresh_keeps_pinned_quality_and_issues_lease ... ok
+test coordinator::tests::start_and_stop_emit_events ... ok
+test coordinator::tests::server_time_machine_stream_disables_local_recording ... ok
+test coordinator::tests::start_stream_waits_for_engine_playing ... ok
+test coordinator::tests::stop_stream_goes_idle_and_resets_uptime ... ok
+test coordinator::tests::stream_ended_signal_marks_ended ... ok
+test coordinator::tests::switch_quality_by_bandwidth_not_found ... ok
+test coordinator::tests::reconnect_attempt_waits_then_stops_engine_if_session_was_cleared ... ok
+test coordinator::tests::target_latency_margin_shifts_band_and_resets ... ok
+test coordinator::tests::time_shift_gate_also_stops_hlsjs_self_correction ... ok
+test coordinator::tests::time_shift_suspends_low_latency_sync_gate ... ok
+test coordinator::tests::switch_quality_pins_variant_and_skips_same_variant ... ok
+test coordinator::tests::variant_base_url_follows_only_allowed_redirects ... ok
+test coordinator::tests::trigger_reconnect_checks_stream_ended_first ... ok
+test coordinator::tests::unselected_pane_gets_stability_target_and_selection_owns_latency ... ok
+test coordinator::tests::video_variant_filter ... ok
+test download::tests::byte_ranges_continue_from_previous_end ... ok
+test download::tests::part_and_iv_rules ... ok
+test download::tests::child_urls_inherit_signed_query ... ok
+test hlsjs::bridge::tests::command_scripts ... ok
+test coordinator::tests::start_loads_manifest_info_in_background ... ok
+test hlsjs::bridge::tests::parses_token_request ... ok
+test hlsjs::bridge::tests::stale_page_filter ... ok
+test hlsjs::bridge::tests::snapshot_parses_v2_metrics ... ok
+test hlsjs::bridge::tests::parses_seek_with_bools_as_numbers ... ok
+test hlsjs::bridge::tests::stub_off_values_equal_off ... ok
+test hlsjs::bridge::tests::parses_seek_skipped_result_fallback_warn ... ok
+test hlsjs::bridge::tests::unknown_kind_and_missing_common_keys ... ok
+test hlsjs::diagnostics::tests::native_fields_reject_objects_and_payloads ... ok
+test hlsjs::network_metrics::tests::usable_rules ... ok
+test hlsjs::network_metrics::tests::parses_and_bounds ... ok
+test hlsjs::bridge::tests::parses_envelopes_of_every_type ... ok
+test coordinator::tests::trigger_reconnect_runs_attempts_until_first_frame ... ok
+test hlsjs::profile::tests::forced_quality_target ... ok
+test hlsjs::profile::tests::config_literal ... ok
+test low_latency::backoff::tests::backoff_is_capped ... ok
+test low_latency::backoff::tests::decay_stops_at_floor_after_rebuffer ... ok
+test low_latency::backoff::tests::bumps_on_each_rebuffer ... ok
+test low_latency::backoff::tests::decays_stepwise_to_floor ... ok
+test low_latency::backoff::tests::disabled_by_default ... ok
+test low_latency::backoff::tests::floor_not_armed_without_rebuffer ... ok
+test low_latency::backoff::tests::disabling_publishes_lowered_target ... ok
+test low_latency::backoff::tests::floor_releases_after_long_clean_stretch ... ok
+test low_latency::backoff::tests::isolated_rebuffer_decays_after_short_hold ... ok
+test low_latency::backoff::tests::rebuffer_pushes_floor_release ... ok
+test low_latency::backoff::tests::rebuffer_rearms_decay_clock ... ok
+test low_latency::backoff::tests::repeated_rebuffers_keep_raised_target_longer ... ok
+test low_latency::backoff::tests::resets_on_session_boundary ... ok
+test low_latency::backoff::tests::runtime_segment_floor_is_published ... ok
+test low_latency::backoff::tests::segment_floor ... ok
+test low_latency::backoff::tests::segment_floor_and_backoff_compose ... ok
+test low_latency::config::tests::custom_defaults ... ok
+test low_latency::backoff::tests::starved_buffer_stops_catch_up ... ok
+test low_latency::config::tests::match_web_v2_constants ... ok
+test low_latency::config::tests::standard_and_ultra_low ... ok
+test low_latency::config::tests::web_parity_micro_stutter_guards ... ok
+test low_latency::match_web_v2::tests::backoff_publishes_targets_without_rate_or_seek ... ok
+test low_latency::match_web_v2::tests::part_duration_floor ... ok
+test low_latency::match_web_v2::tests::ownership ... ok
+test low_latency::match_web_v2::tests::tick_decays_backoff ... ok
+test low_latency::match_web_v2::tests::tick_emits_sample_and_buffer_health ... ok
+test low_latency::sync::tests::catching_up_and_slowing_down ... ok
+test low_latency::sync::tests::edge_cases ... ok
+test low_latency::sync::tests::initial_state ... ok
+test low_latency::sync::tests::latency_spike ... ok
+test low_latency::sync::tests::publishes_only_on_change ... ok
+test low_latency::sync::tests::rate_change_callback ... ok
+test low_latency::sync::tests::rate_clamped ... ok
+test low_latency::sync::tests::reset_restores_idle ... ok
+test low_latency::sync::tests::seek_required_and_callback ... ok
+test low_latency::sync::tests::republishes_after_session_boundary ... ok
+test low_latency::sync::tests::seek_suppressed_without_authority_and_resumes ... ok
+test low_latency::sync::tests::snapshot_fields ... ok
+test low_latency::sync::tests::stale_binding_rejected ... ok
+test low_latency::sync::tests::stop_sync_to_idle ... ok
+test low_latency::sync::tests::synced_at_target ... ok
+test low_latency::sync::tests::ultra_low_faster_response ... ok
+test manifest::byte_span::tests::init_span ... ok
+test manifest::byte_span::tests::content_range_and_final_failure ... ok
+test manifest::byte_span::tests::recordable_body ... ok
+test manifest::byte_span::tests::validated_and_header ... ok
+test manifest::byte_span::tests::resolve_spans ... ok
+test manifest::parser::tests::key_handling ... ok
+test manifest::parser::tests::map_without_byte_range_keeps_token_path ... ok
+test manifest::parser::tests::map_with_byte_range_and_changes ... ok
+test manifest::parser::tests::llhls ... ok
+test manifest::parser::tests::llhls_yields_only_complete_segments ... ok
+test manifest::parser::tests::master_absolute_uri_and_errors ... ok
+test coordinator::tests::success_while_reconnect_play_is_pending_keeps_engine ... ok
+test manifest::parser::tests::master_crlf ... ok
+test manifest::parser::tests::master_full_attributes ... ok
+test manifest::parser::tests::master_single_and_sorted ... ok
+test manifest::parser::tests::media_basics ... ok
+test manifest::parser::tests::media_endlist_discontinuity_invalid ... ok
+test manifest::parser::tests::media_times ... ok
+test manifest::parser::tests::missing_or_invalid_map_and_gap ... ok
+test policy::constants::tests::values ... ok
+test manifest::parser::tests::pdt_and_byte_range ... ok
+test manifest::parser::tests::quality_labels ... ok
+test policy::latency_pairing::tests::custom_band_invariant ... ok
+test policy::latency_pairing::tests::eligibility_table ... ok
+test policy::latency_pairing::tests::low_latency_off_overrides_profile_only ... ok
+test policy::latency_pairing::tests::nil_settings_falls_back_to_web_parity ... ok
+test policy::latency_pairing::tests::pairing_for_v2_and_fallback ... ok
+test policy::latency_pairing::tests::preset_value_table_matches_configurations ... ok
+test policy::latency_snap::tests::snap_gate ... ok
+test low_latency::match_web_v2::tests::backoff_loop_actually_ticks ... ok
+test policy::latency_pairing::tests::custom_builder_passes_rate_significance ... ok
+test policy::manifest_lease::tests::freshness ... ok
+test policy::manifest_refresh_policy::tests::thresholds ... ok
+test policy::manifest_lease::tests::same_urls_ignores_generation ... ok
+test policy::media_response_policy::tests::blocking_and_extension ... ok
+test policy::media_response_policy::tests::content_type_correction ... ok
+test policy::media_response_policy::tests::playlist_detection ... ok
+test policy::occlusion_cap::tests::background_resync_gate ... ok
+test policy::occlusion_cap::tests::constants ... ok
+test policy::occlusion_cap::tests::guards ... ok
+test policy::occlusion_cap::tests::profile_targets ... ok
+test policy::latency_pairing::tests::pairing_matches_declaration ... ok
+test policy::playback_key_access::tests::protected_streams_always_use_proxy ... ok
+test policy::playback_key_access::tests::accepts_only_exact_key_endpoint ... ok
+test policy::quality_policy::tests::flags ... ok
+test policy::quality_policy::tests::legacy_mapping ... ok
+test policy::session_tier::tests::ordering ... ok
+test policy::playback_key_access::tests::stale_cookie_removed_and_post_untouched ... ok
+test proxy::byte_range::tests::byte_range_window ... ok
+test proxy::byte_range::tests::content_range_injection_is_dropped ... ok
+test policy::playback_key_access::tests::redirect_strips_credentials_except_key ... ok
+test proxy::byte_range::tests::reason_phrases ... ok
+test proxy::byte_range::tests::parses_client_range_header ... ok
+test proxy::routing::tests::accepts_only_get_origin_form ... ok
+test proxy::byte_range::tests::error_response_headers ... ok
+test policy::playback_key_access::tests::filters_cookies ... ok
+test proxy::byte_range::tests::preflight_allows_only_range ... ok
+test proxy::routing::tests::dot_segment_removal ... ok
+test proxy::routing::tests::dot_segments_resolve_against_upstream_path ... ok
+test proxy::routing::tests::playlist_base_path_follows_redirects ... ok
+test proxy::routing::tests::network_path_reference ... ok
+test proxy::routing::tests::preserves_signed_paths_and_queries ... ok
+test proxy::routing::tests::proxy_url_routes_cross_cdn ... ok
+test proxy::routing::tests::rejects_cross_cdn_authority ... ok
+test proxy::routing::tests::rewrites_only_whole_allowed_authorities ... ok
+test proxy::routing::tests::root_relative_on_root_playlist ... ok
+test proxy::routing::tests::root_relative_variants ... ok
+test proxy::routing::tests::scheme_detection ... ok
+test proxy::routing::tests::segment_path_detection ... ok
+test policy::latency_pairing::tests::js_fallback_structure ... ok
+test proxy::routing::tests::uri_attribute_boundaries ... ok
+test proxy::routing::tests::unchanged_common_cases ... ok
+test proxy::server::origin_tests::only_app_origins_or_none ... ok
+test proxy::routing::tests::uri_attributes_on_other_tags ... ok
+test proxy::smp_token::tests::appends_once ... ok
+test proxy::smp_token::tests::extracts_raw_hdnts ... ok
+test proxy::telemetry::tests::cadence_aware_gap ... ok
+test proxy::smp_token::tests::rewrites_only_when_enabled ... ok
+test proxy::telemetry::tests::classifies_measured_gaps ... ok
+test proxy::telemetry::tests::consecutive_403_fires_at_threshold ... ok
+test proxy::telemetry::tests::perf_window_counts_supply_gaps ... ok
+test proxy::telemetry::tests::perf_window_summarizes_and_resets ... ok
+test proxy::telemetry::tests::playlist_wait_is_scoped_to_one_gap ... ok
+test proxy::telemetry::tests::thresholds_match_segment_duration ... ok
+test proxy::tests::final_filename_and_only_uri_fields_are_rewritten ... ok
+test proxy::tests::foreign_origin_is_refused ... ok
+test proxy::tests::ignored_range_with_unknown_length_passes_through ... ok
+test proxy::tests::loopback_request_to_untrusted_destination_returns_403 ... ok
+test proxy::tests::key_url_gets_login_cookies_others_do_not ... ok
+test proxy::tests::loopback_attaches_smp_token_to_segments ... ok
+test proxy::tests::ignored_range_is_sliced_and_connection_reused ... ok
+test proxy::tests::proxy_url_rewrites_only_while_running ... ok
+test proxy::tests::consecutive_403_notifies_auth_failure ... ok
+test proxy::tests::refuses_disallowed_host_and_joins_concurrent_starts ... ok
+test proxy::tests::other_methods_get_400_and_absolute_form_is_forbidden ... ok
+test proxy::tests::redirected_playlist_resolves_against_final_url ... ok
+test proxy::tests::rewrites_response_identified_playlists ... ok
+test proxy::tests::corrects_only_supported_media_and_preserves_bytes ... ok
+test proxy::tests::stopped_proxy_refuses_new_sessions ... ok
+test proxy::tests::repeated_playlist_requests_always_reach_upstream ... ok
+test proxy::tests::preflight_answers_204_then_ranged_get_on_same_connection ... ok
+test proxy::tests::upstream_fetch_uses_same_headers_and_validates_ranges ... ok
+test proxy::timeshift::tests::parses_timeshift_paths ... ok
+test proxy::timeshift::tests::tee_commits_only_intact_200 ... ok
+test proxy::transfer_diagnostics::tests::records_update_in_place ... ok
+test proxy::transfer_diagnostics::tests::terminal_metrics_wait_for_pending_sends ... ok
+test reconnection::tests::double_start_guard ... ok
+test reconnection::tests::exhausted_attempt_count_matches_real_attempts ... ok
+test proxy::tests::client_leaving_mid_body_counts_abort ... ok
+test proxy::tests::transient_failure_is_retried_once_with_same_range ... ok
+test reconnection::tests::exhausted_calls_callback ... ok
+test reconnection::tests::exponential_and_capped_delays ... ok
+test proxy::tests::supply_gap_is_noted_only_for_segments ... ok
+test reconnection::tests::initial_state_and_cancel_reset ... ok
+test reconnection::tests::immediate_retry_cuts_backoff ... ok
+test reconnection::tests::presets ... ok
+test reconnection::tests::reset_only_attempt ... ok
+test recording::tests::aes128_cbc_round_trip_and_bad_key ... ok
+test reconnection::tests::set_config_applies ... ok
+test reconnection::tests::old_completion_cannot_finish_replacement ... ok
+test recording::tests::default_recording_path_sanitizes_channel_name ... ok
+test proxy::tests::rejects_unusable_playlists_without_serving_partial_success ... ok
+test recording::tests::decrypts_aes128_segments_with_cached_key ... ok
+test proxy::tests::forwards_ranges_and_relays_206 ... ok
+test recording::tests::discontinuity_rewrites_init ... ok
+test recording::tests::error_bodies_are_not_recorded ... ok
+test recording::tests::fragment_waits_for_init ... ok
+test recording::tests::failed_middle_segment_keeps_file_order ... ok
+test recording::tests::recording_key_table ... ok
+test recording::tests::invalid_discontinuity_restarts_init_once ... ok
+test recording::tests::media_playlist_redirect_uses_final_url ... ok
+test recording::tests::master_redirect_uses_final_url ... ok
+test recording::tests::query_only_differences_are_distinct ... ok
+test coordinator::tests::path_change_interrupts_handler_backoff ... ok
+test recording::tests::rewrites_init_when_map_changes ... ok
+test recording::tests::records_byte_range_sub_segments ... ok
+test recording::tests::rotating_hosts_and_tokens_do_not_duplicate ... ok
+test recording::tests::records_ranged_map_init ... ok
+test recording::tests::start_twice_fails_and_stop_resets_state ... ok
+test seek_arbiter::tests::cancel_all_owner ... ok
+test seek_arbiter::tests::eight_pane_simulation ... ok
+test seek_arbiter::tests::grant_timeout_auto_releases ... ok
+test seek_arbiter::tests::grants_one_at_a_time ... ok
+test seek_arbiter::tests::arbiter_integration ... ok
+test recording::tests::auto_poll_loop_records_until_stopped ... ok
+test seek_arbiter::tests::next_wakeup_values ... ok
+test seek_arbiter::tests::page_gen_distinguishes_requests ... ok
+test seek_arbiter::tests::pending_expires ... ok
+test recording::tests::server_errors_retry_within_poll ... ok
+test seek_arbiter::tests::priority_then_fifo ... ok
+test seek_arbiter::tests::same_owner_replaces ... ok
+test seek_arbiter::tests::spacing_after_release ... ok
+test vod::tests::neon_url_escapes_id_and_key ... ok
+test vod::tests::falls_back_to_vod_url_then_fails ... ok
+test vod::tests::resolver_falls_back_to_neon_playback ... ok
+test vod::tests::parses_neon_playback_hls_and_progressive ... ok
+test vod::tests::resolver_maps_api_errors ... ok
+test vod::tests::resolves_playback_json_with_qualities_and_in_key ... ok
+test recording::tests::writes_init_once_before_fragments ... ok
+test recording::tests::skipped_discontinuity_still_rewrites_init ... ok
+test recording::tests::stale_content_range_is_rejected ... ok
+test proxy::routing::tests::token_substitutions_match_legacy ... ok
+test proxy::tests::serves_timeshift_and_tees_segments ... ok
+test proxy::tests::upstream_waiting_client_abort_cancels_upstream ... ok
+
+test result: ok. 296 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
+   Doc-tests cview_app
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests cview_app_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests cview_auth
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests cview_chat
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests cview_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests cview_networking
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests cview_persistence
+
+running 1 test
+test crates/cview-persistence/src/store/off_main.rs - store::off_main::DataStore::off_main (line 31) ... ignored
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests cview_player
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

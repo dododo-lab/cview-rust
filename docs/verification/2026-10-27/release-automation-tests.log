@@ -1,0 +1,22 @@
+test_cross_origin_redirect_rejected (test_release_automation.ClientTests) ... ok
+test_ssh_does_not_reuse_unrestricted_master_or_password (test_release_automation.ClientTests) ... ok
+test_ssh_failure_exits_nonzero (test_release_automation.ClientTests) ... Release automation failed: offline
+Do not mark the release complete. Keep the version/files/notes and retry the same publish command.
+ok
+test_concurrent_operations_rejected (test_release_automation.GatewayTests) ... ok
+test_hash_mismatch_never_promotes_file (test_release_automation.GatewayTests) ... ok
+test_path_traversal_and_arbitrary_names_rejected (test_release_automation.GatewayTests) ... ok
+test_probe_readback_and_cleanup (test_release_automation.GatewayTests) ... ok
+test_publish_retry_verifies_without_overwriting (test_release_automation.GatewayTests) ... ok
+test_published_but_verification_failed_can_be_retried (test_release_automation.GatewayTests) ... ok
+test_symlink_escape_blocked (test_release_automation.GatewayTests) ... ok
+test_tampering_after_upload_blocks_publication (test_release_automation.GatewayTests) ... ok
+test_truncated_upload_cleans_temporary_files (test_release_automation.GatewayTests) ... ok
+test_unsupported_action_does_not_execute (test_release_automation.GatewayTests) ... ok
+test_upload_retry_is_idempotent_and_conflicts_preserved (test_release_automation.GatewayTests) ... ok
+test_validation_requires_both_platforms_and_matching_files (test_release_automation.GatewayTests) ... ok
+
+----------------------------------------------------------------------
+Ran 15 tests in 0.051s
+
+OK
