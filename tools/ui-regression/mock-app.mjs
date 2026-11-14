@@ -92,7 +92,9 @@ export function mockTauri([origin, theme]) {
     },
     event: { listen: async () => () => {} },
   };
-  try { localStorage.setItem('cview.onboarded', '1'); localStorage.setItem('cview.theme', theme); } catch { /* 무시 */ }
+  // 환영 안내를 띄우지 않는다(키는 onboarding.js WELCOME_KEY). 예전엔 쓰이지 않는 'cview.onboarded' 를 넣어 안내가 늘 떴다.
+  // 열고 나서 지우면 WebKit 에서는 늦게 다시 떠 누르기를 가로챘고, 지운 안내의 Esc 처리기가 첫 Esc 를 먹었다.
+  try { localStorage.setItem('cview.welcomed.v1', String(Date.now())); localStorage.setItem('cview.theme', theme); } catch { /* 무시 */ }
 }
 
 export const go = (page, route, params = {}) => page.evaluate(([r, p]) => window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: r, params: p } })), [route, params]);

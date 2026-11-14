@@ -43,8 +43,6 @@ const NOTES_PAGE = 'https://github.com/dododo-lab/cview-rust/releases/tag/v0.1.1
 
 /** 정보 탭이 부르는 명령만 흉내 낸다(나머지는 mock-app 그대로). 부른 명령·인자는 window.__about.calls. 클립보드도 가짜로. */
 function installAboutMocks([report, dataDir, notesPage]) {
-  // 환영 안내를 띄우지 않는다 — WebKit 에서는 열린 뒤에 늦게 떠서 지워도 다시 나타나 누르기를 가로챘다(키는 onboarding.js).
-  try { localStorage.setItem('cview.welcomed.v1', '1'); } catch { /* 무시 */ }
   const cfg = window.__about = { update: 'latest', notes: 'ok', report: 'ok', clip: 'ok', general: { autoCheckUpdates: true }, calls: [], clipped: [] };
   const inv = window.__TAURI__.core.invoke;
   window.__TAURI__.core.invoke = async (c, a = {}) => {

@@ -43,8 +43,11 @@ class Follower {
   snap() {
     // 창이 숨어 있으면 내리지 않는다 — 아무도 보지 않는데 scrollHeight 를 읽으면 줄을 붙일 때마다 목록 전체
     // 레이아웃을 강제한다(가린 채 멀티라이브를 켜 두면 패인 채팅마다 계속). 다시 보이면 resyncAll 이 바닥으로 내린다.
+    // 숨은 화면(채팅·시청·멀티라이브 페이지가 [hidden])의 목록도 같다 — 시작할 때 세 목록의 ResizeObserver·focus 가
+    // 레이아웃을 강제했다. 화면이 다시 보이면 크기가 바뀌어 위 ResizeObserver 가 바닥으로 내린다.
     if (document.hidden) return;
     const l = this.list;
+    if (l.closest('[hidden]')) return;
     if (l.scrollHeight - l.clientHeight - l.scrollTop > 1) l.scrollTop = l.scrollHeight;
   }
 
