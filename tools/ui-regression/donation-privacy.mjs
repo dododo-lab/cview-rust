@@ -167,6 +167,10 @@ await check('DP03 anonymous lines open no user pop, menu or action bar; named li
   const line = page.locator('#dpbox [data-id="d-ap"]');
   await line.locator('.ev-from .nick').click();
   await line.locator('.ev-card').dblclick();
+  // 앱은 ID 없는 줄의 우클릭을 가로채지 않는다(줄 메뉴 없음 — 아래에서 센다). 그러면 WebKit 은 엔진 기본 문맥 메뉴를 띄우고,
+  // 그 메뉴가 열린 동안 다음 클릭은 페이지에 닿지 않는다(macOS 메뉴처럼 닫기만 한다 — Esc 로도 안 닫힌다). 아래 실명 줄 클릭이
+  // 삼켜지지 않게, 앱 처리기가 모두 돈 뒤(문서 버블 끝) 이번 우클릭의 기본 동작만 막는다. Chromium(헤드리스)은 메뉴가 없다.
+  await page.evaluate(() => document.addEventListener('contextmenu', (e) => e.preventDefault(), { once: true }));
   await line.locator('.ev-card').click({ button: 'right' });
   await line.hover();
   const anon = await page.evaluate(() => ({
