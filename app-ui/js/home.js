@@ -280,7 +280,9 @@ export class HomePage {
     const loggedIn = this.isLoggedIn();
     // 직접 새로고침(덮개 아래)이면 보던 홈을 흐리게 둔 채 바꾼다 — 스켈레톤으로 비우지 않는다.
     if (!this.body.querySelector('.home') || (refresh && !refreshVeiled(this.root))) {
-      this.liveStrip.beforeSwap();
+      // 초점 자리를 기억하고(붙어 있을 때만 — 아니면 앞서 기억한 것을 덮는다) 옛 홈에서 떼어 낸다(옛 트리를 붙잡지 않게).
+      if (this.liveStrip.el.isConnected) this.liveStrip.beforeSwap();
+      this.liveStrip.detach();
       this.body.innerHTML = homeSkeleton(loggedIn);
       this.liveStrip.watch(this.body.querySelector('.lf-skeleton .lf-grid'));
     }
@@ -452,11 +454,14 @@ export class HomePage {
     // 처음 붙일 때 — 문서에 넣기 전에 템플릿 안에서 자리를 구역으로 바꿔 한 번에 붙인다. 빈 자리를 먼저 넣고 바꾸면
     // 세그먼트 판(motion.js)의 MutationObserver 가 같은 묶음에서 .home 과 구역을 두 번 훑어 "다시 붙음"으로 보고
     // 시작 중 판을 동기로 다시 쟀다(강제 레이아웃 약 30ms — perf.mjs P01).
-    this.liveStrip.beforeSwap();
+    // 초점 자리는 구역이 붙어 있을 때만 기억한다 — 스켈레톤을 거쳐 왔으면 그때 기억한 것을 덮지 않게(예전엔 늘 덮어 복원이 실패했다).
+    if (strip.isConnected) this.liveStrip.beforeSwap();
+    else this.liveStrip.hidePeek();
     const tpl = document.createElement('template');
     tpl.innerHTML = html;
     const slot = tpl.content.querySelector('[data-lf-slot]');
     if (slot) this.liveStrip.mount(slot);
+    else this.liveStrip.detach({ forget: true }); // 자리가 없다(로그아웃·팔로잉 실패) — 옛 홈 트리를 붙잡지 않게 뗀다
     // swapContent 와 같은 규칙(보이던 내용을 갈아 끼우면 떠오르지 않는다)
     this.body.classList.toggle('no-enter', this.body.childElementCount > 0 && !this.body.querySelector('.sk, .ip-skeleton, .empty.loading'));
     this.body.replaceChildren(tpl.content);

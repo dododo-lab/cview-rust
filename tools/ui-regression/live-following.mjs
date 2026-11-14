@@ -19,6 +19,15 @@
 // LF08 갱신 깜박임 없음 — 다른 화면에 갔다 와도(홈 다시 그리기), 주기 갱신(사이드바 2분 — 여기서는 즐겨찾기 추가가 같은 함수를
 //      부른다)에도 남은 채널의 칸·그림 요소가 그대로이고 그림을 다시 받지 않는다. 바뀐 글자만 바뀌고 끝난 방송은 빠지고 새 방송은
 //      들어온다. 마우스·초점이 구역에 있는 동안은 자리를 바꾸지 않고, 떠나면 제 순서로.
+// LF09~LF16 — PR #120 검토에서 나온 문제(고친 뒤 다시 생기지 않게):
+// LF09 마우스로 연 카드를 초점이 body 일 때도 Esc 로 닫고, 포인터 아래에서 다시 뜨지 않으며, 위에 뜬 카드 메뉴가 먼저 닫힌다.
+// LF10 '접기'를 누르면 그 단추(→ '+N 더 보기')가 화면에서 제자리에 남는다(위로 밀려 사라지지 않음).
+// LF11 정렬·더 보기·접기를 마우스로 누르고 떠난 뒤 2분 갱신(가짜 시계)에 새 즐겨찾기·새 방송이 제 자리(앞)에 보인다.
+// LF12 스켈레톤을 거치는 다시 그리기(네트워크 복구 자동 새로고침, online 이벤트)에서 키보드 초점이 같은 칸으로 돌아온다.
+// LF13 초점 있던 칸이 숨겨지면(창이 좁아짐) 초점이 '+N 더 보기'로 간다(body 로 떨어지지 않음).
+// LF14 화살표 이동이 페이지를 스크롤해도 새 칸의 카드가 뜬다.
+// LF15 color-mix 를 모르는 엔진(Safari 16.0~16.1 흉내)에서도 개수 배지 바탕이 불투명하고 글자 4.5:1 이상.
+// LF16 홈에 구역 자리가 없어지면(팔로잉 실패) 구역이 떨어진 옛 홈 트리를 붙잡지 않고 카드를 닫는다. 복구되면 같은 요소가 돌아온다.
 // 저장소 루트에서: node tools/ui-regression/live-following.mjs   (Playwright 필요, axe-core 가 있으면 LF03 에서 쓴다.
 //   CVIEW_UI_BROWSER=webkit 이면 앱(macOS)과 같은 WebKit 엔진. CVIEW_UI_SHOTS=<폴더> 면 상태별 PNG.)
 import fs from 'node:fs';
@@ -78,7 +87,7 @@ function mockLF([origin, opts]) {
   const handlers = {
     auth_status: () => ({ loggedIn: true, state: 'loggedIn', nickname: '도도', profileImageUrl: img('avatar', 3) }),
     settings_get: () => ({ multiLive: { maxConcurrentSessions: 4, maxLiveChannels: 5 }, multiChat: {}, player: {}, chat: {}, general: {}, appearance: { theme: opts.theme || 'dark', motionQuality: opts.motion || 'balanced' } }),
-    following_lives: () => { if (opts.failFollowing) throw new Error('network timed out'); return state.following.map((l) => ({ ...l })); },
+    following_lives: () => { if (opts.failFollowing || state.fail) throw new Error('network timed out'); return state.following.map((l) => ({ ...l })); },
     popular_lives: () => Array.from({ length: 24 }, (_, i) => ({ ...live(200 + i), channelId: `pop${i}` })),
     recent_channels: () => state.recent,
     favorites_list: () => [...state.favs].map((channelId) => ({ channelId, channelName: channelId })),
@@ -114,6 +123,8 @@ async function openHome(opts = {}) {
   page.setDefaultTimeout(8000);
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
+  // 2분 주기 갱신(app.js refreshSidebarFollowing)을 앞당겨 부를 검사는 가짜 시계 — 시간은 그대로 흐르고 fastForward 로 건너뛴다
+  if (opts.clock) await page.clock.install();
   await page.addInitScript(mockLF, [base, { count: 12, theme, ...opts }]);
   await page.goto(base);
   await page.waitForSelector(opts.failFollowing ? '.home .home-notice' : '.home .lf', { state: 'attached' });
@@ -795,8 +806,7 @@ await check('LF08 refresh without flicker: home re-render and periodic update ke
   const busy = mid.hover || mid.focusIn;
   const stillThere = mid.vis.indexOf(plan.fav) === plan.keys.filter((k) => k !== plan.gone).indexOf(plan.fav);
   if (busy && !stillThere) problems.push(`손이 구역에 있는데 자리가 바뀌었다 (${mid.vis.indexOf(plan.fav)})`);
-  // 떠나면 제 순서 — 즐겨찾기가 맨 앞
-  await page.evaluate(() => document.activeElement && document.activeElement.blur());
+  // 떠나면 제 순서 — 즐겨찾기가 맨 앞. 초점은 그대로 둔다(마우스로 연 메뉴가 닫히며 칸에 돌려준 초점 — 키보드 초점이 아니다).
   await page.mouse.move(2, 880, { steps: 3 });
   await page.waitForTimeout(250);
   const after = await page.evaluate(() => [...document.querySelectorAll('.lf-grid .lf-item:not(.lf-more-item)')].map((li) => li.dataset.key));
@@ -821,6 +831,240 @@ await check('LF08 refresh without flicker: home re-render and periodic update ke
   await page.waitForTimeout(250);
   const left = await page.evaluate(() => [...document.querySelectorAll('.lf-grid .lf-item:not(.lf-more-item)')].map((li) => li.dataset.key));
   if (left.indexOf(fav2) > 1) problems.push(`마우스가 떠난 뒤에도 새 즐겨찾기가 앞으로 오지 않았다 (${left.indexOf(fav2)})`);
+  if (errors.length) problems.push(`페이지 오류 ${errors[0]}`);
+  await ctx.close();
+  ok(!problems.length, problems.join(' / '));
+});
+
+// ── LF09~LF16 — PR #120 검토에서 나온 문제의 회귀 검사 ─────────────────────────
+const visTiles = (page) => page.locator('.lf-grid .lf-item:not(.lf-more-item):not([hidden])');
+const peekState = (page) => page.evaluate(() => { const p = document.querySelector('.lf-peek'); return { open: !p.hidden, key: p.dataset.channelId || null }; });
+const focusInfo = (page) => page.evaluate(() => {
+  const a = document.activeElement;
+  const li = a && a.closest ? a.closest('.lf-item') : null;
+  return { tag: a ? a.tagName : null, cls: a && a.className ? String(a.className) : '', key: li ? (li.dataset.key || '__more') : null };
+});
+
+await check('LF09 Esc closes a hover-opened peek even when focus is on body; stays closed under the pointer; a context menu above closes first', async () => {
+  const problems = [];
+  const { ctx, page, errors } = await openHome({ count: 12, width: 1280 });
+  const t = visTiles(page).nth(1);
+  const key = await t.getAttribute('data-key');
+  const b = await t.boundingBox();
+  await page.mouse.move(b.x + 30, b.y + b.height / 2);
+  await page.waitForTimeout(650);
+  let p = await peekState(page);
+  if (!p.open || p.key !== key) problems.push(`호버 카드가 없다 ${JSON.stringify(p)}`);
+  await page.evaluate(() => document.activeElement && document.activeElement.blur());
+  const f = await focusInfo(page);
+  if (f.tag !== 'BODY') problems.push(`초점이 body 가 아니다(검사 준비) ${JSON.stringify(f)}`);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(80);
+  p = await peekState(page);
+  if (p.open) problems.push('초점이 body 일 때 Esc 로 카드가 닫히지 않았다');
+  await page.mouse.move(b.x + 40, b.y + b.height / 2 + 2); // 같은 칸 안에서 움직여도
+  await page.waitForTimeout(700);
+  if ((await peekState(page)).open) problems.push('Esc 로 닫은 카드가 포인터 아래에서 다시 떴다');
+  // 카드 메뉴가 위에 있으면 Esc 는 메뉴부터
+  const t2 = visTiles(page).nth(2);
+  const b2 = await t2.boundingBox();
+  await page.mouse.move(b2.x + 30, b2.y + b2.height / 2);
+  await page.waitForTimeout(650);
+  if (!(await peekState(page)).open) problems.push('다른 칸의 카드가 뜨지 않았다');
+  await page.mouse.click(b2.x + 30, b2.y + b2.height / 2, { button: 'right' });
+  await page.waitForSelector('.ctx-menu');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(80);
+  const s1 = await page.evaluate(() => ({ menu: Boolean(document.querySelector('.ctx-menu')), peek: !document.querySelector('.lf-peek').hidden }));
+  if (s1.menu) problems.push('Esc 에 카드 메뉴가 닫히지 않았다');
+  if (!s1.peek) problems.push('메뉴를 닫는 Esc 가 카드까지 닫았다(메뉴부터 하나씩이어야)');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(80);
+  if ((await peekState(page)).open) problems.push('두 번째 Esc 에 카드가 닫히지 않았다');
+  if (errors.length) problems.push(`페이지 오류 ${errors[0]}`);
+  await ctx.close();
+  ok(!problems.length, problems.join(' / '));
+});
+
+await check('LF10 collapsing keeps the "접기" → "+N" button where it was on screen (no jump, scroll position kept)', async () => {
+  const problems = [];
+  const { ctx, page } = await openHome({ count: 39, width: 1280, height: 700 });
+  await page.locator('.lf-more').click();
+  await page.locator('.lf-more').scrollIntoViewIfNeeded();
+  await page.evaluate(() => { const sc = document.querySelector('.page-home'); sc.scrollTop += 120; }); // 단추를 화면 가운데쯤
+  await page.waitForTimeout(100);
+  const before = await page.evaluate(() => ({ top: document.querySelector('.lf-more').getBoundingClientRect().top, label: document.querySelector('.lf-more-count').textContent }));
+  if (before.label !== '접기' || before.top < 0 || before.top > 700) problems.push(`검사 준비 실패 ${JSON.stringify(before)}`);
+  await page.locator('.lf-more').click();
+  await page.waitForTimeout(100);
+  const after = await page.evaluate(() => ({ top: document.querySelector('.lf-more').getBoundingClientRect().top, bottom: document.querySelector('.lf-more').getBoundingClientRect().bottom, label: document.querySelector('.lf-more-count').textContent }));
+  if (!after.label.startsWith('+')) problems.push(`접히지 않았다 ${after.label}`);
+  if (Math.abs(after.top - before.top) > 2) problems.push(`단추가 ${Math.round(before.top)} → ${Math.round(after.top)}px 로 움직였다`);
+  if (after.top < 0 || after.bottom > 700) problems.push('접은 뒤 단추가 화면 밖이다');
+  await ctx.close();
+  ok(!problems.length, problems.join(' / '));
+});
+
+await check('LF11 after mouse clicks on sort / 더 보기 / 접기 and leaving, the 2-minute refresh reorders (new favorite & new live not buried behind +N)', async () => {
+  const problems = [];
+  const { ctx, page, errors } = await openHome({ count: 39, width: 1280, clock: true });
+  await page.locator('[data-lf-sort="viewers"]').click();
+  await page.locator('[data-lf-sort="mine"]').click();
+  await page.locator('.lf-more').click();
+  await page.locator('.lf-more').click();
+  await page.mouse.move(2, 880, { steps: 3 });
+  await page.waitForTimeout(150);
+  const f = await focusInfo(page);
+  // 새 즐겨찾기(접힌 뒤쪽 채널)·새 방송(시청자 가장 많음)
+  await page.evaluate(() => {
+    const st = window.__lf;
+    st.favs.add('ch30');
+    st.following.push({ ...st.live(90, 150000), channelId: 'ch90' });
+  });
+  await page.clock.fastForward(121000);
+  await page.waitForFunction(() => document.querySelector('.lf-item[data-key="ch90"]'), null, { timeout: 4000 }).catch(() => {});
+  await page.waitForTimeout(200);
+  const r = await page.evaluate(() => {
+    const items = [...document.querySelectorAll('.lf-grid .lf-item:not(.lf-more-item)')];
+    const at = (k) => items.findIndex((li) => li.dataset.key === k);
+    const vis = (k) => { const li = items[at(k)]; return Boolean(li && !li.hidden); };
+    return { fav: at('ch30'), favVis: vis('ch30'), fresh: at('ch90'), freshVis: vis('ch90') };
+  });
+  if (r.fresh < 0) problems.push('2분 갱신이 오지 않았다(새 방송 없음)');
+  if (r.fav !== 0 || !r.favVis) problems.push(`새 즐겨찾기가 맨 앞에 보이지 않는다 ${JSON.stringify(r)} (초점 ${JSON.stringify(f)})`);
+  if (r.fresh !== 1 || !r.freshVis) problems.push(`새 방송이 즐겨찾기 다음에 보이지 않는다 ${JSON.stringify(r)} (초점 ${JSON.stringify(f)})`);
+  if (errors.length) problems.push(`페이지 오류 ${errors[0]}`);
+  await ctx.close();
+  ok(!problems.length, problems.join(' / '));
+});
+
+await check('LF12 a skeleton re-render (network recovery auto reload) gives keyboard focus back to the same tile', async () => {
+  const problems = [];
+  const { ctx, page, errors } = await openHome({ count: 12, width: 1280 });
+  await page.locator('.lf-all').focus();
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('ArrowRight');
+  const f0 = await focusInfo(page);
+  const calls0 = await page.evaluate(() => window.__lf.calls.filter(([c]) => c === 'following_lives').length);
+  await page.evaluate(() => { window.__sawSkeleton = false; new MutationObserver(() => { if (document.querySelector('.lf-skeleton')) window.__sawSkeleton = true; }).observe(document.body, { childList: true, subtree: true }); });
+  await page.evaluate(() => window.dispatchEvent(new Event('online')));
+  await page.waitForFunction((n) => window.__lf.calls.filter(([c]) => c === 'following_lives').length > n && document.querySelector('.home .lf:not(.lf-skeleton)'), calls0, { timeout: 6000 });
+  await page.waitForTimeout(400);
+  const f1 = await focusInfo(page);
+  const sk = await page.evaluate(() => window.__sawSkeleton);
+  if (!sk) problems.push('검사 준비 실패 — 스켈레톤을 거치지 않았다');
+  if (!f0.key || f1.key !== f0.key || !f1.cls.includes('lf-open')) problems.push(`초점이 돌아오지 않았다 ${JSON.stringify(f0)} → ${JSON.stringify(f1)}`);
+  if (errors.length) problems.push(`페이지 오류 ${errors[0]}`);
+  await ctx.close();
+  ok(!problems.length, problems.join(' / '));
+});
+
+await check('LF13 when a focused tile gets hidden (window narrows), focus moves to "+N 더 보기" instead of falling to body', async () => {
+  const problems = [];
+  const { ctx, page, errors } = await openHome({ count: 39, width: 1600 });
+  const s0 = await gridState(page);
+  await page.locator('.lf-all').focus();
+  await page.keyboard.press('Tab');
+  for (let i = 0; i < s0.visible - 1; i += 1) await page.keyboard.press('ArrowRight');
+  const f0 = await focusInfo(page);
+  await page.setViewportSize({ width: 1280, height: 900 }); // 홈 1004 → 684px(오른쪽 패널 때문에 1180 은 오히려 넓다)
+  await page.waitForTimeout(300);
+  const s1 = await gridState(page);
+  const f1 = await focusInfo(page);
+  if (s1.visible >= s0.visible) problems.push(`검사 준비 실패 — 칸이 줄지 않았다 ${s0.visible}→${s1.visible}`);
+  if (s1.visKeys.includes(f0.key)) problems.push('검사 준비 실패 — 초점 칸이 그대로 보인다');
+  if (f1.key !== '__more') problems.push(`초점이 더 보기로 가지 않았다 ${JSON.stringify(f0)} → ${JSON.stringify(f1)}`);
+  if (errors.length) problems.push(`페이지 오류 ${errors[0]}`);
+  await ctx.close();
+  ok(!problems.length, problems.join(' / '));
+});
+
+await check('LF14 arrow navigation that scrolls the page still opens the peek for the newly focused tile', async () => {
+  const problems = [];
+  const { ctx, page, errors } = await openHome({ count: 39, width: 1280, height: 560 });
+  await page.locator('.lf-all').focus();
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter'); // 펼치고 처음 드러난 칸으로
+  await page.waitForTimeout(600);
+  if (!(await peekState(page)).open) problems.push('검사 준비 실패 — 키보드 초점 카드가 없다');
+  let scrolled = false;
+  for (let i = 0; i < 10 && !scrolled; i += 1) {
+    const y0 = await page.evaluate(() => document.querySelector('.page-home').scrollTop);
+    await page.keyboard.press('ArrowDown');
+    await page.waitForTimeout(650);
+    const y1 = await page.evaluate(() => document.querySelector('.page-home').scrollTop);
+    if (y1 !== y0) {
+      scrolled = true;
+      const f = await focusInfo(page);
+      const p = await peekState(page);
+      if (!p.open || p.key !== f.key) problems.push(`스크롤한 화살표 이동 뒤 새 칸 카드가 없다 ${JSON.stringify({ focus: f.key, peek: p })}`);
+    }
+  }
+  if (!scrolled) problems.push('검사 준비 실패 — 화살표로 스크롤되지 않았다');
+  if (errors.length) problems.push(`페이지 오류 ${errors[0]}`);
+  await ctx.close();
+  ok(!problems.length, problems.join(' / '));
+});
+
+await check('LF15 count badge stays opaque with ≥ 4.5:1 text when color-mix is unsupported (Safari 16.0~16.1 emulation) — dark & light', async () => {
+  const problems = [];
+  const report = [];
+  for (const emulate of [false, true]) {
+    for (const theme of ['dark', 'light']) {
+      const ctx0 = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: theme, deviceScaleFactor: 1 });
+      const page = await ctx0.newPage();
+      if (emulate) {
+        // color-mix 를 모르는 엔진 흉내 — CSS 의 color-mix( 를 xcolor-mix( 로(@supports 조건도 함께 거짓이 된다)
+        await page.route('**/css/*.css', async (route) => {
+          const res = await route.fetch();
+          const body = (await res.text()).replace(/color-mix\(/g, 'xcolor-mix(');
+          await route.fulfill({ response: res, body, headers: { ...res.headers(), 'content-type': 'text/css' } });
+        });
+      }
+      await page.addInitScript(mockLF, [base, { count: 12, theme }]);
+      await page.goto(base);
+      await page.waitForSelector('.home .lf .section-title .count:not([hidden])');
+      await page.evaluate(() => document.querySelectorAll('.sheet-scrim').forEach((x) => x.remove()));
+      if (theme === 'light') await page.evaluate(() => document.documentElement.setAttribute('data-theme', 'light'));
+      await page.mouse.move(2, 890);
+      await page.waitForTimeout(200);
+      await page.evaluate(colorKit);
+      const bg = await page.evaluate(() => window.__ck.parse(getComputedStyle(document.querySelector('.lf .section-title .count')).backgroundColor));
+      const tag = `${emulate ? 'color-mix 없음' : '보통'} ${theme}`;
+      if (bg[3] < 1) problems.push(`${tag} 배지 바탕이 불투명하지 않다 ${JSON.stringify(bg)}`);
+      await measureAll(page, [['.lf .section-title .count', 4.5]], tag, problems, report);
+      await ctx0.close();
+    }
+  }
+  if (process.env.CVIEW_LF_REPORT) console.log(report.join('\n'));
+  ok(!problems.length, problems.join(' / '));
+});
+
+await check('LF16 when the home loses the section slot (following fails after reload), the strip lets go of the old home tree and closes its peek', async () => {
+  const problems = [];
+  const { ctx, page, errors } = await openHome({ count: 12, width: 1280 });
+  await page.evaluate(() => { window.__lfEl = document.querySelector('.home .lf'); });
+  const t = visTiles(page).nth(0);
+  const b = await t.boundingBox();
+  await page.mouse.move(b.x + 30, b.y + b.height / 2);
+  await page.waitForTimeout(650);
+  if (!(await peekState(page)).open) problems.push('검사 준비 실패 — 카드가 없다');
+  await page.evaluate(() => { window.__lf.fail = true; window.dispatchEvent(new Event('online')); });
+  await page.waitForSelector('.home .home-notice', { timeout: 6000 });
+  await page.waitForTimeout(200);
+  const r = await page.evaluate(() => ({
+    connected: window.__lfEl.isConnected, parent: window.__lfEl.parentNode ? window.__lfEl.parentNode.className || window.__lfEl.parentNode.nodeName : null,
+    peekHidden: window.__lfEl.querySelector('.lf-peek').hidden, inHome: Boolean(document.querySelector('.home .lf')),
+  }));
+  if (r.connected || r.inHome) problems.push(`실패한 홈에 구역이 남았다 ${JSON.stringify(r)}`);
+  if (r.parent !== null) problems.push(`떨어진 옛 홈(${r.parent})을 붙잡고 있다`);
+  if (!r.peekHidden) problems.push('카드가 열린 채 남았다');
+  // 다시 되면 같은 구역이 돌아온다
+  await page.evaluate(() => { window.__lf.fail = false; window.dispatchEvent(new Event('online')); });
+  await page.waitForFunction(() => document.querySelector('.home .lf:not(.lf-skeleton)'), null, { timeout: 6000 });
+  const back = await page.evaluate(() => document.querySelector('.home .lf:not(.lf-skeleton)') === window.__lfEl);
+  if (!back) problems.push('복구 뒤 같은 구역 요소가 돌아오지 않았다');
   if (errors.length) problems.push(`페이지 오류 ${errors[0]}`);
   await ctx.close();
   ok(!problems.length, problems.join(' / '));

@@ -843,11 +843,18 @@ select.select {
 .home-section:hover .shelf-nav, .shelf-nav:focus-within { opacity: 1; }
 .shelf-nav .icon-btn.round { width: 30px; height: 30px; }
 .shelf-nav svg { width: 15px; height: 15px; }
+/* 개수 배지 — 반투명 초록(--primary-dim)을 페이지 바탕(왼쪽 위 초록 번짐) 위에 겹치면 라이트에서 글자와 4.47:1 이라
+   불투명한 면에 섞는다(4.5:1 이상). 섞은 값은 변수로 두고, color-mix 가 없는 엔진(Safari 16.0~16.1)은 아래 @supports 의
+   미리 섞은 값을 쓴다 — var() 를 품은 color-mix 는 그 엔진에서 계산 때 무효가 되어 앞 줄 대체값이 아니라 투명으로 떨어진다. */
 .section-title .count {
-  font-size: var(--fs-footnote); color: var(--primary-text); background: var(--primary-dim);
-  /* 반투명 초록을 페이지 바탕(왼쪽 위 초록 번짐) 위에 겹치면 라이트에서 글자와 4.47:1 — 불투명한 면에 섞어 4.5:1 이상으로 */
-  background: color-mix(in srgb, var(--primary) 12%, var(--surface-base));
+  --count-bg: color-mix(in srgb, var(--primary) 12%, var(--surface-base));
+  font-size: var(--fs-footnote); color: var(--primary-text); background: var(--count-bg);
   padding: 1px 8px; border-radius: var(--radius-ms); vertical-align: 3px; margin-left: 4px;
+}
+@supports not (color: color-mix(in srgb, red 50%, blue)) {
+  .section-title .count { --count-bg: #17362f; }   /* 다크 #00ffa3 12% + #1a1b1f — 글자 9.9:1 */
+  :root[data-theme="light"] .section-title .count { --count-bg: #e0faf1; }   /* 라이트 #00d38a 12% + #fff — 글자(#007a52) 5.0:1 */
+  @media (prefers-color-scheme: light) { :root[data-theme="system"] .section-title .count { --count-bg: #e0faf1; } }
 }
 .link-btn { border: 0; background: none; color: var(--text-secondary); font-size: var(--fs-caption); font-weight: 500; padding: 4px 6px; border-radius: var(--radius-xs); }
 .link-btn:hover { color: var(--primary-text); }
@@ -882,6 +889,7 @@ select.select {
 .lf-head { align-items: center; flex-wrap: wrap; row-gap: var(--sp-sm); }
 .lf-sort { flex: none; }
 .lf-sort .seg { padding: 3px 10px; font-size: var(--fs-footnote); }
+.lf-ruler { height: 0; }   /* 격자와 같은 폭의 자 — 칸 수는 이 폭으로 센다(live-following.js ResizeObserver) */
 .lf-grid { list-style: none; display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 212px), 1fr)); }
 .lf-item { position: relative; min-width: 0; }
 .lf-open, .lf-more {

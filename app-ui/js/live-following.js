@@ -138,6 +138,15 @@ function itemShell() {
   return li;
 }
 
+/** 세로로 스크롤되는 가장 가까운 조상(홈은 .page) — 없으면 문서. */
+function scrollParentOf(el) {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const o = getComputedStyle(p).overflowY;
+    if ((o === 'auto' || o === 'scroll') && p.scrollHeight > p.clientHeight) return p;
+  }
+  return document.scrollingElement;
+}
+
 // 값이 바뀐 곳만 쓴다 — 같은 글을 다시 쓰면 글자 노드가 새로 생겨 화면 낭독기가 다시 읽거나 선택이 풀린다.
 function setText(el, v) { if (el.textContent !== v) el.textContent = v; }
 function setAttr(el, name, v) { if (el.getAttribute(name) !== v) el.setAttribute(name, v); }
@@ -174,6 +183,7 @@ export class LiveFollowingStrip {
         <div class="segmented lf-sort" role="group" aria-label="방송 중인 팔로잉 정렬" data-no-glider>${LF_SORTS.map((s) => `<button type="button" class="seg${s.id === this.sort ? ' active' : ''}" data-lf-sort="${s.id}" title="${esc(s.tip)}">${esc(s.label)}</button>`).join('')}</div>
         <button type="button" class="link-btn lf-all" data-goto="following">전체 보기</button>
       </div>
+      <div class="lf-ruler" aria-hidden="true"></div>
       <ul class="lf-grid" id="${this.uid}-grid" role="list" aria-labelledby="${this.uid}-title"></ul>
       <div class="lf-empty" hidden><span class="lf-empty-ico" aria-hidden="true">${icons.following}</span><span class="lf-empty-text"><strong>지금 방송 중인 팔로잉 채널이 없어요</strong><span>방송을 시작하면 여기에 바로 보여요</span></span></div>
       <div class="lf-peek" aria-hidden="true" hidden></div>`;
@@ -181,6 +191,7 @@ export class LiveFollowingStrip {
     this.count = el.querySelector('.count');
     this.sortBox = el.querySelector('.lf-sort');
     this.grid = el.querySelector('.lf-grid');
+    this.ruler = el.querySelector('.lf-ruler');
     this.empty = el.querySelector('.lf-empty');
     this.peek = el.querySelector('.lf-peek');
     this.moreItem = document.createElement('li');
@@ -201,10 +212,12 @@ export class LiveFollowingStrip {
     // 붙인 직후·숨었다 보일 때도 알림이 오고, 여기서 바꾼 숨김은 같은 프레임의 페인트 전에 다시 배치돼 깜박이지 않는다.
     // 홈 스켈레톤의 같은 격자도 본다(watch) — 붙이기 전에 칸 수를 알아 두면 붙일 때 숨김을 바꿀 일이 없어, 같은 프레임의
     // 다른 관찰자(멀티라이브 머리줄 등)가 크기를 읽다 강제 레이아웃을 일으키지 않는다(perf.mjs P01).
+    // 격자 대신 높이 0 의 자(.lf-ruler — 격자와 같은 폭)를 본다: 여기서 칸을 숨기면 격자 높이가 같은 프레임에 바뀌어
+    // "ResizeObserver loop completed with undelivered notifications" 오류가 났다(WebKit, 창 폭을 줄일 때). 자는 폭만 따른다.
     this.ro = new ResizeObserver((entries) => {
       let w = 0;
       for (const e of entries) {
-        if (e.target !== this.grid && !e.target.isConnected) { this.ro.unobserve(e.target); continue; }
+        if (e.target !== this.ruler && !e.target.isConnected) { this.ro.unobserve(e.target); continue; }
         if (e.contentRect.width) w = e.contentRect.width;
       }
       if (!w) return; // 숨음·떨어짐 — 칸 수는 그대로 둔다
@@ -215,17 +228,50 @@ export class LiveFollowingStrip {
       this.cols = cols;
       this.applyLimit();
     });
-    this.ro.observe(this.grid);
+    this.ro.observe(this.ruler);
     // 미리보기 카드가 열린 동안만 듣는다 — 스크롤·창 크기·바깥 누름·창 가림이면 닫는다.
+    // 스크롤로 닫을 때는 새 칸의 열기 예약을 남긴다 — 화살표로 화면 밖 칸에 가면 focusNav 의 scrollIntoView 가 스크롤을 일으켜,
+    // 그 칸의 카드 예약(focusin)까지 지웠다.
     this.onAway = (e) => {
       if (e.type === 'pointerdown' && (this.peek.contains(e.target) || this.grid.contains(e.target))) return;
+      this.hidePeek({ keepPending: e.type === 'scroll' });
+    };
+    // Esc — 초점이 어디 있든(마우스로 연 카드는 초점이 body 인 일이 흔하다: WKWebView 는 클릭으로 단추에 초점을 주지 않는다)
+    // 카드가 열린 동안 문서에서 먼저 받는다(stats.js 풍선과 같은 방식). 위에 뜬 메뉴·시트·팔레트가 있으면 그것부터 닫히게
+    // 이번 Esc 는 넘긴다. 받으면 preventDefault(app.js escapeTaken 이 시청 화면 등을 함께 닫지 않게) + stopPropagation
+    // (구역의 키 처리와 두 번 다루지 않게).
+    this.onEscDoc = (e) => {
+      if (e.key !== 'Escape' || !this.peekKey || e.defaultPrevented) return;
+      if (document.querySelector('.ctx-menu, .design-menu, .sheet-scrim:not(.leaving), .palette-scrim:not([hidden]):not(.exit-ghost)')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      this.peekDismissed = this.peekKey;
       this.hidePeek();
     };
   }
 
-  /** 같은 폭의 다른 격자(홈 스켈레톤의 자리)로 칸 수를 미리 잰다. 그 요소가 문서에서 빠지면 스스로 놓는다. */
+  /** 같은 폭의 다른 격자(홈 스켈레톤의 자리)로 칸 수를 미리 잰다. 붙일 때(mount)·뗄 때(detach) 놓는다. */
   watch(el) {
-    if (el && el !== this.grid) this.ro.observe(el);
+    this.unwatch();
+    if (!el || el === this.ruler) return;
+    this.watched = el;
+    this.ro.observe(el);
+  }
+
+  unwatch() {
+    if (this.watched) this.ro.unobserve(this.watched);
+    this.watched = null;
+  }
+
+  /**
+   * 홈에 이 구역 자리가 없어질 때(로그아웃·팔로잉 실패·스켈레톤) — 옛 부모에서 떼어 낸다. 떼지 않으면 문서에서 빠진 옛 홈 트리
+   * (히어로·격자·그림)를 이 요소의 부모 사슬로 붙잡아 두었다(HomePage 가 이 객체를 계속 들고 있다). 카드·문서 리스너·예약도 정리한다.
+   */
+  detach({ forget = false } = {}) {
+    this.hidePeek();
+    this.unwatch();
+    if (forget) this.restore = null; // 자리가 아예 없어졌다 — 한참 뒤 다시 그릴 때 옛 칸으로 초점을 끌어가지 않게
+    if (this.el.parentNode) this.el.remove();
   }
 
   // ── 데이터 ───────────────────────────────────────
@@ -242,9 +288,17 @@ export class LiveFollowingStrip {
     this.render();
   }
 
-  /** 마우스가 올라가 있거나 초점이 안에 있다 — 이때는 칸 자리를 바꾸지 않는다. */
+  /**
+   * 마우스가 올라가 있거나 키보드 초점이 안에 있다 — 이때는 칸 자리를 바꾸지 않는다.
+   * 초점은 키보드 초점(:focus-visible)만 본다 — 정렬·더 보기·접기를 마우스로 누르면(Chromium, WebKit 은 tabindex 단 더 보기)
+   * 초점이 그 단추에 남아, 마우스가 떠난 뒤에도 늘 바쁜 것으로 보여 2분 갱신의 새 방송·즐겨찾기가 '+N 더 보기' 뒤 끝에 숨었다.
+   */
   busy() {
-    return this.el.isConnected && (this.el.matches(':hover') || this.el.contains(document.activeElement));
+    if (!this.el.isConnected) return false;
+    if (this.el.matches(':hover')) return true;
+    const a = document.activeElement;
+    if (!a || !this.el.contains(a)) return false;
+    try { return a.matches(':focus-visible'); } catch { return true; } // :focus-visible 이 없는 엔진은 예전처럼
   }
 
   render({ force = false } = {}) {
@@ -347,6 +401,9 @@ export class LiveFollowingStrip {
     const total = this.order.length;
     const lim = collapseLimit(total, this.cols);
     const shown = this.expanded ? total : lim.shown;
+    // 초점 있던 칸이 숨겨지면(창·사이드바 폭이 줄거나 접힐 때) 초점이 body 로 사라졌다 — 아래에서 옮긴다.
+    const a = document.activeElement;
+    const focusLi = a && a !== document.body && this.grid.contains(a) ? a.closest('.lf-item') : null;
     this.order.forEach((k, i) => {
       const li = this.items.get(k);
       const hide = i >= shown;
@@ -378,19 +435,38 @@ export class LiveFollowingStrip {
         }
       }
     }
+    if (this.peekKey && this.items.get(this.peekKey)?.hidden) this.hidePeek();
+    if (focusLi && focusLi.hidden) {
+      // '+N 더 보기'로, 그것도 숨었으면 가장 가까운(앞쪽) 보이는 칸으로
+      const idx = this.order.indexOf(focusLi.dataset.key);
+      let target = !this.moreItem.hidden ? this.moreBtn : null;
+      for (let i = Math.min(idx, this.order.length) - 1; !target && i >= 0; i -= 1) {
+        const li = this.items.get(this.order[i]);
+        if (!li.hidden) target = li.firstElementChild;
+      }
+      if (target) { this.focusNav(target, { scroll: false }); return; }
+    }
     this.syncRoving();
   }
 
   setExpanded(on, { focusFirst = false } = {}) {
     const before = collapseLimit(this.order.length, this.cols).shown;
+    // 접기 — 펼친 목록 끝의 '접기' 단추가 접히며 위로 올라가 화면 밖으로 사라지고 보던 자리도 바뀌었다.
+    // 누르기 전 단추의 화면 위치를 재 두었다가, 접은 뒤 스크롤을 그만큼 되돌려 단추를 제자리에 둔다(누른 뒤라 강제 레이아웃은 괜찮다).
+    const anchor = !on && !this.moreItem.hidden && this.moreBtn.isConnected ? this.moreBtn.getBoundingClientRect().top : null;
     this.expanded = on;
     this.hidePeek();
-    this.applyLimit();
+    this.applyLimit(); // 숨겨진 칸에 있던 초점은 여기서 '접기'(→ '+N 더 보기')로 옮긴다
     if (on && focusFirst) {
       const li = this.items.get(this.order[before]);
       if (li) this.focusNav(li.firstElementChild);
-    } else if (!on && this.grid.contains(document.activeElement) && document.activeElement.closest('.lf-item').hidden) {
-      this.focusNav(this.moreBtn);
+    }
+    if (anchor !== null && !this.moreItem.hidden) {
+      const delta = this.moreBtn.getBoundingClientRect().top - anchor;
+      const sc = scrollParentOf(this.el);
+      if (sc && Math.abs(delta) > 0.5) sc.scrollBy({ top: delta, behavior: 'instant' });
+      const r = this.moreBtn.getBoundingClientRect();
+      if (r.top < 0 || r.bottom > window.innerHeight) this.moreBtn.scrollIntoView({ block: 'nearest' }); // 위로 더 갈 수 없을 때
     }
   }
 
@@ -446,14 +522,17 @@ export class LiveFollowingStrip {
 
   /** 새 홈 본문의 자리(slot — 아직 문서 밖 템플릿 안)를 이 구역으로 바꾼다. 칸 수는 문서에 붙은 뒤 ResizeObserver 가 고친다(페인트 전). */
   mount(slot) {
+    this.unwatch();
     slot.replaceWith(this.el);
   }
 
-  /** 문서에 붙은 뒤 — beforeSwap 이 기억한 초점 자리로 되돌린다. */
+  /** 문서에 붙은 뒤 — beforeSwap 이 기억한 초점 자리로 되돌린다. 그 사이 사용자가 다른 곳으로 초점을 옮겼으면 그대로 둔다. */
   restoreFocus() {
     const r = this.restore;
     this.restore = null;
     if (!r) return;
+    const a = document.activeElement;
+    if (a && a !== document.body && a !== document.documentElement) return;
     let target = null;
     if (r.key === '__more') target = this.moreBtn;
     else if (r.key) { const li = this.items.get(r.key); target = li && !li.hidden ? li.querySelector(r.sel || '.lf-open') : null; }
@@ -493,12 +572,7 @@ export class LiveFollowingStrip {
   }
 
   onKey(e) {
-    if (e.key === 'Escape' && this.peekKey) {
-      e.preventDefault(); // app.js escapeTaken 이 defaultPrevented 를 보고 다른 것을 닫지 않는다
-      this.peekDismissed = this.peekKey;
-      this.hidePeek();
-      return;
-    }
+    // Esc 는 카드가 열린 동안 문서에서 먼저 받는다(onEscDoc) — 여기서는 다루지 않는다.
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const li = e.target.closest && e.target.closest('.lf-item');
     if (li && li !== this.moreItem && (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) {
@@ -608,6 +682,7 @@ export class LiveFollowingStrip {
       this.peek.classList.remove('on');
       void this.peek.offsetWidth; // 처음 열 때만 떠오른다(옆 칸으로 옮길 땐 자리만 바꾼다)
       document.addEventListener('pointerdown', this.onAway, true);
+      document.addEventListener('keydown', this.onEscDoc, true);
       document.addEventListener('scroll', this.onAway, { capture: true, passive: true });
       window.addEventListener('resize', this.onAway);
       window.addEventListener('blur', this.onAway);
@@ -617,8 +692,9 @@ export class LiveFollowingStrip {
     li.classList.add('peeking');
   }
 
-  hidePeek() {
-    clearTimeout(this.timers.show);
+  /** @param {{ keepPending?: boolean }} [opts] keepPending — 다른 칸의 열기 예약은 그대로 둔다(스크롤로 닫을 때). */
+  hidePeek({ keepPending = false } = {}) {
+    if (!keepPending) clearTimeout(this.timers.show);
     clearTimeout(this.timers.hide);
     if (!this.peekKey && this.peek.hidden) return;
     this.peekKey = null;
@@ -631,6 +707,7 @@ export class LiveFollowingStrip {
     delete this.peek.dataset.channelImage;
     for (const x of this.grid.querySelectorAll('.lf-item.peeking')) x.classList.remove('peeking');
     document.removeEventListener('pointerdown', this.onAway, true);
+    document.removeEventListener('keydown', this.onEscDoc, true);
     document.removeEventListener('scroll', this.onAway, { capture: true });
     window.removeEventListener('resize', this.onAway);
     window.removeEventListener('blur', this.onAway);
