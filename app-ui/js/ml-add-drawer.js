@@ -243,7 +243,10 @@ export class MultiLiveAddDrawer {
 
   close() {
     if (!this.isOpen) return;
-    const hadFocus = this.el.contains(document.activeElement);
+    // 초점이 갈 곳을 잃은 것(body)도 안에 있던 것으로 본다 — WebKit(macOS WKWebView)은 마우스로 누른 단추에 초점을 주지 않고,
+    // 누르는 순간 찾기 칸의 초점을 body 로 떨어뜨린다. ✕·여는 버튼을 마우스로 눌러 닫으면 예전엔 초점이 body 에 남았다.
+    const at = document.activeElement;
+    const hadFocus = this.el.contains(at) || !at || at === document.body;
     this.el.classList.remove('open');
     this.el.setAttribute('aria-hidden', 'true');
     this.el.inert = true;

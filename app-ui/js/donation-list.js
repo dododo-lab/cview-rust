@@ -358,11 +358,14 @@ export class DonationList {
     first.focus({ preventScroll: true });
   }
 
-  /** @param {{ restore?: boolean }} [opts] restore — 단추로 초점을 돌려준다(패널 안에 초점이 있었을 때만). */
+  /** @param {{ restore?: boolean }} [opts] restore — 단추로 초점을 돌려준다(패널 안에 초점이 있었거나 초점이 갈 곳을 잃었을 때만). */
   close({ restore = true } = {}) {
     if (!this.isOpen) return;
     this.isOpen = false;
-    const had = this.el.contains(document.activeElement);
+    // WebKit(macOS WKWebView)은 마우스로 누른 단추에 초점을 주지 않고, 누르는 순간 패널 항목의 초점을 body 로 떨어뜨린다 —
+    // ✕·머리 단추를 마우스로 눌러 닫을 때 초점은 '패널 안'이 아니라 body 다. 그대로 두면 초점이 사라지므로 이때도 돌려준다.
+    const at = document.activeElement;
+    const had = this.el.contains(at) || !at || at === document.body;
     if (!this.el.hidden) hideWithExit(this.el);
     this.button.setAttribute('aria-expanded', 'false');
     this.button.classList.remove('open');

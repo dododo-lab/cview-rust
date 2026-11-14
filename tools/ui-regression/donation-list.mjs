@@ -4,7 +4,8 @@
 // DL02 배지 — 지금 막 온 후원·구독만 센다(입장 때 받은 지난 기록·일반 채팅 제외), 열면 0, 열려 있는 동안은 세지 않는다,
 //      100건 넘으면 '99+'. 단추 이름(aria-label)에 새 후원 수, 새 후원이 오면 단추가 반짝인다(.ping).
 // DL03 열기·닫기 — role=dialog·aria-modal·이름, aria-expanded, 채팅 머리 아래·채팅 안에 뜬다. ✕·바깥 누르기·Esc 로 닫히고,
-//      Esc 는 시청 화면 닫기(문서 Esc 처리)까지 가지 않는다. ✕·Esc 면 단추로 초점이 돌아온다.
+//      Esc 는 시청 화면 닫기(문서 Esc 처리)까지 가지 않는다. ✕·Esc·단추 다시 누르기면 단추로 초점이 돌아온다
+//      (WebKit 은 마우스로 누른 단추에 초점을 주지 않아 초점이 body 로 빠진다 — 그때도 돌려준다).
 // DL04 정렬·거르기 — 종류별 건수, 거르기(후원·미션·구독), 합계 글, 금액순(같으면 최신), aria-pressed.
 // DL05 표시 규칙 유지 — 익명은 '익명', 비공개 금액은 금액 칸 없음('0치즈'·NaN 등 없음), 금액 색 단계(ev-lv)가 채팅 카드와 같다.
 //      채팅 줄 후원 강조(.chat-line.ev)와 영상 위 알림 호출(onHighlight)도 그대로.
@@ -266,10 +267,12 @@ await check('DL03 open/close: dialog semantics, placement under the header insid
   assert.equal(s.open, false);
   assert.equal(s.active, 'button');
   assert.equal(await page.evaluate(() => window.__escapes), 0, 'Esc 가 문서까지 갔다(시청 화면도 닫힌다)');
-  // 단추를 다시 누르면 닫힌다(토글)
+  // 단추를 다시 누르면 닫힌다(토글) — 초점은 단추에. WebKit 은 마우스로 누른 단추에 초점을 주지 않아 예전엔 body 로 빠졌다.
   await btn(page).click();
   await btn(page).click();
-  assert.equal((await state(page)).open, false);
+  s = await state(page);
+  assert.equal(s.open, false);
+  assert.equal(s.active, 'button', `토글로 닫은 뒤 초점: ${s.active}`);
   assert.deepEqual(errors, []);
   await ctx.close();
 });
