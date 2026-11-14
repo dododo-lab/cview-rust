@@ -249,7 +249,9 @@ button:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 2
   border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 6px 10px;
   transition: border-color .15s var(--ease-out), box-shadow .15s var(--ease-out);
 }
-:where(input:not([type]), input[type="text"], input[type="search"], input[type="password"], input[type="number"], input[type="url"], textarea):focus { outline: none; border-color: var(--primary-text); box-shadow: var(--focus-ring); }
+/* 글자 칸의 초점 표시는 테두리색 + 아래 "키보드 포커스 (DSN-06)"의 outline 하나 — 글자 칸은 클릭해도 :focus-visible 이라 늘 outline 이 선다.
+   예전엔 여기 box-shadow 고리까지 겹쳤다(반투명일 땐 옅은 번짐, 단색 2px 이 되자 outline 과 붙어 5px 띠). 설정·멀티채팅·시트 칸도 같다. */
+:where(input:not([type]), input[type="text"], input[type="search"], input[type="password"], input[type="number"], input[type="url"], textarea):focus { outline: none; border-color: var(--primary-text); }
 :where(input, textarea)::placeholder { color: var(--text-tertiary); }
 input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
 :where(input[type="range"]) { accent-color: var(--primary); }
@@ -1560,7 +1562,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
   background: var(--surface-base); color: var(--text-primary); font: inherit; resize: vertical; outline: none;
 }
 .sheet textarea { min-height: 140px; }
-.sheet textarea:focus, .sheet input:focus { border-color: var(--primary-text); box-shadow: var(--focus-ring); }
+.sheet textarea:focus, .sheet input:focus { border-color: var(--primary-text); }
 .sheet-actions { display: flex; justify-content: flex-end; gap: var(--sp-sm); }
 
 /* ══ 다시보기·클립 플레이어 (media.js) ═══════════════════════ */
@@ -2057,7 +2059,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .settings-top { display: flex; align-items: center; gap: var(--sp-md); flex-wrap: wrap; margin-bottom: var(--sp-lg); max-width: 1320px; }
 .settings-tabs { margin: 0; flex: 0 1 auto; }
 .settings-search { width: 220px; height: var(--control-md); border-radius: var(--radius-ms); border: 1px solid var(--border-subtle); background: var(--surface-base); padding: 0 12px; outline: none; }
-.settings-search:focus { border-color: var(--primary-text); box-shadow: var(--focus-ring); }
+.settings-search:focus { border-color: var(--primary-text); }
 .settings-search-empty { padding: 48px 16px; } /* 모양은 .empty */
 /* 넓은 창 — 예전엔 860px 한 단에 왼쪽으로 쏠려 오른쪽이 비었다. 카드 두 단(단 최소 420px)이 들어가면 두 단으로 흘린다(위→아래, 왼쪽 단 먼저). */
 .settings-groups { columns: 2 420px; column-gap: var(--sp-lg); max-width: 1320px; }
@@ -2068,7 +2070,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .num-input, .text-input { height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--surface-base); padding: 0 10px; outline: none; }
 .num-input { width: 96px; text-align: right; }
 .text-input { width: 300px; max-width: 50%; }
-.num-input:focus, .text-input:focus { border-color: var(--primary-text); box-shadow: var(--focus-ring); }
+.num-input:focus, .text-input:focus { border-color: var(--primary-text); }
 
 /* ══ 설정 효과 (prefs-effects.js) ═════════════════════════════ */
 .stream-alerts { left: calc(var(--alert-x, 0.5) * 100%); top: calc(var(--alert-y, 0.08) * 100%); transform: translateX(-50%) scale(var(--alert-scale, 1)); transform-origin: top center; }
@@ -2412,7 +2414,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .page-multichat { display: flex; flex-direction: column; overflow: hidden; }
 .mc-header { flex: none; }
 .mc-search { width: 200px; height: var(--control-md); border-radius: var(--radius-ms); border: 1px solid var(--border-subtle); background: var(--surface-base); padding: 0 10px; outline: none; }
-.mc-search:focus { border-color: var(--primary-text); box-shadow: var(--focus-ring); }
+.mc-search:focus { border-color: var(--primary-text); }
 .mc-overview { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: none; padding: 2px 0 10px; }
 .mc-overview:empty { display: none; }
 .mc-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px; border-radius: var(--radius-pill); border: 1px solid var(--border-subtle); background: var(--surface-base); flex: none; font-size: var(--fs-footnote); box-shadow: inset 3px 0 0 var(--mc-color); }

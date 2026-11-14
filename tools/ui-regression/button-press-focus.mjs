@@ -9,12 +9,14 @@
 // BF03 서랍 + 누름 — 호버로 커진(1.08) 단추가 누르면 쉴 때보다 작아진다.
 // BF04 초점 테두리 대비 — 키보드 초점(:focus-visible)의 테두리·고리가 그려진 자리마다 그 뒤 바탕과 3:1 이상(다크·라이트).
 //      outline 이든 box-shadow 고리든 그려진 픽셀과, 테두리만 숨긴 화면의 같은 픽셀을 비교한다(겹친 면·반투명까지 그대로 잰다).
+//      outline 과 box-shadow 고리가 한 요소에 함께 서지 않는다(글자 칸에서 둘이 붙어 5px 띠가 됐다).
 // BF05 모션 줄이기(시스템 설정·앱 설정 두 경로) — 누름·호버에 크기가 바뀌지 않는다(.btn·'새 메시지'·서랍 +).
 // BF06 고대비(forced-colors) — 엔진이 box-shadow 를 지우니 고리로만 초점을 보이던 곳에도 2px 이상 테두리가 선다.
 //      Playwright 가 forced-colors 를 흉내 내지 못하는 엔진(WebKit)에서는 건너뛴다.
 // BF07 CSS 정적 검사 — :focus·:focus-visible·:focus-within 규칙의 outline·border·box-shadow 가 var(--primary)(채움색)를 쓰지 않는다.
 // 저장소 루트에서: node tools/ui-regression/button-press-focus.mjs   (Playwright 가 필요하다.
 //   CVIEW_UI_BROWSER=webkit 이면 앱(macOS)과 같은 WebKit 엔진으로 돈다. CVIEW_UI_SHOTS=<폴더> 면 상태별 PNG 를 남긴다.
+//   CVIEW_BF_REPORT=1 이면 잰 값(초점 테두리 대비·누름 배율)을 함께 찍는다.
 //   CVIEW_BF_ONLY=nav-item,chat-jump 처럼 대상 key 를 주면 그 대상만 돈다 — 고칠 때 빨리 보려고. 이때 BF01 훑기·BF07 은 건너뛴다.)
 import fs from 'node:fs';
 import path from 'node:path';
@@ -36,6 +38,7 @@ const W = 1280, H = 820;
 const fails = { BF01: [], BF02: [], BF03: [], BF04: [], BF05: [], BF06: [], BF07: [] };
 const ONLY = (process.env.CVIEW_BF_ONLY || '').split(',').map((x) => x.trim()).filter(Boolean);
 const want = (key) => !ONLY.length || ONLY.includes(key);
+const REPORT = process.env.CVIEW_BF_REPORT ? [] : null;
 
 // 장면별 모의 IPC — mock-app 의 로그인된 모의 위에 덮어쓴다.
 // in: 로그인(기본) · chat: 채팅 상자 · drawer: 빈 멀티라이브 + 추가 서랍 · watch: 단독 보기(채널 정보란)
@@ -298,6 +301,7 @@ for (const T of PRESS.filter((t) => want(t.key))) {
       }
       const m = await pressRatio(page, T);
       const tag = `${T.key}${motion ? ` 모션 줄이기(${motion})` : ''}`;
+      REPORT?.push(`누름 ${tag}: 호버 ${m.hover.toFixed(3)} · 누름 ${m.press.toFixed(3)}`);
       if (!m.active) { (motion ? fails.BF05 : fails[T.key === 'chat-jump' ? 'BF02' : T.key === 'addrow-act' ? 'BF03' : 'BF01']).push(`${tag}: 눌린 상태가 서지 않았다`); continue; }
       if (motion) {
         if (Math.abs(m.press - 1) > 0.003 || Math.abs(m.hover - 1) > 0.003) fails.BF05.push(`${tag}: 크기가 바뀜(호버 ${m.hover.toFixed(3)}, 누름 ${m.press.toFixed(3)})`);
@@ -341,7 +345,7 @@ const FOCUS = [
   { key: 'mwi-btn', scene: 'watch', route: 'multilive', sel: '.mwi-hero:not(.is-skeleton) .mwi-btn.icon' },
   { key: 'mwi-tab', scene: 'watch', route: 'multilive', sel: '.segmented.mwi-tabs .seg' },
 ];
-// 테두리 모양 — outline 이면 굵기·띄움, 아니면 box-shadow 의 흐림 0 고리(퍼짐·안쪽 여부)
+// 테두리 모양 — outline 이면 굵기·띄움, 아니면 box-shadow 의 흐림 0·퍼짐 2px 이상 고리(퍼짐·안쪽 여부)
 const ringGeom = (page, ring) => page.evaluate((ring) => {
   const el = document.querySelector('[data-bf]');
   const r = ring === 'next' ? el.nextElementSibling : ring === 'card' ? el.closest('.card, .top-item') : ring === 'field' ? el.closest('.search-field') : el;
@@ -351,18 +355,20 @@ const ringGeom = (page, ring) => page.evaluate((ring) => {
   const b = r.getBoundingClientRect();
   const box = { x: b.x, y: b.y, w: b.width, h: b.height };
   const fv = el.matches(':focus-visible');
-  if (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) >= 1) return { kind: 'outline', w: parseFloat(cs.outlineWidth), off: parseFloat(cs.outlineOffset) || 0, box, fv };
   const parts = (cs.boxShadow === 'none' ? '' : cs.boxShadow).split(/,(?![^(]*\))/).map((p) => p.trim()).filter(Boolean);
+  let shadowRing = null;
   for (const p of parts) {
     const color = (p.match(/(?:rgba?|color|oklch|oklab|lab|lch|hsla?)\([^)]*\)|#[0-9a-f]{3,8}\b/i) || [''])[0];
     const lens = (p.replace(color, '').match(/-?[\d.]+px/g) || []).map(parseFloat);
     const [x = 0, y = 0, blur = 0, spread = 0] = lens;
-    if (x === 0 && y === 0 && blur === 0 && spread > 0) {
+    if (x === 0 && y === 0 && blur === 0 && spread >= 2) {   // 1px 는 쉴 때부터 있는 머리카락 테두리(inset 0 0 0 1px 등)
       const inset = /\binset\b/.test(p);
-      return { kind: 'shadow', w: spread, off: inset ? -spread : 0, box, fv };
+      shadowRing = { kind: 'shadow', w: spread, off: inset ? -spread : 0, box, fv };
+      break;
     }
   }
-  return { kind: 'none', box, fv };
+  if (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) >= 1) return { kind: 'outline', w: parseFloat(cs.outlineWidth), off: parseFloat(cs.outlineOffset) || 0, box, fv, double: !!shadowRing };
+  return shadowRing || { kind: 'none', box, fv };
 }, ring);
 // 그려진 테두리 띠의 가운데(네 변의 가운데)에서 초점 화면과 테두리만 숨긴 화면의 픽셀 대비
 async function ringContrast(a, b, clip, g) {
@@ -399,13 +405,15 @@ for (const theme of ['dark', 'light']) {
       if (!g.fv) { fails.BF04.push(`${tag}: 키보드 초점이 서지 않았다(:focus-visible 아님)`); continue; }
       if (g.kind === 'none') { fails.BF04.push(`${tag}: 초점 테두리가 없다`); continue; }
       if (g.w < 2) fails.BF04.push(`${tag}: 테두리 ${g.w}px — 2px 미만`);
+      if (g.double) fails.BF04.push(`${tag}: outline 과 box-shadow 고리가 함께 — 초점 테두리가 두 겹`);
       const clip = clipAround(g.box, Math.max(12, Math.ceil(Math.abs(g.off) + g.w + 6)));
       const on = await shot(page, clip, `focus-${T.key}-${theme}`);
       await page.addStyleTag({ content: '[data-bf-ring], [data-bf-ring]:focus-visible { outline-color: transparent !important; box-shadow: none !important; animation: none !important; }' });
       await page.waitForTimeout(80);
       const off = await shot(page, clip, null);
       const c = await ringContrast(on, off, clip, g);
-      const drawn = Object.entries(c).filter(([, v]) => v >= 1.1);   // 1.1 미만은 그 변이 잘려 안 그려진 것(부모 overflow 등)
+      const drawn = Object.entries(c).filter(([, v]) => v >= 1.1);
+      REPORT?.push(`초점 ${tag}: ${g.kind} ${g.w}px 최저 ${Math.min(...drawn.map(([, v]) => v)).toFixed(2)}:1`);   // 1.1 미만은 그 변이 잘려 안 그려진 것(부모 overflow 등)
       if (drawn.length < 2) fails.BF04.push(`${tag}: 테두리가 그려진 변이 ${drawn.length}개뿐 ${JSON.stringify(c)}`);
       const low = drawn.filter(([, v]) => v < 3);
       if (low.length) fails.BF04.push(`${tag}: 대비 ${low.map(([s, v]) => `${s} ${v.toFixed(2)}`).join(', ')} (3:1 미만, ${g.kind} ${g.w}px)`);
@@ -465,6 +473,7 @@ for (const [id, list] of Object.entries(fails)) {
 
 await browser.close();
 server.close();
+if (REPORT) console.log(REPORT.join('\n'));
 for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'} ${r.id}${r.note ? ` (${r.note})` : ''}${r.ok ? '' : `\n     ${r.error.split('\n').filter((l) => /^[+-] /.test(l.trim()) || /^\s+'/.test(l)).slice(0, 24).join('\n     ') || r.error.slice(0, 900)}`}`);
 const failed = results.filter((r) => !r.ok).length;
 console.log(`\n${results.length - failed}/${results.length} passed (${WEBKIT ? 'webkit' : 'chromium'})`);
