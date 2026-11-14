@@ -1,4 +1,4 @@
-// 설정 — 원본 SettingsView / SettingsWorkspace: 그룹 탭(개요·시청·채팅·멀티·일반·연동·고급) + 설정 검색 (SET-01).
+// 설정 — 원본 SettingsView / SettingsWorkspace: 그룹 탭(개요·시청·채팅·멀티·일반·연동·고급·정보) + 설정 검색 (SET-01).
 // 항목은 스키마로 정의하고 Rust 설정 도메인(settings_update)에 바로 저장한다.
 // SET-02~06 플레이어·지연·되감기·스크린샷·비디오, SET-07 채팅, SET-08 일반, SET-09 외관,
 // SET-10 성능, SET-11 네트워크(프리셋), SET-13 채널 알림, SET-15 동기화, SET-16 도메인, SET-17 백업·복원·초기화,
@@ -16,7 +16,8 @@ import { BACKGROUNDS, READING_WIDTHS } from './chat-extras.js';
 import { kbd, IS_WINDOWS } from './platform.js';
 import { thumbPreviewEnabled, setThumbPreviewEnabled } from './hover-preview.js';
 import { SHARPNESS_LEVELS, SHARPNESS_HELP, ENLARGED_ONLY_LABEL, ENLARGED_ONLY_HELP, sharpnessState, setSharpness } from './sharpness.js';
-import { checkForUpdate, lastUpdateResult, updateSummary, downloadTarget, openDownload, currentVersionText, canInstall, installUpdate, progressHtml, renderProgress } from './update-check.js';
+import { checkForUpdate, lastUpdateResult, updateSummary, downloadTarget, openDownload, currentAppInfo, canInstall, installUpdate, progressHtml, renderProgress } from './update-check.js';
+import { aboutHtml, fillAbout, onAboutClick } from './settings-about.js';
 
 const opt = (pairs) => pairs.map(([value, label]) => ({ value, label }));
 
@@ -95,7 +96,6 @@ export const SCHEMA = [
     { d: 'general', k: 'alwaysOnTop', label: '항상 위에', type: 'toggle' },
     { d: 'general', k: 'launchAtLogin', label: '로그인 시 자동 실행', type: 'toggle' },
     { d: 'general', k: 'showInMenuBar', label: '메뉴 막대에 표시', type: 'toggle' },
-    { d: 'general', k: 'autoCheckUpdates', label: '업데이트 자동 확인', help: '실행할 때와 6시간마다 새 버전을 확인해 사이드바와 알림으로 알려 줍니다', type: 'toggle' },
   ]],
   ['general', '알림', [
     { d: 'general', k: 'notificationsEnabled', label: '알림 사용', type: 'toggle' },
@@ -141,8 +141,11 @@ export const SCHEMA = [
 
 const GROUPS = [
   ['overview', '개요'], ['watch', '시청'], ['chat', '채팅'], ['multi', '멀티라이브'],
-  ['general', '일반'], ['link', '연동'], ['advanced', '고급'],
+  ['general', '일반'], ['link', '연동'], ['advanced', '고급'], ['about', '정보'],
 ];
+// 정보 › 업데이트 묶음의 토글 — 예전엔 일반 탭에 있었다(update-notify.js 가 읽는 general.autoCheckUpdates 그대로).
+// keywords — 예전 이름('업데이트 자동 확인')으로 찾아도 나오게.
+const AUTO_CHECK = { d: 'general', k: 'autoCheckUpdates', label: '자동으로 업데이트 확인', help: '실행할 때와 6시간마다 새 버전을 확인해 사이드바와 알림으로 알려 줍니다', keywords: '업데이트 자동 확인 · 자동 업데이트', type: 'toggle' };
 const NETWORK_PRESETS = [['auto', '자동'], ['balanced', '밸런스'], ['stability', '안정 우선'], ['lowLatency', '저지연 우선'], ['performance', '고성능']];
 
 /** 프리셋 줄 설명 — 자동이면 지금 고른 프리셋을 적는다. */
@@ -188,7 +191,7 @@ function itemHtml(item, values) {
   const off = item.disabled && item.disabled(values) ? ' disabled' : '';
   const attrs = item.local ? `data-local="${item.local}"` : `data-domain="${item.d}" data-key="${item.k}"`;
   const label = `<span class="setting-label">${esc(item.label)}${item.help ? `<small>${esc(item.help)}</small>` : ''}</span>`;
-  const search = esc(`${item.label} ${item.help || ''} ${item.k || ''}`.toLowerCase());
+  const search = esc(`${item.label} ${item.help || ''} ${item.keywords || ''} ${item.k || ''}`.toLowerCase());
   const wrap = (inner) => `<label class="setting${item.adv ? ' adv' : ''}" data-search="${search}">${label}${inner}</label>`;
   switch (item.type) {
     case 'action':
@@ -258,27 +261,63 @@ export class SettingsPage {
       }).join('')}</div>
       <input type="search" class="settings-search" placeholder="설정 검색" value="${esc(this.query)}">
     </div>`;
-    this.body.innerHTML = `${tabs}<div class="settings-groups">${this.groupHtml()}</div><div class="empty settings-search-empty" role="status" hidden></div>`;
+    // 정보 탭은 한 단 — 머리말을 가운데 두고 카드를 그 아래로 쌓는다(검색 중엔 다른 탭 결과와 같이 두 단으로 흐른다).
+    const about = this.group === 'about' && !this.query;
+    this.body.innerHTML = `${tabs}<div class="settings-groups${about ? ' about-tab' : ''}">${this.groupHtml()}</div><div class="empty settings-search-empty" role="status" hidden></div>`;
     bindTabKeys(this.body.querySelector('.settings-tabs'));
     this.applySearch();
     this.refreshOAuth();
     if (this.body.querySelector('.update-row')) this.showUpdate();
+    if (this.body.querySelector('[data-g="about"]')) fillAbout(this.body);
     if (this.body.querySelector('[data-setting-action="clear-image-cache"]')) api.imageCacheStatus().then((st) => this.showImageCache(st)).catch(() => {});
   }
 
-  /** "업데이트 확인" 줄 — 현재 버전과 마지막 확인 결과, 새 버전이면 설치(안 되면 다운로드) 단추. */
+  /** 정보 › "업데이트" 줄 — 앱 이름·버전과 마지막 확인 결과, 새 버전이면 설치(안 되면 다운로드) 단추. */
   async showUpdate() {
     const row = this.body.querySelector('.update-row');
     if (!row) return;
     const u = lastUpdateResult();
     const status = row.querySelector('.update-status');
-    if (u) status.textContent = updateSummary(u);
+    // 확인하는 중에 다시 그렸으면(탭 이동·검색) 그 상태를 이어 보이고 단추로 또 시작하지 못하게 한다.
+    // disabled 대신 aria-disabled — 누른 단추가 초점을 잃지 않는다(checkUpdateNow 가 막는다).
+    const check = row.querySelector('[data-sys="update"]');
+    if (this.updateChecking) status.textContent = '업데이트 서버를 확인하는 중…';
+    else if (u) status.textContent = updateSummary(u);
+    if (this.updateChecking) check.setAttribute('aria-disabled', 'true'); else check.removeAttribute('aria-disabled');
     row.querySelector('[data-sys="update-install"]').hidden = !canInstall(u);
     row.querySelector('[data-sys="update-download"]').hidden = !(u && u.newer && downloadTarget(u)) || canInstall(u);
     row.querySelector('[data-sys="update-page"]').hidden = !(u && u.newer && u.url);
-    const version = await currentVersionText();
+    const info = await currentAppInfo();
     const v = row.isConnected && row.querySelector('.update-version');
-    if (v) v.textContent = `현재 버전 ${version || '-'}`;
+    if (v) v.textContent = `CView ${info ? info.version : ''}`.trim();
+  }
+
+  /**
+   * 정보 › [업데이트 확인] — 결과(최신·새 버전·실패)를 한 번만 알린다. 보이는 업데이트 줄이 있으면 그 상태 글(role=status)로,
+   * 없으면(기다리는 동안 다른 탭·다른 화면으로 갔거나 검색에 걸러짐) 토스트로. 둘 다 하면 화면 낭독기가 두 번 읽었고,
+   * 예전 줄(다시 그려 떨어져 나간 노드)에만 쓰면 아무도 듣지 못했다. 확인이 겹치지 않게 한 번에 하나만.
+   */
+  async checkUpdateNow() {
+    if (this.updateChecking) return;
+    this.updateChecking = true;
+    this.showUpdate();
+    let msg;
+    let failed = false;
+    try {
+      msg = updateSummary(await checkForUpdate());
+    } catch (er) {
+      failed = true;
+      msg = `확인하지 못했습니다 — ${er.message || er}`;
+    } finally {
+      this.updateChecking = false;
+    }
+    const live = this.body.querySelector('.update-row .update-status');
+    const visible = Boolean(live) && !this.root.hidden && !live.closest('[hidden]');
+    const shown = this.showUpdate();
+    // 실패는 lastUpdateResult 에 남지 않아 showUpdate 가 옛 결과로 덮는다 — 그 뒤에 실패 글을 쓴다.
+    if (failed && live) live.textContent = msg;
+    if (!visible) toast(msg, 4000);
+    await shown;
   }
 
   /** 설정 줄에서 업데이트 설치 — 상태 글씨 아래에 진행 막대. 실패하면 다운로드 단추도 보인다. */
@@ -329,6 +368,10 @@ export class SettingsPage {
     if (want('chat')) sections.push(this.chatHtml());
     if (want('general')) sections.push(this.shortcutsHtml());
     if (want('advanced')) sections.push(this.backupHtml());
+    if (want('about')) {
+      const u = lastUpdateResult();
+      sections.push(aboutHtml({ autoCheckHtml: itemHtml(AUTO_CHECK, this.settings), updateText: u ? updateSummary(u) : '', searching: Boolean(this.query) }));
+    }
     return sections.join('');
   }
 
@@ -358,7 +401,6 @@ export class SettingsPage {
         </div>
       </section>
       <section class="settings-group" data-g="overview"><h2>앱</h2>
-        <div class="setting update-row" data-search="업데이트 확인 설치 버전 다운로드 릴리스"><span class="setting-label">업데이트 확인<small class="update-version">현재 버전 확인 중…</small><small class="update-status">업데이트 서버의 최신 릴리스와 비교합니다</small></span><span class="shortcut-edit"><button class="link-btn" data-sys="update-page" hidden>릴리스 노트</button><button class="btn primary" data-sys="update-download" hidden>다운로드</button><button class="btn primary" data-sys="update-install" hidden>업데이트 설치</button><button class="btn" data-sys="update">지금 확인</button></span></div>
         <div class="setting" data-search="알림 권한 시스템 알림"><span class="setting-label">시스템 알림 권한<small class="notify-status">방송 시작·멘션 알림에 필요합니다</small></span><span class="shortcut-edit"><button class="btn" data-sys="notify">권한 확인</button><button class="link-btn" data-sys="notify-settings">시스템 설정 열기</button></span></div>
         <div class="setting" data-search="딥 링크 cview url"><span class="setting-label">링크로 열기<small>cview://live?channelId=… · cview://search?q=… · cview://multilive</small></span></div>
       </section>`;
@@ -647,19 +689,10 @@ export class SettingsPage {
   }
 
   async onSystem(b) {
+    if (b.dataset.sys === 'update') { await this.checkUpdateNow(); return; }
     b.disabled = true;
     try {
-      if (b.dataset.sys === 'update') {
-        const status = this.body.querySelector('.update-status');
-        if (status) status.textContent = '업데이트 서버를 확인하는 중…';
-        try {
-          await checkForUpdate();
-        } catch (er) {
-          if (status) status.textContent = `확인하지 못했습니다 — ${er.message || er}`;
-          throw er;
-        }
-        this.showUpdate();
-      } else if (b.dataset.sys === 'update-install') {
+      if (b.dataset.sys === 'update-install') {
         await this.installUpdate(b);
         return;
       } else if (b.dataset.sys === 'update-download') {
@@ -682,6 +715,7 @@ export class SettingsPage {
   }
 
   async onClick(e) {
+    if (onAboutClick(e)) return;
     const bind = e.target.closest('[data-bind]');
     if (bind) { this.captureBinding(bind); return; }
     const bindReset = e.target.closest('[data-bind-reset]');

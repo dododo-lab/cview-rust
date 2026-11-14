@@ -7,6 +7,9 @@
 //     — 예전엔 플러시마다 앞에서 몇 줄씩 지워 남은 줄 전체가 다시 배치됐다(프레임 25~47%가 20ms 초과).
 // P05 창이 가려진 동안 채팅 줄을 붙여도 바닥 따라가기(snap)가 레이아웃을 당기지 않는지, 다시 보이면 바닥으로 내리는지.
 //     — 예전엔 숨은 창에서도 줄을 붙일 때마다 scrollHeight 를 읽어 목록 전체를 다시 배치했다.
+// P06 숨은 화면([hidden] 페이지) 안의 채팅 목록도 같다 — 줄을 붙여도 레이아웃을 당기지 않고, 화면이 보이면 바닥으로 내린다.
+//     — 예전엔 시작할 때 숨은 채팅·시청·멀티라이브 화면의 목록 세 개가 ResizeObserver·focus 로 레이아웃을 당겼다
+//       (환영 안내가 늘 뜨던 모의 실행에서는 가려져 P01 이 통과했다).
 // 저장소 루트에서: node tools/ui-regression/perf.mjs   (Playwright 가 필요하다)
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -34,13 +37,13 @@ await check('P01 startup: app code forces almost no synchronous layout', async (
   await page.waitForFunction(() => !document.getElementById('splash') || !document.getElementById('splash').isConnected, null, { timeout: 20000 });
   await cdp.send('Tracing.end');
   await done;
-  // 스택이 있는 Layout = 스크립트가 당긴 레이아웃. 환영 안내(onboarding, 처음 한 번)는 모의 실행마다 떠서 빼고,
+  // 스택이 있는 Layout = 스크립트가 당긴 레이아웃. 환영 안내(onboarding, 처음 한 번)는 빼고(mock-app 은 이제 띄우지 않는다),
   // 플레이어 iframe(player.html — hls 포크, isSurfaceHidden 이 숨김 확인에 getClientRects 를 쓴다)은 이 검사 범위 밖이다.
   const forced = events.filter((e) => e.name === 'Layout' && e.ph === 'X' && e.args?.beginData?.stackTrace?.length)
     .map((e) => ({ at: e.args.beginData.stackTrace[0], ms: e.dur / 1000 }))
     .filter((x) => !/onboarding\.js|player\.html/.test(x.at.url || ''));
   const named = forced.map((x) => `${x.at.functionName}@${(x.at.url || '').split('/').pop()}:${x.at.lineNumber + 1} ${x.ms.toFixed(1)}ms`);
-  assert.ok(!named.some((n) => /motion\.js|splitter\.js/.test(n)), `세그먼트 판·채팅 분할기가 시작 중 레이아웃을 당김: ${named}`);
+  assert.ok(!named.some((n) => /motion\.js|splitter\.js|chat-follow\.js/.test(n)), `세그먼트 판·채팅 분할기·숨은 화면 채팅 목록이 시작 중 레이아웃을 당김: ${named}`);
   assert.ok(forced.length <= 2, `강제 레이아웃 ${forced.length}회: ${named}`);
   await ctx.close();
 });
@@ -195,6 +198,55 @@ await check('P05 hidden window: chat appends force no layout, snaps back to bott
     return l.scrollHeight - l.clientHeight - l.scrollTop;
   });
   assert.ok(gap <= 1, `다시 보였는데 바닥에서 ${gap}px 떨어져 있음`);
+  await ctx.close();
+});
+
+// ── P06 숨은 화면 안의 채팅 ──
+await check('P06 hidden page: chat appends force no layout, snaps back to bottom when the page is shown', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  const cdp = await ctx.newCDPSession(page);
+  await page.addInitScript(mockTauri, [base, 'dark']);
+  await page.goto(base);
+  await page.waitForFunction(() => !document.getElementById('splash') || !document.getElementById('splash').isConnected, null, { timeout: 20000 });
+  await page.evaluate(async () => {
+    const { followAppend, trimFront } = await import('/js/chat-follow.js');
+    // 앱 화면처럼 [hidden] 으로 숨긴 페이지 안의 목록
+    const pageEl = document.createElement('section');
+    pageEl.hidden = true;
+    pageEl.style.cssText = 'position:fixed;right:0;top:0;width:320px;height:400px;z-index:9999';
+    const list = document.createElement('div');
+    list.className = 'chat-list';
+    list.style.cssText = 'width:100%;height:100%;overflow:auto';
+    pageEl.appendChild(list);
+    document.body.appendChild(pageEl);
+    // 보이는 화면도 함께 바뀐다(시작 중 홈이 그려지는 것처럼) — 레이아웃이 더러운 채로 scrollHeight 를 읽으면 강제 레이아웃이 된다.
+    // 숨은 목록에 줄만 붙여서는 레이아웃이 더러워지지 않아, 예전 코드도 이 검사를 통과했다.
+    const shown = document.createElement('div');
+    shown.style.cssText = 'position:fixed;left:0;bottom:0;z-index:9999';
+    document.body.appendChild(shown);
+    let n = 0;
+    window.__burst = (k) => { for (let i = 0; i < k; i++) followAppend(list, () => { list.insertAdjacentHTML('beforeend', `<div class="chat-line">줄 ${++n} 가나다라마바사</div>`); trimFront(list, 300); shown.textContent = `줄 ${n}`; }); };
+    window.__page = pageEl;
+    window.__list = list;
+    window.__burst(50);
+  });
+  const evs = [];
+  cdp.on('Tracing.dataCollected', (d) => evs.push(...d.value));
+  const done = new Promise((r) => cdp.once('Tracing.tracingComplete', r));
+  await cdp.send('Tracing.start', { categories: 'devtools.timeline,disabled-by-default-devtools.timeline.stack', transferMode: 'ReportEvents' });
+  await page.evaluate(() => { window.__burst(400); window.dispatchEvent(new Event('focus')); });
+  await cdp.send('Tracing.end');
+  await done;
+  const forced = evs.filter((e) => e.name === 'Layout' && e.ph === 'X' && e.args?.beginData?.stackTrace?.some((f) => /chat-follow\.js|chat\.js/.test(f.url || '')));
+  assert.equal(forced.length, 0, `숨은 화면의 채팅이 레이아웃을 ${forced.length}번 당김`);
+  const gap = await page.evaluate(async () => {
+    window.__page.hidden = false;
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+    const l = window.__list;
+    return l.scrollHeight - l.clientHeight - l.scrollTop;
+  });
+  assert.ok(gap <= 1, `화면이 보였는데 바닥에서 ${gap}px 떨어져 있음`);
   await ctx.close();
 });
 

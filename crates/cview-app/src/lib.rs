@@ -7,6 +7,7 @@
 //!   `cview-player` 의 코디네이터·로컬 프록시가 URL 과 수명을 맡는다([`engine`]).
 
 pub mod commands;
+pub mod diagnostics;
 pub mod dock_icon;
 pub mod dto;
 pub mod engine;
@@ -371,6 +372,8 @@ pub fn run() {
             system::notify_send,
             system::notify_permission,
             system::update_check,
+            system::release_notes,
+            diagnostics::diagnostic_report,
             updater::update_install,
             commands::content::open_path,
             commands::content::open_notification_settings,

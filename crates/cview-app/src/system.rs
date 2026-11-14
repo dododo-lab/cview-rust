@@ -350,6 +350,107 @@ pub async fn update_check(app: AppHandle) -> CmdResult<UpdateCheckDto> {
     update_dto(fetch_current_release().await?, current)
 }
 
+/// 저장소의 릴리스 목록 — 버전별 페이지는 `…/tag/v<버전>`.
+const RELEASES_PAGE: &str = "https://github.com/dododo-lab/cview-rust/releases";
+
+/// 이 버전의 릴리스 노트를 받을 곳 — GitHub 릴리스에 붙인 그 버전의 피드(`latest.json`), 안 되면 자체 서버의
+/// 버전별 manifest. 둘 다 업데이트 피드와 같은 모양(`body` 가 노트)이다. 버전 글자는 숫자·영문·`.`·`-` 만.
+fn release_notes_urls(version: &str) -> Result<Vec<url::Url>, CommandError> {
+    if version.is_empty()
+        || !version
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-')
+    {
+        return Err(CommandError("버전 형식이 올바르지 않습니다".into()));
+    }
+    [
+        format!("{RELEASES_PAGE}/download/v{version}/latest.json"),
+        format!("https://cv.dododo.app/releases/{version}/manifest.json"),
+    ]
+    .iter()
+    .map(|u| validated_update_url(u))
+    .collect()
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseNotesDto {
+    pub version: String,
+    /// 이 버전의 릴리스 노트. 두 곳 모두 그 버전이 없으면(404 — 게시하지 않은 개발 빌드) `None`.
+    pub notes: Option<String>,
+    pub published_at: Option<String>,
+    /// 보기 단추가 여는 곳 — 노트를 받은 곳의 릴리스 페이지, 노트가 없으면 GitHub 릴리스 목록.
+    pub page_url: String,
+    /// `page_url` 이 어디인가 — `"github"` · `"server"`(자체 업데이트 서버). 화면이 단추 이름을 맞춘다.
+    pub source: &'static str,
+}
+
+/// 노트 출처들([`release_notes_urls`] 순서)에서 받은 결과로 답을 정한다. 순수 함수.
+/// 그 버전의 노트를 처음 준 곳을 쓴다. 없으면 — 모두 "없음"(404·다른 버전)일 때만 노트 없음,
+/// 하나라도 연결·HTTP 오류였으면 그 오류(화면이 [다시 시도]를 보인다. 일시 장애를 "미게시"로 말하지 않는다).
+fn release_notes_result(
+    version: String,
+    outcomes: Vec<CmdResult<Option<GitHubRelease>>>,
+) -> CmdResult<ReleaseNotesDto> {
+    let mut failure = None;
+    for (i, outcome) in outcomes.into_iter().enumerate() {
+        match outcome {
+            Ok(Some(release)) if release.version_string() == version => {
+                // GitHub 에서 받았으면 그 태그 페이지. 자체 서버면 manifest 의 페이지(없으면 그 서버의 버전 폴더) —
+                // GitHub 은 방금 그 버전이 없었으니 GitHub 주소로 대신하지 않는다.
+                let page_url = if i == 0 {
+                    format!("{RELEASES_PAGE}/tag/v{version}")
+                } else {
+                    release
+                        .html_url
+                        .map(|u| u.to_string())
+                        .unwrap_or_else(|| format!("https://cv.dododo.app/releases/{version}/"))
+                };
+                // 단추 이름은 실제로 여는 곳의 호스트로 정한다.
+                let github = url::Url::parse(&page_url)
+                    .ok()
+                    .and_then(|u| u.host_str().map(|h| h == "github.com"))
+                    .unwrap_or(false);
+                return Ok(ReleaseNotesDto {
+                    page_url,
+                    source: if github { "github" } else { "server" },
+                    notes: release.body.filter(|b| !b.trim().is_empty()),
+                    published_at: release.published_at.map(|d| d.to_rfc3339()),
+                    version,
+                });
+            }
+            Ok(_) => {}
+            Err(e) => failure = Some(e),
+        }
+    }
+    match failure {
+        Some(e) => Err(e),
+        None => Ok(ReleaseNotesDto {
+            version,
+            notes: None,
+            published_at: None,
+            page_url: RELEASES_PAGE.into(),
+            source: "github",
+        }),
+    }
+}
+
+/// 설정 › 정보 › "이 버전의 새로운 기능" — 지금 실행 중인 버전의 릴리스 노트(GitHub, 안 되면 자체 서버).
+#[tauri::command]
+pub async fn release_notes(app: AppHandle) -> CmdResult<ReleaseNotesDto> {
+    let version = app.package_info().version.to_string();
+    let mut outcomes = Vec::new();
+    for url in release_notes_urls(&version)? {
+        let outcome = fetch_release(url).await;
+        let found = matches!(&outcome, Ok(Some(r)) if r.version_string() == version);
+        outcomes.push(outcome);
+        if found {
+            break;
+        }
+    }
+    release_notes_result(version, outcomes)
+}
+
 /// 피드를 받는다. 공개된 릴리스가 없으면(404) `None`.
 pub(crate) async fn fetch_release(url: url::Url) -> CmdResult<Option<GitHubRelease>> {
     let client = reqwest::Client::builder()
@@ -547,6 +648,133 @@ mod tests {
             "invalid",
         ] {
             assert!(update_feed_urls(Some(bad), Some(embedded)).is_err());
+        }
+    }
+
+    #[test]
+    fn release_notes_sources() {
+        let urls: Vec<String> = release_notes_urls("0.1.103")
+            .unwrap()
+            .iter()
+            .map(|u| u.to_string())
+            .collect();
+        assert_eq!(
+            urls,
+            [
+                "https://github.com/dododo-lab/cview-rust/releases/download/v0.1.103/latest.json",
+                "https://cv.dododo.app/releases/0.1.103/manifest.json",
+            ]
+        );
+        for bad in ["", "../0.1.0", "0.1.0/../../x", "0.1.0?x=1", "0.1 0"] {
+            assert!(release_notes_urls(bad).is_err(), "{bad}");
+        }
+    }
+
+    fn release(tag: &str, body: &str, page: &str) -> GitHubRelease {
+        GitHubRelease {
+            tag_name: tag.into(),
+            name: None,
+            body: Some(body.into()),
+            html_url: Some(url::Url::parse(page).unwrap()),
+            published_at: None,
+            assets: Vec::new(),
+            signature: None,
+        }
+    }
+
+    #[test]
+    fn release_notes_decision() {
+        let v = || "0.1.103".to_string();
+        let err = || Err(CommandError("업데이트 서버에 연결하지 못했습니다".into()));
+        // GitHub 에서 받으면 GitHub 릴리스 페이지
+        let r = release_notes_result(
+            v(),
+            vec![Ok(Some(release(
+                "v0.1.103",
+                "노트",
+                "https://example.com/x",
+            )))],
+        )
+        .unwrap();
+        assert_eq!(r.notes.as_deref(), Some("노트"));
+        assert_eq!(r.source, "github");
+        assert_eq!(r.page_url, format!("{RELEASES_PAGE}/tag/v0.1.103"));
+        // GitHub 404 → 자체 서버에서 받으면 그 서버 페이지와 출처 "server"
+        let r = release_notes_result(
+            v(),
+            vec![
+                Ok(None),
+                Ok(Some(release(
+                    "v0.1.103",
+                    "노트",
+                    "https://cv.dododo.app/releases/0.1.103/",
+                ))),
+            ],
+        )
+        .unwrap();
+        assert_eq!(r.source, "server");
+        assert_eq!(r.page_url, "https://cv.dododo.app/releases/0.1.103/");
+        // 자체 서버 manifest 에 페이지 주소가 없으면 그 서버의 버전 폴더(GitHub 은 방금 404 였다)
+        let mut bare = release("v0.1.103", "노트", "https://x.example");
+        bare.html_url = None;
+        let r = release_notes_result(v(), vec![Ok(None), Ok(Some(bare))]).unwrap();
+        assert_eq!(
+            (r.source, r.page_url.as_str()),
+            ("server", "https://cv.dododo.app/releases/0.1.103/")
+        );
+        // manifest 페이지가 GitHub 이면 단추 이름도 GitHub
+        let r = release_notes_result(
+            v(),
+            vec![
+                Ok(None),
+                Ok(Some(release(
+                    "v0.1.103",
+                    "노트",
+                    "https://github.com/dododo-lab/cview-rust/releases/tag/v0.1.103",
+                ))),
+            ],
+        )
+        .unwrap();
+        assert_eq!(r.source, "github");
+        // 두 곳 모두 404(또는 다른 버전) → 노트 없음
+        let r = release_notes_result(
+            v(),
+            vec![
+                Ok(None),
+                Ok(Some(release("v0.1.102", "옛", "https://x.example"))),
+            ],
+        )
+        .unwrap();
+        assert!(r.notes.is_none());
+        assert_eq!(r.page_url, RELEASES_PAGE);
+        // 404 뒤 자체 서버 연결 실패·5xx → 오류(노트 없음으로 말하지 않는다)
+        assert!(release_notes_result(v(), vec![Ok(None), err()]).is_err());
+        assert!(release_notes_result(v(), vec![err(), Ok(None)]).is_err());
+        assert!(release_notes_result(v(), vec![err(), err()]).is_err());
+        // 오류가 있어도 다른 곳에서 노트를 받으면 노트
+        let r = release_notes_result(
+            v(),
+            vec![
+                err(),
+                Ok(Some(release(
+                    "v0.1.103",
+                    "노트",
+                    "https://cv.dododo.app/r/",
+                ))),
+            ],
+        )
+        .unwrap();
+        assert_eq!(r.notes.as_deref(), Some("노트"));
+    }
+
+    /// 실제 버전별 노트(인터넷 연결 필요) — `cargo test -p cview-app -- --ignored live_release_notes`.
+    #[tokio::test]
+    #[ignore]
+    async fn live_release_notes() {
+        for url in release_notes_urls("0.1.103").unwrap() {
+            let release = fetch_release(url.clone()).await.unwrap().expect("release");
+            assert_eq!(release.version_string(), "0.1.103", "{url}");
+            assert!(release.body.is_some_and(|b| b.contains("0.1.103")), "{url}");
         }
     }
 

@@ -1,8 +1,8 @@
 // 새 버전 알림 — 실행 직후와 몇 시간마다 업데이트 서버를 조용히 확인하고, 새 버전이 있으면 앱 안에서 알린다.
 // · 사이드바 아래(계정 위)에 "새 버전" 줄이 남는다 — 누르면 업데이트 확인 시트(설치 단추).
 // · 버전마다 한 번 알림(토스트, 앱이 뒤에 있으면 시스템 알림). 창을 띄우거나 포커스를 가져가지 않는다.
-// · 설정 › 일반 › "업데이트 자동 확인"(general.autoCheckUpdates)을 끄면 확인도 알림도 하지 않는다.
-// 확인 결과는 update-check.js 와 같이 써서 설정 › 앱 줄에도 바로 보인다.
+// · 설정 › 정보 › "자동으로 업데이트 확인"(general.autoCheckUpdates)을 끄면 확인도 알림도 하지 않는다.
+// 확인 결과는 update-check.js 와 같이 써서 설정 › 정보 › 업데이트 줄에도 바로 보인다.
 import { api, isTauri } from './api.js';
 import { toast, esc } from './dom.js';
 import { checkForUpdate, lastUpdateResult } from './update-check.js';
@@ -61,7 +61,7 @@ function announce(u) {
   // 앱이 뒤에 있으면(다른 앱을 보는 중) 시스템 알림도 — 알림만 뜨고 창은 앞으로 오지 않는다.
   if (document.hidden || !document.hasFocus()) {
     notificationsEnabled().then((on) => {
-      if (on) api.notifySend('CView 업데이트', `새 버전 ${u.latest} 을 설치할 수 있습니다 — 설정 › 앱에서 업데이트하세요`).catch(() => {});
+      if (on) api.notifySend('CView 업데이트', `새 버전 ${u.latest} 을 설치할 수 있습니다 — 설정 › 정보에서 업데이트하세요`).catch(() => {});
     });
   }
 }
