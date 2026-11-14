@@ -97,14 +97,19 @@ export function mockTauri([origin, theme]) {
 
 export const go = (page, route, params = {}) => page.evaluate(([r, p]) => window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: r, params: p } })), [route, params]);
 
-/** 모의 IPC 로 앱을 열고 시작 화면·환영 안내가 걷힐 때까지 기다린다. */
-export async function openApp(browser, { width = 1280, height = 900, theme = 'dark' } = {}) {
+/**
+ * 모의 IPC 로 앱을 열고 시작 화면·환영 안내가 걷힐 때까지 기다린다.
+ * welcomed — 환영 안내를 본 것으로 두어 아예 띄우지 않는다. 환영 안내는 시작 뒤에 뜨므로 WebKit 에서는 아래에서 걷은 뒤에
+ * 떠서 실제 마우스 누르기·호버·초점을 가로챘다.
+ */
+export async function openApp(browser, { width = 1280, height = 900, theme = 'dark', welcomed = false } = {}) {
   const ctx = await browser.newContext({ viewport: { width, height }, colorScheme: theme });
   const page = await ctx.newPage();
   page.setDefaultTimeout(8000);
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.addInitScript(mockTauri, [base, theme]);
+  if (welcomed) await page.addInitScript(() => { try { localStorage.setItem('cview.welcomed.v1', String(Date.now())); } catch { /* 무시 */ } });
   await page.goto(base);
   await page.waitForSelector('[data-page]', { state: 'attached' });
   await page.evaluate(() => document.querySelectorAll('.sheet-scrim.welcome-scrim').forEach((x) => x.remove()));

@@ -8,20 +8,24 @@
 // R07 프로필·썸네일이 없는 채널 — 빈 동그라미 대신 이름 첫 글자.
 // R08 좁은 서랍(320) — 꼬리표 줄의 카테고리가 잘리지 않고 썸네일이 줄어든다.
 // R09 남은 자리 문구는 '추가할 수'(멀티채팅도 같은 서랍), 불러오기 실패 때 바닥줄은 본문 문구를 되풀이하지 않는다.
-// 저장소 루트에서: node tools/ui-regression/add-drawer.mjs   (Playwright·axe-core 가 필요하다)
+// R10 마우스로 닫아도(✕·여는 버튼 다시 누르기, 키보드로 연 뒤 ✕) 초점이 여는 버튼으로 돌아온다 — 멀티라이브·멀티채팅.
+//     WebKit 은 마우스로 누른 단추에 초점을 주지 않고 찾기 칸의 초점을 body 로 떨어뜨려, 예전엔 초점이 body 에 남았다.
+// 저장소 루트에서: node tools/ui-regression/add-drawer.mjs   (Playwright·axe-core 가 필요하다.
+//   CVIEW_UI_BROWSER=webkit 이면 앱과 같은 WebKit 엔진으로 돈다.)
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { server, go, openApp } from './mock-app.mjs';
 
 const require = createRequire(import.meta.url);
-const { chromium } = require('playwright');
+const pw = require('playwright');
+const engine = process.env.CVIEW_UI_BROWSER === 'webkit' ? pw.webkit : pw.chromium;
 const AXE = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 const results = [];
 async function check(id, fn) {
   try { await fn(); results.push({ id, ok: true }); } catch (e) { results.push({ id, ok: false, error: e.message }); }
 }
-const browser = await chromium.launch();
+const browser = await engine.launch();
 
 // 모의 IPC 덮어쓰기 — 멀티라이브 상태(added), 실패(fail), 프로필 없는 채널 추가
 function patch(o) {
@@ -39,7 +43,7 @@ function patch(o) {
   };
 }
 async function openDrawer({ theme = 'dark', width = 1280, route = 'multilive', toggle = '[data-ml="add"]', ...o } = {}) {
-  const app = await openApp(browser, { width, height: 820, theme });
+  const app = await openApp(browser, { width, height: 820, theme, welcomed: true });
   await app.page.evaluate(patch, o);
   await go(app.page, route);
   await app.page.waitForTimeout(500);
@@ -184,6 +188,37 @@ for (const theme of ['dark', 'light']) {
   await check('R08 기본 서랍(340)은 썸네일 116', async () => {
     const w = await page.evaluate(() => Math.round(document.querySelector('.ml-addrow-thumb').getBoundingClientRect().width));
     assert.equal(w, 116);
+  });
+  await ctx.close();
+}
+
+// ── R10 마우스로 닫은 뒤 초점 ──
+for (const [route, toggle] of [['multilive', '[data-ml="add"]'], ['multichat', '[data-mc="add"]']]) {
+  const { ctx, page } = await openDrawer({ route, toggle });
+  await check(`R10 ${route}: 마우스로 닫아도(✕·여는 버튼) 초점이 여는 버튼으로 돌아온다`, async () => {
+    const tg = page.locator(`${toggle}:visible`).first();
+    const at = () => page.evaluate((t) => {
+      const a = document.activeElement;
+      return a && a.matches(t) ? 'toggle' : a === document.body ? 'BODY' : `${a?.tagName}.${a?.className}`;
+    }, toggle);
+    const opened = async () => { await page.waitForSelector('.ml-addbar.open'); await page.waitForTimeout(400); };
+    const closed = () => page.waitForFunction(() => !document.querySelector('.ml-addbar.open'));
+    const closeX = async () => { await page.locator('.ml-addbar.open [data-add="close"]').click(); await closed(); };
+    // 열린 서랍(찾기 칸에 초점)에서 ✕ 를 마우스로
+    await closeX();
+    assert.equal(await at(), 'toggle', `✕ 뒤 초점: ${await at()}`);
+    // 여는 버튼을 마우스로 눌러 열고, 다시 눌러 닫기
+    await tg.click();
+    await opened();
+    await tg.click();
+    await closed();
+    assert.equal(await at(), 'toggle', `여는 버튼으로 닫은 뒤 초점: ${await at()}`);
+    // 키보드로 열고 ✕ 를 마우스로
+    await tg.focus();
+    await page.keyboard.press('Enter');
+    await opened();
+    await closeX();
+    assert.equal(await at(), 'toggle', `키보드로 열고 ✕ 뒤 초점: ${await at()}`);
   });
   await ctx.close();
 }
