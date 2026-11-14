@@ -47,10 +47,13 @@
   --donation-border: rgba(255, 204, 51, 0.35);
   --subscription: #b98cff;
   --subscription-bg: rgba(185, 140, 255, 0.12);
-  --error: #ff5a4f;
+  /* 위험 글자·아이콘 — 글자가 놓이는 면(메뉴·겹친 면·호버 바탕·빨강 12% 호버) 모두 4.5:1 이상.
+     예전 #ff5a4f 는 말풍선 '채팅 숨기기(차단)' 호버 4.06·멀티라이브 '모두 닫기' 호버 4.13·'언팔로우'(겹친 면) 4.47 이었다. */
+  --error: #ff7066;
+  --error-on-media: #ff7066;    /* 늘 검은 영상 무대 위 위험 글자(플레이어 오류) — 두 테마 같은 값, 검정과 7.8:1 */
   --warning: #ffaa00;
   --on-warning: #1f1500;        /* --warning 바탕 위 글자(오프라인 띠) — 흰 글자는 1.9:1 이었다 */
-  --danger-fill: #c42b1c;       /* 흰 글자를 얹는 위험 동작 바탕(삭제 단추 호버·창 닫기) — 5.7:1. --error(#ff5a4f) 위 흰 글자는 3.1:1 */
+  --danger-fill: #c42b1c;       /* 흰 글자를 얹는 위험 동작 바탕(삭제 단추 호버·창 닫기) — 5.7:1. 다크 --error(#ff7066) 위 흰 글자는 2.7:1 */
   --on-danger: #ffffff;
   --accent-yellow: #f5b400;     /* 즐겨찾기 별·고정 핀 — 예전엔 정의 없이 var(--accent-yellow, #f5b400) 로만 썼다 */
   --warning-bg: rgba(255, 170, 0, 0.08);
@@ -160,7 +163,7 @@
   --donation-border: rgba(214, 150, 0, 0.4);
   --subscription: #7a4fd6;
   --subscription-bg: rgba(122, 79, 214, 0.1);
-  --error: #e1352a;
+  --error: #c4291f;             /* 같은 빨강(색상각 3.6°)을 어둡게 — 흰 메뉴 5.7·겹친 면(#e6e8ed) 4.65:1. 예전 #e1352a 는 흰 메뉴와 4.43:1 */
   --warning: #9a5c00;
   --on-warning: #ffffff;        /* 라이트 --warning(#9a5c00) 위 흰 글자 5.1:1 */
   --accent-yellow: #a87400;     /* 흰 바탕에서도 보이는 별·핀 */
@@ -210,7 +213,7 @@
     --donation-border: rgba(214, 150, 0, 0.4);
     --subscription: #7a4fd6;
     --subscription-bg: rgba(122, 79, 214, 0.1);
-    --error: #e1352a;
+    --error: #c4291f;
     --warning: #9a5c00;
     --on-warning: #ffffff;        /* 라이트 --warning(#9a5c00) 위 흰 글자 5.1:1 */
     --accent-yellow: #a87400;     /* 흰 바탕에서도 보이는 별·핀 */
@@ -542,7 +545,7 @@ a { color: var(--primary); }
 .ap-item.danger:hover, .ap-item.danger:focus-visible { background: var(--danger-fill); color: var(--on-danger); }
 .ap-item.danger:hover .ap-icon, .ap-item.danger:focus-visible .ap-icon { color: #fff; }
 /* 키보드 초점 — 호버 바탕 위에 2px 고리를 두르고, 고리와 바탕 사이에 메뉴 바탕색 2px 틈을 둔다.
-   고리 양옆이 늘 메뉴 바탕이라 줄 바탕과 상관없이 3:1 이상이고(--primary-text 라이트 5.4·다크 13, --error 4.4·4.8),
+   고리 양옆이 늘 메뉴 바탕이라 줄 바탕과 상관없이 3:1 이상이고(--primary-text 라이트 5.4·다크 13, --error 5.7·5.5),
    틈과 고리로 마우스만 올린 줄과 구별된다. 예전엔 바탕만 --surface-elevated 로 바뀌어 1.1:1 이었다. */
 .ap-item:focus-visible { box-shadow: inset 0 0 0 2px var(--primary-text), inset 0 0 0 4px var(--surface-popover); }
 .ap-item.danger:focus-visible { box-shadow: inset 0 0 0 2px var(--error), inset 0 0 0 4px var(--surface-popover); }
@@ -740,7 +743,9 @@ select.select {
   gap: var(--sp-sm); color: var(--text-secondary); pointer-events: none; background: rgba(0, 0, 0, 0.35);
 }
 .player-overlay[hidden] { display: none; }
-.player-overlay.error { color: var(--error); background: rgba(0, 0, 0, 0.6); }
+/* 오류 — #viewer 무대는 두 테마 모두 검정(아래 '#viewer .player-stage')이라 테마별 --error 가 아니라 영상용 빨강을 쓴다.
+   라이트 --error(#c4291f)는 검정과 3.7:1 이다. */
+.player-overlay.error { color: var(--error-on-media); background: rgba(0, 0, 0, 0.6); }
 .player-overlay.ended, .ml-pane-state.ended { background: rgba(0, 0, 0, 0.72); color: rgba(255, 255, 255, 0.82); }
 /* 방송 종료 그림 — 오버레이가 ended 일 때만. 패인이 작아지면 같이 줄어든다. */
 .stream-ended-art { display: none; width: clamp(48px, 24%, 132px); color: rgba(255, 255, 255, 0.7); }
@@ -2354,8 +2359,9 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .chat-retry[hidden] { display: none; }
 .chat-header.tools-open .chat-retry { display: none; }
 
-/* 입력 배너 — 실패·거절·제한은 경고 색 */
-.chat-input-banner.warn { color: var(--error); background: color-mix(in srgb, var(--error) 10%, var(--surface-elevated)); }
+/* 입력 배너 — 실패·거절·제한은 경고 색. 바탕에 섞는 빨강은 6% — 같은 빨강을 섞을수록 글자와 가까워져
+   10% 면 라이트 글자가 4.37:1(예전 값 3.44:1)이다. 6% 는 라이트 4.65·다크 5.3:1. */
+.chat-input-banner.warn { color: var(--error); background: color-mix(in srgb, var(--error) 6%, var(--surface-elevated)); }
 /* 남은 글자 수 — 입력칸 오른쪽 안에 */
 .chat-count {
   position: absolute; right: calc(var(--sp-md) + 64px); top: 50%; transform: translateY(-50%); pointer-events: none;
