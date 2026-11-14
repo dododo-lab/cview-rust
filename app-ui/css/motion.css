@@ -188,7 +188,9 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 :is(.nav-item, .side-live, .queue-item, .recent-item, .ml-addrow-open, .palette-item, .quality-item, .ml-menu-item, .design-item,
     .dense-row, .channel-row, .bookmark-row, .side-widget, .ac-item):active:not(:disabled) { scale: .985; transition-duration: var(--dur-1); }
 /* .btn 전환은 아래 "버튼 모션"이 맡는다. 채널 추가(.ch-add)는 글로우·누름을 끝의 "채널 추가 단추" 규칙이 따로 정한다
-   — :where() 로 빼서 다른 .btn 의 우선순위는 그대로다. */
+   — :where() 로 빼서 다른 .btn 의 우선순위는 그대로다.
+   .btn 은 이 transform 하나로만 들어간다 — "버튼 모션"의 기본 scale(.95)과 넓은 단추·재시도 단추의 scale 은 .btn 을 뺀다
+   (예전엔 둘이 함께 걸려 .965 × .95 = .917 로 두 번 줄었다). app.css .btn:active 의 scale(.98)은 같은 transform 이라 이 줄이 덮는다. */
 .btn:active:not(:disabled):where(:not(.ch-add)) { transform: scale(.965); transition-duration: var(--dur-1); }
 .btn.primary:hover:not(:disabled):where(:not(.ch-add)) { box-shadow: 0 8px 22px var(--primary-glow); }
 .btn.primary:active:not(:disabled):where(:not(.ch-add)) { box-shadow: 0 3px 10px var(--primary-glow); filter: brightness(.97); }
@@ -285,7 +287,7 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 .chat-line.ev .ev-card { animation: mo-pop-up .3s var(--ease-out) both; transform-origin: left center; }
 .chat-line.mention, .chat-line.notice-line { animation: mo-fade .3s ease both; }
 .chat-pin:not([hidden]), .chat-notice:not([hidden]), .chat-input-banner:not([hidden]) { animation: mo-pop-down var(--dur-3) var(--ease-out) both; transform-origin: top center; }
-.chat-jump:not([hidden]) { animation: mo-pop-up .3s var(--ease-spring) both; }
+.chat-jump:not([hidden]) { animation: mo-pop-up .3s var(--ease-spring) backwards; }   /* both 면 끝난 뒤에도 scale: 1 을 붙들어 누름(.93)이 안 보였다 */
 .chat-reopen:not([hidden]), .ip-reopen:not([hidden]) { animation: mo-fade var(--dur-3) var(--ease-out) both; }
 .mention-count:not([hidden]) { animation: mo-pop .3s var(--ease-spring) both; }
 .chat-jump:hover { filter: brightness(1.06); box-shadow: 0 6px 18px var(--primary-glow); }
@@ -306,7 +308,7 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 .ml-pane.drop-target { scale: .985; transition: scale var(--dur-2) var(--ease-out); }
 .ml-empty { animation: mo-rise var(--dur-4) var(--ease-emph) both; }
 .ml-addrow-act { transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out), scale .3s var(--ease-spring); }
-.ml-addrow-act:hover:not(:disabled) { scale: 1.08; }
+.ml-addrow-act:hover:not(:disabled):not(:active) { scale: 1.08; }   /* 누르면 호버 크기를 놓고 기본 누름(.95)으로 — 예전엔 1.08 에 머물렀다 */
 
 /* ── 풍부(rich) — 카드 격자가 앞에서부터 차례로(처음 12장만, 나머지는 같이) ── */
 :root[data-motion="rich"] :is(.grid, .shelf, .category-grid) > * { animation: mo-rise .36s var(--ease-emph) both; }
@@ -601,6 +603,7 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
    - 위 "누름 피드백" 목록에 없는 단추도 빠짐없이: 기본값은 :where() 로 걸어 우선순위가 0 — 단추마다 따로 정한
      누름 크기·전환(넓은 줄 .985, 링크 .97 등)이 있으면 그쪽이 이긴다. 따로 transition 을 쓴 단추는 들어가는 것만 바로, 나머지는 그대로.
    - 카드(.card 등 div·a)는 넣지 않는다 — 카드는 위 "카드" 규칙이 transform 으로 따로 누른다(겹치면 두 번 줄어든다).
+     글자 단추(.btn)도 같은 까닭으로 뺀다 — 위 "누름 피드백"의 transform(.965)이 맡는다. 넓은·재시도 .btn 은 아래에서 transform 값만 바꾼다.
    - transform 계열(scale·translate)·opacity 만 움직여 합성 단계에서 끝난다. 상시 도는 것은 없다.
    - 모션 줄이기·절약이면 크기·이동을 없애고 시간은 app.css 전역 규칙이 0 으로 만든다. */
 
@@ -610,12 +613,14 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
   transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), .32s, var(--dur-3);
   transition-timing-function: var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-spring), var(--ease-out);
 }
-:where(button:active:not(:disabled), a.btn:active) { scale: .95; transition-duration: var(--dur-1); }
-/* 넓은 줄·큰 단추는 덜 — 화면 폭만큼 긴 줄이 5% 줄면 출렁여 보인다 */
-:is(.history-row, .discover-item, .picker-row, .ml-mc-cell-head, .quick-search, .load-more, .side-more, .ml-restore):active:not(:disabled) { scale: .985; }
+:where(button:not(.btn):active:not(:disabled)) { scale: .95; transition-duration: var(--dur-1); }
+/* 넓은 줄·큰 단추는 덜 — 화면 폭만큼 긴 줄이 5% 줄면 출렁여 보인다. .btn(더 보기·복원)은 transform 으로 같은 값 — 한 번만 줄게 */
+:is(.history-row, .discover-item, .picker-row, .ml-mc-cell-head, .quick-search, .load-more, .side-more, .ml-restore):active:not(:disabled):where(:not(.btn)) { scale: .985; }
+.btn:is(.load-more, .ml-restore):active:not(:disabled) { transform: scale(.985); }
 /* 끌어 옮기는 손잡이는 누르는 동안 끌기라 그대로 */
 .ml-drag:active { scale: none; }
-:is(.side-quick-btn, .overlay-retry, .ml-state-retry, .ml-merge-btn, .mc-chip, .ip-chip, .ml-live-pill):active:not(:disabled) { scale: .96; }
+:is(.side-quick-btn, .overlay-retry, .ml-state-retry, .ml-merge-btn, .mc-chip, .ip-chip, .ml-live-pill):active:not(:disabled):where(:not(.btn)) { scale: .96; }
+.btn.overlay-retry:active:not(:disabled) { transform: scale(.96); }
 /* 이 단추들은 예전 transition 이 scale 을 빼고 있어 들어갔다 나올 때 툭 끊겼다 — 같은 스프링으로 */
 .side-quick-btn { transition: background var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out), transform .3s var(--ease-spring), scale .3s var(--ease-spring); }
 .side-quick-btn:active { transform: none; }

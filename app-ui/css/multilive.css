@@ -160,7 +160,7 @@
   display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 11px; border-radius: var(--radius-ms);
   background: var(--surface-base); border: 1px solid var(--border-subtle); color: var(--text-tertiary);
 }
-.ml-addbar-search:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-dim); color: var(--text-secondary); }
+.ml-addbar-search:focus-within { border-color: var(--primary-text); box-shadow: var(--focus-ring); color: var(--text-secondary); }
 .ml-addbar-search svg { width: 15px; height: 15px; flex: none; }
 .ml-addbar-search input:focus, .ml-addbar-search input:focus-visible { outline: none; box-shadow: none; }
 .ml-addbar-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-primary); font: inherit; font-size: var(--fs-caption); padding: 0; }
@@ -194,7 +194,7 @@
   flex: 1; min-width: 0; display: flex; align-items: center; gap: 11px; padding: 7px; border: 0; border-radius: var(--radius-md);
   background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer;
 }
-.ml-addrow-open:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.ml-addrow-open:focus-visible { outline: 2px solid var(--primary-text); outline-offset: -2px; }
 .ml-addrow-open:disabled { cursor: default; }
 .ml-addrow.full:not(.added):not(.busy) .ml-addrow-act { opacity: 0.45; }
 .ml-addrow:not(.added):not(.busy) .ml-addrow-open:disabled { opacity: 0.5; }
@@ -365,7 +365,7 @@
 .ml-menu-item[hidden] { display: none; }
 .ml-menu-item svg { width: 15px; height: 15px; color: var(--text-secondary); flex: none; }
 .ml-menu-item:hover, .ml-menu-item:focus-visible { background: var(--hover); }
-.ml-menu-item:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.ml-menu-item:focus-visible { outline: 2px solid var(--primary-text); outline-offset: -2px; }
 .ml-menu-item.danger { color: var(--error); }
 .ml-menu-item.danger svg { color: var(--error); }
 .ml-menu-item.danger:hover { background: color-mix(in srgb, var(--error) 12%, transparent); }
@@ -589,7 +589,7 @@
   color: var(--text-secondary); font-size: var(--fs-caption); font-weight: 500; line-height: 1;
 }
 .ml-watch-chip:hover:not(.active) { color: var(--text-primary); background: var(--hover); }
-.ml-watch-chip:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
+.ml-watch-chip:focus-visible { outline: 2px solid var(--primary-text); outline-offset: -2px; }
 .ml-watch-chip.active { max-width: 200px; color: var(--text-primary); font-weight: 600; background: var(--surface-base); box-shadow: var(--shadow-sm); }
 .ml-watch-chip .vbadge { margin-left: -3px; }
 .ml-watch-chip img, .ml-watch-dot { width: 20px; height: 20px; border-radius: 50%; flex: none; object-fit: cover; }
@@ -637,7 +637,7 @@
 .ml-watch-tab:is(:hover, :focus-within) .ml-watch-close { opacity: 1; pointer-events: auto; }
 .ml-watch-tab:is(:hover, :focus-within) .ml-watch-chip :is(img, .ml-watch-dot) { opacity: 0; }
 .ml-watch-close:hover { color: var(--error); }
-.ml-watch-close:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.ml-watch-close:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 1px; }
 /* × 위에 있어도 칩은 가리킨 모양을 유지한다(× 는 칩의 형제라 칩의 :hover 가 풀린다). */
 .ml-watch-tab:hover .ml-watch-chip:not(.active) { color: var(--text-primary); background: var(--hover); }
 
@@ -989,7 +989,7 @@
 .mwi-post-head .sk.avatar { width: 36px; height: 36px; border-radius: 50%; flex: none; }
 .mwi-post-who .mwi-sk-line + .mwi-sk-line { margin-top: 6px; height: 10px; }
 /* 키보드 초점 — 둥근 단추는 둥근 고리로 */
-:is(.mwi-btn, .mwi-post-img, .mwi-more-text, .segmented.mwi-tabs .seg):focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+:is(.mwi-btn, .mwi-post-img, .mwi-more-text, .segmented.mwi-tabs .seg):focus-visible { outline: 2px solid var(--primary-text); outline-offset: 2px; }
 
 /* 사진 크게 보기 */
 .mwi-lightbox {
