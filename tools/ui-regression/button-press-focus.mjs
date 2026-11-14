@@ -443,13 +443,11 @@ for (const T of FOCUS.filter((t) => t.shadow && want(t.key))) {
 }
 
 // ── BF07 CSS 정적 검사 ────────────────────────────────────────────────────────────
-// PR #115(primary 단추 호버)가 고치는 줄 — 그 PR 이 병합되면 이 목록에서 지운다.
-const KNOWN = ['.ml-addrow .ml-addrow-act:focus-visible:not(:disabled)'];
 for (const file of ONLY.length ? [] : ['app.css', 'multilive.css', 'motion.css']) {
   const src = fs.readFileSync(path.join('app-ui/css', file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '));
   for (const m of src.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     const sel = m[1].replace(/\s+/g, ' ').trim();
-    if (!/:focus(-visible|-within)?\b/.test(sel) || KNOWN.includes(sel)) continue;
+    if (!/:focus(-visible|-within)?\b/.test(sel)) continue;
     for (const decl of m[2].split(';')) {
       const [prop, ...v] = decl.split(':');
       const name = (prop || '').trim();
