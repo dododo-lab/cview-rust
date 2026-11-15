@@ -129,8 +129,8 @@ impl ChatMessageParser {
 
     /// 원시 텍스트 → envelope. 객체가 아니거나 `cmd` 가 정수로 읽히지 않으면 실패.
     pub fn parse_raw(&self, text: &str) -> ChatResult<ChatProtocolMessage> {
-        let json: Value = serde_json::from_str(text).map_err(|_| ChatError::InvalidMessage)?;
-        let obj = json.as_object().ok_or(ChatError::InvalidMessage)?;
+        let mut json: Value = serde_json::from_str(text).map_err(|_| ChatError::InvalidMessage)?;
+        let obj = json.as_object_mut().ok_or(ChatError::InvalidMessage)?;
         let cmd = Self::parse_tid(obj.get("cmd")).ok_or(ChatError::InvalidMessage)?;
 
         Ok(ChatProtocolMessage {
@@ -138,9 +138,10 @@ impl ChatMessageParser {
             tid: Self::parse_tid(obj.get("tid")),
             svcid: ns_str(obj.get("svcid")).map(str::to_owned),
             cid: ns_str(obj.get("cid")).map(str::to_owned),
-            bdy: obj.get("bdy").cloned(),
             ret_code: Self::parse_tid(obj.get("retCode")),
             ret_msg: ns_str(obj.get("retMsg")).map(str::to_owned),
+            // 본문은 복사하지 않고 떼어 온다 — 붐비는 채팅 프레임마다 메시지 배열 전체 트리를 한 번 더 만들었다.
+            bdy: obj.remove("bdy"),
         })
     }
 
