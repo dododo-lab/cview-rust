@@ -27,18 +27,13 @@
 #   3) 버전 patch+1(--minor/--major 면 그 자리 +1, 아래 자리 0)·빌드 번호 +1.
 #   4) 빌드 → DMG 서명 → 공증(Accepted 확인) → 스테이플 → 확인.
 #      여기서 하나라도 실패하면 올린 파일을 git 으로 되돌리고 끝낸다(trap).
-#   4b) 같은 버전의 Windows 설치 파일(NSIS) 두 개를 이 Mac 에서 교차 빌드한다. 둘 다 있어야 게시한다.
-#       DMG 를 만든 직후 백그라운드로 시작해 공증을 기다리는 동안 빌드하고(로그 $TARGET/windows-build-<버전>.log), 공증 뒤 결과를 확인한다.
-#       x64·arm64 끼리는 같은 target 폴더 잠금 때문에 동시에 돌려도 빨라지지 않아 차례로 만든다.
-#       x64  : x86_64-pc-windows-gnu · Homebrew mingw-w64 · makensis   → dist/CView_X.Y.Z_x64-setup.exe
-#       arm64: aarch64-pc-windows-gnullvm · llvm-mingw(clang·lld·llvm-windres·aarch64 CRT) · makensis
-#                                                                        → dist/CView_X.Y.Z_arm64-setup.exe
-#       NSIS 설치 프로그램 자체는 두 판 모두 x86 실행 파일이고, 안에 든 CView.exe 가 x64/ARM64 다(빌드 후 PE 헤더로 확인).
-#       GNU 타깃의 CView.exe 는 WebView2Loader.dll 을 동적으로 부르므로 설치 파일이 아키텍처에 맞는 DLL 을 exe 옆에 넣는다.
-#       만든 설치 파일을 풀어 exe·DLL 이 부르는 DLL 이 모두 시스템 DLL 이거나 같은 폴더에 있는지 확인한다(scripts/windows-installer.py).
-#       코드 서명 인증서가 없어 서명되지 않는다(SmartScreen 경고).
-#       도구(rustup target add x86_64-pc-windows-gnu aarch64-pc-windows-gnullvm · brew install mingw-w64 nsis sevenzip ·
-#       llvm-mingw 를 ~/.local/opt/llvm-mingw 또는 CVIEW_LLVM_MINGW 에)가 없으면 버전을 올리기 전에 멈춘다.
+#   4b) 같은 소스 스냅샷으로 Windows 서버의 MSVC x64·ARM64 NSIS 설치 파일 두 개를 만든다. 둘 다 있어야 게시한다.
+#       DMG 직후 백그라운드로 서버에 제출해 공증 대기와 겹친다(로그 $TARGET/windows-build-<버전>.log).
+#       Mac 작업자는 이 Windows 전용 작업을 가져가지 않는다. macOS 서명·공증은 이 스크립트가 담당한다.
+#       서버에서 PE 아키텍처를 확인하고, Mac에서 두 파일을 받아 SHA-256과 설치 파일 내부 DLL을 검사한다.
+#       검사 통과 후 dist/CView_X.Y.Z_{x64,arm64}-setup.exe 및 CView_X.Y.Z_windows-build.json을 저장한다.
+#       코드 서명 인증서가 없어 Windows 설치 파일은 미서명이다(SmartScreen 경고).
+#       버전을 올리기 전에 전용 SSH 접속·서버 기능·MSVC 도구와 Mac의 7zz·llvm-readobj를 확인한다.
 #       배포에서는 CVIEW_SKIP_WINDOWS를 허용하지 않는다. arm64 만 건너뛰는 길도 없다.
 #   5) 커밋·태그 생성 → 양쪽 파일 SSH 전송 → 서버 원자적 게시 → 서버/클라이언트 전체 다운로드 검증 → Git 푸시.
 #   6) GitHub 릴리스 사본(scripts/github-release.py): 서명된 서버 manifest 와 같은 파일·SHA256SUMS 를 v<버전> 릴리스에
@@ -47,53 +42,10 @@
 #      --no-notarize를 주면 공증만 건너뛰며 릴리스 설명에 명시한다.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-# makensis(Homebrew 3.13)는 로캘이 비어 있으면 bad_alloc 으로 죽는다.
 export LANG="${LANG:-en_US.UTF-8}" LC_ALL="${LC_ALL:-en_US.UTF-8}"
 [[ "$LANG" == "C" || -z "$LANG" ]] && export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
 CONF=crates/cview-app/tauri.conf.json
-# Windows arm64 교차 빌드 도구. Homebrew mingw-w64 는 x86 만 있어 llvm-mingw 를 쓴다.
-# PATH 앞에 넣으면 macOS 빌드의 clang 을 가리므로 타깃별 환경 변수로 절대 경로만 넘긴다.
-LLVM_MINGW="${CVIEW_LLVM_MINGW:-$HOME/.local/opt/llvm-mingw}"
-export CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_LINKER="$LLVM_MINGW/bin/aarch64-w64-mingw32-clang"
-export CC_aarch64_pc_windows_gnullvm="$LLVM_MINGW/bin/aarch64-w64-mingw32-clang"
-export CXX_aarch64_pc_windows_gnullvm="$LLVM_MINGW/bin/aarch64-w64-mingw32-clang++"
-export AR_aarch64_pc_windows_gnullvm="$LLVM_MINGW/bin/llvm-ar"
-export RC_aarch64_pc_windows_gnullvm="$LLVM_MINGW/bin/aarch64-w64-mingw32-windres"
-# gnullvm 은 기본으로 libunwind.dll 을 동적으로 불러오는데 Windows 에는 없다 — 정적으로 넣는다(빌드 후 가져오기 목록으로 확인).
-export CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_RUSTFLAGS="-C target-feature=+crt-static"
-WIN_TARGETS=(x86_64-pc-windows-gnu aarch64-pc-windows-gnullvm)
-# 교차 빌드 도구가 모두 있는지 — 없으면 무엇을 설치할지 알려 주고 실패한다.
-check_windows_tools() {
-  local installed missing=()
-  installed=$(rustup target list --installed 2>/dev/null)
-  for t in $WIN_TARGETS; do
-    print -r -- "$installed" | grep -qx "$t" || missing+=("rustup target add $t")
-  done
-  command -v x86_64-w64-mingw32-gcc >/dev/null || missing+=("brew install mingw-w64")
-  command -v makensis >/dev/null || missing+=("brew install nsis")
-  # 만든 설치 파일을 풀어 들어 있는 exe·DLL 을 검사한다(scripts/windows-installer.py check).
-  command -v 7zz >/dev/null || missing+=("brew install sevenzip")
-  for tool in $CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_LINKER $RC_aarch64_pc_windows_gnullvm $AR_aarch64_pc_windows_gnullvm "$LLVM_MINGW/bin/llvm-readobj"; do
-    [[ -x "$tool" ]] || { missing+=("llvm-mingw → $LLVM_MINGW (CVIEW_LLVM_MINGW): ${tool:t} 없음"); break; }
-  done
-  if (( ${#missing} )); then
-    echo "✗ Windows 설치 파일(x64·arm64) 교차 빌드 도구가 없습니다:"; printf '   %s\n' $missing; return 1
-  fi
-}
-# PE 헤더의 Machine 값 — x64 0x8664, ARM64 0xaa64.
-pe_machine() {
-  python3 - "$1" <<'PY'
-import struct, sys
-data = open(sys.argv[1], 'rb').read(4096)
-if data[:2] != b'MZ':
-    sys.exit('not a PE file: ' + sys.argv[1])
-offset = struct.unpack_from('<I', data, 0x3C)[0]
-if data[offset:offset + 4] != b'PE\0\0':
-    sys.exit('PE signature missing: ' + sys.argv[1])
-print(hex(struct.unpack_from('<H', data, offset + 4)[0]))
-PY
-}
 # 빌드 산출물 폴더는 cargo 에게 묻는다 — .cargo/config.toml 의 build.target-dir · CARGO_TARGET_DIR 을 따른다(기본 ./target).
 TARGET=$(cargo metadata --format-version 1 --no-deps | python3 -c 'import json,sys;print(json.load(sys.stdin)["target_directory"])')
 [[ -d "${TARGET:h}" ]] || { echo "✗ 빌드 폴더의 상위 경로가 없습니다(외장 볼륨이 붙어 있나요?): $TARGET"; exit 1; }
@@ -131,7 +83,8 @@ fi
 
 BUMPED_FILES=($CONF Cargo.toml Cargo.lock)
 bumped=0
-# 공증을 기다리는 동안 백그라운드로 도는 Windows 빌드(build_windows_installers). 중간에 끝나면 프로세스 트리째 멈춘다.
+# 공증 중 서버 빌드를 기다리는 로컬 프로세스. 실패 시 이 모니터를 멈춘다.
+# 서버 작업은 원본·로그와 함께 보존된다. Mac 실패 후에도 산출물을 게시하지 않는다.
 win_pid=""
 kill_tree() {
   local child
@@ -168,7 +121,7 @@ else: patch += 1
 print(f'{major}.{minor}.{patch}')
 PY
 )
-  check_windows_tools
+  python3 scripts/build-server.py windows-preflight
   python3 scripts/publish-update.py --preflight --version "$next_version"
   # 게시 뒤 GitHub 릴리스 사본을 올린다 — gh 인증이 없으면 버전을 올리기 전에 멈춘다.
   gh auth status >/dev/null 2>&1 || { echo "✗ gh 인증이 필요합니다(GitHub 릴리스 사본): gh auth login"; exit 1; }
@@ -181,8 +134,7 @@ PY
   echo "── 검사(올리기 전에)"
   cargo fmt --all --check
   cargo clippy --workspace --all-targets -q -- -D warnings
-  # Windows 판(x64·arm64)도 만들므로 Windows 타깃 clippy 도 — 한 번에 넘겨 호스트용 매크로·빌드 스크립트를 함께 쓰고 두 타깃을 나란히 검사한다.
-  cargo clippy -p cview-app ${WIN_TARGETS/#/--target=} -q -- -D warnings
+  # Windows 타깃 clippy·테스트는 같은 릴리스 소스를 받은 서버에서 수행한다.
   cargo test --workspace -q 2>&1 | grep -E "^test result|FAILED|panicked" \
     | awk '{p+=$4; f+=$6} /FAILED|panicked/ {print} END {print "   테스트 통과", p, "실패", f; exit (f > 0)}'
   for f in app-ui/js/*.js; do node --check "$f"; done
@@ -242,42 +194,14 @@ for img in plistlib.loads(sys.stdin.buffer.read()).get("images", []):
   done
   (( dmg_ok )) || { echo "✗ DMG 를 만들지 못했습니다"; exit 1; }
   # x64·arm64 둘 다 만든다(CVIEW_SKIP_WINDOWS 는 위에서 거부). 하나라도 실패하면 버전을 되돌린다.
-  # 공증은 애플 서버를 기다리기만 하므로 그동안 교차 빌드를 백그라운드로 돌린다(산출물·검사는 그대로, 순서만 겹친다).
-  # macOS 빌드가 끝난 뒤라 같은 target 폴더 잠금과 겹치지 않는다. 출력은 로그에 모았다가 공증 뒤에 보여 준다.
+  # 공증을 기다리는 동안 서버의 MSVC 빌드·다운로드·DLL 검사를 백그라운드로 진행한다.
+  # 버전을 올린 현재 소스를 불변 스냅샷으로 전송한다. Mac 공증 자격·서명 키는 전송하지 않는다.
   build_windows_installers() {
     trap - EXIT INT TERM
-    local t win_arch win_machine win_out win_bin machine win_exe
-    local -a win_config
-    for t in $WIN_TARGETS; do
-      case "$t" in
-        x86_64-*) win_arch=x64 win_machine=0x8664 ;;
-        aarch64-*) win_arch=arm64 win_machine=0xaa64 ;;
-      esac
-      echo "── Windows 설치 파일($win_arch, 교차 빌드 $t)"
-      win_out="dist/CView_${version}_${win_arch}-setup.exe"
-      rm -f "$TARGET"/$t/release/bundle/nsis/*.exe(N) "$win_out"
-      # GNU 타깃의 CView.exe 는 WebView2Loader.dll 을 동적으로 부른다. tauri-bundler 는 타깃 이름이 -gnu 로 끝날 때만
-      # 이 DLL 을 설치 파일에 넣으므로(x64), gnullvm(arm64)은 Cargo.lock 의 webview2-com-sys 에서 arm64 DLL 을 리소스로 넣는다.
-      win_config=()
-      [[ "$t" == *-gnu ]] || win_config=(--config "$(python3 scripts/windows-installer.py loader-config --target "$t")")
-      (cd crates/cview-app && cargo tauri build --target "$t" --bundles nsis $win_config)
-      win_bin="$TARGET/$t/release/cview-app.exe"
-      machine=$(pe_machine "$win_bin")
-      [[ "$machine" == "$win_machine" ]] || { echo "✗ $win_bin 의 PE Machine 이 $machine 입니다($win_arch 는 $win_machine)"; exit 1; }
-      echo "   CView.exe PE Machine $machine ($win_arch)"
-      win_exe=$(ls -t "$TARGET"/$t/release/bundle/nsis/*.exe(N) | head -1)
-      [[ -n "$win_exe" ]] || { echo "✗ Windows $win_arch 설치 파일을 찾지 못했습니다"; exit 1; }
-      # 설치 파일을 풀어 CView.exe 와 옆에 설치되는 DLL 이 부르는 DLL(지연 로드 포함)이 모두 Windows 시스템 DLL 이거나
-      # 같은 폴더에 같은 아키텍처로 들어 있는지 확인한다 — WebView2Loader.dll·MinGW 런타임(libunwind·libwinpthread 등) 누락을 막는다.
-      python3 scripts/windows-installer.py check --installer "$win_exe" --machine "$win_machine" \
-        --readobj "$LLVM_MINGW/bin/llvm-readobj"
-      cp "$win_exe" "$win_out"
-      shasum -a 256 "$win_out"
-      stat -f "   %z bytes" "$win_out"
-    done
+    python3 scripts/build-server.py release-windows --source "$PWD" --version "$version" --output dist
   }
   win_log="$TARGET/windows-build-$version.log"
-  echo "── Windows 설치 파일(x64·arm64) 교차 빌드를 백그라운드로 시작 — 로그: $win_log"
+  echo "── Windows 서버 빌드(x64·ARM64)를 백그라운드로 시작 — 로그: $win_log"
   # 설치 파일 복사(dist/)가 아래 macOS DMG 복사보다 먼저 끝나도 되게 미리 만든다.
   mkdir -p dist
   build_windows_installers >"$win_log" 2>&1 &

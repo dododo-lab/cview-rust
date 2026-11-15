@@ -147,11 +147,20 @@ mod tests {
         assert!(first.is_primary());
         match SingleInstanceGuard::engage(&path) {
             SingleInstanceRole::Secondary { primary_pid } => {
-                assert_eq!(primary_pid, Some(std::process::id()));
+                // Windows locks also deny reads through another file handle;
+                // the documented optional PID can therefore be unavailable.
+                assert!(
+                    primary_pid == Some(std::process::id())
+                        || (cfg!(windows) && primary_pid.is_none())
+                );
             }
             SingleInstanceRole::Primary(_) => panic!("이미 lock 이 잡혀 있다"),
         }
         drop(first);
+        assert_eq!(
+            SingleInstanceGuard::read_primary_pid(&path),
+            Some(std::process::id())
+        );
         assert!(SingleInstanceGuard::engage(&path).is_primary());
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Windows NSIS installer helpers for the macOS cross build (release-macos.sh).
+"""Windows NSIS installer audits and optional GNU cross-build loader helpers.
 
 `loader-config --target <triple>`
     Print a `cargo tauri build --config` JSON that ships WebView2Loader.dll next to cview-app.exe.

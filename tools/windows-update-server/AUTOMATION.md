@@ -30,20 +30,34 @@ CVIEW_RELEASE_NOTES_FILE=/절대/경로/notes.txt scripts/release-macos.sh --dmg
 
 설명을 생략하면 이전 태그 이후 Git 변경 목록을 사용한다. Windows 설치 파일은 현재 미서명이며 SmartScreen 안내를 자동 추가한다. `--no-notarize`는 사용자가 명시적으로 공증 생략을 허용할 때만 사용한다. `CVIEW_SKIP_WINDOWS`는 배포에서 거부하고, Windows arm64만 빼고 게시하는 경로도 없다. 개발용 빌드에는 자동 게시를 적용하지 않는다.
 
-### Windows 교차 빌드 도구
+### Windows 서버 빌드
 
 | 설치 파일 | Rust 타깃 | 도구 |
 | --- | --- | --- |
-| `CView_<버전>_x64-setup.exe` | `x86_64-pc-windows-gnu` | Homebrew `mingw-w64`, `nsis`, `sevenzip`(`7zz`) |
-| `CView_<버전>_arm64-setup.exe` | `aarch64-pc-windows-gnullvm` | [llvm-mingw](https://github.com/mstorsjo/llvm-mingw)(clang·lld·llvm-windres·llvm-readobj·aarch64 CRT), `nsis`, `sevenzip`(`7zz`) |
+| `CView_<버전>_x64-setup.exe` | `x86_64-pc-windows-msvc` | 서버의 MSVC x64 도구·Rust·Tauri CLI |
+| `CView_<버전>_arm64-setup.exe` | `aarch64-pc-windows-msvc` | 서버의 MSVC ARM64 도구·Rust·Tauri CLI |
 
-Homebrew `mingw-w64`에는 aarch64가 없어 arm64는 llvm-mingw를 쓴다. 기본 위치는 `~/.local/opt/llvm-mingw`(macOS universal 릴리스를 풀고 이 이름으로 링크)이며 `CVIEW_LLVM_MINGW`로 바꾼다. 스크립트는 PATH를 바꾸지 않고 `CARGO_TARGET_AARCH64_PC_WINDOWS_GNULLVM_LINKER`, `CC_`·`AR_`·`RC_aarch64_pc_windows_gnullvm`으로 절대 경로만 넘긴다(macOS 빌드의 clang을 가리지 않게). 도구가 하나라도 없으면 버전을 올리기 전에 무엇을 설치할지 알려 주고 멈춘다.
+정식 릴리스는 `scripts/build-server.py release-windows`로 서버에 같은 버전의 소스 스냅샷을 전송한다.
+DMG 생성 직후 백그라운드로 시작해 macOS 공증 대기와 겹치며, Mac 자동 작업자는 이 Windows 전용 작업을 가져가지 않는다.
+Mac의 MinGW·NSIS·Windows Rust 타깃은 필요하지 않다. Mac에는 다운로드한 설치 파일을 검사할 `7zz`(`brew install sevenzip`)와
+`llvm-readobj`가 있어야 한다. 전용 SSH 접속·키·호스트와 `readobj` 경로는 `~/.config/cview-build/server.json`에 둔다.
+[빌드 서버 설치·설정](../build-server/README.md)을 따른다. 서버 기능(`windows-release-v1`)이나 도구가 없으면 버전을 올리기 전에 중단한다.
 
-NSIS 설치 프로그램은 두 판 모두 x86 실행 파일이다. 스크립트는 번들 전 `cview-app.exe`의 PE Machine(x64 `0x8664`, ARM64 `0xaa64`)을 확인하고, `publish-update.py`는 두 Windows 설치 파일이 PE이고 서로 다른지 확인한다. gnullvm 타깃은 기본으로 `libunwind.dll`을 동적으로 부르는데 Windows에는 없으므로 `-C target-feature=+crt-static`로 정적 링크한다.
+NSIS 설치 프로그램은 두 판 모두 x86 실행 파일이다. 서버는 앱 `cview-app.exe`의 PE Machine(x64 `0x8664`, ARM64 `0xaa64`)을 확인하고,
+Mac은 실제 설치 파일 내부 앱의 아키텍처를 다시 확인한다. MSVC CRT는 `-C target-feature=+crt-static`로 정적 링크한다.
+`publish-update.py`도 두 Windows 설치 파일이 PE이고 서로 다른지 확인한다.
 
-GNU 계열 타깃(x64·arm64 모두)에서 `webview2-com-sys`는 `WebView2Loader.dll`을 **동적으로** 링크한다(정적 라이브러리 `WebView2LoaderStatic.lib`는 MSVC 런타임 전용 기호를 요구해 MinGW로는 링크하지 않는다). 그래서 설치 파일이 아키텍처에 맞는 `WebView2Loader.dll`(Microsoft 서명, `webview2-com-sys`에 포함된 것)을 `cview-app.exe` 옆에 넣어야 한다. tauri-bundler는 타깃 이름이 `-gnu`로 끝날 때만 이 DLL을 넣으므로 x64는 자동으로 들어가고, arm64(`-gnullvm`)는 `scripts/windows-installer.py loader-config`가 Cargo.lock이 고른 `webview2-com-sys`의 `arm64/WebView2Loader.dll`을 `bundle.resources`로 넘긴다(`cargo tauri build --config`). arm64 설치 파일은 처음 나온 v0.1.71부터 v0.1.95까지 이 DLL이 빠져 Windows에서 시작되지 않았다(x64는 처음부터 들어 있었다).
+MSVC 빌드는 WebView2 로더를 정적 링크할 수 있으며, 실제 설치 파일의 DLL 의존성을 검사한다.
+GNU 타깃을 별도로 사용할 때에는 아키텍처에 맞는 `WebView2Loader.dll`을 앱 옆에 넣어야 하며 `scripts/windows-installer.py loader-config`가 이를 돕는다.
 
-빌드 후 `scripts/windows-installer.py check`가 만든 설치 파일을 `7zz`로 풀어, `cview-app.exe`와 그 옆에 설치되는 DLL이 가져오는 DLL(지연 로드 포함, `llvm-readobj --coff-imports`)이 모두 Windows 시스템 DLL이거나 같은 폴더에 같은 PE Machine으로 들어 있는지 확인한다. 시스템 DLL 목록(`SYSTEM_DLLS`)에 없는 새 DLL을 부르게 되면 검사가 멈춘다 — Windows에 기본으로 들어 있는 DLL이면 목록에 더하고, 아니면 설치 파일에 넣는다. 앱 내 업데이트도 같은 NSIS 설치 파일을 `/P /R /UPDATE`로 실행하므로 DLL이 함께 설치된다.
+`scripts/windows-installer.py check`는 설치 파일을 `7zz`로 풀어 앱과 DLL이 가져오는 DLL(지연 로드 포함, `llvm-readobj --coff-imports`)이
+모두 Windows 시스템 DLL이거나 같은 폴더에 같은 PE Machine으로 들어 있는지 확인한다.
+시스템 DLL 목록(`SYSTEM_DLLS`)에 없는 DLL을 부르게 되면 검사가 멈춘다. Windows에 기본으로 들어 있는 DLL인지 확인하거나 설치 파일에 넣는다.
+앱 내 업데이트도 같은 NSIS 설치 파일을 `/P /R /UPDATE`로 실행하므로 DLL이 함께 설치된다.
+
+두 파일의 다운로드·SHA-256·DLL 검사를 모두 통과해야 `dist/`에 내보내고 게시를 계속한다.
+소스 해시·서버 작업 ID·파일 해시는 `dist/CView_<버전>_windows-build.json`, 서버 빌드 출력은 `<target>/windows-build-<버전>.log`에 남는다.
+실패하면 게시하지 않고 기존 버전 되돌리기를 실행한다. Mac에서 대기를 중단해도 서버 작업과 원본·로그는 보존된다.
 
 ## GitHub 릴리스 사본
 
@@ -70,7 +84,7 @@ python3 scripts/github-release.py --version <버전> --verify-only
    - 저장소에 immutable releases가 켜져 있어 게시 뒤에는 파일을 더하거나 바꿀 수 없다. 게시된 릴리스에 파일이 빠졌으면 다음 버전으로 배포한다(v0.1.73은 `latest.json` 없이 게시되어 그동안 앱은 자체 서버 피드를 쓴다).
 6. 게시(`release: published`)되면 Actions `github-release` 워크플로가 `--verify-only`로 GitHub 자산을 서버 manifest와 다시 대조하고 결과를 요약에 남긴다. 예전 태그는 Actions에서 `workflow_dispatch`(태그 입력)로 검사한다.
 
-빌드·서명·공증은 이 Mac에서만 하므로 Apple 인증서·공증 자격·피드 서명 키·SSH 키를 GitHub Secrets에 두지 않는다. GitHub 단계가 실패해도 이미 끝난 서버 게시와 푸시는 그대로이며 같은 명령을 재실행하면 된다. 결과는 `dist/CView_<버전>_github-receipt.json`.
+macOS 빌드·서명·공증은 이 Mac에서, Windows 빌드는 전용 서버에서 수행한다. Apple 인증서·공증 자격·피드 서명 키·SSH 키를 GitHub Secrets나 Windows 빌드 서버에 두지 않는다. GitHub 단계가 실패해도 이미 끝난 서버 게시와 푸시는 그대로이며 같은 명령을 재실행하면 된다. 결과는 `dist/CView_<버전>_github-receipt.json`.
 
 이 저장소의 Actions 설정은 `sha_pinning_required`라 액션을 커밋 SHA로 고정해야 한다. 태그(`@v4`)만 쓰면 작업이 시작되지 않고 startup_failure로 끝난다.
 

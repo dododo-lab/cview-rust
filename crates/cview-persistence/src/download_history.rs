@@ -207,12 +207,9 @@ impl DownloadHistoryFileCheck {
         let targets = path_variants(Path::new(path));
         roots.iter().any(|root| {
             path_variants(root).iter().any(|root_path| {
-                let prefix = if root_path.ends_with('/') {
-                    root_path.clone()
-                } else {
-                    format!("{root_path}/")
-                };
-                targets.iter().any(|t| t.starts_with(&prefix))
+                targets
+                    .iter()
+                    .any(|target| Path::new(target).starts_with(Path::new(root_path)))
             })
         })
     }
@@ -255,4 +252,42 @@ fn canonical(path: &str) -> String {
         }
     }
     path.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_paths_use_native_root_components() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("downloads");
+        std::fs::create_dir(&root).unwrap();
+        let roots = [root.clone()];
+        assert!(DownloadHistoryFileCheck::is_inside_accessible_root(
+            &root.join("missing.mp4").to_string_lossy(),
+            &roots
+        ));
+        for outside in [
+            dir.path().join("downloads-other/missing.mp4"),
+            root.join("../outside.mp4"),
+        ] {
+            assert!(!DownloadHistoryFileCheck::is_inside_accessible_root(
+                &outside.to_string_lossy(),
+                &roots
+            ));
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_roots_accept_forward_slash_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("missing.mp4");
+        let forward_slashes = missing.to_string_lossy().replace('\\', "/");
+        assert!(DownloadHistoryFileCheck::is_inside_accessible_root(
+            &forward_slashes,
+            &[dir.path().to_path_buf()]
+        ));
+    }
 }

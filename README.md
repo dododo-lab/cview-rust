@@ -51,6 +51,9 @@ RUST_LOG=debug cargo run -p cview-app     # 로그 수준 조절
 Tauri CLI(`cargo install tauri-cli --version "^2"`)가 있으면 `cd crates/cview-app && cargo tauri dev`로도 실행할 수 있다.
 앱 데이터(SQLite 스토어 `CView_v2.store`, 설정 미러 `settings.json`)는 OS 앱 데이터 디렉터리의 `app.cview.rust` 아래에 저장된다.
 
+Windows 서버에 소스를 올려 Windows x64·ARM64와 Mac의 macOS arm64 빌드를 함께 실행하려면
+[서버 빌드 안내](tools/build-server/README.md)를 따른다. 개발·검증용 설치 파일을 만들며, 배포용 릴리스는 아래 정식 배포 절차를 사용한다.
+
 ### 검사
 
 PR을 올리기 전에 저장소 루트에서 다음을 통과시킨다.
@@ -67,7 +70,7 @@ for f in app-ui/js/*.js; do node --check "$f"; done
 ## 배포
 
 배포용 릴리스는 메인테이너의 Mac에서 `scripts/release-macos.sh --dmg` 한 명령으로 만든다. 검사, 버전·빌드 번호 증가, macOS 서명·공증,
-Windows 설치 파일 교차 빌드, 업데이트 서버 게시, 양쪽 다운로드 검증, 태그 푸시까지 한 번에 진행한다. 자세한 절차는 [`docs/RELEASING.md`](docs/RELEASING.md).
+Windows 서버의 x64·ARM64 설치 파일 빌드·다운로드 검증, 업데이트 서버 게시, 양쪽 다운로드 검증, 태그 푸시까지 한 번에 진행한다. 자세한 절차는 [`docs/RELEASING.md`](docs/RELEASING.md).
 
 ## 프로젝트 구조
 

@@ -1082,7 +1082,10 @@ mod tests {
             dir.join("noext")
         );
         assert_eq!(std::fs::read_to_string(dir.join("a.txt")).unwrap(), "x");
-        assert_eq!(shellexpand_home("~/Pics", home), "/Users/x/Pics");
+        assert_eq!(
+            PathBuf::from(shellexpand_home("~/Pics", home)),
+            home.join("Pics")
+        );
     }
 
     #[test]

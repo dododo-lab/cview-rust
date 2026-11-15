@@ -564,13 +564,22 @@ class WindowsInstallerTests(unittest.TestCase):
             with self.assertRaises(SystemExit):
                 wininst.loader_path(metadata, 'x86_64')
 
-    def test_release_script_ships_and_checks_the_loader(self):
+    def test_release_script_requires_server_build_before_publishing(self):
         script = (TOOLS.parents[1] / 'scripts/release-macos.sh').read_text(encoding='utf-8')
-        # tauri-bundler 가 스스로 넣지 않는 gnullvm 에는 로더를 리소스로 넘기고, 두 설치 파일을 모두 풀어 검사한다.
-        self.assertIn('[[ "$t" == *-gnu ]] || win_config=(--config "$(python3 scripts/windows-installer.py loader-config --target "$t")")', script)
-        self.assertIn('cargo tauri build --target "$t" --bundles nsis $win_config', script)
-        self.assertIn('python3 scripts/windows-installer.py check --installer "$win_exe" --machine "$win_machine"', script)
-        self.assertIn('brew install sevenzip', script)
+        preflight = script.index('python3 scripts/build-server.py windows-preflight')
+        bump = script.index('bumped=1')
+        submit = script.index('python3 scripts/build-server.py release-windows --source "$PWD" --version "$version" --output dist')
+        wait = script.index('wait "$win_pid" || win_rc=$?')
+        gate = script.index('(( win_rc == 0 ))')
+        publish = script.index('python3 scripts/publish-update.py --version "$version"')
+        self.assertLess(preflight, bump)
+        self.assertLess(bump, submit)
+        self.assertLess(submit, wait)
+        self.assertLess(wait, gate)
+        self.assertLess(gate, script.index('git commit -q'))
+        self.assertLess(gate, publish)
+        self.assertNotIn('CVIEW_LLVM_MINGW', script)
+        self.assertNotIn('cargo tauri build --target "$t"', script)
 
 
 if __name__ == '__main__':
