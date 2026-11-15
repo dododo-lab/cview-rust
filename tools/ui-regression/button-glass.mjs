@@ -1,14 +1,19 @@
 // 단추 체계(유리 재질, app-ui/css/controls.css) 회귀 검사 — 모의 IPC·헤드리스 브라우저(실제 서비스는 건드리지 않는다).
 // 앱 CSS 를 그대로 읽은 화면에 단추 종류를 모아 넣고(button-gallery.mjs 와 같은 묶음) 다크·라이트에서 잰다.
 // BG01 토큰 — controls.css 의 --glass-*·--seg-*·--toggle-*·--btn-* 토큰이 다크·라이트(앱 설정)·라이트(시스템 설정) 모두에서 값이 있고,
+//      색을 담은 다크 토큰은 두 라이트 블록에서 각각 다시 정해지며(두 블록 값은 같다) 실제 계산값도 다크와 다르다.
 //      규칙 본문(사용자 정의 속성 밖)에 색 리터럴(#hex·rgb()·rgba())이 없다(색은 토큰으로만).
 // BG02 모양 — 글자 단추·큰 단추·칩·세그먼트 묶음과 칸은 알약(반경 ≥ 높이/2), 아이콘 단추·둥근 아이콘·작은 닫기는 원. 높이는 --control-* 그대로.
 // BG03 글자 대비 — 보조·고스트·위험·기본·칩·고른 칩·고른 세그먼트의 글자색과 실제 바탕(조상 바탕을 겹친 값) 4.5:1 이상,
 //      쉼·호버·누름(다크·라이트). 위험 호버는 --danger-fill 위 --on-danger.
 // BG04 토글 — 켜진 홈은 둘레 면과 3:1 이상, 꺼진 홈의 테두리도 둘레 면과 3:1 이상(WCAG 1.4.11). 키보드 초점이면 초점 고리(켜짐·꺼짐 모두).
-// BG05 제자리 — 보조·기본 단추·칩은 호버에 위치·크기가 그대로(떠오르지 않는다), 누름은 한 번만 줄어든다(.btn .955·칩 .925 이상).
+// BG05 제자리 — 보조·기본 단추·칩은 호버에 위치·크기가 그대로(떠오르지 않는다), 누름은 한 번만 줄어든다(.btn .955·칩 .925 이상, .99 이하 — 아예 안 줄면 실패).
 // BG06 꺼짐 — :disabled 단추는 호버해도 바탕·테두리·그림자가 쉴 때와 같다.
 // BG07 초점 — 키보드 초점(:focus-visible)이면 2px 이상 --primary-text 테두리(보조·기본·아이콘·칩·세그먼트).
+// BG09 늘 어두운 면 — 히어로 '멀티라이브'(.btn.hero-ghost)·영상 컨트롤 바·영상 위쪽 줄·영상 위 채팅(머리 단추·닫기·후원 패널 칩·닫기)은
+//      테마와 무관하게 어두운 유리: 쉼·호버·누름에서 글자 4.5:1·아이콘 3:1 이상, 히어로·영상 위 단추는 다크·라이트 바탕이 같다.
+// BG10 상태 단추 — 무장된 글자 단추(.link-btn[data-armed])는 호버에 --danger-fill 위 4.5:1, 눌린 채팅 머리 단추(aria-pressed)는 호버에도 눌린 모양.
+// BG11 각진 세그먼트 — 멀티라이브 툴바·더보기 메뉴의 세그먼트는 판(--glider-r) 모서리가 홈 모서리를 넘지 않는다(각진 홈에 알약 판 없음).
 // 저장소 루트에서: node tools/ui-regression/button-glass.mjs   (Playwright 가 필요하다. CVIEW_UI_BROWSER=webkit 이면 WebKit.)
 import fs from 'node:fs';
 import path from 'node:path';
@@ -42,7 +47,31 @@ const KIT = `
   </div>
   <div class="segmented" data-no-glider data-k="segmented"><button class="seg active" data-k="seg-active">개요</button><button class="seg" data-k="seg">클립</button></div>
   <div class="chips"><button class="chip active" data-k="chip-active">전체</button><button class="chip" data-k="chip">게임</button></div>
-</div>`;
+  <div style="display:flex;gap:10px;align-items:center;padding:12px;background:var(--surface-base)">
+    <button class="link-btn" data-armed="1" data-k="armed-link">한 번 더 누르면 삭제</button>
+    <div class="chat-header" style="display:flex;gap:4px"><button class="icon-btn chat-hbtn" aria-pressed="true" aria-label="검색" data-k="hbtn-pressed">${ICON}</button></div>
+    <div class="ml-toolbar" style="display:flex"><div class="segmented" data-k="tb-seg"><button class="seg active">그리드</button><button class="seg">포커스</button></div></div>
+  </div>
+  <!-- 늘 어두운 면 — 사진·영상 대신 짙은 바탕(hero-shade·막대 그라디언트의 어두운 끝) -->
+  <div class="hero-actions" style="display:flex;gap:8px;padding:12px;background:var(--bg-media)" data-k="media">
+    <button type="button" class="btn lg hero-ghost" data-k="hero">${ICON}멀티라이브</button>
+    <div class="chzzk-bar" style="display:flex;position:static"><button class="icon-btn" aria-label="음소거" data-k="bar-icon">${ICON}</button></div>
+    <div class="stage-top" style="display:flex;position:static"><button class="icon-btn" id="bg-viewer-close" aria-label="닫기" data-k="top-icon">${ICON}</button></div>
+  </div>
+  <div class="viewer chat-mode-overlay" style="position:relative;display:block;width:360px;height:300px;background:var(--bg-media)">
+    <div class="chat" style="position:absolute;inset:0;top:0;bottom:0;right:0;width:360px !important;display:flex;flex-direction:column">
+      <div class="chat-header" style="display:flex;gap:4px;align-items:center;padding:6px">
+        <button class="icon-btn chat-hbtn" aria-label="검색" data-k="ov-hbtn">${ICON}</button>
+        <button class="notice-x" aria-label="닫기" data-k="ov-x">×</button>
+      </div>
+      <div class="dp-panel" style="position:relative;inset:auto;top:auto;left:auto;right:auto;margin:6px">
+        <div class="dp-head"><span class="dp-title">후원</span><button class="icon-btn dp-close" aria-label="닫기" data-k="ov-close">${ICON}</button></div>
+        <div class="dp-controls"><div class="dp-filter chips"><button class="chip active" data-k="ov-chip-active">전체</button><button class="chip" data-k="ov-chip">영상</button></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+<style>#bg-kit { --bg-media: rgb(18, 19, 22); }</style>`;
 
 async function setup(browser, theme, system = false) {
   const { ctx, page, errors } = await openApp(browser, { width: 1100, height: 700, theme, welcomed: true });
@@ -77,6 +106,7 @@ const over = ([r, g, b, a], bg) => [r * a + bg[0] * (1 - a), g * a + bg[1] * (1 
 const textRatio = (p) => ratio(over(p.fg, p.bg), p.bg);
 const center = async (page, k) => { const p = await probe(page, k); return [p.x + p.w / 2, p.y + p.h / 2]; };
 
+const dark09 = {};   // BG09 — 다크·라이트 모습 비교
 const browser = await engine.launch();
 try {
   await check('BG01 tokens defined in every theme, no color literals in rule bodies', async () => {
@@ -87,6 +117,31 @@ try {
       const missing = await page.evaluate((list) => list.filter((n) => !getComputedStyle(document.documentElement).getPropertyValue(n).trim()), names);
       assert.deepEqual(missing, [], `${theme}${system ? '(시스템)' : ''} 에서 값이 없는 토큰`);
       await ctx.close();
+    }
+    // 테마 블록마다 — 색을 담은 다크 토큰은 라이트(앱 설정)·라이트(시스템) 블록에서 각각 다시 정한다(두 블록 값은 같다)
+    const noComments = SRC.replace(/\/\*[\s\S]*?\*\//g, '');
+    const block = (head) => { const i = noComments.indexOf(head); assert.ok(i >= 0, `블록이 없다: ${head}`); const j = noComments.indexOf('{', i); const k = noComments.indexOf('}', j); return noComments.slice(j + 1, k); };
+    const decls = (b) => Object.fromEntries([...b.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim().replace(/\s+/g, ' ')]));
+    const dark = decls(block(':root, .viewer.chat-mode-overlay .chat'));
+    const light = decls(block(':root[data-theme="light"] {'));
+    const sys = decls(block(':root[data-theme="system"] {'));
+    const SAME = new Set(['--toggle-knob', '--danger-hi', '--fill-inset', '--glass-tint']);   // 테마와 무관한 색
+    const themed = Object.keys(dark).filter((n) => /#[0-9a-f]{3,8}\b|rgba?\(|var\(--surface/i.test(dark[n]) && !SAME.has(n));
+    assert.ok(themed.length >= 15, `색 토큰이 너무 적다: ${themed.length}`);
+    assert.deepEqual(themed.filter((n) => !(n in light)), [], '라이트(앱 설정) 블록에 없는 색 토큰');
+    assert.deepEqual(themed.filter((n) => !(n in sys)), [], '라이트(시스템) 블록에 없는 색 토큰');
+    assert.deepEqual(Object.keys(light).filter((n) => light[n] !== sys[n]), [], '두 라이트 블록 값이 다르다');
+    // 실제 계산값 — 라이트에서 다크와 달라야 한다(블록이 이름만 있고 안 걸리는 경우)
+    const vals = {};
+    for (const [theme, system] of [['dark', false], ['light', false], ['light', true]]) {
+      const { ctx, page } = await setup(browser, theme, system);
+      if (system) await page.emulateMedia({ colorScheme: 'light' });
+      vals[`${theme}${system ? '-sys' : ''}`] = await page.evaluate((list) => Object.fromEntries(list.map((n) => [n, getComputedStyle(document.documentElement).getPropertyValue(n).trim()])), themed);
+      await ctx.close();
+    }
+    for (const t of ['light', 'light-sys']) {
+      const same = themed.filter((n) => vals[t][n] === vals.dark[n] && !/var\(--surface/.test(dark[n]));
+      assert.deepEqual(same, [], `${t} 에서 다크와 같은 값`);
     }
     // 규칙 본문 — 주석과 사용자 정의 속성 선언(--x: …;)을 지운 나머지에서 색 리터럴을 찾는다
     const body = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/--[\w-]+\s*:[^;{}]*;/g, '');
@@ -150,6 +205,11 @@ try {
         const sh = await page.evaluate((key) => ({ fv: document.querySelector(`[data-k="${key}"] input`).matches(':focus-visible'), s: getComputedStyle(document.querySelector(`[data-k="${key}"] span`)).boxShadow }), k);
         assert.ok(sh.fv, `${k} 키보드 초점이 아니다`);
         assert.ok(/0px 0px 0px 2px/.test(sh.s), `${k} 초점 고리가 없다: ${sh.s}`);
+        // 초점 + 호버 — 호버 테두리가 초점 고리를 덮지 않는다
+        const [hx, hy] = await center(page, k); await page.mouse.move(hx, hy); await page.waitForTimeout(250);
+        const hs = await page.evaluate((key) => getComputedStyle(document.querySelector(`[data-k="${key}"] span`)).boxShadow, k);
+        assert.ok(/0px 0px 0px 2px/.test(hs), `${k} 초점 + 호버에서 초점 고리가 없다: ${hs}`);
+        await page.mouse.move(1090, 690);
       }
     });
 
@@ -167,6 +227,7 @@ try {
         const s = c.w / a.w;
         const min = k === 'chip' ? 0.925 : 0.955;   // 글자 단추 .965 · 작은 단추(칩) .93 — 한 번만
         if (s < min) bad.push(`${k} 누름 ${s.toFixed(3)} — 두 번 줄었다`);
+        if (s > 0.99) bad.push(`${k} 누름 ${s.toFixed(3)} — 줄어들지 않는다`);
         await page.mouse.up();
       }
       assert.deepEqual(bad, []);
@@ -195,6 +256,49 @@ try {
         else if (p.outline.color.slice(0, 3).some((v, i) => Math.abs(v - wantC[i]) > 2)) bad.push(`${k} 테두리색 ${p.outline.color} ≠ --primary-text`);
       }
       assert.deepEqual(bad, []);
+    });
+
+    await check(`BG09 [${theme}] always-dark surfaces keep dark glass`, async () => {
+      const bad = [];
+      const items = [['hero', 4.5], ['bar-icon', 3], ['top-icon', 3], ['ov-hbtn', 3], ['ov-x', 4.5], ['ov-close', 3], ['ov-chip', 4.5], ['ov-chip-active', 4.5]];
+      for (const [k, min] of items) {
+        await away(page);
+        const rest = await probe(page, k); if (textRatio(rest) < min) bad.push(`${k} 쉼 ${textRatio(rest).toFixed(2)}`);
+        const [x, y] = await center(page, k);
+        await page.mouse.move(x, y); await page.waitForTimeout(280);
+        const hov = await probe(page, k); if (textRatio(hov) < min) bad.push(`${k} 호버 ${textRatio(hov).toFixed(2)} (${hov.bgColor})`);
+        await page.mouse.down(); await page.waitForTimeout(220);
+        const act = await probe(page, k); if (textRatio(act) < min) bad.push(`${k} 누름 ${textRatio(act).toFixed(2)} (${act.bgColor})`);
+        await page.mouse.up();
+        if (['hero', 'bar-icon', 'top-icon'].includes(k)) dark09[`${k}`] ??= {}, dark09[k][theme] = [rest.bgColor, hov.bgColor, act.bgColor, rest.fg.join()];
+      }
+      if (theme === 'light') for (const k of Object.keys(dark09)) if (JSON.stringify(dark09[k].dark) !== JSON.stringify(dark09[k].light)) bad.push(`${k} 다크·라이트 모습이 다르다 ${JSON.stringify(dark09[k])}`);
+      assert.deepEqual(bad, []);
+    });
+
+    await check(`BG10 [${theme}] armed text button and pressed header button on hover`, async () => {
+      const bad = [];
+      await away(page);
+      let [x, y] = await center(page, 'armed-link');
+      await page.mouse.move(x, y); await page.waitForTimeout(280);
+      const armed = await probe(page, 'armed-link');
+      const fill = await page.evaluate(() => { const d = document.createElement('div'); d.style.background = 'var(--danger-fill)'; document.body.append(d); const c = getComputedStyle(d).backgroundColor; d.remove(); return c; });
+      if (armed.bgColor !== fill) bad.push(`무장 글자 단추 호버 바탕 ${armed.bgColor} ≠ --danger-fill ${fill}`);
+      if (textRatio(armed) < 4.5) bad.push(`무장 글자 단추 호버 대비 ${textRatio(armed).toFixed(2)}`);
+      await away(page);
+      const pr = await probe(page, 'hbtn-pressed');
+      [x, y] = await center(page, 'hbtn-pressed');
+      await page.mouse.move(x, y); await page.waitForTimeout(280);
+      const ph = await probe(page, 'hbtn-pressed');
+      if (ph.bgColor !== pr.bgColor || ph.fg.join() !== pr.fg.join()) bad.push(`눌린 머리 단추 호버에 모양이 풀린다 ${pr.bgColor}/${pr.fg} → ${ph.bgColor}/${ph.fg}`);
+      assert.deepEqual(bad, []);
+    });
+
+    await check(`BG11 [${theme}] square segmented thumb matches track`, async () => {
+      const r = await page.evaluate(() => { const el = document.querySelector('[data-k="tb-seg"]'); const cs = getComputedStyle(el); return { track: parseFloat(cs.borderTopLeftRadius), glider: parseFloat(cs.getPropertyValue('--glider-r')), seg: parseFloat(getComputedStyle(el.querySelector('.seg')).borderTopLeftRadius) }; });
+      assert.ok(r.track < 20, `툴바 세그먼트 홈이 각지지 않다(반경 ${r.track}) — 검사 전제`);
+      assert.ok(r.glider <= r.track, `판 모서리 ${r.glider} > 홈 모서리 ${r.track}`);
+      assert.ok(Math.abs(r.glider - r.seg) <= 1, `판 모서리 ${r.glider} ≠ 칸 모서리 ${r.seg}`);
     });
 
     await check(`BG08 [${theme}] no page errors`, async () => assert.deepEqual(errors, []));
