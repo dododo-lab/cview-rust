@@ -8,18 +8,19 @@ use crate::time::{from_db, to_db, Date};
 use rusqlite::types::{Value, ValueRef};
 use rusqlite::{Connection, Row};
 
-/// 열 하나의 값 변환.
+/// 열 하나의 값 변환. 읽기는 열 위치로 한다 — 이름으로 읽으면 rusqlite 가 행마다·열마다 열 이름을 처음부터
+/// 견줘 찾아(대소문자 무시 비교) 시청 기록 5천 행을 읽는 데만 약 5ms 가 들었다([`fetch`] 가 열 순서를 정한다).
 pub(crate) trait Col: Sized {
     fn value(&self) -> Value;
-    fn read(row: &Row<'_>, col: &str) -> rusqlite::Result<Self>;
+    fn read(row: &Row<'_>, idx: usize) -> rusqlite::Result<Self>;
 }
 
 impl Col for String {
     fn value(&self) -> Value {
         Value::Text(self.clone())
     }
-    fn read(row: &Row<'_>, col: &str) -> rusqlite::Result<Self> {
-        row.get(col)
+    fn read(row: &Row<'_>, idx: usize) -> rusqlite::Result<Self> {
+        row.get(idx)
     }
 }
 
@@ -27,8 +28,8 @@ impl Col for Option<String> {
     fn value(&self) -> Value {
         self.clone().map_or(Value::Null, Value::Text)
     }
-    fn read(row: &Row<'_>, col: &str) -> rusqlite::Result<Self> {
-        row.get(col)
+    fn read(row: &Row<'_>, idx: usize) -> rusqlite::Result<Self> {
+        row.get(idx)
     }
 }
 
@@ -36,8 +37,8 @@ impl Col for i64 {
     fn value(&self) -> Value {
         Value::Integer(*self)
     }
-    fn read(row: &Row<'_>, col: &str) -> rusqlite::Result<Self> {
-        row.get(col)
+    fn read(row: &Row<'_>, idx: usize) -> rusqlite::Result<Self> {
+        row.get(idx)
     }
 }
 
@@ -45,8 +46,8 @@ impl Col for Option<i64> {
     fn value(&self) -> Value {
         self.map_or(Value::Null, Value::Integer)
     }
-    fn read(row: &Row<'_>, col: &str) -> rusqlite::Result<Self> {
-        row.get(col)
+    fn read(row: &Row<'_>, idx: usize) -> rusqlite::Result<Self> {
+        row.get(idx)
     }
 }
 
@@ -64,8 +65,8 @@ impl Col for f64 {
     fn value(&self) -> Value {
         Value::Real(finite_or_zero(*self))
     }
-    fn read(row: &Row<'_>, col: &str) -> rusqlite::Result<Self> {
-        row.get(col)
+    fn read(row: &Row<'_>, idx: usize) -> rusqlite::Result<Self> {
+        row.get(idx)
     }
 }
 
@@ -73,8 +74,8 @@ impl Col for Option<f64> {
     fn value(&self) -> Value {
         self.map_or(Value::Null, |v| Value::Real(finite_or_zero(v)))
     }
-    fn read(row: &Row<'_>, col: &str) -> rusqlite::Result<Self> {
-        row.get(col)
+    fn read(row: &Row<'_>, idx: usize) -> rusqlite::Result<Self> {
+        row.get(idx)
     }
 }
 
@@ -82,8 +83,8 @@ impl Col for bool {
     fn value(&self) -> Value {
         Value::Integer(i64::from(*self))
     }
-    fn read(row: &Row<'_>, col: &str) -> rusqlite::Result<Self> {
-        row.get(col)
+    fn read(row: &Row<'_>, idx: usize) -> rusqlite::Result<Self> {
+        row.get(idx)
     }
 }
 
@@ -91,14 +92,16 @@ impl Col for Vec<u8> {
     fn value(&self) -> Value {
         Value::Blob(self.clone())
     }
-    fn read(row: &Row<'_>, col: &str) -> rusqlite::Result<Self> {
-        match row.get_ref(col)? {
+    fn read(row: &Row<'_>, idx: usize) -> rusqlite::Result<Self> {
+        match row.get_ref(idx)? {
             ValueRef::Blob(b) => Ok(b.to_vec()),
             ValueRef::Text(t) => Ok(t.to_vec()),
             ValueRef::Null => Ok(Vec::new()),
             other => Err(rusqlite::Error::InvalidColumnType(
-                0,
-                col.to_string(),
+                idx,
+                row.as_ref()
+                    .column_name(idx)
+                    .map_or_else(|_| String::new(), str::to_string),
                 other.data_type(),
             )),
         }
@@ -109,8 +112,8 @@ impl Col for Date {
     fn value(&self) -> Value {
         Value::Integer(to_db(self))
     }
-    fn read(row: &Row<'_>, col: &str) -> rusqlite::Result<Self> {
-        Ok(from_db(row.get::<_, i64>(col)?))
+    fn read(row: &Row<'_>, idx: usize) -> rusqlite::Result<Self> {
+        Ok(from_db(row.get::<_, i64>(idx)?))
     }
 }
 
@@ -119,8 +122,8 @@ impl Col for Option<Date> {
         self.as_ref()
             .map_or(Value::Null, |d| Value::Integer(to_db(d)))
     }
-    fn read(row: &Row<'_>, col: &str) -> rusqlite::Result<Self> {
-        Ok(row.get::<_, Option<i64>>(col)?.map(from_db))
+    fn read(row: &Row<'_>, idx: usize) -> rusqlite::Result<Self> {
+        Ok(row.get::<_, Option<i64>>(idx)?.map(from_db))
     }
 }
 
@@ -134,19 +137,26 @@ pub(crate) trait Model: Sized {
     const TABLE: &'static str;
     /// `id` 를 뺀 열 이름(선언 순서).
     const COLUMNS: &'static [&'static str];
+    /// [`fetch`] 가 고른 열 순서(`id`, 그다음 `COLUMNS`)로 읽는다.
     fn from_row(row: &Row<'_>) -> rusqlite::Result<Self>;
     fn values(&self) -> Vec<Value>;
     fn row_id(&self) -> i64;
     fn set_row_id(&mut self, id: i64);
 }
 
-/// `SELECT * FROM <table> <suffix>`.
+/// `SELECT id, <COLUMNS> FROM <table> <suffix>` — 열을 이 순서로 골라 [`Model::from_row`] 가 위치로 읽는다.
+/// (`SELECT *` 는 테이블에 열을 덧붙인 이전 스키마에서 순서가 다를 수 있다.)
 pub(crate) fn fetch<M: Model>(
     conn: &Connection,
     suffix: &str,
     params: &[Value],
 ) -> rusqlite::Result<Vec<M>> {
-    let sql = format!("SELECT * FROM {} {}", M::TABLE, suffix);
+    let sql = format!(
+        "SELECT id,{} FROM {} {}",
+        M::COLUMNS.join(","),
+        M::TABLE,
+        suffix
+    );
     let mut stmt = conn.prepare_cached(&sql)?;
     let rows = stmt.query_map(rusqlite::params_from_iter(params.iter()), M::from_row)?;
     rows.collect()
@@ -251,9 +261,11 @@ macro_rules! db_model {
             const TABLE: &'static str = $table;
             const COLUMNS: &'static [&'static str] = &[$($col),*];
             fn from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
+                // 열 위치: 0 은 id, 필드는 선언 순서대로 1 부터(구조체 식의 필드는 적은 순서로 평가된다).
+                let mut idx = 0usize;
                 Ok(Self {
-                    id: row.get("id")?,
-                    $( $field: <$ty as $crate::db::Col>::read(row, $col)?, )*
+                    id: row.get(0)?,
+                    $( $field: { idx += 1; <$ty as $crate::db::Col>::read(row, idx)? }, )*
                 })
             }
             fn values(&self) -> Vec<rusqlite::types::Value> {

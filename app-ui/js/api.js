@@ -6,16 +6,59 @@ const tauri = window.__TAURI__;
 
 export const isTauri = Boolean(tauri && tauri.core);
 
-/** Rust 명령 호출. 실패하면 사용자용 문구(문자열)로 reject. */
-export async function invoke(command, args = {}) {
-  if (!isTauri) {
-    throw new Error('CView 앱 안에서 실행해야 합니다');
-  }
+async function call(command, args) {
   try {
     return await tauri.core.invoke(command, args);
   } catch (e) {
     throw new Error(typeof e === 'string' ? e : (e && e.message) || String(e));
   }
+}
+
+// 같은 읽기 명령이 같은 인자로 동시에 여러 번 나가면 하나만 보내고 결과를 나눈다. 시작할 때 사이드바·홈·인사이트
+// 패널·설정 반영이 저마다 같은 값을 거의 동시에 물어 settings_get 4번·following_lives 3번처럼 겹쳤고, 보관함에 들어갈
+// 때도 개요 카드와 인사이트 패널이 같은 목록을 함께 물었다. 끝난 결과는 기억하지 않는다(늦게 물으면 새로 받는다).
+// 다른 명령을 보내면 그 뒤 읽기는 진행 중인 요청에 끼지 않는다 — 쓰기 뒤에 바뀌기 전 값을 받지 않게.
+// 저장된 데이터를 바꾸지 않는 것이 분명한 조회·신호(READ_ONLY)만 예외다.
+const SHARED_READS = new Set([
+  'settings_get', 'following_lives', 'popular_lives', 'popular_clips', 'favorites_list', 'recent_channels',
+  'vod_continue_list', 'vod_watch_later_list', 'bookmarks_list', 'download_list', 'insights_overview',
+]);
+const READ_ONLY = new Set([
+  'ui_heartbeat', 'perf_log', 'perf_log_status', 'app_info', 'auth_status', 'oauth_status', 'data_health',
+  'equalizer_presets', 'deeplink_take_pending', 'chat_avatars', 'chat_emoticons', 'chat_user_card',
+  'chat_donation_ranking', 'live_detail', 'channel_detail', 'channel_overview', 'channel_info', 'channel_vods',
+  'channel_clips', 'channel_posts', 'search', 'search_more_clips', 'search_videos', 'following_channels_all',
+  'following_vods', 'insights_report', 'multilive_state', 'multilive_stage_size', 'multilive_set_window_occluded',
+  'image_cache_status', 'live_connector_status', 'player_record_status', 'preset_list', 'release_notes', 'vod_detail',
+]);
+const inflight = new Map();
+
+/** 나눠 받은 결과는 부른 쪽마다 따로 복사한다 — 한쪽이 고친 객체(설정 등)를 다른 쪽이 보지 않게. */
+function own(value) {
+  if (value === null || typeof value !== 'object') return value;
+  try { return structuredClone(value); } catch { return value; }
+}
+
+/** Rust 명령 호출. 실패하면 사용자용 문구(문자열)로 reject. */
+export async function invoke(command, args = {}) {
+  if (!isTauri) {
+    throw new Error('CView 앱 안에서 실행해야 합니다');
+  }
+  if (!SHARED_READS.has(command)) {
+    if (!READ_ONLY.has(command)) inflight.clear();
+    return call(command, args);
+  }
+  const key = `${command}\u0000${JSON.stringify(args)}`;
+  let entry = inflight.get(key);
+  if (entry) entry.shared = true;
+  else {
+    entry = { promise: call(command, args), shared: false };
+    inflight.set(key, entry);
+    const done = () => { if (inflight.get(key) === entry) inflight.delete(key); };
+    entry.promise.then(done, done);
+  }
+  const value = await entry.promise;
+  return entry.shared ? own(value) : value;
 }
 
 // 채팅 연결·해제 요청 순번 — Tauri 비동기 명령은 보낸 순서대로 돈다는 보장이 없어, 패인을 바꾸며 보낸

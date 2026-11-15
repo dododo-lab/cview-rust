@@ -10,6 +10,9 @@
 // P06 숨은 화면([hidden] 페이지) 안의 채팅 목록도 같다 — 줄을 붙여도 레이아웃을 당기지 않고, 화면이 보이면 바닥으로 내린다.
 //     — 예전엔 시작할 때 숨은 채팅·시청·멀티라이브 화면의 목록 세 개가 ResizeObserver·focus 로 레이아웃을 당겼다
 //       (환영 안내가 늘 뜨던 모의 실행에서는 가려져 P01 이 통과했다).
+// P07 같은 읽기 명령이 같은 인자로 동시에 나가면 한 번만 보내는지(api.js invoke) — 보관함에 들어갈 때 겹치는 요청이 없고,
+//     나눠 받은 결과는 부른 쪽마다 따로이며, 쓰기 뒤의 읽기는 쓰기 전에 나간 요청에 끼지 않는지.
+//     — 예전엔 시작할 때 settings_get 4번·following_lives 3번, 보관함 진입마다 같은 목록을 2~3번씩 물었다.
 // 저장소 루트에서: node tools/ui-regression/perf.mjs   (Playwright 가 필요하다)
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -247,6 +250,58 @@ await check('P06 hidden page: chat appends force no layout, snaps back to bottom
     return l.scrollHeight - l.clientHeight - l.scrollTop;
   });
   assert.ok(gap <= 1, `화면이 보였는데 바닥에서 ${gap}px 떨어져 있음`);
+  await ctx.close();
+});
+
+// ── P07 겹치는 읽기 요청 ──
+await check('P07 shared reads: concurrent identical reads go out once, copies stay separate, writes cut in', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const page = await ctx.newPage();
+  await page.addInitScript(mockTauri, [base, 'dark']);
+  // 실제 IPC 처럼 응답에 시간이 걸리게 하고, 같은 명령·인자가 이미 나가 있는 동안 또 나간 횟수를 센다.
+  await page.addInitScript(() => {
+    const inv = window.__TAURI__.core.invoke;
+    const open = new Map();
+    window.__overlap = [];
+    window.__TAURI__.core.invoke = async (c, a) => {
+      const key = c + JSON.stringify(a || {});
+      if (open.get(key)) window.__overlap.push(c);
+      open.set(key, (open.get(key) || 0) + 1);
+      try { await new Promise((r) => setTimeout(r, 30)); return await inv(c, a); } finally { open.set(key, open.get(key) - 1); }
+    };
+  });
+  await page.goto(base);
+  await page.waitForFunction(() => !document.getElementById('splash') || !document.getElementById('splash').isConnected, null, { timeout: 20000 });
+  await page.waitForTimeout(1500);
+  const startup = await page.evaluate(() => window.__overlap.splice(0));
+  const startSettings = startup.filter((c) => c === 'settings_get').length;
+  await go(page, 'library');
+  await page.waitForTimeout(1500);
+  const library = await page.evaluate(() => window.__overlap.splice(0));
+  // 고치기 전: 보관함 진입 때 겹친 요청 6건(vod_continue_list·download_list·favorites_list 등)
+  assert.deepEqual(library, [], `보관함 진입 때 겹친 요청: ${library}`);
+  // 시작 때 settings_get 은 쓰기(settings_update) 앞뒤로 나뉠 수는 있어도 같은 때 셋 이상 겹치지 않는다(고치기 전 3건).
+  assert.ok(startSettings <= 1, `시작 때 겹친 settings_get ${startSettings}건: ${startup}`);
+  const r = await page.evaluate(async () => {
+    const { invoke } = await import('/js/api.js');
+    const calls = () => window.__calls.filter((c) => c === 'settings_get').length;
+    const before = calls();
+    const [a, b] = await Promise.all([invoke('settings_get'), invoke('settings_get')]);
+    const sent = calls() - before;
+    a.player.__probe = 1; // 한쪽이 고쳐도 다른 쪽은 그대로여야 한다
+    const separate = a !== b && b.player.__probe === undefined;
+    // 읽기가 나가 있는 동안 쓰기를 보내면, 그 뒤 읽기는 새로 나간다
+    const b2 = calls();
+    const first = invoke('settings_get');
+    const write = invoke('settings_update', { domain: 'player', patch: { volume: 0.3 } });
+    const second = await invoke('settings_get'); // 앞 읽기가 아직 나가 있는 동안 부른다
+    await Promise.all([first, write]);
+    return { sent, separate, afterWrite: calls() - b2, volume: second.player.volume };
+  });
+  assert.equal(r.sent, 1, `동시에 부른 settings_get 이 ${r.sent}번 나감`);
+  assert.ok(r.separate, '나눠 받은 결과가 같은 객체다');
+  assert.equal(r.afterWrite, 2, `쓰기 뒤 settings_get 이 앞 요청에 끼었다(보낸 횟수 ${r.afterWrite})`);
+  assert.equal(r.volume, 0.3);
   await ctx.close();
 });
 
