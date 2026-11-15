@@ -1,0 +1,267 @@
+/* ══ 단추 체계 — 유리 재질(macOS 27 Liquid Glass 계열) (2026-11-15) ═════════════════════════════════════
+   앱의 모든 단추를 한 말로 그린다. 이 파일은 app.css·multilive.css·motion.css 다음에 읽혀 그 공통 규칙을 덮고,
+   화면마다 따로 정한 규칙(더 높은 특이도 — 예: .ci-head .btn, .channel-actions .btn)은 그대로 이긴다.
+
+   재질 — 반투명 면 + 위쪽 옅은 광택(그라디언트) + 위 모서리 1px 빛 + 아래 1px 그늘 + 가는 테두리 + 단추 아래 짧은 그림자.
+     backdrop-filter 는 쓰지 않는다 — 목록마다 수십 개인 단추에 걸면 매 프레임 뒤를 다시 흐린다(perf/results.md). 단추는 대부분
+     단색 면 위라 흐림이 보이지 않고, 광택·빛·그늘만으로 유리처럼 읽힌다. 영상 위 단추는 원래의 어두운 유리 규칙을 그대로 둔다.
+   모양 — 글자 단추·칩·세그먼트·토글은 알약(캡슐), 아이콘 단추·닫기는 원. 높이는 --control-* 그대로.
+   상태 — 호버: 면이 밝아지고 테두리·윗빛이 또렷해진다(제자리 — 떠오르지 않는다). 누름: 면이 가라앉고 그림자가 안으로
+     (줄어드는 크기는 motion.css "누름 피드백"·"버튼 모션" 그대로 한 번만). 초점: 2px --primary-text 테두리(app.css DSN-06).
+     꺼짐: 흐리게, 호버·누름 반응 없음. 색은 전환만(--dur-2), 모션 줄이기는 app.css 전역 규칙이 시간을 0 으로 만든다.
+   기본(.btn.primary)·채널 추가(.ch-add)는 motion.css "빛을 받는 키" 구조(--pk-*)를 그대로 쓰고, 여기서는 유리 광택만 더한다.
+   메뉴 줄(.ctx-item·.ml-menu-item·.ap-item)은 색·초점 모양을 menu-item-focus·danger-text-contrast 검사가 정한 그대로 둔다. */
+
+/* ── 토큰 — 다크(기본) ── */
+:root {
+  --btn-radius: var(--radius-pill);          /* 글자 단추·칩·세그먼트 */
+  --btn-radius-icon: var(--radius-pill);     /* 아이콘 단추·닫기(정사각이라 원) */
+  --btn-weight: 560;
+  --btn-transition: background-color var(--dur-2, .16s) var(--ease-out), background-image var(--dur-2, .16s) var(--ease-out),
+    color var(--dur-2, .16s) var(--ease-out), border-color var(--dur-2, .16s) var(--ease-out), box-shadow var(--dur-2, .16s) var(--ease-out);
+
+  /* 유리 재질 */
+  --glass-fill: rgba(255, 255, 255, 0.065);
+  --glass-fill-hover: rgba(255, 255, 255, 0.115);
+  --glass-fill-press: rgba(255, 255, 255, 0.045);
+  --glass-edge: rgba(255, 255, 255, 0.11);
+  --glass-edge-hover: rgba(255, 255, 255, 0.2);
+  --glass-sheen: rgba(255, 255, 255, 0.06);           /* 위쪽 광택 — 아래로 사라진다 */
+  --glass-sheen-hover: rgba(255, 255, 255, 0.1);
+  --glass-hi: rgba(255, 255, 255, 0.13);              /* 위 모서리 1px 빛 */
+  --glass-lo: rgba(0, 0, 0, 0.22);                    /* 아래 모서리 1px 그늘 */
+  --glass-drop: 0 1px 2px rgba(0, 0, 0, 0.3), 0 3px 10px -5px rgba(0, 0, 0, 0.45);
+  --glass-press-inset: inset 0 1px 3px rgba(0, 0, 0, 0.32);
+  --glass-tint: color-mix(in srgb, var(--primary) 14%, transparent);   /* 글자 단추 호버 물들임 */
+  --pk-sheen: rgba(255, 255, 255, 0.22);              /* 기본 단추(브랜드 면) 위 광택 */
+  --danger-hi: rgba(255, 255, 255, 0.18);             /* 위험 채움 위 1px 빛 */
+  --fill-inset: inset 0 1px 1px rgba(0, 0, 0, 0.12);  /* 채운 홈(켜진 토글) 안쪽 그늘 */
+
+  /* 세그먼트 — 오목한 홈 + 떠 있는 유리 판 */
+  --seg-track: rgba(0, 0, 0, 0.22);
+  --seg-track-edge: rgba(255, 255, 255, 0.07);
+  --seg-track-inset: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+  --seg-thumb: var(--surface-overlay);   /* 면 토큰을 따라가야 화면마다 면을 다시 정한 곳(영상 위 채팅 등)에서도 글자와 맞는다 */
+  --seg-thumb-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.06), 0 2px 6px -1px rgba(0, 0, 0, 0.5);
+
+  /* 칩 — 고른 칩은 뒤집은 면(밝은 알약) */
+  --chip-on: var(--text-primary);
+  --chip-on-text: var(--background);
+
+  /* 토글 — 켜짐 바탕은 둘레와 3:1 이상, 꺼짐은 테두리가 3:1 이상(WCAG 1.4.11) */
+  --toggle-on: var(--primary);
+  --toggle-off: rgba(255, 255, 255, 0.08);
+  --toggle-off-edge: #6e727b;      /* 기본 면(#1a1b1f) 3.5:1 · 덱 3.6:1 */
+  --toggle-knob: #ffffff;
+  --toggle-knob-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
+/* ── 토큰 — 라이트(명시 선택) ── */
+:root[data-theme="light"] {
+  --glass-fill: rgba(255, 255, 255, 0.72);
+  --glass-fill-hover: rgba(240, 242, 246, 0.96);
+  --glass-fill-press: rgba(228, 231, 237, 0.96);
+  --glass-edge: rgba(15, 20, 30, 0.12);
+  --glass-edge-hover: rgba(15, 20, 30, 0.2);
+  --glass-sheen: rgba(255, 255, 255, 0.7);
+  --glass-sheen-hover: rgba(255, 255, 255, 0.85);
+  --glass-hi: rgba(255, 255, 255, 0.95);
+  --glass-lo: rgba(15, 20, 30, 0.05);
+  --glass-drop: 0 1px 2px rgba(15, 20, 30, 0.07), 0 3px 10px -5px rgba(15, 20, 30, 0.14);
+  --glass-press-inset: inset 0 1px 2px rgba(15, 20, 30, 0.12);
+  --pk-sheen: rgba(255, 255, 255, 0.3);
+  --seg-track: rgba(15, 20, 30, 0.055);
+  --seg-track-edge: rgba(15, 20, 30, 0.06);
+  --seg-track-inset: inset 0 1px 2px rgba(15, 20, 30, 0.07);
+  --seg-thumb: var(--surface-popover);
+  --seg-thumb-shadow: 0 0 0 1px rgba(15, 20, 30, 0.06), 0 1px 2px rgba(15, 20, 30, 0.1), 0 3px 8px -2px rgba(15, 20, 30, 0.12);
+  --toggle-on: #00a36b;            /* 흰 면 3.3:1 · 흰 손잡이와도 3.3:1 (브랜드 #00d38a 는 1.9:1) */
+  --toggle-off: rgba(15, 20, 30, 0.07);
+  --toggle-off-edge: #8a8f98;      /* 흰 면 3.3:1 */
+  --toggle-knob-shadow: 0 1px 2px rgba(15, 20, 30, 0.2), 0 2px 6px rgba(15, 20, 30, 0.12), 0 0 0 0.5px rgba(15, 20, 30, 0.08);
+}
+
+/* ── 토큰 — 라이트(시스템 설정, 위와 같은 값) ── */
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] {
+    --glass-fill: rgba(255, 255, 255, 0.72);
+    --glass-fill-hover: rgba(240, 242, 246, 0.96);
+    --glass-fill-press: rgba(228, 231, 237, 0.96);
+    --glass-edge: rgba(15, 20, 30, 0.12);
+    --glass-edge-hover: rgba(15, 20, 30, 0.2);
+    --glass-sheen: rgba(255, 255, 255, 0.7);
+    --glass-sheen-hover: rgba(255, 255, 255, 0.85);
+    --glass-hi: rgba(255, 255, 255, 0.95);
+    --glass-lo: rgba(15, 20, 30, 0.05);
+    --glass-drop: 0 1px 2px rgba(15, 20, 30, 0.07), 0 3px 10px -5px rgba(15, 20, 30, 0.14);
+    --glass-press-inset: inset 0 1px 2px rgba(15, 20, 30, 0.12);
+    --pk-sheen: rgba(255, 255, 255, 0.3);
+    --seg-track: rgba(15, 20, 30, 0.055);
+    --seg-track-edge: rgba(15, 20, 30, 0.06);
+    --seg-track-inset: inset 0 1px 2px rgba(15, 20, 30, 0.07);
+    --seg-thumb: var(--surface-popover);
+    --seg-thumb-shadow: 0 0 0 1px rgba(15, 20, 30, 0.06), 0 1px 2px rgba(15, 20, 30, 0.1), 0 3px 8px -2px rgba(15, 20, 30, 0.12);
+    --toggle-on: #00a36b;
+    --toggle-off: rgba(15, 20, 30, 0.07);
+    --toggle-off-edge: #8a8f98;
+    --toggle-knob-shadow: 0 1px 2px rgba(15, 20, 30, 0.2), 0 2px 6px rgba(15, 20, 30, 0.12), 0 0 0 0.5px rgba(15, 20, 30, 0.08);
+  }
+}
+
+/* color-mix 이전 엔진(Safari 16.0·16.1) — 물들임은 반투명 브랜드색으로 */
+@supports not (color: color-mix(in srgb, red 50%, blue)) {
+  :root { --glass-tint: var(--primary-dim); }
+}
+
+/* ══ 글자 단추(.btn) — 보조(기본 모양) ══ */
+.btn {
+  border-radius: var(--btn-radius);
+  border: 1px solid var(--glass-edge);
+  background-color: var(--glass-fill);
+  background-image: linear-gradient(to bottom, var(--glass-sheen), transparent 62%);
+  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 var(--glass-lo), var(--glass-drop);
+  font-weight: var(--btn-weight);
+}
+/* 호버 — 면·광택·테두리가 밝아진다. 떠오름(motion.css translate -1px)·번지는 그림자는 없앤다 — 유리는 제자리에서 빛을 받는다.
+   기본·위험·무장·채널 추가는 따로(아래·motion.css). 특이도는 motion.css 호버 규칙과 같고 뒤라 이긴다. */
+.btn:not(.ghost):hover:not(:disabled):not(:active):where(:not(.primary, .danger, .ch-add, [data-armed="1"])) {
+  background-color: var(--glass-fill-hover);
+  background-image: linear-gradient(to bottom, var(--glass-sheen-hover), transparent 62%);
+  border-color: var(--glass-edge-hover);
+  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 var(--glass-lo), var(--glass-drop);
+}
+.btn:hover:not(:disabled):not(:active):where(:not(.ch-add)) { translate: none; }
+/* 누름 — 면이 가라앉고 그림자가 안으로 */
+.btn:active:not(:disabled):where(:not(.primary, .danger, .ch-add, .ghost, [data-armed="1"], [aria-disabled="true"])) {
+  background-color: var(--glass-fill-press);
+  background-image: none;
+  box-shadow: var(--glass-press-inset);
+}
+/* 채널 추가(.ch-add)는 PR #114 의 '빛을 받는 키'(광택 띠·열림 칩·가득 참 점선)를 그대로 — 모서리도 원래 10px 로 둔다.
+   알약이면 서랍이 단추 오른쪽을 덮을 때 열림 칩 글자 둘레가 테두리에 닿아 대비가 떨어졌다(channel-add-hover CH07). */
+.btn:where(.ch-add) { border-radius: var(--radius-ms); }
+/* 큰 단추도 알약(app.css .btn.lg 의 10px 반경을 덮는다) */
+.btn.lg:where(:not(.ch-add)) { border-radius: var(--btn-radius); }
+/* 꺼짐 — 흐리게, 그림자 없이(납작하게 가라앉은 유리). 호버·누름에도 쉴 때 그대로(app.css 의 .btn:hover 회색 면이 꺼진 단추에도 걸렸다) */
+.btn:disabled { box-shadow: none; }
+.btn:disabled:is(:hover, :active):not(.primary, .ghost) {
+  background-color: var(--glass-fill); background-image: linear-gradient(to bottom, var(--glass-sheen), transparent 62%);
+  border-color: var(--glass-edge); box-shadow: none; translate: none;
+}
+.btn.ghost:disabled:is(:hover, :active) { background-color: transparent; background-image: none; border-color: transparent; color: var(--text-secondary); box-shadow: none; }
+.btn.danger:disabled:is(:hover, :active) { color: var(--error); }
+
+/* 고스트 — 쉴 때는 글자뿐, 호버하면 유리가 생긴다 */
+.btn.ghost { background-color: transparent; background-image: none; border-color: transparent; box-shadow: none; }
+.btn.ghost:hover:not(:disabled) {
+  color: var(--text-primary); background-color: var(--glass-fill-hover);
+  background-image: linear-gradient(to bottom, var(--glass-sheen-hover), transparent 62%);
+  border-color: var(--glass-edge); box-shadow: inset 0 1px 0 var(--glass-hi);
+}
+.btn.ghost:active:not(:disabled) { background-color: var(--glass-fill-press); background-image: none; box-shadow: var(--glass-press-inset); }
+
+/* 위험 — 쉴 때는 유리 위 빨간 글자, 호버·누름은 위험 채움(--danger-fill) 위 흰 글자(app.css 와 같은 색) */
+.btn.danger:hover:not(:disabled), .btn[data-armed="1"]:hover:not(:disabled) {
+  background-color: var(--danger-fill); background-image: none; color: var(--on-danger); border-color: transparent;
+  box-shadow: inset 0 1px 0 var(--danger-hi), var(--glass-drop);
+}
+.btn.danger:active:not(:disabled), .btn[data-armed="1"]:active:not(:disabled) { box-shadow: var(--glass-press-inset); }
+
+/* 기본(.btn.primary) — 브랜드 면에 유리 광택. 테두리·빛·턱·호버 빛은 motion.css "빛을 받는 키"(--pk-*) 그대로 */
+.btn.primary:where(:not(.ch-add, .chat-skin .chat-input .btn)) {
+  background-image: linear-gradient(to bottom, var(--pk-sheen), transparent 58%);
+  font-weight: 650;
+}
+.btn.primary:active:not(:disabled):where(:not(.ch-add, .chat-skin .chat-input .btn, [aria-disabled="true"])) { background-image: none; }
+
+/* ══ 아이콘 단추 — 원. 쉴 때는 아이콘뿐, 호버하면 유리 원 ══ */
+.icon-btn { border-radius: var(--btn-radius-icon); }
+.icon-btn:hover:not(:disabled) {
+  background-color: var(--glass-fill-hover); color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px var(--glass-edge), inset 0 1px 0 var(--glass-hi);
+}
+.icon-btn:active:not(:disabled) { background-color: var(--glass-fill-press); box-shadow: var(--glass-press-inset); }
+/* 둥근 아이콘 단추 — 쉴 때부터 유리 원 */
+.icon-btn.round {
+  border: 1px solid var(--glass-edge); background-color: var(--glass-fill);
+  background-image: linear-gradient(to bottom, var(--glass-sheen), transparent 62%);
+  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 var(--glass-lo), var(--glass-drop);
+}
+.icon-btn.round:hover:not(:disabled) {
+  background-color: var(--glass-fill-hover); border-color: var(--glass-edge-hover);
+  background-image: linear-gradient(to bottom, var(--glass-sheen-hover), transparent 62%);
+  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 var(--glass-lo), var(--glass-drop);
+}
+.icon-btn.round:active:not(:disabled) { background-color: var(--glass-fill-press); background-image: none; box-shadow: var(--glass-press-inset); }
+
+/* 툴바 아이콘(멀티라이브 머리줄·채팅 머리) — 같은 유리 원/알약 */
+.ml-tb-icon, .chat-hbtn { border-radius: var(--btn-radius-icon); }
+.ml-tb-icon:hover:not(.active, [aria-expanded="true"]), .chat-hbtn:hover:not([aria-pressed="true"]) {
+  background-color: var(--glass-fill-hover); color: var(--text-primary);
+  box-shadow: inset 0 0 0 1px var(--glass-edge), inset 0 1px 0 var(--glass-hi);
+}
+.ml-tb-icon:active, .chat-hbtn:active { background-color: var(--glass-fill-press); box-shadow: var(--glass-press-inset); }
+
+/* 닫기·작은 X — 원, 호버하면 유리 원 */
+.notice-x, .update-pill-close { border-radius: var(--btn-radius-icon); }
+.notice-x:hover, .update-pill-close:hover { background-color: var(--glass-fill-hover); color: var(--text-primary); box-shadow: inset 0 0 0 1px var(--glass-edge); }
+.notice-x:active, .update-pill-close:active { background-color: var(--glass-fill-press); box-shadow: none; }
+/* 영상 위 패인 단추 — 어두운 유리는 그대로, 모서리만 원으로 */
+.ml-pane-btn, .ml-pane-close { border-radius: var(--btn-radius-icon); }
+
+/* 뒤로 — 알약, 호버하면 유리 */
+.back-btn { border-radius: var(--btn-radius); padding-left: 6px; }
+.back-btn:hover { background-color: var(--glass-fill-hover); box-shadow: inset 0 0 0 1px var(--glass-edge); }
+
+/* ══ 글자만 단추(.link-btn) — 호버하면 브랜드색 글자에 옅은 물들임 알약 ══ */
+.link-btn { border-radius: var(--btn-radius); }
+.link-btn:hover:not(:disabled) { background-color: var(--glass-tint); }
+
+/* ══ 세그먼트·탭 — 오목한 유리 홈 위로 떠 있는 판(motion.js 의 .seg-glider 가 미끄러진다) ══ */
+/* 판 색은 면 토큰을 그 자리에서 읽는다 — :root 에서 정한 값은 이미 풀려 내려오니, 면을 다시 정한 곳(라이트 테마의 영상 위 채팅 후원 패널 등)에서
+   흰 판에 밝은 글자가 됐다. 다크는 겹친 면, 라이트는 메뉴 면(흰색) */
+.segmented { --seg-thumb: var(--surface-overlay); }
+:root[data-theme="light"] .segmented { --seg-thumb: var(--surface-popover); }
+@media (prefers-color-scheme: light) { :root[data-theme="system"] .segmented { --seg-thumb: var(--surface-popover); } }
+.segmented {
+  border-radius: var(--btn-radius); background: var(--seg-track); border-color: var(--seg-track-edge); box-shadow: var(--seg-track-inset);
+  --glider-r: var(--btn-radius); --glider-bg: var(--seg-thumb); --glider-shadow: var(--seg-thumb-shadow);
+}
+.segmented .seg { border-radius: var(--btn-radius); }
+.segmented .seg:hover:not(.active) { color: var(--text-primary); }
+.segmented:not(.has-glider) .seg.active { background: var(--seg-thumb); box-shadow: var(--seg-thumb-shadow); }
+/* 라이브 보기 전환(머리줄)도 같은 알약 — 예전엔 혼자 7px 판·10px 홈이었다 */
+.segmented.live-mode-seg { border-radius: var(--btn-radius); --glider-r: var(--btn-radius); --glider-bg: var(--seg-thumb); --glider-shadow: var(--seg-thumb-shadow); }
+.segmented.live-mode-seg .seg:hover:not(.active) { background: transparent; }
+.segmented.live-mode-seg:not(.has-glider) .seg.active { background: var(--seg-thumb); box-shadow: var(--seg-thumb-shadow); }
+.segmented.mwi-tabs { --glider-bg: var(--seg-thumb); --glider-shadow: var(--seg-thumb-shadow); }
+
+/* ══ 칩 — 유리 알약, 고른 칩은 뒤집은 밝은 알약 ══ */
+.chip {
+  border-color: var(--glass-edge); background-color: var(--glass-fill);
+  background-image: linear-gradient(to bottom, var(--glass-sheen), transparent 62%);
+  box-shadow: inset 0 1px 0 var(--glass-hi);   /* 전환은 motion.css 의 작은 단추 목록(색·그림자·scale 스프링) 그대로 */
+}
+.chip:hover:not(.active, [aria-pressed="true"]) {
+  background-color: var(--glass-fill-hover); border-color: var(--glass-edge-hover);
+  background-image: linear-gradient(to bottom, var(--glass-sheen-hover), transparent 62%);
+}
+.chip:active:not(.active, [aria-pressed="true"]) { background-color: var(--glass-fill-press); background-image: none; box-shadow: var(--glass-press-inset); }
+.chip.active { background-color: var(--chip-on); background-image: none; color: var(--chip-on-text); box-shadow: 0 1px 2px var(--glass-lo); }
+
+/* ══ 토글 — 알약 홈 + 흰 손잡이 ══ */
+.toggle span { border-radius: var(--btn-radius); background: var(--toggle-off); box-shadow: inset 0 0 0 1px var(--toggle-off-edge); transition: var(--btn-transition); }
+.toggle span::after { background: var(--toggle-knob); box-shadow: var(--toggle-knob-shadow); }
+.toggle input:checked + span { background: var(--toggle-on); box-shadow: var(--fill-inset); }
+.toggle input:disabled + span { opacity: 0.45; cursor: default; }
+.toggle:hover input:not(:disabled):not(:checked) + span { box-shadow: inset 0 0 0 1px var(--text-tertiary); }
+/* 초점 고리 — 위 규칙들보다 뒤에 둬야 켜짐·호버에서도 보인다(app.css 의 같은 규칙을 다시 건다) */
+.toggle input:focus-visible + span, .toggle input:checked:focus-visible + span { box-shadow: var(--focus-ring); }
+
+/* ══ 메뉴 줄 — 색·초점은 그대로(검사 고정), 모서리만 같은 토큰으로 ══ */
+.ctx-item, .ml-menu-item { border-radius: var(--radius-sm); }
+
+/* ══ 고대비(forced-colors) — 유리 광택·그림자는 시스템 색을 따르지 않으니 끈다. 테두리는 엔진이 시스템 색으로 그린다 ══ */
+@media (forced-colors: active) {
+  .btn, .btn.primary, .icon-btn.round, .chip, .segmented { background-image: none; }
+}
