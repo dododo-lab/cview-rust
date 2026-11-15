@@ -12,7 +12,11 @@
 // BG07 초점 — 키보드 초점(:focus-visible)이면 2px 이상 --primary-text 테두리(보조·기본·아이콘·칩·세그먼트).
 // BG09 늘 어두운 면 — 히어로 '멀티라이브'(.btn.hero-ghost)·영상 컨트롤 바·영상 위쪽 줄·영상 위 채팅(머리 단추·닫기·후원 패널 칩·닫기)은
 //      테마와 무관하게 어두운 유리: 쉼·호버·누름에서 글자 4.5:1·아이콘 3:1 이상, 히어로·영상 위 단추는 다크·라이트 바탕이 같다.
+//      후원 패널의 고른 칩은 면이 패널과 3:1 이상(뒤집힌 알약이 패널에 묻히지 않게). 다크·라이트(앱 설정)·라이트(시스템 설정).
 // BG10 상태 단추 — 무장된 글자 단추(.link-btn[data-armed])는 호버에 --danger-fill 위 4.5:1, 눌린 채팅 머리 단추(aria-pressed)는 호버에도 눌린 모양.
+// BG12 상태 있는 단추 — 즐겨찾기 별(.fav.on)·채팅 도구(펼침)·후원(열림·새 후원)·합치기(켜짐)·툴바 켜짐·눌린 머리 단추·무장된 고스트 단추는
+//      호버·누름 중에도 상태 글자색(과 상태 면)이 쉴 때와 같다. 무장 고스트는 쉴 때 빨간 글자 + 안쪽 테두리, 호버는 위험 채움.
+//      보통 채팅 머리 단추는 누르면 호버와 다른 눌림 면.
 // BG11 각진 세그먼트 — 멀티라이브 툴바·더보기 메뉴의 세그먼트는 판(--glider-r) 모서리가 홈 모서리를 넘지 않는다(각진 홈에 알약 판 없음).
 // 저장소 루트에서: node tools/ui-regression/button-glass.mjs   (Playwright 가 필요하다. CVIEW_UI_BROWSER=webkit 이면 WebKit.)
 import fs from 'node:fs';
@@ -50,6 +54,16 @@ const KIT = `
   <div style="display:flex;gap:10px;align-items:center;padding:12px;background:var(--surface-base)">
     <button class="link-btn" data-armed="1" data-k="armed-link">한 번 더 누르면 삭제</button>
     <div class="chat-header" style="display:flex;gap:4px"><button class="icon-btn chat-hbtn" aria-pressed="true" aria-label="검색" data-k="hbtn-pressed">${ICON}</button></div>
+    <div class="channel-actions" style="display:flex"><button class="icon-btn round fav on" aria-label="즐겨찾기 해제" data-k="fav">${ICON}</button></div>
+    <div class="chat-header" style="display:flex;gap:4px">
+      <button class="icon-btn chat-hbtn" aria-label="보통" data-k="hbtn">${ICON}</button>
+      <button class="icon-btn chat-hbtn chat-tools-toggle" aria-expanded="true" aria-label="채팅 도구" data-k="tools">${ICON}</button>
+      <button class="icon-btn chat-hbtn dp-btn open" aria-label="후원 목록" data-k="dp-open">${ICON}</button>
+      <button class="icon-btn chat-hbtn dp-btn has-new" aria-label="새 후원" data-k="dp-new">${ICON}</button>
+      <button class="icon-btn chat-hbtn ml-merge-btn active" aria-label="합치기" data-k="merge">${ICON}</button>
+    </div>
+    <button class="ml-tb-icon active" aria-label="툴바 켜짐" data-k="tb-active">${ICON}</button>
+    <button class="btn ghost" data-armed="1" data-k="ghost-armed">끝난 항목 지우기</button>
     <div class="ml-toolbar" style="display:flex"><div class="segmented" data-k="tb-seg"><button class="seg active">그리드</button><button class="seg">포커스</button></div></div>
   </div>
   <!-- 늘 어두운 면 — 사진·영상 대신 짙은 바탕(hero-shade·막대 그라디언트의 어두운 끝) -->
@@ -105,6 +119,33 @@ const ratio = (p, q) => { const [a, b] = [lum(p), lum(q)].sort((m, n) => n - m);
 const over = ([r, g, b, a], bg) => [r * a + bg[0] * (1 - a), g * a + bg[1] * (1 - a), b * a + bg[2] * (1 - a)];
 const textRatio = (p) => ratio(over(p.fg, p.bg), p.bg);
 const center = async (page, k) => { const p = await probe(page, k); return [p.x + p.w / 2, p.y + p.h / 2]; };
+
+async function bg09(page, theme) {
+  const bad = [];
+  const items = [['hero', 4.5], ['bar-icon', 3], ['top-icon', 3], ['ov-hbtn', 3], ['ov-x', 4.5], ['ov-close', 3], ['ov-chip', 4.5], ['ov-chip-active', 4.5]];
+  for (const [k, min] of items) {
+    await away(page);
+    const rest = await probe(page, k); if (textRatio(rest) < min) bad.push(`${k} 쉼 ${textRatio(rest).toFixed(2)}`);
+    const [x, y] = await center(page, k);
+    await page.mouse.move(x, y); await page.waitForTimeout(280);
+    const hov = await probe(page, k); if (textRatio(hov) < min) bad.push(`${k} 호버 ${textRatio(hov).toFixed(2)} (${hov.bgColor})`);
+    await page.mouse.down(); await page.waitForTimeout(220);
+    const act = await probe(page, k); if (textRatio(act) < min) bad.push(`${k} 누름 ${textRatio(act).toFixed(2)} (${act.bgColor})`);
+    await page.mouse.up();
+    if (['hero', 'bar-icon', 'top-icon'].includes(k)) dark09[`${k}`] ??= {}, dark09[k][theme] = [rest.bgColor, hov.bgColor, act.bgColor, rest.fg.join()];
+  }
+  if (theme !== 'dark') for (const k of Object.keys(dark09)) if (JSON.stringify(dark09[k].dark) !== JSON.stringify(dark09[k][theme])) bad.push(`${k} 다크·라이트 모습이 다르다 ${JSON.stringify(dark09[k])}`);
+  // 후원 패널의 고른 칩 — 면이 패널과 3:1 이상(뒤집힌 알약이 패널에 묻히지 않게)
+  await away(page);
+  const on = await probe(page, 'ov-chip-active');
+  const panel = await page.evaluate(() => {
+    const cv = document.createElement('canvas'); cv.width = cv.height = 1; const g = cv.getContext('2d');
+    g.fillStyle = getComputedStyle(document.querySelector('#bg-kit .dp-panel')).backgroundColor; g.fillRect(0, 0, 1, 1);
+    return [...g.getImageData(0, 0, 1, 1).data].slice(0, 3);
+  });
+  if (ratio(on.bg, panel) < 3) bad.push(`고른 칩 면 ${on.bgColor} 과 패널 rgb(${panel}) 대비 ${ratio(on.bg, panel).toFixed(2)} < 3`);
+  assert.deepEqual(bad, []);
+}
 
 const dark09 = {};   // BG09 — 다크·라이트 모습 비교
 const browser = await engine.launch();
@@ -258,23 +299,7 @@ try {
       assert.deepEqual(bad, []);
     });
 
-    await check(`BG09 [${theme}] always-dark surfaces keep dark glass`, async () => {
-      const bad = [];
-      const items = [['hero', 4.5], ['bar-icon', 3], ['top-icon', 3], ['ov-hbtn', 3], ['ov-x', 4.5], ['ov-close', 3], ['ov-chip', 4.5], ['ov-chip-active', 4.5]];
-      for (const [k, min] of items) {
-        await away(page);
-        const rest = await probe(page, k); if (textRatio(rest) < min) bad.push(`${k} 쉼 ${textRatio(rest).toFixed(2)}`);
-        const [x, y] = await center(page, k);
-        await page.mouse.move(x, y); await page.waitForTimeout(280);
-        const hov = await probe(page, k); if (textRatio(hov) < min) bad.push(`${k} 호버 ${textRatio(hov).toFixed(2)} (${hov.bgColor})`);
-        await page.mouse.down(); await page.waitForTimeout(220);
-        const act = await probe(page, k); if (textRatio(act) < min) bad.push(`${k} 누름 ${textRatio(act).toFixed(2)} (${act.bgColor})`);
-        await page.mouse.up();
-        if (['hero', 'bar-icon', 'top-icon'].includes(k)) dark09[`${k}`] ??= {}, dark09[k][theme] = [rest.bgColor, hov.bgColor, act.bgColor, rest.fg.join()];
-      }
-      if (theme === 'light') for (const k of Object.keys(dark09)) if (JSON.stringify(dark09[k].dark) !== JSON.stringify(dark09[k].light)) bad.push(`${k} 다크·라이트 모습이 다르다 ${JSON.stringify(dark09[k])}`);
-      assert.deepEqual(bad, []);
-    });
+    await check(`BG09 [${theme}] always-dark surfaces keep dark glass`, () => bg09(page, theme));
 
     await check(`BG10 [${theme}] armed text button and pressed header button on hover`, async () => {
       const bad = [];
@@ -294,6 +319,46 @@ try {
       assert.deepEqual(bad, []);
     });
 
+    await check(`BG12 [${theme}] stateful buttons keep their state on hover and press`, async () => {
+      const bad = [];
+      const errC = await page.evaluate(() => { const d = document.createElement('div'); d.style.color = 'var(--error)'; document.body.append(d); const c = getComputedStyle(d).color; d.remove(); return c; });
+      const fill = await page.evaluate(() => { const d = document.createElement('div'); d.style.background = 'var(--danger-fill)'; document.body.append(d); const c = getComputedStyle(d).backgroundColor; d.remove(); return c; });
+      // [키, 면도 같아야 하나]
+      for (const [k, keepBg] of [['fav', false], ['tools', true], ['dp-open', true], ['dp-new', false], ['merge', true], ['tb-active', true], ['hbtn-pressed', true]]) {
+        await away(page);
+        const rest = await probe(page, k);
+        const [x, y] = await center(page, k);
+        await page.mouse.move(x, y); await page.waitForTimeout(280);
+        const hov = await probe(page, k);
+        await page.mouse.down(); await page.waitForTimeout(220);
+        const act = await probe(page, k);
+        await page.mouse.up();
+        for (const [st, p] of [['호버', hov], ['누름', act]]) {
+          if (p.fg.join() !== rest.fg.join()) bad.push(`${k} ${st} 글자색 ${rest.fg} → ${p.fg}`);
+          if (keepBg && p.bgColor !== rest.bgColor) bad.push(`${k} ${st} 상태 면 ${rest.bgColor} → ${p.bgColor}`);
+        }
+      }
+      await away(page);
+      const ga = await probe(page, 'ghost-armed');
+      const gaC = `rgb(${ga.fg.slice(0, 3).join(', ')})`;
+      if (gaC !== errC) bad.push(`무장 고스트 쉼 글자 ${gaC} ≠ --error ${errC}`);
+      if (!/inset/.test(ga.shadow)) bad.push(`무장 고스트 쉼에 안쪽 테두리가 없다: ${ga.shadow}`);
+      let [x, y] = await center(page, 'ghost-armed');
+      await page.mouse.move(x, y); await page.waitForTimeout(280);
+      const gh = await probe(page, 'ghost-armed');
+      if (gh.bgColor !== fill) bad.push(`무장 고스트 호버 바탕 ${gh.bgColor} ≠ --danger-fill ${fill}`);
+      // 보통 머리 단추 — 누름은 호버와 다른 면
+      await away(page);
+      [x, y] = await center(page, 'hbtn');
+      await page.mouse.move(x, y); await page.waitForTimeout(280);
+      const hh = await probe(page, 'hbtn');
+      await page.mouse.down(); await page.waitForTimeout(220);
+      const ha = await probe(page, 'hbtn');
+      await page.mouse.up();
+      if (hh.bgColor === ha.bgColor && hh.shadow === ha.shadow) bad.push(`보통 머리 단추 누름이 호버와 같다 ${ha.bgColor}`);
+      assert.deepEqual(bad, []);
+    });
+
     await check(`BG11 [${theme}] square segmented thumb matches track`, async () => {
       const r = await page.evaluate(() => { const el = document.querySelector('[data-k="tb-seg"]'); const cs = getComputedStyle(el); return { track: parseFloat(cs.borderTopLeftRadius), glider: parseFloat(cs.getPropertyValue('--glider-r')), seg: parseFloat(getComputedStyle(el.querySelector('.seg')).borderTopLeftRadius) }; });
       assert.ok(r.track < 20, `툴바 세그먼트 홈이 각지지 않다(반경 ${r.track}) — 검사 전제`);
@@ -304,9 +369,15 @@ try {
     await check(`BG08 [${theme}] no page errors`, async () => assert.deepEqual(errors, []));
     await ctx.close();
   }
+  {
+    const { ctx, page } = await setup(browser, 'light', true);
+    await page.emulateMedia({ colorScheme: 'light' }); await page.waitForTimeout(200);
+    await check('BG09 [light-system] always-dark surfaces keep dark glass', () => bg09(page, 'light-system'));
+    await ctx.close();
+  }
 } finally { await browser.close(); server.close(); }
 
-for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'} ${r.id}${r.ok ? '' : `\n     ${r.error.split('\n').slice(0, 12).join('\n     ')}`}`);
+for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'} ${r.id}${r.ok ? '' : `\n     ${r.error.split('\n').slice(0, 80).join('\n     ')}`}`);
 const failed = results.filter((r) => !r.ok).length;
 console.log(`\n${results.length - failed}/${results.length} passed`);
 process.exitCode = failed ? 1 : 0;

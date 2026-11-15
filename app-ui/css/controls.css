@@ -168,7 +168,8 @@
 .btn.danger:disabled:is(:hover, :active) { color: var(--error); }
 
 /* 고스트 — 쉴 때는 글자뿐, 호버하면 유리가 생긴다 */
-.btn.ghost { background-color: transparent; background-image: none; border-color: transparent; box-shadow: none; }
+.btn.ghost { background-color: transparent; background-image: none; border-color: transparent; }
+.btn.ghost:where(:not([data-armed="1"])) { box-shadow: none; }   /* 무장(다운로드 '끝난 항목 지우기' 등)은 app.css 의 빨간 글자·안쪽 테두리 그대로 */
 .btn.ghost:hover:not(:disabled) {
   color: var(--text-primary); background-color: var(--glass-fill-hover);
   background-image: linear-gradient(to bottom, var(--glass-sheen-hover), transparent 62%);
@@ -203,11 +204,13 @@
 
 /* ══ 아이콘 단추 — 원. 쉴 때는 아이콘뿐, 호버하면 유리 원 ══ */
 .icon-btn { border-radius: var(--btn-radius-icon); }
-.icon-btn:hover:not(:disabled):where(:not([aria-pressed="true"], .chzzk-bar *, .stage-top *)) {
+/* 상태 있는 아이콘 단추(켜짐·열림·새 소식·눌림·펼침 — 즐겨찾기 별, 채팅 도구·후원·합치기 단추, 툴바 켜짐)는 화면별 규칙의 색·면을
+   그대로 둔다 — 일반 유리 호버·누름이 덮으면 상태 표시가 사라졌다(리뷰 A~D·F). */
+.icon-btn:hover:not(:disabled):where(:not(.active, .on, .open, .has-new, [aria-pressed="true"], [aria-expanded="true"], [data-armed="1"], .chzzk-bar *, .stage-top *)) {
   background-color: var(--glass-fill-hover); color: var(--text-primary);
   box-shadow: inset 0 0 0 1px var(--glass-edge), inset 0 1px 0 var(--glass-hi);
 }
-.icon-btn:active:not(:disabled):where(:not(.chzzk-bar *, .stage-top *)) { background-color: var(--glass-fill-press); box-shadow: var(--glass-press-inset); }
+.icon-btn:active:not(:disabled):where(:not(.active, .on, .open, .has-new, [aria-pressed="true"], [aria-expanded="true"], [data-armed="1"], .chzzk-bar *, .stage-top *)) { background-color: var(--glass-fill-press); box-shadow: var(--glass-press-inset); }
 /* 영상 컨트롤 바·영상 위쪽 줄 — app.css 의 흰 글자·옅은 흰 원 그대로(테마와 무관), 누름만 더한다 */
 :is(.chzzk-bar, .stage-top) .icon-btn:active:not(:disabled) { background-color: var(--media-icon-press); box-shadow: var(--media-press-inset); }
 /* 둥근 아이콘 단추 — 쉴 때부터 유리 원 */
@@ -225,11 +228,11 @@
 
 /* 툴바 아이콘(멀티라이브 머리줄·채팅 머리) — 같은 유리 원/알약 */
 .ml-tb-icon, .chat-hbtn { border-radius: var(--btn-radius-icon); }
-.ml-tb-icon:hover:not(.active, [aria-expanded="true"]), .chat-hbtn:hover:not([aria-pressed="true"]) {
+:is(.ml-tb-icon, .chat-hbtn):hover:not(:active):where(:not(.active, .on, .open, .has-new, [aria-pressed="true"], [aria-expanded="true"], [data-armed="1"])) {
   background-color: var(--glass-fill-hover); color: var(--text-primary);
   box-shadow: inset 0 0 0 1px var(--glass-edge), inset 0 1px 0 var(--glass-hi);
 }
-.ml-tb-icon:active, .chat-hbtn:active { background-color: var(--glass-fill-press); box-shadow: var(--glass-press-inset); }
+:is(.ml-tb-icon, .chat-hbtn):active:not(:disabled):where(:not(.active, .on, .open, .has-new, [aria-pressed="true"], [aria-expanded="true"], [data-armed="1"])) { background-color: var(--glass-fill-press); box-shadow: var(--glass-press-inset); }
 
 /* 닫기·작은 X — 원, 호버하면 유리 원 */
 .notice-x, .update-pill-close { border-radius: var(--btn-radius-icon); }
