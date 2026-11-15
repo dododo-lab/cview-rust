@@ -66,6 +66,9 @@ fn named(v: Vec<(String, f64)>) -> Vec<NamedSeconds> {
         .collect()
 }
 
+/// 통계 개요의 최근 기록 수.
+const RECENT_LIMIT: usize = 60;
+
 /// 시청 통계 — KPI·채널/카테고리 순위·시간대·30일 추이·최근 기록.
 #[tauri::command]
 pub async fn insights_overview(services: State<'_, AppServices>) -> CmdResult<InsightsDto> {
@@ -84,13 +87,11 @@ pub async fn insights_overview(services: State<'_, AppServices>) -> CmdResult<In
             *slot = *s;
         }
     }
-    let mut rows = store
-        .all_watch_history_rows()
-        .map_err(|e| CommandError(e.to_string()))?;
-    rows.sort_by_key(|r| std::cmp::Reverse(r.started_at));
-    let recent = rows
+    // 최근 60개만 색인으로 읽는다 — 예전엔 기록 전체를 한 번 더 읽어 정렬했다(5천 행에서 약 5ms, 시작·사이드바 위젯마다).
+    let recent = store
+        .recent_watch_history_rows(RECENT_LIMIT)
+        .map_err(|e| CommandError(e.to_string()))?
         .iter()
-        .take(60)
         .map(|r| WatchRecordDto {
             channel_id: r.channel_id.clone(),
             channel_name: r.channel_name.clone(),

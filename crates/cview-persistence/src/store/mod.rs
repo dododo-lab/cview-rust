@@ -653,6 +653,18 @@ impl DataStore {
         })
     }
 
+    /// 최근 시작한 시청 기록 `limit` 행(시작 시각 내림차순, 같은 시각이면 먼저 넣은 행이 앞).
+    /// 전 행을 읽어 정렬한 뒤 앞만 쓰던 것(`all_watch_history_rows` + 정렬)과 같은 순서를 `startedAt` 색인으로 바로 읽는다.
+    pub fn recent_watch_history_rows(&self, limit: usize) -> Result<Vec<WatchHistory>> {
+        self.read(|conn| {
+            Ok(db::fetch::<WatchHistory>(
+                conn,
+                "ORDER BY startedAt DESC, id ASC LIMIT ?",
+                &[Value::Integer(limit as i64)],
+            )?)
+        })
+    }
+
     /// 테이블 행 수(진단·테스트).
     #[doc(hidden)]
     pub fn table_row_count(&self, table: &str) -> Result<i64> {

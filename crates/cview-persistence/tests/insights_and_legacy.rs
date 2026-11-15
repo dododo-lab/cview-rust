@@ -421,3 +421,38 @@ fn purge_legacy_home_cache_on_empty_store_writes_nothing() {
     assert_eq!(s.purge_legacy_home_cache().unwrap(), (0, 0));
     assert_eq!(s.history_transaction_count(), before);
 }
+
+// MARK: - 최근 기록
+
+/// `recent_watch_history_rows` 는 예전 방식(전 행을 시작 시각순으로 읽어 시작 시각 내림차순으로 안정 정렬한 앞부분)과
+/// 같은 행을 같은 순서로 돌려준다 — 같은 시작 시각·소수 초·넣은 순서가 뒤섞인 경우까지.
+#[test]
+fn recent_watch_history_rows_match_full_sort() {
+    let s = store();
+    let base = ts(1_750_000_000.0);
+    let offsets = [
+        30.0, 0.0, 30.0, 1.5, 7200.0, 30.0, 0.25, 86_400.0, 1.5, 59.999, 7200.0, 0.0,
+    ];
+    let rows: Vec<WatchHistory> = offsets
+        .iter()
+        .enumerate()
+        .map(|(i, off)| row(&format!("c{i}"), add(&base, *off), None, 0.0, None))
+        .collect();
+    s.insert_watch_history_rows(&rows).unwrap();
+    let mut all = s.all_watch_history_rows().unwrap();
+    all.sort_by_key(|r| std::cmp::Reverse(r.started_at));
+    for limit in [0, 1, 5, offsets.len(), offsets.len() + 3] {
+        let want: Vec<_> = all
+            .iter()
+            .take(limit)
+            .map(|r| (r.id, r.channel_id.clone()))
+            .collect();
+        let got: Vec<_> = s
+            .recent_watch_history_rows(limit)
+            .unwrap()
+            .iter()
+            .map(|r| (r.id, r.channel_id.clone()))
+            .collect();
+        assert_eq!(got, want, "limit {limit}");
+    }
+}
