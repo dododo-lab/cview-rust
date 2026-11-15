@@ -443,7 +443,7 @@ for (const T of FOCUS.filter((t) => t.shadow && want(t.key))) {
 }
 
 // ── BF07 CSS 정적 검사 ────────────────────────────────────────────────────────────
-for (const file of ONLY.length ? [] : ['app.css', 'multilive.css', 'motion.css']) {
+for (const file of ONLY.length ? [] : ['app.css', 'multilive.css', 'motion.css', 'controls.css']) {
   const src = fs.readFileSync(path.join('app-ui/css', file), 'utf8').replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '));
   for (const m of src.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     const sel = m[1].replace(/\s+/g, ' ').trim();

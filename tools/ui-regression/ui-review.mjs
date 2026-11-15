@@ -743,7 +743,7 @@ await check('UR19 [P3-3] banner/danger contrast ≥ 4.5 in dark and light; z-ind
     assert.deepEqual(errors, []);
     await ctx.close();
   }
-  for (const f of ['app-ui/css/app.css', 'app-ui/css/multilive.css', 'app-ui/css/motion.css']) {
+  for (const f of ['app-ui/css/app.css', 'app-ui/css/multilive.css', 'app-ui/css/motion.css', 'app-ui/css/controls.css']) {
     const raw = fs.readFileSync(f, 'utf8').match(/z-index:\s*\d{3,}/g) || [];
     assert.deepEqual(raw, [], `${f} 에 숫자 z-index(≥100): ${raw.join(', ')}`);
   }
