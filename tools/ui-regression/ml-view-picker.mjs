@@ -105,7 +105,8 @@ const browser = await engine.launch();
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
 page.setDefaultTimeout(5000);
 const errors = [];
-page.on('pageerror', (e) => errors.push(String(e.stack || e)));
+// 창 크기를 바꾸는 검사에서 WebKit 이 내는 무해한 'ResizeObserver loop' 알림은 빼고 센다.
+page.on('pageerror', (e) => { const m = String(e.stack || e); if (!/ResizeObserver loop/.test(m)) errors.push(m); });
 await page.addInitScript(mockTauri);
 await page.goto(base);
 await page.waitForSelector('[data-page]', { state: 'attached' });
@@ -223,6 +224,41 @@ await check('Esc 로 닫으면 바꾸지 않고 초점은 고르기 단추로', 
   assert.equal(await page.evaluate(() => Boolean(document.querySelector('.ml-pick-scrim'))), false);
   assert.equal(await page.evaluate(() => document.activeElement?.dataset?.ml), 'pick');
   assert.equal((await calls()).filter((x) => x[0] === 'view').length, 0);
+});
+
+await check('긴 방송 제목도 줄이 시트 밖으로 넘치지 않고 말줄임된다', async () => {
+  await page.evaluate(() => {
+    const s = window.__mock.state.sessions.find((x) => x.id === 's-c1');
+    s.liveTitle = '아주 긴 방송 제목 '.repeat(20);
+    s.channelName = '아주긴채널이름'.repeat(8);
+    window.__mock.emit();
+  });
+  await settle();
+  try {
+  for (const width of [1280, 520]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.click('[data-page="multilive"] [data-ml="pick"]');
+    await page.waitForSelector('.ml-pick-sheet');
+    const m = await page.evaluate(() => {
+      const sheet = document.querySelector('.ml-pick-sheet');
+      const cs = getComputedStyle(sheet);
+      const inner = sheet.getBoundingClientRect().right - parseFloat(cs.paddingRight) - parseFloat(cs.borderRightWidth);
+      const rows = [...sheet.querySelectorAll('.ml-pick-row')].map((r) => r.getBoundingClientRect().right);
+      const title = sheet.querySelector('.ml-pick-row[data-session-id="s-c1"] .ml-pick-title');
+      return { inner, maxRow: Math.max(...rows), sheetScroll: sheet.scrollWidth - sheet.clientWidth, ellipsized: title.scrollWidth > title.clientWidth };
+    });
+    assert.ok(m.maxRow <= m.inner + 0.5, `${width}px: 줄 오른쪽 ${m.maxRow} > 시트 안쪽 ${m.inner}`);
+    assert.ok(m.sheetScroll <= 0, `${width}px: 시트 가로 넘침 ${m.sheetScroll}`);
+    assert.ok(m.ellipsized, `${width}px: 긴 제목이 말줄임되지 않음`);
+    await shot(`picker-long-title-${width}`);
+    await page.keyboard.press('Escape');
+    await settle();
+  }
+  } finally {
+    // 실패해도 시트를 닫고 크기를 되돌려 다음 검사에 번지지 않게
+    await page.evaluate(() => document.querySelectorAll('.ml-pick-scrim').forEach((x) => x.remove()));
+    await page.setViewportSize({ width: 1280, height: 800 });
+  }
 });
 
 await check('라이브 단독 보기로 가면 고르기 단추가 숨고 모든 채널이 머리줄에 있다', async () => {
