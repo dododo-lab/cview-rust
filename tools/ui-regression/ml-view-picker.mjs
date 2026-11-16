@@ -41,18 +41,20 @@ function mockTauri() {
   };
   // 모의 Rust — 고른 목록이 있으면 그것만(상한보다 적어도 다시 채우지 않는다), 없으면 자동 보기 → 세션 순으로 상한까지.
   // 어느 쪽이든 선택 세션이 맨 앞.
+  // 고른 적이 있으면 고른 수까지만(닫혀 빠진 자리만 채운다), 상한 이하로 줄면 고른 목록을 지운다.
   let picked = [];
+  let pickCount = 0;
   let auto = [];
   const sync = () => {
     const n = state.sessions.length;
     const ids = state.sessions.map((s) => s.id);
     let view = null;
+    if (!state.watchId && n <= state.maxMultiSessions) { picked = []; pickCount = 0; auto = []; }
     if (!state.watchId && n > state.maxMultiSessions) {
-      const chosen = picked.filter((id) => ids.includes(id));
-      const rest = chosen.length ? chosen : [...auto, ...ids];
+      const target = pickCount ? Math.min(pickCount, state.maxMultiSessions) : state.maxMultiSessions;
       view = [];
-      for (const id of [state.selectedId, ...rest]) if (id && ids.includes(id) && !view.includes(id) && view.length < state.maxMultiSessions) view.push(id);
-      if (chosen.length) picked = view.slice(); else auto = view.slice();
+      for (const id of [state.selectedId, ...(pickCount ? picked : auto), ...ids]) if (id && ids.includes(id) && !view.includes(id) && view.length < target) view.push(id);
+      if (pickCount) picked = view.slice(); else auto = view.slice();
     }
     for (const s of state.sessions) {
       s.inMultiView = !view || view.includes(s.id);
@@ -76,6 +78,7 @@ function mockTauri() {
     multilive_set_view: ({ sessionIds }) => {
       calls.push(['view', sessionIds]);
       picked = sessionIds.slice(0, state.maxMultiSessions);
+      pickCount = picked.length;
       if (!picked.includes(state.selectedId)) { state.selectedId = picked[0]; state.focusMainId = picked[0]; }
       return sync();
     },
@@ -87,7 +90,7 @@ function mockTauri() {
   const listeners = new Map();
   window.__mock = {
     state, handlers, calls,
-    resetPick: () => { picked = []; auto = []; },
+    resetPick: () => { picked = []; pickCount = 0; auto = []; },
     addLive: (ids) => { for (const id of ids) state.sessions.push(session(id, state.sessions.length)); },
     emit: () => { const s = sync(); for (const [ev, fns] of listeners) if (ev === 'multilive://state') for (const f of fns) f({ payload: s }); },
   };

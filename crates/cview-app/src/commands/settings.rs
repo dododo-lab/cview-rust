@@ -260,6 +260,7 @@ pub async fn settings_export(services: State<'_, AppServices>) -> CmdResult<Stri
 #[tauri::command]
 pub async fn settings_import(
     services: State<'_, AppServices>,
+    shell: State<'_, MultiLiveShell>,
     json: String,
 ) -> CmdResult<Vec<String>> {
     let root: Value = serde_json::from_str(&json)
@@ -274,6 +275,10 @@ pub async fn settings_import(
                 skipped.push((*domain).to_string());
             }
         }
+    }
+    if map.contains_key("multiLive") {
+        // 가져온 멀티라이브 상한도 저장·초기화처럼 바로 반영한다.
+        shell.manager.lock().multi_live_limits_changed();
     }
     Ok(skipped)
 }

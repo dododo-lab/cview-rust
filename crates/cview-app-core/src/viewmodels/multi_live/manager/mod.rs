@@ -204,8 +204,15 @@ pub struct ManagerState {
     /// 사용자가 멀티라이브에 올리려고 고른 세션(고른 순서) — 라이브 단독 보기에서 멀티라이브 상한보다 많이 담아
     /// 왔을 때만 쓴다. 고른 수가 상한보다 적어도 그대로 존중한다(디코드 순위로 다시 채우지 않는다).
     multi_view_ids: Vec<Uuid>,
+    /// 사용자가 고른 수 — 고른 세션이 닫혀 빠지면 이 수까지만 디코드 순위로 채운다(일부러 적게 고른 수는 존중).
+    /// `None` 이면 아직 고르지 않았다.
+    multi_view_pick_count: Option<usize>,
     /// 아직 고르지 않았을 때 자동으로 채운 보기 — 다음 계산이 흔들리지 않게 잡아 두는 값(사용자 선택과 따로).
     multi_view_auto_ids: Vec<Uuid>,
+    /// 마지막으로 뒤처리(소리·포커스 메인·패인 크기)를 맞춘 보기 — 바뀔 때만 다시 맞춘다.
+    last_multi_view: Option<Vec<Uuid>>,
+    /// 뒤처리 중 — 그 안에서 다시 불린 reconcile 이 뒤처리를 겹쳐 돌지 않게.
+    syncing_multi_view: bool,
     memory_pressure_k_override: Option<usize>,
     memory_pressure_recovery_task: Option<TaskSlot>,
     memory_pressure_generation: u64,
@@ -662,7 +669,10 @@ impl MultiLiveManager {
                 last_applied_hls_kbps: HashMap::new(),
                 mru: MruLedger::default(),
                 multi_view_ids: Vec::new(),
+                multi_view_pick_count: None,
                 multi_view_auto_ids: Vec::new(),
+                last_multi_view: None,
+                syncing_multi_view: false,
                 memory_pressure_k_override: None,
                 memory_pressure_recovery_task: None,
                 memory_pressure_generation: 0,

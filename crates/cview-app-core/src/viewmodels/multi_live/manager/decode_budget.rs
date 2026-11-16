@@ -96,7 +96,8 @@ impl ManagerState {
     /// 멀티라이브 보기에 올린 세션 — 라이브 단독 보기에서 멀티라이브 상한보다 많이 담아 온 채 멀티라이브로
     /// 돌아왔을 때만 `Some`(그 밖에는 모든 세션이 보인다).
     ///
-    /// - 사용자가 고른 목록이 있으면 그 목록만 쓴다 — 상한보다 적게 골랐어도 디코드 순위로 다시 채우지 않는다.
+    /// - 사용자가 고른 적이 있으면 고른 수(상한 이하)까지만 보인다 — 일부러 적게 고른 수는 디코드 순위로 다시
+    ///   채우지 않고, 고른 세션이 닫혀 빠진 빈자리만 디코드 순위로 채운다.
     /// - 아직 고르지 않았으면 자동 보기(잡아 둔 값) → 디코드 우선순위 순으로 상한까지 채운다.
     /// - 어느 쪽이든 선택 세션(단독 보기에서 보던 채널)은 맨 앞에 들어가고, 넘치면 목록의 맨 뒤가 밀려난다.
     pub fn multi_view_session_ids(&self) -> Option<Vec<Uuid>> {
@@ -104,24 +105,18 @@ impl ManagerState {
         if self.stage_session_id.is_some() || self.sessions.len() <= max {
             return None;
         }
-        let chosen: Vec<Uuid> = self
-            .multi_view_ids
-            .iter()
-            .copied()
-            .filter(|id| self.contains(*id))
-            .collect();
-        let rest: Vec<Uuid> = if chosen.is_empty() {
-            self.multi_view_auto_ids
-                .iter()
-                .copied()
-                .chain(self.decode_rank())
-                .collect()
-        } else {
-            chosen
+        let (target, kept) = match self.multi_view_pick_count {
+            Some(count) => (count.clamp(1, max), &self.multi_view_ids),
+            None => (max, &self.multi_view_auto_ids),
         };
-        let mut out: Vec<Uuid> = Vec::with_capacity(max);
-        for id in self.selected_session_id.into_iter().chain(rest) {
-            if out.len() >= max {
+        let mut out: Vec<Uuid> = Vec::with_capacity(target);
+        let candidates = self
+            .selected_session_id
+            .into_iter()
+            .chain(kept.iter().copied())
+            .chain(self.decode_rank());
+        for id in candidates {
+            if out.len() >= target {
                 break;
             }
             if self.contains(id) && !out.contains(&id) {
@@ -136,8 +131,8 @@ impl ManagerState {
         view.is_none_or(|v| v.contains(&id))
     }
 
-    /// 멀티라이브에 올릴 세션을 고른다(상한까지, 고른 순서대로). 선택 세션이 빠지면 고른 첫 세션을 선택하고,
-    /// 소리도 보이는 패인으로 옮긴다(숨긴 패인이 소리를 쥐면 보이는 패인이 모두 무음이 된다).
+    /// 멀티라이브에 올릴 세션을 고른다(상한까지, 고른 순서대로). 선택 세션이 빠지면 고른 첫 세션을 선택한다.
+    /// 소리·포커스 메인·패인 크기는 보기가 바뀌며 [`Self::sync_multi_view`] 가 맞춘다.
     /// 고른 세션이 하나도 없으면(모두 닫힌 세션) 아무것도 바꾸지 않는다.
     pub fn set_multi_view_sessions(&mut self, ids: &[Uuid]) {
         let max = self.max_multi_live_sessions();
@@ -150,30 +145,64 @@ impl ManagerState {
         let Some(&first) = picked.first() else {
             return;
         };
+        self.multi_view_pick_count = Some(picked.len());
         self.multi_view_ids = picked.clone();
         self.multi_view_auto_ids.clear();
-        let selected_in_view = self
+        if self
             .selected_session_id
-            .is_some_and(|s| picked.contains(&s));
-        if !selected_in_view {
-            // 선택이 바뀌며 소리(단일 소리 모드)·디코드 예산도 따라간다.
-            self.select_session(first, true);
-        } else if !self
-            .focus_main_session_id
-            .is_some_and(|f| picked.contains(&f))
+            .is_some_and(|s| picked.contains(&s))
         {
-            self.set_focus_main_session_id(self.selected_session_id);
+            self.reconcile_decode_budget();
+        } else {
+            // 선택이 바뀌며 디코드 예산(그 안의 보기 뒤처리)도 다시 맞춘다.
+            self.select_session(first, true);
         }
-        self.fit_audio_to_multi_view();
-        self.reconcile_decode_budget();
+    }
+
+    /// 보이는 세션 집합을 정하고 잡아 둔다. 집합이 바뀌었으면 뒤처리를 한 곳에서 한다 — 고르기·단독 보기
+    /// 복귀·세션 추가/삭제·선택 변경·설정 변경 모두 reconcile_decode_budget 을 거치므로 여기서 맞춘다.
+    /// - 소리: 숨긴 패인이 쥔 소리를 보이는 패인으로([`Self::fit_audio_to_multi_view`]).
+    /// - 포커스 메인: 숨은 패인에 남았으면 보이는 패인으로.
+    /// - 패인 크기·화질 목표: 보이는 수로 다시 계산.
+    fn sync_multi_view(&mut self) -> Option<Vec<Uuid>> {
+        // 제한이 풀리면(상한 이하로 줄면) 고른 목록·자동 보기를 지운다 — 다음에 다시 넘으면 처음처럼 채운다.
+        // 단독 보기 중(무대가 있음)에는 돌아올 때 쓰도록 남긴다.
+        if self.stage_session_id.is_none() && self.sessions.len() <= self.max_multi_live_sessions()
+        {
+            self.multi_view_ids.clear();
+            self.multi_view_pick_count = None;
+            self.multi_view_auto_ids.clear();
+        }
+        let view = self.multi_view_session_ids();
+        if let Some(v) = &view {
+            if self.multi_view_pick_count.is_some() {
+                self.multi_view_ids.clone_from(v);
+            } else {
+                self.multi_view_auto_ids.clone_from(v);
+            }
+        }
+        if !self.syncing_multi_view && view != self.last_multi_view {
+            self.last_multi_view.clone_from(&view);
+            self.syncing_multi_view = true;
+            if let Some(v) = &view {
+                self.fit_audio_to_multi_view(v);
+                if !self.focus_main_session_id.is_some_and(|f| v.contains(&f)) {
+                    let main = self
+                        .selected_session_id
+                        .filter(|s| v.contains(s))
+                        .or_else(|| v.first().copied());
+                    self.set_focus_main_session_id(main);
+                }
+            }
+            self.update_estimated_pane_sizes();
+            self.syncing_multi_view = false;
+        }
+        view
     }
 
     /// 숨긴 세션이 쥔 소리를 보이는 패인으로 옮긴다 — 단일 소리면 선택 세션으로, 여러 소리면 숨긴 세션을 목록에서
-    /// 빼고 끈다(`remove_session` 의 소리 넘기기와 같은 방식).
-    fn fit_audio_to_multi_view(&mut self) {
-        let Some(view) = self.multi_view_session_ids() else {
-            return;
-        };
+    /// 빼고 끄며, 켜진 보이는 패인이 하나도 없으면 선택 패인을 켠다(`remove_session` 의 소리 넘기기와 같은 방식).
+    fn fit_audio_to_multi_view(&mut self, view: &[Uuid]) {
         let hidden: Vec<Uuid> = self
             .sessions
             .iter()
@@ -183,28 +212,44 @@ impl ManagerState {
         if hidden.is_empty() {
             return;
         }
+        let fallback = self
+            .selected_session_id
+            .filter(|s| view.contains(s))
+            .or_else(|| view.first().copied());
         if self.is_multi_audio_mode {
+            let had_audio = !self.audio_enabled_session_ids.is_empty();
             for id in &hidden {
                 self.audio_enabled_session_ids.remove(id);
                 if let Some(s) = self.session(*id) {
                     s.set_muted(true);
                 }
             }
+            if had_audio
+                && !view
+                    .iter()
+                    .any(|v| self.audio_enabled_session_ids.contains(v))
+            {
+                if let Some(target) = fallback {
+                    self.audio_enabled_session_ids.insert(target);
+                    if let Some(s) = self.session(target) {
+                        s.set_muted(false);
+                    }
+                }
+            }
             if self.audio_session_id.is_some_and(|a| hidden.contains(&a)) {
-                self.audio_session_id = self
-                    .selected_session_id
+                self.audio_session_id = fallback
                     .filter(|s| self.audio_enabled_session_ids.contains(s))
                     .or_else(|| {
                         view.iter()
                             .copied()
                             .find(|v| self.audio_enabled_session_ids.contains(v))
                     })
-                    .or(self.selected_session_id);
+                    .or(fallback);
             }
             self.sync_audio_volumes();
             self.reconcile_focus_quality(None);
         } else if self.audio_session_id.is_some_and(|a| hidden.contains(&a)) {
-            if let Some(target) = self.selected_session_id.or_else(|| view.first().copied()) {
+            if let Some(target) = fallback {
                 self.route_audio(target);
             }
         }
@@ -212,7 +257,6 @@ impl ManagerState {
 
     /// 멀티라이브 상한 설정이 바뀌었을 때 — 보기·디코드 예산·패인 크기를 다시 맞춘다.
     pub fn multi_live_limits_changed(&mut self) {
-        self.fit_audio_to_multi_view();
         self.reconcile_decode_budget();
         self.update_estimated_pane_sizes();
     }
@@ -220,16 +264,7 @@ impl ManagerState {
     pub fn reconcile_decode_budget(&mut self) {
         let sessions = self.sessions.clone();
         // 멀티라이브 상한을 넘으면 고른 세션만 보이고, 나머지는 어떤 경우에도 재생을 멈춘다.
-        let view = self.multi_view_session_ids();
-        if let Some(v) = &view {
-            // 고른 목록이 있으면(보던 채널이 앞에 붙었을 수 있다) 그 결과를, 없으면 자동 보기로만 잡아 둔다 —
-            // 자동으로 채운 값을 사용자 선택으로 덮어쓰지 않는다.
-            if self.multi_view_ids.iter().any(|id| self.contains(*id)) {
-                self.multi_view_ids.clone_from(v);
-            } else {
-                self.multi_view_auto_ids.clone_from(v);
-            }
-        }
+        let view = self.sync_multi_view();
         let in_view = |id: Uuid| Self::in_multi_view(view.as_deref(), id);
         if !self.decode_suspension_reasons.is_empty() {
             for s in &sessions {

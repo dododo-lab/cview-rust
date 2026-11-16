@@ -435,7 +435,14 @@ impl MultiLiveManager {
             st.sessions.remove(index);
             st.sessions_did_change();
             if st.selected_session_id == Some(id) {
-                let first = st.sessions.first().map(|s| s.id());
+                // 멀티라이브 상한을 넘어 일부만 보이면 보이는 세션 중에서 — 숨은 세션을 고르면 보기 맨 앞으로 끌려 들어온다.
+                let visible = st.last_multi_view.clone();
+                let first = st
+                    .sessions
+                    .iter()
+                    .map(|s| s.id())
+                    .find(|s| visible.as_ref().is_none_or(|v| v.contains(s)))
+                    .or_else(|| st.sessions.first().map(|s| s.id()));
                 st.set_selected_session_id(first);
                 if let Some(new_id) = first {
                     st.mru.touch(new_id);

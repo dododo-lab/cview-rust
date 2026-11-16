@@ -1764,9 +1764,124 @@ async fn multi_view_keeps_fewer_picks_than_limit() {
         st.set_stage_session(None);
         st.reconcile_decode_budget();
     }
+    // 고른 수(2)는 그대로 — 보던 채널이 앞에 들어가고 목록의 맨 뒤가 밀린다.
     assert_eq!(
         m.read().multi_view_session_ids().unwrap(),
-        vec![ids[5], ids[0], ids[1]]
+        vec![ids[5], ids[0]]
+    );
+}
+
+#[tokio::test]
+async fn multi_view_pick_resets_when_limit_lifts_and_refills_closed_picks() {
+    // 4개를 고른 뒤 그중 하나(선택 아님)를 닫으면 숨은 채널로 빈자리를 채운다.
+    let (m, ids) = six_over_multi_limit(None).await;
+    m.lock().set_multi_view_sessions(&ids[..4]);
+    m.remove_session(ids[3]).await;
+    let view = m.read().multi_view_session_ids().unwrap();
+    assert_eq!(view.len(), 4, "고른 수만큼 다시 채운다: {view:?}");
+    assert!(!view.contains(&ids[3]));
+    // 일부러 2개만 고른 뒤 하나를 닫으면 2개까지만 채운다.
+    let (m, ids) = six_over_multi_limit(None).await;
+    m.lock().set_multi_view_sessions(&[ids[0], ids[1]]);
+    m.remove_session(ids[1]).await;
+    assert_eq!(m.read().multi_view_session_ids().unwrap().len(), 2);
+    // 상한 이하로 줄면 고른 목록이 지워진다 — 다시 넘으면 처음처럼 상한까지 채운다.
+    let (m, ids) = six_over_multi_limit(None).await;
+    m.lock().set_multi_view_sessions(&[ids[0], ids[1]]);
+    m.remove_session(ids[5]).await;
+    m.remove_session(ids[4]).await;
+    assert_eq!(m.read().multi_view_session_ids(), None);
+    let live = AddSessionOptions {
+        start_immediately: false,
+        live_view: true,
+        ..AddSessionOptions::default()
+    };
+    assert!(m.add_session("ch-new", live, None).await.is_new_session());
+    m.lock().reconcile_decode_budget();
+    assert_eq!(
+        m.read().multi_view_session_ids().unwrap().len(),
+        4,
+        "예전에 2개만 고른 목록이 되살아나지 않는다"
+    );
+}
+
+#[tokio::test]
+async fn multi_view_change_recomputes_pane_sizes_and_focus_main() {
+    let (m, ids) = six_over_multi_limit(None).await;
+    {
+        let mut st = m.lock();
+        st.set_grid_layout_mode(MultiLiveGridLayoutMode::Focus);
+        st.set_focus_main_session_id(Some(ids[0]));
+    }
+    let before = m.read().pane_geometry_revision();
+    m.lock().set_multi_view_sessions(&[ids[4], ids[5]]);
+    let st = m.read();
+    assert!(
+        st.pane_geometry_revision() > before,
+        "보기가 바뀌면 패인 크기를 다시 제출"
+    );
+    let view = st.multi_view_session_ids().unwrap();
+    assert_eq!(view, vec![ids[4], ids[5]]);
+    assert!(
+        st.focus_main_session_id()
+            .is_some_and(|f| view.contains(&f)),
+        "포커스 메인은 보이는 패인으로"
+    );
+}
+
+#[tokio::test]
+async fn returning_from_watch_keeps_multi_audio_on_a_visible_pane() {
+    // 여러 소리 — 고른 4개 중 ch-3 만 소리를 켠 채, 단독 보기로 ch-5 를 보다 돌아오면 ch-3 이 밀려난다.
+    let (m, ids) = six_over_multi_limit(None).await;
+    m.lock().set_multi_view_sessions(&ids[..4]);
+    {
+        let mut st = m.lock();
+        st.toggle_multi_audio_mode();
+        let enabled: Vec<Uuid> = st.audio_enabled_session_ids().iter().copied().collect();
+        for id in enabled {
+            st.toggle_session_audio(id);
+        }
+        st.toggle_session_audio(ids[3]);
+        assert_eq!(
+            st.audio_enabled_session_ids()
+                .iter()
+                .copied()
+                .collect::<Vec<_>>(),
+            vec![ids[3]]
+        );
+        st.set_stage_session(Some(ids[5]));
+        st.select_session(ids[5], true);
+        st.set_stage_session(None);
+        st.reconcile_decode_budget();
+    }
+    let st = m.read();
+    let view = st.multi_view_session_ids().unwrap();
+    assert!(!view.contains(&ids[3]), "맨 뒤(ch-3)가 밀려난다: {view:?}");
+    let audible: Vec<Uuid> = st
+        .audio_enabled_session_ids()
+        .iter()
+        .copied()
+        .filter(|id| view.contains(id))
+        .collect();
+    assert!(
+        !audible.is_empty(),
+        "보이는 패인 중 하나는 소리가 켜져 있다"
+    );
+    assert!(!st.audio_enabled_session_ids().contains(&ids[3]));
+}
+
+#[tokio::test]
+async fn closing_selected_pane_selects_a_visible_one() {
+    let (m, ids) = six_over_multi_limit(None).await;
+    // 숨은 세션이 목록 앞쪽(ch-0)에 오도록 ch-2..ch-5 를 고르고 ch-2 를 선택.
+    m.lock().set_multi_view_sessions(&ids[2..]);
+    m.lock().select_session(ids[2], true);
+    m.remove_session(ids[2]).await;
+    let st = m.read();
+    let selected = st.selected_session_id().unwrap();
+    assert!(
+        ids[3..].contains(&selected),
+        "보이던 세션 중에서 선택한다(숨은 ch-0·ch-1 이 끌려오지 않게)"
     );
 }
 
