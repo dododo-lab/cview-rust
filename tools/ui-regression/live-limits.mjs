@@ -98,6 +98,20 @@ await check('설정: 멀티라이브·라이브 단독 보기 상한이 따로 �
   assert.deepEqual(v, { multi: '4', live: '8' });
 });
 
+await check('멀티라이브가 가득(4/4)이면 머리줄 채널 추가가 "채널 고르기"로 바뀐다', async () => {
+  await navigate('multilive');
+  await page.waitForSelector('[data-page="multilive"] .ml-stage');
+  await settle();
+  const head = () => page.evaluate(() => {
+    const b = document.querySelector('[data-page="multilive"] .ml-toolbar .ml-add');
+    return { mode: b.dataset.ml, badge: b.querySelector('.ml-add-full')?.textContent || '', disabled: b.getAttribute('aria-disabled'), label: b.getAttribute('aria-label') };
+  });
+  const full = await head();
+  assert.equal(full.mode, 'pick', JSON.stringify(full));
+  assert.equal(full.badge, '4/4');
+  assert.equal(full.disabled, null, '막힌 단추가 아니라 누를 수 있는 고르기');
+});
+
 await check('멀티라이브가 가득이어도 라이브로 열면 라이브 상한으로 추가해 단독 보기로 올린다', async () => {
   await navigate('multilive');
   await page.waitForSelector('[data-page="multilive"] .ml-stage');
@@ -111,6 +125,9 @@ await check('멀티라이브가 가득이어도 라이브로 열면 라이브 �
 
 await check('라이브 단독 보기의 채널 추가(+)도 라이브 상한으로 담고 수 표시는 5 / 8', async () => {
   await page.evaluate(() => { window.__mock.calls.length = 0; });
+  // 단독 보기(라이브 상한 8)에서는 같은 머리줄 단추가 다시 채널 추가다 — 라이브에는 더 담을 수 있다.
+  const head = await page.evaluate(() => { const b = document.querySelector('[data-page="multilive"] .ml-toolbar .ml-add'); return { mode: b.dataset.ml, disabled: b.getAttribute('aria-disabled') }; });
+  assert.deepEqual(head, { mode: 'add', disabled: null });
   await page.evaluate(() => [...document.querySelectorAll('[data-ml="add"]')].find((b) => b.offsetParent).click());
   await page.waitForSelector('.ml-addrow-act[data-channel-id="p1"]');
   const count = await page.evaluate(() => document.querySelector('.ml-addbar-count, .ml-addbar [class*="count"]')?.textContent || '');

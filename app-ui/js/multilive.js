@@ -28,7 +28,7 @@ import { WatchInfoPanel } from './ml-watch-info.js';
 import { liveIcon, multiLiveIcon, liveModeSwitch, setLiveModeActive } from './live-mode.js';
 import { decoratePageHeader } from './page-header.js';
 import { verifiedBadge } from './verified-badge.js';
-import { visibleSessions, viewLimit, viewPickerButtonHtml, syncViewPickerButton, openViewPicker } from './ml-view-picker.js';
+import { visibleSessions, viewLimit, headerAddMode, syncHeaderAddButton, openViewPicker } from './ml-view-picker.js';
 import { liveHandlers, pickNowPlayingSession, multiLiveNowPlayingInfo } from './now-playing.js';
 
 export { multiLiveIcon };
@@ -38,6 +38,8 @@ const ICON_SOUND = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4
 // 보조 창(?w=player|chat|…) — 멀티라이브는 메인 창에서만 보여 준다(app.js openChannel).
 const AUX_WINDOW = new URLSearchParams(location.search).has('w');
 const ICON_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+// 머리줄 채널 추가 단추 속 — 가득 차 "채널 고르기"로 바뀌었다가 자리가 나면 이것으로 돌아온다.
+const ADD_INNER = `${ICON_PLUS}<span class="ml-add-label"><span class="ml-add-long">채널 </span>추가</span><span class="ml-add-full" aria-hidden="true" hidden></span>`;
 
 const STAT_ICON = {
   viewers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>',
@@ -127,7 +129,6 @@ export class MultiLivePage {
         <div class="ml-watch-picker" role="group" aria-label="라이브로 볼 채널" hidden></div>
         <div class="ml-head-gap after" data-tauri-drag-region></div>
         <div class="ml-toolbar">
-          ${viewPickerButtonHtml()}
           <div class="ml-more">
             <button class="ml-tb-icon" data-ml-more title="더 보기" aria-label="더 보기" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg></button>
             <div class="ml-more-menu" role="menu" hidden>
@@ -160,7 +161,7 @@ export class MultiLivePage {
               <button class="ml-menu-item danger" role="menuitem" data-ml="stop-all"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 6l12 12M18 6 6 18"/></svg>모두 닫기</button>
             </div>
           </div>
-          <button class="btn primary ml-add ch-add" data-ml="add" title="채널 추가" aria-label="채널 추가">${ICON_PLUS}<span class="ml-add-label"><span class="ml-add-long">채널 </span>추가</span><span class="ml-add-full" aria-hidden="true" hidden></span></button>
+          <button class="btn primary ml-add ch-add" data-ml="add" title="채널 추가" aria-label="채널 추가">${ADD_INNER}</button>
         </div>
       </header>
       <div class="page-body ml-body">
@@ -202,7 +203,8 @@ export class MultiLivePage {
     this.focusInfoEl = this.root.querySelector('.ml-focus-info');
     this.focusInfo = new WatchInfoPanel(this.focusInfoEl);
     this.count = this.root.querySelector('.ml-count');
-    this.pickButton = this.root.querySelector('[data-ml="pick"]');
+    // 머리줄 채널 추가 — 멀티라이브가 가득 차면 같은 단추가 "채널 고르기"로 바뀐다(ml-view-picker.js syncHeaderAddButton).
+    this.headAdd = this.root.querySelector('.ml-toolbar .ml-add');
     this.watchPicker = this.root.querySelector('.ml-watch-picker');
     this.watchPicker.addEventListener('scroll', () => this.syncWatchPickerFade(), { passive: true });
     // 직접 넘겨 보기 시작하면 지금 보는 칩으로 되돌리지 않는다.
@@ -342,6 +344,8 @@ export class MultiLivePage {
       },
       onOpen: onOpenChannel,
       addLabel: '멀티라이브에 추가',
+      // 마지막 채널을 넣어 가득 차면 머리줄 단추가 "채널 고르기"(data-ml="pick")가 되어 [data-ml="add"] 가 남지 않는다 — 그때 닫으면 거기로.
+      focusFallback: () => this.headAdd,
     });
     this.watch = new WatchTools(this);
     // 시스템 '지금 재생 중'(macOS 섬·제어 센터)의 재생·일시정지. WebKit 은 볼륨 0 패인도 후보로 보므로
@@ -525,7 +529,7 @@ export class MultiLivePage {
     this.count.textContent = `${n} / ${state.maxSessions}`;
     this.count.classList.toggle('full', full && n > 0);
     this.count.title = limit.limited ? `라이브에 담은 ${total}개 중 ${n}개 재생 중 — 최대 ${state.maxSessions}개` : full ? `가득 찼어요 — 최대 ${state.maxSessions}개` : `${state.maxSessions}개 중 ${n}개 재생 중`;
-    syncViewPickerButton(this.pickButton, state);
+    syncHeaderAddButton(this.headAdd, state, { addInner: ADD_INNER, drawerOpen: this.addBar.isOpen });
     this.empty.querySelector('.ml-empty-text').textContent = `채널을 추가하면 최대 ${state.maxSessions}개까지 나란히 재생합니다. 패인을 누르면 소리와 채팅이 그 방송으로 바뀝니다.`;
     for (const b of this.root.querySelectorAll('[data-layout]')) {
       b.classList.toggle('active', b.dataset.layout === state.layout);
@@ -1010,8 +1014,28 @@ export class MultiLivePage {
   }
 
   showViewPicker() {
-    if (!viewLimit(this.state).limited) return;
-    openViewPicker({ state: this.state, onApply: (ids) => this.run(api.multiLiveSetView(ids)) });
+    if (!headerAddMode(this.state).pick) return;
+    // 가득 찬 채널 추가 사이드바는 닫는다 — 시트에서 빼고 추가하면 다시 연다.
+    this.addBar.close();
+    openViewPicker({
+      state: this.state,
+      onApply: (ids) => this.run(api.multiLiveSetView(ids)),
+      onSwap: (ids) => this.swapOut(ids),
+      opener: this.headAdd.offsetParent ? this.headAdd : null,
+    });
+  }
+
+  /** 가득 찬 멀티라이브에서 고른 채널을 빼고(닫고) 채널 추가 사이드바를 연다 — 고르기 시트의 "빼고 채널 추가". */
+  async swapOut(ids) {
+    for (const id of ids) {
+      try {
+        this.render(await api.multiLiveRemove(id));
+      } catch (e) {
+        toast(e.message);
+        return;
+      }
+    }
+    if (this.state.canAdd && !this.root.hidden) this.addBar.open();
   }
 
   // ── 채널 프리셋 (MUL-14) ─────────────────────
