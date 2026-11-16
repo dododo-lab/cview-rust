@@ -834,6 +834,8 @@ select.select {
 
 .home { container: home / inline-size; display: flex; flex-direction: column; gap: 40px; padding-bottom: var(--sp-xxl); }
 .home-section { min-width: 0; }
+.home-history { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.home-history[hidden] { display: none; }
 .section-head { display: flex; align-items: flex-end; gap: var(--sp-sm); margin-bottom: 14px; }
 .section-titles { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .section-head .section-title { margin: 0; font-size: var(--fs-headline); font-weight: 750; letter-spacing: -0.4px; }
@@ -1180,6 +1182,19 @@ select.select {
 .shelf > .card { scroll-snap-align: start; }
 /* 홈 선반 오른쪽 끝을 흐려 옆으로 더 있다는 걸 알린다 */
 .home .shelf { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent); }
+
+/* 이어 보기는 작은 가로 카드로 — 영상이 적어도 라이브 사이에 큰 빈 선반이 생기지 않게 한다. */
+.home .continue-shelf {
+  grid-auto-columns: clamp(300px, calc((100% - 12px) / 2), 420px); gap: 12px;
+  -webkit-mask-image: none; mask-image: none;
+}
+.continue-shelf > .card {
+  display: flex; align-items: center; gap: 12px; min-width: 0; padding: 8px;
+  background: var(--surface-base); border: 1px solid var(--border-subtle);
+}
+.continue-shelf .thumb { flex: none; width: 112px; border-radius: var(--radius-sm); }
+.continue-shelf .card-body { flex: 1; min-width: 0; padding: 0; }
+.continue-shelf .card-title { font-size: var(--fs-caption); }
 
 /* 카테고리 칩 */
 .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: var(--sp-lg); }

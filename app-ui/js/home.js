@@ -1,4 +1,4 @@
-// 홈 — 인사 헤더 / 방송 중인 팔로잉 스트립 / 앰비언트 스포트라이트(히어로 + 넘김 탭) / 최근 시청 퀵픽 /
+// 홈 — 인사 헤더 / 방송 중인 팔로잉 스트립 / 앰비언트 스포트라이트(히어로 + 넘김 탭) / 이어 보기·최근 시청 퀵픽 /
 // 지금 인기 TOP 10 / 팔로잉 선반 / 카테고리 칩 + 발견 격자(더 보기로 펼침).
 // Swift `HomeView_v3` 의 "지금 볼 라이브를 먼저" 원칙을 따르되, 지금 Rust 명령으로 받을 수 있는
 // 데이터(팔로잉·인기 라이브)와 로컬 최근 시청 기록만으로 그린다.
@@ -395,13 +395,16 @@ export class HomePage {
         </section>`;
     }
 
-    if (recent.length) html += recentShelf(recent, liveById);
+    // 보던 영상·채널은 추천 바로 아래에 모은다. 기록이 없으면 구역 자체를 숨겨 빈 간격도 남기지 않는다.
+    html += `<div class="home-history"${recent.length ? '' : ' hidden'}>
+      <section class="home-section home-continue" data-rail="continue" hidden></section>
+      ${recent.length ? recentShelf(recent, liveById) : ''}
+    </div>`;
 
     // TOP 10 — 히어로가 인기 앞쪽을 쓰고 있으면(비로그인·팔로잉 없음) 그 다음 순위부터 겹치지 않게.
     const topFrom = following.length ? 0 : HERO_SIZE;
     const top = popular.slice(topFrom, topFrom + TOP_SIZE);
     if (top.length >= 3) html += topRail(top);
-    html += '<section class="home-section" data-rail="continue" hidden></section>';
     if (following.length > HERO_SIZE) html += followingShelf(following);
 
     if (popularRes.status === 'fulfilled') {
@@ -496,8 +499,10 @@ export class HomePage {
       if (!box || !html) return;
       box.innerHTML = `${sectionHead(title, sub, `${shelfNav}${more}`)}${html}`;
       box.hidden = false;
+      const history = box.closest('.home-history');
+      if (history) history.hidden = false;
     };
-    if (cont.status === 'fulfilled' && cont.value.length) fill('continue', '이어 보기', '보던 다시보기를 멈춘 곳부터', `<div class="shelf">${cont.value.map(continueCard).join('')}</div>`, '<button class="link-btn" data-goto-lib="continue">전체 보기</button>');
+    if (cont.status === 'fulfilled' && cont.value.length) fill('continue', '이어 보기', '보던 다시보기를 멈춘 곳부터', `<div class="shelf continue-shelf">${cont.value.map(continueCard).join('')}</div>`, '<button class="link-btn" data-goto-lib="continue">전체 보기</button>');
     if (clips.status === 'fulfilled' && clips.value.length) fill('clips', '오늘의 인기 클립', '하루 동안 가장 많이 본 순간', `<div class="shelf clip-shelf">${clips.value.slice(0, 16).map(clipCard).join('')}</div>`, '<button class="link-btn" data-goto="popular" data-goto-tab="clips" data-goto-period="WITHIN_1_DAY">전체 보기</button>');
   }
 
