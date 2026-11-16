@@ -71,6 +71,21 @@ pub async fn multilive_select(
     Ok(shell.state_dto())
 }
 
+/// 멀티라이브에서 볼 채널 고르기 — 라이브 단독 보기에 멀티라이브 상한보다 많이 담아 왔을 때 어떤 세션을
+/// 함께 재생할지 고른다(상한까지, 고른 순서대로). 고르지 않은 세션은 닫지 않고 라이브 머리줄에 남는다.
+#[tauri::command]
+pub async fn multilive_set_view(
+    shell: State<'_, MultiLiveShell>,
+    session_ids: Vec<String>,
+) -> CmdResult<MultiLiveStateDto> {
+    let ids = session_ids
+        .iter()
+        .map(|id| parse_id(id))
+        .collect::<CmdResult<Vec<_>>>()?;
+    shell.manager.lock().set_multi_view_sessions(&ids);
+    Ok(shell.state_dto())
+}
+
 /// 라이브 메뉴에서 이 세션만 보기(`Some`) / 멀티라이브로 돌아가기(`None`) — 원본 시청·멀티 허브 모드.
 ///
 /// 같은 세션(플레이어·채팅 소켓)을 그대로 무대에 올리므로 다시 연결하지 않는다. 무대가 있으면 매니저의

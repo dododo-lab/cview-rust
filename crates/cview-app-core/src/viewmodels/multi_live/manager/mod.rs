@@ -201,6 +201,8 @@ pub struct ManagerState {
     last_applied_cap_height: HashMap<Uuid, i64>,
     last_applied_hls_kbps: HashMap<Uuid, f64>,
     mru: MruLedger,
+    /// 멀티라이브에 올릴 세션(사용자가 고른 순서) — 라이브 단독 보기에서 멀티라이브 상한보다 많이 담아 왔을 때만 쓴다.
+    multi_view_ids: Vec<Uuid>,
     memory_pressure_k_override: Option<usize>,
     memory_pressure_recovery_task: Option<TaskSlot>,
     memory_pressure_generation: u64,
@@ -656,6 +658,7 @@ impl MultiLiveManager {
                 last_applied_cap_height: HashMap::new(),
                 last_applied_hls_kbps: HashMap::new(),
                 mru: MruLedger::default(),
+                multi_view_ids: Vec::new(),
                 memory_pressure_k_override: None,
                 memory_pressure_recovery_task: None,
                 memory_pressure_generation: 0,

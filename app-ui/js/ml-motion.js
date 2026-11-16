@@ -138,7 +138,7 @@ export function bindPaneDrag(page, onDrop) {
     drag = null; // 무대 밖에서 놓아 끝나지 않은 '누르기만 한' 끌기는 버린다
     if (!e.target.closest('.ml-pane-hit, .ml-drag')) return;
     const pane = paneOf(e.target);
-    const n = (page.state.sessions || []).length;
+    const n = (page.state.sessions || []).filter((s) => s.inMultiView !== false).length;
     if (!pane || !pane.sessionId || pane.exiting || n < 2 || page.watchSlot != null || page.single != null) return;
     drag = { pane, id: e.pointerId, x: e.clientX, y: e.clientY, started: false, target: null, handle: e.target };
   });

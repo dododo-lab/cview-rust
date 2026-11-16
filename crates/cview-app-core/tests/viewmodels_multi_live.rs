@@ -1579,6 +1579,92 @@ async fn live_view_and_multi_live_limits_are_separate() {
 }
 
 #[tokio::test]
+async fn multi_view_picks_channels_when_live_view_holds_more_than_multi_limit() {
+    let ml = MultiLiveSettings {
+        max_concurrent_sessions: 4,
+        max_live_channels: 6,
+        ..MultiLiveSettings::default()
+    };
+    let (m, _) = live_manager_with(
+        Arc::new(FakeBackend::default()),
+        Arc::new(FakePool::default()),
+        ml,
+    );
+    let live = AddSessionOptions {
+        start_immediately: false,
+        live_view: true,
+        ..AddSessionOptions::default()
+    };
+    for i in 0..6 {
+        assert!(m
+            .add_session(&format!("ch-{i}"), live, None)
+            .await
+            .is_new_session());
+    }
+    // 잠금을 잡은 채 인자에서 다시 읽으면 교착된다 — ID 는 먼저 꺼내 둔다.
+    let id_of = |c: &str| m.read().session_for_channel(c).unwrap().id();
+    let ch5 = id_of("ch-5");
+    // 무대(라이브 단독 보기)에서는 고를 일이 없다 — 모든 채널이 머리줄에 있다.
+    m.lock().set_stage_session(Some(ch5));
+    m.lock().select_session(ch5, true);
+    assert_eq!(m.read().multi_view_session_ids(), None);
+    m.lock().set_stage_session(None);
+    m.lock().set_grid_layout(true);
+    m.lock().reconcile_decode_budget();
+    let view = m
+        .read()
+        .multi_view_session_ids()
+        .expect("상한을 넘으면 고른 채널만");
+    assert_eq!(view.len(), 4);
+    assert_eq!(
+        view[0],
+        id_of("ch-5"),
+        "단독 보기에서 보던 채널은 늘 들어간다"
+    );
+
+    // 고르기 — 상한을 넘는 몫·없는 세션은 버리고, 선택 세션이 빠지면 고른 첫 채널을 선택한다.
+    let picked = ["ch-0", "ch-1", "ch-2", "ch-3", "ch-4"].map(id_of);
+    m.lock().set_multi_view_sessions(&[
+        Uuid::new_v4(),
+        picked[0],
+        picked[1],
+        picked[2],
+        picked[3],
+        picked[4],
+    ]);
+    {
+        let st = m.read();
+        let view = st.multi_view_session_ids().unwrap();
+        assert_eq!(view, picked[..4].to_vec());
+        assert_eq!(st.selected_session_id(), Some(picked[0]));
+        // 고르지 않은 채널만 재생을 멈춘다(가짜 플레이어엔 엔진이 없어 멈춤 사유로 본다).
+        let mut paused: Vec<Uuid> = st.pane_suspension().keys().copied().collect();
+        paused.sort();
+        let mut hidden: Vec<Uuid> = st
+            .sessions()
+            .iter()
+            .map(|s| s.id())
+            .filter(|id| !view.contains(id))
+            .collect();
+        hidden.sort();
+        assert_eq!(paused, hidden, "고른 채널만 재생");
+    }
+    // 고른 목록 밖 채널은 닫히지 않는다 — 라이브 단독 보기로 가면 다시 모두 보인다.
+    assert_eq!(m.read().sessions().len(), 6);
+    // 단독 보기에서 다른 채널(ch-5)을 보다 돌아오면 그 채널이 앞에 들어가고 고른 목록의 맨 뒤가 밀린다.
+    m.lock().set_stage_session(Some(ch5));
+    m.lock().select_session(ch5, true);
+    m.lock().set_stage_session(None);
+    m.lock().reconcile_decode_budget();
+    let view = m.read().multi_view_session_ids().unwrap();
+    assert_eq!(view, vec![ch5, picked[0], picked[1], picked[2]]);
+    // 상한 이하로 줄면 고르기는 풀리고 모두 보인다.
+    m.remove_session(picked[4]).await;
+    m.remove_session(picked[3]).await;
+    assert_eq!(m.read().multi_view_session_ids(), None);
+}
+
+#[tokio::test]
 async fn add_session_selects_first_and_evicts_lru_in_watch_mode() {
     let backend = Arc::new(FakeBackend::default());
     let pool = Arc::new(FakePool::default());

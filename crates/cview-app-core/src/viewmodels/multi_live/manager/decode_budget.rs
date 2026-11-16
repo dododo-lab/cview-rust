@@ -70,11 +70,96 @@ impl ManagerState {
         }
     }
 
+    /// 디코드 우선순위 — 선택·PiP·포커스 메인·소리 패인, 그다음 최근에 본 순.
+    fn decode_rank(&self) -> Vec<Uuid> {
+        let focus_main = if self.grid_layout_mode == MultiLiveGridLayoutMode::Focus {
+            self.focus_main_session_id
+        } else {
+            None
+        };
+        let audible: HashSet<Uuid> = self
+            .sessions
+            .iter()
+            .filter(|s| self.is_audible_session(s))
+            .map(|s| s.id())
+            .collect();
+        let ids: Vec<Uuid> = self.sessions.iter().map(|s| s.id()).collect();
+        policy::rank_for_decode_budget(
+            &policy::rank_inputs(&ids, &self.mru),
+            self.selected_session_id,
+            self.pip_session_id,
+            focus_main,
+            &audible,
+        )
+    }
+
+    /// 멀티라이브 보기에 올린 세션 — 라이브 단독 보기에서 멀티라이브 상한보다 많이 담아 온 채 멀티라이브로
+    /// 돌아왔을 때만 `Some`(그 밖에는 모든 세션이 보인다). 선택 세션, 사용자가 고른 세션, 디코드 우선순위 순으로
+    /// 상한까지 채운다 — 단독 보기에서 보던 채널은 늘 들어가고, 고른 목록의 맨 뒤가 밀려난다.
+    pub fn multi_view_session_ids(&self) -> Option<Vec<Uuid>> {
+        let max = self.max_multi_live_sessions();
+        if self.stage_session_id.is_some() || self.sessions.len() <= max {
+            return None;
+        }
+        let mut out: Vec<Uuid> = Vec::with_capacity(max);
+        let candidates = self
+            .selected_session_id
+            .into_iter()
+            .chain(self.multi_view_ids.iter().copied())
+            .chain(self.decode_rank());
+        for id in candidates {
+            if out.len() >= max {
+                break;
+            }
+            if self.contains(id) && !out.contains(&id) {
+                out.push(id);
+            }
+        }
+        Some(out)
+    }
+
+    /// 멀티라이브에 올릴 세션을 고른다(상한까지, 고른 순서대로). 선택 세션이 빠지면 고른 첫 세션을 선택한다.
+    /// 고른 세션이 하나도 없으면(모두 닫힌 세션) 아무것도 바꾸지 않는다.
+    pub fn set_multi_view_sessions(&mut self, ids: &[Uuid]) {
+        let max = self.max_multi_live_sessions();
+        let mut picked: Vec<Uuid> = Vec::with_capacity(max);
+        for &id in ids {
+            if picked.len() < max && self.contains(id) && !picked.contains(&id) {
+                picked.push(id);
+            }
+        }
+        let Some(&first) = picked.first() else {
+            return;
+        };
+        self.multi_view_ids = picked.clone();
+        let selected_in_view = self
+            .selected_session_id
+            .is_some_and(|s| picked.contains(&s));
+        if selected_in_view {
+            if !self
+                .focus_main_session_id
+                .is_some_and(|f| picked.contains(&f))
+            {
+                self.set_focus_main_session_id(self.selected_session_id);
+            }
+            self.reconcile_decode_budget();
+        } else {
+            // 선택이 바뀌며 디코드 예산도 다시 맞춘다.
+            self.select_session(first, true);
+        }
+    }
+
     pub fn reconcile_decode_budget(&mut self) {
         let sessions = self.sessions.clone();
+        // 멀티라이브 상한을 넘으면 고른 세션만 보이고, 나머지는 어떤 경우에도 재생을 멈춘다.
+        let view = self.multi_view_session_ids();
+        if let Some(v) = &view {
+            self.multi_view_ids.clone_from(v);
+        }
+        let in_view = |id: Uuid| view.as_ref().is_none_or(|v| v.contains(&id));
         if !self.decode_suspension_reasons.is_empty() {
             for s in &sessions {
-                let protected = self.is_protected_during_suspension(s);
+                let protected = self.is_protected_during_suspension(s) && in_view(s.id());
                 self.apply_decode_state(s, protected);
             }
             return;
@@ -85,7 +170,7 @@ impl ManagerState {
             .is_none_or(|s| s.multi_live().background_quality_reduction);
         if !reduce_enabled && self.memory_pressure_k_override.is_none() {
             for s in &sessions {
-                self.apply_decode_state(s, true);
+                self.apply_decode_state(s, in_view(s.id()));
             }
             return;
         }
@@ -94,35 +179,24 @@ impl ManagerState {
             self.effective_max_sessions(),
             self.memory_pressure_k_override,
         );
-        // 라이브 단독 보기에서 멀티라이브 상한보다 많이 담아 온 채 멀티라이브로 돌아오면 넘는 패인은
-        // 재생을 멈춘다(동시 재생 한도 — 선택하면 그 패인이 재생된다).
+        // 라이브 단독 보기에서 멀티라이브 상한보다 많이 담아 온 채 멀티라이브로 돌아오면 고른 패인만
+        // 재생한다(동시 재생 한도 — 나머지는 라이브 머리줄에만 남는다).
         if self.stage_session_id.is_none() {
             k = k.min(self.max_multi_live_sessions());
         }
-        let focus_main = if self.grid_layout_mode == MultiLiveGridLayoutMode::Focus {
-            self.focus_main_session_id
-        } else {
-            None
-        };
-        let audible: HashSet<Uuid> = sessions
-            .iter()
-            .filter(|s| self.is_audible_session(s))
-            .map(|s| s.id())
-            .collect();
-        let ids: Vec<Uuid> = sessions.iter().map(|s| s.id()).collect();
-        let ranked = policy::rank_for_decode_budget(
-            &policy::rank_inputs(&ids, &self.mru),
-            self.selected_session_id,
-            self.pip_session_id,
-            focus_main,
-            &audible,
-        );
+        let ranked = self.decode_rank();
         let keep_alive = self.watch_keep_alive_session_ids();
-        for (rank, id) in ranked.into_iter().enumerate() {
+        let mut rank = 0;
+        for id in ranked {
             let Some(s) = sessions.iter().find(|s| s.id() == id).cloned() else {
                 continue;
             };
+            if !in_view(id) {
+                self.apply_decode_state(&s, false);
+                continue;
+            }
             let decoding = rank < k && self.watch_mode_allows_decode_with(id, &keep_alive);
+            rank += 1;
             self.apply_decode_state(&s, decoding);
         }
     }
