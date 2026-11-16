@@ -2341,3 +2341,27 @@ async fn watch_stage_handoff_then_exit_restores_every_pane() {
     tokio::time::sleep(Duration::from_secs(6)).await;
     assert_all_panes_restored(&m, &p);
 }
+
+#[tokio::test]
+async fn multi_view_quality_targets_count_only_visible_panes() {
+    // 6개 중 2개만 고르면 화면은 2분할 — 보조 패인 화질 목표는 6개 격자·'패인 많음(360p)' 상한이 아니라
+    // 2분할 크기로 정한다.
+    let (m, ids) = six_over_multi_limit(None).await;
+    {
+        let mut st = m.lock();
+        st.set_grid_layout(true);
+        st.set_grid_layout_mode(MultiLiveGridLayoutMode::Preset);
+    }
+    m.lock().set_multi_view_sessions(&[ids[0], ids[1]]);
+    m.lock().select_session(ids[0], true);
+    m.lock().update_pane_sizes(1600, 900);
+    let st = m.read();
+    assert_eq!(st.multi_view_session_ids().unwrap().len(), 2);
+    let secondary = st.session(ids[1]).unwrap();
+    assert!(secondary.player().is_muted(), "보조 패인은 소리 없음");
+    let h = secondary.player().multi_live_quality_target().height;
+    assert!(
+        h > 360,
+        "보이는 2분할 보조 패인이 숨은 세션까지 센 6개 기준으로 360p 에 묶이면 안 된다: {h}"
+    );
+}

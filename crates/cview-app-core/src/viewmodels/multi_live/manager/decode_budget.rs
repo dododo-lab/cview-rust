@@ -126,6 +126,13 @@ impl ManagerState {
         Some(out)
     }
 
+    /// 멀티라이브 무대에 실제로 보이는 패인 수 — 상한을 넘어 일부만 보이면 그 수, 아니면 모든 세션.
+    /// 패인 크기·화질 목표·재생 속도 예산이 숨은(멈춘) 세션까지 세지 않게 쓴다.
+    pub fn visible_pane_count(&self) -> usize {
+        self.multi_view_session_ids()
+            .map_or(self.sessions.len(), |v| v.len())
+    }
+
     /// 지금 보기에 올라간 세션인가 — 상한을 넘지 않았거나 단독 보기면 늘 `true`.
     fn in_multi_view(view: Option<&[Uuid]>, id: Uuid) -> bool {
         view.is_none_or(|v| v.contains(&id))

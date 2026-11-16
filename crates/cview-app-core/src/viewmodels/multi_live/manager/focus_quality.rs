@@ -75,10 +75,12 @@ impl ManagerState {
         self.reconcile_picture_enhancement();
         let main = self.quality_main_session_id();
         let size = stage_size.or(self.last_reported_stage_size);
+        // 상한을 넘어 일부만 보이면 보이는 패인 수로 나눈다(숨은 세션은 재생을 멈췄다).
+        let pane_count = self.visible_pane_count();
         let pane_size = size.map(|stage| {
             focus_quality::secondary_pane_size(
                 stage,
-                self.sessions.len(),
+                pane_count,
                 self.is_grid_layout && self.grid_layout_mode == MultiLiveGridLayoutMode::Focus,
                 self.focus_direction.is_horizontal(),
                 self.layout_ratios.focus_ratio,
@@ -111,7 +113,7 @@ impl ManagerState {
                         !s.player().is_muted(),
                         thermal_cap,
                     ),
-                    self.sessions.len(),
+                    pane_count,
                     !s.player().is_muted(),
                 )
             };
