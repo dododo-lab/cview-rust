@@ -28,6 +28,10 @@ MAX_ARTIFACT = 2 * 1024**3
 ROOT_FILES = ('Cargo.toml', 'Cargo.lock', 'tools/windows-update-server/tests/signed_feed_vector.json')
 TARGETS = {'x64': ('x86_64-pc-windows-msvc', 0x8664),
            'arm64': ('aarch64-pc-windows-msvc', 0xAA64)}
+# Windows 빌드 갈래 — 검사(fmt·clippy·test x64)와 x64·ARM64 설치 파일을 동시에 만든다. 갈래마다 CARGO_TARGET_DIR 을
+# 따로 써서 cargo 빌드 폴더 잠금으로 서로 기다리지 않는다(x64 는 예전 `target` 캐시를 그대로 쓴다).
+LANES = (('check', 'target-check'), ('x64', 'target'), ('arm64', 'target-arm64'))
+LANE_TARGET_DIRS = dict(LANES)
 
 
 def now():

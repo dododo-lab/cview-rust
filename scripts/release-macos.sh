@@ -45,6 +45,10 @@ cd "$(dirname "$0")/.."
 export LANG="${LANG:-en_US.UTF-8}" LC_ALL="${LC_ALL:-en_US.UTF-8}"
 [[ "$LANG" == "C" || -z "$LANG" ]] && export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
 
+# 단계 머리줄 — 시각과 시작 후 경과 시간을 함께 찍어 어느 단계가 오래 걸리는지 로그만으로 보이게 한다.
+release_started=$SECONDS
+step() { printf '── %s  [%s · +%dm%02ds]\n' "$*" "$(date +%H:%M:%S)" $(( (SECONDS - release_started) / 60 )) $(( (SECONDS - release_started) % 60 )); }
+
 CONF=crates/cview-app/tauri.conf.json
 # 빌드 산출물 폴더는 cargo 에게 묻는다 — .cargo/config.toml 의 build.target-dir · CARGO_TARGET_DIR 을 따른다(기본 ./target).
 TARGET=$(cargo metadata --format-version 1 --no-deps | python3 -c 'import json,sys;print(json.load(sys.stdin)["target_directory"])')
@@ -111,7 +115,7 @@ if (( dist_build )); then
   if [[ -n "$(git status --porcelain)" ]]; then
     echo "✗ 작업 트리가 깨끗하지 않습니다 — 배포 빌드는 커밋된 코드로만 만듭니다."; git status --short; exit 1
   fi
-  echo "── 업데이트 서버·인증 사전 확인"
+  step "업데이트 서버·인증 사전 확인"
   next_version=$(python3 - "$CONF" "$part" <<'PY'
 import json, sys
 major, minor, patch = map(int, json.load(open(sys.argv[1]))['version'].split('.'))
@@ -131,14 +135,14 @@ PY
   if [[ -n "${CVIEW_RELEASE_NOTES_FILE:-}" && ! -s "$CVIEW_RELEASE_NOTES_FILE" ]]; then
     echo "✗ 릴리스 설명 파일이 없거나 비어 있습니다: $CVIEW_RELEASE_NOTES_FILE"; exit 1
   fi
-  echo "── 검사(올리기 전에)"
+  step "검사(올리기 전에)"
   cargo fmt --all --check
   cargo clippy --workspace --all-targets -q -- -D warnings
   # Windows 타깃 clippy·테스트는 같은 릴리스 소스를 받은 서버에서 수행한다.
   cargo test --workspace -q 2>&1 | grep -E "^test result|FAILED|panicked" \
     | awk '{p+=$4; f+=$6} /FAILED|panicked/ {print} END {print "   테스트 통과", p, "실패", f; exit (f > 0)}'
   for f in app-ui/js/*.js; do node --check "$f"; done
-  echo "── 버전·빌드 번호 올리기($part)"
+  step "버전·빌드 번호 올리기($part)"
   trap revert_bump EXIT INT TERM
   bumped=1
   read -r version build < <(python3 - "$CONF" "$part" <<'PY'
@@ -168,6 +172,21 @@ PY
   echo "   → v$version (빌드 $build)"
   # 예전 DMG 를 다시 쓰지 않게 지운다.
   rm -f "$TARGET"/release/bundle/dmg/*.dmg(N) dist/CView_${version}_arm64.dmg(N)
+  # x64·arm64 둘 다 만든다(CVIEW_SKIP_WINDOWS 는 위에서 거부). 하나라도 실패하면 버전을 되돌린다.
+  # 서버의 MSVC 빌드가 릴리스의 가장 긴 단계라, 번호를 올리자마자 시작해 Mac 빌드·DMG·공증과 겹친다
+  # (예전엔 Mac 빌드가 끝난 뒤 시작해 v0.1.110 에서 그만큼 4분가량 늦게 끝났다). 원본 스냅샷은 gen·target 을
+  # 빼므로 함께 도는 Mac 빌드가 쓰는 파일은 담기지 않는다.
+  # 버전을 올린 현재 소스를 불변 스냅샷으로 전송한다. Mac 공증 자격·서명 키는 전송하지 않는다.
+  build_windows_installers() {
+    trap - EXIT INT TERM
+    python3 scripts/build-server.py release-windows --source "$PWD" --version "$version" --output dist
+  }
+  win_log="$TARGET/windows-build-$version.log"
+  step "Windows 서버 빌드(x64·ARM64)를 백그라운드로 시작 — 로그: $win_log"
+  # 설치 파일 복사(dist/)가 아래 macOS DMG 복사보다 먼저 끝나도 되게 미리 만든다.
+  mkdir -p dist
+  build_windows_installers >"$win_log" 2>&1 &
+  win_pid=$!
 fi
 
 (cd crates/cview-app && cargo tauri build --bundles app)
@@ -193,32 +212,19 @@ for img in plistlib.loads(sys.stdin.buffer.read()).get("images", []):
     sleep 5
   done
   (( dmg_ok )) || { echo "✗ DMG 를 만들지 못했습니다"; exit 1; }
-  # x64·arm64 둘 다 만든다(CVIEW_SKIP_WINDOWS 는 위에서 거부). 하나라도 실패하면 버전을 되돌린다.
-  # 공증을 기다리는 동안 서버의 MSVC 빌드·다운로드·DLL 검사를 백그라운드로 진행한다.
-  # 버전을 올린 현재 소스를 불변 스냅샷으로 전송한다. Mac 공증 자격·서명 키는 전송하지 않는다.
-  build_windows_installers() {
-    trap - EXIT INT TERM
-    python3 scripts/build-server.py release-windows --source "$PWD" --version "$version" --output dist
-  }
-  win_log="$TARGET/windows-build-$version.log"
-  echo "── Windows 서버 빌드(x64·ARM64)를 백그라운드로 시작 — 로그: $win_log"
-  # 설치 파일 복사(dist/)가 아래 macOS DMG 복사보다 먼저 끝나도 되게 미리 만든다.
-  mkdir -p dist
-  build_windows_installers >"$win_log" 2>&1 &
-  win_pid=$!
 fi
 
 app="$TARGET/release/bundle/macos/CView.app"
 [[ -d "$app" ]] || { echo "번들을 찾지 못했습니다: $app"; exit 1; }
-echo "── 산출물"
+step "산출물"
 ls -la "$app/Contents/MacOS"
 lipo -info "$app/Contents/MacOS/"* || true
 echo "   CFBundleShortVersionString $(plutil -extract CFBundleShortVersionString raw "$app/Contents/Info.plist")"
 echo "   CFBundleVersion $(plutil -extract CFBundleVersion raw "$app/Contents/Info.plist")"
-echo "── 서명 확인"
+step "서명 확인"
 codesign --verify --deep --strict --verbose=2 "$app"
 codesign -dv --verbose=2 "$app" 2>&1 | grep -E "Authority|TeamIdentifier|Runtime" || true
-echo "── Gatekeeper 평가"
+step "Gatekeeper 평가"
 spctl -a -vvv -t exec "$app" || echo "(공증 전이면 거부될 수 있습니다)"
 xcrun stapler validate "$app" || true
 
@@ -226,7 +232,7 @@ if (( dist_build )); then
   dmg=$(ls -t "$TARGET"/release/bundle/dmg/*.dmg(N) 2>/dev/null | head -1 || true)
   [[ -n "$dmg" ]] || { echo "✗ DMG 를 찾지 못했습니다"; exit 1; }
   out="dist/CView_${version}_arm64.dmg"
-  echo "── DMG 서명·복사 → $out"
+  step "DMG 서명·복사 → $out"
   codesign --force --timestamp --sign "$identity" "$dmg"
   mkdir -p dist && cp "$dmg" "$out"
   if (( no_notarize )); then
@@ -239,7 +245,7 @@ if (( dist_build )); then
     echo "⚠︎ 공증 프로파일이 없어 서명만 한 DMG 입니다(배포용 아님) — 번호는 되돌립니다: $out"
     exit 0
   else
-    echo "── 공증(프로파일 $CVIEW_NOTARIZE_PROFILE)"
+    step "공증(프로파일 $CVIEW_NOTARIZE_PROFILE)"
     # notarytool 은 결과가 Invalid 여도 0 으로 끝나므로 상태를 직접 확인한다.
     # notarytool --wait 는 기다리는 중 스스로 죽는다(2026-10-21 SIGBUS — 문자열 포맷 중 스택 가드, 애플 도구 쪽; 0.1.8 은 3번 모두).
     # 그래서 올리기만 하고(--no-wait, 바로 끝남) 상태는 짧은 info 호출로 15초마다 묻는다 — 한 번 죽어도 다음 물음이 이어간다.
@@ -286,9 +292,11 @@ print(max(subs, key=lambda s: s["createdDate"])["id"] if subs else "")' "$(basen
     stat -f "   %z bytes" "$out"
     notarize_note="공증 제출 $sub_id — Accepted."
   fi
-  echo "── Windows 설치 파일(x64·arm64) — 백그라운드 빌드 결과"
+  step "Windows 설치 파일(x64·arm64) — 백그라운드 빌드 결과"
   win_rc=0
+  win_wait_from=$SECONDS
   wait "$win_pid" || win_rc=$?
+  echo "   Mac 쪽이 Windows 빌드를 기다린 시간: $(( (SECONDS - win_wait_from) / 60 ))분 $(( (SECONDS - win_wait_from) % 60 ))초"
   win_pid=""
   cat "$win_log"
   (( win_rc == 0 )) || { echo "✗ Windows 설치 파일을 만들지 못했습니다(종료 코드 $win_rc) — 로그: $win_log"; exit 1; }
@@ -310,7 +318,7 @@ notes = (f'CView {version} (빌드 {build})\n\n{body}\n\nmacOS: Apple Silicon(ar
          '업데이트 확인과 다운로드는 인터넷 연결만 있으면 됩니다(Tailscale 불필요).\n')
 Path(output).write_text(notes, encoding='utf-8')
 PY
-  echo "── 커밋·태그 v$version (빌드 $build)"
+  step "커밋·태그 v$version (빌드 $build)"
   git add $BUMPED_FILES
   git commit -q -m "release: v$version (build $build)" -m "$notarize_note dist/CView_${version}_arm64.dmg"
   # A committed release may be published even if the SSH response is lost.
@@ -318,7 +326,7 @@ PY
   bumped=0
   trap - EXIT INT TERM
   git tag -a "v$version" -m "CView v$version (build $build)"
-  echo "── 업데이트 서버 업로드·게시·다운로드 검증"
+  step "업데이트 서버 업로드·게시·다운로드 검증"
   publish_flags=()
   (( no_notarize )) && publish_flags+=(--allow-unnotarized)
   if ! python3 scripts/publish-update.py --version "$version" --notes-file "$notes_out" "${publish_flags[@]}"; then
@@ -332,7 +340,7 @@ PY
     git push -q origin "v$version"
     echo "   푸시: $(git rev-parse --short HEAD) + 태그 v$version"
     # 업데이트 서버 게시·검증·푸시가 끝난 뒤의 사본이다. 실패해도 게시는 그대로 두고 이 단계만 재실행한다.
-    echo "── GitHub 릴리스 사본(설치 파일·SHA256SUMS 업로드·다운로드 검증)"
+    step "GitHub 릴리스 사본(설치 파일·SHA256SUMS 업로드·다운로드 검증)"
     if ! python3 scripts/github-release.py --version "$version"; then
       echo "✗ 업데이트 서버 게시·검증·푸시는 끝났고 GitHub 릴리스 사본만 미완료입니다. 새 버전을 만들지 말고 재실행하세요:"
       echo "python3 scripts/github-release.py --version $version"
@@ -340,4 +348,4 @@ PY
     fi
   fi
 fi
-echo "완료: $app"
+echo "완료: $app (총 $(( (SECONDS - release_started) / 60 ))분 $(( (SECONDS - release_started) % 60 ))초)"
