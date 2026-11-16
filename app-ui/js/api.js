@@ -128,6 +128,8 @@ export const api = {
   multiLiveRemove: (sessionId) => invoke('multilive_remove', { sessionId }),
   multiLiveSelect: (sessionId) => invoke('multilive_select', { sessionId }),
   multiLiveWatch: (sessionId) => invoke('multilive_watch', { sessionId }),
+  // 라이브에 멀티라이브 상한보다 많이 담아 왔을 때 멀티라이브에서 함께 재생할 세션 고르기
+  multiLiveSetView: (sessionIds) => invoke('multilive_set_view', { sessionIds }),
   multiLivePark: (parked) => invoke('multilive_park', { parked }),
   multiLiveSetWindowOccluded: (occluded) => invoke('multilive_set_window_occluded', { occluded }),
   multiLiveSetLayout: (layout) => invoke('multilive_set_layout', { layout }),

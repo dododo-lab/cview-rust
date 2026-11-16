@@ -26,6 +26,11 @@ impl ManagerState {
             .replace_selected_stream(self.selected_session_id, revision);
     }
 
+    /// 패인 크기를 몇 번 제출했는가 — 레이아웃·보기가 바뀌어 다시 계산했는지 확인할 때.
+    pub fn pane_geometry_revision(&self) -> u64 {
+        self.pane_geometry_revision
+    }
+
     pub fn submit_pane_geometry(&mut self, updates: Vec<StreamPaneSizeUpdate>) {
         self.pane_geometry_revision = self.pane_geometry_revision.wrapping_add(1);
         let revision = self.pane_geometry_revision;

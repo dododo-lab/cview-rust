@@ -976,6 +976,7 @@ impl MultiLiveShell {
     fn state_dto_raw(&self) -> MultiLiveStateDto {
         let st = self.manager.read();
         let selected = st.selected_session_id();
+        let multi_view = st.multi_view_session_ids();
         let sessions = st
             .sessions()
             .iter()
@@ -1008,6 +1009,7 @@ impl MultiLiveShell {
                     max_height_cap: engine.as_ref().map(|e| e.max_height_cap()).unwrap_or(0),
                     decode_suspended: st.decode_active(s.id()) == Some(false)
                         || engine.as_ref().is_some_and(|e| e.is_loading_suspended()),
+                    in_multi_view: multi_view.as_ref().is_none_or(|v| v.contains(&s.id())),
                 }
             })
             .collect();
@@ -1122,6 +1124,9 @@ pub struct MultiLivePaneDto {
     pub max_height_cap: i64,
     /// 디코드 예산·가림·시청 모드로 로딩을 멈춘 패인 — 화면의 첫 프레임 감시가 다시 연결하지 않게.
     pub decode_suspended: bool,
+    /// 멀티라이브 보기에 올린 패인인가 — 라이브 단독 보기에서 멀티라이브 상한보다 많이 담아 온 채 멀티라이브로
+    /// 돌아오면 고른(없으면 최근에 본) 채널만 `true`, 나머지는 멀티라이브에서 숨는다. 그 밖에는 늘 `true`.
+    pub in_multi_view: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize)]

@@ -15,7 +15,8 @@ impl ManagerState {
             self.update_pane_sizes(w as i64, h as i64);
             return;
         }
-        let count = self.sessions.len();
+        let view = self.multi_view_session_ids();
+        let count = view.as_ref().map_or(self.sessions.len(), Vec::len);
         if count == 0 {
             return;
         }
@@ -24,10 +25,13 @@ impl ManagerState {
         let updates = self
             .sessions
             .iter()
-            .map(|s| StreamPaneSizeUpdate {
-                session_id: s.id(),
-                width: pw,
-                height: ph,
+            .map(|s| {
+                let hidden = view.as_ref().is_some_and(|v| !v.contains(&s.id()));
+                StreamPaneSizeUpdate {
+                    session_id: s.id(),
+                    width: if hidden { 0 } else { pw },
+                    height: if hidden { 0 } else { ph },
+                }
             })
             .collect();
         self.submit_pane_geometry(updates);
@@ -35,23 +39,41 @@ impl ManagerState {
 
     /// 역할별 패인 크기 — PiP 패널, 스테이지(전체/가청 854×480/숨김 0), 포커스, 그리드.
     pub fn update_pane_sizes(&mut self, stage_width: i64, stage_height: i64) {
-        let count = self.sessions.len();
-        if count == 0 || stage_width <= 0 || stage_height <= 0 {
+        if self.sessions.is_empty() || stage_width <= 0 || stage_height <= 0 {
             return;
         }
         self.reconcile_focus_quality(Some((stage_width as f64, stage_height as f64)));
+        let updates = self.pane_size_updates(stage_width, stage_height);
+        if !updates.is_empty() {
+            self.submit_pane_geometry(updates);
+        }
+    }
+
+    /// 역할별 패인 크기 계산(제출하지 않음). 멀티라이브 상한을 넘어 숨긴 패인은 격자에 없다 — 보이는 수로
+    /// 나누고, 숨긴 패인은 0×0.
+    pub fn pane_size_updates(
+        &self,
+        stage_width: i64,
+        stage_height: i64,
+    ) -> Vec<StreamPaneSizeUpdate> {
+        let view = self.multi_view_session_ids();
+        let count = view.as_ref().map_or(self.sessions.len(), Vec::len);
+        if count == 0 || stage_width <= 0 || stage_height <= 0 {
+            return Vec::new();
+        }
         let stage_id = self.stage_session_id;
         let focus_main = self.focus_main_session_id.or(self.selected_session_id);
         let focus_ratio = self.layout_ratios.focus_ratio;
         let mode = self.grid_layout_mode;
         let pip_id = self.pip_session_id;
         let (pip_w, pip_h) = self.core.deps.pip.panel_pixel_size();
-        let updates: Vec<StreamPaneSizeUpdate> = self
-            .sessions
+        self.sessions
             .iter()
             .map(|s| {
                 let id = s.id();
-                let (w, h) = if pip_id == Some(id) && pip_w > 0.0 && pip_h > 0.0 {
+                let (w, h) = if view.as_ref().is_some_and(|v| !v.contains(&id)) {
+                    (0, 0)
+                } else if pip_id == Some(id) && pip_w > 0.0 && pip_h > 0.0 {
                     (pip_w.round() as i64, pip_h.round() as i64)
                 } else if let Some(stage) = stage_id {
                     if id == stage {
@@ -83,8 +105,7 @@ impl ManagerState {
                     height: h,
                 }
             })
-            .collect();
-        self.submit_pane_geometry(updates);
+            .collect()
     }
 
     pub fn is_pip_target_on_stage(&self) -> bool {

@@ -28,6 +28,7 @@ import { WatchInfoPanel } from './ml-watch-info.js';
 import { liveIcon, multiLiveIcon, liveModeSwitch, setLiveModeActive } from './live-mode.js';
 import { decoratePageHeader } from './page-header.js';
 import { verifiedBadge } from './verified-badge.js';
+import { visibleSessions, viewLimit, viewPickerButtonHtml, syncViewPickerButton, openViewPicker } from './ml-view-picker.js';
 import { liveHandlers, pickNowPlayingSession, multiLiveNowPlayingInfo } from './now-playing.js';
 
 export { multiLiveIcon };
@@ -126,6 +127,7 @@ export class MultiLivePage {
         <div class="ml-watch-picker" role="group" aria-label="라이브로 볼 채널" hidden></div>
         <div class="ml-head-gap after" data-tauri-drag-region></div>
         <div class="ml-toolbar">
+          ${viewPickerButtonHtml()}
           <div class="ml-more">
             <button class="ml-tb-icon" data-ml-more title="더 보기" aria-label="더 보기" aria-haspopup="menu" aria-expanded="false"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg></button>
             <div class="ml-more-menu" role="menu" hidden>
@@ -200,6 +202,7 @@ export class MultiLivePage {
     this.focusInfoEl = this.root.querySelector('.ml-focus-info');
     this.focusInfo = new WatchInfoPanel(this.focusInfoEl);
     this.count = this.root.querySelector('.ml-count');
+    this.pickButton = this.root.querySelector('[data-ml="pick"]');
     this.watchPicker = this.root.querySelector('.ml-watch-picker');
     this.watchPicker.addEventListener('scroll', () => this.syncWatchPickerFade(), { passive: true });
     // 직접 넘겨 보기 시작하면 지금 보는 칩으로 되돌리지 않는다.
@@ -512,11 +515,17 @@ export class MultiLivePage {
     if (releasing) { releaseDragged(this.dragRelease); this.dragRelease = null; }
     this.state = state;
     const sessions = state.sessions || [];
-    const n = sessions.length;
+    // 라이브 단독 보기에 멀티라이브 상한보다 많이 담아 온 채 멀티라이브로 오면 고른 채널만 패인으로 보인다(ml-view-picker.js).
+    const view = visibleSessions(state);
+    const shownIds = new Set(view.map((x) => x.id));
+    const n = view.length;
+    const total = sessions.length;
+    const limit = viewLimit(state);
     const full = !state.canAdd;
     this.count.textContent = `${n} / ${state.maxSessions}`;
     this.count.classList.toggle('full', full && n > 0);
-    this.count.title = full ? `가득 찼어요 — 최대 ${state.maxSessions}개` : `${state.maxSessions}개 중 ${n}개 재생 중`;
+    this.count.title = limit.limited ? `라이브에 담은 ${total}개 중 ${n}개 재생 중 — 최대 ${state.maxSessions}개` : full ? `가득 찼어요 — 최대 ${state.maxSessions}개` : `${state.maxSessions}개 중 ${n}개 재생 중`;
+    syncViewPickerButton(this.pickButton, state);
     this.empty.querySelector('.ml-empty-text').textContent = `채널을 추가하면 최대 ${state.maxSessions}개까지 나란히 재생합니다. 패인을 누르면 소리와 채팅이 그 방송으로 바뀝니다.`;
     for (const b of this.root.querySelectorAll('[data-layout]')) {
       b.classList.toggle('active', b.dataset.layout === state.layout);
@@ -535,23 +544,24 @@ export class MultiLivePage {
       const badge = b.querySelector('.ml-add-full');
       if (badge) { badge.hidden = !full; badge.textContent = full ? `${n}/${state.maxSessions}` : ''; }
     }
-    this.root.querySelector('[data-ml="stop-all"]').hidden = n === 0;
-    this.root.querySelector('[data-ml="retry-all"]').hidden = n === 0;
-    this.root.querySelector('[data-ml="alert-pos"]').hidden = n === 0;
+    this.root.querySelector('[data-ml="stop-all"]').hidden = total === 0;
+    this.root.querySelector('[data-ml="retry-all"]').hidden = total === 0;
+    this.root.querySelector('[data-ml="alert-pos"]').hidden = total === 0;
     const ma = this.root.querySelector('[data-ml="multi-audio"]');
     ma.classList.toggle('active', Boolean(state.multiAudio));
     ma.setAttribute('aria-checked', String(Boolean(state.multiAudio)));
     // 지난 구성 기억(MUL-15) — 세션이 있으면 저장, 비면 다시 열기 버튼
     const savedIds = this.savedSessionIds();
-    if (n > 0) this.saveSessionIds(sessions.map((x) => x.channelId));
+    if (total > 0) this.saveSessionIds(sessions.map((x) => x.channelId));
     const restore = this.root.querySelector('[data-ml="restore"]');
-    restore.hidden = n > 0 || !savedIds.length;
+    restore.hidden = total > 0 || !savedIds.length;
     restore.textContent = `지난 구성 다시 열기 (${savedIds.length}개)`;
-    if (this.single != null && !sessions.some((x) => x.slot === this.single)) this.single = null;
+    if (this.single != null && !view.some((x) => x.slot === this.single)) this.single = null;
     // 라이브 메뉴 단독 보기(원본 시청 모드) — 같은 세션을 무대에 올려 다시 연결하지 않는다.
     const watched = state.watchId ? sessions.find((x) => x.id === state.watchId) : null;
     this.watchSlot = watched && watched.slot != null ? watched.slot : null;
     this.root.classList.toggle('as-watch', this.watchSlot != null);
+    this.noticeViewLimit(limit);
     // 단독 무대일 땐 라이브, 아니면 멀티라이브 — 전환 버튼이 지금 보기를 따른다(제목·아이콘은 늘 '라이브').
     const mode = this.watchSlot != null ? 'live' : 'multilive';
     setLiveModeActive(this.root.querySelector('.ml-header'), mode);
@@ -561,7 +571,7 @@ export class MultiLivePage {
     const focus = state.layout === 'focus' && n > 1;
     const stack = this.stackApplies(state, single);
     this.stage.className = `ml-stage ml-n${n <= 4 ? n : (n <= 9 ? 'many' : 'lots')} ${focus ? `ml-focus dir-${state.focusDirection}` : ''} ${state.layout === 'custom' && n > 1 && n <= 4 ? 'ml-custom' : ''} ${single != null ? 'ml-single' : ''} ${stack ? 'ml-stack' : ''}`;
-    this.empty.hidden = n > 0;
+    this.empty.hidden = total > 0;
     this.focusControls.hidden = state.layout !== 'focus';
     for (const b of this.root.querySelectorAll('[data-direction]')) {
       b.classList.toggle('active', b.dataset.direction === state.focusDirection);
@@ -571,7 +581,7 @@ export class MultiLivePage {
       this.ratioOutput.textContent = `${this.ratioInput.value}%`; this.syncRatioFill();
     }
 
-    const order = paneOrder(sessions, state.focusMainId || state.selectedId, state.layout);
+    const order = paneOrder(view, state.focusMainId || state.selectedId, state.layout);
     const live = new Set();
     for (const s of sessions) {
       if (s.slot == null) continue;
@@ -595,6 +605,8 @@ export class MultiLivePage {
       pane.controls?.setChannel(s.channelId);
       // 라이브 단독 보기의 무대 패인만 배속·화면 비율·자동 밝기·색 보정·이퀄라이저를 쓰고, 선명도의 확대(업스케일)를 허용한다.
       pane.controls?.setStage(this.watchSlot === s.slot);
+      // 고르지 않은 채널 — 닫지 않고(플레이어·채팅은 그대로, Rust 가 재생만 멈춘다) 무대에서만 숨긴다.
+      if (!shownIds.has(s.id)) { pane.el.hidden = true; pane.el.classList.remove('selected', 'ml-first'); continue; }
       this.renderPane(pane, s, order.indexOf(s.id), s.id === state.selectedId);
     }
     this.applyFocusGrid(focus, order);
@@ -622,7 +634,8 @@ export class MultiLivePage {
       }
     }
     if (before) playLayoutMotion(this.panes, before);
-    this.syncNowPlaying(sessions, state);
+    // 숨긴 채널(여러 소리 모드에서도 멈춘 채)은 '지금 재생 중' 후보에서 뺀다.
+    this.syncNowPlaying(view, state);
     this.syncChat(sessions.find((s) => s.id === state.selectedId) || null);
     // 채팅 테두리는 채팅을 보여 주는(선택) 패인의 색을 따른다.
     const shown = [...this.panes.values()].find((p) => p.sessionId && p.sessionId === state.selectedId);
@@ -655,7 +668,7 @@ export class MultiLivePage {
 
   /** 패인 배치의 지문 — 이게 바뀔 때만 움직임을 준다(시청자 수 같은 잦은 상태 갱신은 그대로). */
   motionSignature(state) {
-    const sessions = state.sessions || [];
+    const sessions = visibleSessions(state);
     const order = paneOrder(sessions, state.focusMainId || state.selectedId, state.layout);
     const slotOf = new Map(sessions.map((x) => [x.id, x.slot]));
     const single = state.watchId ? 'w' : this.single;
@@ -664,7 +677,7 @@ export class MultiLivePage {
 
   /** 2분할(그리드)을 위아래로 쌓는가 — 무대 비율로 고른 값(syncStack)을 그리드 2개일 때만 쓴다. */
   stackApplies(state, single) {
-    return Boolean(this.stackTwo) && state.layout === 'grid' && (state.sessions || []).length === 2 && single == null;
+    return Boolean(this.stackTwo) && state.layout === 'grid' && visibleSessions(state).length === 2 && single == null;
   }
 
   /** 무대 크기가 바뀌면 2분할 방향을 다시 고른다 — 바뀌었고 지금 2분할이면 다시 그려 FLIP 으로 옮긴다. */
@@ -674,7 +687,7 @@ export class MultiLivePage {
     const next = stackTwoPanes(r.width, r.height);
     if (next === Boolean(this.stackTwo)) return;
     this.stackTwo = next;
-    if (this.state.layout === 'grid' && (this.state.sessions || []).length === 2) this.render(this.state);
+    if (this.state.layout === 'grid' && visibleSessions(this.state).length === 2) this.render(this.state);
   }
 
   fullMessage() {
@@ -788,7 +801,7 @@ export class MultiLivePage {
    */
   syncFocusInfo() {
     const st = this.state || {};
-    const sessions = st.sessions || [];
+    const sessions = visibleSessions(st);
     const side = st.focusDirection === 'left' || st.focusDirection === 'right';
     const on = side && this.stage.classList.contains('ml-focus') && this.watchSlot == null && this.single == null && !document.fullscreenElement;
     const mainId = on ? paneOrder(sessions, st.focusMainId || st.selectedId, st.layout)[0] : null;
@@ -856,7 +869,7 @@ export class MultiLivePage {
       const st = this.state;
       if (!st || this.localRatio == null) return;
       if (!this.stage.classList.contains('ml-focus')) { this.render(st); return; }
-      this.applyFocusGrid(true, paneOrder(st.sessions || [], st.focusMainId || st.selectedId, st.layout));
+      this.applyFocusGrid(true, paneOrder(visibleSessions(st), st.focusMainId || st.selectedId, st.layout));
     });
   }
 
@@ -891,7 +904,7 @@ export class MultiLivePage {
           const r = this.stage.getBoundingClientRect();
           const frac = axis === 'h' ? (ev.clientX - r.left) / r.width : (ev.clientY - r.top) / r.height;
           this.localGrid = { ...(this.localGrid || { h: this.state.horizontalRatio, v: this.state.verticalRatio }), [axis]: Math.min(0.8, Math.max(0.2, frac)) };
-          this.applyCustomGrid(true, (this.state.sessions || []).length);
+          this.applyCustomGrid(true, visibleSessions(this.state).length);
         };
         // 취소(pointercancel)도 — 없으면 resizing·끌기 리스너·localGrid 가 남아 실제 비율을 덮었다.
         const up = () => {
@@ -982,6 +995,23 @@ export class MultiLivePage {
     for (const id of ids) {
       try { this.render(await api.multiLiveAdd(id)); } catch (e) { toast(e.message); }
     }
+  }
+
+  // ── 멀티라이브에서 볼 채널 고르기 ─────────────────────
+
+  /** 라이브에 멀티라이브 상한보다 많이 담아 온 채 멀티라이브로 오면 한 번 알린다 — 고르기 단추로 바로 간다. */
+  noticeViewLimit(limit) {
+    // 상한 아래로 내려가야 다음에 다시 알린다 — 단독 보기를 오가며(그동안은 제한이 풀려 보인다) 거듭 뜨지 않게.
+    if (limit.total <= limit.max) { this.viewLimitNoticed = false; return; }
+    // 실제 멀티라이브 화면에서만 — 라이브 단독 보기 중이거나 그 화면을 나가는 길에는 띄우지 않는다.
+    if (!limit.limited || this.viewLimitNoticed || this.root.hidden || !this.onMultiRoute || this.watchSlot != null) return;
+    this.viewLimitNoticed = true;
+    toast(`라이브에 담은 ${limit.total}개 중 ${limit.shown}개만 함께 재생해요 — 볼 채널을 고를 수 있어요`, 6000, { label: '고르기', run: () => this.showViewPicker() });
+  }
+
+  showViewPicker() {
+    if (!viewLimit(this.state).limited) return;
+    openViewPicker({ state: this.state, onApply: (ids) => this.run(api.multiLiveSetView(ids)) });
   }
 
   // ── 채널 프리셋 (MUL-14) ─────────────────────
@@ -1313,6 +1343,7 @@ export class MultiLivePage {
       }
       case 'multi-audio': this.run(api.multiLiveAudio(null, true)); break;
       case 'presets': this.showPresets(); break;
+      case 'pick': this.showViewPicker(); break;
       case 'restore': this.restoreSessions(this.savedSessionIds()); break;
       case 'retry': if (sessionId) { toast('다시 연결합니다', 1200); this.run(api.multiLiveRetry(sessionId)); } break;
       case 'alert-pos': this.alerts.preview(); break;

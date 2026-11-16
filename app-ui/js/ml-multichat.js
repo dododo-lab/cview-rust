@@ -213,7 +213,8 @@ export class MultiLiveMergedChat {
   /** 패인 구성에 맞춰 추가 세션을 열고 닫고, 칸을 배치한다(render 마다 불린다 — 바뀐 것만 건드린다). */
   sync() {
     const state = this.getState() || {};
-    const all = (state.sessions || []).filter((s) => s.chatChannelId);
+    // 멀티라이브 상한을 넘어 숨긴 채널(ml-view-picker.js)은 함께 보는 채팅에서도 뺀다.
+    const all = (state.sessions || []).filter((s) => s.chatChannelId && s.inMultiView !== false);
     const sessions = this.on && !AUX_WINDOW ? all : [];
     const hueOf = new Map();
     for (const p of this.getPanes().values()) if (p.sessionId) hueOf.set(p.sessionId, p.hue);

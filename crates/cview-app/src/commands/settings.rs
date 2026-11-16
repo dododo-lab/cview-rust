@@ -147,10 +147,15 @@ fn apply_domain(services: &AppServices, domain: &str, patch: Value) -> CmdResult
 pub async fn settings_update(
     app: tauri::AppHandle,
     services: State<'_, AppServices>,
+    shell: State<'_, MultiLiveShell>,
     domain: String,
     patch: Value,
 ) -> CmdResult<SettingsDto> {
     apply_domain(&services, &domain, patch)?;
+    if domain == "multiLive" {
+        // 멀티라이브 상한이 바뀌면 보이는 패인·디코드 예산·패인 크기를 바로 다시 맞춘다(화면과 재생이 어긋나지 않게).
+        shell.manager.lock().multi_live_limits_changed();
+    }
     if domain == "appearance" {
         // 설정 "디버그 로그"를 켜고 끄면 바로 반영하고 화면 수집기에 알린다.
         if let Ok(dir) = tauri::Manager::path(&app).app_data_dir() {
@@ -255,6 +260,7 @@ pub async fn settings_export(services: State<'_, AppServices>) -> CmdResult<Stri
 #[tauri::command]
 pub async fn settings_import(
     services: State<'_, AppServices>,
+    shell: State<'_, MultiLiveShell>,
     json: String,
 ) -> CmdResult<Vec<String>> {
     let root: Value = serde_json::from_str(&json)
@@ -270,6 +276,10 @@ pub async fn settings_import(
             }
         }
     }
+    if map.contains_key("multiLive") {
+        // 가져온 멀티라이브 상한도 저장·초기화처럼 바로 반영한다.
+        shell.manager.lock().multi_live_limits_changed();
+    }
     Ok(skipped)
 }
 
@@ -277,6 +287,7 @@ pub async fn settings_import(
 #[tauri::command]
 pub async fn settings_reset(
     services: State<'_, AppServices>,
+    shell: State<'_, MultiLiveShell>,
     domain: String,
 ) -> CmdResult<SettingsDto> {
     let s = &services.settings;
@@ -306,6 +317,9 @@ pub async fn settings_reset(
         return Err(CommandError(format!("알 수 없는 설정 영역: {domain}")));
     }
     services.api.update_network_settings(&s.network());
+    if domain == "all" || domain == "multiLive" {
+        shell.manager.lock().multi_live_limits_changed();
+    }
     Ok(snapshot(&services))
 }
 
