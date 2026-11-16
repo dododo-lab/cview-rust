@@ -37,7 +37,7 @@ function mockTauri() {
   window.__TAURI__ = {
     core: {
       invoke: async (cmd, args) => {
-        calls.push({ cmd, args });
+        calls.push({ cmd, args, at: Date.now() }); // at — 모의 시계 기준 호출 시각
         const h = handlers[cmd];
         if (!h) throw new Error(`mock: ${cmd}`);
         return h(args);
@@ -70,8 +70,14 @@ async function open(setup = '') {
   await page.goto(base);
   await page.waitForSelector('[data-page]', { state: 'attached' });
   await page.evaluate(() => document.querySelectorAll('.sheet-scrim.welcome-scrim').forEach((x) => x.remove()));
+  // 앱은 확인 타이머를 건(installUpdateNotifier) 바로 뒤에 deeplink_take_pending 을 부른다 — 그때가 '실행 직후' 기준점이다.
+  // 이보다 먼저 시계를 앞당기면 타이머가 늦게 걸려 첫 확인 시점을 잴 수 없다.
+  await page.waitForFunction(() => window.__mock.calls.some((c) => c.cmd === 'deeplink_take_pending'));
+  const readyAt = await page.evaluate(() => window.__mock.calls.find((c) => c.cmd === 'deeplink_take_pending').at);
   const checks = () => page.evaluate(() => window.__mock.calls.filter((c) => c.cmd === 'update_check').length);
-  return { page, errors, checks };
+  // 기준점에서 첫 확인까지(모의 시계 ms) — 15초(FIRST_DELAY_MS) 안팎이어야 한다
+  const firstDelay = () => page.evaluate((t0) => window.__mock.calls.find((c) => c.cmd === 'update_check').at - t0, readyAt);
+  return { page, errors, checks, firstDelay };
 }
 
 // 시계를 조금씩 앞당기며 조건을 기다린다. 앱은 비동기 시작(설정 읽기 등)을 마친 뒤에야 확인 타이머를 걸고, 실패 뒤 재시도
@@ -86,13 +92,19 @@ async function advanceUntil(page, pred, stepMs, maxSteps, what) {
 }
 const pillShown = () => Boolean(document.querySelector('#update-pill:not([hidden]) .update-pill-main'));
 const checkCount = () => window.__mock.calls.filter((c) => c.cmd === 'update_check').length;
+// 첫 확인은 실행 직후가 아니라 약 15초 뒤 — 시계를 1초씩 앞당겨 기다리되 늦게 와도 통과하지 않게 상한을 둔다
+async function assertFirstCheckAt15s(firstDelay) {
+  const ms = await firstDelay();
+  assert.ok(ms >= 14000 && ms <= 17000, `첫 확인이 실행 ${ms / 1000}초 뒤(15초 안팎이어야 함)`);
+}
 
 await check('실행 직후엔 확인하지 않고 15초 뒤 조용히 확인 → 사이드바 줄·토스트', async () => {
-  const { page, errors, checks } = await open();
+  const { page, errors, checks, firstDelay } = await open();
   await page.clock.fastForward(5000);
   assert.equal(await checks(), 0, '5초 안에 확인하면 안 됨');
-  await advanceUntil(page, pillShown, 1000, 40, '업데이트 줄');
+  await advanceUntil(page, pillShown, 1000, 20, '업데이트 줄');
   assert.equal(await checks(), 1);
+  await assertFirstCheckAt15s(firstDelay);
   assert.ok((await page.locator('#update-pill').innerText()).includes('새 버전 0.1.41'));
   assert.ok((await page.locator('.toast-stack').innerText()).includes('0.1.41'));
   // 토스트는 창 하단 중앙 — 동작 단추가 있는 토스트가 오른쪽으로 밀리던 문제 회귀 방지
@@ -120,8 +132,9 @@ await check('실행 직후엔 확인하지 않고 15초 뒤 조용히 확인 →
 });
 
 await check('같은 버전은 다시 열어도 토스트를 또 띄우지 않고, ✕ 로 줄을 숨기면 그 버전 동안 숨김', async () => {
-  const { page } = await open(() => { localStorage.setItem('cview.updateNotified', '0.1.41'); });
-  await advanceUntil(page, pillShown, 1000, 40, '업데이트 줄');
+  const { page, firstDelay } = await open(() => { localStorage.setItem('cview.updateNotified', '0.1.41'); });
+  await advanceUntil(page, pillShown, 1000, 20, '업데이트 줄');
+  await assertFirstCheckAt15s(firstDelay);
   assert.equal(await page.locator('.toast-stack .toast').count(), 0);
   await page.locator('#update-pill .update-pill-close').click();
   assert.equal(await page.locator('#update-pill').isHidden(), true);
@@ -130,9 +143,10 @@ await check('같은 버전은 다시 열어도 토스트를 또 띄우지 않고
 });
 
 await check('최신 버전이면 줄도 토스트도 없음', async () => {
-  const { page, checks } = await open(() => { window.__latest = true; });
+  const { page, checks, firstDelay } = await open(() => { window.__latest = true; });
   await page.evaluate(() => { window.__mock.handlers.update_check = () => ({ current: '0.1.41', latest: '0.1.41', newer: false }); });
-  await advanceUntil(page, checkCount, 1000, 40, '첫 확인');
+  await advanceUntil(page, checkCount, 1000, 20, '첫 확인');
+  await assertFirstCheckAt15s(firstDelay);
   await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
   assert.equal(await checks(), 1);
   assert.equal(await page.locator('#update-pill').isHidden(), true);
@@ -150,9 +164,10 @@ await check('설정에서 자동 확인을 끄면 서버에 묻지 않음', asyn
 });
 
 await check('확인 실패는 조용히 넘어가고 30분 뒤 다시 시도', async () => {
-  const { page, checks } = await open();
+  const { page, checks, firstDelay } = await open();
   await page.evaluate(() => { window.__mock.handlers.update_check = () => { throw new Error('오프라인'); }; });
-  await advanceUntil(page, checkCount, 1000, 40, '첫 확인');
+  await advanceUntil(page, checkCount, 1000, 20, '첫 확인');
+  await assertFirstCheckAt15s(firstDelay);
   assert.equal(await page.locator('.toast-stack .toast').count(), 0);
   // 실패 직후(6시간 주기가 아니라) 30분 안팎에 다시 묻는다 — 1분씩 앞당겨 29~32분 사이에 와야 한다
   let minutes = 0;

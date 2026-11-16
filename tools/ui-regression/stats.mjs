@@ -370,7 +370,17 @@ for (const width of [900, 700]) {
     assert.equal(await p.locator(`${S} .rt-opt`).first().isVisible(), tableWidth > 560);
     // 화면 아래 차트로 초점이 가며 자동 스크롤돼도 풍선은 닫히지 않고 그 차트 곁으로 옮겨진다
     await p.evaluate(() => { document.querySelector('[data-page="stats"]').scrollTop = 0; });
-    await p.focus(`${S} [data-chart="cats"]`);
+    // 키보드 사용자 — 탭 단추를 누른 커서는 그대로 두고 Tab 으로 차트에 들어간다(:focus-visible). 바로 앞 초점 자리에
+    // 스크롤 없이 초점을 둔 뒤 Tab — 차트는 화면 아래라 초점 이동으로 자동 스크롤된다.
+    await p.evaluate((sel) => {
+      const chart = document.querySelector(sel);
+      const all = [...document.querySelectorAll('button, a[href], input, select, [tabindex]:not([tabindex="-1"])')]
+        .filter((el) => !el.disabled && el.getClientRects().length && (el.compareDocumentPosition(chart) & Node.DOCUMENT_POSITION_FOLLOWING));
+      all.at(-1).focus({ preventScroll: true });
+    }, `${S} [data-chart="cats"]`);
+    await p.keyboard.press('Tab');
+    assert.equal(await p.evaluate(() => document.activeElement.dataset.chart), 'cats', 'Tab 이 차트로 가지 않았다');
+    assert.equal(await p.evaluate(() => document.activeElement.matches(':focus-visible')), true, '키보드 초점이 아니다');
     await p.waitForTimeout(250);
     const tip = p.locator(`${S} .chart-tip`);
     assert.equal(await tip.isVisible(), true, 'tip stays open after focus scroll');
@@ -386,6 +396,38 @@ for (const width of [900, 700]) {
     await shotFull(narrow.page, 'stats-narrow');
   }
   await narrow.page.close();
+}
+
+// ── 클릭 초점 뒤 커서 그대로 굴리기 ─────────────────────
+// 클릭으로 초점이 간 차트(:focus-visible 아님)는 키보드 풍선 가드(커서 그대로면 둔다)를 받지 않는다 — 휠로 굴려 다른 차트가
+// 커서 밑에 오면 그 차트로 풍선이 옮겨 간다(WebKit 은 커서가 그대로여도 pointermove 를 보낸다).
+{
+  const o = await openStats({ height: 700, params: { tab: 'time', period: '30d' } });
+  await check('T11b click-focused chart hands the tip to the chart scrolled under a still cursor', async () => {
+    const p = o.page;
+    const heat = await p.locator(`${S} [data-chart="heat"]`).boundingBox();
+    const hours = await p.locator(`${S} [data-chart="hours"]`).boundingBox();
+    const x = hours.x + hours.width * 0.4;
+    const y = heat.y + heat.height * 0.5;
+    await p.mouse.move(x, y, { steps: 3 });
+    await p.mouse.down();
+    await p.mouse.up();
+    await p.waitForTimeout(150);
+    assert.equal(await p.evaluate(() => document.activeElement.dataset.chart), 'heat', '클릭이 차트에 초점을 주지 않았다');
+    assert.equal(await p.evaluate(() => document.activeElement.matches(':focus-visible')), false);
+    assert.ok(await p.locator(`${S} [data-chart="heat"] .is-active`).count() > 0, '클릭한 칸 풍선');
+    // 커서는 그대로 — 아래 시간대 차트 막대 높이 가운데가 커서 밑에 오도록 굴린다
+    await p.mouse.wheel(0, Math.round(hours.y + hours.height * 0.6 - y));
+    await p.waitForTimeout(250);
+    await p.mouse.move(x, y); // 같은 좌표 — 엔진이 굴림 뒤 보내는 가짜 움직임과 같다(Chromium 은 보내지 않을 때가 있다)
+    await p.waitForTimeout(150);
+    const under = await p.evaluate(([px, py]) => document.elementFromPoint(px, py)?.closest('[data-chart]')?.dataset.chart, [x, y]);
+    assert.equal(under, 'hours', `커서 밑 차트 ${under}`);
+    assert.equal(await p.locator(`${S} [data-chart="heat"] .is-active`).count(), 0, '위 차트 풍선이 남았다');
+    assert.ok(await p.locator(`${S} [data-chart="hours"] .is-active`).count() > 0, '커서 밑 차트로 풍선이 옮겨 가지 않았다');
+    assert.deepEqual(o.errors, []);
+  });
+  await o.page.close();
 }
 
 // ── 라이트 테마 ─────────────────────
