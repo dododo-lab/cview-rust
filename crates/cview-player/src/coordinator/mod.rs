@@ -260,6 +260,10 @@ pub(crate) struct State {
     pub(crate) master_playlist: Option<MasterPlaylist>,
     pub(crate) current_quality: Option<StreamQualityInfo>,
     pub(crate) stream_url: Option<url::Url>,
+    /// 채널 시작·정지·종료를 넘겨 도착한 응답을 버리는 재생 세대.
+    pub(crate) stream_generation: u64,
+    /// 재연결 준비·종료 확인의 소유권. 일시정지나 새 복구 요청도 앞선 작업을 취소한다.
+    pub(crate) reconnect_generation: u64,
     pub(crate) start_time: Option<Instant>,
     pub(crate) is_proxy_active: bool,
     pub(crate) requested_proxy_mode: StreamProxyMode,
@@ -382,6 +386,8 @@ impl StreamCoordinator {
             master_playlist: None,
             current_quality: None,
             stream_url: None,
+            stream_generation: 0,
+            reconnect_generation: 0,
             start_time: None,
             is_proxy_active: false,
             requested_proxy_mode: config.stream_proxy_mode,

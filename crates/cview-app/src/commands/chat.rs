@@ -96,7 +96,10 @@ pub async fn chat_connect(
             if !still_current(&services) {
                 return Ok(superseded());
             }
-            chat.disconnect().await;
+            let Some(detached) = chat.detach_if_current(ticket) else {
+                return Ok(superseded());
+            };
+            detached.await;
             return Err(e.into());
         }
     };
@@ -117,6 +120,9 @@ pub async fn chat_connect(
 
     {
         let mut s = chat.lock();
+        if s.connection_request_generation != ticket {
+            return Ok(superseded());
+        }
         s.current_user_uid = uid.clone();
         s.current_user_nickname = nickname;
     }
@@ -169,15 +175,22 @@ pub async fn chat_send(
     services: State<'_, AppServices>,
     text: String,
     session: Option<String>,
+    chat_channel_id: Option<String>,
 ) -> CmdResult<()> {
-    let chat = services.chat_vm(session.as_deref());
+    let chat = services
+        .existing_chat_vm(session.as_deref())
+        .ok_or_else(|| CommandError("채팅 연결이 종료되었습니다".into()))?;
     let Some(text) = sanitize_outgoing(&text) else {
         return Err(CommandError("메시지를 입력하세요".into()));
     };
     if !services.auth.is_authenticated() {
         return Err(CommandError("로그인 후 채팅 참여 가능".into()));
     }
-    match chat.send_message(&text).await {
+    let outcome = match chat_channel_id {
+        Some(channel) => chat.send_message_for_channel(&text, &channel).await,
+        None => chat.send_message(&text).await,
+    };
+    match outcome {
         MessageSendOutcome::Sent | MessageSendOutcome::HandledLocally => Ok(()),
         MessageSendOutcome::SessionChanged => Err(CommandError(
             "채팅 연결이 바뀌었습니다. 다시 보내 주세요".into(),

@@ -353,6 +353,7 @@ pub struct PanePlayer {
     cookies: Arc<CookieManager>,
     auth_key_channels: AuthKeyChannels,
     on_state_changed: StateChangedSlot,
+    stream_ended_probe: Arc<Mutex<Option<StreamEndedProbe>>>,
     presented_ticks: AtomicU64,
     watch_events: LiveWatchReporter,
     /// 시청 이벤트 화면 키(`pane-<번호>`) — 슬롯은 재사용되므로 플레이어마다 따로 붙인다.
@@ -384,12 +385,23 @@ impl PanePlayer {
         vm.apply_settings(settings, false);
         let on_state_changed: StateChangedSlot = Arc::new(Mutex::new(None));
         let slot = on_state_changed.clone();
+        let stream_ended_probe: Arc<Mutex<Option<StreamEndedProbe>>> = Arc::new(Mutex::new(None));
+        let probe_slot = stream_ended_probe.clone();
         vm.set_callbacks(PlayerCallbacks {
             on_playback_state_changed: Some(Arc::new(move || {
                 let cb = lock(&slot).clone();
                 if let Some(cb) = cb {
                     cb();
                 }
+            })),
+            on_check_stream_ended: Some(Arc::new(move |_| {
+                let probe = lock(&probe_slot).clone();
+                Box::pin(async move {
+                    match probe {
+                        Some(probe) => probe().await,
+                        None => false,
+                    }
+                })
             })),
             ..PlayerCallbacks::default()
         });
@@ -399,6 +411,7 @@ impl PanePlayer {
             cookies,
             auth_key_channels,
             on_state_changed,
+            stream_ended_probe,
             presented_ticks: AtomicU64::new(0),
             watch_events,
             watch_source: format!("pane-{}", NEXT_WATCH_SOURCE.fetch_add(1, Ordering::Relaxed)),
@@ -517,7 +530,9 @@ impl MultiLivePlayer for PanePlayer {
     fn set_on_playback_state_changed(&self, callback: Option<Arc<dyn Fn() + Send + Sync>>) {
         *lock(&self.on_state_changed) = callback;
     }
-    fn set_stream_ended_probe(&self, _probe: Option<StreamEndedProbe>) {}
+    fn set_stream_ended_probe(&self, probe: Option<StreamEndedProbe>) {
+        *lock(&self.stream_ended_probe) = probe;
+    }
     async fn start_stream(&self, request: MultiLiveStreamRequest) {
         let Ok(url) = Url::parse(&request.stream_url) else {
             tracing::warn!("멀티라이브: 스트림 URL 해석 실패");
@@ -552,6 +567,7 @@ impl MultiLivePlayer for PanePlayer {
         let mut start = StartStreamRequest::new(request.channel_id.clone(), url);
         start.channel_name = request.channel_name;
         start.live_title = request.live_title;
+        start.player_settings = Some(request.player_settings);
         start.playback_key_access = access;
         start.match_web_v2_source_eligible = request.match_web_v2_source_eligible;
         self.watch_events
@@ -1179,6 +1195,94 @@ fn live_status_snapshot(info: &LiveInfo) -> LiveStatusSnapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct NoWatchApi;
+
+    #[async_trait]
+    impl cview_app_core::services::live_watch_events::WatchEventApi for NoWatchApi {
+        async fn live_watch_status(
+            &self,
+            _: &str,
+        ) -> Result<cview_networking::client_watch::LiveWatchStatus, cview_core::error::ApiError>
+        {
+            unreachable!("재생하지 않은 테스트는 시청 이벤트를 보내지 않는다")
+        }
+        async fn current_live_id(&self, _: &str) -> Result<i64, cview_core::error::ApiError> {
+            unreachable!("재생하지 않은 테스트는 시청 이벤트를 보내지 않는다")
+        }
+        async fn post_live_watch_event(
+            &self,
+            _: &cview_networking::client_watch::LiveWatchEvent,
+        ) -> Result<(), cview_core::error::ApiError> {
+            unreachable!("재생하지 않은 테스트는 시청 이벤트를 보내지 않는다")
+        }
+    }
+
+    fn test_pane(settings: &PlayerSettings) -> Arc<PanePlayer> {
+        let engine = Arc::new(PaneEngine::new(0, Arc::new(|_, _| {})));
+        let cookies = Arc::new(CookieManager::new(
+            Arc::new(cview_auth::secret_store::KeychainService::in_memory()),
+            Arc::new(cview_auth::cookie::CookieJar::new()),
+        ));
+        PanePlayer::new(
+            Some(engine),
+            cookies,
+            Arc::new(Mutex::new(HashMap::new())),
+            settings,
+            LiveWatchReporter::new(Arc::new(NoWatchApi)),
+        )
+    }
+
+    fn test_stream_request(settings: PlayerSettings) -> MultiLiveStreamRequest {
+        MultiLiveStreamRequest {
+            channel_id: "테스트 채널".into(),
+            stream_url: "http://127.0.0.1:9/live.m3u8".into(),
+            channel_name: "테스트".into(),
+            live_title: "라이브 검사".into(),
+            player_settings: settings,
+            plan: LaunchPlan::default(),
+            match_web_v2_source_eligible: true,
+        }
+    }
+
+    #[tokio::test]
+    async fn pane_start_honors_player_settings() {
+        let settings = PlayerSettings {
+            low_latency_mode: false,
+            stream_proxy_mode: cview_core::models::stream_proxy::StreamProxyMode::None,
+            ..Default::default()
+        };
+        let pane = test_pane(&settings);
+        pane.start_stream(test_stream_request(settings.clone()))
+            .await;
+        let coordinator = pane.vm.read().coordinator().cloned().unwrap();
+        assert!(
+            !coordinator.configuration().enable_low_latency,
+            "끄기로 설정한 저지연 제어가 켜졌다"
+        );
+        assert_eq!(
+            coordinator.configuration().stream_proxy_mode,
+            settings.stream_proxy_mode
+        );
+        pane.stop_stream().await;
+    }
+
+    #[tokio::test]
+    async fn pane_reconnect_checks_stream_ended_probe() {
+        let pane = test_pane(&PlayerSettings::default());
+        pane.set_stream_ended_probe(Some(Arc::new(|| Box::pin(async { true }))));
+        pane.start_stream(test_stream_request(PlayerSettings::default()))
+            .await;
+        let coordinator = pane.vm.read().coordinator().cloned().unwrap();
+        coordinator.trigger_reconnect("방송 종료 검사", false);
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        assert_eq!(
+            coordinator.phase(),
+            StreamPhase::StreamEnded,
+            "종료된 방송에 재연결을 시도했다"
+        );
+        pane.stop_stream().await;
+    }
 
     type SentLog = Arc<Mutex<Vec<(u32, String)>>>;
 

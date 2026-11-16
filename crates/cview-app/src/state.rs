@@ -6,6 +6,7 @@
 //! (`commands`)은 그 상태를 기존 DTO 로 바꿔 돌려준다. 전역 상태 규칙은 app-core [`AppState`].
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
@@ -242,6 +243,8 @@ pub struct AppServices {
     pub engine: Arc<WebViewHlsEngine>,
     /// 재생 시작·정지 직렬화 — 지금 재생 중인 채널.
     pub player_channel: tokio::sync::Mutex<Option<String>>,
+    /// 라이브 상세를 기다리는 시작 요청도 다음 시작·닫기로 취소한다.
+    player_request_generation: AtomicU64,
     /// 지금 단독 재생 중인 원본 스트림 주소와 채널 이름(녹화용).
     pub playing_stream: Mutex<Option<(url::Url, String)>>,
     /// 방송 녹화(원본 StreamRecordingService).
@@ -388,6 +391,7 @@ impl AppServices {
             player,
             engine,
             player_channel: tokio::sync::Mutex::new(None),
+            player_request_generation: AtomicU64::new(0),
             watch_record: Mutex::new(None),
             watch_events,
             playing_stream: Mutex::new(None),
@@ -428,7 +432,26 @@ impl AppServices {
 
     /// 재생 정지.
     pub async fn stop_player(&self) {
+        let generation = self.begin_player_request();
+        self.stop_player_for_request(generation).await;
+    }
+
+    pub(crate) fn begin_player_request(&self) -> u64 {
+        self.player_request_generation
+            .fetch_add(1, Ordering::SeqCst)
+            .wrapping_add(1)
+    }
+
+    pub(crate) fn is_current_player_request(&self, generation: u64) -> bool {
+        self.player_request_generation.load(Ordering::SeqCst) == generation
+    }
+
+    /// 새 시작 요청이 앞 재생을 정리할 때에는 그 요청의 세대를 그대로 유지한다.
+    pub(crate) async fn stop_player_for_request(&self, generation: u64) -> bool {
         let mut channel = self.player_channel.lock().await;
+        if !self.is_current_player_request(generation) {
+            return false;
+        }
         if channel.take().is_some() {
             self.player.stop_stream().await;
         }
@@ -439,6 +462,7 @@ impl AppServices {
             .lock()
             .unwrap_or_else(|e| e.into_inner()) = None;
         self.end_watch_record();
+        true
     }
 
     /// 세션 키 → 채팅 뷰모델. 없거나 `main` 이면 기본 세션, 아니면 없을 때 새로 만든다.
@@ -460,6 +484,19 @@ impl AppServices {
         });
         map.insert(key.to_string(), vm.clone());
         vm
+    }
+
+    /// 전송처럼 새 연결을 만들면 안 되는 명령은 이미 살아 있는 세션만 찾는다.
+    pub fn existing_chat_vm(&self, session: Option<&str>) -> Option<ChatViewModel> {
+        let key = chat_session_key(session);
+        if key == MAIN_CHAT_SESSION {
+            return Some(self.chat.clone());
+        }
+        self.chat_sessions
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(key)
+            .cloned()
     }
 
     /// `vm` 이 아직 이 세션 키의 뷰모델인가. 기다리는 동안 `drop_chat_session` 이 지웠다면 `false` —

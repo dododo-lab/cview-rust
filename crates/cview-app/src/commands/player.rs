@@ -33,11 +33,23 @@ pub async fn player_start(
     services: State<'_, AppServices>,
     channel_id: String,
 ) -> CmdResult<PlaybackStartedDto> {
-    services.stop_player().await;
-    // 재생을 시작한 창이 플레이어 명령을 받는다(보조 플레이어 창, PLY-18).
-    crate::windows::set_player_target(window.label());
+    start_player(&services, window.label(), channel_id).await
+}
+
+async fn start_player(
+    services: &AppServices,
+    window_label: &str,
+    channel_id: String,
+) -> CmdResult<PlaybackStartedDto> {
+    let generation = services.begin_player_request();
+    if !services.stop_player_for_request(generation).await {
+        return Err(CommandError("재생 요청이 취소되었습니다".into()));
+    }
 
     let info = services.api.live_detail(&channel_id, true).await?;
+    if !services.is_current_player_request(generation) {
+        return Err(CommandError("재생 요청이 취소되었습니다".into()));
+    }
     if info.status != LiveStatus::Open {
         return Err(CommandError("현재 방송 중이 아닙니다".into()));
     }
@@ -75,11 +87,16 @@ pub async fn player_start(
 
     let connector_limited_height =
         crate::live_connector::policy_height(plan.p2p_general_max_height);
+    let mut channel = services.player_channel.lock().await;
+    if !services.is_current_player_request(generation) {
+        return Err(CommandError("재생 요청이 취소되었습니다".into()));
+    }
+    // 최신 요청이 재생을 확정한 창만 명령을 받는다(보조 플레이어 창 포함).
+    crate::windows::set_player_target(window_label);
     services
         .engine
         .set_policy_quality_ceiling_height(connector_limited_height);
 
-    let mut channel = services.player_channel.lock().await;
     // 재생 시작 전에 등록해 둔다 — 첫 `watchActivity` 가 시작 명령보다 먼저 올 수 있다.
     services.watch_events.begin(
         crate::state::VIEWER_WATCH_SOURCE,
@@ -87,9 +104,13 @@ pub async fn player_start(
         Some(info.live_id),
     );
     services.player.start_stream(request).await;
+    if !services.is_current_player_request(generation) {
+        services.watch_events.end(crate::state::VIEWER_WATCH_SOURCE);
+        services.player.stop_stream().await;
+        return Err(CommandError("재생 요청이 취소되었습니다".into()));
+    }
     let phase = services.player.read().stream_phase.clone();
     if let StreamPhase::Error(message) = phase {
-        drop(channel);
         services.watch_events.end(crate::state::VIEWER_WATCH_SOURCE);
         services.player.stop_stream().await;
         return Err(CommandError(format!(
@@ -97,7 +118,6 @@ pub async fn player_start(
         )));
     }
     *channel = Some(channel_id.clone());
-    drop(channel);
 
     services.begin_watch_record(&info);
     *services
@@ -110,6 +130,7 @@ pub async fn player_start(
             .map(|c| c.channel_name.clone())
             .unwrap_or_else(|| channel_id.clone()),
     ));
+    drop(channel);
 
     Ok(PlaybackStartedDto {
         live: LiveDetailDto::from_live_info(&info, &channel_id),
@@ -227,5 +248,112 @@ pub fn log_player_page_message(source: &str, message: &Value) {
             "player.event",
             serde_json::json!({ "source": source, "type": kind, "data": message.get("data").cloned().unwrap_or(Value::Null) }),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+    use cview_networking::transport::{HttpRequest, HttpResponse, HttpTransport, TransportError};
+    use tokio::sync::Notify;
+
+    struct EmptyWebView;
+
+    #[async_trait]
+    impl cview_auth::WebViewDataStore for EmptyWebView {
+        async fn all_cookies(&self) -> Vec<cview_auth::StoredCookie> {
+            Vec::new()
+        }
+        async fn delete_cookie(&self, _: &cview_auth::StoredCookie) {}
+        async fn remove_all_website_data(&self) {}
+    }
+
+    #[derive(Default)]
+    struct DelayedLiveApi {
+        entered: Notify,
+        release: Notify,
+    }
+
+    #[async_trait]
+    impl HttpTransport for DelayedLiveApi {
+        async fn send(&self, request: HttpRequest) -> Result<HttpResponse, TransportError> {
+            let slow = request.url.path().contains("/slow/");
+            if slow {
+                self.entered.notify_one();
+                self.release.notified().await;
+            }
+            let channel = if slow { "slow" } else { "fast" };
+            let playback = serde_json::json!({"media":[{
+                "mediaId":"HLS", "protocol":"HLS", "path":format!("http://127.0.0.1:9/{channel}.m3u8")
+            }]}).to_string();
+            let response = serde_json::json!({"code":200,"content":{
+                "liveId":1,"liveTitle":"재생 순서 검사","status":"OPEN","livePlaybackJson":playback,
+                "channel":{"channelId":channel,"channelName":"테스트"}
+            }});
+            Ok(HttpResponse::new(
+                200,
+                serde_json::to_vec(&response).unwrap(),
+            ))
+        }
+    }
+
+    async fn services() -> (tempfile::TempDir, Arc<AppServices>, Arc<DelayedLiveApi>) {
+        let dir = tempfile::tempdir().unwrap();
+        let mut services = AppServices::initialize(
+            dir.path(),
+            "app.cview.test.live-order",
+            Arc::new(EmptyWebView),
+            crate::state::ShellSinks::noop(),
+        )
+        .await;
+        let transport = Arc::new(DelayedLiveApi::default());
+        services.api = cview_networking::ChzzkApiClient::new(cview_networking::ClientConfig::new(
+            transport.clone(),
+        ));
+        (dir, Arc::new(services), transport)
+    }
+
+    #[tokio::test]
+    async fn latest_channel_request_wins_when_live_detail_arrives_out_of_order() {
+        let (_dir, services, api) = services().await;
+        let slow = {
+            let services = services.clone();
+            tokio::spawn(async move { start_player(&services, "main", "slow".into()).await })
+        };
+        api.entered.notified().await;
+        start_player(&services, "main", "fast".into())
+            .await
+            .unwrap();
+        api.release.notify_one();
+        let old = slow.await.unwrap();
+        assert!(old.is_err(), "늦은 라이브 상세가 이전 채널을 다시 재생했다");
+        assert_eq!(
+            services.player_channel.lock().await.as_deref(),
+            Some("fast")
+        );
+        assert_eq!(
+            services.player.read().current_channel_id.as_deref(),
+            Some("fast")
+        );
+        services.stop_player().await;
+    }
+
+    #[tokio::test]
+    async fn closing_viewer_cancels_pending_live_detail() {
+        let (_dir, services, api) = services().await;
+        let pending = {
+            let services = services.clone();
+            tokio::spawn(async move { start_player(&services, "main", "slow".into()).await })
+        };
+        api.entered.notified().await;
+        services.stop_player().await;
+        api.release.notify_one();
+        let old = pending.await.unwrap();
+        assert!(old.is_err(), "시청 화면을 닫은 뒤 뒤늦게 재생을 시작했다");
+        assert!(services.player_channel.lock().await.is_none());
+        assert_eq!(services.player.read().stream_phase, StreamPhase::Idle);
+        assert!(services.playing_stream.lock().unwrap().is_none());
+        assert_eq!(services.watch_events.session_count(), 0);
     }
 }

@@ -326,6 +326,7 @@ export class MultiChatPage {
 
   /** 보낼 채널을 바꾸면 — 이모티콘·닉네임 후보가 그 채널 것으로 바뀐다. */
   onTargetChange() {
+    this.pendingSend = null;
     this.composer.setAutocompleteOpen(false);
     if (!this.composer.picker.hidden) this.composer.renderPicker();
     this.updateMergedInput();
@@ -335,7 +336,8 @@ export class MultiChatPage {
     const c = this.targetEntry();
     const loggedIn = this.isLoggedIn();
     const p = c && c.panel;
-    const enabled = Boolean(loggedIn && p && p.connected && p.canSend);
+    if (this.pendingSend && (this.pendingSend.entry !== c || this.pendingSend.seq !== p?.connSeq)) this.pendingSend = null;
+    const enabled = Boolean(loggedIn && p?.canSendMessage && !p.pendingSend && !this.pendingSend);
     const input = this.mergedInput;
     input.disabled = !enabled;
     this.mergedForm.querySelector('button[type="submit"], button:not([type])').disabled = !enabled;
@@ -346,6 +348,8 @@ export class MultiChatPage {
     if (!loggedIn) html = '로그인하면 채팅에 참여할 수 있어요 <button class="link-btn" data-login>로그인</button>';
     else if (p && !p.connected) html = `${esc(c.name)} 채팅에 연결되어 있지 않습니다`;
     else if (p && !p.canSend) html = `${esc(c.name)} 채팅방에서는 지금 채팅을 보낼 수 없습니다 (팔로워·구독자 전용이거나 제한 중)`;
+    else if (p?.restrictedUntil > Date.now()) html = `${esc(c.name)}: ${esc(p.restrictText)}`;
+    else if (p?.kicked) html = `${esc(c.name)} 채팅방에서 퇴장되어 메시지를 보낼 수 없습니다`;
     this.mergedBanner.innerHTML = html;
     this.mergedBanner.hidden = !html;
   }
@@ -370,6 +374,7 @@ export class MultiChatPage {
     const c = this.channels.find((x) => x.session === p.session);
     if (!c) return;
     const ev = p.event;
+    if (!c.panel.active || (ev.chatChannelId && ev.chatChannelId !== c.panel.chatChannelId)) return;
     if (ev.type === 'blinded') {
       blindMergedLines([this.mergedList], c.channelId, ev.messageId, ev.blindText);
       // 아직 붙이지 않은(화면을 떠나 있는 동안 모은) 메시지도
@@ -451,14 +456,28 @@ export class MultiChatPage {
 
   async sendMerged() {
     const input = this.mergedInput;
-    const text = input.value.trim();
-    if (!text || input.disabled) return;
+    const submitted = input.value;
+    const text = submitted.trim();
+    const entry = this.targetEntry();
+    if (!text || input.disabled || this.pendingSend || !entry?.panel.canSendMessage) return;
+    const request = { entry, seq: entry.panel.connSeq, chatChannelId: entry.panel.chatChannelId };
+    const current = () => this.pendingSend === request && this.targetEntry() === entry
+      && entry.panel.connSeq === request.seq && entry.panel.active && !entry.panel.destroyed;
+    this.pendingSend = request;
+    this.updateMergedInput();
     try {
-      await api.chatSend(text, this.target.value);
-      input.value = '';
+      await api.chatSend(text, entry.session, request.chatChannelId);
+      if (!current()) return;
+      if (input.value === submitted) input.value = '';
       this.composer.remember(text);
-    } catch (e) { toast(e.message); }
-    this.composer.renderCount();
+    } catch (e) { if (current()) toast(e.message); }
+    finally {
+      if (current()) {
+        this.pendingSend = null;
+        this.updateMergedInput();
+        this.composer.renderCount();
+      }
+    }
   }
 
   // ── 검색 (MUL-03) ──

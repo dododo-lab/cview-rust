@@ -12,6 +12,14 @@ use crate::reconnection::{AttemptCallback, ExhaustedCallback};
 const RECONNECT_FIRST_FRAME_WAIT: Duration = Duration::from_secs(8);
 
 impl StreamCoordinator {
+    fn owns_reconnect(&self, generation: u64) -> bool {
+        let s = self.st();
+        s.reconnect_generation == generation
+            && s.phase == StreamPhase::Reconnecting
+            && !s.user_paused
+            && s.stream_url.is_some()
+    }
+
     /// 쿨다운 중 들어온 신호(대표적으로 fatal 오류)는 버리면 엔진이 죽은 채 남는다 — 이 신호를 다시
     /// 보내 줄 감시자가 없다. 쿨다운이 끝났을 때 그사이 다른 재연결·세션 교체가 없었고 엔진이 아직
     /// 오류 상태면 한 번 더 시도한다. 같은 쿨다운 창의 신호 여럿은 시도 하나로 모인다.
@@ -49,7 +57,7 @@ impl StreamCoordinator {
     pub fn trigger_reconnect(&self, reason: &str, bypass_cooldown: bool) {
         let engine = self.engine();
         let suspend = engine.is_some_and(|e| e.is_suspend_intent_active());
-        let raw_url = {
+        let (raw_url, generation) = {
             let mut s = self.st();
             if s.user_paused
                 || matches!(s.phase, StreamPhase::Idle | StreamPhase::StreamEnded)
@@ -74,7 +82,8 @@ impl StreamCoordinator {
                 return;
             }
             s.last_reconnect_time = Some(now);
-            raw_url
+            s.reconnect_generation = s.reconnect_generation.wrapping_add(1);
+            (raw_url, s.reconnect_generation)
         };
         self.update_phase(StreamPhase::Reconnecting);
         tracing::info!("StreamCoordinator: 재연결 시작 ({reason})");
@@ -85,7 +94,11 @@ impl StreamCoordinator {
                 return;
             };
             // 종료된 방송에 재연결하지 않는다.
-            if this.check_stream_ended().await {
+            let ended = this.check_stream_ended().await;
+            if !this.owns_reconnect(generation) {
+                return;
+            }
+            if ended {
                 this.handle_stream_ended();
                 return;
             }
@@ -96,14 +109,9 @@ impl StreamCoordinator {
             }
             this.refresh_master_manifest().await;
             // 준비 중 stopStream/streamEnded 가 끼어들었으면 좀비 재시작을 막는다.
-            {
-                let s = this.st();
-                if s.phase != StreamPhase::Reconnecting || s.stream_url.is_none() {
-                    tracing::info!(
-                        "StreamCoordinator: 재연결 준비 중 세션 정리 감지 — 재시작 취소"
-                    );
-                    return;
-                }
+            if !this.owns_reconnect(generation) {
+                tracing::info!("StreamCoordinator: 재연결 준비 중 세션 교체 — 재시작 취소");
+                return;
             }
             let attempt_weak = weak.clone();
             let on_attempt: AttemptCallback = Arc::new(move |attempt, delay| {
@@ -111,7 +119,8 @@ impl StreamCoordinator {
                 let raw_url = raw_url.clone();
                 Box::pin(async move {
                     if let Some(this) = StreamCoordinator::from_weak(&weak) {
-                        this.run_reconnect_attempt(attempt, delay, raw_url).await;
+                        this.run_reconnect_attempt(attempt, delay, raw_url, generation)
+                            .await;
                     }
                 })
             });
@@ -120,7 +129,9 @@ impl StreamCoordinator {
                 let weak = exhausted_weak.clone();
                 Box::pin(async move {
                     if let Some(this) = StreamCoordinator::from_weak(&weak) {
-                        this.handle_reconnect_exhausted();
+                        if this.owns_reconnect(generation) {
+                            this.handle_reconnect_exhausted();
+                        }
                     }
                 })
             });
@@ -138,18 +149,18 @@ impl StreamCoordinator {
         }
     }
 
-    async fn run_reconnect_attempt(&self, attempt: u32, delay: f64, raw_url: Url) {
+    async fn run_reconnect_attempt(&self, attempt: u32, delay: f64, raw_url: Url, generation: u64) {
         tracing::info!("StreamCoordinator: 재시도 {attempt} — {delay:.1}초 대기");
         self.inner.reconnection.wait_for_backoff(delay).await;
         // 백오프는 수십 초일 수 있다 — 그 사이 세션이 정리됐으면 시도하지 않는다.
-        {
-            let s = self.st();
-            if s.phase != StreamPhase::Reconnecting || s.stream_url.is_none() {
-                tracing::info!("StreamCoordinator: 백오프 중 세션 정리 감지 — 재시도 취소");
-                return;
-            }
+        if !self.owns_reconnect(generation) {
+            return;
         }
-        if self.check_stream_ended().await {
+        let ended = self.check_stream_ended().await;
+        if !self.owns_reconnect(generation) {
+            return;
+        }
+        if ended {
             self.handle_stream_ended();
             return;
         }
@@ -157,6 +168,9 @@ impl StreamCoordinator {
         let pinned = self.st().user_selected_variant.is_some();
         if attempt > 1 || pinned {
             self.refresh_master_manifest().await;
+        }
+        if !self.owns_reconnect(generation) {
+            return;
         }
         let target = self.reconnect_playback_url(&raw_url);
         let url = if self.st().is_proxy_active {
@@ -270,6 +284,11 @@ impl StreamCoordinator {
     /// 재연결 핸들러 태스크 안에서도 불린다. `cancel()` 이 자기 태스크를 abort 하므로 이 함수는
     /// `await` 없이 끝까지 실행돼야 한다.
     pub fn handle_stream_ended(&self) {
+        {
+            let mut s = self.st();
+            s.stream_generation = s.stream_generation.wrapping_add(1);
+            s.reconnect_generation = s.reconnect_generation.wrapping_add(1);
+        }
         self.invalidate_low_latency_control();
         self.inner.reconnection.cancel();
         if let Some(e) = self.engine() {

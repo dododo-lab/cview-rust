@@ -154,19 +154,38 @@ impl ChatViewModel {
     /// 셸이 여러 요청의 순서를 한 잠금 안에서 정할 때 쓴다(잠금을 쥔 채 `await` 하지 않게). 진행 중인 `connect` 는
     /// 세대가 바뀌어 다음 확인 지점에서 물러난다.
     pub fn detach(&self) -> impl std::future::Future<Output = ()> + Send + 'static {
+        self.detach_inner(None)
+            .expect("순번 없는 해제는 항상 수락한다")
+    }
+
+    /// 실패한 토큰 요청을 정리할 때, 그 뒤에 시작한 새 연결을 끊지 않는다. 순번 확인과 엔진 분리를 원자적으로 처리한다.
+    pub fn detach_if_current(
+        &self,
+        ticket: u64,
+    ) -> Option<impl std::future::Future<Output = ()> + Send + 'static> {
+        self.detach_inner(Some(ticket))
+    }
+
+    fn detach_inner(
+        &self,
+        ticket: Option<u64>,
+    ) -> Option<impl std::future::Future<Output = ()> + Send + 'static> {
         let old = {
             let mut s = self.lock();
+            if ticket.is_some_and(|ticket| s.connection_request_generation != ticket) {
+                return None;
+            }
             s.connection_request_generation = s.connection_request_generation.wrapping_add(1);
             s.chat_session_generation = s.chat_session_generation.wrapping_add(1);
             s.message_filter_generation = s.message_filter_generation.wrapping_add(1);
             s.moderation_state_generation = s.moderation_state_generation.wrapping_add(1);
             s.disconnect_for_connection_change()
         };
-        async move {
+        Some(async move {
             if let Some(e) = old {
                 e.disconnect().await;
             }
-        }
+        })
     }
 
     async fn abandon_stale_engine(&self, engine: Arc<dyn ChatEngineHandle>) {

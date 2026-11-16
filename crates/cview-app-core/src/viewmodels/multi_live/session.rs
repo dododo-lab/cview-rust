@@ -572,6 +572,7 @@ impl MultiLiveSession {
             stream_url: plan.stream_url.clone(),
             channel_name: channel_name.clone(),
             live_title: live_title.clone(),
+            player_settings: ps.clone(),
             plan: plan.clone(),
             match_web_v2_source_eligible: MatchWebV2Flag::source_eligible(
                 is_watch_party,

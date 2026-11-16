@@ -39,12 +39,36 @@ impl ChatViewModel {
     }
 
     pub async fn send_message(&self, submitted: &str) -> MessageSendOutcome {
+        self.send_message_inner(submitted, None).await
+    }
+
+    /// 입력을 제출한 채팅방이 아직 선택되어 있을 때만 전송한다. IPC를 기다리는 사이 채널을 바꾼 경우도 포함한다.
+    pub async fn send_message_for_channel(
+        &self,
+        submitted: &str,
+        chat_channel_id: &str,
+    ) -> MessageSendOutcome {
+        self.send_message_inner(submitted, Some(chat_channel_id))
+            .await
+    }
+
+    async fn send_message_inner(
+        &self,
+        submitted: &str,
+        expected_channel: Option<&str>,
+    ) -> MessageSendOutcome {
         let text = submitted.trim().to_string();
         if text.is_empty() {
             return MessageSendOutcome::Failed;
         }
         let (engine, session_generation, channel_identity, local_user_id, local_nickname, emojis) = {
             let mut s = self.lock();
+            // 검사와 전송 엔진 선택을 같은 잠금 안에서 처리한다. 로컬 명령도 다른 방에 적용하지 않는다.
+            if expected_channel
+                .is_some_and(|expected| s.active_chat_channel_id().as_deref() != Some(expected))
+            {
+                return MessageSendOutcome::SessionChanged;
+            }
             if let Some(outcome) = s.try_handle_command(&text) {
                 return outcome;
             }

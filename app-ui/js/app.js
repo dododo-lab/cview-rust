@@ -1077,8 +1077,10 @@ async function queueMulti(channelIds) {
 }
 
 // 시작 중 예외가 나면 로딩 화면이 걷히지 않고 영원히 남았다(누구도 거부를 받지 않았다) — 걷고 다시 불러오기를 권한다.
-main().catch((e) => {
-  console.error('CView 시작 실패', e);
-  hideSplash();
-  toast('화면을 준비하지 못했습니다', 600000, { label: '다시 불러오기', run: () => location.reload() });
-});
+if (window.__cviewBoot?.ready() !== false) {
+  main().catch((e) => {
+    console.error('CView 시작 실패', e);
+    hideSplash();
+    toast('화면을 준비하지 못했습니다', 600000, { label: '다시 불러오기', run: () => location.reload() });
+  });
+}

@@ -951,6 +951,100 @@ async fn stream_ended_signal_marks_ended() {
 
 // MARK: - 매니페스트 갱신
 
+struct GatedManifestFetcher {
+    entered: Notify,
+    release: Notify,
+    result: Result<FetchedManifest, String>,
+}
+
+impl GatedManifestFetcher {
+    fn new(body: Result<&str, &str>) -> Arc<Self> {
+        Arc::new(Self {
+            entered: Notify::new(),
+            release: Notify::new(),
+            result: body
+                .map(|body| FetchedManifest {
+                    body: body.into(),
+                    final_url: None,
+                })
+                .map_err(str::to_string),
+        })
+    }
+}
+
+#[async_trait]
+impl ManifestFetcher for GatedManifestFetcher {
+    async fn fetch(
+        &self,
+        _url: &Url,
+        _timeout: Option<Duration>,
+    ) -> Result<FetchedManifest, String> {
+        self.entered.notify_one();
+        self.release.notified().await;
+        self.result.clone()
+    }
+}
+
+#[tokio::test]
+async fn stopped_manifest_refresh_discards_late_success_and_failure() {
+    for result in [Ok(MASTER), Err("연결 끊김")] {
+        let fetcher = GatedManifestFetcher::new(result);
+        let c = StreamCoordinator::with_fetcher(
+            config(false),
+            PlaybackKeyAccess::anonymous(),
+            fetcher.clone(),
+        );
+        c.st().stream_url = Some(test_url());
+        c.update_phase(StreamPhase::Playing);
+        let refresh = {
+            let c = c.clone();
+            tokio::spawn(async move { c.refresh_master_manifest().await })
+        };
+        fetcher.entered.notified().await;
+        c.stop_stream().await;
+        fetcher.release.notify_one();
+        refresh.await.unwrap();
+        assert_eq!(c.phase(), StreamPhase::Idle);
+        assert!(
+            c.st().master_playlist.is_none(),
+            "닫은 방송의 재생목록이 복원됐다"
+        );
+        assert!(c.current_manifest_lease().is_none());
+        assert_eq!(
+            c.st().manifest_refresh_fail_count,
+            0,
+            "닫은 방송의 실패를 누적했다"
+        );
+    }
+}
+
+#[tokio::test]
+async fn restarted_stream_discards_old_manifest_info() {
+    let fetcher = GatedManifestFetcher::new(Ok(MASTER));
+    let c = StreamCoordinator::with_fetcher(
+        config(false),
+        PlaybackKeyAccess::anonymous(),
+        fetcher.clone(),
+    );
+    c.set_player_engine(MockEngine::new().shared()).await;
+    c.start_stream(test_url()).await.unwrap();
+    fetcher.entered.notified().await;
+    c.stop_stream().await;
+    let current = HlsManifestParser::new()
+        .parse_master_playlist(&MASTER.replace("token=new", "token=current"), &test_url())
+        .unwrap();
+    c.set_prefetched_manifest(current.clone());
+    c.start_stream(test_url()).await.unwrap();
+    fetcher.release.notify_one();
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    assert_eq!(
+        c.st().master_playlist.as_ref(),
+        Some(&current),
+        "이전 요청이 새 방송의 화질 정보를 덮었다"
+    );
+    c.stop_stream().await;
+}
+
 #[tokio::test]
 async fn refresh_keeps_pinned_quality_and_issues_lease() {
     let fetcher = Arc::new(MockFetcher::default());
@@ -1342,6 +1436,45 @@ async fn trigger_reconnect_checks_stream_ended_first() {
     assert_eq!(c.phase(), StreamPhase::StreamEnded);
     assert!(drain(&mut events).contains(&StreamEvent::StreamEnded));
     assert_eq!(engine.s().play_count, 1, "종료된 방송에 재연결하지 않는다");
+}
+
+#[tokio::test]
+async fn restarted_stream_ignores_old_reconnect_ended_probe() {
+    let c = coordinator(false);
+    let engine = MockEngine::new();
+    c.set_player_engine(engine.shared()).await;
+    c.start_stream(test_url()).await.unwrap();
+    c.report_engine_playing().await;
+    let entered = Arc::new(Notify::new());
+    let release = Arc::new(Notify::new());
+    c.set_check_stream_ended_callback(Arc::new({
+        let entered = entered.clone();
+        let release = release.clone();
+        move || {
+            let entered = entered.clone();
+            let release = release.clone();
+            Box::pin(async move {
+                entered.notify_one();
+                release.notified().await;
+                true
+            })
+        }
+    }));
+    c.trigger_reconnect("연결 끊김", false);
+    entered.notified().await;
+    c.stop_stream().await;
+    c.start_stream(test_url()).await.unwrap();
+    c.report_engine_playing().await;
+    let stops = engine.s().stop_count;
+    release.notify_one();
+    tokio::time::sleep(Duration::from_millis(10)).await;
+    assert_eq!(
+        c.phase(),
+        StreamPhase::Playing,
+        "늦은 방송 종료 응답이 새 재생을 끝냈다"
+    );
+    assert_eq!(engine.s().stop_count, stops, "새 방송의 엔진을 정지했다");
+    c.stop_stream().await;
 }
 
 // MARK: - 네트워크 복구

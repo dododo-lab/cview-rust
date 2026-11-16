@@ -92,6 +92,8 @@ function mockTauri([origin, previewOn]) {
   };
   try {
     localStorage.setItem('cview.onboarded', '1');
+    // 시작 뒤 늦게 뜨는 환영 창이 미리보기 대상의 포인터를 가리지 않게 한다.
+    localStorage.setItem('cview.welcomed.v1', String(Date.now()));
     localStorage.setItem('cview.thumbPreview', previewOn ? '1' : '0');
   } catch { /* 무시 */ }
 }

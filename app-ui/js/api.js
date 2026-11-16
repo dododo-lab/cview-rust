@@ -201,7 +201,7 @@ export const api = {
   chatAvatars: (userIds) => invoke('chat_avatars', { userIds }),
   chatConnect: (chatChannelId, channelId, session = null) => invoke('chat_connect', { chatChannelId, channelId, session, op: nextChatOp() }),
   chatDisconnect: (session = null) => invoke('chat_disconnect', { session, op: nextChatOp() }),
-  chatSend: (text, session = null) => invoke('chat_send', { text, session }),
+  chatSend: (text, session = null, chatChannelId = null) => invoke('chat_send', { text, session, chatChannelId }),
 
   appInfo: () => invoke('app_info'),
   perfLog: (kind, data) => invoke('perf_log', { kind, data }),

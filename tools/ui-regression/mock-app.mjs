@@ -13,6 +13,8 @@ function fakeImage(kind, n) {
 }
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.json': 'application/json' };
 export const server = http.createServer((req, res) => {
+  // WebKit의 로컬 HTTP 연결 재사용 중 모듈 응답이 다른 자산과 뒤바뀌었다. 검사용 연결은 응답마다 닫는다.
+  res.setHeader('connection', 'close');
   const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   const img = url.match(/^\/__img\/(\w+)\/(\d+)\.svg$/);
   if (img) { res.writeHead(200, { 'content-type': 'image/svg+xml' }); res.end(fakeImage(img[1], Number(img[2]))); return; }

@@ -63,6 +63,8 @@ pub struct MultiLiveStreamRequest {
     pub stream_url: String,
     pub channel_name: String,
     pub live_title: String,
+    /// 코디네이터와 첫 소스 로드부터 적용할 사용자 설정.
+    pub player_settings: PlayerSettings,
     pub plan: LaunchPlan,
     pub match_web_v2_source_eligible: bool,
 }

@@ -23,6 +23,69 @@
         else def('ctrlKey', false);
       }, true);
     }
+    // 모듈 그래프가 실패하면 app.js의 catch와 onboarding.js의 타이머도 실행되지 않는다.
+    // 모듈에 의존하지 않는 이 감시가 일시적인 로딩 실패를 한 번 복구하고 무한 대기를 막는다.
+    (function () {
+      var key = 'cview.boot.retry.v1';
+      var finished = false;
+      var timer;
+      function entry() { return document.querySelector('script[type="module"][src="js/app.js"]'); }
+      function cleanup() {
+        clearTimeout(timer);
+        window.removeEventListener('error', onError, true);
+      }
+      function clearRetry() { try { sessionStorage.removeItem(key); } catch (e) { /* 저장소 차단 */ } }
+      function showFailure() {
+        if (!document.body) { document.addEventListener('DOMContentLoaded', showFailure, { once: true }); return; }
+        var splash = document.getElementById('splash');
+        if (splash) splash.remove();
+        var light = document.documentElement.dataset.theme === 'light';
+        var box = document.createElement('div');
+        box.id = 'boot-error';
+        box.setAttribute('role', 'alert');
+        box.style.cssText = 'position:fixed;inset:0;z-index:2147483647;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:24px;text-align:center;font:16px system-ui;background:' + (light ? '#f7f8fa;color:#171a20' : '#111318;color:#f2f4f8');
+        var text = document.createElement('p');
+        text.textContent = '화면을 준비하지 못했습니다. 다시 불러와 주세요.';
+        var retry = document.createElement('button');
+        retry.type = 'button';
+        retry.textContent = '다시 불러오기';
+        retry.style.cssText = 'padding:12px 20px;border:0;border-radius:10px;background:#00b884;color:#05271f;font:inherit;cursor:pointer';
+        retry.addEventListener('click', function () { clearRetry(); location.reload(); });
+        box.append(text, retry);
+        document.body.append(box);
+        retry.focus();
+      }
+      function fail(reason) {
+        if (finished || !entry()) return;
+        finished = true;
+        cleanup();
+        console.error('CView 시작 모듈을 불러오지 못했습니다', reason);
+        try {
+          // 저장소를 쓸 수 없으면 자동 재시작하지 않는다. 반복 횟수를 잃고 재시작을 계속할 수 있다.
+          if (!sessionStorage.getItem(key)) {
+            sessionStorage.setItem(key, '1');
+            location.reload();
+            return;
+          }
+        } catch (e) { /* 수동 복구 화면으로 */ }
+        showFailure();
+      }
+      function onError(event) {
+        if (event.target === entry() || (event.target === window && event instanceof ErrorEvent)) fail('시작 모듈 오류');
+      }
+      window.__cviewBoot = {
+        ready: function () {
+          // 제한 시간 뒤 늦게 도착한 모듈은 종료 중인 문서나 오류 화면 뒤에서 앱을 시작하지 않는다.
+          if (finished) return false;
+          finished = true;
+          cleanup();
+          clearRetry();
+          return true;
+        }
+      };
+      window.addEventListener('error', onError, true);
+      timer = setTimeout(function () { fail('시작 모듈 준비 시간 초과'); }, 8000);
+    })();
   </script>
   <link rel="stylesheet" href="css/app.css">
   <link rel="stylesheet" href="css/multilive.css">

@@ -1,6 +1,7 @@
 // 앱 시작 로딩 화면 회귀 검사 + 스크린샷 — 모의 IPC 응답을 일부러 늦춰, 로딩 화면이 홈 데이터·첫 화면 썸네일을
 // 기다렸다가 걷히고 그 뒤에 채워진 홈이 보이는지 본다. 실제 서비스·데이터는 건드리지 않는다.
 // 저장소 루트에서: node tools/ui-regression/startup-loading.mjs   (CVIEW_UI_SHOTS=<폴더> 면 PNG 를 남긴다)
+// CVIEW_UI_BROWSER=webkit 이면 화면 없는 WebKit으로 검사한다.
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,7 +9,8 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { chromium } = require('playwright');
+const pw = require('playwright');
+const engine = process.env.CVIEW_UI_BROWSER === 'webkit' ? pw.webkit : pw.chromium;
 
 const ROOT = path.resolve('app-ui');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.json': 'application/json' };
@@ -25,6 +27,8 @@ function fakeImage(kind, n) {
 }
 
 const server = http.createServer((req, res) => {
+  // 모의 자산 응답이 뒤바뀌는 WebKit의 HTTP 연결 재사용 경로를 피한다(mock-app.mjs와 같은 조건).
+  res.setHeader('connection', 'close');
   const url = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   const img = url.match(/^\/__img\/(thumb|avatar)\/(\d+)\.svg$/);
   if (img) { res.writeHead(200, { 'content-type': 'image/svg+xml' }); res.end(fakeImage(img[1], Number(img[2]))); return; }
@@ -70,7 +74,7 @@ function mockTauri([origin, loggedIn, delays]) {
 }
 
 const SHOTS = process.env.CVIEW_UI_SHOTS;
-const browser = await chromium.launch();
+const browser = await engine.launch({ headless: true });
 const results = [];
 async function check(id, fn) {
   try { await fn(); results.push({ id, ok: true }); } catch (e) { results.push({ id, ok: false, error: e.message }); }

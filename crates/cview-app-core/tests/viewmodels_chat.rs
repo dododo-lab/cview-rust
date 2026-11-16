@@ -1068,6 +1068,88 @@ async fn send_without_login_fails_and_commands_are_local() {
 }
 
 #[tokio::test]
+async fn queued_send_cannot_be_redirected_to_a_different_chat_channel() {
+    let engines = Arc::new(Mutex::new(vec![]));
+    let vm = ChatViewModel::with_deps(fake_deps(engines.clone()));
+    vm.connect(ConnectRequest::new("chat-a", "토큰")).await;
+    // A에서 제출한 IPC가 처리되기 전에 B로 바뀐 상태를 재현한다.
+    vm.connect(ConnectRequest::new("chat-b", "토큰")).await;
+    {
+        let mut s = vm.lock();
+        s.current_user_uid = Some("me".into());
+        s.handle_event(ChatEngineEvent::Connected);
+        s.end_backlog_hold();
+    }
+    assert_eq!(
+        vm.send_message_for_channel("A로 보낸 글", "chat-a").await,
+        MessageSendOutcome::SessionChanged
+    );
+    assert!(
+        engines.lock().unwrap()[1].sent.lock().unwrap().is_empty(),
+        "이전 채널의 글을 새 방으로 보냈다"
+    );
+    assert!(!vm
+        .lock()
+        .messages
+        .iter()
+        .any(|m| m.content == "A로 보낸 글"));
+    assert_eq!(
+        vm.send_message_for_channel("B로 보낸 글", "chat-b").await,
+        MessageSendOutcome::Sent
+    );
+    assert_eq!(
+        engines.lock().unwrap()[1].sent.lock().unwrap().as_slice(),
+        ["B로 보낸 글"]
+    );
+    vm.disconnect().await;
+}
+
+#[tokio::test]
+async fn queued_local_command_does_not_change_another_channels_moderation() {
+    let engines = Arc::new(Mutex::new(vec![]));
+    let vm = ChatViewModel::with_deps(fake_deps(engines.clone()));
+    vm.connect(ConnectRequest::new("chat-b", "토큰")).await;
+    assert_eq!(
+        vm.send_message_for_channel("/block other", "chat-a").await,
+        MessageSendOutcome::SessionChanged
+    );
+    assert!(!vm.lock().blocked_users().contains("other"));
+    assert!(engines.lock().unwrap()[0].sent.lock().unwrap().is_empty());
+    vm.disconnect().await;
+}
+
+#[tokio::test]
+async fn stale_token_failure_cannot_detach_newer_chat_engine() {
+    let engines = Arc::new(Mutex::new(vec![]));
+    let vm = ChatViewModel::with_deps(fake_deps(engines.clone()));
+    let old = vm.begin_connect_request();
+    vm.connect(ConnectRequest::new("chat-b", "토큰")).await;
+    assert!(vm.detach_if_current(old).is_none());
+    assert!(
+        vm.lock().chat_engine.is_some(),
+        "늦은 토큰 오류가 새 엔진을 떼어 냈다"
+    );
+    assert!(!*engines.lock().unwrap()[0].disconnected.lock().unwrap());
+    vm.disconnect().await;
+}
+
+#[tokio::test]
+async fn current_token_failure_detaches_before_awaiting_socket_close() {
+    let engines = Arc::new(Mutex::new(vec![]));
+    let vm = ChatViewModel::with_deps(fake_deps(engines.clone()));
+    vm.connect(ConnectRequest::new("chat-a", "토큰")).await;
+    let pending = vm.begin_connect_request();
+    let cleanup = vm
+        .detach_if_current(pending)
+        .expect("현재 요청의 실패는 정리해야 한다");
+    assert!(vm.lock().chat_engine.is_none());
+    assert!(!vm.is_current_connect_request(pending));
+    assert!(!*engines.lock().unwrap()[0].disconnected.lock().unwrap());
+    cleanup.await;
+    assert!(*engines.lock().unwrap()[0].disconnected.lock().unwrap());
+}
+
+#[tokio::test]
 async fn event_loop_delivers_engine_events() {
     let engines = Arc::new(Mutex::new(vec![]));
     let vm = ChatViewModel::with_deps(fake_deps(engines.clone()));

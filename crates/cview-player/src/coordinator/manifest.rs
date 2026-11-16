@@ -107,7 +107,7 @@ pub async fn fetch_stream_variants(
 impl StreamCoordinator {
     /// 마스터 매니페스트를 다시 받아 variant URL 을 갱신한다(토큰 리프레시). 오류 phase 에서는 건너뛴다.
     pub async fn refresh_master_manifest(&self) {
-        let stream_url = {
+        let (stream_url, generation) = {
             let s = self.st();
             let Some(url) = s.stream_url.clone() else {
                 return;
@@ -115,7 +115,7 @@ impl StreamCoordinator {
             if matches!(s.phase, StreamPhase::Error(_)) {
                 return;
             }
-            url
+            (url, s.stream_generation)
         };
         let result = fetch_stream_variants(
             self.inner.fetcher.as_ref(),
@@ -126,10 +126,15 @@ impl StreamCoordinator {
         .await;
         match result {
             Ok(None) => {}
-            Ok(Some(fetched)) => self.apply_refreshed_manifest(stream_url, fetched),
+            Ok(Some(fetched)) => self.apply_refreshed_manifest(stream_url, fetched, generation),
             Err(error) => {
                 let count = {
                     let mut s = self.st();
+                    if s.stream_generation != generation
+                        || s.stream_url.as_ref() != Some(&stream_url)
+                    {
+                        return;
+                    }
                     s.manifest_refresh_fail_count += 1;
                     s.manifest_refresh_fail_count
                 };
@@ -148,8 +153,11 @@ impl StreamCoordinator {
         }
     }
 
-    fn apply_refreshed_manifest(&self, stream_url: Url, fetched: MasterPlaylist) {
+    fn apply_refreshed_manifest(&self, stream_url: Url, fetched: MasterPlaylist, generation: u64) {
         let mut s = self.st();
+        if s.stream_generation != generation || s.stream_url.as_ref() != Some(&stream_url) {
+            return;
+        }
         s.master_playlist = Some(fetched.clone());
         s.manifest_refresh_fail_count = 0;
         // 사용자가 화질을 고정했으면 그 화질의 최신 URL 로 갱신한다(1080p 로 덮지 않는다).
@@ -194,7 +202,7 @@ impl StreamCoordinator {
     }
 
     /// 품질 정보 수집용 백그라운드 파싱(재생에는 영향 없음).
-    pub(crate) fn load_manifest_info(&self, url: Url) {
+    pub(crate) fn load_manifest_info(&self, url: Url, generation: u64) {
         let weak = self.weak();
         tokio::spawn(async move {
             let Some(this) = StreamCoordinator::from_weak(&weak) else {
@@ -203,7 +211,7 @@ impl StreamCoordinator {
             match fetch_stream_variants(this.inner.fetcher.as_ref(), &this.inner.parser, &url, None)
                 .await
             {
-                Ok(Some(master)) => this.update_master_playlist(master),
+                Ok(Some(master)) => this.update_master_playlist(master, generation),
                 Ok(None) => {}
                 Err(e) => tracing::debug!("Manifest info fetch skipped: {e}"),
             }
@@ -211,10 +219,13 @@ impl StreamCoordinator {
     }
 
     /// 마스터 정보 갱신 — 1080p60 variant 를 현재 품질로 표시한다.
-    pub(crate) fn update_master_playlist(&self, master: MasterPlaylist) {
+    fn update_master_playlist(&self, master: MasterPlaylist, generation: u64) {
         let best = select_1080p60_variant(&master.variants).map(StreamQualityInfo::from_variant);
         {
             let mut s = self.st();
+            if s.stream_generation != generation || s.stream_url.is_none() {
+                return;
+            }
             s.master_playlist = Some(master);
             if let Some(q) = &best {
                 s.current_quality = Some(q.clone());

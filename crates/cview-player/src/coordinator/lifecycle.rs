@@ -122,14 +122,19 @@ impl StreamCoordinator {
 
     /// 스트림 재생 시작. PID 싱크는 엔진의 실제 `.playing` 보고 뒤에 시작한다.
     pub async fn start_stream(&self, url: Url) -> Result<(), StreamCoordinatorError> {
-        let generation = {
+        let (generation, stream_generation) = {
             let mut s = self.st();
+            s.stream_generation = s.stream_generation.wrapping_add(1);
+            s.reconnect_generation = s.reconnect_generation.wrapping_add(1);
+            s.last_reconnect_time = None;
+            s.cooldown_retry_for = None;
             s.proxy_route_generation = s.proxy_route_generation.wrapping_add(1);
             s.user_paused = false;
             s.stream_url = Some(url.clone());
             s.start_time = Some(Instant::now());
-            s.proxy_route_generation
+            (s.proxy_route_generation, s.stream_generation)
         };
+        self.inner.reconnection.cancel();
         self.update_phase(StreamPhase::Connecting);
         let owns = |this: &Self| {
             let s = this.st();
@@ -148,8 +153,11 @@ impl StreamCoordinator {
             }
             // hls.js `play(url)` 은 `isLoadingSuspended` 를 false 로 되돌린다 — 다시 파생시킨다.
             self.reconcile_network_activity().await;
+            if !owns(self) {
+                return Err(StreamCoordinatorError::Cancelled);
+            }
             if self.st().master_playlist.is_none() {
-                self.load_manifest_info(url.clone());
+                self.load_manifest_info(url.clone(), stream_generation);
             }
             tracing::info!("Stream started");
             Ok(())
@@ -173,6 +181,8 @@ impl StreamCoordinator {
     pub async fn stop_stream(&self) {
         {
             let mut s = self.st();
+            s.stream_generation = s.stream_generation.wrapping_add(1);
+            s.reconnect_generation = s.reconnect_generation.wrapping_add(1);
             s.proxy_route_generation = s.proxy_route_generation.wrapping_add(1);
             s.stream_url = None;
             s.is_proxy_active = false;
@@ -192,11 +202,14 @@ impl StreamCoordinator {
             let mut s = self.st();
             s.local_timeshift_playing = false;
             s.master_playlist = None;
+            s.current_manifest_lease = None;
+            s.manifest_refresh_fail_count = 0;
             s.current_quality = None;
             s.start_time = None;
             s.user_selected_variant = None;
             s.current_variant_url = None;
             s.last_reconnect_time = None;
+            s.cooldown_retry_for = None;
         }
         self.update_phase(StreamPhase::Idle);
         self.emit_event(StreamEvent::Stopped);
@@ -205,7 +218,11 @@ impl StreamCoordinator {
 
     /// 일시정지 — 재버퍼 신호가 아니므로 저지연 루프 자체를 끝낸다.
     pub async fn pause(&self) {
-        self.st().user_paused = true;
+        {
+            let mut s = self.st();
+            s.user_paused = true;
+            s.reconnect_generation = s.reconnect_generation.wrapping_add(1);
+        }
         self.update_phase(StreamPhase::Paused);
         if let Some(e) = self.engine() {
             e.pause();

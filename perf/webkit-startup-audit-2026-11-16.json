@@ -1,0 +1,243 @@
+{
+  "검증일": "2026-11-16",
+  "대상": "간헐적인 WebKit 시작 화면 대기 타임아웃",
+  "브랜치": "codex/live-reliability-audit-20261116",
+  "결과": "소스 수정 및 검증 완료",
+  "확인한원인": [
+    "검사용 로컬 HTTP/1.1 연결을 재사용할 때 WebKit이 요청한 JavaScript 모듈에 다른 JavaScript 또는 CSS 응답 본문이 연결되는 현상을 재현. 모듈 MIME 검사 또는 가져올 이름 확인 단계에서 앱 모듈 그래프가 중단됨",
+    "기존 main().catch와 onboarding.js의 8초 보조 타이머 모두 모듈 그래프 실행에 의존. 그래프가 로드되지 않으면 어느 복구 경로도 등록되지 않아 시작 화면이 계속 남음"
+  ],
+  "최초타임아웃상태": {
+    "대기한도밀리초": 20000,
+    "시작화면남음": true,
+    "프레임실행수": 1200,
+    "독립타이머실행수": 40,
+    "앱명령호출수": 0,
+    "오류": [
+      "TypeError: 'text/css' is not a valid JavaScript MIME type."
+    ]
+  },
+  "서버원본과브라우저수신본문대조": [
+    {
+      "요청파일": "/js/motion.js",
+      "서버콘텐츠유형": "text/javascript",
+      "서버파일바이트": 13329,
+      "수신콘텐츠유형": "text/javascript",
+      "수신바이트": 60653,
+      "수신본문과같은파일": "js/app.js",
+      "수신본문SHA256": "af3335ffcc87caf835f610d94d4fec3d8791532d4983343c312a6191586fbcab"
+    },
+    {
+      "요청파일": "/js/update-notify.js",
+      "서버콘텐츠유형": "text/javascript",
+      "서버파일바이트": 5621,
+      "수신콘텐츠유형": "text/css",
+      "수신바이트": 22272,
+      "수신본문과같은파일": "css/controls.css",
+      "수신본문SHA256": "ded791a9168ea72968a848e08977d43edfb16242a11e00335cd71af30c74a417"
+    }
+  ],
+  "발생조건대조": {
+    "소스조건": "현재 요청의 복구 수정 전 index.html과 app.js를 고정해 자동 재시도가 결과를 가리지 않도록 함. 나머지 실제 app-ui 모듈을 같은 서버로 제공",
+    "검사": [
+      {
+        "엔진": "Playwright 1.65.1 / WebKit 27.2",
+        "HTTP조건": "연결 재사용",
+        "완료횟수": 500,
+        "모듈로딩오류수": 1
+      },
+      {
+        "엔진": "Playwright 1.65.1 / WebKit 27.2",
+        "HTTP조건": "응답 뒤 연결 종료",
+        "완료횟수": 500,
+        "모듈로딩오류수": 0
+      },
+      {
+        "엔진": "Playwright 1.49.1 / WebKit 18.2",
+        "HTTP조건": "응답 뒤 연결 종료",
+        "완료횟수": 500,
+        "모듈로딩오류수": 0
+      }
+    ],
+    "반증": [
+      "Content-Length가 있는 응답에서도 다른 CSS 본문이 JavaScript 요청에 연결됨. 길이 헤더만으로 해결되지 않음",
+      "검사용 브라우저의 시스템 프록시 상속을 우회해도 같은 오류가 재현됨",
+      "최신 Playwright/WebKit에서도 재현되어 버전 교체만으로 해결되지 않음"
+    ],
+    "해석한계": "HTTP 지속 연결 구간에서 발생하는 자산 응답 혼선과 연결 재사용을 끈 대조군의 개선을 확인했다. WebKit·CFNetwork·네트워크 확장 내부의 특정 코드 결함까지 확정한 것은 아니다"
+  },
+  "수정": [
+    {
+      "파일": "tools/ui-regression/mock-app.mjs, tools/ui-regression/startup-loading.mjs",
+      "내용": "검사용 정적 서버가 모든 응답에 Connection: close를 보내어 연결을 재사용하지 않도록 함"
+    },
+    {
+      "파일": "app-ui/index.html",
+      "내용": "첫 인라인 스크립트에 모듈과 독립된 시작 감시 추가. 모듈 오류 또는 8초 준비 시간 초과 시 탭의 sessionStorage로 자동 재시작을 한 번으로 제한. 반복 실패 또는 저장소 접근 차단은 독립 오류 화면과 다시 불러오기 버튼으로 복구"
+    },
+    {
+      "파일": "app-ui/js/app.js",
+      "내용": "모듈 준비 완료 시 시작 감시와 재시도 기록을 정리. 이미 실패 처리한 문서에서는 늦게 도착한 모듈이 앱을 시작하지 않도록 함. 기존 main() 실패 처리 유지"
+    },
+    {
+      "파일": "tools/ui-regression/startup-modules.mjs",
+      "내용": "MIME 오류·404·반복 실패·저장소 차단·응답 정지·구문/가져오기 오류·보안 정책·시작 후 오류 격리·실제 자산 반복 시작 등 11개 회귀 항목 추가. 시작 화면 제거와 초기화 마지막 명령까지 확인"
+    },
+    {
+      "파일": "tools/ui-regression/native-startup.swift",
+      "내용": "창과 앱 활성화 없이 실제 macOS WKWebView와 모의 모듈로 동일한 인라인 시작 감시 검증"
+    }
+  ],
+  "검증": {
+    "모듈로딩대조_연결종료조건": {
+      "횟수": 1000,
+      "오류수": 0
+    },
+    "앱전체시작반복": [
+      {
+        "엔진": "webkit",
+        "완료횟수": 100,
+        "오류수": 0,
+        "자동재시도수": 0
+      },
+      {
+        "엔진": "current-webkit",
+        "완료횟수": 100,
+        "오류수": 0,
+        "자동재시도수": 0
+      },
+      {
+        "엔진": "chromium",
+        "완료횟수": 30,
+        "오류수": 0,
+        "자동재시도수": 0
+      }
+    ],
+    "화면회귀검사": {
+      "실행조합수": 15,
+      "통과항목수": 150,
+      "실패수": 0,
+      "실행": [
+        {
+          "검사": "startup-loading",
+          "엔진": "chromium",
+          "통과항목수": 10
+        },
+        {
+          "검사": "chat-ux",
+          "엔진": "chromium",
+          "통과항목수": 11
+        },
+        {
+          "검사": "donation-privacy",
+          "엔진": "chromium",
+          "통과항목수": 5
+        },
+        {
+          "검사": "chat-lifecycle",
+          "엔진": "chromium",
+          "통과항목수": 16
+        },
+        {
+          "검사": "offline-recovery",
+          "엔진": "chromium",
+          "통과항목수": 7
+        },
+        {
+          "검사": "startup-loading",
+          "엔진": "webkit",
+          "통과항목수": 10
+        },
+        {
+          "검사": "chat-ux",
+          "엔진": "webkit",
+          "통과항목수": 11
+        },
+        {
+          "검사": "donation-privacy",
+          "엔진": "webkit",
+          "통과항목수": 5
+        },
+        {
+          "검사": "chat-lifecycle",
+          "엔진": "webkit",
+          "통과항목수": 16
+        },
+        {
+          "검사": "startup-loading",
+          "엔진": "current-webkit",
+          "통과항목수": 10
+        },
+        {
+          "검사": "chat-ux",
+          "엔진": "current-webkit",
+          "통과항목수": 11
+        },
+        {
+          "검사": "donation-privacy",
+          "엔진": "current-webkit",
+          "통과항목수": 5
+        },
+        {
+          "검사": "startup-modules",
+          "엔진": "chromium",
+          "통과항목수": 11
+        },
+        {
+          "검사": "startup-modules",
+          "엔진": "webkit",
+          "통과항목수": 11
+        },
+        {
+          "검사": "startup-modules",
+          "엔진": "current-webkit",
+          "통과항목수": 11
+        }
+      ]
+    },
+    "네이티브WKWebView": {
+      "검사": [
+        {
+          "검사": "mime",
+          "모듈요청수": 2,
+          "수동복구": false,
+          "진단": "",
+          "탐색수": 2,
+          "통과": true
+        },
+        {
+          "검사": "binding",
+          "모듈요청수": 2,
+          "수동복구": false,
+          "진단": "",
+          "탐색수": 2,
+          "통과": true
+        },
+        {
+          "검사": "permanent",
+          "모듈요청수": 3,
+          "수동복구": true,
+          "진단": "",
+          "탐색수": 3,
+          "통과": true
+        }
+      ],
+      "엔진": "macOS 네이티브 WKWebView",
+      "창표시": false
+    },
+    "정적검사": "app-ui/js 전체 및 관련 검사 스크립트 총 84개와 인라인 스크립트 문법 검사, cargo fmt --all -- --check, git diff --check 통과",
+    "개발빌드": "cargo build --workspace 통과"
+  },
+  "재실행": [
+    "NODE_PATH=<Playwright 경로> CVIEW_UI_BROWSER=webkit node tools/ui-regression/startup-modules.mjs",
+    "NODE_PATH=<Playwright 경로> CVIEW_UI_BROWSER=webkit CVIEW_BOOT_CASE=BM11 CVIEW_STARTUP_REPEAT=100 node tools/ui-regression/startup-modules.mjs",
+    "NODE_PATH=<Playwright 경로> CVIEW_UI_BROWSER=webkit node tools/ui-regression/startup-loading.mjs",
+    "swift tools/ui-regression/native-startup.swift"
+  ],
+  "작업범위와한계": [
+    "모든 검사는 화면을 띄우거나 사용자 앱을 활성화하지 않고 실행. 시스템 프록시 설정은 변경하지 않음",
+    "비교용 Playwright 설치가 구버전 엔진 캐시를 자동 정리해 일부 진단 실행이 중단됨. 기존 Chromium/WebKit 캐시를 복원하고 자동 정리를 끈 뒤 최종 검사를 모두 다시 수행. 중단된 실행은 최종 성공 집계에 포함하지 않음",
+    "이번 검사는 모의 IPC와 실제 macOS WKWebView의 시작 복구 경로를 검증. 설치된 CView 창을 통한 종단 간 실행과 Windows 런타임 검사는 미수행",
+    "기존 라이브·채팅 수정 및 사용자 연구 파일 보존. 버전 증가·설치된 앱 교체·정식 배포는 수행하지 않음"
+  ]
+}

@@ -36,6 +36,9 @@ const ICON = {
 const ROLE_CLASSES = new Set(['streamer', 'manager', 'channelManager']);
 // 창이 숨은 동안 채팅 줄을 모아 붙이는 간격(보일 때는 다음 프레임, 늦어도 250ms).
 const HIDDEN_FLUSH_MS = 1000;
+// 표시 목록과 별개인 보조 기록도 상한을 둔다. 트레이는 최근 50개, 이모티콘 선택기는 최근 200개만 쓴다.
+const MENTION_LIMIT = 200;
+const SEEN_EMOJI_LIMIT = 200;
 /** 입장 때 받은 지난 기록(ev.recent) 메시지 — append 가 표시하고 flushLines 가 읽는다. */
 const RECENT = new WeakSet();
 const BLIND_TEXT = '관리자에 의해 삭제된 메시지입니다.';
@@ -349,9 +352,16 @@ export class ChatPanel {
 
   /** 패널을 버린다(멀티채팅에서 채널 닫기) — 이벤트 구독·문서 리스너·설정 구독·패널 목록에서 뺀다. */
   async destroy() {
-    await this.disconnect();
-    for (const fn of this.cleanups.splice(0)) { try { await fn(); } catch { /* 무시 */ } }
+    if (this.destroyed) return;
+    this.destroyed = true;
+    const disconnected = this.disconnect();
+    clearTimeout(this.restrictTimer);
+    clearTimeout(this.bannerTimer);
+    clearTimeout(this.dividerTimer);
+    clearTimeout(this.toolsSettle);
     PANELS.delete(this);
+    for (const fn of this.cleanups.splice(0)) { try { await fn(); } catch { /* 무시 */ } }
+    await disconnected;
   }
 
   // 글자 크기·줄 간격·시간·배지 표시는 applyChatSkin(chat-extras)이 디자인과 함께 입힌다(멀티채팅 통합 목록과 공유).
@@ -364,11 +374,24 @@ export class ChatPanel {
 
   // 연결 순번 — 빠른 채널·패인 전환 때 늦게 끝난 connect/disconnect 가 새 연결 상태를 덮지 않게.
   async connect(chatChannelId, channelId) {
+    if (this.destroyed) return;
     const seq = this.connSeq = (this.connSeq || 0) + 1;
+    this.pendingSend = null;
+    this.canSend = false;
     if (!this.session) for (const p of PANELS) if (p !== this && !p.session) p.active = false;
     this.clear();
     this.active = true;
-    if (this.channelId !== channelId) { this.seenEmoji.clear(); this.setSolo(null); closeUserPop(this); }
+    if (this.channelId !== channelId || this.chatChannelId !== chatChannelId) {
+      this.seenEmoji.clear();
+      this.recentNicks.clear();
+      this.restrictedUntil = 0;
+      this.restrictText = '';
+      clearTimeout(this.restrictTimer);
+      clearTimeout(this.bannerTimer);
+      this.setSolo(null);
+      closeUserPop(this);
+    }
+    this.kicked = false;
     this.chatChannelId = chatChannelId;
     this.channelId = channelId;
     this.mentions = [];
@@ -379,7 +402,10 @@ export class ChatPanel {
     this.loadEmoticons(channelId);
     this.setState('connecting');
     this.authAtConnect = this.isLoggedIn();
-    if (!chatChannelId) {
+    if (!chatChannelId || !String(chatChannelId).trim()) {
+      this.active = false;
+      try { await api.chatDisconnect(this.session); } catch { /* 이전 연결 정리 */ }
+      if (seq !== this.connSeq || this.destroyed) return;
       this.setState('failed');
       this.system('채팅 채널 정보가 없습니다');
       return;
@@ -407,9 +433,13 @@ export class ChatPanel {
     this.active = false;
     this.connected = false;
     this.canSend = false;
+    this.pendingSend = null;
+    this.cancelPendingLines();
+    clearTimeout(this.bannerTimer);
     this.ranking.clear();
     // 후원 읽어 주기(TTS) 대기열은 전역이다 — 연결된 채팅이 하나도 없으면 남은 것을 멈춘다(화면을 떠나도 계속 읽었다)
     if (window.speechSynthesis && ![...PANELS].some((p) => p.connected)) speechSynthesis.cancel();
+    this.updateInput();
     try { await api.chatDisconnect(this.session); } catch { /* 무시 */ }
     if (seq !== this.connSeq) return;
     this.setState('disconnected');
@@ -418,7 +448,8 @@ export class ChatPanel {
 
   clear(byUser = false) {
     this.clearLineSelection?.();
-    this.pendingLines = [];
+    this.cancelPendingLines();
+    clearTimeout(this.dividerTimer);
     this.lastGroup = null;
     this.list.innerHTML = `<div class="empty">${byUser ? '채팅을 지웠습니다' : '메시지 대기 중…'}</div>`;
     if (!byUser) this.notice.hidden = true;
@@ -426,6 +457,14 @@ export class ChatPanel {
     this.renderJump();
     // 검색 — 채널이 바뀌면 닫고, 지우기(/clear·⇧⌘K)면 줄 수만 다시 센다(예전엔 지운 줄의 'N개'가 남았다).
     if (this.searchQuery) { if (byUser) this.refreshSearch?.(); else this.closeSearch?.(); }
+  }
+
+  /** 닫거나 채널을 바꿀 때 이전 메시지 묶음과 후크가 뒤늦게 실행되지 않게 한다. */
+  cancelPendingLines() {
+    cancelAnimationFrame(this.flushRaf);
+    clearTimeout(this.flushTimer);
+    this.flushScheduled = false;
+    this.pendingLines = [];
   }
 
   setState(name, detail) {
@@ -439,15 +478,21 @@ export class ChatPanel {
   }
 
   /** CHT-20 입력 상태 배너 — 왜 보낼 수 없는지 알려 준다. */
+  get canSendMessage() {
+    return !this.destroyed && this.active && this.isLoggedIn() && this.connected && this.canSend
+      && !this.kicked && !(this.restrictedUntil > Date.now());
+  }
+
   updateInput(reason = null) {
     const loggedIn = this.isLoggedIn();
-    const enabled = loggedIn && this.connected && this.canSend;
+    const enabled = this.canSendMessage && !this.pendingSend;
     this.input.disabled = !enabled;
     this.sendButton.disabled = !enabled;
     this.composer.setEnabled(enabled);
     this.input.placeholder = loggedIn ? '채팅을 입력하세요…' : '로그인 후 채팅 참여 가능';
     let html = '';
     if (!reason && this.restrictedUntil > Date.now()) reason = this.restrictText;
+    if (!reason && this.kicked) reason = '채팅방에서 퇴장되어 메시지를 보낼 수 없습니다';
     if (reason) html = esc(reason);
     else if (!loggedIn) html = '로그인하면 채팅에 참여할 수 있어요 <button class="link-btn" data-login>로그인</button>';
     else if (this.connected && !this.canSend) html = '이 채팅방에서는 지금 채팅을 보낼 수 없습니다 (팔로워·구독자 전용이거나 제한 중)';
@@ -476,7 +521,7 @@ export class ChatPanel {
    *   멘션 알림·TTS·채팅 통계에는 넣지 않는다(지금 막 온 글이 아니다).
    */
   append(messages, { recent = false } = {}) {
-    if (!messages || !messages.length) return;
+    if (this.destroyed || !messages || !messages.length) return;
     const prefs = chatPrefs();
     // localHidden — /mute 로 잠시 숨긴 닉네임(chat-extras.js). 붙인 뒤 지우면 한 프레임 보였다가 사라졌다.
     const hidden = this.localHidden;
@@ -500,6 +545,8 @@ export class ChatPanel {
       const keep = [...this.recentNicks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 300);
       this.recentNicks = new Map(keep);
     }
+    if (this.mentions.length > MENTION_LIMIT) this.mentions.splice(0, this.mentions.length - MENTION_LIMIT);
+    while (this.seenEmoji.size > SEEN_EMOJI_LIMIT) this.seenEmoji.delete(this.seenEmoji.keys().next().value);
     this.pendingLines = (this.pendingLines || []).concat(shown);
     // 안 보이는 동안 쌓여도 화면에 남을 만큼만 그린다.
     if (this.pendingLines.length > this.maxLines) this.pendingLines = this.pendingLines.slice(-this.maxLines);
@@ -590,6 +637,7 @@ export class ChatPanel {
         this.setState(ev.state, ev.detail);
         break;
       case 'connected':
+        this.kicked = false;
         this.setState('connected');
         break;
       case 'reconnecting':
@@ -618,7 +666,9 @@ export class ChatPanel {
         this.blind(ev.messageId, ev.blindText);
         break;
       case 'kicked':
+        this.kicked = true;
         this.system('채팅방에서 퇴장되었습니다');
+        this.updateInput();
         break;
       case 'penalized': {
         // 셸은 내 제한만 보낸다(state.rs forward_to_shell). 기간이 있으면 그동안 배너에 남기고, 끝나면 걷는다.
@@ -647,24 +697,35 @@ export class ChatPanel {
   }
 
   async send() {
-    const text = this.input.value.trim();
+    if (this.input.disabled || this.pendingSend || !this.canSendMessage) return;
+    const submitted = this.input.value;
+    const text = submitted.trim();
     if (!text) return;
     // 슬래시 명령 등 — 훅이 처리하면 서버로 보내지 않는다(CHT-07).
     for (const fn of this.sendHooks) {
-      if (fn(text)) { this.input.value = ''; return; }
+      if (fn(text)) { this.input.value = ''; this.renderCount(); return; }
     }
-    this.input.disabled = true;
+    const request = { seq: this.connSeq, chatChannelId: this.chatChannelId };
+    const current = () => this.pendingSend === request && this.connSeq === request.seq
+      && this.chatChannelId === request.chatChannelId && this.active && !this.destroyed;
+    this.pendingSend = request;
+    this.updateInput();
     let failed = '';
     try {
-      await api.chatSend(text, this.session);
-      this.input.value = '';
+      await api.chatSend(text, this.session, request.chatChannelId);
+      if (!current()) return;
+      if (this.input.value === submitted) this.input.value = '';
       this.remember(text);
     } catch (e) {
+      if (!current()) return;
       failed = (e && e.message) || '메시지를 보내지 못했습니다';
     } finally {
-      this.updateInput();
-      this.renderCount();
-      this.input.focus();
+      if (current()) {
+        this.pendingSend = null;
+        this.updateInput();
+        this.renderCount();
+        if (this.root.contains(document.activeElement)) this.input.focus();
+      }
     }
     // 실패는 이 패널 입력창 위에 — 멀티채팅처럼 패널이 여럿이면 토스트만으로는 어느 채팅인지 몰랐다. 쓴 글은 남긴다.
     if (failed) this.flashInput(failed);
@@ -699,15 +760,23 @@ export class ChatPanel {
   blind(messageId, blindText) {
     if (!messageId) return;
     const text = blindText || BLIND_TEXT;
-    const pending = this.pendingLines || [];
-    const i = pending.findIndex((m) => m.id === messageId);
-    if (i >= 0) pending[i] = { ...pending[i], isBlinded: true, content: text, emojis: {} };
-    const line = this.list.querySelector(`.chat-line[data-id="${CSS.escape(messageId)}"]`);
-    if (!line) return;
-    line.classList.add('blinded');
-    line.classList.remove('emote-only');
-    const el = line.querySelector('.text, .ev-body');
-    if (el) el.textContent = text;
+    const blind = (m) => {
+      if (m.id !== messageId) return m;
+      const updated = { ...m, isBlinded: true, content: text, emojis: {} };
+      if (RECENT.has(m)) RECENT.add(updated);
+      return updated;
+    };
+    this.pendingLines = (this.pendingLines || []).map(blind);
+    this.mentions = this.mentions.map(blind);
+    if (!this.tray.hidden) this.renderMentionTray();
+    const lines = [...this.list.querySelectorAll(`.chat-line[data-id="${CSS.escape(messageId)}"]`)];
+    if (this.pinBar.dataset.messageId === messageId) lines.push(...this.pinBar.querySelectorAll('.chat-line'));
+    for (const line of lines) {
+      line.classList.add('blinded');
+      line.classList.remove('emote-only');
+      const el = line.querySelector('.text, .ev-body');
+      if (el) el.textContent = text;
+    }
   }
 
   // ── 멘션 트레이 (CHT-08) ───────────────────
@@ -737,11 +806,15 @@ export class ChatPanel {
 
   toggleMentionTray() {
     if (!this.tray.hidden) { this.tray.hidden = true; return; }
+    this.renderMentionTray();
+    this.tray.hidden = false;
+  }
+
+  renderMentionTray() {
     const items = this.mentions.slice(-50).reverse();
     this.tray.innerHTML = `
       <div class="tray-head"><strong>나를 부른 메시지</strong><div class="grow"></div>${items.length ? '<button class="link-btn" data-tray-clear>모두 지우기</button>' : ''}</div>
       ${items.length ? items.map((m) => `<div class="tray-item"><time>${esc(timeText(m.timestamp))}</time><b>${esc(m.nickname)}</b> ${renderContent(m.content, m.emojis)}</div>`).join('') : `<div class="tray-empty">${getMyNickname() ? `@${esc(getMyNickname())} 로 부른 메시지가 없습니다` : '로그인하면 나를 부른 메시지를 모아 줍니다'}</div>`}`;
-    this.tray.hidden = false;
   }
 
   // ── 컨텍스트 메뉴 (CHT-03) · 프로필 (CHT-04) ─
@@ -801,6 +874,7 @@ export class ChatPanel {
     clone.removeAttribute('id');
     clone.removeAttribute('data-uid');
     clone.removeAttribute('data-id');
+    this.pinBar.dataset.messageId = line.dataset.id || '';
     this.pinBar.innerHTML = `<span class="pin-icon">${ICON.pin}</span><div class="pin-body"></div><button class="icon-btn notice-x" data-unpin title="고정 해제">✕</button>`;
     this.pinBar.querySelector('.pin-body').append(clone);
     this.pinBar.hidden = false;
