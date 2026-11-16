@@ -236,6 +236,49 @@ await check('사이드바가 열린 채 다시 가득 차면 고르기로 바뀌
   }
 });
 
+await check('사이드바로 마지막 채널을 넣어 가득 찬 뒤 Esc 로 닫으면 초점은 "채널 고르기" 단추로(마우스로 연 경우)', async () => {
+  // 3/4 로 줄이고 — WebKit 처럼 누른 단추에 초점이 없는 채로(el.click) 사이드바를 연다.
+  await page.evaluate(() => { const m = window.__mock; m.state.sessions = m.state.sessions.filter((s) => s.channelId !== 'c2'); m.emit(); });
+  await settle();
+  assert.equal((await pickButton()).mode, 'add');
+  await page.evaluate(() => { document.activeElement?.blur?.(); document.querySelector('[data-page="multilive"] .ml-toolbar .ml-add').click(); });
+  await page.waitForFunction(() => document.querySelector('.ml-addbar')?.contains(document.activeElement));
+  await page.evaluate(() => { window.__mock.addLive(['c2']); window.__mock.emit(); });
+  await settle();
+  const b = await pickButton();
+  assert.equal(b.mode, 'pick');
+  assert.equal(b.expanded, null, '고르기는 사이드바 여닫이가 아니다(aria-expanded 없음)');
+  assert.equal(await page.evaluate(() => document.querySelector('.ml-addbar').classList.contains('open')), true);
+  await page.keyboard.press('Escape');
+  await settle();
+  const after = await page.evaluate(() => ({ open: document.querySelector('.ml-addbar').classList.contains('open'), ml: document.activeElement?.dataset?.ml, tag: document.activeElement?.tagName }));
+  assert.equal(after.open, false);
+  assert.equal(after.ml, 'pick', `초점: ${JSON.stringify(after)}`);
+});
+
+await check('포커스 배치 끝 칸으로 연 사이드바 — 채워 끝 칸이 숨어도 닫으면 초점은 "채널 고르기" 단추로', async () => {
+  try {
+    await page.evaluate(() => { const m = window.__mock; m.state.sessions = m.state.sessions.filter((s) => s.channelId !== 'c2'); m.state.layout = 'focus'; m.emit(); });
+    await settle();
+    const tile = '[data-page="multilive"] .ml-focus-add';
+    assert.equal(await page.evaluate((t) => Boolean(document.querySelector(t)?.offsetParent), tile), true, '3/4 포커스 배치에 끝 칸이 보인다');
+    await page.focus(tile);
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => document.querySelector('.ml-addbar')?.contains(document.activeElement));
+    await page.evaluate(() => { window.__mock.addLive(['c2']); window.__mock.emit(); });
+    await settle();
+    assert.equal(await page.evaluate((t) => Boolean(document.querySelector(t)?.offsetParent), tile), false, '가득 차면 끝 칸이 숨는다');
+    await page.click('.ml-addbar [data-add="close"]');
+    await settle();
+    const after = await page.evaluate(() => ({ open: document.querySelector('.ml-addbar').classList.contains('open'), ml: document.activeElement?.dataset?.ml, tag: document.activeElement?.tagName }));
+    assert.equal(after.open, false);
+    assert.equal(after.ml, 'pick', `초점: ${JSON.stringify(after)}`);
+  } finally {
+    await page.evaluate(() => { const m = window.__mock; m.state.layout = 'grid'; m.emit(); });
+    await settle();
+  }
+});
+
 await check('라이브에 6개 담아 온 채 멀티라이브 — 4개만 패인으로, 단추에 4/6 과 안내 토스트', async () => {
   await page.evaluate(() => { window.__mock.addLive(['c4', 'c5']); window.__mock.state.selectedId = 's-c5'; window.__mock.emit(); });
   await settle();

@@ -96,13 +96,16 @@ export class MultiLiveAddDrawer {
   /**
    * @param {HTMLElement} host `.ml-body` — 채팅과 같은 컨테이너
    * @param {{ isLoggedIn: () => boolean, getState: () => any, onAdd: (channelId: string) => Promise<void>,
-   *   onOpen?: (channelId: string) => void, addLabel?: string, toggleSelector?: string, unit?: string }} opts
+   *   onOpen?: (channelId: string) => void, addLabel?: string, toggleSelector?: string, unit?: string,
+   *   focusFallback?: () => HTMLElement | null }} opts
    *   onOpen — 줄(썸네일·이름)을 누를 때. 없으면 줄을 눌러도 추가한다.
-   *   addLabel — + 버튼 풍선말, toggleSelector — 여는 버튼(바깥 클릭으로 치지 않는다), unit — 꽉 참 안내에 쓰는 이름(패인·채널)
+   *   addLabel — + 버튼 풍선말, toggleSelector — 여는 버튼(바깥 클릭으로 치지 않는다), unit — 꽉 참 안내에 쓰는 이름(패인·채널),
+   *   focusFallback — 닫을 때 보이는 여는 버튼이 하나도 없으면 초점을 돌려줄 곳(멀티라이브: 가득 차 "채널 고르기"가 된 머리줄 단추)
    */
-  constructor(host, { isLoggedIn, getState, onAdd, onOpen = null, addLabel = '추가', toggleSelector = '[data-ml="add"]', unit = '패인' }) {
+  constructor(host, { isLoggedIn, getState, onAdd, onOpen = null, addLabel = '추가', toggleSelector = '[data-ml="add"]', unit = '패인', focusFallback = null }) {
     this.host = host;
     this.toggleSelector = toggleSelector;
+    this.focusFallback = focusFallback;
     this.unit = unit;
     this.isLoggedIn = isLoggedIn;
     this.getState = getState;
@@ -255,7 +258,10 @@ export class MultiLiveAddDrawer {
     // (disabled 가 아니라) 초점을 받을 수 있다 — 예전엔 열린 채 가득 차면 돌려줄 곳이 없어 초점이 사라졌다.
     if (hadFocus) {
       const shown = (b) => b?.isConnected && b.offsetParent && !b.disabled;
-      const back = shown(this.returnFocus) ? this.returnFocus : [...document.querySelectorAll(this.toggleSelector)].find(shown);
+      // 연 버튼이 사라졌고(포커스 배치 끝 칸이 가득 차 숨음) 다른 여는 버튼도 없으면(머리줄이 "채널 고르기"로 바뀜) 대신 갈 곳으로.
+      const fallback = this.focusFallback?.();
+      const back = shown(this.returnFocus) ? this.returnFocus
+        : [...document.querySelectorAll(this.toggleSelector)].find(shown) || (shown(fallback) ? fallback : null);
       back?.focus({ preventScroll: true });
     }
     this.returnFocus = null;

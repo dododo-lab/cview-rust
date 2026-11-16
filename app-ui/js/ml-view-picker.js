@@ -52,6 +52,9 @@ export function syncHeaderAddButton(button, state, { addInner, drawerOpen }) {
     button.innerHTML = m.pick ? PICK_INNER : addInner;
     button.removeAttribute('aria-disabled');
     if (m.pick) {
+      // 고르기는 사이드바 여닫이가 아니라 대화 상자를 여는 단추라 aria-expanded 를 두지 않는다. 사이드바가 열린 채 바뀌어도
+      // 사이드바는 스스로 닫는 길(× · Esc)을 갖고, 닫으면 초점이 이 단추로 돌아온다(ml-add-drawer focusFallback).
+      // 누르면 사이드바를 닫고 시트를 연다. 자리가 나 채널 추가로 돌아오면 그때 사이드바 열림을 다시 단다.
       button.setAttribute('aria-haspopup', 'dialog');
       button.removeAttribute('aria-expanded');
     } else {

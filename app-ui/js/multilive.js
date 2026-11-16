@@ -344,6 +344,8 @@ export class MultiLivePage {
       },
       onOpen: onOpenChannel,
       addLabel: '멀티라이브에 추가',
+      // 마지막 채널을 넣어 가득 차면 머리줄 단추가 "채널 고르기"(data-ml="pick")가 되어 [data-ml="add"] 가 남지 않는다 — 그때 닫으면 거기로.
+      focusFallback: () => this.headAdd,
     });
     this.watch = new WatchTools(this);
     // 시스템 '지금 재생 중'(macOS 섬·제어 센터)의 재생·일시정지. WebKit 은 볼륨 0 패인도 후보로 보므로
