@@ -8,6 +8,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest.mock import patch
 import zipfile
@@ -301,6 +302,46 @@ class BuildTests(unittest.TestCase):
         data = log.read_text()
         self.assertIn('stdout marker', data)
         self.assertIn('stderr marker', data)
+
+    def _lane_starter(self, scripts):
+        def start(name, lane_log):
+            code = f'import sys, time; open({str(lane_log)!r}, "a").write("lane {name} marker\\n"); ' + scripts[name]
+            return subprocess.Popen([sys.executable, '-c', code])
+        return start
+
+    def test_build_lanes_run_concurrently_and_merge_logs_in_order(self):
+        log = self.root / 'windows.log'
+        scripts = {name: 'time.sleep(0.8)' for name, _ in common.LANES}
+        started = time.monotonic()
+        failed = runner.run_lanes([n for n, _ in common.LANES], log, self._lane_starter(scripts), poll=0.05)
+        self.assertEqual(failed, [])
+        self.assertLess(time.monotonic() - started, 2.0, 'lanes must overlap, not run one after another')
+        data = log.read_text()
+        positions = [data.index(f'===== lane {n}: ok') for n, _ in common.LANES]
+        self.assertEqual(positions, sorted(positions))
+        for name, _ in common.LANES:
+            self.assertIn(f'lane {name} marker', data)
+        self.assertIn('Lanes: check', data)
+
+    def test_first_failing_lane_stops_the_others(self):
+        log = self.root / 'windows.log'
+        scripts = {'check': 'sys.exit(3)', 'x64': 'time.sleep(30)', 'arm64': 'time.sleep(30)'}
+        started = time.monotonic()
+        failed = runner.run_lanes(['check', 'x64', 'arm64'], log, self._lane_starter(scripts), poll=0.05)
+        self.assertLess(time.monotonic() - started, 10, 'a failed check must not wait for both release builds')
+        self.assertEqual(failed, ['check', 'x64', 'arm64'])
+        data = log.read_text()
+        self.assertIn('lane check: failed (exit 3)', data)
+        self.assertIn('lane x64: stopped', data)
+
+    def test_lanes_use_separate_cargo_target_dirs(self):
+        dirs = [d for _, d in common.LANES]
+        self.assertEqual(len(set(d.casefold() for d in dirs)), len(dirs))
+        self.assertEqual(common.LANE_TARGET_DIRS['x64'], 'target', 'x64 keeps the existing warm cache')
+        self.assertEqual(set(common.TARGETS), {'x64', 'arm64'} & set(common.LANE_TARGET_DIRS))
+        script = (Path(runner.__file__).with_name('Build-Windows.ps1')).read_text()
+        self.assertIn("[ValidateSet('all', 'check', 'x64', 'arm64')]", script)
+        self.assertIn('$TargetDir', script)
 
     def test_native_log_reports_failure_to_start(self):
         log = self.root / 'windows.log'

@@ -4,6 +4,11 @@ param(
     [string]$SourcePath,
     [string]$OutputPath,
     [string]$LogPath,
+    # 병렬 갈래(build_runner.py run_lanes) — check: fmt·clippy·test x64, x64·arm64: 설치 파일. all 은 예전처럼 차례로 모두.
+    [ValidateSet('all', 'check', 'x64', 'arm64')]
+    [string]$Lane = 'all',
+    # 갈래마다 다른 CARGO_TARGET_DIR — 같은 폴더면 cargo 잠금으로 서로 기다린다.
+    [string]$TargetDir,
     [switch]$CheckOnly
 )
 $ErrorActionPreference = 'Stop'
@@ -13,7 +18,7 @@ trap {
     throw $_
 }
 $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
-$env:CARGO_TARGET_DIR = Join-Path $Root 'target'
+$env:CARGO_TARGET_DIR = if ($TargetDir) { $TargetDir } else { Join-Path $Root 'target' }
 $env:CI = 'true'
 $env:RUSTUP_TOOLCHAIN = 'stable-x86_64-pc-windows-msvc'
 # Both MSVC targets must embed the CRT; installers cannot rely on a separately
@@ -49,12 +54,15 @@ $version = (Get-Content (Join-Path $SourcePath 'crates\cview-app\tauri.conf.json
 New-Item -ItemType Directory -Force $OutputPath | Out-Null
 Push-Location $SourcePath
 try {
-    & $developerShell -Arch amd64 -HostArch amd64 -SkipAutomaticLocation
-    Invoke-Native 'cargo' @('fmt', '--all', '--check')
-    Invoke-Native 'cargo' @('clippy', '--workspace', '--all-targets', '--locked', '--target', 'x86_64-pc-windows-msvc', '--', '-D', 'warnings')
-    Invoke-Native 'cargo' @('test', '--workspace', '--locked', '--target', 'x86_64-pc-windows-msvc')
+    if ($Lane -eq 'all' -or $Lane -eq 'check') {
+        & $developerShell -Arch amd64 -HostArch amd64 -SkipAutomaticLocation
+        Invoke-Native 'cargo' @('fmt', '--all', '--check')
+        Invoke-Native 'cargo' @('clippy', '--workspace', '--all-targets', '--locked', '--target', 'x86_64-pc-windows-msvc', '--', '-D', 'warnings')
+        Invoke-Native 'cargo' @('test', '--workspace', '--locked', '--target', 'x86_64-pc-windows-msvc')
+    }
     foreach ($entry in @(@{Arch='x64'; Target='x86_64-pc-windows-msvc'; VcArch='amd64'},
                          @{Arch='arm64'; Target='aarch64-pc-windows-msvc'; VcArch='arm64'})) {
+        if ($Lane -ne 'all' -and $Lane -ne $entry.Arch) { continue }
         & $developerShell -Arch $entry.VcArch -HostArch amd64 -SkipAutomaticLocation
         if ($entry.Arch -eq 'arm64') {
             Invoke-Native 'cargo' @('clippy', '-p', 'cview-app', '--all-targets', '--locked', '--target', $entry.Target, '--', '-D', 'warnings')

@@ -6,6 +6,7 @@ from pathlib import Path
 import struct
 import subprocess
 import sys
+import time
 
 import build_common as common
 
@@ -32,14 +33,73 @@ def native_logged(log_path, command):
     """
     log_path = common.safe(Path(log_path))
     with log_path.open('ab', buffering=0) as output:
-        output.write(('\n$ ' + ' '.join(command) + '\n').encode('utf-8'))
+        output.write(('\n$ ' + ' '.join(command) + '   [' + time.strftime('%H:%M:%S') + ']\n').encode('utf-8'))
+        started = time.monotonic()
         try:
             result = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=output, stderr=subprocess.STDOUT,
                                     creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+            output.write(('  (exit ' + str(result.returncode) + ', ' + elapsed(started) + ')\n').encode('utf-8'))
             return result.returncode
         except OSError as error:
             output.write(('Cannot start native command: ' + str(error) + '\n').encode('utf-8'))
             return 1
+
+
+def elapsed(started):
+    seconds = int(time.monotonic() - started)
+    return f'{seconds // 60}m{seconds % 60:02d}s'
+
+
+def kill_tree(process):
+    """Stop a lane and its cargo/rustc children (TerminateProcess alone leaves them holding the target lock)."""
+    if process.poll() is not None:
+        return
+    if os.name == 'nt':
+        subprocess.run(['taskkill', '/T', '/F', '/PID', str(process.pid)], stdin=subprocess.DEVNULL,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
+    else:
+        process.kill()
+    process.wait()
+
+
+def run_lanes(lanes, log_path, start, poll=0.5):
+    """Run build lanes concurrently and merge their logs in lane order.
+
+    `start(name, lane_log)` returns a Popen-like process. The first failing lane
+    stops the others so a broken check does not wait for two release builds.
+    Returns the names of lanes that failed or were stopped.
+    """
+    log_path = common.safe(Path(log_path))
+    running, results = {}, {}
+    for name in lanes:
+        lane_log = log_path.with_name(log_path.stem + '-' + name + '.log')
+        running[name] = (start(name, lane_log), lane_log, time.monotonic())
+    stopped = set()
+    while len(results) < len(running):
+        for name, (process, _, started) in running.items():
+            if name in results or process.poll() is None:
+                continue
+            results[name] = (process.returncode, elapsed(started))
+            if process.returncode != 0:
+                for other, (other_process, _, other_started) in running.items():
+                    if other not in results:
+                        kill_tree(other_process)
+                        stopped.add(other)
+                        results[other] = (other_process.returncode, elapsed(other_started))
+        if len(results) < len(running):
+            time.sleep(poll)
+    failed = []
+    with log_path.open('ab', buffering=0) as output:
+        for name, (_, lane_log, _) in running.items():
+            code, took = results[name]
+            state = 'stopped' if name in stopped else ('ok' if code == 0 else f'failed (exit {code})')
+            if state != 'ok':
+                failed.append(name)
+            output.write(f'\n===== lane {name}: {state}, {took} =====\n'.encode('utf-8'))
+            if lane_log.exists():
+                output.write(lane_log.read_bytes())
+        output.write(('\nLanes: ' + ', '.join(f'{n} {results[n][1]}' for n in running) + '\n').encode('utf-8'))
+    return failed
 
 
 def run(root, job):
@@ -59,13 +119,19 @@ def run(root, job):
             env = os.environ.copy()
             env.pop('CVIEW_UPDATE_URL', None)
             env.update(common.build_environment(current.get('build_env', {})))
-            subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-                            '-File', str(Path(__file__).with_name('Build-Windows.ps1')), '-Root', str(root),
-                            '-SourcePath', str(source), '-OutputPath', str(directory / 'artifacts'),
-                            '-LogPath', str(directory / 'windows.log')], check=True, env=env)
+            def start(lane, lane_log):
+                return subprocess.Popen(['powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+                                         '-File', str(Path(__file__).with_name('Build-Windows.ps1')), '-Root', str(root),
+                                         '-SourcePath', str(source), '-OutputPath', str(directory / 'artifacts'),
+                                         '-LogPath', str(lane_log), '-Lane', lane,
+                                         '-TargetDir', str(root / common.LANE_TARGET_DIRS[lane])],
+                                        stdin=subprocess.DEVNULL, env=env)
+            failed = run_lanes([name for name, _ in common.LANES], directory / 'windows.log', start)
+            if failed:
+                raise ValueError('Windows build lane failed: ' + ', '.join(failed))
             files = {}
             for arch, (target, machine) in common.TARGETS.items():
-                binary = root / 'target' / target / 'release' / 'cview-app.exe'
+                binary = root / common.LANE_TARGET_DIRS[arch] / target / 'release' / 'cview-app.exe'
                 if pe_machine(binary) != machine:
                     raise ValueError('Wrong PE architecture: ' + arch)
                 name = f'CView_{current["version"]}_{arch}-setup.exe'
