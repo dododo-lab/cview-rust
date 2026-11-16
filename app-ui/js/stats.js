@@ -478,7 +478,19 @@ export class StatsPage {
       const cell = e.target.closest?.('[data-i]');
       return chart && cell && chart.contains(cell) ? [chart, Number(cell.dataset.i)] : [chart, -1];
     };
+    // WebKit(macOS 앱)은 스크롤로 내용이 커서 밑에서 밀리면 커서가 그대로여도 pointermove 를 보낸다. 키보드 초점이 아래 차트로
+    // 가며 자동 스크롤될 때 그 가짜 움직임이 키보드로 연 풍선을 닫았다 — 커서 자리가 그대로면 초점 차트의 풍선은 둔다.
+    // 커서 자리는 문서 전체에서 잰다 — 차트 밖(탭 단추 등)에 있던 커서 밑으로 차트가 밀려 들어오는 경우가 바로 그 경우다.
+    let px = NaN;
+    let py = NaN;
+    let still = false;
+    window.addEventListener('pointermove', (e) => {
+      still = e.clientX === px && e.clientY === py;
+      px = e.clientX;
+      py = e.clientY;
+    }, { capture: true, passive: true });
     this.body.addEventListener('pointermove', (e) => {
+      if (still && this.tipChart && document.activeElement === this.tipChart) return;
       const [chart, i] = at(e);
       if (chart && i >= 0) this.activate(chart, i, false);
       else if (!chart || chart !== this.tipChart || document.activeElement !== chart) this.hideTip();

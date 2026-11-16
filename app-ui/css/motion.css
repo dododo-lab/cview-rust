@@ -368,7 +368,9 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
    다시 그릴 때마다 되풀이되는 곳(채팅·설정·사이드바 폴링)에는 걸지 않는다. 모션 줄이기는 전역 규칙이 끝 상태로. ══ */
 
 /* ── 세그먼트 판 — 고른 칸 아래로 미끄러진다(motion.js installSegmentGlider) ── */
-.segmented.has-glider { position: relative; isolation: isolate; }
+/* 판이 붙기 전부터 relative — 첫 배치가 고른 칸의 offset 을 먼저 읽고 판을 넣을 수 있게(넣은 뒤 읽으면 강제 동기 레이아웃, perf P01). */
+.segmented { position: relative; }
+.segmented.has-glider { isolation: isolate; }
 .seg-glider {
   position: absolute; left: 0; top: 0; z-index: -1; pointer-events: none; opacity: 0;
   border-radius: var(--glider-r, var(--radius-sm)); background: var(--glider-bg, var(--surface-base)); box-shadow: var(--glider-shadow, var(--shadow-sm));

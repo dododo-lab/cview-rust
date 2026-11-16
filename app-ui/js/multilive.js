@@ -1239,7 +1239,8 @@ export class MultiLivePage {
   syncHeaderCenter() {
     const h = this.header;
     const [before, after] = this.headGaps;
-    if (!h || h.offsetParent === null) return;
+    // 숨은 화면이면 offsetParent 를 읽기 전에 돌아간다 — closest 는 레이아웃 없이 답한다(시작 중 강제 레이아웃, perf P01).
+    if (!h || h.closest('[hidden]') || h.offsetParent === null) return;
     const cs = getComputedStyle(h);
     const box = h.getBoundingClientRect();
     const left = before.getBoundingClientRect().left - (box.left + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth));

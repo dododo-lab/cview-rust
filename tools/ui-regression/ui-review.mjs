@@ -633,7 +633,8 @@ await check('UR16 [P2-1] merged multichat: blinded, emoji-name search, backlog w
     const list = document.createElement('div');
     root.append(list);
     document.body.append(root);
-    const c = { channelId: 'chA', name: 'A', color: '#0f0', session: 'mc:chA' };
+    // 채팅 패널이 살아 있고 지금 연결(chatChannelId)이 같은 이벤트만 받는다(e0a6084 경쟁 상태 방지).
+    const c = { channelId: 'chA', name: 'A', color: '#0f0', session: 'mc:chA', panel: { active: true, chatChannelId: 'chA' } };
     Object.assign(page, { root, mergedList: list, layout: 'merged', channels: [c], search: { value: '' }, queueSearchNote() {} });
     page.onSessionEvent({ session: 'mc:chA', event: { type: 'messages', messages: [msg('x1', '떠나 있는 동안 1'), msg('x2', '떠나 있는 동안 2')] } });
     page.onSessionEvent({ session: 'mc:chA', event: { type: 'blinded', messageId: 'x2', blindText: '' } });
@@ -645,8 +646,15 @@ await check('UR16 [P2-1] merged multichat: blinded, emoji-name search, backlog w
     page.onSessionEvent({ session: 'mc:chA', event: { type: 'blinded', messageId: 'x3', blindText: '' } });
     page.flushBacklog(); // 통합 목록은 프레임마다 한 번 붙인다(붙기 전에 온 삭제도 걸린다)
     const live = list.lastElementChild.querySelector('.text').textContent;
+    // 옛 연결에서 늦게 온 이벤트·닫힌 패널의 이벤트는 버린다
+    const before = list.querySelectorAll('.merged-line').length;
+    page.onSessionEvent({ session: 'mc:chA', event: { type: 'messages', chatChannelId: 'old', messages: [msg('x4', '옛 연결')] } });
+    c.panel.active = false;
+    page.onSessionEvent({ session: 'mc:chA', event: { type: 'messages', messages: [msg('x5', '닫힌 패널')] } });
+    page.flushBacklog();
+    const stale = list.querySelectorAll('.merged-line').length - before;
     root.remove();
-    return { pure, away, back, live };
+    return { pure, away, back, live, stale };
   });
   assert.equal(r.pure.n, 1, '다른 채널의 같은 id 까지 지웠다');
   assert.match(r.pure.a, /삭제된 메시지/);
@@ -657,6 +665,7 @@ await check('UR16 [P2-1] merged multichat: blinded, emoji-name search, backlog w
   assert.equal(r.back.length, 2, `돌아와도 붙지 않았다 ${JSON.stringify(r.back)}`);
   assert.match(r.back[1], /삭제된 메시지/, '떠나 있는 동안 지운 글이 그대로다');
   assert.match(r.live, /삭제된 메시지/);
+  assert.equal(r.stale, 0, '옛 연결·닫힌 패널의 메시지를 붙였다');
   assert.deepEqual(errors, []);
   await ctx.close();
 });
