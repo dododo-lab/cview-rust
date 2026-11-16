@@ -24,19 +24,15 @@ impl ManagerState {
             .map(|s| s.id())
             .filter(|id| view.as_ref().is_none_or(|v| v.contains(id)))
             .collect();
-        match rate_budget_plan(&ids, self.selected_session_id) {
-            None => {
-                if let Some(s) = self.sessions.first() {
-                    s.player().set_max_rate_override(None);
-                }
-            }
-            Some(plan) => {
-                for (id, rate) in plan {
-                    if let Some(s) = self.session(id) {
-                        s.player().set_max_rate_override(Some(rate));
-                    }
-                }
-            }
+        // 계획에 없는 세션(하나만 보이거나 숨은 세션)은 덮어쓰기를 지운다 — 숨었다가 다시 보일 때 예전 몫
+        // (예: 선택일 때 받은 +7.2%)이 남지 않게.
+        let plan = rate_budget_plan(&ids, self.selected_session_id).unwrap_or_default();
+        for s in &self.sessions {
+            let rate = plan
+                .iter()
+                .find(|(id, _)| *id == s.id())
+                .map(|&(_, rate)| rate);
+            s.player().set_max_rate_override(rate);
         }
     }
 }

@@ -2365,3 +2365,42 @@ async fn multi_view_quality_targets_count_only_visible_panes() {
         "보이는 2분할 보조 패인이 숨은 세션까지 센 6개 기준으로 360p 에 묶이면 안 된다: {h}"
     );
 }
+
+#[test]
+fn multi_view_change_rebalances_rate_budget_and_latency_margin() {
+    // 상한(기본 4)을 넘는 6개 중 일부만 보일 때 — 보기가 바뀌면 선택이 그대로여도 재생 속도 배분·메인 지연
+    // 여유를 다시 맞추고, 계획에서 빠진(숨은·혼자 보이는) 세션의 덮어쓰기는 지운다.
+    let m = manager();
+    let p = panes(6, "view-rate");
+    let id = ids(&p);
+    let mut st = m.lock();
+    st.set_sessions(p.iter().map(|x| x.session.clone()).collect());
+    st.set_selected_session_id(Some(id[0]));
+    st.apply_rate_budget();
+    assert!(
+        st.multi_view_session_ids().is_some(),
+        "상한을 넘어 일부만 보인다"
+    );
+    let rate = |i: usize| *p[i].player.rate_override.lock().unwrap();
+    let margin = |i: usize| *p[i].player.latency_margin.lock().unwrap();
+    assert!((rate(0).unwrap() - 1.072).abs() < 1e-9);
+    assert_eq!(margin(0), 1.0, "4개 보일 때 메인 여유");
+
+    // 선택(id0)을 두고 id1 만 함께 — 선택이 그대로라 select 를 거치지 않아도 2개 기준으로 다시 나눈다.
+    st.set_multi_view_sessions(&[id[0], id[1]]);
+    assert_eq!(margin(0), 0.0, "2개면 메인 여유 없음");
+    assert!(
+        (rate(1).unwrap() - 1.048).abs() < 1e-9,
+        "보이는 비선택 몫: {:?}",
+        rate(1)
+    );
+    for i in 2..6 {
+        assert_eq!(rate(i), None, "숨은 세션 덮어쓰기는 지운다");
+    }
+    // 하나만 고르면(계획 없음) 보이는 세션의 덮어쓰기도 지운다 — 숨은 첫 세션만 지우고 남기지 않는다.
+    st.set_multi_view_sessions(&[id[3]]);
+    assert_eq!(st.selected_session_id(), Some(id[3]));
+    for i in 0..6 {
+        assert_eq!(rate(i), None, "세션 {i}");
+    }
+}

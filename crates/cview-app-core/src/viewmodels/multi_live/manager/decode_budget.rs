@@ -202,6 +202,8 @@ impl ManagerState {
                 }
             }
             self.update_estimated_pane_sizes();
+            // 보이는 수가 바뀌면 재생 속도 배분·메인 지연 여유도 다시 — 선택이 그대로인 고르기는 select 를 거치지 않는다.
+            self.apply_rate_budget();
             self.syncing_multi_view = false;
         }
         view
