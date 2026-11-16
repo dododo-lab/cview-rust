@@ -339,6 +339,8 @@ async function navigate(route, params = {}, { push = true } = {}) {
   for (const [id, page] of Object.entries(pages)) {
     page.root.hidden = showViewer || id !== (showWatch ? 'multilive' : route);
   }
+  // 멀티라이브 화면 자체인가 — 라이브 단독 보기(showWatch)도 같은 화면을 쓰므로 그때는 멀티라이브 안내를 띄우지 않는다.
+  if (pages.multilive) pages.multilive.onMultiRoute = route === 'multilive';
   refreshSegmentGliders(); // 숨어 있는 동안 고른 칸이 바뀐 세그먼트(전환 버튼 등)의 판을 제자리로
   if (showViewer) {
     setMenuHidden(viewer.player.iframe, false);

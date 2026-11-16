@@ -94,20 +94,33 @@ impl ManagerState {
     }
 
     /// 멀티라이브 보기에 올린 세션 — 라이브 단독 보기에서 멀티라이브 상한보다 많이 담아 온 채 멀티라이브로
-    /// 돌아왔을 때만 `Some`(그 밖에는 모든 세션이 보인다). 선택 세션, 사용자가 고른 세션, 디코드 우선순위 순으로
-    /// 상한까지 채운다 — 단독 보기에서 보던 채널은 늘 들어가고, 고른 목록의 맨 뒤가 밀려난다.
+    /// 돌아왔을 때만 `Some`(그 밖에는 모든 세션이 보인다).
+    ///
+    /// - 사용자가 고른 목록이 있으면 그 목록만 쓴다 — 상한보다 적게 골랐어도 디코드 순위로 다시 채우지 않는다.
+    /// - 아직 고르지 않았으면 자동 보기(잡아 둔 값) → 디코드 우선순위 순으로 상한까지 채운다.
+    /// - 어느 쪽이든 선택 세션(단독 보기에서 보던 채널)은 맨 앞에 들어가고, 넘치면 목록의 맨 뒤가 밀려난다.
     pub fn multi_view_session_ids(&self) -> Option<Vec<Uuid>> {
         let max = self.max_multi_live_sessions();
         if self.stage_session_id.is_some() || self.sessions.len() <= max {
             return None;
         }
+        let chosen: Vec<Uuid> = self
+            .multi_view_ids
+            .iter()
+            .copied()
+            .filter(|id| self.contains(*id))
+            .collect();
+        let rest: Vec<Uuid> = if chosen.is_empty() {
+            self.multi_view_auto_ids
+                .iter()
+                .copied()
+                .chain(self.decode_rank())
+                .collect()
+        } else {
+            chosen
+        };
         let mut out: Vec<Uuid> = Vec::with_capacity(max);
-        let candidates = self
-            .selected_session_id
-            .into_iter()
-            .chain(self.multi_view_ids.iter().copied())
-            .chain(self.decode_rank());
-        for id in candidates {
+        for id in self.selected_session_id.into_iter().chain(rest) {
             if out.len() >= max {
                 break;
             }
@@ -118,7 +131,13 @@ impl ManagerState {
         Some(out)
     }
 
-    /// 멀티라이브에 올릴 세션을 고른다(상한까지, 고른 순서대로). 선택 세션이 빠지면 고른 첫 세션을 선택한다.
+    /// 지금 보기에 올라간 세션인가 — 상한을 넘지 않았거나 단독 보기면 늘 `true`.
+    fn in_multi_view(view: Option<&[Uuid]>, id: Uuid) -> bool {
+        view.is_none_or(|v| v.contains(&id))
+    }
+
+    /// 멀티라이브에 올릴 세션을 고른다(상한까지, 고른 순서대로). 선택 세션이 빠지면 고른 첫 세션을 선택하고,
+    /// 소리도 보이는 패인으로 옮긴다(숨긴 패인이 소리를 쥐면 보이는 패인이 모두 무음이 된다).
     /// 고른 세션이 하나도 없으면(모두 닫힌 세션) 아무것도 바꾸지 않는다.
     pub fn set_multi_view_sessions(&mut self, ids: &[Uuid]) {
         let max = self.max_multi_live_sessions();
@@ -132,21 +151,70 @@ impl ManagerState {
             return;
         };
         self.multi_view_ids = picked.clone();
+        self.multi_view_auto_ids.clear();
         let selected_in_view = self
             .selected_session_id
             .is_some_and(|s| picked.contains(&s));
-        if selected_in_view {
-            if !self
-                .focus_main_session_id
-                .is_some_and(|f| picked.contains(&f))
-            {
-                self.set_focus_main_session_id(self.selected_session_id);
-            }
-            self.reconcile_decode_budget();
-        } else {
-            // 선택이 바뀌며 디코드 예산도 다시 맞춘다.
+        if !selected_in_view {
+            // 선택이 바뀌며 소리(단일 소리 모드)·디코드 예산도 따라간다.
             self.select_session(first, true);
+        } else if !self
+            .focus_main_session_id
+            .is_some_and(|f| picked.contains(&f))
+        {
+            self.set_focus_main_session_id(self.selected_session_id);
         }
+        self.fit_audio_to_multi_view();
+        self.reconcile_decode_budget();
+    }
+
+    /// 숨긴 세션이 쥔 소리를 보이는 패인으로 옮긴다 — 단일 소리면 선택 세션으로, 여러 소리면 숨긴 세션을 목록에서
+    /// 빼고 끈다(`remove_session` 의 소리 넘기기와 같은 방식).
+    fn fit_audio_to_multi_view(&mut self) {
+        let Some(view) = self.multi_view_session_ids() else {
+            return;
+        };
+        let hidden: Vec<Uuid> = self
+            .sessions
+            .iter()
+            .map(|s| s.id())
+            .filter(|id| !view.contains(id))
+            .collect();
+        if hidden.is_empty() {
+            return;
+        }
+        if self.is_multi_audio_mode {
+            for id in &hidden {
+                self.audio_enabled_session_ids.remove(id);
+                if let Some(s) = self.session(*id) {
+                    s.set_muted(true);
+                }
+            }
+            if self.audio_session_id.is_some_and(|a| hidden.contains(&a)) {
+                self.audio_session_id = self
+                    .selected_session_id
+                    .filter(|s| self.audio_enabled_session_ids.contains(s))
+                    .or_else(|| {
+                        view.iter()
+                            .copied()
+                            .find(|v| self.audio_enabled_session_ids.contains(v))
+                    })
+                    .or(self.selected_session_id);
+            }
+            self.sync_audio_volumes();
+            self.reconcile_focus_quality(None);
+        } else if self.audio_session_id.is_some_and(|a| hidden.contains(&a)) {
+            if let Some(target) = self.selected_session_id.or_else(|| view.first().copied()) {
+                self.route_audio(target);
+            }
+        }
+    }
+
+    /// 멀티라이브 상한 설정이 바뀌었을 때 — 보기·디코드 예산·패인 크기를 다시 맞춘다.
+    pub fn multi_live_limits_changed(&mut self) {
+        self.fit_audio_to_multi_view();
+        self.reconcile_decode_budget();
+        self.update_estimated_pane_sizes();
     }
 
     pub fn reconcile_decode_budget(&mut self) {
@@ -154,9 +222,15 @@ impl ManagerState {
         // 멀티라이브 상한을 넘으면 고른 세션만 보이고, 나머지는 어떤 경우에도 재생을 멈춘다.
         let view = self.multi_view_session_ids();
         if let Some(v) = &view {
-            self.multi_view_ids.clone_from(v);
+            // 고른 목록이 있으면(보던 채널이 앞에 붙었을 수 있다) 그 결과를, 없으면 자동 보기로만 잡아 둔다 —
+            // 자동으로 채운 값을 사용자 선택으로 덮어쓰지 않는다.
+            if self.multi_view_ids.iter().any(|id| self.contains(*id)) {
+                self.multi_view_ids.clone_from(v);
+            } else {
+                self.multi_view_auto_ids.clone_from(v);
+            }
         }
-        let in_view = |id: Uuid| view.as_ref().is_none_or(|v| v.contains(&id));
+        let in_view = |id: Uuid| Self::in_multi_view(view.as_deref(), id);
         if !self.decode_suspension_reasons.is_empty() {
             for s in &sessions {
                 let protected = self.is_protected_during_suspension(s) && in_view(s.id());
@@ -222,8 +296,11 @@ impl ManagerState {
 
     pub fn suspend_non_selected_decode(&mut self, reason: DecodeSuspensionReason) {
         let inserted = self.decode_suspension_reasons.insert(reason);
+        // 멀티라이브에서 숨긴 패인은 들리는 패인이어도 멈춘 채 둔다(reconcile_decode_budget 과 같은 규칙).
+        let view = self.multi_view_session_ids();
         for s in self.sessions.clone() {
-            let protected = self.is_protected_during_suspension(&s);
+            let protected = self.is_protected_during_suspension(&s)
+                && Self::in_multi_view(view.as_deref(), s.id());
             self.apply_decode_state(&s, protected);
         }
         if inserted {

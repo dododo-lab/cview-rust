@@ -39,15 +39,20 @@ function mockTauri() {
     canAdd: false, maxSessions: 4, canAddLive: true, maxLiveSessions: 8, maxMultiSessions: 4,
     focusDirection: 'left', focusRatio: 0.7, horizontalRatio: 0.5, verticalRatio: 0.5, multiAudio: false, watchId: null, rev: 1,
   };
+  // 모의 Rust — 고른 목록이 있으면 그것만(상한보다 적어도 다시 채우지 않는다), 없으면 자동 보기 → 세션 순으로 상한까지.
+  // 어느 쪽이든 선택 세션이 맨 앞.
   let picked = [];
+  let auto = [];
   const sync = () => {
     const n = state.sessions.length;
     const ids = state.sessions.map((s) => s.id);
     let view = null;
     if (!state.watchId && n > state.maxMultiSessions) {
+      const chosen = picked.filter((id) => ids.includes(id));
+      const rest = chosen.length ? chosen : [...auto, ...ids];
       view = [];
-      for (const id of [state.selectedId, ...picked, ...ids]) if (id && ids.includes(id) && !view.includes(id) && view.length < state.maxMultiSessions) view.push(id);
-      picked = view.slice();
+      for (const id of [state.selectedId, ...rest]) if (id && ids.includes(id) && !view.includes(id) && view.length < state.maxMultiSessions) view.push(id);
+      if (chosen.length) picked = view.slice(); else auto = view.slice();
     }
     for (const s of state.sessions) {
       s.inMultiView = !view || view.includes(s.id);
@@ -82,6 +87,7 @@ function mockTauri() {
   const listeners = new Map();
   window.__mock = {
     state, handlers, calls,
+    resetPick: () => { picked = []; auto = []; },
     addLive: (ids) => { for (const id of ids) state.sessions.push(session(id, state.sessions.length)); },
     emit: () => { const s = sync(); for (const [ev, fns] of listeners) if (ev === 'multilive://state') for (const f of fns) f({ payload: s }); },
   };
@@ -233,6 +239,88 @@ await check('패인을 닫아 상한 이하가 되면 고르기는 풀리고 모
   assert.deepEqual(await shownPanes(), ['c0', 'c1', 'c2', 'c3']);
   const b = await pickButton();
   assert.ok(b && !b.visible);
+});
+
+await check('상한보다 적게(2개) 고르면 2개만 보이고 다시 채워지지 않는다', async () => {
+  await page.evaluate(() => { const m = window.__mock; m.resetPick(); m.addLive(['c4', 'c5']); m.state.selectedId = 's-c0'; m.emit(); });
+  await settle();
+  await page.click('[data-page="multilive"] [data-ml="pick"]');
+  await page.waitForSelector('.ml-pick-sheet');
+  await page.evaluate(() => {
+    for (const b of document.querySelectorAll('.ml-pick-sheet input[type="checkbox"]')) {
+      const want = b.value === 's-c0' || b.value === 's-c1';
+      if (b.checked !== want) b.click();
+    }
+  });
+  assert.match(await page.evaluate(() => document.querySelector('.ml-pick-status').textContent), /2 \/ 4개 선택/);
+  await page.click('.ml-pick-sheet [data-pick-apply]');
+  await settle();
+  await page.evaluate(() => window.__mock.emit()); // 주기 상태가 와도 그대로
+  await settle();
+  assert.deepEqual(await shownPanes(), ['c0', 'c1']);
+  const b = await pickButton();
+  assert.equal(b.n, '2/6');
+  const stageClass = await page.evaluate(() => document.querySelector('[data-page="multilive"] .ml-stage').className);
+  assert.match(stageClass, /ml-n2/);
+});
+
+await check("여러 소리에서 숨긴 채널은 '지금 재생 중'으로 고르지 않는다", async () => {
+  const supported = await page.evaluate(() => 'mediaSession' in navigator);
+  // 보이는 선택 패인(c0)은 무음, 숨긴 c5 는 들림으로 둔 상태 — 예전엔 c5 를 골랐다.
+  await page.evaluate(() => {
+    const m = window.__mock;
+    m.state.multiAudio = true;
+    for (const s of m.state.sessions) s.isAudible = s.channelId === 'c5';
+    // emit 이 isAudible 을 덮지 않게 한 번 더 맞춘다
+    const orig = m.handlers.multilive_state;
+    m.emit();
+    for (const s of m.state.sessions) s.isAudible = s.channelId === 'c5';
+    m.emit();
+    return orig && true;
+  });
+  await settle();
+  const titles = await page.evaluate(() => [...document.querySelectorAll('[data-page="multilive"] .ml-pane:not([hidden]) iframe')]
+    .map((f) => { try { return f.contentWindow.navigator.mediaSession?.metadata?.title || ''; } catch { return 'x'; } }).filter(Boolean));
+  if (supported && titles.length) assert.ok(titles.every((t) => !t.includes('c5')), `지금 재생 중: ${titles}`);
+  const slot = await page.evaluate(() => {
+    const m = window.__mock.state.sessions.find((s) => s.channelId === 'c5');
+    const pane = document.querySelector(`[data-page="multilive"] .ml-pane[data-slot="${m.slot}"] iframe`);
+    try { return pane?.contentWindow.navigator.mediaSession?.metadata?.title || ''; } catch { return ''; }
+  });
+  assert.ok(!slot.includes('c5'), `숨긴 패인 문서의 지금 재생 중: ${slot}`);
+  await page.evaluate(() => { const m = window.__mock; m.state.multiAudio = false; for (const s of m.state.sessions) s.isAudible = s.id === m.state.selectedId; m.emit(); });
+  await settle();
+});
+
+await check('안내 토스트는 실제 멀티라이브 화면에서 처음 제한될 때 한 번만', async () => {
+  const toasts = () => page.evaluate(() => [...document.querySelectorAll('#toast-stack > *')].filter((x) => /함께 재생해요/.test(x.textContent)).length);
+  const clear = () => page.evaluate(() => document.querySelectorAll('#toast-stack > *').forEach((x) => x.remove()));
+  // 상한 아래로 내려 기억을 지운다.
+  await page.evaluate(() => { const m = window.__mock; m.resetPick(); m.state.sessions = m.state.sessions.slice(0, 4); m.state.selectedId = 's-c0'; m.emit(); });
+  await settle();
+  await clear();
+  // 라이브 단독 보기(같은 화면을 무대로) 중에 더 담는다 — 띄우지 않는다.
+  await navigate('live');
+  await page.evaluate(() => { const m = window.__mock; m.state.watchId = 's-c0'; m.addLive(['c4', 'c5']); m.emit(); });
+  await settle();
+  assert.equal(await toasts(), 0, '단독 보기 중');
+  // 단독 보기를 나가는 길 — 상태가 먼저 와 아직 라이브 메뉴(무대 화면이 보이는 채)로 그리는 순간에는 띄우지 않는다.
+  const during = await page.evaluate(() => {
+    const m = window.__mock; m.state.watchId = null; m.emit();
+    return [...document.querySelectorAll('#toast-stack > *')].filter((x) => /함께 재생해요/.test(x.textContent)).length;
+  });
+  assert.equal(during, 0, '단독 보기를 나가는 길');
+  // 앱이 남은 패인이 있어 멀티라이브 화면으로 옮긴다 — 거기서 한 번.
+  await settle();
+  assert.equal(await page.evaluate(() => !document.querySelector('[data-page="multilive"]').hidden), true);
+  assert.equal(await toasts(), 1, '멀티라이브 화면에서 처음');
+  await clear();
+  // 단독 보기를 다녀와도 다시 뜨지 않는다.
+  await page.evaluate(() => { const m = window.__mock; m.state.watchId = 's-c1'; m.emit(); });
+  await settle();
+  await page.evaluate(() => { const m = window.__mock; m.state.watchId = null; m.emit(); });
+  await settle();
+  assert.equal(await toasts(), 0, '두 번째는 띄우지 않는다');
 });
 
 await browser.close();

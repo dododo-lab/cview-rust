@@ -526,7 +526,6 @@ export class MultiLivePage {
     this.count.classList.toggle('full', full && n > 0);
     this.count.title = limit.limited ? `라이브에 담은 ${total}개 중 ${n}개 재생 중 — 최대 ${state.maxSessions}개` : full ? `가득 찼어요 — 최대 ${state.maxSessions}개` : `${state.maxSessions}개 중 ${n}개 재생 중`;
     syncViewPickerButton(this.pickButton, state);
-    this.noticeViewLimit(limit);
     this.empty.querySelector('.ml-empty-text').textContent = `채널을 추가하면 최대 ${state.maxSessions}개까지 나란히 재생합니다. 패인을 누르면 소리와 채팅이 그 방송으로 바뀝니다.`;
     for (const b of this.root.querySelectorAll('[data-layout]')) {
       b.classList.toggle('active', b.dataset.layout === state.layout);
@@ -562,6 +561,7 @@ export class MultiLivePage {
     const watched = state.watchId ? sessions.find((x) => x.id === state.watchId) : null;
     this.watchSlot = watched && watched.slot != null ? watched.slot : null;
     this.root.classList.toggle('as-watch', this.watchSlot != null);
+    this.noticeViewLimit(limit);
     // 단독 무대일 땐 라이브, 아니면 멀티라이브 — 전환 버튼이 지금 보기를 따른다(제목·아이콘은 늘 '라이브').
     const mode = this.watchSlot != null ? 'live' : 'multilive';
     setLiveModeActive(this.root.querySelector('.ml-header'), mode);
@@ -634,7 +634,8 @@ export class MultiLivePage {
       }
     }
     if (before) playLayoutMotion(this.panes, before);
-    this.syncNowPlaying(sessions, state);
+    // 숨긴 채널(여러 소리 모드에서도 멈춘 채)은 '지금 재생 중' 후보에서 뺀다.
+    this.syncNowPlaying(view, state);
     this.syncChat(sessions.find((s) => s.id === state.selectedId) || null);
     // 채팅 테두리는 채팅을 보여 주는(선택) 패인의 색을 따른다.
     const shown = [...this.panes.values()].find((p) => p.sessionId && p.sessionId === state.selectedId);
@@ -1000,10 +1001,11 @@ export class MultiLivePage {
 
   /** 라이브에 멀티라이브 상한보다 많이 담아 온 채 멀티라이브로 오면 한 번 알린다 — 고르기 단추로 바로 간다. */
   noticeViewLimit(limit) {
-    if (this.root.hidden) return; // 화면에 올 때(show → render) 다시 본다
-    const was = this.viewLimited;
-    this.viewLimited = limit.limited;
-    if (!limit.limited || was) return;
+    // 상한 아래로 내려가야 다음에 다시 알린다 — 단독 보기를 오가며(그동안은 제한이 풀려 보인다) 거듭 뜨지 않게.
+    if (limit.total <= limit.max) { this.viewLimitNoticed = false; return; }
+    // 실제 멀티라이브 화면에서만 — 라이브 단독 보기 중이거나 그 화면을 나가는 길에는 띄우지 않는다.
+    if (!limit.limited || this.viewLimitNoticed || this.root.hidden || !this.onMultiRoute || this.watchSlot != null) return;
+    this.viewLimitNoticed = true;
     toast(`라이브에 담은 ${limit.total}개 중 ${limit.shown}개만 함께 재생해요 — 볼 채널을 고를 수 있어요`, 6000, { label: '고르기', run: () => this.showViewPicker() });
   }
 

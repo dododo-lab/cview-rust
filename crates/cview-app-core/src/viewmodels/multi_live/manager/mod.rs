@@ -201,8 +201,11 @@ pub struct ManagerState {
     last_applied_cap_height: HashMap<Uuid, i64>,
     last_applied_hls_kbps: HashMap<Uuid, f64>,
     mru: MruLedger,
-    /// 멀티라이브에 올릴 세션(사용자가 고른 순서) — 라이브 단독 보기에서 멀티라이브 상한보다 많이 담아 왔을 때만 쓴다.
+    /// 사용자가 멀티라이브에 올리려고 고른 세션(고른 순서) — 라이브 단독 보기에서 멀티라이브 상한보다 많이 담아
+    /// 왔을 때만 쓴다. 고른 수가 상한보다 적어도 그대로 존중한다(디코드 순위로 다시 채우지 않는다).
     multi_view_ids: Vec<Uuid>,
+    /// 아직 고르지 않았을 때 자동으로 채운 보기 — 다음 계산이 흔들리지 않게 잡아 두는 값(사용자 선택과 따로).
+    multi_view_auto_ids: Vec<Uuid>,
     memory_pressure_k_override: Option<usize>,
     memory_pressure_recovery_task: Option<TaskSlot>,
     memory_pressure_generation: u64,
@@ -659,6 +662,7 @@ impl MultiLiveManager {
                 last_applied_hls_kbps: HashMap::new(),
                 mru: MruLedger::default(),
                 multi_view_ids: Vec::new(),
+                multi_view_auto_ids: Vec::new(),
                 memory_pressure_k_override: None,
                 memory_pressure_recovery_task: None,
                 memory_pressure_generation: 0,

@@ -1664,6 +1664,211 @@ async fn multi_view_picks_channels_when_live_view_holds_more_than_multi_limit() 
     assert_eq!(m.read().multi_view_session_ids(), None);
 }
 
+/// 실행 중 바꿀 수 있는 멀티라이브 설정(상한 변경 검사용).
+struct MutSettings {
+    ml: Mutex<MultiLiveSettings>,
+}
+
+impl MultiLiveSettingsSource for MutSettings {
+    fn multi_live(&self) -> MultiLiveSettings {
+        self.ml.lock().unwrap().clone()
+    }
+    fn player(&self) -> PlayerSettings {
+        PlayerSettings::default()
+    }
+}
+
+/// 멀티라이브 상한 4 · 라이브 상한 6 으로 6개를 담고 멀티라이브(그리드)로 돌아온 매니저와 채널별 ID.
+async fn six_over_multi_limit(settings: Option<Arc<MutSettings>>) -> (MultiLiveManager, Vec<Uuid>) {
+    let ml = MultiLiveSettings {
+        max_concurrent_sessions: 4,
+        max_live_channels: 6,
+        ..MultiLiveSettings::default()
+    };
+    let (m, _) = live_manager_with(
+        Arc::new(FakeBackend::default()),
+        Arc::new(FakePool::default()),
+        ml,
+    );
+    if let Some(src) = settings {
+        m.lock().configure(
+            Some(Arc::new(FakeBackend::default())),
+            Some(src),
+            Some("uid".into()),
+            Some("닉".into()),
+            None,
+        );
+    }
+    let live = AddSessionOptions {
+        start_immediately: false,
+        live_view: true,
+        ..AddSessionOptions::default()
+    };
+    for i in 0..6 {
+        assert!(m
+            .add_session(&format!("ch-{i}"), live, None)
+            .await
+            .is_new_session());
+    }
+    let ids: Vec<Uuid> = (0..6)
+        .map(|i| {
+            m.read()
+                .session_for_channel(&format!("ch-{i}"))
+                .unwrap()
+                .id()
+        })
+        .collect();
+    {
+        let mut st = m.lock();
+        st.set_stage_session(None);
+        st.set_grid_layout(true);
+        st.select_session(ids[0], true);
+        st.reconcile_decode_budget();
+    }
+    (m, ids)
+}
+
+fn decode_paused(m: &MultiLiveManager) -> Vec<Uuid> {
+    let mut v: Vec<Uuid> = m.read().pane_suspension().keys().copied().collect();
+    v.sort();
+    v
+}
+
+fn sorted(mut v: Vec<Uuid>) -> Vec<Uuid> {
+    v.sort();
+    v
+}
+
+#[tokio::test]
+async fn multi_view_keeps_fewer_picks_than_limit() {
+    let (m, ids) = six_over_multi_limit(None).await;
+    assert_eq!(
+        m.read().multi_view_session_ids().unwrap().len(),
+        4,
+        "처음엔 상한까지 자동으로"
+    );
+    m.lock().set_multi_view_sessions(&[ids[0], ids[1]]);
+    m.lock().reconcile_decode_budget();
+    m.lock().reconcile_decode_budget();
+    assert_eq!(
+        m.read().multi_view_session_ids().unwrap(),
+        vec![ids[0], ids[1]],
+        "두 개만 고르면 디코드 순위로 다시 채우지 않는다"
+    );
+    assert_eq!(decode_paused(&m), sorted(ids[2..].to_vec()));
+    // 단독 보기에서 다른 채널을 보다 돌아오면 그 채널만 앞에 붙는다.
+    {
+        let mut st = m.lock();
+        st.set_stage_session(Some(ids[5]));
+        st.select_session(ids[5], true);
+        st.set_stage_session(None);
+        st.reconcile_decode_budget();
+    }
+    assert_eq!(
+        m.read().multi_view_session_ids().unwrap(),
+        vec![ids[5], ids[0], ids[1]]
+    );
+}
+
+#[tokio::test]
+async fn multi_view_moves_audio_off_hidden_panes() {
+    // 단일 소리 — 선택(ch-0)은 두고 소리를 옮긴 ch-1 만 빼면 소리가 선택 패인으로 온다.
+    let (m, ids) = six_over_multi_limit(None).await;
+    m.lock().route_audio(ids[1]);
+    assert_eq!(m.read().audio_session_id(), Some(ids[1]));
+    m.lock().set_multi_view_sessions(&[ids[0], ids[2], ids[3]]);
+    {
+        let st = m.read();
+        assert_eq!(st.audio_session_id(), Some(ids[0]));
+        assert!(!st.session(ids[0]).unwrap().is_muted());
+        assert!(st.session(ids[1]).unwrap().is_muted());
+    }
+    // 여러 소리 — 숨긴 세션은 켜진 목록에서 빠지고 꺼진다.
+    let (m, ids) = six_over_multi_limit(None).await;
+    {
+        let mut st = m.lock();
+        st.toggle_multi_audio_mode();
+        st.toggle_session_audio(ids[1]);
+        st.toggle_session_audio(ids[2]);
+        assert!(st.audio_enabled_session_ids().contains(&ids[1]));
+    }
+    m.lock().set_multi_view_sessions(&[ids[0], ids[2]]);
+    let st = m.read();
+    assert!(!st.audio_enabled_session_ids().contains(&ids[1]));
+    assert!(st.audio_enabled_session_ids().contains(&ids[2]));
+    assert!(st.session(ids[1]).unwrap().is_muted());
+    assert!(st.audio_session_id().is_none_or(|a| a != ids[1]));
+}
+
+#[tokio::test]
+async fn window_occlusion_keeps_hidden_audible_pane_paused() {
+    // 여러 소리로 다섯 패인을 켠 채(고르지 않음) 상한 4 — 하나는 들리는데도 숨는다.
+    let (m, ids) = six_over_multi_limit(None).await;
+    {
+        let mut st = m.lock();
+        st.toggle_multi_audio_mode();
+        for id in &ids[1..5] {
+            st.toggle_session_audio(*id);
+        }
+        st.reconcile_decode_budget();
+    }
+    let view = m.read().multi_view_session_ids().unwrap();
+    let hidden_audible: Vec<Uuid> = ids[..5]
+        .iter()
+        .copied()
+        .filter(|id| !view.contains(id))
+        .collect();
+    assert!(!hidden_audible.is_empty());
+    for _ in 0..2 {
+        m.lock().set_window_occluded(true);
+        for id in &hidden_audible {
+            assert!(
+                m.read().pane_suspension().contains_key(id),
+                "가려져도 숨긴 패인은 다시 재생하지 않는다"
+            );
+        }
+        m.lock().set_window_occluded(false);
+        for id in &hidden_audible {
+            assert!(m.read().pane_suspension().contains_key(id));
+        }
+    }
+}
+
+#[tokio::test]
+async fn multi_live_limit_change_reconciles_view_and_decode() {
+    let src = Arc::new(MutSettings {
+        ml: Mutex::new(MultiLiveSettings {
+            max_concurrent_sessions: 4,
+            max_live_channels: 6,
+            ..MultiLiveSettings::default()
+        }),
+    });
+    let (m, _) = six_over_multi_limit(Some(src.clone())).await;
+    assert_eq!(decode_paused(&m).len(), 2);
+    src.ml.lock().unwrap().max_concurrent_sessions = 6;
+    m.lock().multi_live_limits_changed();
+    assert_eq!(m.read().multi_view_session_ids(), None);
+    assert!(decode_paused(&m).is_empty(), "상한을 올리면 모두 다시 재생");
+}
+
+#[tokio::test]
+async fn pane_sizes_count_only_visible_panes() {
+    let (m, ids) = six_over_multi_limit(None).await;
+    m.lock().set_multi_view_sessions(&ids[..4]);
+    let updates = m.read().pane_size_updates(1000, 600);
+    let size = |id: Uuid| {
+        let u = updates.iter().find(|u| u.session_id == id).unwrap();
+        (u.width, u.height)
+    };
+    let grid4 = policy::grid_pane_size(4, 1000, 600);
+    for id in &ids[..4] {
+        assert_eq!(size(*id), grid4, "보이는 네 패인으로 나눈다");
+    }
+    for id in &ids[4..] {
+        assert_eq!(size(*id), (0, 0), "숨긴 패인은 크기 0");
+    }
+}
+
 #[tokio::test]
 async fn add_session_selects_first_and_evicts_lru_in_watch_mode() {
     let backend = Arc::new(FakeBackend::default());
