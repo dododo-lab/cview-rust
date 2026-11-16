@@ -91,7 +91,8 @@ function finish(state, { immediate = false } = {}) {
  */
 export async function withRefreshVeil(root, run) {
   if (active) finish(active, { immediate: true });
-  const state = { root, body: root && (root.querySelector('.page-body') || root), shownAt: 0, done: false };
+  const body = root && (root.querySelector('.page:not([hidden])')?.querySelector('.page-body') || root.querySelector('.page-body') || root);
+  const state = { root, body, shownAt: 0, done: false };
   active = state;
   state.showTimer = setTimeout(() => reveal(state), SHOW_DELAY_MS);
   state.maxTimer = setTimeout(() => finish(state), MAX_MS);

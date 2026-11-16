@@ -55,7 +55,7 @@ const ROUTES = [
   { id: 'multilive', title: '멀티라이브', icon: multiLiveIcon, sidebar: false },
   { id: 'multichat', title: '멀티채팅', icon: multiChatIcon },
   { id: 'library', title: '보관함', icon: libraryIcon },
-  { id: 'stats', title: '통계', icon: statsIcon },
+  { id: 'stats', title: '시청 리포트', icon: statsIcon, sidebar: false },
   { id: 'search', title: '검색', icon: icons.search, section: '탐색' },
   { id: 'settings', title: '설정', icon: icons.settings, section: '앱' },
 ];
@@ -314,6 +314,8 @@ let currentParams = {};
 const BACK_MAX = 50;
 
 async function navigate(route, params = {}, { push = true } = {}) {
+  // 예전 통계 진입점(메뉴 막대·팔레트·작업 공간)은 홈 리포트로 모은다. 보조 통계 창은 그대로 지원한다.
+  if (route === 'stats' && AUX !== 'stats') { route = 'home'; params = { ...params, view: 'report' }; }
   // 인기 클립은 보관함에서 방송&클립 › 클립 탭으로 옮겼다 — 예전 경로(저장된 작업 공간·뒤로 가기 기록·옛 진입점)도 그리로.
   if (route === 'library' && params && params.tab === 'clips') { route = 'popular'; params = { tab: 'clips' }; }
   if (!pages[route]) return;
@@ -324,7 +326,7 @@ async function navigate(route, params = {}, { push = true } = {}) {
   }
   current = route;
   // 방송&클립은 고른 탭·기간을 스스로 기억한다 — 연 때의 탭·기간을 경로에 남기면 ⌘R·재연결·작업 공간 복원이 사용자가 바꾼 탭을 되돌렸다.
-  currentParams = route === 'popular' ? {} : params;
+  currentParams = route === 'popular' ? {} : route === 'home' ? { view: params.view || pages.home.view } : params;
   if (route === 'multilive') keepTransient(); // 멀티라이브 화면에서 본 패인은 남긴다
   if (LIVE_MODES.includes(route)) lastLiveMode = route;
   sidebar.setActive(LIVE_MODES.includes(route) ? 'live' : route);
@@ -337,6 +339,8 @@ async function navigate(route, params = {}, { push = true } = {}) {
   const showViewer = route === 'live' && viewer.isPlaying;
   const showWatch = route === 'live' && !showViewer && watching;
   for (const [id, page] of Object.entries(pages)) {
+    // 홈 안 리포트의 표시 여부는 HomePage가 고른다. 먼저 숨기면 같은 홈 안 이동에서도 스크롤이 초기화된다.
+    if (id === 'stats' && page.embedded && route === 'home' && !showViewer) continue;
     page.root.hidden = showViewer || id !== (showWatch ? 'multilive' : route);
   }
   // 멀티라이브 화면 자체인가 — 라이브 단독 보기(showWatch)도 같은 화면을 쓰므로 그때는 멀티라이브 안내를 띄우지 않는다.
@@ -616,8 +620,7 @@ function installPalette() {
       { group: '보관함', label: '이어 보기', hint: '다시보기', run: () => navigate('library', { tab: 'continue' }) },
       { group: '보관함', label: '즐겨찾기', hint: '채널', run: () => navigate('library', { tab: 'favorites' }) },
       { group: '보관함', label: '북마크', hint: '방송 장면', run: () => navigate('library', { tab: 'bookmarks' }) },
-      { group: '통계', label: '시청 통계', hint: '통계', run: () => navigate('stats') },
-      { group: '통계', label: '데이터 관리 · 백업', hint: '저장소', run: () => navigate('stats', { tab: 'data' }) },
+      { group: '홈', label: '데이터 관리 · 백업', hint: '시청 리포트', run: () => navigate('stats', { tab: 'data' }) },
       { group: '동작', label: resolvedTheme() === 'dark' ? '라이트 테마로 전환' : '다크 테마로 전환', hint: '테마', run: () => setTheme(resolvedTheme() === 'dark' ? 'light' : 'dark') },
       { group: '동작', label: '뒤로 가기', hint: kbd('⌘['), run: goBack },
       { group: '동작', label: '사이드바 접기/펼치기', hint: kbd('⌘\\'), run: () => sidebar.toggle() },
@@ -823,7 +826,8 @@ async function main() {
   pages.multichat = new MultiChatPage(content, { isLoggedIn, onPlay: openChannel });
   pages.chat = new ChatOnlyPage(content, { isLoggedIn, onBack: goBack, onPlay: openChannel, session: AUX === 'chat' ? `win-${Date.now()}` : null, standalone: AUX === 'chat' });
   pages.library = new LibraryPage(content, { isLoggedIn, onOpenChannel: openChannelPage });
-  pages.stats = new StatsPage(content, { onOpenChannel: openChannelPage });
+  pages.stats = new StatsPage(AUX === 'stats' ? content : pages.home.panels, { onOpenChannel: openChannelPage, embedded: AUX !== 'stats' });
+  if (AUX !== 'stats') pages.home.attachReport(pages.stats);
   pages.media = new MediaPage(content, { onBack: goBack, onOpenChannel: openChannelPage });
   pages.channel = new ChannelPage(content, { onBack: goBack, onPlay: openChannel, onAddMulti: addToMultiLive });
   viewer = new Viewer(document.getElementById('viewer'), { isLoggedIn, onClose: onViewerClosed });

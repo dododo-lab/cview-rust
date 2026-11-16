@@ -143,7 +143,7 @@
           <div class="home-hello">
             <p class="home-date"></p>
             <h1 class="home-greeting">안녕하세요</h1>
-            <p class="home-summary">지금 볼 만한 라이브를 모았어요</p>
+            <p class="home-summary">좋아하는 방송과 나의 시청 기록을 한곳에서</p>
           </div>
           <div class="grow" data-tauri-drag-region></div>
           <form class="search-field home-search" role="search">
@@ -154,7 +154,16 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>
           </button>
         </header>
-        <div class="page-body"></div>
+        <div class="home-toolbar">
+          <div class="segmented home-tabs" role="tablist" aria-label="홈">
+            <button class="seg" data-tab="live" role="tab">라이브 탐색</button>
+            <button class="seg" data-tab="report" role="tab">시청 리포트</button>
+          </div>
+          <span class="home-toolbar-note">나의 취향으로 채우는 홈</span>
+        </div>
+        <div class="home-panels">
+          <div class="home-live-view"><div class="page-body"></div></div>
+        </div>
       </section>
 
       <section class="page" data-page="following" hidden>

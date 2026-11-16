@@ -4,9 +4,9 @@
 // 이제 카드는 초점을 받지 않고, 카드 전체를 덮는 주 동작 단추(.card-open, 이름 = 방송 제목, 채널 이름)와 보조 단추(+·아바타)가 형제다.
 // CS01 홈·팔로잉(격자·간결·전체 채널)·인기·검색 — 초점을 받는 요소 안에 대화형 요소가 없고, +·채널 정보는 진짜 <button>.
 // CS02 접근 가능한 이름 — 주 동작은 '방송 제목, 채널 이름', +·아바타는 각자 이름. 카드 안 Tab 순서는 주 동작 → + → 아바타.
-// CS03 Enter·Space 로 카드를 한 번만 연다(재생 시작 두 번 없음) — 홈 격자·히어로·TOP 10·간결 보기 줄·검색 채널 줄.
+// CS03 Enter·Space 로 카드를 한 번만 연다(재생 시작 두 번 없음) — 홈 격자·히어로·간결 보기 줄·검색 채널 줄.
 // CS04 카드 안 +·아바타는 Enter·Space·클릭 모두 각자 동작하고 카드 열기로 새지 않는다.
-// CS05 화살표 — 격자(좌우·아래)·TOP 10 선반·간결 보기 목록에서 다음 카드의 주 동작으로 초점이 옮겨 간다.
+// CS05 화살표 — 격자(좌우·아래)·간결 보기 목록에서 다음 카드의 주 동작으로 초점이 옮겨 간다.
 // CS06 마우스 — 썸네일을 누르면 한 번 열리고, 주 동작 단추는 마우스를 가로채지 않는다(호버 미리보기·우클릭 메뉴가 카드에서 그대로).
 //      키보드 메뉴(초점에서 contextmenu)도 카드 메뉴를 연다.
 // CS07 초점 고리 — 주 동작에 초점이면 카드(간결 보기 줄은 안쪽 -2px)에 예전과 같은 외곽선이 그려지고 단추 자체엔 없다.
@@ -28,7 +28,7 @@ const HOME_CARD = '[data-page="home"] .popular-grid .card';
 
 /** 앱을 열고 홈 카드가 그려질 때까지. 카드 열기·멀티라이브 추가·채널 정보를 세는 계수기를 단다. */
 async function open() {
-  const app = await openApp(browser, { width: 1280, height: 900 });
+  const app = await openApp(browser, { width: 1280, height: 900, liveCount: 36 });
   const { page } = app;
   await page.waitForSelector(HOME_CARD);
   await page.evaluate(() => {
@@ -121,17 +121,12 @@ await check('CS02 accessible names: main action = "title, channel"; + and avatar
   assert.equal(await card.getByRole('button', { name: `${first.title}, ${first.name}`, exact: true }).count(), 1, '주 동작 이름');
   assert.equal(await card.getByRole('button', { name: '멀티라이브에 추가', exact: true }).count(), 1, '+ 이름');
   assert.equal(await card.getByRole('button', { name: `${first.name} 채널 정보`, exact: true }).count(), 1, '아바타 이름');
-  // 히어로·TOP 10 도 같은 이름 규칙
+  // 히어로도 같은 이름 규칙
   const hero = await page.evaluate(() => {
     const h = document.querySelector('[data-page="home"] .hero-main');
     return { label: h.querySelector(':scope > .card-open')?.getAttribute('aria-label'), title: h.querySelector('.hero-title').textContent.trim(), name: h.dataset.channelName };
   });
   assert.equal(hero.label, `${hero.title}, ${hero.name}`, '히어로 이름');
-  const top = await page.evaluate(() => {
-    const t = document.querySelector('[data-page="home"] .top-item');
-    return { label: t.querySelector(':scope > .card-open')?.getAttribute('aria-label'), title: t.querySelector('.top-title').textContent.trim(), name: t.dataset.channelName };
-  });
-  assert.equal(top.label, `${top.title}, ${top.name}`, 'TOP 10 이름');
   // 카드 안 Tab 순서
   await focusIn(page, `${HOME_CARD}:first-child > .card-open`);
   const order = [await active(page)];
@@ -143,7 +138,7 @@ await check('CS02 accessible names: main action = "title, channel"; + and avatar
   await ctx.close();
 });
 
-await check('CS03 Enter and Space open a card exactly once (home grid, hero, top 10, dense row, search channel row)', async () => {
+await check('CS03 Enter and Space open a card exactly once (home grid, hero, dense row, search channel row)', async () => {
   const { ctx, page, errors } = await open();
   const press = async (label, sel, key) => {
     await focusIn(page, sel);
@@ -159,8 +154,6 @@ await check('CS03 Enter and Space open a card exactly once (home grid, hero, top
     await press('home grid', `${HOME_CARD}:nth-child(2) > .card-open`, key);
     await go(page, 'home');
     await press('hero', '[data-page="home"] .hero-main > .card-open', key);
-    await go(page, 'home');
-    await press('top 10', '[data-page="home"] .top-item > .card-open', key);
   }
   await go(page, 'following');
   await page.waitForSelector('[data-page="following"] .grid .card');
@@ -199,10 +192,10 @@ await check('CS04 + and avatar act on their own (Enter, Space, click) and never 
     await settle(page);
     assert.deepEqual(await take(page), { opens: 0, channelPage: 1, mlAdd: 0 }, `avatar ${how}`);
   }
-  // 히어로의 '멀티라이브'와 TOP 10 의 + 도
+  // 히어로의 '멀티라이브'도
   await go(page, 'home');
   await page.waitForSelector(HOME_CARD);
-  for (const sel of ['[data-page="home"] .hero-main [data-ml-add]', '[data-page="home"] .top-item [data-ml-add]']) {
+  for (const sel of ['[data-page="home"] .hero-main [data-ml-add]']) {
     await go(page, 'home');
     await focusIn(page, sel);
     await take(page);
@@ -224,9 +217,9 @@ await check('CS04 + and avatar act on their own (Enter, Space, click) and never 
   await ctx.close();
 });
 
-await check('CS05 arrow keys move focus to the next card\'s main action (grid, top 10 shelf, dense list)', async () => {
+await check('CS05 arrow keys move focus to the next card\'s main action (grid, dense list)', async () => {
   const { ctx, page, errors } = await open();
-  // 격자 — 인기 화면(홈 격자는 모의 데이터에서 2장뿐)
+  // 격자 — 인기 화면
   const GRID = '[data-page="popular"] .grid .card';
   await go(page, 'popular');
   await page.waitForSelector(GRID);
@@ -249,13 +242,6 @@ await check('CS05 arrow keys move focus to the next card\'s main action (grid, t
   await focusIn(page, `${GRID}:nth-child(1) .card-ml-add`);
   await page.keyboard.press('ArrowRight');
   assert.deepEqual(await active(page), { cls: 'card-open', id: ids[1][0] }, '+ 에서 ArrowRight');
-  // TOP 10 선반
-  await go(page, 'home');
-  await page.waitForSelector(HOME_CARD);
-  const tops = await page.$$eval('[data-page="home"] .top-item', (ts) => ts.map((t) => t.dataset.channelId));
-  await focusIn(page, '[data-page="home"] .top-item > .card-open');
-  await page.keyboard.press('ArrowRight');
-  assert.deepEqual(await active(page), { cls: 'card-open', id: tops[1] }, 'TOP 10 ArrowRight');
   // 간결 보기 목록
   await go(page, 'following');
   await page.waitForSelector('[data-page="following"] .grid .card');
@@ -316,7 +302,6 @@ await check('CS07 focus ring is drawn on the card (same outline as before), not 
   };
   assert.deepEqual(await ring(`${HOME_CARD}:nth-child(2)`), { card: 'solid 2px 3px', button: 'none' }, 'grid card');
   assert.deepEqual(await ring('[data-page="home"] .hero-main'), { card: 'solid 2px 3px', button: 'none' }, 'hero');
-  assert.deepEqual(await ring('[data-page="home"] .top-item'), { card: 'solid 2px 3px', button: 'none' }, 'top 10');
   await go(page, 'following');
   await page.waitForSelector('[data-page="following"] .grid .card');
   await page.click('[data-page="following"] [data-dense]');

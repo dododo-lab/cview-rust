@@ -129,7 +129,7 @@ const TABBED = [['library', '[data-page="library"] .lib-tabs'], ['stats', '[data
     await page.keyboard.press('Home');
   });
   await check('D22 default controls follow --control-* heights', async () => {
-    const h = async (route, sel) => { await go(page, route, {}); await page.waitForSelector(sel); return page.$eval(sel, (n) => Math.round(n.getBoundingClientRect().height)); };
+    const h = async (route, sel) => { await go(page, route, route === 'home' ? { view: 'live' } : {}); await page.waitForSelector(sel); return page.$eval(sel, (n) => Math.round(n.getBoundingClientRect().height)); };
     assert.equal(await h('following', '[data-page="following"] .chip'), sm, '필터 칩 = --control-sm');
     assert.equal(await h('following', '[data-page="following"] .segmented'), md, '세그먼트 = --control-md');
     assert.equal(await h('following', '[data-page="following"] .btn.primary'), md, '버튼 = --control-md');

@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { chromium } = require('playwright');
+const { chromium, webkit } = require('playwright');
 
 const ROOT = path.resolve('app-ui');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.json': 'application/json' };
@@ -130,7 +130,7 @@ function mockTauri(mode) {
 }
 
 const SHOTS = process.env.CVIEW_UI_SHOTS;
-const browser = await chromium.launch();
+const browser = await (process.env.CVIEW_UI_BROWSER === 'webkit' ? webkit : chromium).launch();
 const results = [];
 async function check(id, fn) {
   try { await fn(); results.push({ id, ok: true }); } catch (e) { results.push({ id, ok: false, error: e.message }); }
@@ -142,7 +142,8 @@ async function openStats({ width = 1440, height = 960, scheme = 'dark', mode = '
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.addInitScript(mockTauri, mode);
-  await page.goto(base);
+  // 상세 차트 전체의 계약은 독립 통계 창에서 검사한다. 홈 통합·중복 제거는 home.mjs가 검사한다.
+  await page.goto(`${base}?w=stats`);
   await page.waitForSelector('[data-page]', { state: 'attached' });
   await page.evaluate(() => document.querySelectorAll('.sheet-scrim').forEach((x) => x.remove()));
   await go(page, 'stats', params);
@@ -365,7 +366,8 @@ for (const width of [900, 700]) {
     // 좁으면 순위표의 횟수·마지막 시청 열을 접는다
     await p.locator(`${S} [role="tab"][data-tab="ranking"]`).click();
     await waitReport(p);
-    if (width === 700) assert.equal(await p.locator(`${S} .rt-opt`).first().isVisible(), false);
+    const tableWidth = await p.locator(`${S} .rank-table`).evaluate((el) => el.clientWidth);
+    assert.equal(await p.locator(`${S} .rt-opt`).first().isVisible(), tableWidth > 560);
     // 화면 아래 차트로 초점이 가며 자동 스크롤돼도 풍선은 닫히지 않고 그 차트 곁으로 옮겨진다
     await p.evaluate(() => { document.querySelector('[data-page="stats"]').scrollTop = 0; });
     await p.focus(`${S} [data-chart="cats"]`);

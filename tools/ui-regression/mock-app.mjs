@@ -27,7 +27,7 @@ await new Promise((r) => server.listen(0, '127.0.0.1', r));
 export const base = `http://127.0.0.1:${server.address().port}/`;
 
 // 모의 IPC — 로그인·데이터 있음. 화면이 쓰는 명령만 채우고 나머지는 실패로 돌려 오류·빈 상태 코드도 지나가게 둔다.
-export function mockTauri([origin, theme]) {
+export function mockTauri([origin, theme, liveCount = 12]) {
   const img = (kind, n) => `${origin}__img/${kind}/${n}.svg`;
   const names = ['릴카', '플러리', '따효니', '괴물쥐', '침착맨', '녹두로', '한동숙', '풍월량', '김도', '소풍왔니', '마라맛', '서새봄'];
   const cats = ['마인크래프트', '메이플스토리', '배틀그라운드', '리그 오브 레전드', '스타크래프트', '저스트 채팅'];
@@ -36,7 +36,7 @@ export function mockTauri([origin, theme]) {
   const ago = (min) => new Date(now - min * 60000).toISOString();
   const ch = (i) => ({ channelId: `ch${i}`, channelName: names[i % names.length], channelImageUrl: img('avatar', i) });
   const live = (i, v) => ({ ...ch(i), liveTitle: titles[i % titles.length], thumbnailUrl: img('thumb', i), viewerCount: v, viewerCountText: v.toLocaleString('ko-KR'), categoryName: cats[i % cats.length], openDate: ago(20 + i * 17), isLive: true, adult: false });
-  const lives = Array.from({ length: 12 }, (_, i) => live(i, Math.round(60000 / (1 + i))));
+  const lives = Array.from({ length: liveCount }, (_, i) => live(i, Math.round(60000 / (1 + i))));
   const clips = Array.from({ length: 8 }, (_, i) => ({ clipUID: `c${i}`, clipTitle: `레전드 순간 #${i + 1}`, thumbnailImageUrl: img('thumb', 30 + i), duration: 40 + i * 7, readCount: 120000 - i * 9000, channel: ch(i) }));
   const vods = Array.from({ length: 8 }, (_, i) => ({ videoNo: 500 + i, videoTitle: titles[i % titles.length], thumbnailImageUrl: img('thumb', 10 + i), duration: 9000, readCount: 80 + i, publishDate: ago(i * 600), channel: ch(i) }));
   const cont = Array.from({ length: 4 }, (_, i) => ({ videoNo: 100 + i, title: `${titles[i]} 다시보기`, thumbnailUrl: img('thumb', 20 + i), duration: 7200, position: 1200 + i * 900, channelName: names[i] }));
@@ -106,13 +106,13 @@ export const go = (page, route, params = {}) => page.evaluate(([r, p]) => window
  * welcomed — 환영 안내를 본 것으로 두어 아예 띄우지 않는다. 환영 안내는 시작 뒤에 뜨므로 WebKit 에서는 아래에서 걷은 뒤에
  * 떠서 실제 마우스 누르기·호버·초점을 가로챘다.
  */
-export async function openApp(browser, { width = 1280, height = 900, theme = 'dark', welcomed = false } = {}) {
+export async function openApp(browser, { width = 1280, height = 900, theme = 'dark', welcomed = false, liveCount = 12 } = {}) {
   const ctx = await browser.newContext({ viewport: { width, height }, colorScheme: theme });
   const page = await ctx.newPage();
   page.setDefaultTimeout(8000);
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
-  await page.addInitScript(mockTauri, [base, theme]);
+  await page.addInitScript(mockTauri, [base, theme, liveCount]);
   if (welcomed) await page.addInitScript(() => { try { localStorage.setItem('cview.welcomed.v1', String(Date.now())); } catch { /* 무시 */ } });
   await page.goto(base);
   await page.waitForSelector('[data-page]', { state: 'attached' });

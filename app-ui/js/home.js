@@ -1,17 +1,18 @@
-// 홈 — 인사 헤더 / 방송 중인 팔로잉 스트립 / 앰비언트 스포트라이트(히어로 + 넘김 탭) / 이어 보기·최근 시청 퀵픽 /
-// 지금 인기 TOP 10 / 팔로잉 선반 / 카테고리 칩 + 발견 격자(더 보기로 펼침).
+// 홈 — 라이브 탐색과 시청 리포트를 한 화면에 모은다. 팔로잉은 스트립 한 곳,
+// 추천·발견은 겹치지 않는 채널로, 이어 보기·최근 채널은 한 시청 구역으로 그린다.
 // Swift `HomeView_v3` 의 "지금 볼 라이브를 먼저" 원칙을 따르되, 지금 Rust 명령으로 받을 수 있는
 // 데이터(팔로잉·인기 라이브)와 로컬 최근 시청 기록만으로 그린다.
 import { api } from './api.js';
 import { esc, safeUrl, icons, imageSrc } from './dom.js';
-import { liveCard, cardOpenButton, liveLabel, lacksThumbs, THUMB_FILL_DELAY_MS, THUMB_FILL_TRIES, emptyState, errorState, friendlyError, liveGrid, recentChannels, uptimeText, compactCount } from './cards.js';
+import { cardOpenButton, liveLabel, lacksThumbs, THUMB_FILL_DELAY_MS, THUMB_FILL_TRIES, emptyState, errorState, friendlyError, liveGrid, recentChannels, uptimeText } from './cards.js';
 import { clipCard } from './channel.js';
 import { continueCard } from './media.js';
-import { motionReduced, swapContent } from './motion.js';
+import { motionReduced } from './motion.js';
 import { previewAttr } from './hover-preview.js';
 import { verifiedBadge } from './verified-badge.js';
 import { withRefreshVeil, refreshVeiled } from './refresh-veil.js';
 import { LiveFollowingStrip, liveFollowingSkeleton } from './live-following.js';
+import { syncTabs, bindTabKeys } from './a11y.js';
 
 const HERO_SIZE = 5;
 // 자동 넘김 — 대기열 진행 막대(CSS `queue-progress`, 7초)가 끝나면 다음 장으로. 호버 중엔 CSS 가 멈춘다.
@@ -19,7 +20,6 @@ const HERO_SIZE = 5;
 const POPULAR_SIZE = 48;
 const POPULAR_GRID = 36;
 const GRID_STEP = 12; // 발견 격자는 12개씩 펼친다 — 첫 화면이 끝없이 길어지지 않게
-const TOP_SIZE = 10;
 const CHIP_LIMIT = 8;
 const ALL = '';
 
@@ -37,6 +37,7 @@ function dateLabel(now = new Date()) {
 }
 
 const byViewers = (a, b) => (b.viewerCount || 0) - (a.viewerCount || 0);
+const uniqueLives = (lives) => [...new Map(lives.map((live) => [live.channelId, live])).values()];
 
 function avatarImg(url, cls = 'avatar') {
   const src = safeUrl(url);
@@ -78,7 +79,7 @@ function loginBanner() {
     </section>`;
 }
 
-function heroSlide(live, source) {
+function heroSlide(live) {
   const thumb = safeUrl(live.thumbnailUrl);
   const up = uptimeText(live.openDate);
   return `
@@ -93,7 +94,7 @@ function heroSlide(live, source) {
           <span class="badge-live">LIVE</span>
           <span class="chip-glass"><i class="dot"></i>${esc(live.viewerCountText)}명 시청</span>
           ${up ? `<span class="chip-glass">${esc(up)}</span>` : ''}
-          <span class="chip-glass soft">${source === 'following' ? '팔로잉' : '지금 인기'}</span>
+          <span class="chip-glass soft">지금 인기</span>
           ${live.adult ? '<span class="chip-glass warn">19</span>' : ''}
         </div>
         <h3 class="hero-title">${esc(live.liveTitle || '제목 없음')}</h3>
@@ -131,35 +132,6 @@ function heroAmbient(live) {
   return thumb ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(thumb, 'live'))}" alt="" referrerpolicy="no-referrer">` : '';
 }
 
-/** 지금 인기 TOP 10 — 큰 순위 숫자 + 썸네일 카드. */
-function topRail(lives) {
-  const items = lives.map((l, i) => {
-    const thumb = safeUrl(l.thumbnailUrl);
-    return `
-      <article class="top-item" ${channelData(l)} title="${esc(l.liveTitle)}">
-        ${cardOpenButton(liveLabel(l))}
-        <span class="top-rank" aria-hidden="true">${i + 1}</span>
-        <div class="top-card">
-          <div class="thumb"${l.adult ? '' : previewAttr('live', l.channelId)}>
-            ${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
-            <span class="badge-live">LIVE</span>
-            <span class="badge-viewers"><i class="dot"></i>${esc(l.viewerCountText)}명</span>
-            <button type="button" class="card-ml-add" data-ml-add title="멀티라이브에 추가" aria-label="멀티라이브에 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></button>
-          </div>
-          <div class="top-text">
-            <div class="top-title">${esc(l.liveTitle || '제목 없음')}</div>
-            <div class="top-meta ellipsis">${avatarImg(l.channelImageUrl, 'avatar xs')}<span>${esc(l.channelName)}</span>${verifiedBadge(l, 'sm')}${l.categoryName ? `<span class="category">· ${esc(l.categoryName)}</span>` : ''}</div>
-          </div>
-        </div>
-      </article>`;
-  }).join('');
-  return `
-    <section class="home-section">
-      ${sectionHead('지금 인기 TOP 10', '시청자 수 기준 실시간 순위', `${shelfNav}<button class="link-btn" data-goto="popular" data-goto-tab="live">방송&amp;클립에서 보기</button>`)}
-      <div class="shelf top-shelf">${items}</div>
-    </section>`;
-}
-
 function recentShelf(recent, liveById) {
   const items = recent.map((r) => {
     const live = liveById.get(r.channelId);
@@ -174,19 +146,13 @@ function recentShelf(recent, liveById) {
       </button>`;
   }).join('');
   return `
-    <section class="home-section">
-      ${sectionHead('최근 시청', '최근에 본 채널로 바로 돌아가기')}
+    <div class="home-recent-channels">
+      <h3 class="home-row-title">최근 본 채널</h3>
       <div class="recent-row">${items}</div>
-    </section>`;
+    </div>`;
 }
 
-function followingShelf(lives) {
-  return `
-    <section class="home-section">
-      ${sectionHead('팔로잉 라이브', '시청자 많은 순', shelfNav)}
-      <div class="shelf">${lives.map(liveCard).join('')}</div>
-    </section>`;
-}
+const recapSkeleton = () => `<section class="home-recap" data-home-recap aria-label="시청 리포트 미리보기" aria-busy="true"><div class="home-recap-intro"><p class="home-kicker">최근 30일</p><h2>나의 시청 취향</h2><span>좋아하는 방송이 쌓이는 곳</span></div><div class="home-recap-metrics">${'<div class="sk recap-sk"></div>'.repeat(3)}</div><button class="btn" data-home-report="overview">리포트 보기 ${icons.chevronRight}</button></section>`;
 
 function categoryChips(popular, selected) {
   const counts = new Map();
@@ -231,18 +197,28 @@ export class HomePage {
     this.summary = root.querySelector('.home-summary');
     this.isLoggedIn = isLoggedIn;
     this.getAuth = getAuth;
+    this.acceptsParams = true;
+    this.view = 'live';
+    this.viewScroll = { live: 0, report: 0 };
+    this.panels = root.querySelector('.home-panels');
+    this.liveView = root.querySelector('.home-live-view');
+    this.viewTabs = root.querySelector('.home-tabs');
+    bindTabKeys(this.viewTabs);
+    this.viewTabs.addEventListener('click', (e) => {
+      const tab = e.target.closest('[data-tab]');
+      if (tab) goHome({ view: tab.dataset.tab });
+    });
     this.seq = 0;
     this.category = ALL;
     this.gridLimit = GRID_STEP;
     this.popular = [];
     this.hero = [];
-    this.heroSource = 'popular';
     this.heroIndex = 0;
     this.favorites = [];
     // 맨 위 "방송 중인 팔로잉" — 홈을 다시 그려도 이 요소는 옮겨 붙인다(정렬·펼침·초점 유지, 같은 칸은 다시 그리지 않음).
     this.liveStrip = new LiveFollowingStrip();
     // 홈을 떠나면(단축키·메뉴로 다른 화면 — 포인터는 그대로) 미리보기 카드를 닫는다. 남으면 숨은 홈의 카드가 다음 화면의 첫 Esc 를 삼켰다.
-    new MutationObserver(() => { if (root.hidden) this.liveStrip.onHidden(); })
+    new MutationObserver(() => { if (root.hidden) { this.liveStrip.onHidden(); this.reportPage?.hideTip(); } })
       .observe(root, { attributes: true, attributeFilter: ['hidden'] });
     // 첫 내용이 그려지면 풀린다 — 시작 로딩 화면이 이걸 기다렸다가 걷힌다(app.js).
     this.firstRender = new Promise((resolve) => { this.resolveFirstRender = resolve; });
@@ -277,10 +253,48 @@ export class HomePage {
     });
   }
 
-  async show(refresh = false) {
-    const seq = ++this.seq;
+  attachReport(reportPage) {
+    this.reportPage = reportPage;
+    this.setView(this.view);
+  }
+
+  retry() {
+    return this.show({ view: this.view, refresh: true });
+  }
+
+  setView(view) {
+    const next = view === 'report' && this.reportPage ? 'report' : 'live';
+    const changed = this.view !== next;
+    if (changed) this.viewScroll[this.view] = this.root.scrollTop;
+    this.view = next;
+    this.root.dataset.homeView = this.view;
+    this.liveView.hidden = this.view !== 'live';
+    if (this.reportPage) {
+      this.reportPage.root.hidden = this.view !== 'report';
+      this.reportPage.hideTip();
+    }
+    if (this.view !== 'live') this.liveStrip.onHidden();
+    syncTabs(this.viewTabs, this.view, this.panels, 'home');
     this.renderGreeting();
+    if (changed) this.root.scrollTop = this.viewScroll[this.view];
+  }
+
+  async show(params = false) {
+    const refresh = params === true || Boolean(params && params.refresh);
+    this.setView(params && typeof params === 'object' && params.view ? params.view : this.view);
+    const seq = ++this.seq;
+    if (refresh) this.reportPage?.reportCache.clear();
+    if (this.view === 'report') {
+      try { await this.reportPage.show(typeof params === 'object' ? params : {}); }
+      finally { this.resolveFirstRender(); }
+      return;
+    }
     const loggedIn = this.isLoggedIn();
+    if (!refresh && this.loadedLoggedIn === loggedIn && this.loadedAt && Date.now() - this.loadedAt < 60000) {
+      this.loadRails(seq);
+      this.loadRecap(seq);
+      return;
+    }
     // 직접 새로고침(덮개 아래)이면 보던 홈을 흐리게 둔 채 바꾼다 — 스켈레톤으로 비우지 않는다.
     if (!this.body.querySelector('.home') || (refresh && !refreshVeiled(this.root))) {
       // 초점 자리를 기억하고(붙어 있을 때만 — 아니면 앞서 기억한 것을 덮는다) 옛 홈에서 떼어 낸다(옛 트리를 붙잡지 않게).
@@ -304,8 +318,11 @@ export class HomePage {
     this.dbRecent = recent.status === 'fulfilled' ? recent.value : [];
     if (favorites.status === 'fulfilled' && Array.isArray(favorites.value)) this.favorites = favorites.value;
     this.render(loggedIn, following, popular);
+    this.loadedLoggedIn = loggedIn;
+    this.loadedAt = Date.now();
     this.resolveFirstRender();
     this.loadRails(seq);
+    this.loadRecap(seq);
     this.fillThumbsLater(refresh, following.status === 'fulfilled' ? following.value : []);
   }
 
@@ -316,7 +333,8 @@ export class HomePage {
     if (!lacksThumbs(following) || (this.fillTries || 0) >= THUMB_FILL_TRIES) return;
     this.fillTries = (this.fillTries || 0) + 1;
     this.fillTimer = setTimeout(() => {
-      if (!this.root.hidden) this.show(false);
+      this.loadedAt = 0;
+      if (!this.root.hidden && this.view === 'live') this.show(false);
     }, THUMB_FILL_DELAY_MS);
   }
 
@@ -337,20 +355,14 @@ export class HomePage {
     this.greet.textContent = `${nick}${greeting()}`;
   }
 
-  renderGreeting(following = null, popular = null) {
+  renderGreeting() {
     this.refreshGreetingName();
     if (this.date) this.date.textContent = dateLabel();
-    const parts = [];
-    if (following) parts.push(`<span class="pill${following.length ? ' live' : ''}"><i class="dot"></i>팔로잉 <b>${following.length}</b>명 방송 중</span>`);
-    if (popular && popular.length) {
-      const total = popular.reduce((s, l) => s + (l.viewerCount || 0), 0);
-      parts.push(`<span class="pill">인기 라이브 <b>${esc(compactCount(total))}</b>명 시청 중</span>`);
-    }
-    this.summary.innerHTML = parts.length ? parts.join('') : '지금 볼 만한 라이브를 모았어요';
+    this.summary.textContent = this.view === 'report' ? '좋아하는 채널과 함께한 시간을 돌아보세요' : '좋아하는 방송과 나의 시청 기록을 한곳에서';
   }
 
   /**
-   * 사이드바 주기 갱신(app.js, 2분마다)이 받은 팔로잉 라이브로 맨 위 구역과 인사 요약만 고친다 — 홈 전체를 다시 그리지 않아
+   * 사이드바 주기 갱신(app.js, 2분마다)이 받은 팔로잉 라이브로 맨 위 구역만 고친다 — 홈 전체를 다시 그리지 않아
    * 깜박이지 않고, 새로 시작한 방송은 나타나고 끝난 방송은 빠진다. 홈을 아직 그리지 않았거나 로그아웃이면 아무것도 않는다.
    * @param {Array} lives @param {Set<string>|Array} [favorites]
    */
@@ -358,18 +370,23 @@ export class HomePage {
     if (!this.isLoggedIn() || !Array.isArray(lives) || !this.liveStrip.el.isConnected) return;
     if (favorites) this.favorites = [...favorites];
     this.liveStrip.update(lives, { favorites: this.favorites });
-    this.renderGreeting(lives, this.popular);
+    const followIds = new Set(lives.map((live) => live.channelId));
+    if ([...this.hero, ...(this.discover || [])].some((live) => followIds.has(live.channelId))) {
+      // 새로 팔로우한 채널이 추천에도 남아 있으면 다음 홈 갱신에서 중복을 걷는다.
+      this.loadedAt = 0;
+      if (!this.root.hidden && this.view === 'live') this.show(false);
+    }
   }
 
   render(loggedIn, followingRes, popularRes) {
-    const following = followingRes.status === 'fulfilled' ? [...(followingRes.value || [])].sort(byViewers) : [];
-    const popular = popularRes.status === 'fulfilled' ? popularRes.value || [] : [];
+    const following = followingRes.status === 'fulfilled' ? uniqueLives(followingRes.value || []).sort(byViewers) : [];
+    const popular = popularRes.status === 'fulfilled' ? uniqueLives(popularRes.value || []).sort(byViewers) : [];
     this.popular = popular;
-    this.renderGreeting(loggedIn && followingRes.status === 'fulfilled' ? following : null, popular);
+    this.renderGreeting();
 
     const followIds = new Set(following.map((l) => l.channelId));
-    this.heroSource = following.length ? 'following' : 'popular';
-    this.hero = (following.length ? following : popular).slice(0, HERO_SIZE);
+    // 팔로잉은 위 스트립에 한 번만. 스포트라이트와 발견 격자는 팔로우 밖의 인기 방송으로 채운다.
+    this.hero = popular.filter((live) => !followIds.has(live.channelId)).slice(0, HERO_SIZE);
     if (this.heroIndex >= this.hero.length) this.heroIndex = 0;
 
     const liveById = new Map([...popular, ...following].map((l) => [l.channelId, l]));
@@ -386,36 +403,35 @@ export class HomePage {
       this.liveStrip.update(following, { favorites: this.favorites, recent });
     }
 
+    if (this.reportPage) html += recapSkeleton();
+
     if (this.hero.length) {
       html += `
-        <section class="hero" aria-label="${this.heroSource === 'following' ? '팔로잉 추천' : '지금 뜨는 라이브'}">
+        <section class="home-section home-spotlight">
+        ${sectionHead('지금 눈여겨볼 라이브', '새롭게 만나는 인기 방송', '<button class="link-btn" data-goto="popular" data-goto-tab="live">전체 방송 보기</button>')}
+        <div class="hero" aria-label="지금 뜨는 라이브">
           <div class="hero-ambient" aria-hidden="true">${heroAmbient(this.hero[this.heroIndex])}</div>
-          <div class="hero-slot">${heroSlide(this.hero[this.heroIndex], this.heroSource)}</div>
+          <div class="hero-slot">${heroSlide(this.hero[this.heroIndex])}</div>
           <div class="hero-queue" role="tablist" aria-label="추천 방송 넘기기">${heroQueue(this.hero, this.heroIndex)}</div>
-        </section>`;
+        </div></section>`;
     }
 
     // 보던 영상·채널은 추천 바로 아래에 모은다. 기록이 없으면 구역 자체를 숨겨 빈 간격도 남기지 않는다.
-    html += `<div class="home-history"${recent.length ? '' : ' hidden'}>
-      <section class="home-section home-continue" data-rail="continue" hidden></section>
+    html += `<section class="home-section home-history"${recent.length ? '' : ' hidden'}>
+      ${sectionHead('최근 시청', '보던 영상과 채널을 이어서 만나보세요', '<button class="link-btn" data-goto-lib="recent">전체 기록 보기</button>')}
+      <div class="home-continue" data-rail="continue" hidden></div>
       ${recent.length ? recentShelf(recent, liveById) : ''}
-    </div>`;
-
-    // TOP 10 — 히어로가 인기 앞쪽을 쓰고 있으면(비로그인·팔로잉 없음) 그 다음 순위부터 겹치지 않게.
-    const topFrom = following.length ? 0 : HERO_SIZE;
-    const top = popular.slice(topFrom, topFrom + TOP_SIZE);
-    if (top.length >= 3) html += topRail(top);
-    if (following.length > HERO_SIZE) html += followingShelf(following);
+    </section>`;
 
     if (popularRes.status === 'fulfilled') {
       // 팔로잉이 히어로를 차지했으면 인기 격자는 팔로우 밖 채널부터(발견) — Swift popularLive 규칙.
-      // 위 히어로·TOP 10 에 이미 나온 채널은 빼서 같은 카드가 두 번 보이지 않게 한다.
-      const shown = new Set([...followIds, ...(top.length >= 3 ? top : []).map((l) => l.channelId), ...this.hero.map((l) => l.channelId)]);
+      // 위 스포트라이트와 팔로잉에 나온 채널은 빼서 같은 카드가 두 번 보이지 않게 한다.
+      const shown = new Set([...followIds, ...this.hero.map((l) => l.channelId)]);
       const discover = popular.filter((l) => !shown.has(l.channelId));
       this.discover = discover;
       html += `
         <section class="home-section">
-          ${sectionHead(following.length ? '새로운 라이브 발견' : '더 많은 라이브', following.length ? '팔로우하지 않은 채널 중 지금 인기' : '카테고리로 골라 보기', '<button class="link-btn" data-goto="popular" data-goto-tab="live">방송&amp;클립에서 보기</button>')}
+          ${sectionHead('더 많은 라이브 발견', '관심 있는 카테고리로 골라 보세요')}
           ${categoryChips(discover, this.category)}
           <div class="popular-grid">${discover.length ? popularGrid(discover, this.category, this.gridLimit) : emptyState('추천할 라이브 채널이 없습니다')}</div>
         </section>`;
@@ -497,13 +513,35 @@ export class HomePage {
     const fill = (name, title, sub, html, more) => {
       const box = this.body.querySelector(`[data-rail="${name}"]`);
       if (!box || !html) return;
-      box.innerHTML = `${sectionHead(title, sub, `${shelfNav}${more}`)}${html}`;
+      box.innerHTML = name === 'continue'
+        ? `<div class="home-row-head"><h3 class="home-row-title">${esc(title)}</h3><div class="grow"></div>${shelfNav}${more}</div>${html}`
+        : `${sectionHead(title, sub, `${shelfNav}${more}`)}${html}`;
       box.hidden = false;
       const history = box.closest('.home-history');
       if (history) history.hidden = false;
     };
     if (cont.status === 'fulfilled' && cont.value.length) fill('continue', '이어 보기', '보던 다시보기를 멈춘 곳부터', `<div class="shelf continue-shelf">${cont.value.map(continueCard).join('')}</div>`, '<button class="link-btn" data-goto-lib="continue">전체 보기</button>');
     if (clips.status === 'fulfilled' && clips.value.length) fill('clips', '오늘의 인기 클립', '하루 동안 가장 많이 본 순간', `<div class="shelf clip-shelf">${clips.value.slice(0, 16).map(clipCard).join('')}</div>`, '<button class="link-btn" data-goto="popular" data-goto-tab="clips" data-goto-period="WITHIN_1_DAY">전체 보기</button>');
+  }
+
+  async loadRecap(seq) {
+    const box = this.body.querySelector('[data-home-recap]');
+    if (!box || !this.reportPage) return;
+    const button = `<button class="btn" data-home-report="overview">리포트 보기 ${icons.chevronRight}</button>`;
+    const intro = `<div class="home-recap-intro"><p class="home-kicker">최근 30일</p><h2>나의 시청 취향</h2><span>좋아하는 방송이 쌓이는 곳</span></div>`;
+    try {
+      const r = await this.reportPage.fetchReport('30d');
+      if (seq !== this.seq || !box.isConnected) return;
+      const metric = (label, value) => `<div class="home-recap-metric"><span>${esc(label)}</span><strong class="ellipsis" title="${esc(value)}">${esc(value)}</strong></div>`;
+      box.innerHTML = intro + (r.total > 0
+        ? `<div class="home-recap-metrics">${metric('가장 오래 본 채널', r.channels[0]?.name || '—')}${metric('즐겨 본 카테고리', r.categories[0]?.name || '—')}${metric('시청한 방송', `${r.sessionCount.toLocaleString()}회`)}</div>`
+        : '<p class="home-recap-empty">라이브를 보면 나만의 시청 취향이 여기에 쌓여요.</p>') + button;
+    } catch {
+      if (seq !== this.seq || !box.isConnected) return;
+      box.innerHTML = intro + '<p class="home-recap-empty">시청 리포트를 불러오지 못했어요.</p><button class="btn" data-recap-retry>다시 시도</button>';
+    } finally {
+      if (seq === this.seq) box.setAttribute('aria-busy', 'false');
+    }
   }
 
   setHero(index) {
@@ -513,7 +551,7 @@ export class HomePage {
     if (!slot) return;
     // 키보드 초점이 히어로 카드에 있던 채 자동으로 넘어가면 초점이 문서 처음으로 떨어졌다 — 새 장의 같은 단추로 옮긴다.
     const focused = slot.contains(document.activeElement) ? (document.activeElement.matches('[data-ml-add]') ? '[data-ml-add]' : '.card-open') : '';
-    slot.innerHTML = heroSlide(this.hero[this.heroIndex], this.heroSource);
+    slot.innerHTML = heroSlide(this.hero[this.heroIndex]);
     if (focused) slot.querySelector(focused)?.focus({ preventScroll: true });
     const ambient = this.body.querySelector('.hero-ambient');
     if (ambient) ambient.innerHTML = heroAmbient(this.hero[this.heroIndex]);
@@ -527,6 +565,9 @@ export class HomePage {
   }
 
   onClick(e) {
+    const report = e.target.closest('[data-home-report]');
+    if (report) { goHome({ view: 'report', tab: report.dataset.homeReport, period: '30d' }); return; }
+    if (e.target.closest('[data-recap-retry]')) { this.loadRecap(this.seq); return; }
     const queue = e.target.closest('[data-hero-index]');
     if (queue) {
       this.setHero(Number(queue.dataset.heroIndex));
@@ -560,6 +601,10 @@ export class HomePage {
     const goto = e.target.closest('[data-goto]');
     if (goto) window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: goto.dataset.goto, params: { ...(goto.dataset.gotoTab ? { tab: goto.dataset.gotoTab } : {}), ...(goto.dataset.gotoPeriod ? { period: goto.dataset.gotoPeriod } : {}) } } }));
   }
+}
+
+function goHome(params) {
+  window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: 'home', params } }));
 }
 
 /** 홈 검색창 → 검색 화면으로 넘겨 바로 검색한다. */

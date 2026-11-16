@@ -240,24 +240,24 @@ function shareBars(rows, total, { channel = false, limit = rows.length, swatches
 }
 
 export class StatsPage {
-  constructor(content, { onOpenChannel }) {
+  constructor(content, { onOpenChannel, embedded = false }) {
     this.onOpenChannel = onOpenChannel;
+    this.embedded = embedded;
     this.acceptsParams = true;
     this.tab = 'overview';
-    this.period = loadPeriod();
+    this.periods = embedded ? PERIODS.filter(([id]) => id !== 'today' && id !== '7d') : PERIODS;
+    this.period = this.validPeriod(loadPeriod());
+    this.reportCache = new Map();
     this.charts = {};
     this.root = document.createElement('section');
-    this.root.className = 'page';
+    this.root.className = embedded ? 'page home-report' : 'page';
     this.root.dataset.page = 'stats';
     this.root.hidden = true;
     this.root.innerHTML = `
-      <header class="page-header" data-tauri-drag-region>
-        <h1 class="page-title">통계</h1>
-        <span class="page-subtitle">이 기기에서 본 방송 기록으로 계산합니다 · 기록은 이 기기에만 저장됩니다</span>
-      </header>
+      ${embedded ? `<header class="home-report-heading"><div><p class="home-kicker">MY VIEWING</p><h2>나의 시청 리포트</h2><p>오래 머문 채널부터 즐겨 보는 시간까지, 나의 시청 취향을 만나보세요.</p></div><span class="home-local-note">이 기기에만 저장되는 기록</span></header>` : `<header class="page-header" data-tauri-drag-region><h1 class="page-title">통계</h1><span class="page-subtitle">이 기기에서 본 방송 기록으로 계산합니다 · 기록은 이 기기에만 저장됩니다</span></header>`}
       <div class="stats-toolbar">
         <div class="segmented page-tabs lib-tabs" role="tablist" aria-label="통계">${TABS.map(([id, label]) => `<button class="seg" data-tab="${id}" role="tab">${label}</button>`).join('')}</div>
-        <div class="segmented stats-period" role="group" aria-label="기간">${PERIODS.map(([id, label]) => `<button class="seg" data-period="${id}" aria-pressed="false">${label}</button>`).join('')}</div>
+        <div class="segmented stats-period" role="group" aria-label="기간">${this.periods.map(([id, label]) => `<button class="seg" data-period="${id}" aria-pressed="false">${label}</button>`).join('')}</div>
       </div>
       <div class="page-body stats-body"></div>
       <p id="stats-chart-help" class="sr-only">화살표 키로 칸을 옮기면 값을 읽어 줍니다</p>
@@ -276,12 +276,29 @@ export class StatsPage {
   }
 
   show(params = {}) {
-    if (params.tab) this.tab = params.tab;
-    if (params.period && PERIODS.some(([k]) => k === params.period)) this.period = params.period;
+    if (params.tab && TABS.some(([id]) => id === params.tab)) this.tab = params.tab;
+    if (params.period) this.period = this.validPeriod(params.period);
     syncTabs(this.tabs, this.tab, this.body, 'stats');
     this.syncPeriod();
     // 직접 새로고침(덮개 아래)이면 보던 내용을 흐리게 둔 채 바꾼다.
-    return this.load({ keep: refreshVeiled(this.root) });
+    return this.load({ keep: refreshVeiled(this.root) || (this.embedded && refreshVeiled(this.root.closest('.page-home'))) });
+  }
+
+  validPeriod(period) {
+    return this.periods.some(([id]) => id === period) ? period : this.embedded ? '30d' : '7d';
+  }
+
+  // 홈의 미리보기와 상세 리포트가 같은 원본을 쓴다. 탭 전환 때는 잠깐 재사용하고 새로고침·정리 때 비운다.
+  fetchReport(period) {
+    if (!this.embedded) return api.insightsReport(period);
+    const entry = this.reportCache.get(period);
+    if (entry && Date.now() - entry.at < 60000) return entry.promise;
+    const promise = api.insightsReport(period).catch((error) => {
+      if (this.reportCache.get(period)?.promise === promise) this.reportCache.delete(period);
+      throw error;
+    });
+    this.reportCache.set(period, { at: Date.now(), promise });
+    return promise;
   }
 
   syncPeriod() {
@@ -308,7 +325,7 @@ export class StatsPage {
         if (seq === this.seq) this.renderHistory(d);
         return;
       }
-      const r = await api.insightsReport(this.period);
+      const r = await this.fetchReport(this.period);
       if (seq !== this.seq) return;
       this.report = r;
       this.charts = {};
@@ -377,13 +394,13 @@ export class StatsPage {
     this.body.innerHTML = `
       <div class="kpi-grid">
         ${kpi('시청 시간', durationText(r.total), delta ? delta.text : '', { tone: delta?.tone })}
-        ${kpi('하루 평균', durationText(r.dailyAverage), days)}
+        ${this.embedded ? '' : kpi('하루 평균', durationText(r.dailyAverage), days)}
         ${kpi('시청 횟수', `${r.sessionCount.toLocaleString()}회`, `회당 평균 ${durationText(r.averageSession)}`)}
         ${kpi('본 채널', `${r.channelCount.toLocaleString()}개`, `카테고리 ${r.categoryCount}개`)}
-        ${kpi('연속 시청', `${r.currentStreak}일`, `최장 ${r.bestStreak}일`, { title: '오늘 아직 안 봤어도 어제까지 이어진 날을 셉니다' })}
+        ${this.embedded ? '' : kpi('연속 시청', `${r.currentStreak}일`, `최장 ${r.bestStreak}일`, { title: '오늘 아직 안 봤어도 어제까지 이어진 날을 셉니다' })}
         ${longest ? kpi('가장 길게 본 방송', durationText(longest.seconds), `${longest.channelName} · ${relativeDate(longest.startedAt)}`, { title: `${longest.channelName} · ${longest.category}` }) : ''}
       </div>
-      ${this.trendCard(r)}
+      ${this.embedded ? '' : this.trendCard(r)}
       <div class="stats-split">
         <section class="stats-card"><div class="card-head"><h2>많이 본 채널</h2><button class="link-btn" data-tab="ranking">전체 순위</button></div>
           ${shareBars(r.channels, r.total, { channel: true, limit: 5 })}</section>
@@ -494,7 +511,7 @@ export class StatsPage {
     window.addEventListener('resize', () => this.hideTip(), { passive: true });
     // 마우스로 띄운 풍선도 초점 위치와 상관없이 Esc 로 닫는다(WCAG 1.4.13). 풍선이 떠 있을 때만 가로챈다.
     document.addEventListener('keydown', (e) => {
-      if (e.key !== 'Escape' || this.tip.hidden || this.root.hidden) return;
+      if (e.key !== 'Escape' || this.tip.hidden || this.root.hidden || this.root.closest('.page-home')?.hidden) return;
       if (e.target.closest?.('[data-chart]')) return; // 초점 있는 차트는 위 처리기가 맡는다
       e.preventDefault();
       e.stopPropagation();
@@ -502,7 +519,7 @@ export class StatsPage {
     }, true);
     // 스크롤하면 풍선이 엉뚱한 곳에 떠 있지 않게 — 키보드 초점이 있는 차트(초점 이동으로 자동 스크롤된 경우 포함)는
     // 다음 프레임에 자리를 다시 잡고, 마우스로 연 풍선은 닫는다.
-    this.root.addEventListener('scroll', () => {
+    (this.embedded ? this.root.closest('.page-home') : this.root).addEventListener('scroll', () => {
       const chart = this.tipChart;
       if (!chart || document.activeElement !== chart) { this.hideTip(); return; }
       cancelAnimationFrame(this.tipFrame);
@@ -600,12 +617,13 @@ export class StatsPage {
     if (tab) { this.show({ tab: tab.dataset.tab }); return; }
     const period = e.target.closest('[data-period]');
     if (period) {
-      this.period = period.dataset.period;
+      this.period = this.validPeriod(period.dataset.period);
       try { localStorage.setItem(PERIOD_KEY, this.period); } catch { /* 기억 못 해도 화면은 바꾼다 */ }
       this.syncPeriod();
       this.load();
       return;
     }
+    if (e.target.closest('[data-retry]')) { e.stopPropagation(); this.load(); return; }
     const ch = e.target.closest('[data-open-channel-id]');
     if (ch) { this.onOpenChannel(ch.dataset.openChannelId); return; }
     const b = e.target.closest('[data-stats]');
@@ -628,11 +646,13 @@ export class StatsPage {
             }
           }
           paint(await api.dataCleanup(kind));
+          this.reportCache.clear();
           toast(ok.backup ? '백업한 뒤 지웠습니다' : '지웠습니다', 1800);
           return;
         }
         b.disabled = true;
         paint(await api.dataCleanup(kind));
+        this.reportCache.clear();
         toast('정리했습니다', 1500);
       } else if (b.dataset.stats === 'backup') {
         b.disabled = true;

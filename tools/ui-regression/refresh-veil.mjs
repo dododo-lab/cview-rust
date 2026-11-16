@@ -120,8 +120,8 @@ const menuRefresh = (page) => page.evaluate(() => window.__emit('menu://action',
 const setDelay = (page, delay) => page.evaluate((d) => { window.__delay = d; window.__veilSeen = 0; }, delay);
 const veilState = (page, route) => page.evaluate((r) => {
   const v = document.querySelector('.refresh-veil');
-  const root = document.querySelector(`[data-page="${r}"]`) || document.querySelector(`.page-${r}`);
-  const body = root && root.querySelector('.page-body');
+  const root = document.querySelector(`[data-page="${r === 'stats' ? 'home' : r}"]`) || document.querySelector(`.page-${r}`);
+  const body = root && (root.querySelector('.page:not([hidden])')?.querySelector('.page-body') || root.querySelector('.page-body'));
   return {
     shown: Boolean(v && !v.hidden),
     blurred: Boolean(body && body.classList.contains('is-refreshing')),
