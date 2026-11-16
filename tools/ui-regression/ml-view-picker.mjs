@@ -1,5 +1,7 @@
-// 멀티라이브에서 볼 채널 고르기 — 라이브 단독 보기에 멀티라이브 상한보다 많이 담아 온 채 멀티라이브로 오면 고른 채널만
-// 패인으로 보이고, 머리줄 "볼 채널 고르기" 시트에서 어떤 채널을 올릴지(빼고 넣어 바꾸기) 고른다. 상한 이하면 예전 그대로.
+// 멀티라이브 채널 고르기 — 머리줄 "채널 추가" 단추는 멀티라이브가 상한까지 다 차면 같은 자리에서 "채널 고르기"로 바뀐다.
+// - 라이브 단독 보기에 상한보다 많이 담아 온 채 멀티라이브로 오면 고른 채널만 패인으로 보이고, 시트에서 어떤 채널을
+//   올릴지(빼고 넣어 바꾸기) 고른다.
+// - 딱 상한만큼이면 시트가 "바꾸기"로 열린다 — 뺄 채널의 체크를 끄고 "빼고 채널 추가"를 누르면 닫고 추가 사이드바를 연다.
 // app-ui 를 그대로 띄우고 window.__TAURI__ 를 모의 IPC 로 바꿔 실제 화면 코드를 돌린다(실제 서비스·데이터는 건드리지 않음).
 // 저장소 루트에서: node tools/ui-regression/ml-view-picker.mjs   (Playwright 가 필요하다.
 //   CVIEW_UI_BROWSER=webkit 이면 앱과 같은 WebKit 엔진으로 돈다. CVIEW_UI_SHOTS=<폴더> 면 화면을 남긴다.)
@@ -67,13 +69,15 @@ function mockTauri() {
     return JSON.parse(JSON.stringify(state));
   };
   const calls = [];
+  // 패인 자리(slot)는 닫힌 자리를 다시 쓰지 않고 늘 새로 — 실제 Rust 처럼 겹치지 않게.
+  const nextSlot = () => Math.max(-1, ...state.sessions.map((s) => s.slot)) + 1;
   const handlers = {
     auth_status: () => ({ loggedIn: false, state: 'loggedOut' }),
     settings_get: () => ({ multiLive: { maxConcurrentSessions: 4, maxLiveChannels: 8 }, multiChat: {}, player: {}, chat: {}, general: {} }),
     multilive_state: () => sync(),
-    multilive_add: ({ channelId }) => { state.sessions.push(session(channelId, state.sessions.length)); return sync(); },
+    multilive_add: ({ channelId }) => { state.sessions.push(session(channelId, nextSlot())); return sync(); },
     multilive_watch: ({ sessionId }) => { calls.push(['watch', sessionId]); state.watchId = sessionId || null; if (sessionId) state.selectedId = sessionId; return sync(); },
-    multilive_remove: ({ sessionId }) => { state.sessions = state.sessions.filter((s) => s.id !== sessionId); return sync(); },
+    multilive_remove: ({ sessionId }) => { calls.push(['remove', sessionId]); state.sessions = state.sessions.filter((s) => s.id !== sessionId); return sync(); },
     multilive_select: ({ sessionId }) => { state.selectedId = sessionId; return sync(); },
     multilive_set_view: ({ sessionIds }) => {
       calls.push(['view', sessionIds]);
@@ -91,7 +95,7 @@ function mockTauri() {
   window.__mock = {
     state, handlers, calls,
     resetPick: () => { picked = []; pickCount = 0; auto = []; },
-    addLive: (ids) => { for (const id of ids) state.sessions.push(session(id, state.sessions.length)); },
+    addLive: (ids) => { for (const id of ids) state.sessions.push(session(id, nextSlot())); },
     emit: () => { const s = sync(); for (const [ev, fns] of listeners) if (ev === 'multilive://state') for (const f of fns) f({ payload: s }); },
   };
   window.__TAURI__ = {
@@ -117,23 +121,119 @@ const calls = () => page.evaluate(() => window.__mock.calls.slice());
 const shot = async (name) => { if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await page.screenshot({ path: path.join(SHOTS, `${name}.png`) }); } };
 const shownPanes = () => page.evaluate(() => [...document.querySelectorAll('[data-page="multilive"] .ml-pane')]
   .filter((p) => !p.hidden && p.offsetParent).map((p) => p.dataset.perfChannel).sort());
+// 머리줄 채널 추가/고르기 단추(같은 요소) — mode 는 data-ml(add·pick).
 const pickButton = () => page.evaluate(() => {
-  const b = document.querySelector('[data-page="multilive"] [data-ml="pick"]');
-  return b ? { hidden: b.hidden, visible: Boolean(b.offsetParent), n: b.querySelector('.ml-pick-n')?.textContent || '', label: b.getAttribute('aria-label') || '' } : null;
+  const b = document.querySelector('[data-page="multilive"] .ml-toolbar .ml-add');
+  if (!b) return null;
+  const badge = b.querySelector('.ml-add-full');
+  return {
+    mode: b.dataset.ml, visible: Boolean(b.offsetParent), n: badge && !badge.hidden ? badge.textContent : '',
+    label: b.getAttribute('aria-label') || '', text: b.querySelector('.ml-add-label')?.textContent || '',
+    haspopup: b.getAttribute('aria-haspopup'), expanded: b.getAttribute('aria-expanded'), disabled: b.getAttribute('aria-disabled'),
+    primary: b.classList.contains('primary'), count: document.querySelectorAll('[data-page="multilive"] .ml-toolbar :is([data-ml="add"], [data-ml="pick"])').length,
+  };
 });
+const PICK = '[data-page="multilive"] .ml-toolbar [data-ml="pick"]';
 
 const results = [];
 async function check(id, fn) {
   try { await fn(); results.push({ id, ok: true }); } catch (e) { results.push({ id, ok: false, error: e.message }); }
 }
 
-await check('상한 이하(4개) — 고르기 단추 없이 모든 패인이 보인다(예전 동작)', async () => {
+await check('자리가 있으면(3/4) 머리줄에는 "채널 추가" 하나뿐', async () => {
+  await page.evaluate(() => { const m = window.__mock; m.state.sessions = m.state.sessions.slice(0, 3); });
   await navigate('multilive');
   await page.waitForSelector('[data-page="multilive"] .ml-stage');
   await settle();
+  assert.deepEqual(await shownPanes(), ['c0', 'c1', 'c2']);
+  const b = await pickButton();
+  assert.equal(b.mode, 'add', JSON.stringify(b));
+  assert.equal(b.count, 1, '따로 있던 고르기 단추는 없다');
+  assert.ok(b.primary && b.label === '채널 추가' && !b.haspopup && !b.disabled, JSON.stringify(b));
+});
+
+await check('딱 상한(4/4)까지 차면 같은 단추가 "채널 고르기 4/4"로 바뀌고 초점은 그대로', async () => {
+  await page.focus('[data-page="multilive"] .ml-toolbar .ml-add');
+  await page.evaluate(() => { window.__mock.addLive(['c3']); window.__mock.emit(); });
+  await settle();
   assert.deepEqual(await shownPanes(), ['c0', 'c1', 'c2', 'c3']);
   const b = await pickButton();
-  assert.ok(b && b.hidden && !b.visible, `단추: ${JSON.stringify(b)}`);
+  assert.equal(b.mode, 'pick', JSON.stringify(b));
+  assert.equal(b.count, 1);
+  assert.equal(b.text, '채널 고르기');
+  assert.equal(b.n, '4/4');
+  assert.equal(b.haspopup, 'dialog');
+  assert.equal(b.expanded, null, '고르기는 사이드바 여닫이가 아니다');
+  assert.equal(b.disabled, null, '누를 수 있는 단추(점선·aria-disabled 아님)');
+  assert.ok(!b.primary, '머리줄 유리 단추 모양');
+  assert.match(b.label, /^채널 고르기 — 가득 참 4\/4/);
+  assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('ml-add')), true, '같은 요소라 초점이 남는다');
+});
+
+await check('가득 참 시트는 "바꾸기" — 빼기 전엔 막혀 있고, 하나 빼면 "빼고 채널 추가"로 닫고 추가 사이드바를 연다', async () => {
+  await page.evaluate(() => { window.__mock.calls.length = 0; });
+  await page.keyboard.press('Enter'); // 초점이 단추에 있다
+  await page.waitForSelector('.ml-pick-sheet[role="dialog"]');
+  const info = await page.evaluate(() => {
+    const d = document.querySelector('.ml-pick-sheet');
+    const boxes = [...d.querySelectorAll('input[type="checkbox"]')];
+    const apply = d.querySelector('[data-pick-apply]');
+    return {
+      checked: boxes.filter((b) => b.checked).length, blocked: boxes.filter((b) => b.getAttribute('aria-disabled') === 'true').length,
+      apply: apply.textContent, applyDisabled: apply.disabled, desc: document.getElementById(d.getAttribute('aria-describedby'))?.textContent || '',
+      status: d.querySelector('.ml-pick-status').textContent,
+    };
+  });
+  assert.equal(info.checked, 4);
+  assert.equal(info.blocked, 0);
+  assert.equal(info.apply, '빼고 채널 추가');
+  assert.ok(info.applyDisabled, '뺄 채널을 고르기 전에는 누를 수 없다');
+  assert.match(info.desc, /뺄 채널의 체크를 끄고 새 채널을 추가/);
+  assert.match(info.status, /4 \/ 4개 — 다른 채널로 바꾸려면/);
+  await shot('after-swap-sheet');
+  await page.focus('.ml-pick-sheet input[value="s-c2"]');
+  await page.keyboard.press('Space');
+  const st = await page.evaluate(() => ({ status: document.querySelector('.ml-pick-status').textContent, disabled: document.querySelector('[data-pick-apply]').disabled }));
+  assert.equal(st.status, '1개를 빼고 새 채널을 추가해요');
+  assert.equal(st.disabled, false);
+  await shot('after-swap-sheet-unchecked');
+  await page.click('.ml-pick-sheet [data-pick-apply]');
+  await settle();
+  const c = await calls();
+  assert.deepEqual(c.filter((x) => x[0] === 'remove'), [['remove', 's-c2']]);
+  assert.equal(c.filter((x) => x[0] === 'view').length, 0, '보기 고르기는 부르지 않는다');
+  assert.deepEqual(await shownPanes(), ['c0', 'c1', 'c3']);
+  const b = await pickButton();
+  assert.equal(b.mode, 'add', '자리가 나면 다시 채널 추가');
+  assert.equal(b.expanded, 'true', '추가 사이드바가 열려 있다');
+  const drawer = await page.evaluate(() => ({ open: document.querySelector('.ml-addbar')?.classList.contains('open'), focus: document.querySelector('.ml-addbar')?.contains(document.activeElement) }));
+  assert.ok(drawer.open, '추가 사이드바가 열린다');
+  assert.ok(drawer.focus, '초점이 사이드바 안(찾기 칸)으로');
+  await shot('after-swap-drawer');
+});
+
+await check('사이드바가 열린 채 다시 가득 차면 고르기로 바뀌고, 누르면 사이드바를 닫고 시트를 연다', async () => {
+  await page.evaluate(() => { window.__mock.addLive(['c6']); window.__mock.emit(); });
+  await settle();
+  const b = await pickButton();
+  assert.equal(b.mode, 'pick');
+  assert.equal(b.expanded, null);
+  try {
+    await page.click(PICK);
+    await page.waitForSelector('.ml-pick-sheet');
+    assert.equal(await page.evaluate(() => document.querySelector('.ml-addbar').classList.contains('open')), false, '사이드바는 닫힌다');
+    await page.keyboard.press('Escape');
+    await settle();
+    // 마우스로 열었어도(WebKit 은 누른 단추에 초점을 주지 않는다) 닫으면 초점은 고르기 단추로.
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset?.ml), 'pick', 'Esc 로 닫으면 초점은 고르기 단추로');
+  } finally {
+    // 다음 검사가 예전 구성(c0~c3)으로 시작하게 되돌린다.
+    await page.evaluate(() => {
+      document.querySelectorAll('.ml-pick-scrim').forEach((x) => x.remove());
+      const m = window.__mock; m.state.sessions = m.state.sessions.filter((s) => s.channelId !== 'c6'); m.addLive(['c2']); m.emit();
+    });
+    await settle();
+  }
 });
 
 await check('라이브에 6개 담아 온 채 멀티라이브 — 4개만 패인으로, 단추에 4/6 과 안내 토스트', async () => {
@@ -143,9 +243,9 @@ await check('라이브에 6개 담아 온 채 멀티라이브 — 4개만 패인
   assert.equal(shown.length, 4, `보이는 패인: ${shown}`);
   assert.ok(shown.includes('c5'), '단독 보기에서 보던 채널은 들어간다');
   const b = await pickButton();
-  assert.ok(b && b.visible, `단추: ${JSON.stringify(b)}`);
+  assert.ok(b && b.visible && b.mode === 'pick', `단추: ${JSON.stringify(b)}`);
   assert.equal(b.n, '4/6');
-  assert.match(b.label, /6개 중 4개/);
+  assert.match(b.label, /^채널 고르기 — 라이브에 담은 6개 중 4개/);
   const count = await page.evaluate(() => document.querySelector('[data-page="multilive"] .ml-count').textContent);
   assert.equal(count, '4 / 4');
   const stageClass = await page.evaluate(() => document.querySelector('[data-page="multilive"] .ml-stage').className);
@@ -156,7 +256,7 @@ await check('라이브에 6개 담아 온 채 멀티라이브 — 4개만 패인
 });
 
 await check('고르기 시트 — 대화 상자·체크 4개, 가득 차면 나머지는 막히고 누르면 이유를 알린다', async () => {
-  await page.click('[data-page="multilive"] [data-ml="pick"]');
+  await page.click(PICK);
   await page.waitForSelector('.ml-pick-sheet[role="dialog"]');
   const info = await page.evaluate(() => {
     const d = document.querySelector('.ml-pick-sheet');
@@ -215,7 +315,7 @@ await check('키보드로 하나 빼고 다른 채널 넣기(바꾸기) → 이�
 
 await check('Esc 로 닫으면 바꾸지 않고 초점은 고르기 단추로', async () => {
   await page.evaluate(() => { window.__mock.calls.length = 0; });
-  await page.focus('[data-page="multilive"] [data-ml="pick"]');
+  await page.focus(PICK);
   await page.keyboard.press('Enter');
   await page.waitForSelector('.ml-pick-sheet');
   await page.keyboard.press('Space'); // 초점 줄을 바꿔도 적용하지 않으면 그대로
@@ -237,7 +337,7 @@ await check('긴 방송 제목도 줄이 시트 밖으로 넘치지 않고 말�
   try {
   for (const width of [1280, 520]) {
     await page.setViewportSize({ width, height: 800 });
-    await page.click('[data-page="multilive"] [data-ml="pick"]');
+    await page.click(PICK);
     await page.waitForSelector('.ml-pick-sheet');
     const m = await page.evaluate(() => {
       const sheet = document.querySelector('.ml-pick-sheet');
@@ -261,29 +361,64 @@ await check('긴 방송 제목도 줄이 시트 밖으로 넘치지 않고 말�
   }
 });
 
-await check('라이브 단독 보기로 가면 고르기 단추가 숨고 모든 채널이 머리줄에 있다', async () => {
+await check('라이브 단독 보기로 가면 단추는 "채널 추가"(라이브 상한)이고 모든 채널이 머리줄에 있다', async () => {
   await page.evaluate(() => { window.__mock.state.watchId = 's-c0'; window.__mock.state.selectedId = 's-c0'; window.__mock.emit(); });
   await settle();
   const b = await pickButton();
-  assert.ok(b && !b.visible, `단추: ${JSON.stringify(b)}`);
+  assert.ok(b && b.visible && b.mode === 'add' && b.primary, `단추: ${JSON.stringify(b)}`);
+  assert.equal(b.disabled, null, '6/8 — 라이브에는 더 담을 수 있다');
   const chips = await page.evaluate(() => document.querySelectorAll('[data-page="multilive"] .ml-watch-picker [data-session-id]:not([data-ml="watch-close"])').length);
   assert.ok(chips >= 6, `머리줄 채널: ${chips}`);
   await page.evaluate(() => { window.__mock.state.watchId = null; window.__mock.emit(); });
   await settle();
 });
 
-await check('패인을 닫아 상한 이하가 되면 고르기는 풀리고 모두 보인다', async () => {
+await check('패인을 닫아 상한(4)이 되면 일부만 보임은 풀리고(고르기 4/4), 하나 더 닫으면 채널 추가로', async () => {
   await page.evaluate(() => { const m = window.__mock; m.state.sessions = m.state.sessions.slice(0, 4); if (!m.state.sessions.some((s) => s.id === m.state.selectedId)) m.state.selectedId = 's-c0'; m.emit(); });
   await settle();
   assert.deepEqual(await shownPanes(), ['c0', 'c1', 'c2', 'c3']);
-  const b = await pickButton();
-  assert.ok(b && !b.visible);
+  let b = await pickButton();
+  assert.equal(b.mode, 'pick');
+  assert.equal(b.n, '4/4');
+  await page.evaluate(() => { const m = window.__mock; m.state.sessions = m.state.sessions.slice(0, 3); m.emit(); });
+  await settle();
+  b = await pickButton();
+  assert.equal(b.mode, 'add');
+  assert.equal(b.label, '채널 추가');
+  assert.equal(b.n, '', '배지가 없다');
+  await page.evaluate(() => { const m = window.__mock; m.addLive(['c3']); m.emit(); });
+  await settle();
+});
+
+await check('좁은 머리줄 — "고르기" → 아이콘+배지로 접혀도 이름은 aria-label 에 남고 머리줄이 넘치지 않는다', async () => {
+  try {
+    for (const [width, text] of [[900, true], [560, false]]) {
+      await page.setViewportSize({ width, height: 800 });
+      await settle();
+      const m = await page.evaluate(() => {
+        const b = document.querySelector('[data-page="multilive"] .ml-toolbar .ml-add');
+        const head = document.querySelector('[data-page="multilive"] .ml-header');
+        const vis = (el) => Boolean(el && el.getClientRects().length && getComputedStyle(el).display !== 'none');
+        return { label: vis(b.querySelector('.ml-add-label')), badge: vis(b.querySelector('.ml-add-full')), name: b.getAttribute('aria-label'),
+          over: head.scrollWidth - head.clientWidth, right: b.getBoundingClientRect().right, headRight: head.getBoundingClientRect().right, h: b.getBoundingClientRect().height };
+      });
+      assert.equal(m.label, text, `${width}px 글자: ${JSON.stringify(m)}`);
+      assert.ok(m.badge, `${width}px 배지`);
+      assert.match(m.name, /^채널 고르기/);
+      assert.ok(m.over <= 0 && m.right <= m.headRight + 0.5, `${width}px 넘침: ${JSON.stringify(m)}`);
+      assert.equal(Math.round(m.h), 30);
+      await shot(`after-narrow-${width}`);
+    }
+  } finally {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await settle();
+  }
 });
 
 await check('상한보다 적게(2개) 고르면 2개만 보이고 다시 채워지지 않는다', async () => {
   await page.evaluate(() => { const m = window.__mock; m.resetPick(); m.addLive(['c4', 'c5']); m.state.selectedId = 's-c0'; m.emit(); });
   await settle();
-  await page.click('[data-page="multilive"] [data-ml="pick"]');
+  await page.click(PICK);
   await page.waitForSelector('.ml-pick-sheet');
   await page.evaluate(() => {
     for (const b of document.querySelectorAll('.ml-pick-sheet input[type="checkbox"]')) {
