@@ -78,10 +78,18 @@ export function installSegmentGlider() {
       if (!e.target.isConnected) { ro.unobserve(e.target); dirty.delete(e.target); continue; }
       // 관찰을 시작하면 크기가 그대로여도 한 번 불린다 — 그 첫 알림이 첫 배치다(track 참고).
       // 넘겨받아 track() 이 이미 놓은 판은 건너뛴다(미끄러지는 중에 instant 로 끝 자리에 뚝 놓지 않게).
-      if (!seen.has(e.target)) { seen.add(e.target); if (!e.target.querySelector(':scope > .seg-glider')) place(e.target, false); continue; }
-      place(e.target, false);
+      if (!seen.has(e.target)) { seen.add(e.target); if (!e.target.querySelector(':scope > .seg-glider')) placeLater(e.target); continue; }
+      placeLater(e.target);
     }
   });
+  // 관찰자 알림 안에서는 재기만 하고(레이아웃 직후라 공짜) 쓰기는 다음 프레임으로 — 여기서 판 스타일을 쓰면 뒤이은 다른
+  // ResizeObserver(탭 끝 흐림·멀티라이브 머리줄·채팅 분할기 등)의 읽기가 강제 동기 레이아웃이 됐다(perf P01).
+  // 그 사이 고른 칸이 바뀌었으면(class → 바로 place) 옛 잰 값은 버린다.
+  function placeLater(box) {
+    const m = measure(box);
+    if (!m) { place(box, false); return; }
+    requestAnimationFrame(() => { if (box.isConnected && box.querySelector(':scope > .seg.active') === m.active) place(box, false, m); });
+  }
   const io = new IntersectionObserver((entries) => {
     for (const e of entries) {
       if (!e.target.isConnected) { io.unobserve(e.target); dirty.delete(e.target); continue; }
@@ -108,19 +116,28 @@ export function installSegmentGlider() {
       if (g && g.style.opacity === '1') handoff.set(sigOf(box, page), { translate: g.style.translate, width: g.style.width, height: g.style.height });
     }
   }
-  function place(box, animate = true) {
+  // 고른 칸의 자리·크기. 숨은 화면([hidden] 조상)이면 재지 않는다 — 어차피 크기 0 인데 offsetWidth 를 읽으면 강제 동기
+  // 레이아웃(전체 문서)이 일어났다(시작할 때 숨은 멀티라이브·멀티채팅 세그먼트마다). closest 는 레이아웃 없이 답한다.
+  // .segmented 는 늘 position:relative(motion.css)라 offset 은 판이 붙기 전에도 이 상자 기준이다.
+  function measure(box) {
+    const active = box.querySelector(':scope > .seg.active');
+    if (!active || box.closest('[hidden]') || !active.offsetWidth) return null;
+    return { active, rect: { width: `${active.offsetWidth}px`, height: `${active.offsetHeight}px`, translate: `${active.offsetLeft}px ${active.offsetTop}px` } };
+  }
+  function place(box, animate = true, measured = null) {
     const active = box.querySelector(':scope > .seg.active');
     let g = box.querySelector(':scope > .seg-glider');
-    // 숨은 화면([hidden] 조상)이면 재지 않는다 — 어차피 크기 0 인데 offsetWidth 를 읽으면 강제 동기 레이아웃(전체 문서)이 일어났다
-    // (시작할 때 숨은 멀티라이브·멀티채팅 세그먼트마다). closest 는 레이아웃 없이 답한다.
-    if (!active || box.closest('[hidden]') || !active.offsetWidth) {
+    // 재기 먼저, 쓰기는 뒤에 — 판을 넣거나 class 를 바꾼 뒤에 읽으면 그 자리에서 문서 전체 레이아웃을 당긴다(perf P01).
+    const m = measured || measure(box);
+    if (!m) {
       if (g) g.style.opacity = '0';
       // 숨어 있어 못 놓음 — 다시 보이면 놓는다(고른 칸이 없는 세그먼트는 기다리지 않는다).
       if (active && !dirty.has(box)) { dirty.add(box); io.observe(box); }
       return;
     }
     if (dirty.delete(box)) io.unobserve(box);
-    box.classList.add('has-glider'); // position:relative — 아래 offset 이 이 상자 기준이 되게 먼저 단다
+    const { rect } = m;
+    box.classList.add('has-glider');
     if (!g) {
       g = document.createElement('span');
       g.className = 'seg-glider';
@@ -138,10 +155,7 @@ export function installSegmentGlider() {
     }
     const instant = !animate || g.style.opacity === '0' || motionReduced();
     if (instant) g.classList.add('instant');
-    g.style.width = `${active.offsetWidth}px`;
-    g.style.height = `${active.offsetHeight}px`;
-    g.style.translate = `${active.offsetLeft}px ${active.offsetTop}px`;
-    g.style.opacity = '1';
+    Object.assign(g.style, rect, { opacity: '1' });
     if (instant) requestAnimationFrame(() => requestAnimationFrame(() => g.classList.remove('instant')));
   }
   // 새로 붙은 세그먼트의 첫 배치는 ResizeObserver 의 첫 알림(레이아웃이 끝난 뒤·페인트 전)에서 — 그때 offset 을 읽으면 공짜다.
@@ -174,7 +188,9 @@ export function installSegmentGlider() {
       if (r.type === 'attributes') {
         const box = r.target.parentElement;
         if (box && box.classList.contains('segmented') && r.target.classList.contains('seg')) {
-          if (!tracked.has(box)) track(box); else place(box);
+          // 아직 ResizeObserver 의 첫 알림(첫 배치)을 받지 않았으면 그때 놓는다 — 지금 offset 을 읽으면 강제 동기 레이아웃이다
+          // (시작할 때 홈 보기 탭의 syncTabs 가 고른 칸 class 를 바꿔 perf P01 에 걸렸다).
+          if (!tracked.has(box)) track(box); else if (seen.has(box)) place(box);
         }
       } else {
         const box = r.target.classList?.contains('segmented') ? r.target : null;

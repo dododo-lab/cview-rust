@@ -159,8 +159,9 @@ export function syncTabs(tablist, activeId, panel, prefix) {
     b.setAttribute('aria-controls', panelId);
     b.tabIndex = on ? 0 : -1;
     if (on && panel) panel.setAttribute('aria-labelledby', b.id);
-    // 탭이 넘쳐 가로로 밀리는 묶음(.page-tabs)은 고른 탭이 보이게 묶음 안에서만 민다(페이지는 움직이지 않는다)
-    if (on && tablist.scrollWidth > tablist.clientWidth) {
+    // 탭이 넘쳐 가로로 밀리는 묶음(.page-tabs)은 고른 탭이 보이게 묶음 안에서만 민다(페이지는 움직이지 않는다).
+    // 넘칠 수 없는 묶음(홈 보기 탭 등)·숨은 묶음은 재지 않는다 — scrollWidth 를 읽으면 시작 중 강제 동기 레이아웃이 일어났다(perf P01).
+    if (on && tablist.classList.contains('page-tabs') && !tablist.closest('[hidden]') && tablist.scrollWidth > tablist.clientWidth) {
       const l = b.offsetLeft - 8; const r = b.offsetLeft + b.offsetWidth + 8 - tablist.clientWidth;
       if (tablist.scrollLeft > l) tablist.scrollLeft = l; else if (tablist.scrollLeft < r) tablist.scrollLeft = r;
     }
@@ -180,7 +181,8 @@ export function watchEdges(box) {
   box.addEventListener('scroll', update, { passive: true });
   // 설정처럼 다시 그려 묶음이 통째로 바뀌는 화면이 있어, 떨어져 나가면 관찰을 끊는다
   // 첫 계산은 ResizeObserver 의 첫 알림(레이아웃 뒤)에서 — 만들자마자 scrollWidth 를 읽으면 숨은 화면에서도 강제 레이아웃이 일어났다
-  const ro = new ResizeObserver(() => { if (!box.isConnected) { ro.disconnect(); return; } update(); });
+  // 숨은 화면(크기 0)에서는 재지 않는다 — 다른 관찰자가 쓴 뒤라 시작 중 강제 레이아웃이 됐다(perf P01). 보이면 크기가 바뀌어 다시 불린다.
+  const ro = new ResizeObserver(([e]) => { if (!box.isConnected) { ro.disconnect(); return; } if (e && !e.contentRect.width) return; update(); });
   ro.observe(box);
   return update;
 }

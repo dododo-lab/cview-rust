@@ -478,7 +478,21 @@ export class StatsPage {
       const cell = e.target.closest?.('[data-i]');
       return chart && cell && chart.contains(cell) ? [chart, Number(cell.dataset.i)] : [chart, -1];
     };
+    // WebKit(macOS 앱)은 스크롤로 내용이 커서 밑에서 밀리면 커서가 그대로여도 pointermove 를 보낸다. 키보드 초점이 아래 차트로
+    // 가며 자동 스크롤될 때 그 가짜 움직임이 키보드로 연 풍선을 닫았다 — 커서 자리가 그대로면 키보드로 연 초점 차트의 풍선은 둔다.
+    // 클릭으로 초점이 간 차트는 이 가드를 받지 않는다 — 커서를 두고 휠로 굴려 다른 차트가 커서 밑에 오면 그쪽으로 옮겨 가야 한다.
+    // 커서 자리는 문서 전체에서 잰다 — 차트 밖(탭 단추 등)에 있던 커서 밑으로 차트가 밀려 들어오는 경우가 바로 그 경우다.
+    let px = NaN;
+    let py = NaN;
+    let still = false;
+    window.addEventListener('pointermove', (e) => {
+      still = e.clientX === px && e.clientY === py;
+      px = e.clientX;
+      py = e.clientY;
+    }, { capture: true, passive: true });
+    window.addEventListener('pointerdown', () => { this.tipByKey = false; }, { capture: true, passive: true });
     this.body.addEventListener('pointermove', (e) => {
+      if (still && this.tipByKey && this.tipChart && document.activeElement === this.tipChart) return;
       const [chart, i] = at(e);
       if (chart && i >= 0) this.activate(chart, i, false);
       else if (!chart || chart !== this.tipChart || document.activeElement !== chart) this.hideTip();
@@ -491,6 +505,7 @@ export class StatsPage {
       if (!meta) return;
       const i = Number(chart.dataset.active ?? meta.count - 1);
       this.activate(chart, Math.max(0, Math.min(meta.count - 1, i)), true);
+      this.tipByKey = chart.matches(':focus-visible'); // 클릭 초점은 :focus-visible 이 아니다
     });
     this.body.addEventListener('focusout', (e) => { if (e.target === this.tipChart) this.hideTip(); });
     this.body.addEventListener('keydown', (e) => {
@@ -534,7 +549,9 @@ export class StatsPage {
     if (!meta) return;
     const d = meta.describe(i);
     chart.dataset.active = String(i);
-    for (const el of chart.querySelectorAll('.is-active')) el.classList.remove('is-active');
+    // 풍선이 다른 차트에서 곧장 넘어오면(굴려서 커서 밑 차트가 바뀜) 앞 차트의 강조도 걷는다
+    const prev = this.tipChart && this.tipChart !== chart ? this.tipChart.querySelectorAll('.is-active') : [];
+    for (const el of [...prev, ...chart.querySelectorAll('.is-active')]) el.classList.remove('is-active');
     const cells = chart.querySelectorAll(`[data-i="${i}"]`);
     cells.forEach((el) => el.classList.add('is-active'));
     const rows = (d.rows || []).map(([cls, name, v]) => `<li><i class="sw ${cls}"></i><span>${esc(name)}</span><b>${esc(durationText(v))}</b></li>`).join('');
@@ -558,6 +575,7 @@ export class StatsPage {
   }
 
   hideTip() {
+    this.tipByKey = false;
     if (this.tip) this.tip.hidden = true;
     if (this.tipChart) for (const el of this.tipChart.querySelectorAll('.is-active')) el.classList.remove('is-active');
     this.tipChart = null;

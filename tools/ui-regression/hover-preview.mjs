@@ -133,6 +133,17 @@ async function hover(page, selector) {
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 4 });
 }
 
+// 히어로 — 가운데·왼쪽 아래는 제목·단추(.hero-info)가 덮으므로 그림만 보이는 오른쪽 위에 올린다.
+async function hoverHero(page) {
+  const el = page.locator('.hero-media[data-preview]').first();
+  await el.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(150);
+  const box = await el.boundingBox();
+  const x = box.x + box.width * 0.85, y = box.y + box.height * 0.2;
+  await page.mouse.move(x, y, { steps: 4 });
+  return page.evaluate(([px, py]) => { const t = document.elementFromPoint(px, py); return t && (t.closest('[data-preview]') ? 'preview' : t.className); }, [x, y]);
+}
+
 async function waitPlaying(page) {
   await page.waitForFunction(() => document.querySelector('.preview-on > video.thumb-preview'), null, { timeout: 4000 });
   await page.waitForTimeout(450); // 페이드인 끝
@@ -192,14 +203,14 @@ await check('P04 passing over quickly does not request a preview', async () => {
   assert.equal((await previewCalls(p)).length, before);
 });
 
-await check('P05 top-10 rail and hero preview too; adult cards do not', async () => {
-  assert.ok(await p.locator('.top-shelf .thumb[data-preview^="live:"]').count() > 0, 'top rail');
+// 홈의 'TOP 10' 선반은 a855ff0(홈·시청 리포트 통합)에서 빠졌다 — 남은 큰 자리인 스포트라이트(히어로)를 본다.
+await check('P05 hero spotlight previews too; adult cards do not', async () => {
   assert.ok(await p.locator('.hero-media[data-preview^="live:"]').count() > 0, 'hero');
   assert.equal(await p.locator('[data-channel-id="ch7"] .thumb[data-preview]').count(), 0, 'adult card has preview');
-  await hover(p, '.top-shelf .top-item:nth-child(1) .thumb[data-preview]');
+  assert.equal(await hoverHero(p), 'preview', '히어로 그림 위 포인터를 다른 층이 가로챘다');
   await waitPlaying(p);
 });
-await shot(p, 'after-home-top10', '.top-shelf .top-item:has(.preview-on)');
+await shot(p, 'after-home-hero', '.hero');
 await p.mouse.move(5, 890);
 await p.waitForTimeout(300);
 
@@ -286,9 +297,9 @@ await check('P12 setting off never requests previews', async () => {
   assert.equal((await activeVideos(off.page)).length, 0);
 });
 await shot(off.page, 'before-home-grid', '.popular-grid .card:hover');
-await hover(off.page, '.top-shelf .top-item:nth-child(1) .thumb[data-preview]');
+await hoverHero(off.page);
 await off.page.waitForTimeout(500);
-await shot(off.page, 'before-home-top10', '.top-shelf .top-item:nth-child(1)');
+await shot(off.page, 'before-home-hero', '.hero');
 for (const [route, sel] of [['popular', '[data-page="popular"] .pop-panel[data-panel="live"] .thumb[data-preview]'], ['following', '[data-page="following"] .thumb[data-preview]'], ['categories', '[data-page="categories"] .category-art[data-preview]']]) {
   await go(off.page, route, route === 'popular' ? { tab: 'live' } : {});
   await off.page.waitForSelector(sel, { timeout: 4000 }).catch(() => {});

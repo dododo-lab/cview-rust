@@ -335,7 +335,9 @@ const FOCUS = [
   { key: 'toggle', scene: 'in', route: 'settings', prep: '.settings-tabs [data-group="watch"]', sel: '.toggle input', ring: 'next', shadow: true },
   { key: 'settings-search', scene: 'in', route: 'settings', sel: '.settings-search' },
   { key: 'lib-ov-title', scene: 'in', route: 'library', sel: '.lib-ov-title', shadow: true },
-  { key: 'chart', scene: 'in', route: 'stats', sel: '.chart[tabindex]', shadow: true },
+  // 홈에 들어간 시청 리포트(a855ff0)에는 추이 차트가 없어 첫 차트가 도넛이다 — 초점에 뜨는 값 풍선(.chart-tip)이 위 변 고리에
+  // 반쯤 겹친다(의도된 풍선, 고리는 나머지 변에 다 보인다). 고리와 바탕만 재도록 풍선을 가린다.
+  { key: 'chart', scene: 'in', route: 'stats', sel: '.chart[tabindex]', shadow: true, hide: '.chart-tip' },
   { key: 'channel-btn', scene: 'in', route: 'channel', params: { channelId: 'ch1' }, sel: '.btn.ghost.sm' },
   { key: 'ci-link', scene: 'in', route: 'channel', params: { channelId: 'ch1' }, sel: '.ci-link' },
   { key: 'discover-item', scene: 'in', route: 'search', params: { q: '릴카' }, sel: '.discover-item' },
@@ -401,6 +403,7 @@ for (const theme of ['dark', 'light']) {
       await mark(page, T.sel, { sized: !T.ring });
       await away(page);
       await keyFocus(page);
+      if (T.hide) await page.addStyleTag({ content: `${T.hide} { visibility: hidden !important; }` });
       const g = await ringGeom(page, T.ring);
       if (!g.fv) { fails.BF04.push(`${tag}: 키보드 초점이 서지 않았다(:focus-visible 아님)`); continue; }
       if (g.kind === 'none') { fails.BF04.push(`${tag}: 초점 테두리가 없다`); continue; }
