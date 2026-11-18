@@ -99,7 +99,9 @@ export function safeUrl(value) {
 // ── 화면 이미지 ──────────────────────────────
 // 썸네일·아바타는 Rust 의 디스크·메모리 캐시(cvimg: 프로토콜)를 거치고, CDN 에는 칸에 맞는 크기만 요청한다.
 // - live: 라이브 썸네일 image_720(1280×720, ~150KB) → image_405(720×405, ~60KB). 카드 칸은 약 330×185.
-// - hero: 홈 큰 슬라이드 — 720 그대로.
+//   고해상도(Retina·화면 크기 확대)에서 칸이 물리 픽셀로 405 보다 크면 480·540·720 으로 올린다(N 은 세로 픽셀).
+// - hero: 홈 큰 슬라이드(화면당 한 장) — 720, 칸이 물리 픽셀로 더 크면(Retina·4K) 1080·1280.
+// 물리 픽셀 = CSS 픽셀 × 기기 배율 × 화면 크기(setImageZoom). 단계는 thumbnail_tier.rs 화이트리스트 안에서만 고른다.
 // - avatar / avatar-lg: 네이버 이미지 원본(최대 1344² PNG) → ?type=f120_120_na(~24KB) / f240_240_na.
 // - avatar-sm: 채팅 아바타(34px) → ?type=f60_60_na(~7KB, 2026-11-12 실측 200 — f48·f64·f80 은 404).
 // - vod: 다시보기 썸네일(가로) 원본 1280~1920px(~75~120KB) → ?type=w640(640×360, ~50KB). 카드 칸은 약 330×185.
@@ -114,9 +116,46 @@ const CVIMG_BASE = typeof navigator !== 'undefined' && /Windows/i.test(navigator
   : 'cvimg://localhost/';
 const HAS_TAURI = typeof window !== 'undefined' && Boolean(window.__TAURI__);
 
+// 화면 크기(설정 "외관 → 화면 크기") — WebKit 은 확대해도 devicePixelRatio 가 그대로고 WebView2 는 함께 커진다.
+// 확대 전 배율(baseDpr)을 기억해 두고 둘 중 큰 값을 물리 배율로 쓴다(어느 엔진이든 두 번 곱하지 않게).
+let uiZoom = 1;
+let baseDpr = 0;
+const winDpr = () => (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+/** 화면 크기 배율을 알린다 — 웹뷰 확대(ui_zoom)를 걸기 전에 부른다. */
+export function setImageZoom(zoom) {
+  if (!baseDpr) baseDpr = winDpr();
+  uiZoom = Number(zoom) > 0 ? Number(zoom) : 1;
+}
+export function pixelScale() {
+  return Math.max(winDpr(), (baseDpr || winDpr()) * uiZoom);
+}
+
+/** 본문 칸 폭(CSS 픽셀) 추정 — 사이드바(약 220)와 넓은 창의 인사이트 칸(약 280)을 뺀다. 그리기 전에 쓰므로 재지 않는다. */
+function contentWidth() {
+  const w = (typeof window !== 'undefined' && window.innerWidth) || 1280;
+  return Math.max(260, w - 220 - (w >= 1241 ? 280 : 0) - 48);
+}
+/** 카드 격자(minmax(260px, 1fr), 간격 16) 한 칸의 폭. */
+export function cardWidth(content = contentWidth()) {
+  const cols = Math.max(1, Math.floor((content + 16) / (260 + 16)));
+  return (content - 16 * (cols - 1)) / cols;
+}
+const LIVE_TIERS = [405, 480, 540, 720];
+const HERO_TIERS = [720, 1080, 1280]; // 1280 = 2276×1280 — 4K 를 2배율로 쓰면 히어로 칸이 물리 픽셀로 5천 픽셀을 넘는다
+/** 세로 물리 픽셀 need 를 덮는 가장 작은 단계(10% 모자란 것까지는 받아 준다). 없으면 가장 큰 단계. */
+export function pickTier(need, tiers) {
+  return tiers.find((t) => t >= need * 0.9) ?? tiers[tiers.length - 1];
+}
+function retier(url, tier) {
+  return url.replace(/\/image_(\d+)\.jpg(?=$|\?)/, (m, n) => (Number(n) === tier ? m : `/image_${tier}.jpg`));
+}
+
 function sizedForBox(url, kind) {
   if (kind === 'live') {
-    return url.replace(/\/image_(\d+)\.jpg(?=$|\?)/, (m, n) => (Number(n) > 405 ? '/image_405.jpg' : m));
+    return retier(url, pickTier((cardWidth() * 9) / 16 * pixelScale(), LIVE_TIERS));
+  }
+  if (kind === 'hero') {
+    return retier(url, pickTier((contentWidth() * 0.85 * 9) / 16 * pixelScale(), HERO_TIERS));
   }
   if (kind === 'vod' || kind === 'clip') {
     try {
@@ -124,7 +163,8 @@ function sizedForBox(url, kind) {
       const nng = /^nng-phinf\.pstatic\.net$/i.test(u.host);
       const video = /^video-phinf\.pstatic\.net$/i.test(u.host);
       if ((nng || (video && kind === 'vod')) && !u.search) {
-        u.searchParams.set('type', 'w640');
+        // 다시보기 칸이 물리 픽셀로 640 을 넘으면(Retina) 두 서버 모두 받는 w750 — 그보다 큰 단계는 서버마다 달라 쓰지 않는다.
+        u.searchParams.set('type', kind === 'vod' && cardWidth() * pixelScale() > 680 ? 'w750' : 'w640');
         return u.toString();
       }
     } catch { /* 그대로 */ }
@@ -134,7 +174,9 @@ function sizedForBox(url, kind) {
     try {
       const u = new URL(url);
       if (/phinf\.pstatic\.net$/i.test(u.host) && !u.searchParams.has('type')) {
-        u.searchParams.set('type', { avatar: 'f120_120_na', 'avatar-sm': 'f60_60_na' }[kind] || 'f240_240_na');
+        // 채팅 아바타(34px)는 2배율 이상이면 68px 이 필요해 f60 이 흐리다 — f120.
+        const sm = pixelScale() >= 1.75 ? 'f120_120_na' : 'f60_60_na';
+        u.searchParams.set('type', { avatar: 'f120_120_na', 'avatar-sm': sm }[kind] || 'f240_240_na');
         return u.toString();
       }
     } catch { /* 그대로 */ }

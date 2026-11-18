@@ -1,6 +1,7 @@
 // 설정값 → 화면 동작. 원본 설정의 효과를 웹 화면에 반영한다.
 // DSN-02 모션 등급, DSN-03 콤팩트, PLY-16 후원 알림 위치·크기, PLY-19 백그라운드 재생, SYS-15 자동 새로고침 주기.
 import { api } from './api.js';
+import { setImageZoom } from './dom.js';
 
 let settings = null;
 let refreshTimer = 0;
@@ -22,6 +23,8 @@ function apply(s, ctx) {
   const a = s.appearance || {};
   root.classList.toggle('compact', Boolean(a.compactMode));
   root.dataset.motion = a.motionQuality || 'balanced';
+  // 화면 크기 — 웹뷰 확대는 Rust 가 건다(ui_zoom_sync·설정 저장). 여기선 썸네일 단계를 고를 배율만 알린다.
+  setImageZoom(Number(a.uiScale) || 1);
   // 투명도 (SYS-22) — 시스템이면 macOS "투명도 줄이기"를 따른다.
   root.dataset.transparency = a.transparencyMode || 'system';
   for (const [k, v] of Object.entries(alertVars(s.player || {}))) root.style.setProperty(k, v);
@@ -44,6 +47,8 @@ function scheduleRefresh(ctx) {
  */
 export async function installPrefsEffects(ctx) {
   try { apply(await api.settingsGet(), ctx); } catch { /* 앱 밖 */ }
+  // 창이 뜰 때마다 저장된 화면 크기를 이 창에 건다(보조 창 포함). 배율을 먼저 알린 뒤에 걸어야 확대 전 기기 배율을 기억한다.
+  if (window.__TAURI__) api.uiZoomSync().catch(() => {});
   window.addEventListener('cview:settings-changed', (e) => {
     if (e.detail && e.detail.settings) apply(e.detail.settings, ctx);
   });

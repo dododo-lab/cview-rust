@@ -235,4 +235,8 @@ export const api = {
   equalizerPresets: () => invoke('equalizer_presets'),
   settingsGet: () => invoke('settings_get'),
   settingsUpdate: (domain, patch) => invoke('settings_update', { domain, patch }),
+  /** 이 창에 저장된 화면 크기(웹뷰 확대)를 건다 — 배율을 돌려준다. */
+  uiZoomSync: () => invoke('ui_zoom_sync'),
+  /** 화면 크기 한 단계 확대(1)·축소(-1)·실제 크기(0) — 모든 창에 걸고 새 설정을 돌려준다. */
+  uiZoomStep: (dir) => invoke('ui_zoom_step', { dir }),
 };
