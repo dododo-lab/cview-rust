@@ -781,6 +781,9 @@ select.select {
 }
 .chat-notice[hidden] { display: none; }
 .chat-list { flex: 1; overflow-y: auto; padding: var(--sp-sm) var(--sp-md); user-select: text; }
+/* 메시지를 기다리는 안내 — 목록 위쪽 1/4 자리에 떠 있었다(칸마다 높이가 달라 단일·통합·칸이 서로 다른 자리). 목록 한가운데에 둔다.
+   (:only-child 는 쓰지 않는다 — 줄을 붙일 때마다 형제 다시 계산을 부른다. 안내는 첫 줄이 붙을 때 지워진다.) */
+.chat-list > .empty { min-height: 100%; box-sizing: border-box; padding-block: var(--sp-lg); user-select: none; }
 .chat-line { padding: 3px 0; font-size: var(--fs-caption); line-height: 1.5; word-break: break-word; }
 .chat-line .nick { font-weight: 600; margin-right: 6px; color: var(--text-secondary); }
 .chat-line .nick.streamer { color: var(--primary-text); }
@@ -800,7 +803,9 @@ select.select {
   background: var(--surface-elevated); padding: 0 var(--sp-md); outline: none;
 }
 .chat-input input:focus { border-color: var(--primary-text); }
-.chat-input input:disabled { opacity: 0.6; }
+.chat-input input:disabled { opacity: 0.6; cursor: not-allowed; }
+/* 보내는 동안(입력창이 잠깐 꺼진다)은 흐리게 하지 않는다 — 보낼 때마다 글이 깜박였다. */
+.chat-input.sending :is(input, .btn):disabled { opacity: 1; cursor: progress; }
 
 /* ── 토스트 ───────────────────────────────── */
 .toast {
@@ -1976,7 +1981,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .chat-pin .pin-body { flex: 1; min-width: 0; }
 .chat-pin .chat-line { padding: 0; background: none; box-shadow: none; }
 .chat-jump {
-  position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); z-index: 5; display: inline-flex; align-items: center; gap: 5px;
+  position: absolute; left: 50%; bottom: calc(74px + var(--chat-banner-h, 0px)); transform: translateX(-50%); z-index: 5; display: inline-flex; align-items: center; gap: 5px;
   padding: 6px 12px; border-radius: var(--radius-pill); border: 0; background: var(--primary); color: var(--on-primary); font-size: var(--fs-footnote);
   font-weight: 700; box-shadow: var(--shadow-md);
 }

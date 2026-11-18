@@ -12,7 +12,7 @@
 // - 켜 둔 동안 채팅 머리의 후원 목록(donation-list.js)은 모든 패인의 후원·구독을 채널 이름과 함께 모은다
 //   (선택 패인 채팅만 보던 예전 띠는 통합 목록 위에서 다른 패인 후원을 빠뜨렸다).
 import { api, listen } from './api.js';
-import { esc } from './dom.js';
+import { esc, fitPopover } from './dom.js';
 import { mergedItemsHtml, blindMergedLines, applyMergedStyle, mergedChatStyle, setMergedChatStyle } from './multichat.js';
 import { MergedLineHost } from './merged-lines.js';
 import { mentionInto } from './chat-composer.js';
@@ -153,6 +153,7 @@ export class MultiLiveMergedChat {
     this.cellLines = new MergedLineHost(this.grid, lineOpts);
     document.addEventListener('pointerdown', (e) => { if (!this.menu.hidden && !e.target.closest('.ml-mc-view')) this.openMenu(false); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !this.menu.hidden) this.openMenu(false); });
+    window.addEventListener('resize', () => { if (!this.menu.hidden) fitPopover(this.menu, this.chatEl); });
     this.grid.addEventListener('click', (e) => {
       const head = e.target.closest('.ml-mc-cell-head');
       if (head && head.dataset.session) this.onSelect(head.dataset.session);
@@ -167,6 +168,8 @@ export class MultiLiveMergedChat {
     const back = !open && this.menu.contains(document.activeElement); // 숨으며 초점이 body 로 떨어지지 않게
     this.menu.hidden = !open;
     this.button.setAttribute('aria-expanded', String(open));
+    // 버튼이 도구 서랍 왼쪽 끝이라 오른쪽 정렬 메뉴가 좁은 패널(.ml-chat 은 넘침을 자른다) 왼쪽 밖으로 잘렸다.
+    if (open) fitPopover(this.menu, this.chatEl);
     if (back) this.button.focus({ preventScroll: true });
   }
 
