@@ -34,6 +34,11 @@ const VIEW: &[Item] = &[
         "다크/라이트 전환",
         Some("CmdOrCtrl+Shift+L"),
     ),
+    SEP,
+    // 화면 크기(설정 외관 → 화면 크기) — 4K 1배율·Retina 에서 글자·단추 크기를 맞춘다.
+    ("zoom-in", "확대", Some("CmdOrCtrl+=")),
+    ("zoom-out", "축소", Some("CmdOrCtrl+-")),
+    ("zoom-reset", "실제 크기", Some("CmdOrCtrl+0")),
 ];
 
 /// 이동 — 페이지 이동, 뒤로, 찾아 들어가기(검색·명령 팔레트).

@@ -845,7 +845,7 @@ select.select {
 .home-recap-intro { flex: 0 0 150px; min-width: 0; }
 .home-recap-intro h2 { margin: 0 0 5px; font-size: var(--fs-subhead); font-weight: 700; letter-spacing: -.4px; }
 .home-recap-intro > span { font-size: var(--fs-footnote); color: var(--text-tertiary); }
-.home-recap-metrics { flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-xl); min-width: 0; }
+.home-recap-metrics { flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 260px)); gap: var(--sp-xl); min-width: 0; }
 .home-recap-metric { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .home-recap-metric > span { font-size: var(--fs-footnote); color: var(--text-secondary); }
 .home-recap-metric > strong { font-size: var(--fs-subhead); font-weight: 650; letter-spacing: -.3px; font-variant-numeric: tabular-nums; }
@@ -2860,7 +2860,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
 .donut-center strong { font-size: var(--fs-page); line-height: 1.1; font-variant-numeric: tabular-nums; }
 .donut-center span { font-size: var(--fs-micro); color: var(--text-tertiary); }
-.donut-legend { list-style: none; margin: 0; padding: 0; flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.donut-legend { list-style: none; margin: 0; padding: 0; flex: 1 1 200px; max-width: 460px; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .donut-legend li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto auto; align-items: center; gap: 8px; padding: 5px 6px; border-radius: var(--radius-xs); font-size: var(--fs-footnote); }
 .donut-legend li.is-active { background: var(--hover); }
 .donut-legend b { font-variant-numeric: tabular-nums; }
@@ -2869,6 +2869,9 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 /* 순위 막대(비중) */
 .share-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .share-bars li { display: grid; grid-template-columns: 20px minmax(64px, 1fr) minmax(56px, 1.15fr) 44px minmax(68px, auto); align-items: center; gap: 10px; font-size: var(--fs-footnote); min-height: 26px; }
+/* 넓은 창(4K 1배율 등) — 이름 칸이 1fr 로 늘어 이름과 막대 사이가 수백 픽셀 벌어졌다. 이름은 최대 11em(긴 채널명은 말줄임), 남는 폭은 막대로.
+   창 폭으로 가른다 — 좁은 카드에 걸면 막대가 최소 폭으로 줄어든다(1900 이상이면 둘로 나뉜 카드도 750 이상). */
+@media (min-width: 1900px) { .share-bars li { grid-template-columns: 20px minmax(64px, 11em) minmax(56px, 1fr) 44px minmax(68px, auto); } }
 .share-bars .rank-name { display: inline-flex; align-items: center; gap: 6px; min-width: 0; text-align: left; justify-content: flex-start; }
 .share-bars button.rank-name { display: block; font-size: var(--fs-footnote); color: var(--text-primary); padding: 4px 6px; margin: 0 -6px; }
 .share-bars button.rank-name:hover { color: var(--primary-text); }

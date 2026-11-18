@@ -545,6 +545,44 @@ pub mod sidebar {
     }
 }
 
+/// 화면 크기(웹뷰 확대 배율) — 4K 를 1배율로 쓰거나 Retina 에서 글자·단추를 키우고 줄일 때.
+#[allow(clippy::manual_clamp)]
+pub mod ui_scale {
+    pub const MIN: f64 = 0.8;
+    pub const DEFAULT: f64 = 1.0;
+    pub const MAX: f64 = 2.0;
+    /// 메뉴 "확대·축소"가 오가는 단계.
+    pub const STEPS: [f64; 9] = [0.8, 0.9, 1.0, 1.1, 1.25, 1.4, 1.5, 1.75, 2.0];
+
+    /// 확대(`dir` > 0)·축소(< 0)·실제 크기(0) — 단계 사이 값(설정에서 직접 고른 값)이면 그 방향의 다음 단계로.
+    pub fn step(current: f64, dir: i32) -> f64 {
+        let cur = clamped(current);
+        match dir.signum() {
+            0 => DEFAULT,
+            1 => STEPS
+                .iter()
+                .copied()
+                .find(|&s| s > cur + 1e-6)
+                .unwrap_or(MAX),
+            _ => STEPS
+                .iter()
+                .rev()
+                .copied()
+                .find(|&s| s < cur - 1e-6)
+                .unwrap_or(MIN),
+        }
+    }
+
+    /// 범위 밖·숫자 아님은 기본값으로.
+    pub fn clamped(scale: f64) -> f64 {
+        if scale.is_finite() {
+            scale.max(MIN).min(MAX)
+        } else {
+            DEFAULT
+        }
+    }
+}
+
 /// 외관 설정.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -558,6 +596,9 @@ pub struct AppearanceSettings {
     #[serde(deserialize_with = "de_sidebar_scale")]
     pub sidebar_scale: f64,
     pub compact_mode: bool,
+    /// 화면 크기 — 앱 전체(모든 창)의 웹뷰 확대 배율. [`ui_scale`] 범위.
+    #[serde(deserialize_with = "de_ui_scale")]
+    pub ui_scale: f64,
     #[serde(rename = "maxMemoryMB")]
     pub max_memory_mb: i64,
     pub debug_mode: bool,
@@ -573,6 +614,7 @@ impl Default for AppearanceSettings {
             sidebar_width: sidebar::DEFAULT_WIDTH,
             sidebar_scale: sidebar::SCALE_DEFAULT,
             compact_mode: false,
+            ui_scale: ui_scale::DEFAULT,
             max_memory_mb: 512,
             debug_mode: false,
         }
@@ -581,6 +623,10 @@ impl Default for AppearanceSettings {
 
 fn de_sidebar_width<'de, D: Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
     Ok(sidebar::clamped_width(f64::deserialize(d)?))
+}
+
+fn de_ui_scale<'de, D: Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
+    Ok(ui_scale::clamped(f64::deserialize(d)?))
 }
 
 fn de_sidebar_scale<'de, D: Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
@@ -1185,6 +1231,28 @@ mod tests {
             serde_json::to_value(FrameRateMode::Fixed60).unwrap(),
             "fixed60"
         );
+    }
+
+    #[test]
+    fn appearance_ui_scale_defaults_and_clamps() {
+        // 구 저장본(키 없음)은 100%.
+        let old: AppearanceSettings = serde_json::from_str(r#"{"compactMode":true}"#).unwrap();
+        assert_eq!(old.ui_scale, ui_scale::DEFAULT);
+        let big: AppearanceSettings = serde_json::from_str(r#"{"uiScale":9}"#).unwrap();
+        assert_eq!(big.ui_scale, ui_scale::MAX);
+        let small: AppearanceSettings = serde_json::from_str(r#"{"uiScale":0.2}"#).unwrap();
+        assert_eq!(small.ui_scale, ui_scale::MIN);
+        assert_eq!(ui_scale::clamped(f64::NAN), ui_scale::DEFAULT);
+        assert!(ui_scale::STEPS.contains(&ui_scale::DEFAULT));
+        assert!(ui_scale::STEPS.windows(2).all(|w| w[0] < w[1]));
+        assert_eq!(ui_scale::step(1.0, 1), 1.1);
+        assert_eq!(ui_scale::step(1.0, -1), 0.9);
+        assert_eq!(ui_scale::step(1.3, 1), 1.4);
+        assert_eq!(ui_scale::step(1.3, -1), 1.25);
+        assert_eq!(ui_scale::step(2.0, 1), 2.0);
+        assert_eq!(ui_scale::step(0.8, -1), 0.8);
+        assert_eq!(ui_scale::step(1.75, 0), 1.0);
+        assert_eq!(serde_json::to_value(&old).unwrap()["uiScale"], 1.0);
     }
 
     #[test]

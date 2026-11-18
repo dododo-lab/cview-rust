@@ -39,7 +39,7 @@ import { installBackgroundSaver, setMenuHidden } from './background-saver.js';
 import { installPerfCollector } from './perf-collector.js';
 import { showMenu, refreshChatAuth, reconnectFailedChats } from './chat.js';
 import { installUiHealth } from './ui-health.js';
-import { kbd } from './platform.js';
+import { kbd, IS_WINDOWS } from './platform.js';
 import { installWindowControls } from './window-controls.js';
 import { withRefreshVeil, cancelRefreshVeil } from './refresh-veil.js';
 import { initSharpness, flushSharpnessNotice } from './sharpness.js';
@@ -688,6 +688,9 @@ const MENU_ACTIONS = {
   refresh: () => reloadCurrent({ veil: true }),
   'toggle-sidebar': () => sidebar.toggle(),
   'theme-toggle': () => setTheme(resolvedTheme() === 'dark' ? 'light' : 'dark'),
+  'zoom-in': () => zoomStep(1),
+  'zoom-out': () => zoomStep(-1),
+  'zoom-reset': () => zoomStep(0),
   settings: () => navigate('settings'),
   about: () => showAbout(),
   'check-update': () => showUpdateCheck(),
@@ -738,6 +741,17 @@ const MENU_ACTIONS = {
   },
 };
 
+/** 화면 크기 한 단계(메뉴·단축키) — 저장·모든 창 적용은 Rust, 화면은 설정 변경 알림으로 따라온다. */
+async function zoomStep(dir) {
+  if (!isTauri) return;
+  try {
+    const settings = await api.uiZoomStep(dir);
+    const scale = Number(settings && settings.appearance && settings.appearance.uiScale) || 1;
+    window.dispatchEvent(new CustomEvent('cview:settings-changed', { detail: { domain: 'appearance', key: 'uiScale', value: scale, settings } }));
+    toast(`화면 크기 ${Math.round(scale * 100)}%`, 1200);
+  } catch (e) { toast(e.message); }
+}
+
 function installMenuAndShortcuts() {
   // 메뉴 이벤트는 모든 창에 간다 — 앞에 있는 창만 실행한다.
   listen('menu://action', (p) => {
@@ -750,6 +764,10 @@ function installMenuAndShortcuts() {
     if (e.altKey && e.metaKey) {
       const hub = HUBS.find(([k]) => e.code === `Digit${k}`);
       if (hub) { e.preventDefault(); if (hub[1] === 'live') openLiveMenu(); else navigate(hub[1]); hubFlash(hub[2]); return; }
+    }
+    // 화면 크기 — macOS 는 메뉴 단축키가 먼저 가져간다. 메뉴 막대가 없는 Windows 는 여기서.
+    if (IS_WINDOWS && !e.altKey && (e.key === '+' || (!e.shiftKey && ['=', '-', '0'].includes(e.key)))) {
+      e.preventDefault(); zoomStep(e.key === '0' ? 0 : e.key === '-' ? -1 : 1); return;
     }
     if (e.key === '/') { e.preventDefault(); showShortcuts(); }
     else if (e.key === ',') { e.preventDefault(); navigate('settings'); }

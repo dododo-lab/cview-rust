@@ -104,6 +104,7 @@ export const SCHEMA = [
     { d: 'general', k: 'notifyOnTitleChange', label: '방송 제목 변경', type: 'toggle' },
   ]],
   ['general', '외관', [
+    { d: 'appearance', k: 'uiScale', label: '화면 크기', help: '앱 전체의 글자·단추·카드 크기를 함께 키우거나 줄입니다(⌘= 확대 · ⌘- 축소 · ⌘0 실제 크기). 4K 모니터를 1배율로 쓸 때 키워 보세요', type: 'range', min: 0.8, max: 2, step: 0.05, pct: true },
     { d: 'appearance', k: 'compactMode', label: '콤팩트 모드', help: '여백과 카드를 촘촘하게 줄입니다', type: 'toggle' },
     { d: 'appearance', k: 'motionQuality', label: '모션', type: 'select', options: opt([['reduced', '절약'], ['balanced', '균형'], ['rich', '풍부']]) },
     { local: 'thumbPreview', label: '썸네일 미리보기', help: '라이브·다시보기·클립 썸네일 위에 마우스를 잠시 올려 두면 소리 없이 미리 봅니다(모션 "절약"에서는 쉽니다)', type: 'toggle' },

@@ -157,6 +157,7 @@ pub async fn settings_update(
         shell.manager.lock().multi_live_limits_changed();
     }
     if domain == "appearance" {
+        apply_ui_zoom_all(&app, services.settings.appearance().ui_scale);
         // 설정 "디버그 로그"를 켜고 끄면 바로 반영하고 화면 수집기에 알린다.
         if let Ok(dir) = tauri::Manager::path(&app).app_data_dir() {
             let on = crate::perf_log::forced_by_env() || services.settings.appearance().debug_mode;
@@ -170,6 +171,44 @@ pub async fn settings_update(
     if domain == "keyboard" {
         crate::menu::rebuild(&app);
     }
+    Ok(snapshot(&services))
+}
+
+/// 화면 크기 — 열린 모든 창의 웹뷰 확대 배율을 맞춘다(설정은 앱 전체 하나).
+fn apply_ui_zoom_all(app: &tauri::AppHandle, scale: f64) {
+    for w in tauri::Manager::webview_windows(app).values() {
+        if let Err(e) = w.set_zoom(scale) {
+            tracing::debug!("화면 크기 적용 실패({}): {e}", w.label());
+        }
+    }
+}
+
+/// 창이 처음 뜰 때 화면(prefs-effects.js)이 부른다 — 이 창에 저장된 화면 크기를 건다.
+#[tauri::command]
+pub async fn ui_zoom_sync(
+    window: tauri::WebviewWindow,
+    services: State<'_, AppServices>,
+) -> CmdResult<f64> {
+    let scale = services.settings.appearance().ui_scale;
+    window
+        .set_zoom(scale)
+        .map_err(|e| CommandError(e.to_string()))?;
+    Ok(scale)
+}
+
+/// 메뉴 "확대·축소·실제 크기"(⌘= ⌘- ⌘0) — 단계를 옮겨 저장하고 모든 창에 건다.
+#[tauri::command]
+pub async fn ui_zoom_step(
+    app: tauri::AppHandle,
+    services: State<'_, AppServices>,
+    dir: i32,
+) -> CmdResult<SettingsDto> {
+    use cview_core::models::settings::ui_scale;
+    let mut a = services.settings.appearance();
+    a.ui_scale = ui_scale::step(a.ui_scale, dir);
+    let scale = a.ui_scale;
+    services.settings.set_appearance(a);
+    apply_ui_zoom_all(&app, scale);
     Ok(snapshot(&services))
 }
 
