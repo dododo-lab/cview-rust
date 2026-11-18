@@ -675,7 +675,9 @@ a { color: var(--primary); }
    예전엔 화면마다 따로 그려 제목이 보조색 16px · 기본색 20px · 15px · 14px 로 제각각이었다. */
 .empty[hidden] { display: none; }
 .empty > strong { color: var(--text-primary); font-size: var(--fs-subhead); font-weight: 700; line-height: 1.35; }
-.empty > span:not(.empty-icon) { max-width: 440px; }
+.empty > span:not(.empty-icon) { max-width: 440px; text-wrap: pretty; }   /* 마지막 줄에 한두 글자만 남지 않게 */
+/* 제목·빈 상태 제목은 줄 길이를 고르게(두 줄이 될 때 윗줄만 길고 아랫줄에 낱말 하나 남던 것). 한 줄 제목에는 영향이 없다. */
+:where(h1, h2, .empty > strong, .sheet h2) { text-wrap: balance; }
 .empty.lg { font-size: var(--fs-body); }
 .empty.lg > strong { font-size: var(--fs-headline); }
 .empty.boxed { border: 1px dashed var(--border); border-radius: var(--radius-lg); }
@@ -1360,10 +1362,21 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .segmented.page-tabs[data-edge="end"] { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
 .segmented.page-tabs[data-edge="start"] { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px); mask-image: linear-gradient(90deg, transparent, #000 36px); }
 .segmented.page-tabs[data-edge="both"] { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
-/* 좁은 머리줄 — 멀티채팅처럼 검색칸·전환·버튼이 한 줄에 몰리면 검색칸이 96px 로 눌렸다. 좁으면 검색칸을 다음 줄 전체로 내린다. */
-@media (max-width: 760px) {
+/* 좁은 머리줄 — 멀티채팅처럼 검색칸·전환·버튼이 한 줄에 몰리면 검색칸이 96px 로 눌렸다. 좁으면 검색칸을 다음 줄로 내린다.
+   기준은 창 폭이 아니라 화면 폭(@container mcpage) — 창이 1280px 여도 사이드바·인사이트 칸을 빼면 748px 라, 예전 창 폭 기준(760px)에서는
+   제목 칸이 36px 로 눌려 '멀티채팅'이 검색칸 밑으로 겹쳤다. 한 줄에 다 들려면 약 860px(통합 보기의 줄 모양 전환까지)가 필요하다.
+   내려간 줄에서는 검색칸이 늘어나고 '모두 닫기'가 그 옆에 붙는다(혼자 한 줄을 차지하지 않게). */
+.page-multichat { container: mcpage / inline-size; }
+@container mcpage (max-width: 880px) {
   .page-header.ph:has(> .mc-search) { flex-wrap: wrap; row-gap: 10px; }
-  .ph > .mc-search { order: 9; flex: 1 1 100%; width: auto; }
+  /* 기본 폭을 줄 전체 - 120px 로 — 첫 줄 남은 자리로는 들어가지 못해 늘 다음 줄로 가고, '모두 닫기'(78px)가 옆에 들어간다 */
+  .ph > .mc-search { order: 9; flex: 1 1 calc(100% - 120px); width: auto; }
+  .ph:has(> .mc-search) > [data-mc="close-all"] { order: 10; }
+}
+/* 아주 좁으면(화면 480px 미만) 옆에 붙인 '모두 닫기' 탓에 검색칸이 300px 아래로 줄어든다 — 이때는 검색칸이 한 줄을 다 쓴다(예전과 같다). */
+@container mcpage (max-width: 479px) {
+  .ph > .mc-search { flex-basis: 100%; }
+  .ph:has(> .mc-search) > [data-mc="close-all"] { order: 0; }
 }
 
 /* 라이브 메뉴 보기 전환(라이브 · 멀티라이브) — 제목 옆 알약. 아이콘+글자, 고른 쪽은 떠 있는 판에 브랜드색 아이콘.
@@ -1735,6 +1748,9 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
   border: 1px solid var(--border-subtle); box-shadow: var(--shadow-lg); display: flex; flex-direction: column; gap: var(--sp-md);
 }
 .sheet h2 { font-size: var(--fs-headline); font-weight: 800; }
+/* 열 때 초점을 받는 대화 상자 자체(tabindex=-1)에는 고리를 그리지 않는다 — 단축키로 열면 :focus-visible 이라 시트 전체가 초록 테두리로 둘러싸였다.
+   이름은 aria-labelledby 로 읽히고, 다음 Tab 은 시트 안 첫 단추로 가서 그 단추의 고리가 보인다(바로가기 화면 [data-skip-target] 과 같은 규칙). */
+:is(.sheet, [role="dialog"])[tabindex="-1"]:focus { outline: none; }
 .sheet textarea, .sheet input[type=text], .sheet input[type=search] {
   width: 100%; min-height: 40px; padding: 10px 12px; border-radius: var(--radius-md); border: 1px solid var(--border-subtle);
   background: var(--surface-base); color: var(--text-primary); font: inherit; resize: vertical; outline: none;
@@ -2434,6 +2450,8 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .chat-skin .chat-input input::placeholder { color: var(--cs-time); }
 .chat-skin .chat-input .btn.primary { background: var(--cs-send); color: var(--cs-send-text); border-radius: var(--radius-lg); font-weight: 700; box-shadow: none; }
 .chat-skin .chat-input .btn.primary:hover:not(:disabled) { filter: brightness(0.96); box-shadow: none; }
+/* 보낼 수 없을 때(연결 전·끊김·로그인 필요) — 반투명 노랑은 다크에서 탁한 올리브색이 됐다. 메신저처럼 회색 단추로 '아직 못 보냄'을 보인다. */
+.chat-skin .chat-input .btn.primary:disabled { background: var(--cs-fill); color: var(--cs-time); opacity: 1; }
 /* 누름 — motion.css .btn.primary 누름의 초록 글로우(0 3px 10px)가 노란 단추 밑으로 번졌다. 스킨 단추는 빛을 받는 키가 아니라 납작한 그대로다 */
 .chat-skin .chat-input .btn.primary:active:not(:disabled) { box-shadow: none; }
 .chat-skin .chat-line .text { color: var(--cs-ink); }
@@ -2762,9 +2780,10 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .skip-link {
   position: fixed; left: 12px; top: 10px; z-index: var(--z-skip); padding: 8px 14px; border-radius: var(--radius-ms);
   background: var(--primary); color: var(--on-primary); font-weight: 700; font-size: var(--fs-caption); text-decoration: none;
-  box-shadow: var(--shadow-md); transform: translateY(-160%); transition: transform 0.15s var(--ease-out);
+  transform: translateY(-160%); transition: transform 0.15s var(--ease-out);
 }
-.skip-link:focus, .skip-link:focus-visible { transform: none; outline: 2px solid var(--text-primary); outline-offset: 2px; }
+/* 그림자는 나타날 때만 — 화면 밖(위)에 숨어 있을 때도 0 8px 24px 그림자가 창 위 가장자리로 번져 사이드바 머리에 회색 얼룩이 졌다(라이트에서 뚜렷). */
+.skip-link:focus, .skip-link:focus-visible { transform: none; outline: 2px solid var(--text-primary); outline-offset: 2px; box-shadow: var(--shadow-md); }
 [data-skip-target]:focus { outline: none; } /* 바로가기로 옮긴 화면 자체에는 링을 그리지 않는다(다음 Tab 이 화면 안 첫 요소로 간다) */
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
@@ -2780,6 +2799,11 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .kpi-sub.up { color: var(--primary-text); }
 .kpi-sub.down { color: var(--text-secondary); }
 .kpi-value { font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 값의 단위(시간·분·회·개)는 숫자보다 작고 옅게 — 숫자가 먼저 읽히고, 좁은 카드에서도 '14시간 22분'이 '14시간 …'으로 잘리지 않는다(stats.js kpi). */
+.kpi-unit { margin-left: 0.08em; font-size: 0.62em; font-weight: 600; letter-spacing: 0; color: var(--text-secondary); }
+.home-report .kpi-card:first-child .kpi-unit { color: inherit; }
+.kpi-card { container-type: inline-size; min-width: 0; }
+@container (max-width: 132px) { .kpi-value { font-size: var(--fs-headline); } }
 .kpi-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* 차트 공통 — 초점 링, 고른 칸 강조 */

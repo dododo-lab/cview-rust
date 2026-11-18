@@ -1039,13 +1039,21 @@
 .mwi-body .clip-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 
 /* 정보 탭 */
+/* 타일 — 정보 칸 폭(@container mwi-body)을 따라: 넓으면 한 줄, 4개가 한 줄에 못 들면 2×2(예전엔 3+1 로 하나가 홀로 남았다).
+   타일 폭이 190px 아래로 줄 때는 한 줄의 타일을 모두 아이콘 위·글자 아래로 쌓는다 — 예전엔 아이콘 옆 글자 칸이 48~80px 로 눌려
+   '1시간 30분'이 타일 밖으로 넘쳤다. 기준: 4개 한 줄은 칸 801px 미만, 3개 한 줄·2×2 는 칸 600px·400px 이하에서 타일이 190px 아래가 된다. */
+.mwi-body { container: mwi-body / inline-size; }
 .mwi-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: var(--mwi-gap); margin-bottom: var(--mwi-gap); }
+@container mwi-body (max-width: 600px) { .mwi-tiles:has(> :nth-child(4):last-child) { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container mwi-body (min-width: 601px) and (max-width: 800px) { .mwi-tiles:has(> :nth-child(4):last-child) > .mwi-tile { flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px; } }
+@container mwi-body (max-width: 600px) { .mwi-tiles:has(> :nth-child(3):last-child) > .mwi-tile { flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px; } }
+@container mwi-body (max-width: 400px) { .mwi-tiles > .mwi-tile { flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px; } }
 .mwi-tile { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: var(--radius-lg); background: var(--surface-base); box-shadow: inset 0 0 0 1px var(--border-subtle); min-width: 0; }
 .mwi-tile-icon { flex: none; display: grid; place-items: center; width: 38px; height: 38px; border-radius: var(--radius-md); color: var(--primary-text); background: color-mix(in srgb, var(--primary) 12%, transparent); }
 .mwi-tile-icon svg { width: 19px; height: 19px; }
 .mwi-tile-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .mwi-tile small { font-size: var(--fs-footnote); color: var(--text-tertiary); font-weight: 600; }
-.mwi-tile strong { font-size: var(--fs-headline); font-weight: 800; letter-spacing: -0.4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mwi-tile strong { font-size: var(--fs-headline); font-weight: 800; letter-spacing: -0.4px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mwi-card { padding: 16px 18px; border-radius: var(--radius-lg); background: var(--surface-base); box-shadow: inset 0 0 0 1px var(--border-subtle); }
 .mwi-card h3 { font-size: var(--fs-caption); font-weight: 700; color: var(--text-tertiary); margin-bottom: 8px; }
 .mwi-desc { color: var(--text-primary); white-space: pre-wrap; line-height: 1.7; user-select: text; overflow-wrap: anywhere; }

@@ -76,8 +76,13 @@ export function bytesText(n) {
   return `${x.toFixed(x < 10 ? 1 : 0)} ${units[i]}`;
 }
 
+/** KPI 값 — 숫자 바로 뒤 단위(시간·분·회·개·일·시)를 .kpi-unit 으로 감싸 작게 그린다. 글자(textContent)는 그대로다. */
+export function kpiValueHtml(value) {
+  return esc(value).replace(/(\d)([가-힣]+)/g, '$1<span class="kpi-unit">$2</span>');
+}
+
 function kpi(label, value, sub = '', { tone = '', title = '' } = {}) {
-  return `<div class="kpi-card"${title ? ` title="${esc(title)}"` : ''}><span class="kpi-label">${esc(label)}</span><strong class="kpi-value">${esc(value)}</strong>${sub ? `<span class="kpi-sub${tone ? ` ${tone}` : ''}">${esc(sub)}</span>` : ''}</div>`;
+  return `<div class="kpi-card"${title ? ` title="${esc(title)}"` : ''}><span class="kpi-label">${esc(label)}</span><strong class="kpi-value">${kpiValueHtml(value)}</strong>${sub ? `<span class="kpi-sub${tone ? ` ${tone}` : ''}">${esc(sub)}</span>` : ''}</div>`;
 }
 
 // ── 기간 리포트(insights_report) 화면 ─────────────────────
