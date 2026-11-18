@@ -122,14 +122,15 @@ export const RESERVED = [
 ];
 
 /**
- * Windows 전용 예약 키 — 메뉴 막대가 없어 app.js 가 Ctrl 조합을 직접 받는다(화면 크기). bindingFromEvent 는
- * Ctrl 을 MOD.control 로 적으므로 ⌘ 줄만으로는 Ctrl+0 같은 키를 스크린샷·북마크에 묶을 수 있었다.
- * '+' 는 Ctrl+Shift+= 와 숫자패드 + 로 들어온다.
+ * Windows 전용 예약 키 — 메뉴 막대가 없어 app.js 가 화면 크기 키를 직접 받는다. index.html 의 재매핑이 캡처 단계에서
+ * Ctrl → ⌘(metaKey), Ctrl+Shift+Alt → ⌃⌘ 로 바꾸므로 bindingFromEvent 가 보는 것은 그 결과다. Ctrl+= · Ctrl+- · Ctrl+0 은
+ * 위의 ⌘ 줄이 이미 막는다. 여기는 app.js 가 확대로 받는데 ⌘ 줄에 없는 조합:
+ * '+'(Ctrl+Shift+= → ⌘⇧+, 숫자패드 + → ⌘+), 그리고 Ctrl+Shift+Alt 로 누른 = · - · 0 · + (→ ⌃⌘).
  */
 const K = MOD.control;
 export const RESERVED_WINDOWS = [
-  ['=', K, '화면 크기 확대'], ['+', K, '화면 크기 확대'], ['+', K | S, '화면 크기 확대'],
-  ['-', K, '화면 크기 축소'], ['0', K, '화면 실제 크기'],
+  ['+', C, '화면 크기 확대'], ['+', C | S, '화면 크기 확대'], ['+', C | K, '화면 크기 확대'],
+  ['=', C | K, '화면 크기 확대'], ['-', C | K, '화면 크기 축소'], ['0', C | K, '화면 실제 크기'],
 ];
 
 /** 예약 키면 그 설명, 아니면 null. 순수 함수(windows 는 기본이 지금 플랫폼). */
