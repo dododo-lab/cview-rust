@@ -267,6 +267,8 @@ pub fn run() {
             );
             perf_log::emit("startup.services_ready", serde_json::json!({}));
             commands::settings::apply_window_theme(&handle, services.settings.appearance().theme);
+            // 저장된 화면 크기 — 첫 화면을 100% 로 그렸다가 튀지 않게 창이 그리기 전에 건다.
+            commands::settings::apply_ui_zoom_all(&handle, services.settings.appearance().ui_scale);
             window_prefs::apply_on_launch(&handle, &data_dir, &services.settings.general());
             // 창 위치·크기 저장 — 움직이거나 크기를 바꾸면 기록한다(SYS-16).
             // 끄는 동안의 이벤트는 모았다가 조용해지면 한 번 쓴다(window_prefs::FrameSaver).

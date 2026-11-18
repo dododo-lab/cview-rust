@@ -9,6 +9,9 @@
 //      홈 '나의 시청 취향' 숫자 칸은 260px 이하로 붙어 있다.
 // MH06 설정 → 외관에 '화면 크기'(80~200%)가 있고, 단축키 시트에 ⌘= / ⌘- / ⌘0 이 있다. 창이 뜰 때 저장된 화면 크기를 건다(ui_zoom_sync).
 // MH07 Windows(메뉴 막대 없음) — Ctrl+= · Ctrl+- · Ctrl+0 이 화면 크기 단계를 옮긴다(ui_zoom_step).
+// MH08 외관 변경 알림(settings://appearance, Rust 가 모든 창에) — 열린 설정 화면의 '화면 크기' 슬라이더와 % 표시, 썸네일 배율이 따라온다.
+// MH09 devicePixelRatio 에 확대가 이미 들어 있으면(WebView2·확대가 남은 채 다시 불러온 창) 화면 크기를 두 번 곱하지 않는다.
+// MH10 ⌘= ⌘- ⌘0 은 단축키 설정의 예약 키다(스크린샷·북마크 등에 묶어 메뉴에 같은 키가 둘 생기지 않게).
 // 저장소 루트에서: node tools/ui-regression/motion-hidpi.mjs   (Playwright 가 필요하다. CVIEW_UI_BROWSER=webkit 이면 WebKit)
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -44,7 +47,14 @@ function recordAnimations() {
   requestAnimationFrame(tick);
 }
 
-async function open({ width = 1440, height = 900, dpr = 1, reduced = false, ua } = {}) {
+// 이벤트 모의 — 화면이 듣는 Tauri 이벤트를 모아 두고 window.__emit(이름, 값)으로 보낸다(Rust 가 모든 창에 보내는 것을 흉내).
+function eventBus() {
+  const subs = {};
+  window.__emit = (name, payload) => (subs[name] || []).forEach((cb) => cb({ payload }));
+  window.__TAURI__.event.listen = async (name, cb) => { (subs[name] = subs[name] || []).push(cb); return () => {}; };
+}
+
+async function open({ width = 1440, height = 900, dpr = 1, reduced = false, ua, bus = false } = {}) {
   const ctx = await engine.launch().then(async (b) => {
     const c = await b.newContext({ viewport: { width, height }, deviceScaleFactor: dpr, colorScheme: 'dark', reducedMotion: reduced ? 'reduce' : 'no-preference', ...(ua ? { userAgent: ua } : {}) });
     c.__browser = b;
@@ -56,6 +66,7 @@ async function open({ width = 1440, height = 900, dpr = 1, reduced = false, ua }
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.addInitScript(mockTauri, [base, 'dark', 24]);
   await page.addInitScript(recordAnimations);
+  if (bus) await page.addInitScript(eventBus);
   await page.goto(base);
   await page.waitForSelector('[data-page]', { state: 'attached' });
   await page.waitForFunction(() => { const s = document.getElementById('splash'); return !s || !s.isConnected || getComputedStyle(s).display === 'none'; }, null, { timeout: 8000 }).catch(() => {});
@@ -221,6 +232,55 @@ await check('MH07 Windows — Ctrl+= · Ctrl+- · Ctrl+0 이 화면 크기를 �
     await page.waitForTimeout(200);
     const n = (await page.evaluate(() => window.__calls)).filter((c) => c === 'ui_zoom_step').length;
     assert.equal(n, 3, `ui_zoom_step ${n}번`);
+  } finally { await close(); }
+});
+
+await check('MH08 외관 변경 알림 — 설정 슬라이더·썸네일 배율이 따라온다(⌘= 를 다른 곳에서 눌러도)', async () => {
+  const { page, errors, close } = await open({ bus: true });
+  try {
+    await go(page, 'settings', {});
+    await page.waitForSelector('.page[data-page="settings"]:not([hidden])');
+    await page.fill('.settings-search', '화면 크기');
+    const range = page.locator('input[type="range"][data-domain="appearance"][data-key="uiScale"]');
+    await range.waitFor({ state: 'attached' });
+    // 모의 settings_get 에는 uiScale 이 없어 처음 값은 정하지 않는다(실제 앱은 늘 있다) — 1.25 가 아니기만 하면 된다
+    assert.notEqual(await range.inputValue(), '1.25');
+    await page.evaluate(() => window.__emit('settings://appearance', { theme: 'dark', uiScale: 1.25, motionQuality: 'balanced' }));
+    await page.waitForFunction(() => document.querySelector('input[data-key="uiScale"]').value === '1.25');
+    const out = await range.evaluate((el) => el.parentElement.querySelector('output').textContent);
+    assert.equal(out, '125%');
+    // 같은 알림이 썸네일 배율(prefs-effects → setImageZoom)에도 닿는다 — 1배율 맥이면 1 × 1.25
+    assert.equal(await page.evaluate(async () => (await import('/js/dom.js')).pixelScale()), 1.25);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+await check('MH09 기기 배율에 확대가 들어 있으면 두 번 곱하지 않는다(WebView2·다시 불러온 창)', async () => {
+  const { page, close } = await open();
+  try {
+    const r = await page.evaluate(async () => {
+      const d = await import('/js/dom.js');
+      return [d.dprIncludesZoom(3.5, true), d.dprIncludesZoom(2, true), d.dprIncludesZoom(2, false), d.dprIncludesZoom(1, false), d.dprIncludesZoom(3, false), d.dprIncludesZoom(2.5, false)];
+    });
+    // Windows(WebView2)는 늘 포함, 맥은 1·2 면 화면 배율 그대로(곱한다), 2 초과·소수면 이미 포함
+    assert.deepEqual(r, [true, true, false, false, true, true]);
+  } finally { await close(); }
+  const win = await open({ dpr: 3, ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36' });
+  try {
+    // 150% 모니터에서 화면 크기 200% → WebView2 의 devicePixelRatio 3 — 6 으로 부풀리지 않는다
+    assert.equal(await win.page.evaluate(async () => { const d = await import('/js/dom.js'); d.setImageZoom(2); return d.pixelScale(); }), 3);
+  } finally { await win.close(); }
+});
+
+await check('MH10 ⌘= ⌘- ⌘0 은 예약 키 — 다른 동작에 묶을 수 없다', async () => {
+  const { page, close } = await open();
+  try {
+    const r = await page.evaluate(async () => {
+      const s = await import('/js/shortcuts.js');
+      const cmd = s.RESERVED.find(([k]) => k === 'f')[1];
+      return ['=', '-', '0'].map((key) => s.reservedOf({ key, modifiers: cmd }));
+    });
+    assert.ok(r.every(Boolean), `예약 설명 ${JSON.stringify(r)}`);
   } finally { await close(); }
 });
 

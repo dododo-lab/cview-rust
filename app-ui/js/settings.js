@@ -232,6 +232,9 @@ export class SettingsPage {
     });
     this.body.addEventListener('submit', (e) => this.onSubmit(e));
     this.body.addEventListener('click', (e) => this.onClick(e));
+    // 외관이 다른 곳에서 바뀌면(⌘= ⌘- ⌘0·다른 창·가져오기·초기화) 저장된 값과 보이는 컨트롤을 맞춘다 —
+    // 예전엔 화면 크기 슬라이더가 옛 값에 남아 있다가 → 키 한 번에 옛 값 기준으로 튀었다. 다시 그리지 않아 초점은 그대로.
+    listen(Events.appearanceChanged, (appearance) => this.syncAppearance(appearance));
     // 자동 프리셋이 값을 바꾸면 네트워크 값만 다시 읽어 프리셋 줄이 보일 때 다시 그린다.
     listen(Events.networkPresetChanged, async () => {
       if (!this.settings) return;
@@ -581,6 +584,20 @@ export class SettingsPage {
   }
 
   /** 다른 곳(영상 ⚙·시청 화면)에서 바꾼 선명도를 이 화면의 칸에 맞춘다. */
+  /** 외관 값(설정 저장 이벤트) → this.settings 와 화면의 외관 컨트롤(체크·선택·슬라이더와 % 표시). */
+  syncAppearance(appearance) {
+    if (!appearance || typeof appearance !== 'object' || !this.settings) return;
+    this.settings.appearance = { ...(this.settings.appearance || {}), ...appearance };
+    for (const el of this.body.querySelectorAll('[data-domain="appearance"][data-key]')) {
+      const v = appearance[el.dataset.key];
+      if (v === undefined) continue;
+      if (el.type === 'checkbox') el.checked = Boolean(v);
+      else el.value = String(v);
+      const out = el.type === 'range' && el.parentElement.querySelector('output');
+      if (out) out.textContent = el.dataset.pct ? `${Math.round(Number(v) * 100)}%` : String(v);
+    }
+  }
+
   syncSharpnessControls() {
     const s = sharpnessState();
     const sel = this.body.querySelector('select[data-key="sharpnessLevel"]');

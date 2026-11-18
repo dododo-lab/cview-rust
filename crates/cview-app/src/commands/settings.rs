@@ -157,7 +157,7 @@ pub async fn settings_update(
         shell.manager.lock().multi_live_limits_changed();
     }
     if domain == "appearance" {
-        apply_ui_zoom_all(&app, services.settings.appearance().ui_scale);
+        appearance_changed(&app, &services);
         // 설정 "디버그 로그"를 켜고 끄면 바로 반영하고 화면 수집기에 알린다.
         if let Ok(dir) = tauri::Manager::path(&app).app_data_dir() {
             let on = crate::perf_log::forced_by_env() || services.settings.appearance().debug_mode;
@@ -174,13 +174,39 @@ pub async fn settings_update(
     Ok(snapshot(&services))
 }
 
-/// 화면 크기 — 열린 모든 창의 웹뷰 확대 배율을 맞춘다(설정은 앱 전체 하나).
-fn apply_ui_zoom_all(app: &tauri::AppHandle, scale: f64) {
-    for w in tauri::Manager::webview_windows(app).values() {
-        if let Err(e) = w.set_zoom(scale) {
-            tracing::debug!("화면 크기 적용 실패({}): {e}", w.label());
-        }
+/// 화면 크기를 걸 창인가 — 네이버 로그인 창(외부 nid.naver.com)은 제외한다. 확대하면 폼·캡차가 창 밖으로 잘린다.
+pub fn zoom_applies_to(label: &str) -> bool {
+    label != crate::login::LOGIN_WINDOW
+}
+
+/// 이 창에 저장된 화면 크기를 건다 — 창을 만든 직후(메인 창 setup·보조 창 window_open)에 불러
+/// 100% 로 먼저 그렸다가 튀지 않게 한다. 로그인 창은 건너뛴다.
+pub fn apply_saved_zoom<R: tauri::Runtime>(window: &tauri::WebviewWindow<R>, scale: f64) {
+    if !zoom_applies_to(window.label()) {
+        return;
     }
+    if let Err(e) = window.set_zoom(scale) {
+        tracing::debug!("화면 크기 적용 실패({}): {e}", window.label());
+    }
+}
+
+/// 화면 크기 — 열린 모든 창(로그인 창 제외)의 웹뷰 확대 배율을 맞춘다(설정은 앱 전체 하나).
+pub fn apply_ui_zoom_all(app: &tauri::AppHandle, scale: f64) {
+    for w in tauri::Manager::webview_windows(app).values() {
+        apply_saved_zoom(w, scale);
+    }
+}
+
+/// 외관 설정이 바뀌었다(저장·확대 단계·가져오기·초기화) — 모든 창에 확대를 걸고, 모든 창에 새 외관 값을 알린다.
+/// 화면(prefs-effects.js)은 썸네일 배율·모션 등급을, 설정 화면은 '화면 크기' 슬라이더를 이 값으로 맞춘다.
+fn appearance_changed(app: &tauri::AppHandle, services: &AppServices) {
+    let appearance = services.settings.appearance();
+    apply_ui_zoom_all(app, appearance.ui_scale);
+    let _ = tauri::Emitter::emit(
+        app,
+        super::events::APPEARANCE_CHANGED,
+        serde_json::to_value(&appearance).unwrap_or(Value::Null),
+    );
 }
 
 /// 창이 처음 뜰 때 화면(prefs-effects.js)이 부른다 — 이 창에 저장된 화면 크기를 건다.
@@ -190,9 +216,11 @@ pub async fn ui_zoom_sync(
     services: State<'_, AppServices>,
 ) -> CmdResult<f64> {
     let scale = services.settings.appearance().ui_scale;
-    window
-        .set_zoom(scale)
-        .map_err(|e| CommandError(e.to_string()))?;
+    if zoom_applies_to(window.label()) {
+        window
+            .set_zoom(scale)
+            .map_err(|e| CommandError(e.to_string()))?;
+    }
     Ok(scale)
 }
 
@@ -206,9 +234,8 @@ pub async fn ui_zoom_step(
     use cview_core::models::settings::ui_scale;
     let mut a = services.settings.appearance();
     a.ui_scale = ui_scale::step(a.ui_scale, dir);
-    let scale = a.ui_scale;
     services.settings.set_appearance(a);
-    apply_ui_zoom_all(&app, scale);
+    appearance_changed(&app, &services);
     Ok(snapshot(&services))
 }
 
@@ -298,6 +325,7 @@ pub async fn settings_export(services: State<'_, AppServices>) -> CmdResult<Stri
 /// 설정 가져오기 — 내보낸 JSON 을 도메인별로 덮어쓴다. 잘못된 도메인 값은 건너뛰고 이름을 돌려준다.
 #[tauri::command]
 pub async fn settings_import(
+    app: tauri::AppHandle,
     services: State<'_, AppServices>,
     shell: State<'_, MultiLiveShell>,
     json: String,
@@ -319,12 +347,17 @@ pub async fn settings_import(
         // 가져온 멀티라이브 상한도 저장·초기화처럼 바로 반영한다.
         shell.manager.lock().multi_live_limits_changed();
     }
+    if map.contains_key("appearance") {
+        // 가져온 화면 크기도 바로 — 설정은 150% 인데 창은 예전 배율로 남지 않게.
+        appearance_changed(&app, &services);
+    }
     Ok(skipped)
 }
 
 /// 도메인 초기화 — 기본값으로 되돌린다(`all` 이면 전부).
 #[tauri::command]
 pub async fn settings_reset(
+    app: tauri::AppHandle,
     services: State<'_, AppServices>,
     shell: State<'_, MultiLiveShell>,
     domain: String,
@@ -359,12 +392,23 @@ pub async fn settings_reset(
     if domain == "all" || domain == "multiLive" {
         shell.manager.lock().multi_live_limits_changed();
     }
+    if domain == "all" || domain == "appearance" {
+        // 초기화한 화면 크기(100%)도 모든 창에 바로 건다.
+        appearance_changed(&app, &services);
+    }
     Ok(snapshot(&services))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn login_window_is_never_zoomed() {
+        assert!(!zoom_applies_to(crate::login::LOGIN_WINDOW));
+        assert!(zoom_applies_to("main"));
+        assert!(zoom_applies_to("chat-1"));
+    }
 
     #[test]
     fn domains_cover_dto_fields() {

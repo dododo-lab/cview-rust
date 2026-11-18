@@ -94,6 +94,13 @@ pub async fn window_open(
     let window = builder
         .build()
         .map_err(|e| CommandError(format!("창을 열지 못했습니다: {e}")))?;
+    // 저장된 화면 크기 — 보조 창도 100% 로 먼저 그렸다가 튀지 않게 만들자마자 건다.
+    if let Some(services) = app.try_state::<crate::state::AppServices>() {
+        crate::commands::settings::apply_saved_zoom(
+            &window,
+            services.settings.appearance().ui_scale,
+        );
+    }
     #[cfg(windows)]
     let _ = window.hide_menu();
     let handle = app.clone();

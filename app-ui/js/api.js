@@ -98,6 +98,8 @@ export const Events = Object.freeze({
   multiLiveCommand: 'multilive://command',
   multiLiveState: 'multilive://state',
   networkPresetChanged: 'settings://network-preset',
+  /** 외관 설정이 바뀌었다(화면 크기 단계·저장·가져오기·초기화) — 새 외관 값. 모든 창에 온다. */
+  appearanceChanged: 'settings://appearance',
   downloadUpdate: 'download://update',
   deepLink: 'deeplink://open',
 });
