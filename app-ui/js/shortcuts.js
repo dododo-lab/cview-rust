@@ -2,7 +2,7 @@
 // 바인딩은 설정 keyboard 도메인(`{ bindings: [동작, {key, modifiers}, …] }`)에 있다. 수식 키가 있는 바인딩은
 // 메뉴 막대가 가속기로 받고(셸이 메뉴를 다시 만든다), 맨 글자 바인딩은 여기서 시청 화면 키로 받는다.
 import { api } from './api.js';
-import { kbd } from './platform.js';
+import { kbd, IS_WINDOWS } from './platform.js';
 
 export const MOD = { cmd: 1, shift: 2, option: 4, control: 8 };
 export const ACTIONS = [
@@ -121,11 +121,23 @@ export const RESERVED = [
   ['c', C, '복사'], ['v', C, '붙여넣기'], ['x', C, '잘라내기'], ['a', C, '전체 선택'], ['z', C, '실행 취소'],
 ];
 
-/** 예약 키면 그 설명, 아니면 null. 순수 함수. */
-export function reservedOf(binding) {
+/**
+ * Windows 전용 예약 키 — 메뉴 막대가 없어 app.js 가 Ctrl 조합을 직접 받는다(화면 크기). bindingFromEvent 는
+ * Ctrl 을 MOD.control 로 적으므로 ⌘ 줄만으로는 Ctrl+0 같은 키를 스크린샷·북마크에 묶을 수 있었다.
+ * '+' 는 Ctrl+Shift+= 와 숫자패드 + 로 들어온다.
+ */
+const K = MOD.control;
+export const RESERVED_WINDOWS = [
+  ['=', K, '화면 크기 확대'], ['+', K, '화면 크기 확대'], ['+', K | S, '화면 크기 확대'],
+  ['-', K, '화면 크기 축소'], ['0', K, '화면 실제 크기'],
+];
+
+/** 예약 키면 그 설명, 아니면 null. 순수 함수(windows 는 기본이 지금 플랫폼). */
+export function reservedOf(binding, windows = IS_WINDOWS) {
   if (!binding || !binding.key) return null;
   const m = binding.modifiers || 0;
-  const hit = RESERVED.find(([k, mods]) => k === binding.key && mods === m);
+  const table = windows ? [...RESERVED, ...RESERVED_WINDOWS] : RESERVED;
+  const hit = table.find(([k, mods]) => k === binding.key && mods === m);
   return hit ? hit[2] : null;
 }
 

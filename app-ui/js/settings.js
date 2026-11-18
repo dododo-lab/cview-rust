@@ -21,6 +21,9 @@ import { aboutHtml, fillAbout, onAboutClick } from './settings-about.js';
 
 const opt = (pairs) => pairs.map(([value, label]) => ({ value, label }));
 
+/** 외관 컨트롤을 마지막으로 바꾼 뒤 이만큼은 '조작 중'으로 본다(키를 연달아 누르는 간격보다 넉넉히). */
+const APPEARANCE_SETTLE_MS = 700;
+
 /** 스키마 — [그룹, 섹션 제목, 항목들]. 항목 type: toggle | select | range | number | text. */
 export const SCHEMA = [
   ['watch', '재생', [
@@ -235,6 +238,20 @@ export class SettingsPage {
     // 외관이 다른 곳에서 바뀌면(⌘= ⌘- ⌘0·다른 창·가져오기·초기화) 저장된 값과 보이는 컨트롤을 맞춘다 —
     // 예전엔 화면 크기 슬라이더가 옛 값에 남아 있다가 → 키 한 번에 옛 값 기준으로 튀었다. 다시 그리지 않아 초점은 그대로.
     listen(Events.appearanceChanged, (appearance) => this.syncAppearance(appearance));
+    // 사용자가 조작 중인 외관 컨트롤은 알림으로 덮지 않는다 — 저장 알림은 저장한 창에도 되돌아와서,
+    // 슬라이더에서 → 를 빠르게 누르면 앞선 저장의 메아리가 값을 한 단계 되돌렸다. 드래그·저장 중·막 누른 동안은
+    // 마지막 알림만 기억했다가 조작이 끝나면(놓기·초점 이동·저장 완료) 반영한다.
+    this.appearanceBusy = { dragging: null, pending: new Map(), sent: new Map(), touched: new Map(), deferred: null, timer: 0 };
+    this.body.addEventListener('pointerdown', (e) => {
+      if (e.target.matches && e.target.matches('[data-domain="appearance"][data-key]')) this.appearanceBusy.dragging = e.target.dataset.key;
+    });
+    // 놓을 때 바로 반영하면 뒤따르는 change 가 미뤄 둔 값을 드래그 값 대신 저장한다 — change 다음 차례에 본다.
+    const release = () => { if (this.appearanceBusy.dragging) { this.appearanceBusy.dragging = null; setTimeout(() => this.flushAppearance(), 0); } };
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    this.body.addEventListener('focusout', (e) => {
+      if (e.target.matches && e.target.matches('[data-domain="appearance"][data-key]')) setTimeout(() => this.flushAppearance(), 0);
+    });
     // 자동 프리셋이 값을 바꾸면 네트워크 값만 다시 읽어 프리셋 줄이 보일 때 다시 그린다.
     listen(Events.networkPresetChanged, async () => {
       if (!this.settings) return;
@@ -563,6 +580,12 @@ export class SettingsPage {
     else if (target.type === 'range' || target.type === 'number') value = Number(target.value);
     else if (target.tagName === 'SELECT' && /^\d+$/.test(target.value)) value = Number(target.value);
     else value = target.value;
+    const busy = domain === 'appearance' && this.appearanceBusy;
+    if (busy) {
+      busy.pending.set(key, (busy.pending.get(key) || 0) + 1);
+      busy.sent.set(key, value);
+      busy.touched.set(key, Date.now());
+    }
     try {
       this.settings = await api.settingsUpdate(domain, { [key]: value });
       toast('설정을 저장했습니다', 1200);
@@ -570,7 +593,31 @@ export class SettingsPage {
     } catch (e) {
       toast(e.message);
       this.render();
+    } finally {
+      if (busy) {
+        const n = (busy.pending.get(key) || 1) - 1;
+        if (n > 0) busy.pending.set(key, n); else busy.pending.delete(key);
+        this.flushAppearance();
+      }
     }
+  }
+
+  /** 이 외관 항목을 사용자가 지금 조작 중인지 — 드래그 중, 이 창의 저장이 진행 중, 또는 초점이 있고 막 바꾼 참. */
+  appearanceKeyBusy(key, el) {
+    const b = this.appearanceBusy;
+    if (!b) return false;
+    if (b.dragging === key || b.pending.get(key) > 0) return true;
+    return el === document.activeElement && Date.now() - (b.touched.get(key) || 0) < APPEARANCE_SETTLE_MS;
+  }
+
+  /** 미뤄 둔 마지막 외관 알림을 조작이 끝난 컨트롤에 반영한다. 아직 조작 중이면 잠시 뒤 다시 본다. */
+  flushAppearance() {
+    const b = this.appearanceBusy;
+    if (!b || !b.deferred) return;
+    clearTimeout(b.timer);
+    const pending = b.deferred;
+    b.deferred = null;
+    this.syncAppearance(pending);
   }
 
   /** 선명도 — setSharpness 로 저장한다(모든 라이브 화면에 바로 걸고 구버전 거울도 쓴다). */
@@ -588,13 +635,27 @@ export class SettingsPage {
   syncAppearance(appearance) {
     if (!appearance || typeof appearance !== 'object' || !this.settings) return;
     this.settings.appearance = { ...(this.settings.appearance || {}), ...appearance };
+    const b = this.appearanceBusy;
+    let deferred = null;
     for (const el of this.body.querySelectorAll('[data-domain="appearance"][data-key]')) {
-      const v = appearance[el.dataset.key];
+      const key = el.dataset.key;
+      const v = appearance[key];
       if (v === undefined) continue;
+      if (b && this.appearanceKeyBusy(key, el)) {
+        // 조작 중 — 덮지 않고 기억만. 이 창이 마지막으로 보낸 값의 메아리면 기억할 것도 없다.
+        if (!(b.pending.get(key) > 0) && b.sent.has(key) && b.sent.get(key) === v) continue;
+        (deferred ||= {})[key] = v;
+        continue;
+      }
       if (el.type === 'checkbox') el.checked = Boolean(v);
       else el.value = String(v);
       const out = el.type === 'range' && el.parentElement.querySelector('output');
       if (out) out.textContent = el.dataset.pct ? `${Math.round(Number(v) * 100)}%` : String(v);
+    }
+    if (deferred) {
+      b.deferred = { ...(b.deferred || {}), ...deferred };
+      clearTimeout(b.timer);
+      b.timer = setTimeout(() => this.flushAppearance(), APPEARANCE_SETTLE_MS);
     }
   }
 

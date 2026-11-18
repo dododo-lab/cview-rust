@@ -12,6 +12,9 @@
 // MH08 외관 변경 알림(settings://appearance, Rust 가 모든 창에) — 열린 설정 화면의 '화면 크기' 슬라이더와 % 표시, 썸네일 배율이 따라온다.
 // MH09 devicePixelRatio 에 확대가 이미 들어 있으면(WebView2·확대가 남은 채 다시 불러온 창) 화면 크기를 두 번 곱하지 않는다.
 // MH10 ⌘= ⌘- ⌘0 은 단축키 설정의 예약 키다(스크린샷·북마크 등에 묶어 메뉴에 같은 키가 둘 생기지 않게).
+//      Windows 는 Ctrl+= · Ctrl+- · Ctrl+0 · Ctrl+(+) · Ctrl+Shift+(+) 도 예약이다(app.js 가 직접 받는다). 맥에서 Ctrl 조합은 비어 있다.
+// MH11 저장 알림은 저장한 창에도 되돌아온다 — '화면 크기' 슬라이더에서 → 를 빠르게 세 번 눌러도 앞선 저장의 메아리가 값을
+//      되돌리지 않고, 드래그 중에 온 다른 곳의 변경은 놓은 뒤에 반영된다.
 // 저장소 루트에서: node tools/ui-regression/motion-hidpi.mjs   (Playwright 가 필요하다. CVIEW_UI_BROWSER=webkit 이면 WebKit)
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -281,6 +284,79 @@ await check('MH10 ⌘= ⌘- ⌘0 은 예약 키 — 다른 동작에 묶을 수 
       return ['=', '-', '0'].map((key) => s.reservedOf({ key, modifiers: cmd }));
     });
     assert.ok(r.every(Boolean), `예약 설명 ${JSON.stringify(r)}`);
+  } finally { await close(); }
+});
+
+await check('MH10b Windows — Ctrl 확대 키도 예약 키, 맥은 Ctrl 조합을 막지 않는다', async () => {
+  const { page, close } = await open();
+  try {
+    const r = await page.evaluate(async () => {
+      const s = await import('/js/shortcuts.js');
+      const { control, shift } = s.MOD;
+      const keys = [['=', control], ['-', control], ['0', control], ['+', control], ['+', control | shift]];
+      // 실제 키 이벤트 → 바인딩 경로로도 확인(Windows 는 Ctrl 을 MOD.control 로 적는다)
+      const fromEvent = s.bindingFromEvent({ key: '0', code: 'Digit0', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false });
+      return {
+        win: keys.map(([key, modifiers]) => s.reservedOf({ key, modifiers }, true)),
+        mac: keys.map(([key, modifiers]) => s.reservedOf({ key, modifiers }, false)),
+        event: s.reservedOf(fromEvent, true),
+      };
+    });
+    assert.ok(r.win.every(Boolean), `Windows 예약 ${JSON.stringify(r.win)}`);
+    assert.ok(r.mac.every((x) => x === null), `맥 ${JSON.stringify(r.mac)}`);
+    assert.equal(r.event, '화면 실제 크기');
+  } finally { await close(); }
+});
+
+await check('MH11 빠른 연속 변경 중 메아리 알림이 화면 크기 슬라이더를 되돌리지 않는다', async () => {
+  const { page, errors, close } = await open({ bus: true });
+  try {
+    // 실제 앱처럼 settings_update(외관)는 늦게 끝나고, 끝나기 전에 모든 창(저장한 창 포함)에 알림을 보낸다
+    await page.evaluate(() => {
+      const core = window.__TAURI__.core;
+      const orig = core.invoke;
+      let appearance = { theme: 'dark', uiScale: 1 };
+      core.invoke = async (cmd, args) => {
+        if (cmd === 'settings_get') { const s = await orig(cmd, args); return { ...s, appearance: { ...appearance } }; }
+        if (cmd !== 'settings_update' || !args || args.domain !== 'appearance') return orig(cmd, args);
+        appearance = { ...appearance, ...args.patch };
+        const echo = { ...appearance };
+        await new Promise((r) => setTimeout(r, 120));
+        window.__emit('settings://appearance', echo);
+        await new Promise((r) => setTimeout(r, 120));
+        const s = await orig('settings_get', {});
+        return { ...s, appearance: echo };
+      };
+    });
+    await go(page, 'settings', {});
+    await page.waitForSelector('.page[data-page="settings"]:not([hidden])');
+    await page.fill('.settings-search', '화면 크기');
+    const range = page.locator('input[type="range"][data-domain="appearance"][data-key="uiScale"]');
+    await range.waitFor({ state: 'attached' });
+    await range.evaluate((el) => { el.value = '1'; });
+    await range.focus();
+    for (let i = 0; i < 3; i++) { await page.keyboard.press('ArrowRight'); await page.waitForTimeout(60); }
+    const seen = [];
+    for (let i = 0; i < 12; i++) { seen.push(await range.inputValue()); await page.waitForTimeout(120); }
+    assert.ok(seen.every((v) => v === '1.15'), `값 흐름 ${seen.join(' ')}`);
+    assert.equal(await range.evaluate((el) => el.parentElement.querySelector('output').textContent), '115%');
+
+    // 드래그 중 다른 곳(⌘0)에서 바뀌면 엄지를 건드리지 않고, 놓은 뒤에 맞춘다
+    const box = await range.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.evaluate(() => window.__emit('settings://appearance', { theme: 'dark', uiScale: 1.5 }));
+    await page.waitForTimeout(900);
+    const during = await range.inputValue();
+    assert.notEqual(during, '1.5', '드래그 중에 덮었다');
+    await page.mouse.up();
+    // 놓으면 change 로 드래그 값이 저장된다(미뤄 둔 1.5 가 드래그 값을 밀어내지 않는다) — 화면과 저장이 같은 드래그 값
+    await page.waitForTimeout(1500);
+    const after = await range.inputValue();
+    const saved = await page.evaluate(async () => (await window.__TAURI__.core.invoke('settings_get', {})).appearance.uiScale);
+    assert.equal(Number(after), Number(saved), `화면 ${after} · 저장 ${saved}`);
+    assert.equal(after, during, `드래그 값 ${during} → ${after}`);
+    assert.deepEqual(errors, []);
   } finally { await close(); }
 });
 
