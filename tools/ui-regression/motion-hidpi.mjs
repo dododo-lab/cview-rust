@@ -324,23 +324,40 @@ await check('MH10b Windows — 화면 크기로 받는 Ctrl 조합은 모두 예
     const r = await page.evaluate(async () => {
       const s = await import('/js/shortcuts.js');
       const { control, shift } = s.MOD;
-      return [['=', control], ['-', control], ['0', control], ['+', control], ['+', control | shift]].map(([key, modifiers]) => s.reservedOf({ key, modifiers }, false));
+      const cmd = s.MOD.cmd;
+      // Windows 전용 항목(재매핑 결과)이 맥에서 예약되지 않는다 — 맥에서 ⌘+ · ⌘⇧+ · ⌃⌘= 등을 막는 과잉 예약 회귀
+      const winOnly = s.RESERVED_WINDOWS.map(([key, modifiers]) => s.reservedOf({ key, modifiers }, false));
+      const expected = [['+', cmd], ['+', cmd | shift], ['+', cmd | control], ['=', cmd | control], ['-', cmd | control], ['0', cmd | control]];
+      return {
+        table: s.RESERVED_WINDOWS.map(([k, m]) => [k, m]),
+        expected,
+        winOnly,
+        listed: expected.map(([key, modifiers]) => s.reservedOf({ key, modifiers }, false)),
+        windows: expected.map(([key, modifiers]) => s.reservedOf({ key, modifiers }, true)),
+      };
     });
-    assert.ok(r.every((x) => x === null), `맥 ${JSON.stringify(r)}`);
+    assert.deepEqual(r.table, r.expected, 'Windows 전용 표');
+    assert.ok(r.winOnly.every((x) => x === null) && r.listed.every((x) => x === null), `맥 ${JSON.stringify(r)}`);
+    assert.ok(r.windows.every(Boolean), `Windows ${JSON.stringify(r.windows)}`);
   } finally { await close(); }
 });
 
-// 화면 크기 슬라이더를 연 설정 화면 — settings_update(외관)를 order 대로 흉내 낸다.
+// 화면 크기 슬라이더를 연 설정 화면 — Rust 쪽 settings_update(외관)를 order 대로 흉내 낸다. Rust 는 알림을 처리한 순서대로
+// 보낸다(모의도 한 줄로 보낸다). window.__rustSet(v) 는 다른 곳(⌘- · ⌘0 · 다른 창)의 변경이다.
 //   'echo-first': 실제 앱처럼 알림이 응답보다 먼저(늦게 끝나는 저장)
-//   'late': 응답이 먼저 오고 알림은 늦게, 그것도 앞선 저장의 알림이 더 늦게(Tauri 는 순서를 보장하지 않는다)
+//   'late': 응답이 먼저 오고 알림은 한참 뒤에 차례로
 async function openScaleSlider(order) {
   const ctx = await open({ bus: true });
   await ctx.page.evaluate((order) => {
     const core = window.__TAURI__.core;
     const orig = core.invoke;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     let appearance = { theme: 'dark', uiScale: 1 };
-    let n = 0;
-    window.__saved = () => appearance.uiScale;
+    let line = Promise.resolve();
+    const emit = (echo, delay) => { line = line.then(() => sleep(delay)).then(() => window.__emit('settings://appearance', echo)); return line; };
+    window.__saved = () => appearance.uiScale; // Rust 가 저장하고 창에 건(set_zoom) 값
+    window.__rustSet = (v) => { appearance = { ...appearance, uiScale: v }; emit({ ...appearance }, 0); };
+    window.__quiet = () => line;
     core.invoke = async (cmd, args) => {
       if (cmd === 'settings_get') { const s = await orig(cmd, args); return { ...s, appearance: { ...appearance } }; }
       if (cmd !== 'settings_update' || !args || args.domain !== 'appearance') return orig(cmd, args);
@@ -348,14 +365,13 @@ async function openScaleSlider(order) {
       const echo = { ...appearance };
       const s = await orig('settings_get', {});
       if (order === 'late') {
-        const i = n++;
-        setTimeout(() => window.__emit('settings://appearance', echo), 450 - 150 * Math.min(i, 2));
-        await new Promise((r) => setTimeout(r, 20));
+        emit(echo, 250);
+        await sleep(20);
         return { ...s, appearance: echo };
       }
-      await new Promise((r) => setTimeout(r, 120));
-      window.__emit('settings://appearance', echo);
-      await new Promise((r) => setTimeout(r, 120));
+      await sleep(120);
+      await emit(echo, 0);
+      await sleep(120);
       return { ...s, appearance: echo };
     };
   }, order);
@@ -375,17 +391,41 @@ async function watchValue(page, range, ms) {
   return seen;
 }
 
-await check('MH11 빠른 연속 변경 중 메아리 알림이 화면 크기 슬라이더를 되돌리지 않는다', async () => {
+// 정착한 뒤 — 슬라이더·% 표시·this.settings(검색을 지웠다 다시 넣어 다시 그린 값)·썸네일 배율이 Rust 가 건 값과 같다.
+async function settledState(page, range) {
+  await page.evaluate(() => window.__quiet());
+  await page.waitForTimeout(APPEARANCE_WAIT);
+  const shown = Number(await range.inputValue());
+  const out = await range.evaluate((el) => el.parentElement.querySelector('output').textContent);
+  const zoom = await page.evaluate(async () => (await import('/js/dom.js')).pixelScale());
+  const saved = await page.evaluate(() => window.__saved());
+  await range.evaluate((el) => el.blur());
+  await page.fill('.settings-search', '');
+  await page.fill('.settings-search', '화면 크기');
+  const rendered = Number(await page.locator('input[data-key="uiScale"]').inputValue());
+  return { shown, out, zoom, saved, rendered };
+}
+const APPEARANCE_WAIT = 1200; // 정착 시간(700ms)보다 넉넉히
+
+await check('MH11 빠른 연속 변경 중 메아리·다른 곳의 변경 — 조작 중엔 슬라이더를 되돌리지 않고, 끝나면 실제 값과 맞는다', async () => {
   for (const order of ['echo-first', 'late']) {
-    const { page, errors, close, range } = await openScaleSlider(order);
-    try {
-      for (let i = 0; i < 3; i++) { await page.keyboard.press('ArrowRight'); await page.waitForTimeout(60); }
-      const seen = await watchValue(page, range, 1600);
-      assert.ok(seen.every((v) => v === '1.15'), `${order} 값 흐름 ${seen.join(' ')}`);
-      assert.equal(await range.evaluate((el) => el.parentElement.querySelector('output').textContent), '115%', order);
-      assert.equal(await page.evaluate(() => window.__saved()), 1.15, order);
-      assert.deepEqual(errors, [], order);
-    } finally { await close(); }
+    for (const external of [null, 1.1, 1]) {
+      const label = `${order}${external === null ? '' : ` · 조작 중 다른 곳에서 ${external}`}`;
+      const { page, errors, close, range } = await openScaleSlider(order);
+      try {
+        for (let i = 0; i < 3; i++) { await page.keyboard.press('ArrowRight'); await page.waitForTimeout(60); }
+        // 조작 중(초점·정착 시간 안) — 메아리가 값을 한 단계 되돌리지 않는다
+        const seen = await watchValue(page, range, 400);
+        assert.ok(seen.every((v) => v === '1.15'), `${label} 조작 중 값 흐름 ${seen.join(' ')}`);
+        // 700ms 안에 ⌘-(1.1, 보낸 값 중 하나와 같다)나 ⌘0(1) — 버려지지 않고 끝난 뒤 반영된다
+        if (external !== null) await page.evaluate((v) => window.__rustSet(v), external);
+        const st = await settledState(page, range);
+        const want = external === null ? 1.15 : external;
+        assert.equal(st.saved, want, `${label} Rust 값`);
+        assert.deepEqual([st.shown, st.out, st.zoom, st.rendered], [want, `${Math.round(want * 100)}%`, want, want], `${label} ${JSON.stringify(st)}`);
+        assert.deepEqual(errors, [], label);
+      } finally { await close(); }
+    }
   }
   // 드래그 중 다른 곳(⌘0)에서 바뀌면 엄지를 건드리지 않고, 놓으면 드래그 값이 저장된다(미뤄 둔 값이 밀어내지 않는다)
   const { page, errors, close, range } = await openScaleSlider('echo-first');
@@ -393,15 +433,14 @@ await check('MH11 빠른 연속 변경 중 메아리 알림이 화면 크기 슬
     const box = await range.boundingBox();
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
-    await page.evaluate(() => window.__emit('settings://appearance', { theme: 'dark', uiScale: 1.5 }));
+    await page.evaluate(() => window.__rustSet(1.5));
     await page.waitForTimeout(900);
     const during = await range.inputValue();
     assert.notEqual(during, '1.5', '드래그 중에 덮었다');
     await page.mouse.up();
-    await page.waitForTimeout(1500);
-    const after = await range.inputValue();
-    assert.equal(after, during, `드래그 값 ${during} → ${after}`);
-    assert.equal(Number(after), await page.evaluate(() => window.__saved()));
+    const st = await settledState(page, range);
+    assert.equal(String(st.shown), String(Number(during)), `드래그 값 ${during} → ${st.shown}`);
+    assert.deepEqual([st.saved, st.zoom, st.rendered], [st.shown, st.shown, st.shown], JSON.stringify(st));
     assert.deepEqual(errors, []);
   } finally { await close(); }
 });

@@ -240,9 +240,10 @@ export class SettingsPage {
     listen(Events.appearanceChanged, (appearance) => this.syncAppearance(appearance));
     // 사용자가 조작 중인 외관 컨트롤은 알림으로 덮지 않는다 — 저장 알림은 저장한 창에도 되돌아와서,
     // 슬라이더에서 → 를 빠르게 누르면 앞선 저장의 메아리가 값을 한 단계 되돌렸다. 드래그·저장 중·막 누른 동안은
-    // 마지막 알림만 기억했다가 조작이 끝나면(놓기·초점 이동·저장 완료) 반영한다.
-    // sent: 키 → 이번 연속 조작에서 보낸 값들(메아리 판별), last: 키 → 마지막으로 보낸 값.
-    this.appearanceBusy = { dragging: null, pending: new Map(), sent: new Map(), last: new Map(), touched: new Map(), deferred: null, timer: 0 };
+    // 알림을 버리지 않고 키마다 마지막 것만 덮어 써 두었다가, 조작이 끝나면(놓기·초점 이동·저장 완료·정착 시간)
+    // 그 값을 반영한다. Rust 는 알림을 저장 순서대로 보내므로 마지막 알림이 곧 실제(적용된) 값이다 — 값을 비교해
+    // 메아리를 거르면 ⌘- 처럼 다른 곳의 변경이 우연히 보낸 값과 같을 때 버려져 화면과 어긋났다.
+    this.appearanceBusy = { dragging: null, pending: new Map(), touched: new Map(), deferred: null, timer: 0 };
     this.body.addEventListener('pointerdown', (e) => {
       if (e.target.matches && e.target.matches('[data-domain="appearance"][data-key]')) this.appearanceBusy.dragging = e.target.dataset.key;
     });
@@ -583,18 +584,12 @@ export class SettingsPage {
     else value = target.value;
     const busy = domain === 'appearance' && this.appearanceBusy;
     if (busy) {
-      // 앞선 조작이 끝난 뒤의 첫 저장이면 새 묶음 — 옛 값을 메아리로 여기지 않게 보낸 값 목록을 비운다.
-      const fresh = !(busy.pending.get(key) > 0) && Date.now() - (busy.touched.get(key) || 0) >= APPEARANCE_SETTLE_MS;
-      if (fresh || !busy.sent.has(key)) busy.sent.set(key, new Set());
-      busy.sent.get(key).add(value);
-      busy.last.set(key, value);
       busy.pending.set(key, (busy.pending.get(key) || 0) + 1);
       busy.touched.set(key, Date.now());
     }
     try {
       this.settings = await api.settingsUpdate(domain, { [key]: value });
-      // 응답 순서는 보장되지 않는다 — 늦게 온 앞선 응답이 마지막 값을 덮지 않게 마지막으로 보낸 값으로 맞춘다.
-      if (busy && this.settings && busy.last.has(key)) this.settings.appearance = { ...(this.settings.appearance || {}), [key]: busy.last.get(key) };
+      // 외관은 응답보다 알림이 기준이다 — 미뤄 둔 마지막 알림이 있으면 정착할 때 그 값이 이 응답 값을 이긴다(flushAppearance).
       toast('설정을 저장했습니다', 1200);
       window.dispatchEvent(new CustomEvent('cview:settings-changed', { detail: { domain, key, value, settings: this.settings } }));
     } catch (e) {
@@ -649,10 +644,8 @@ export class SettingsPage {
       const v = appearance[key];
       if (v === undefined) continue;
       if (b && this.appearanceKeyBusy(key, el)) {
-        delete apply[key]; // 조작 중인 값은 this.settings 에도 아직 넣지 않는다(반영할 때 넣는다)
-        // 이번 연속 조작에서 이 창이 보낸 값의 메아리 — 이벤트·응답 순서가 뒤섞여 앞선 값이 늦게 와도 버린다.
-        // 미뤄 둔 같은 키의 옛 값(앞선 메아리·다른 곳의 변경)도 사용자의 마지막 조작이 이기므로 지운다.
-        if (b.sent.has(key) && b.sent.get(key).has(v)) { if (b.deferred) delete b.deferred[key]; continue; }
+        // 조작 중 — 컨트롤도 this.settings 도 건드리지 않고 마지막 알림만 덮어 써 둔다(정착할 때 반영).
+        delete apply[key];
         (deferred ||= {})[key] = v;
         continue;
       }
