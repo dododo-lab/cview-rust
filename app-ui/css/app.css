@@ -1373,6 +1373,11 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
   .ph > .mc-search { order: 9; flex: 1 1 calc(100% - 120px); width: auto; }
   .ph:has(> .mc-search) > [data-mc="close-all"] { order: 10; }
 }
+/* 아주 좁으면(화면 480px 미만) 옆에 붙인 '모두 닫기' 탓에 검색칸이 300px 아래로 줄어든다 — 이때는 검색칸이 한 줄을 다 쓴다(예전과 같다). */
+@container mcpage (max-width: 479px) {
+  .ph > .mc-search { flex-basis: 100%; }
+  .ph:has(> .mc-search) > [data-mc="close-all"] { order: 0; }
+}
 
 /* 라이브 메뉴 보기 전환(라이브 · 멀티라이브) — 제목 옆 알약. 아이콘+글자, 고른 쪽은 떠 있는 판에 브랜드색 아이콘.
    머리줄이 좁아도 줄지 않는다. */
