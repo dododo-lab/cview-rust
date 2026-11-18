@@ -2,7 +2,7 @@
 // 바인딩은 설정 keyboard 도메인(`{ bindings: [동작, {key, modifiers}, …] }`)에 있다. 수식 키가 있는 바인딩은
 // 메뉴 막대가 가속기로 받고(셸이 메뉴를 다시 만든다), 맨 글자 바인딩은 여기서 시청 화면 키로 받는다.
 import { api } from './api.js';
-import { kbd } from './platform.js';
+import { kbd, IS_WINDOWS } from './platform.js';
 
 export const MOD = { cmd: 1, shift: 2, option: 4, control: 8 };
 export const ACTIONS = [
@@ -113,6 +113,7 @@ export const RESERVED = [
   ['escape', 0, '닫기'], ['tab', 0, '초점 이동'], ['return', 0, '누르기'],
   ...['1', '2', '3', '4', '5', '6', '7'].map((k) => [k, C, '메뉴 이동']),
   ['f', C, '검색'], ['k', C, '명령 팔레트'], ['[', C, '뒤로'], ['r', C, '새로고침'], ['\\', C, '사이드바 접기'], [',', C, '설정'],
+  ['=', C, '화면 크기 확대'], ['-', C, '화면 크기 축소'], ['0', C, '화면 실제 크기'],
   ['/', C, '키보드 단축키'], ['l', C | S, '다크/라이트 전환'], ['f', C | S, '영상 전체 화면'], ['f', C | MOD.control, '영상+채팅 전체 화면'],
   ['p', C | MOD.option, 'PiP'], ['w', C, '시청 화면 닫기'], ['k', C | S, '채팅 지우기'], ['j', C, '자동 스크롤'],
   ['n', C, '새 플레이어 창'], ['c', C | S, '채팅 창'], ['m', C | S, '멀티채팅 창'], ['t', C | S, '통계 창'],
@@ -120,11 +121,24 @@ export const RESERVED = [
   ['c', C, '복사'], ['v', C, '붙여넣기'], ['x', C, '잘라내기'], ['a', C, '전체 선택'], ['z', C, '실행 취소'],
 ];
 
-/** 예약 키면 그 설명, 아니면 null. 순수 함수. */
-export function reservedOf(binding) {
+/**
+ * Windows 전용 예약 키 — 메뉴 막대가 없어 app.js 가 화면 크기 키를 직접 받는다. index.html 의 재매핑이 캡처 단계에서
+ * Ctrl → ⌘(metaKey), Ctrl+Shift+Alt → ⌃⌘ 로 바꾸므로 bindingFromEvent 가 보는 것은 그 결과다. Ctrl+= · Ctrl+- · Ctrl+0 은
+ * 위의 ⌘ 줄이 이미 막는다. 여기는 app.js 가 확대로 받는데 ⌘ 줄에 없는 조합:
+ * '+'(Ctrl+Shift+= → ⌘⇧+, 숫자패드 + → ⌘+), 그리고 Ctrl+Shift+Alt 로 누른 = · - · 0 · + (→ ⌃⌘).
+ */
+const K = MOD.control;
+export const RESERVED_WINDOWS = [
+  ['+', C, '화면 크기 확대'], ['+', C | S, '화면 크기 확대'], ['+', C | K, '화면 크기 확대'],
+  ['=', C | K, '화면 크기 확대'], ['-', C | K, '화면 크기 축소'], ['0', C | K, '화면 실제 크기'],
+];
+
+/** 예약 키면 그 설명, 아니면 null. 순수 함수(windows 는 기본이 지금 플랫폼). */
+export function reservedOf(binding, windows = IS_WINDOWS) {
   if (!binding || !binding.key) return null;
   const m = binding.modifiers || 0;
-  const hit = RESERVED.find(([k, mods]) => k === binding.key && mods === m);
+  const table = windows ? [...RESERVED, ...RESERVED_WINDOWS] : RESERVED;
+  const hit = table.find(([k, mods]) => k === binding.key && mods === m);
   return hit ? hit[2] : null;
 }
 

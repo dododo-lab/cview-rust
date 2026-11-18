@@ -116,18 +116,27 @@ const CVIMG_BASE = typeof navigator !== 'undefined' && /Windows/i.test(navigator
   : 'cvimg://localhost/';
 const HAS_TAURI = typeof window !== 'undefined' && Boolean(window.__TAURI__);
 
-// 화면 크기(설정 "외관 → 화면 크기") — WebKit 은 확대해도 devicePixelRatio 가 그대로고 WebView2 는 함께 커진다.
-// 확대 전 배율(baseDpr)을 기억해 두고 둘 중 큰 값을 물리 배율로 쓴다(어느 엔진이든 두 번 곱하지 않게).
+// 화면 크기(설정 "외관 → 화면 크기") — 웹뷰 확대가 devicePixelRatio 에 들어가는지는 엔진마다 다르다.
+// - WebView2(Windows, Chromium): 확대가 devicePixelRatio 에 이미 들어 있다 — 그대로 쓴다(곱하면 두 번).
+//   확대는 다시 불러오기 뒤에도 남으므로 "처음 본 배율"을 확대 전 값으로 기억하면 안 된다.
+// - WKWebView(macOS): devicePixelRatio 는 화면 배율(1·2) 그대로라 확대 배율을 곱한다. 다만 값이 2 를 넘거나
+//   정수가 아니면(맥 화면 배율은 1·2 뿐) 확대가 이미 들어간 것으로 보고 곱하지 않는다.
 let uiZoom = 1;
-let baseDpr = 0;
 const winDpr = () => (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
-/** 화면 크기 배율을 알린다 — 웹뷰 확대(ui_zoom)를 걸기 전에 부른다. */
+const ON_WINDOWS = typeof navigator !== 'undefined' && /Windows/i.test(navigator.userAgent);
+/** devicePixelRatio 가 화면 크기 확대를 이미 품고 있는가. 순수 함수(검사용으로 내보낸다). */
+export function dprIncludesZoom(dpr, windows = ON_WINDOWS) {
+  if (windows) return true;
+  return dpr > 2.01 || Math.abs(dpr - Math.round(dpr)) > 0.01;
+}
+/** 화면 크기 배율을 알린다(prefs-effects.js). */
 export function setImageZoom(zoom) {
-  if (!baseDpr) baseDpr = winDpr();
   uiZoom = Number(zoom) > 0 ? Number(zoom) : 1;
 }
+/** CSS 픽셀 → 물리 픽셀 배율. */
 export function pixelScale() {
-  return Math.max(winDpr(), (baseDpr || winDpr()) * uiZoom);
+  const d = winDpr();
+  return dprIncludesZoom(d) ? d : d * uiZoom;
 }
 
 /** 본문 칸 폭(CSS 픽셀) 추정 — 사이드바(약 220)와 넓은 창의 인사이트 칸(약 280)을 뺀다. 그리기 전에 쓰므로 재지 않는다. */

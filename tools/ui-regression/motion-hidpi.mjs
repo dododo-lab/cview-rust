@@ -9,6 +9,14 @@
 //      홈 '나의 시청 취향' 숫자 칸은 260px 이하로 붙어 있다.
 // MH06 설정 → 외관에 '화면 크기'(80~200%)가 있고, 단축키 시트에 ⌘= / ⌘- / ⌘0 이 있다. 창이 뜰 때 저장된 화면 크기를 건다(ui_zoom_sync).
 // MH07 Windows(메뉴 막대 없음) — Ctrl+= · Ctrl+- · Ctrl+0 이 화면 크기 단계를 옮긴다(ui_zoom_step).
+// MH08 외관 변경 알림(settings://appearance, Rust 가 모든 창에) — 열린 설정 화면의 '화면 크기' 슬라이더와 % 표시, 썸네일 배율이 따라온다.
+// MH09 devicePixelRatio 에 확대가 이미 들어 있으면(WebView2·확대가 남은 채 다시 불러온 창) 화면 크기를 두 번 곱하지 않는다.
+// MH10 ⌘= ⌘- ⌘0 은 단축키 설정의 예약 키다(스크린샷·북마크 등에 묶어 메뉴에 같은 키가 둘 생기지 않게).
+//      Windows 는 index.html 이 Ctrl 을 ⌘ 로 바꾼 뒤 app.js 가 직접 받는다 — 실제 키를 눌러 확대로 받힌 조합이 모두 예약인지 본다.
+//      맥에서 Ctrl 조합은 비어 있다.
+// MH11 저장 알림은 저장한 창에도 되돌아온다 — '화면 크기' 슬라이더에서 → 를 빠르게 세 번 눌러도 앞선 저장의 메아리가 값을
+//      되돌리지 않는다 — 알림이 응답보다 먼저 오든, 응답 뒤에 앞선 저장의 알림이 더 늦게 오든. 드래그 중 다른 곳의 변경은
+//      엄지를 건드리지 않고, 놓으면 드래그 값이 저장된다.
 // 저장소 루트에서: node tools/ui-regression/motion-hidpi.mjs   (Playwright 가 필요하다. CVIEW_UI_BROWSER=webkit 이면 WebKit)
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -44,7 +52,14 @@ function recordAnimations() {
   requestAnimationFrame(tick);
 }
 
-async function open({ width = 1440, height = 900, dpr = 1, reduced = false, ua } = {}) {
+// 이벤트 모의 — 화면이 듣는 Tauri 이벤트를 모아 두고 window.__emit(이름, 값)으로 보낸다(Rust 가 모든 창에 보내는 것을 흉내).
+function eventBus() {
+  const subs = {};
+  window.__emit = (name, payload) => (subs[name] || []).forEach((cb) => cb({ payload }));
+  window.__TAURI__.event.listen = async (name, cb) => { (subs[name] = subs[name] || []).push(cb); return () => {}; };
+}
+
+async function open({ width = 1440, height = 900, dpr = 1, reduced = false, ua, bus = false } = {}) {
   const ctx = await engine.launch().then(async (b) => {
     const c = await b.newContext({ viewport: { width, height }, deviceScaleFactor: dpr, colorScheme: 'dark', reducedMotion: reduced ? 'reduce' : 'no-preference', ...(ua ? { userAgent: ua } : {}) });
     c.__browser = b;
@@ -56,6 +71,7 @@ async function open({ width = 1440, height = 900, dpr = 1, reduced = false, ua }
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.addInitScript(mockTauri, [base, 'dark', 24]);
   await page.addInitScript(recordAnimations);
+  if (bus) await page.addInitScript(eventBus);
   await page.goto(base);
   await page.waitForSelector('[data-page]', { state: 'attached' });
   await page.waitForFunction(() => { const s = document.getElementById('splash'); return !s || !s.isConnected || getComputedStyle(s).display === 'none'; }, null, { timeout: 8000 }).catch(() => {});
@@ -221,6 +237,211 @@ await check('MH07 Windows — Ctrl+= · Ctrl+- · Ctrl+0 이 화면 크기를 �
     await page.waitForTimeout(200);
     const n = (await page.evaluate(() => window.__calls)).filter((c) => c === 'ui_zoom_step').length;
     assert.equal(n, 3, `ui_zoom_step ${n}번`);
+  } finally { await close(); }
+});
+
+await check('MH08 외관 변경 알림 — 설정 슬라이더·썸네일 배율이 따라온다(⌘= 를 다른 곳에서 눌러도)', async () => {
+  const { page, errors, close } = await open({ bus: true });
+  try {
+    await go(page, 'settings', {});
+    await page.waitForSelector('.page[data-page="settings"]:not([hidden])');
+    await page.fill('.settings-search', '화면 크기');
+    const range = page.locator('input[type="range"][data-domain="appearance"][data-key="uiScale"]');
+    await range.waitFor({ state: 'attached' });
+    // 모의 settings_get 에는 uiScale 이 없어 처음 값은 정하지 않는다(실제 앱은 늘 있다) — 1.25 가 아니기만 하면 된다
+    assert.notEqual(await range.inputValue(), '1.25');
+    await page.evaluate(() => window.__emit('settings://appearance', { theme: 'dark', uiScale: 1.25, motionQuality: 'balanced' }));
+    await page.waitForFunction(() => document.querySelector('input[data-key="uiScale"]').value === '1.25');
+    const out = await range.evaluate((el) => el.parentElement.querySelector('output').textContent);
+    assert.equal(out, '125%');
+    // 같은 알림이 썸네일 배율(prefs-effects → setImageZoom)에도 닿는다 — 1배율 맥이면 1 × 1.25
+    assert.equal(await page.evaluate(async () => (await import('/js/dom.js')).pixelScale()), 1.25);
+    assert.deepEqual(errors, []);
+  } finally { await close(); }
+});
+
+await check('MH09 기기 배율에 확대가 들어 있으면 두 번 곱하지 않는다(WebView2·다시 불러온 창)', async () => {
+  const { page, close } = await open();
+  try {
+    const r = await page.evaluate(async () => {
+      const d = await import('/js/dom.js');
+      return [d.dprIncludesZoom(3.5, true), d.dprIncludesZoom(2, true), d.dprIncludesZoom(2, false), d.dprIncludesZoom(1, false), d.dprIncludesZoom(3, false), d.dprIncludesZoom(2.5, false)];
+    });
+    // Windows(WebView2)는 늘 포함, 맥은 1·2 면 화면 배율 그대로(곱한다), 2 초과·소수면 이미 포함
+    assert.deepEqual(r, [true, true, false, false, true, true]);
+  } finally { await close(); }
+  const win = await open({ dpr: 3, ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36' });
+  try {
+    // 150% 모니터에서 화면 크기 200% → WebView2 의 devicePixelRatio 3 — 6 으로 부풀리지 않는다
+    assert.equal(await win.page.evaluate(async () => { const d = await import('/js/dom.js'); d.setImageZoom(2); return d.pixelScale(); }), 3);
+  } finally { await win.close(); }
+});
+
+await check('MH10 ⌘= ⌘- ⌘0 은 예약 키 — 다른 동작에 묶을 수 없다', async () => {
+  const { page, close } = await open();
+  try {
+    const r = await page.evaluate(async () => {
+      const s = await import('/js/shortcuts.js');
+      const cmd = s.RESERVED.find(([k]) => k === 'f')[1];
+      return ['=', '-', '0'].map((key) => s.reservedOf({ key, modifiers: cmd }));
+    });
+    assert.ok(r.every(Boolean), `예약 설명 ${JSON.stringify(r)}`);
+  } finally { await close(); }
+});
+
+await check('MH10b Windows — 화면 크기로 받는 Ctrl 조합은 모두 예약 키(재매핑을 거친 실제 키), 맥은 Ctrl 조합을 막지 않는다', async () => {
+  const win = await open({ ua: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36' });
+  try {
+    await win.page.evaluate(async () => {
+      const s = await import('/js/shortcuts.js');
+      window.__keys = [];
+      // index.html 의 Windows 재매핑(Ctrl → ⌘)과 app.js 처리기를 거친 뒤의 이벤트를 단축키 설정과 같은 방법으로 읽는다
+      window.addEventListener('keydown', (e) => {
+        const b = s.bindingFromEvent(e);
+        if (b) window.__keys.push({ b, reserved: s.reservedOf(b), zoom: window.__calls.filter((c) => c === 'ui_zoom_step').length });
+      });
+    });
+    await win.page.mouse.click(700, 600);
+    const combos = ['Control+Equal', 'Control+Minus', 'Control+Digit0', 'Control+Shift+Equal', 'Control+NumpadAdd', 'Control+NumpadSubtract', 'Control+Shift+Alt+Equal', 'Control+Shift+Alt+Minus', 'Control+Shift+Alt+Digit0'];
+    const rows = [];
+    for (const k of combos) {
+      const before = await win.page.evaluate(() => window.__calls.filter((c) => c === 'ui_zoom_step').length);
+      await win.page.keyboard.press(k);
+      await win.page.waitForTimeout(80);
+      const last = await win.page.evaluate(() => window.__keys[window.__keys.length - 1]);
+      rows.push({ k, zoomed: last.zoom > before, ...last });
+    }
+    // 재매핑을 거쳤다 — Ctrl 은 ⌘ 로 읽힌다
+    assert.ok(rows.every((r) => r.b.modifiers & 1), `재매핑 ${JSON.stringify(rows.map((r) => [r.k, r.b]))}`);
+    // 확대·축소로 받힌 키는 하나도 빠짐없이 예약 키다(다른 동작에 묶으면 확대와 같이 일어났다)
+    const leaks = rows.filter((r) => r.zoomed && !r.reserved);
+    assert.deepEqual(leaks.map((r) => [r.k, r.b]), []);
+    // 실제로 확대 키로 받힌 조합 수(+ 로 들어오는 두 갈래 포함)
+    assert.ok(rows.filter((r) => r.zoomed).length >= 6, `확대로 받힌 키 ${rows.filter((r) => r.zoomed).map((r) => r.k)}`);
+  } finally { await win.close(); }
+  const { page, close } = await open();
+  try {
+    const r = await page.evaluate(async () => {
+      const s = await import('/js/shortcuts.js');
+      const { control, shift } = s.MOD;
+      const cmd = s.MOD.cmd;
+      // Windows 전용 항목(재매핑 결과)이 맥에서 예약되지 않는다 — 맥에서 ⌘+ · ⌘⇧+ · ⌃⌘= 등을 막는 과잉 예약 회귀
+      const winOnly = s.RESERVED_WINDOWS.map(([key, modifiers]) => s.reservedOf({ key, modifiers }, false));
+      const expected = [['+', cmd], ['+', cmd | shift], ['+', cmd | control], ['=', cmd | control], ['-', cmd | control], ['0', cmd | control]];
+      return {
+        table: s.RESERVED_WINDOWS.map(([k, m]) => [k, m]),
+        expected,
+        winOnly,
+        listed: expected.map(([key, modifiers]) => s.reservedOf({ key, modifiers }, false)),
+        windows: expected.map(([key, modifiers]) => s.reservedOf({ key, modifiers }, true)),
+      };
+    });
+    assert.deepEqual(r.table, r.expected, 'Windows 전용 표');
+    assert.ok(r.winOnly.every((x) => x === null) && r.listed.every((x) => x === null), `맥 ${JSON.stringify(r)}`);
+    assert.ok(r.windows.every(Boolean), `Windows ${JSON.stringify(r.windows)}`);
+  } finally { await close(); }
+});
+
+// 화면 크기 슬라이더를 연 설정 화면 — Rust 쪽 settings_update(외관)를 order 대로 흉내 낸다. Rust 는 알림을 처리한 순서대로
+// 보낸다(모의도 한 줄로 보낸다). window.__rustSet(v) 는 다른 곳(⌘- · ⌘0 · 다른 창)의 변경이다.
+//   'echo-first': 실제 앱처럼 알림이 응답보다 먼저(늦게 끝나는 저장)
+//   'late': 응답이 먼저 오고 알림은 한참 뒤에 차례로
+async function openScaleSlider(order) {
+  const ctx = await open({ bus: true });
+  await ctx.page.evaluate((order) => {
+    const core = window.__TAURI__.core;
+    const orig = core.invoke;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    let appearance = { theme: 'dark', uiScale: 1 };
+    let line = Promise.resolve();
+    const emit = (echo, delay) => { line = line.then(() => sleep(delay)).then(() => window.__emit('settings://appearance', echo)); return line; };
+    window.__saved = () => appearance.uiScale; // Rust 가 저장하고 창에 건(set_zoom) 값
+    window.__rustSet = (v) => { appearance = { ...appearance, uiScale: v }; emit({ ...appearance }, 0); };
+    window.__quiet = () => line;
+    core.invoke = async (cmd, args) => {
+      if (cmd === 'settings_get') { const s = await orig(cmd, args); return { ...s, appearance: { ...appearance } }; }
+      if (cmd !== 'settings_update' || !args || args.domain !== 'appearance') return orig(cmd, args);
+      appearance = { ...appearance, ...args.patch };
+      const echo = { ...appearance };
+      const s = await orig('settings_get', {});
+      if (order === 'late') {
+        emit(echo, 250);
+        await sleep(20);
+        return { ...s, appearance: echo };
+      }
+      await sleep(120);
+      await emit(echo, 0);
+      await sleep(120);
+      return { ...s, appearance: echo };
+    };
+  }, order);
+  await go(ctx.page, 'settings', {});
+  await ctx.page.waitForSelector('.page[data-page="settings"]:not([hidden])');
+  await ctx.page.fill('.settings-search', '화면 크기');
+  const range = ctx.page.locator('input[type="range"][data-domain="appearance"][data-key="uiScale"]');
+  await range.waitFor({ state: 'attached' });
+  await range.evaluate((el) => { el.value = '1'; });
+  await range.focus();
+  return { ...ctx, range };
+}
+
+async function watchValue(page, range, ms) {
+  const seen = [];
+  for (let t = 0; t < ms; t += 100) { seen.push(await range.inputValue()); await page.waitForTimeout(100); }
+  return seen;
+}
+
+// 정착한 뒤 — 슬라이더·% 표시·this.settings(검색을 지웠다 다시 넣어 다시 그린 값)·썸네일 배율이 Rust 가 건 값과 같다.
+async function settledState(page, range) {
+  await page.evaluate(() => window.__quiet());
+  await page.waitForTimeout(APPEARANCE_WAIT);
+  const shown = Number(await range.inputValue());
+  const out = await range.evaluate((el) => el.parentElement.querySelector('output').textContent);
+  const zoom = await page.evaluate(async () => (await import('/js/dom.js')).pixelScale());
+  const saved = await page.evaluate(() => window.__saved());
+  await range.evaluate((el) => el.blur());
+  await page.fill('.settings-search', '');
+  await page.fill('.settings-search', '화면 크기');
+  const rendered = Number(await page.locator('input[data-key="uiScale"]').inputValue());
+  return { shown, out, zoom, saved, rendered };
+}
+const APPEARANCE_WAIT = 1200; // 정착 시간(700ms)보다 넉넉히
+
+await check('MH11 빠른 연속 변경 중 메아리·다른 곳의 변경 — 조작 중엔 슬라이더를 되돌리지 않고, 끝나면 실제 값과 맞는다', async () => {
+  for (const order of ['echo-first', 'late']) {
+    for (const external of [null, 1.1, 1]) {
+      const label = `${order}${external === null ? '' : ` · 조작 중 다른 곳에서 ${external}`}`;
+      const { page, errors, close, range } = await openScaleSlider(order);
+      try {
+        for (let i = 0; i < 3; i++) { await page.keyboard.press('ArrowRight'); await page.waitForTimeout(60); }
+        // 조작 중(초점·정착 시간 안) — 메아리가 값을 한 단계 되돌리지 않는다
+        const seen = await watchValue(page, range, 400);
+        assert.ok(seen.every((v) => v === '1.15'), `${label} 조작 중 값 흐름 ${seen.join(' ')}`);
+        // 700ms 안에 ⌘-(1.1, 보낸 값 중 하나와 같다)나 ⌘0(1) — 버려지지 않고 끝난 뒤 반영된다
+        if (external !== null) await page.evaluate((v) => window.__rustSet(v), external);
+        const st = await settledState(page, range);
+        const want = external === null ? 1.15 : external;
+        assert.equal(st.saved, want, `${label} Rust 값`);
+        assert.deepEqual([st.shown, st.out, st.zoom, st.rendered], [want, `${Math.round(want * 100)}%`, want, want], `${label} ${JSON.stringify(st)}`);
+        assert.deepEqual(errors, [], label);
+      } finally { await close(); }
+    }
+  }
+  // 드래그 중 다른 곳(⌘0)에서 바뀌면 엄지를 건드리지 않고, 놓으면 드래그 값이 저장된다(미뤄 둔 값이 밀어내지 않는다)
+  const { page, errors, close, range } = await openScaleSlider('echo-first');
+  try {
+    const box = await range.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.evaluate(() => window.__rustSet(1.5));
+    await page.waitForTimeout(900);
+    const during = await range.inputValue();
+    assert.notEqual(during, '1.5', '드래그 중에 덮었다');
+    await page.mouse.up();
+    const st = await settledState(page, range);
+    assert.equal(String(st.shown), String(Number(during)), `드래그 값 ${during} → ${st.shown}`);
+    assert.deepEqual([st.saved, st.zoom, st.rendered], [st.shown, st.shown, st.shown], JSON.stringify(st));
+    assert.deepEqual(errors, []);
   } finally { await close(); }
 });
 

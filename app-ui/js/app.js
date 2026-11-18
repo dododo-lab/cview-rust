@@ -745,9 +745,9 @@ const MENU_ACTIONS = {
 async function zoomStep(dir) {
   if (!isTauri) return;
   try {
+    // 모든 창의 화면(썸네일 배율·설정 슬라이더)은 Rust 가 보내는 settings://appearance 로 따라온다.
     const settings = await api.uiZoomStep(dir);
     const scale = Number(settings && settings.appearance && settings.appearance.uiScale) || 1;
-    window.dispatchEvent(new CustomEvent('cview:settings-changed', { detail: { domain: 'appearance', key: 'uiScale', value: scale, settings } }));
     toast(`화면 크기 ${Math.round(scale * 100)}%`, 1200);
   } catch (e) { toast(e.message); }
 }

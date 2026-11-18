@@ -1,6 +1,6 @@
 // 설정값 → 화면 동작. 원본 설정의 효과를 웹 화면에 반영한다.
 // DSN-02 모션 등급, DSN-03 콤팩트, PLY-16 후원 알림 위치·크기, PLY-19 백그라운드 재생, SYS-15 자동 새로고침 주기.
-import { api } from './api.js';
+import { api, listen, Events } from './api.js';
 import { setImageZoom } from './dom.js';
 
 let settings = null;
@@ -47,8 +47,13 @@ function scheduleRefresh(ctx) {
  */
 export async function installPrefsEffects(ctx) {
   try { apply(await api.settingsGet(), ctx); } catch { /* 앱 밖 */ }
-  // 창이 뜰 때마다 저장된 화면 크기를 이 창에 건다(보조 창 포함). 배율을 먼저 알린 뒤에 걸어야 확대 전 기기 배율을 기억한다.
+  // 창이 뜰 때 저장된 화면 크기 — Rust 가 창을 만들자마자 걸어 둔다. 여기서는 웹뷰가 문서를 바꾸며 확대를 잃은 경우의 보조.
   if (window.__TAURI__) api.uiZoomSync().catch(() => {});
+  // 다른 창·메뉴(⌘= ⌘- ⌘0)·가져오기·초기화로 외관이 바뀌면 모든 창에 온다 — 썸네일 배율·모션 등급을 맞춘다.
+  listen(Events.appearanceChanged, (appearance) => {
+    if (!appearance || typeof appearance !== 'object') return;
+    apply({ ...(settings || {}), appearance }, ctx);
+  });
   window.addEventListener('cview:settings-changed', (e) => {
     if (e.detail && e.detail.settings) apply(e.detail.settings, ctx);
   });

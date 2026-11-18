@@ -42,6 +42,8 @@ pub mod events {
     pub const MULTILIVE_STATE: &str = "multilive://state";
     /// 자동 네트워크 프리셋이 값을 바꿨다 — 페이로드 없음(설정 화면이 다시 읽는다).
     pub const NETWORK_PRESET_CHANGED: &str = "settings://network-preset";
+    /// 외관 설정이 바뀌었다(화면 크기 단계·저장·가져오기·초기화) — 새 `AppearanceSettings` JSON. 모든 창에 간다.
+    pub const APPEARANCE_CHANGED: &str = "settings://appearance";
 }
 
 /// 명령 오류 — 프런트엔드에는 사용자용 문구 문자열로 간다.
