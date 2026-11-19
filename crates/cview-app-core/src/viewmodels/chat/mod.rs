@@ -305,6 +305,8 @@ impl ChatState {
     pub const BACKLOG_HOLD_TIMEOUT: Duration = Duration::from_millis(800);
     pub const BATCH_FLUSH_INTERVAL_NS: u64 = 33_000_000;
     pub const PENDING_SENT_ECHO_TTL_SECS: i64 = 30;
+    /// 보낸 글의 에코 열쇠 수명(`recent_sent_echo_keys`).
+    pub const SENT_ECHO_KEY_TTL_SECS: i64 = 5;
     pub const PENDING_SENT_ECHO_CAP: usize = 64;
     pub const EARLY_SEND_REJECTION_TTL_SECS: i64 = 30;
     pub const EARLY_SEND_REJECTION_CAP: usize = 64;

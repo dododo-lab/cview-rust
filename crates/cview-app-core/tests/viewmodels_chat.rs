@@ -1208,3 +1208,42 @@ async fn untracked_view_model_keeps_no_message_buffers() {
     s.handle_event(ChatEngineEvent::Kicked);
     assert!(s.error_message.is_some());
 }
+
+#[tokio::test]
+async fn untracked_view_model_expires_sent_echo_keys_and_still_reclaims() {
+    // 받은 메시지를 쌓지 않는 뷰모델은 dedupe_for_ingress 를 타지 않는다 — 에코 열쇠는 넣을 때 만료분을 비운다.
+    let vm = ChatViewModel::with_deps(ChatDeps {
+        track_messages: false,
+        ..Default::default()
+    });
+    let mut s = vm.lock();
+    s.current_user_uid = Some("me".into());
+    s.handle_event(ChatEngineEvent::Connected);
+    let past = Utc::now() - chrono::Duration::seconds(60);
+    for i in 0..50 {
+        s.remember_sent_echo_key(format!("me_old{i}"), past);
+    }
+    // 오래된 50개는 1분 전에 5초 수명으로 들어갔으니 지금 넣을 때 모두 빠진다.
+    s.handle_event(ChatEngineEvent::NewMessages(vec![ChatMessage::with_id(
+        "x",
+        "닉",
+        "아무 글",
+    )
+    .user_id("u")]));
+    s.remember_sent_echo_key("me_새 글".into(), Utc::now());
+    assert_eq!(
+        s.recent_sent_echo_keys.keys().collect::<Vec<_>>(),
+        vec!["me_새 글"]
+    );
+    // 거부된 전송 되돌리기는 그대로 — 에코 줄과 열쇠를 지운다.
+    let id = "me_7".to_string();
+    s.messages.push(item(&id, "me", "새 글"));
+    s.remember_pending_echo(7, &id, "me_새 글");
+    s.handle_event(ChatEngineEvent::SendRejected {
+        tid: Some(7),
+        ret_code: -1,
+        message: None,
+    });
+    assert!(!s.messages.iter().any(|m| m.id == id));
+    assert!(s.recent_sent_echo_keys.is_empty());
+}
