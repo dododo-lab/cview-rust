@@ -868,6 +868,16 @@
 /* 채팅 머리줄 — 도구 단추가 많아 "채팅" 제목이 "채.."로 잘리고 상태가 두 줄로 꺾였다. 제목은 그대로 두고 상태 글자만 줄인다. */
 .ml-chat .chat-header strong { flex: none; }
 .ml-chat .chat-header .chat-state { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 도구를 펼치면 멀티라이브 채팅은 단추가 둘 더(채팅 보기·후원 목록) 있어 380px 안팎에서도 한 줄에 다 들어가지 않았다 —
+   '채팅 그리드'처럼 긴 제목이면 ⋯ 단추가 패널 오른쪽 밖으로 잘렸다. 단일 채팅의 좁은 폭 규칙(339px 이하)과 같이
+   도구를 둘째 줄로 꺼낸다(연결 상태 글자도 다시 보인다). 그보다 넓어도 넘치면 제목이 말줄임으로 줄어든다. */
+.ml-chat .chat-header.tools-open strong { flex: 0 1 auto; min-width: 2.5em; }
+@container chatpanel (max-width: 459px) {
+  .ml-chat .chat-header.tools-open { flex-wrap: wrap; row-gap: 2px; padding-top: 6px; padding-bottom: 6px; }
+  .ml-chat .chat-header.tools-open .chat-state { max-width: 160px; opacity: 1; margin-left: 0; }
+  .ml-chat .chat-header.tools-open .chat-tools { order: 2; flex-basis: 100%; }
+  .ml-chat .chat-header.tools-open .chat-tools-inner { justify-content: flex-end; }
+}
 
 /* ── 라이브 단독 보기 — 영상 아래 채널 정보·다시보기·클립·커뮤니티(ml-watch-info.js) ──
    무대 칸이 세로로 스크롤한다. 영상은 16:9 로 칸 폭을 채우되, 아래 채널 카드 윗부분(84px)이 늘 보이게 높이를 남긴다 —

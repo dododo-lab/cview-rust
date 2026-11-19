@@ -56,6 +56,79 @@ export function hideWithExit(el, ms = 160) {
   setTimeout(done, ms + 80);
 }
 
+/**
+ * 버튼 옆에 absolute 로 뜨는 메뉴를 경계(잘리는 패널 또는 창) 안에 들인다 — 연 직후(보이는 상태에서) 부른다.
+ * 1) 메뉴가 경계보다 넓으면 경계 폭으로 줄인다(항목 글자는 줄바꿈된다 — 잘리지 않는다).
+ * 2) CSS 정렬(보통 버튼 오른쪽 끝)이 넘치면 반대쪽 정렬(버튼 왼쪽 끝)로 뒤집고, 그래도 넘치면 경계 안으로 민다.
+ * 3) 아래가 모자라면 높이를 남은 공간으로 줄여 안에서 스크롤한다. 아래 공간이 너무 좁고 위가 더 넓으면 위로 연다.
+ * 위치는 left·right 만 바꾼다 — 여닫는 모션(motion.css mo-pop-down)이 translate·scale 을 쓴다.
+ * 매번 인라인 값을 지우고 CSS 자리에서 다시 잰다(패널 폭·화면 크기가 바뀌었을 수 있다). 레이아웃은 메뉴를 열 때만 읽는다.
+ * @param {HTMLElement} menu
+ * @param {Element|null} [bound] 메뉴를 자르는 상자(넘침을 숨기는 패널). 없으면 창. 창과 겹친 부분만 쓴다.
+ * @param {number} [margin] 경계에서 띄울 거리(px)
+ */
+export function fitPopover(menu, bound = null, margin = 8) {
+  if (!menu || menu.hidden) return;
+  const s = menu.style;
+  s.left = ''; s.right = ''; s.top = ''; s.bottom = ''; s.minWidth = ''; s.maxWidth = ''; s.maxHeight = ''; s.overflowY = ''; s.transformOrigin = '';
+  delete menu.dataset.fit;
+  const op = menu.offsetParent;
+  if (!op) return;
+  // 숨김을 풀면 바로 여는 모션(mo-pop-down: translate 0 -4px · scale .97)이 시작된다 — 그 첫 프레임을 재면 폭은 97%,
+  // 아래 끝은 (4px + 높이 3%) 위로 재져 높이 상한이 걸리지 않고 다 열린 뒤 메뉴가 경계 밖으로 나갔다.
+  // 재는 동안만 모션을 끄고(돌고 있을 때만 — 창 크기 변경으로 다시 잴 때 다 열린 메뉴가 다시 튀지 않게) 되돌린다.
+  const playing = typeof menu.getAnimations === 'function' && menu.getAnimations().some((a) => a.playState === 'running');
+  const prevAnimation = s.animation;
+  if (playing) s.animation = 'none';
+  try { measureAndFit(menu, op, bound, margin); } finally { if (playing) s.animation = prevAnimation; }
+}
+
+function measureAndFit(menu, op, bound, margin) {
+  const s = menu.style;
+  const b = bound ? bound.getBoundingClientRect() : { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight };
+  const lo = Math.max(b.left, 0) + margin;
+  const hi = Math.min(b.right, window.innerWidth) - margin;
+  const top = Math.max(b.top, 0) + margin;
+  const bottom = Math.min(b.bottom, window.innerHeight) - margin;
+  const avail = Math.max(0, hi - lo);
+  let r = menu.getBoundingClientRect();
+  if (r.width > avail + 0.5) {
+    s.minWidth = '0';
+    s.maxWidth = `${avail}px`;
+    r = menu.getBoundingClientRect();
+  }
+  const fits = (x) => x >= lo - 0.5 && x + r.width <= hi + 0.5;
+  if (!fits(r.left)) {
+    const o = op.getBoundingClientRect();
+    // 반대쪽 정렬 — 왼쪽으로 넘치면 버튼 묶음(offsetParent) 왼쪽 끝에서, 오른쪽으로 넘치면 오른쪽 끝에 맞춰 연다
+    const flip = r.left < lo ? o.left : o.right - r.width;
+    const x = fits(flip) ? flip : Math.min(Math.max(r.left, lo), hi - r.width);
+    s.left = `${Math.round(x - o.left - op.clientLeft)}px`;
+    s.right = 'auto';
+    s.transformOrigin = x + r.width / 2 > (o.left + o.right) / 2 ? 'top right' : 'top left';
+    menu.dataset.fit = fits(flip) ? 'flip' : 'shift';
+  }
+  if (r.bottom > bottom + 0.5) {
+    const o = op.getBoundingClientRect();
+    const gap = Math.max(0, r.top - o.bottom); // 버튼 묶음과 메뉴 사이(보통 6px)
+    const below = Math.floor(bottom - r.top);
+    const above = Math.floor(o.top - gap - top);
+    // 아래가 너무 좁고(메뉴도 다 못 들이고 120px 도 안 됨) 위가 더 넓으면 위로 연다
+    const up = below < Math.min(120, r.height) && above > below;
+    if (up) {
+      s.top = 'auto';
+      s.bottom = `${Math.round(op.clientHeight + gap)}px`;
+      s.transformOrigin = `bottom ${s.transformOrigin.split(' ')[1] || 'right'}`;
+      menu.dataset.fitV = 'up';
+    } else delete menu.dataset.fitV;
+    const room = up ? above : below;
+    if (r.height > room + 0.5) {
+      s.maxHeight = `${Math.max(0, room)}px`;
+      s.overflowY = 'auto';
+    }
+  } else delete menu.dataset.fitV;
+}
+
 const FOCUS_KEYS = ['data-route', 'data-channel-id', 'data-dl-id', 'data-dl'];
 
 /** 초점 든 요소를 다시 찾을 선택자 — 자신과 조상의 식별 data-* 로(없으면 null). */

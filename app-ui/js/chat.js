@@ -305,6 +305,17 @@ export class ChatPanel {
       if (this.onLogin) this.onLogin();
       else window.dispatchEvent(new Event('cview:login'));
     });
+    // '새 메시지' 단추는 입력창 위에 떠 있다 — 입력창 위 안내(로그인·제한·전송 실패)가 보이면 그 높이만큼 올린다.
+    // 예전엔 단추가 안내 글과 '로그인' 링크를 덮었다. 크기는 ResizeObserver 가 알려 준다(메시지 경로에서 레이아웃을 읽지 않는다).
+    if (typeof ResizeObserver === 'function') {
+      const ro = new ResizeObserver((entries) => {
+        const h = Math.round(entries[entries.length - 1].borderBoxSize?.[0]?.blockSize ?? this.banner.offsetHeight);
+        if (h) this.root.style.setProperty('--chat-banner-h', `${h}px`);
+        else this.root.style.removeProperty('--chat-banner-h');
+      });
+      ro.observe(this.banner);
+      this.cleanups.push(() => ro.disconnect());
+    }
 
     // 입력부(이모티콘 선택기·자동완성·글자 수·입력 기록)는 ChatComposer 가 맡는다 — 멀티채팅 통합 입력도 같은 것을 쓴다.
     // 이모티콘·닉네임 목록은 이 패널의 것을 읽는다.
@@ -489,7 +500,19 @@ export class ChatPanel {
     this.input.disabled = !enabled;
     this.sendButton.disabled = !enabled;
     this.composer.setEnabled(enabled);
-    this.input.placeholder = loggedIn ? '채팅을 입력하세요…' : '로그인 후 채팅 참여 가능';
+    // 입력창 자리 글 — 연결 중·끊김이면 그 까닭을(도구 서랍을 펴면 머리줄의 연결 상태 글자가 숨어, 꺼진 입력창만 보였다).
+    const linking = this.stateName === 'connecting' || this.stateName === 'reconnecting';
+    const down = this.stateName === 'failed' || this.stateName === 'disconnected';
+    let hint = '채팅을 입력하세요…';
+    if (!loggedIn) hint = '로그인 후 채팅 참여 가능';
+    else if (this.active && this.chatChannelId && !this.connected && (linking || down)) hint = linking ? '채팅에 연결하는 중…' : '채팅 연결이 끊겼습니다';
+    if (this.input.placeholder !== hint) this.input.placeholder = hint;
+    // 보내는 동안(왕복 수십 ms) 입력창이 꺼지며 흐려졌다 돌아오는 깜박임 — 보내는 중에는 흐리게 하지 않는다(CSS .sending).
+    const form = this.input.form;
+    if (form) {
+      form.classList.toggle('sending', Boolean(this.pendingSend));
+      if (this.pendingSend) form.setAttribute('aria-busy', 'true'); else form.removeAttribute('aria-busy');
+    }
     let html = '';
     if (!reason && this.restrictedUntil > Date.now()) reason = this.restrictText;
     if (!reason && this.kicked) reason = '채팅방에서 퇴장되어 메시지를 보낼 수 없습니다';
@@ -808,6 +831,11 @@ export class ChatPanel {
     if (!this.tray.hidden) { this.tray.hidden = true; return; }
     this.renderMentionTray();
     this.tray.hidden = false;
+    // 머리 바로 아래에 연다 — 좁은 패널에서 도구가 둘째 줄로 내려가면 고정 자리(52px)의 모음이 그 줄(이 @ 단추까지)을 덮었다.
+    // 후원 목록(donation-list.js position)과 같은 규칙. 열 때 한 번만 잰다.
+    const top = Math.round(this.header.getBoundingClientRect().bottom - this.root.getBoundingClientRect().top) + 6;
+    this.tray.style.top = `${top}px`;
+    this.tray.style.maxHeight = `${Math.max(120, Math.min(360, this.root.clientHeight - top - 8))}px`;
   }
 
   renderMentionTray() {

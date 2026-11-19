@@ -8,7 +8,7 @@
 import { api, listen, listenHere, Events } from './api.js';
 import { playPreroll, cancelPreroll } from './ads.js';
 import { noteConnectorLimit } from './live-connector.js';
-import { esc, safeUrl, toast, imageSrc, streamEndedArt, dismiss, hideWithExit } from './dom.js';
+import { esc, safeUrl, toast, imageSrc, streamEndedArt, dismiss, hideWithExit, fitPopover } from './dom.js';
 import { PlayerBridge } from './player.js';
 import { ChatPanel } from './chat.js';
 import { StreamAlerts } from './donations.js';
@@ -391,8 +391,10 @@ export class MultiLivePage {
       if (!moreMenu.hidden) { closeMore(); return; }
       moreMenu.hidden = false;
       moreBtn.setAttribute('aria-expanded', 'true');
+      fitPopover(moreMenu); // 좁은 창·큰 화면 크기에서도 창 안에(넘치면 안에서 스크롤)
       if (moreBtn.matches(':focus-visible')) focusFirstMenuItem(moreMenu);
     });
+    window.addEventListener('resize', () => { if (!moreMenu.hidden) fitPopover(moreMenu); });
     moreMenu.addEventListener('click', (e) => { if (e.target.closest('.ml-menu-item:not(.ml-multiaudio)')) closeMore(); });
     document.addEventListener('pointerdown', (e) => { if (!moreMenu.hidden && !e.target.closest('.ml-more')) closeMore(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !moreMenu.hidden) closeMore(); });
