@@ -4,6 +4,7 @@
 // - 위치는 누른 닉네임 아래(자리가 없으면 위), 꼬리가 닉네임을 가리킨다. 붐비는 채널은 줄이 1~2초 만에 밀려
 //   지워지므로 말풍선은 연 자리에 머물고, 닉네임이 그 자리를 떠나면 꼬리만 감춘다(누르려던 버튼이 도망가지 않게).
 // - 바깥 누르기·Esc·창 전환으로 닫는다. 열고 닫는 움직임은 motion.css 규칙(모션 줄이기면 바로)을 따른다.
+import { channelSocialChanged } from './channel-actions.js';
 import { api } from './api.js';
 import { esc, safeUrl, imageSrc, toast, hideWithExit } from './dom.js';
 import { verifiedBadge } from './verified-badge.js';
@@ -225,6 +226,7 @@ export function openUserPop(panel, anchor, line) {
         render();
         try {
           await api.channelFollow(ch.channelId, on);
+          channelSocialChanged(ch.channelId, { following: on }); // 시청 상단 바의 팔로우 단추도 따라간다
           state.card = { ...c, following: on, channel: { ...ch, followerCount: Math.max(0, (ch.followerCount || 0) + (on ? 1 : -1)) } };
           cardCache.delete(`${panel.chatChannelId || ''}|${uid}`);
           toast(on ? `${ch.channelName} 채널을 팔로우했습니다` : `${ch.channelName} 채널 팔로우를 끊었습니다`, 1500);

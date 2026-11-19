@@ -1,5 +1,6 @@
 // 채널 상세 — 원본 ChannelInfoView / ChannelInfoHeaderView / ChannelVODClipTab / ChannelMemoSheet.
 // NAV-01 헤더·방송 중 배지·정보/다시보기/클립 탭, VOD-05 채널 VOD·클립 탭, DAT-01 메모, DAT-02 즐겨찾기.
+import { channelSocialChanged } from './channel-actions.js';
 import { api } from './api.js';
 import { esc, safeUrl, toast, channelTone, imageSrc, dismiss } from './dom.js';
 import { emptyState, loadingState, compactCount, errorState } from './cards.js';
@@ -269,6 +270,7 @@ export class ChannelPage {
         try {
           await api.favoriteSet(this.channelId, next, c.channelName, c.channelImageUrl || null);
           this.detail.isFavorite = next;
+          channelSocialChanged(this.channelId, { favorite: next }); // 상단 바 별·사이드바도 따라간다
           this.favPop = next; // 켜면 별이 톡 튄다
           toast(next ? '즐겨찾기에 추가했습니다' : '즐겨찾기에서 뺐습니다', 1500);
           this.render();

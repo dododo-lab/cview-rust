@@ -1,4 +1,5 @@
 // CView 메인 — 사이드바 라우팅, 인증 상태, 시청 화면 연결.
+import { CHANNEL_SOCIAL_EVENT, channelSocialChanged, resetFollowOverrides } from './channel-actions.js';
 import { api, listen, Events, isTauri } from './api.js';
 import { toast, icons } from './dom.js';
 import { showShortcuts, showAbout, showUpdateCheck } from './app-sheets.js';
@@ -409,7 +410,10 @@ function onAuthChanged(status) {
   // 시작 때는 닉네임 없이 홈을 먼저 그린다 — 서버 확인으로 닉네임이 오면 인사말만 고친다.
   if (pages.home) pages.home.refreshGreetingName();
   if (wasLoggedIn !== isLoggedIn()) refreshSidebarFollowing();
-  if (viewer) viewer.refreshAuth();
+  if (wasLoggedIn !== isLoggedIn()) resetFollowOverrides();
+  if (viewer) viewer.refreshAuth(wasLoggedIn !== isLoggedIn());
+  // 시청 상단 바의 팔로우 단추는 로그인했을 때만 — 로그인·로그아웃하면 지금 채널 상태를 다시 읽는다(예전엔 그대로 남았다).
+  if (wasLoggedIn !== isLoggedIn() && pages.multilive) pages.multilive.watch.refreshAuth();
   if (wasLoggedIn !== isLoggedIn()) refreshChatAuth();
   if (wasLoggedIn !== isLoggedIn() && current && current !== 'search' && !(viewer && viewer.isOpen) && !liveListHidden()) {
     pages[current].show();
@@ -547,28 +551,6 @@ async function addToMultiLive(channelId, { quiet = false } = {}) {
   syncLiveIndicators();
 }
 
-function installViewerMultiLiveButton() {
-  const close = document.getElementById('viewer-close');
-  const button = document.createElement('button');
-  button.className = 'icon-btn';
-  button.title = '멀티라이브에 추가';
-  button.innerHTML = multiLiveIcon;
-  button.addEventListener('click', () => {
-    const channelId = viewer.channelId;
-    if (channelId) addToMultiLive(channelId);
-  });
-  close.before(button);
-  // 새 플레이어 창으로 분리 (PLY-18, ⌘N) — 보조 창 안에서는 숨긴다.
-  if (!AUX) {
-    const pop = document.createElement('button');
-    pop.className = 'icon-btn';
-    pop.title = kbd('새 창으로 분리 (⌘N)');
-    pop.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="13" height="13" rx="2"/><path d="M10 4h10v10M20 4l-8 8"/></svg>';
-    pop.addEventListener('click', () => MENU_ACTIONS['window-player']());
-    button.before(pop);
-  }
-}
-
 /** 카드 우클릭 메뉴 — 원본 LiveCardActionMenu (NAV-10). */
 function installCardMenu() {
   document.addEventListener('contextmenu', async (e) => {
@@ -596,7 +578,8 @@ function installCardMenu() {
       else if (a === 'channel') openChannelPage(id);
       else if (a === 'chat') { if (viewer.isPlaying) viewer.close(); navigate('chat', { channelId: id }); }
       else if (a === 'fav') {
-        try { await api.favoriteSet(id, !isFav, name, image); toast(isFav ? '즐겨찾기에서 뺐습니다' : '즐겨찾기에 추가했습니다', 1500); refreshSidebarFollowing(); } catch (er) { toast(er.message); }
+        // 알림을 받아 사이드바·홈을 다시 읽는다(아래 CHANNEL_SOCIAL_EVENT) — 시청 상단 바 별도 함께 따라간다.
+        try { await api.favoriteSet(id, !isFav, name, image); toast(isFav ? '즐겨찾기에서 뺐습니다' : '즐겨찾기에 추가했습니다', 1500); channelSocialChanged(id, { favorite: !isFav }); } catch (er) { toast(er.message); }
       } else if (a === 'copy') navigator.clipboard.writeText(url).then(() => toast('링크를 복사했습니다', 1200), () => toast('링크를 복사하지 못했습니다'));
       else if (a === 'open') api.openExternal(url).catch((er) => toast(er.message));
     });
@@ -640,7 +623,7 @@ function installPalette() {
 // ── 메뉴·단축키·정보·오프라인 (SYS-01·02·03·09·12) ─────────────────
 
 // Esc 는 맨 위의 것 하나만 닫는다 — 메뉴·시트·입력란이 먼저 받고, 아무것도 없을 때만 시청 화면을 닫는다.
-const ESC_POPUPS = ':is(.quality-menu, .player-panel, .emoji-picker, .chat-tray, .dp-panel, .chat-autocomplete, .ml-pane-menu, .ml-more-menu):not([hidden], .exit-ghost)';
+const ESC_POPUPS = ':is(.quality-menu, .vt-menu, .player-panel, .emoji-picker, .chat-tray, .dp-panel, .chat-autocomplete, .ml-pane-menu, .ml-more-menu, .ml-watch-overflow):not([hidden], .exit-ghost)';
 const ESC_LAYERS = '.sheet-scrim:not(.leaving), .palette-scrim:not([hidden], .exit-ghost)';
 function escapeTaken(e) {
   if (e.defaultPrevented) return true;
@@ -848,10 +831,14 @@ async function main() {
   if (AUX !== 'stats') pages.home.attachReport(pages.stats);
   pages.media = new MediaPage(content, { onBack: goBack, onOpenChannel: openChannelPage });
   pages.channel = new ChannelPage(content, { onBack: goBack, onPlay: openChannel, onAddMulti: addToMultiLive });
-  viewer = new Viewer(document.getElementById('viewer'), { isLoggedIn, onClose: onViewerClosed });
+  // 위 막대 ⋯ 의 '멀티라이브에 추가'·'새 창으로 분리'(보조 창 안에서는 없다) — viewer-topbar.js
+  viewer = new Viewer(document.getElementById('viewer'), {
+    isLoggedIn, onClose: onViewerClosed,
+    onAddMulti: (id) => addToMultiLive(id),
+    onPopout: AUX ? null : () => MENU_ACTIONS['window-player'](),
+  });
   if (!AUX) insights = new InsightPanel(content, { isLoggedIn });
   bindMultiLiveAddButtons(addToMultiLive);
-  installViewerMultiLiveButton();
   if (!AUX) {
     document.querySelector('.viewer-header .page-title').insertAdjacentHTML('afterend', liveModeSwitch('live'));
     bindLiveModeSwitch(switchLiveMode);
@@ -973,6 +960,8 @@ async function main() {
 
   listen(Events.authChanged, onAuthChanged);
   window.addEventListener('cview:login', login);
+  // 팔로우·즐겨찾기가 어디서든 바뀌면(상단 바·채팅 말풍선·채널 화면·카드 메뉴) 사이드바·홈 팔로잉(즐겨찾기 순서)을 다시 읽는다.
+  window.addEventListener(CHANNEL_SOCIAL_EVENT, () => refreshSidebarFollowing());
   loadChatPrefs();
   loadShortcuts();
   listen(Events.loginFailed, (p) => p && p.message && toast(p.message));

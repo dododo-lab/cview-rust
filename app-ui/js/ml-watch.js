@@ -2,19 +2,21 @@
 // 예전 시청 화면(viewer.js)에 있던 기능을 같은 패인 위에서 그대로 쓰게 한다.
 //
 // - 단축키: Space 재생/일시정지 · M 음소거 · ↑↓ 볼륨 · L 라이브로 · ←/→ 되감기(⇧ 60초) · 사용자 맨 글자 동작(F·C·P…)
-// - 막대 단추: 스크린샷 · 북마크 · 채팅 표시 방식(옆·영상 위·숨김) · 영상+채팅 전체 화면, 위쪽: 새 창으로 분리
-// - 위 정보에 인증·팔로워·카테고리 · 가운데 OSD
+// - 위 막대(상단 바): 채널 정보(제목·채널·인증·팔로워·카테고리·지표 칩·화질/지연 배지) | 채널 묶음(팔로우·즐겨찾기·링크 복사)
+//   | 보기 묶음(채팅 표시 방식·새 창으로 분리) | ⋯(채널·방송·보기 묶음 — 좁으면 접힌 단추도 여기로) | 닫기
+// - 아래 막대 단추: 스크린샷 · 북마크 · 영상+채팅 전체 화면 · 가운데 OSD
 // - 패인 ⚙ 의 배속·화면 꽉 채우기·자동 보정/업스케일·이퀄라이저(Windows)는 무대 패인에만(ml-pane-controls.js setStage)
 // 앱 메뉴 동작(⌘S·⇧⌘F·PiP·⌘W 등)은 app.js 가 이 도구로 넘긴다.
 import { api } from './api.js';
 import { esc, toast, keyBelongsToTarget } from './dom.js';
 import { chatPrefs, onChatPrefs, updateChatPrefs } from './chat-prefs.js';
-import { matchPlainAction } from './shortcuts.js';
+import { matchPlainAction, currentBindings, bindingLabel, onShortcuts } from './shortcuts.js';
 import { togglePipFor, stamp, toggleFullscreenOn } from './viewer-controls.js';
 import { seekPlan } from './viewer-extras.js';
 import { compactCount } from './cards.js';
 import { kbd } from './platform.js';
 import { WatchInfoPanel } from './ml-watch-info.js';
+import { CHANNEL_ICON, CHANNEL_SOCIAL_EVENT, loadChannelSocial, setFollow, setFavorite, copyLiveLink, openOnChzzk } from './channel-actions.js';
 
 const CHAT_MODES = ['side', 'overlay', 'hidden'];
 const CHAT_MODE_LABEL = { side: '채팅: 옆', overlay: '채팅: 영상 위', hidden: '채팅: 숨김' };
@@ -27,20 +29,72 @@ export const WATCH_ICON = {
   popout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="13" height="13" rx="2"/><path d="M10 4h10v10M20 4l-8 8"/></svg>',
 };
 
-/** 막대(아래)에 넣는 단독 보기 전용 단추 — 멀티라이브 보기에서는 CSS 가 숨긴다. */
+/**
+ * 막대(아래)에 넣는 단독 보기 전용 단추 — 영상을 담는 동작(스크린샷·북마크)만. 멀티라이브 보기에서는 CSS 가 숨긴다.
+ * 채팅 표시 방식은 위 막대의 '보기' 묶음으로 옮겼다(watchTopHtml).
+ */
 export function watchBarHtml() {
   return `
         <button class="ml-pane-btn ml-watch-only" data-mw="shot" title="${kbd('스크린샷 (⌘S)')}" aria-label="스크린샷">${WATCH_ICON.camera}</button>
-        <button class="ml-pane-btn ml-watch-only" data-mw="bookmark" title="북마크 (B)" aria-label="북마크">${WATCH_ICON.bookmark}</button>
-        <button class="ml-pane-btn ml-watch-only" data-mw="chatmode" title="채팅 표시 방식 (C)" aria-label="채팅 표시 방식">${WATCH_ICON.chat}</button>`;
+        <button class="ml-pane-btn ml-watch-only" data-mw="bookmark" title="북마크 (B)" aria-label="북마크">${WATCH_ICON.bookmark}</button>`;
 }
 
 export function watchBarEndHtml() {
   return `<button class="ml-pane-btn ml-watch-only" data-mw="fullchat" title="${kbd('영상+채팅 전체 화면 (⌃⌘F)')}" aria-label="영상과 채팅 전체 화면">${WATCH_ICON.chatFull}</button>`;
 }
 
+/**
+ * 위 막대 오른쪽 — 단독 보기 무대 패인에서만 보인다. 의미별 두 묶음:
+ *   채널(팔로우·즐겨찾기·링크 복사) | 보기(채팅 표시 방식·새 창으로 분리) — 그 뒤 ⋯ · 닫기는 패인 공용.
+ * 좁은 패인(520px 이하)에서는 두 묶음이 접히고 같은 동작이 ⋯ 메뉴(watchMenuHtml)에 나온다.
+ */
 export function watchTopHtml() {
-  return `<button class="ml-pane-btn ml-watch-only" data-mw="popout" title="${kbd('새 창으로 분리 (⌘N)')}" aria-label="새 창으로 분리">${WATCH_ICON.popout}</button>`;
+  return `
+        <div class="ml-wt-group ml-watch-only" role="group" aria-label="채널">
+          <button class="ml-wt-follow" data-mw="follow" title="팔로우" hidden><span class="ml-wt-ico">${CHANNEL_ICON.follow}</span><span class="ml-wt-label">팔로우</span></button>
+          <button class="ml-pane-btn" data-mw="fav" aria-pressed="false" title="즐겨찾기에 추가" aria-label="즐겨찾기">${CHANNEL_ICON.star}</button>
+          <button class="ml-pane-btn" data-mw="copy" title="방송 링크 복사" aria-label="방송 링크 복사">${CHANNEL_ICON.link}</button>
+        </div>
+        <span class="ml-wt-sep ml-watch-only" aria-hidden="true"></span>
+        <div class="ml-wt-group ml-watch-only" role="group" aria-label="보기">
+          <button class="ml-pane-btn" data-mw="chatmode" title="채팅 표시 방식 (C)" aria-label="채팅 표시 방식">${WATCH_ICON.chat}</button>
+          <button class="ml-pane-btn" data-mw="popout" title="${kbd('새 창으로 분리 (⌘N)')}" aria-label="새 창으로 분리">${WATCH_ICON.popout}</button>
+        </div>`;
+}
+
+/** 위 정보 지표 줄 끝 — 지금 화질·지연 배지(누르면 ⚙ 화질·지연 메뉴). 단독 보기 무대 패인에서만, 값이 오면 보인다. */
+export function watchStatusHtml() {
+  return '<button class="ml-q-badge ml-watch-only" data-mp="quality" aria-haspopup="menu" aria-expanded="false" hidden><span class="ml-q-res"></span><span class="ml-q-lat"></span></button>';
+}
+
+/**
+ * 단독 보기 ⋯ 메뉴 — 채널 / 방송 / 보기 묶음. 위 막대에 단추가 없는 동작(채널 정보·치지직에서 열기·멀티라이브에 추가·
+ * 다시 연결)과 단축키가 있는 영상 동작(북마크·스크린샷·PiP·영상+채팅 전체 화면)은 늘 보이고, 위 막대 단추와 같은 동작
+ * (팔로우·즐겨찾기·링크·채팅 표시·새 창 — `ml-narrow-only`)은 위 막대가 접혔을 때(좁은 패인)만 보인다.
+ * 채널 정보·다시 연결·PiP 는 패인 공용 항목(ml-pane-controls.js)을 그대로 쓰고 순서만 맞춘다.
+ */
+export function watchMenuHtml(shared) {
+  const key = (k) => `<kbd class="ml-menu-key" data-key-of="${k}"></kbd>`;
+  const item = (mw, icon, label, { narrow = false, k = '', attrs = '' } = {}) => `<button class="ml-menu-item ml-watch-only${narrow ? ' ml-narrow-only' : ''}" role="menuitem" data-mw="${mw}"${attrs}>${icon}<span>${label}</span>${k}</button>`;
+  return `
+        <div class="ml-menu-label ml-watch-only" aria-hidden="true">채널</div>
+        ${shared.info}
+        ${item('follow', CHANNEL_ICON.follow, '팔로우', { narrow: true, attrs: ' hidden' })}
+        ${item('fav', CHANNEL_ICON.star, '즐겨찾기에 추가', { narrow: true })}
+        ${item('copy', CHANNEL_ICON.link, '방송 링크 복사', { narrow: true })}
+        ${item('external', CHANNEL_ICON.external, '치지직에서 열기')}
+        ${item('multi', CHANNEL_ICON.multi, '멀티라이브에 추가')}
+        <div class="ml-menu-sep ml-watch-only"></div>
+        <div class="ml-menu-label ml-watch-only" aria-hidden="true">방송</div>
+        ${item('bookmark', WATCH_ICON.bookmark, '북마크', { k: key('bookmark') })}
+        ${item('shot', WATCH_ICON.camera, '스크린샷', { k: key('screenshot') })}
+        ${shared.retry}
+        <div class="ml-menu-sep ml-watch-only"></div>
+        <div class="ml-menu-label ml-watch-only" aria-hidden="true">보기</div>
+        ${item('chatmode', WATCH_ICON.chat, '채팅 표시 방식', { narrow: true, k: key('chat') })}
+        ${item('popout', WATCH_ICON.popout, '새 창으로 분리', { narrow: true, k: key('popout') })}
+        ${shared.pip}
+        ${item('fullchat', WATCH_ICON.chatFull, '영상+채팅 전체 화면', { k: key('fullchat') })}`;
 }
 
 export class WatchTools {
@@ -73,11 +127,122 @@ export class WatchTools {
         case 'chatmode': this.cycleChatMode(); break;
         case 'fullchat': this.fullscreen(true); break;
         case 'popout': window.dispatchEvent(new CustomEvent('cview:menu', { detail: 'window-player' })); break;
+        case 'follow': this.toggleFollow(); break;
+        case 'fav': this.toggleFavorite(); break;
+        case 'copy': if (this.channelId) copyLiveLink(this.channelId); break;
+        case 'external': if (this.channelId) openOnChzzk(this.channelId); break;
+        case 'multi': if (this.channelId && this.page.onAddChannel) this.page.onAddChannel(this.channelId); break;
         default: break;
       }
     });
     document.addEventListener('keydown', (e) => this.onKey(e));
     onChatPrefs(() => this.applyChatMode());
+    // 단축키 표시 — 사용자가 바꾼 키(설정 › 단축키)를 단추 툴팁·⋯ 메뉴에 그대로 보인다.
+    onShortcuts(() => this.applyShortcutHints());
+    this.applyShortcutHints();
+    // 다른 화면(채널 화면·카드 메뉴·채팅 말풍선)에서 바꾼 팔로우·즐겨찾기도 따라간다.
+    window.addEventListener(CHANNEL_SOCIAL_EVENT, (e) => {
+      const d = e.detail || {};
+      if (!this.social || d.channelId !== this.channelId) return;
+      if (typeof d.following === 'boolean') this.social.following = d.following;
+      if (typeof d.favorite === 'boolean') this.social.favorite = d.favorite;
+      this.renderSocial();
+    });
+  }
+
+  // ── 상단 바 채널 묶음(팔로우·즐겨찾기) ─────────────
+
+  /** 로그인·로그아웃 — 팔로우 단추를 그 상태로 다시 읽는다(로그아웃이면 숨는다). */
+  refreshAuth() {
+    if (this.channelId) this.loadSocial(this.channelId);
+  }
+
+  async loadSocial(channelId) {
+    this.social = null;
+    this.renderSocial();
+    if (!channelId) return;
+    const social = await loadChannelSocial(channelId, this.page.isLoggedIn());
+    if (channelId !== this.channelId) return;
+    this.social = social;
+    this.renderSocial();
+  }
+
+  /** 팔로우(로그인했을 때만)·즐겨찾기 단추와 ⋯ 항목을 지금 상태로. 상태를 모르면 팔로우는 숨긴다. */
+  renderSocial() {
+    const s = this.social;
+    const name = this.session?.channelName || '채널';
+    for (const b of this.root.querySelectorAll('[data-mw="follow"]')) {
+      const known = Boolean(s) && typeof s.following === 'boolean';
+      b.hidden = !known;
+      if (!known) continue;
+      const on = s.following;
+      b.classList.toggle('on', on);
+      b.disabled = Boolean(this.socialBusy);
+      const label = on ? '팔로잉' : '팔로우';
+      const hint = on ? `${name} 팔로잉 중 — 눌러서 팔로우 끊기` : `${name} 팔로우`;
+      b.title = hint;
+      const icon = b.querySelector('.ml-wt-ico, svg');
+      if (b.classList.contains('ml-menu-item')) {
+        b.querySelector('span').textContent = on ? '팔로우 끊기' : '팔로우';
+        b.setAttribute('aria-label', hint);
+      } else {
+        b.querySelector('.ml-wt-label').textContent = label;
+        // 보이는 글자(팔로우/팔로잉)를 이름 앞에 — 아이콘만일 때도 같은 이름(WCAG 2.5.3). 상태는 글자 자체가 알린다.
+        b.setAttribute('aria-label', on ? `팔로잉 — ${name} 팔로우 끊기` : `팔로우 — ${name}`);
+        if (icon) icon.innerHTML = on ? CHANNEL_ICON.following : CHANNEL_ICON.follow;
+      }
+    }
+    for (const b of this.root.querySelectorAll('[data-mw="fav"]')) {
+      const on = Boolean(s && s.favorite);
+      b.setAttribute('aria-pressed', String(on));
+      b.classList.toggle('on', on);
+      b.title = on ? '즐겨찾기에서 빼기' : '즐겨찾기에 추가';
+      if (b.classList.contains('ml-menu-item')) {
+        b.removeAttribute('aria-pressed');
+        b.querySelector('span').textContent = b.title;
+      } else {
+        b.setAttribute('aria-label', '즐겨찾기');
+        const svg = on ? CHANNEL_ICON.starOn : CHANNEL_ICON.star;
+        if (b.dataset.icon !== String(on)) { b.innerHTML = svg; b.dataset.icon = String(on); }
+      }
+    }
+  }
+
+  async toggleFollow() {
+    const s = this.social;
+    if (!this.channelId || !s || typeof s.following !== 'boolean' || this.socialBusy) return;
+    this.socialBusy = true;
+    this.renderSocial();
+    const id = this.channelId;
+    const next = await setFollow(id, this.session?.channelName, !s.following);
+    this.socialBusy = false;
+    if (next !== null && id === this.channelId) s.following = next;
+    this.renderSocial();
+  }
+
+  async toggleFavorite() {
+    if (!this.channelId) return;
+    const s = this.social || (this.social = { following: null, favorite: false });
+    const id = this.channelId;
+    const live = this.session;
+    const next = await setFavorite(id, live?.channelName, live?.profileImageUrl, !s.favorite);
+    if (next !== null && id === this.channelId) s.favorite = next;
+    this.renderSocial();
+  }
+
+  /** 단추 툴팁·⋯ 메뉴 오른쪽의 단축키 — 지금 바인딩(바꿀 수 있는 것)과 고정 키. */
+  applyShortcutHints() {
+    const b = currentBindings();
+    const label = (x) => (x && x.key ? bindingLabel(x) : '');
+    const keys = {
+      chat: label(b.toggleChat), pip: label(b.togglePiP), screenshot: label(b.screenshot) || kbd('⌘S'),
+      bookmark: 'B', popout: kbd('⌘N'), fullchat: kbd('⌃⌘F'),
+    };
+    for (const k of this.root.querySelectorAll('.ml-more-pane [data-key-of]')) {
+      const text = keys[k.dataset.keyOf] || '';
+      if (k.textContent !== text) k.textContent = text;
+    }
+    this.applyChatMode();
   }
 
   /** 라이브 메뉴 단독 보기가 화면에 떠 있는가. */
@@ -108,6 +273,7 @@ export class WatchTools {
       this.info = null;
       for (const meta of this.root.querySelectorAll('.ml-watch-meta')) meta.remove();
       this.loadInfo(id);
+      this.loadSocial(id);
     }
     this.infoPanel.show(id);
     if (s) this.infoPanel.syncViewers(s.viewerCountText); // 시청자 수가 바뀌면 정보란 숫자가 굴러 바뀐다
@@ -120,6 +286,7 @@ export class WatchTools {
     const pane = this.pane;
     if (pane && !this.hooked.has(pane.bridge)) {
       this.hooked.add(pane.bridge);
+      this.applyShortcutHints(); // 새로 만든 패인의 ⋯ 메뉴에도 단축키를 채운다
       pane.bridge.onMessage((type, data) => {
         if (type === 'screenshot' && pane.shotPending) {
           pane.shotPending = false;
@@ -178,7 +345,8 @@ export class WatchTools {
     const p = chatPrefs();
     this.body.style.setProperty('--overlay-w', `${Math.min(560, Math.max(240, Number(p.overlayWidth) || 320))}px`);
     for (const b of this.root.querySelectorAll('[data-mw="chatmode"]')) {
-      b.title = `${CHAT_MODE_LABEL[mode]} — 눌러서 바꾸기 (C)`;
+      const key = currentBindings().toggleChat;
+      b.title = `${CHAT_MODE_LABEL[mode]} — 눌러서 바꾸기${key && key.key ? ` (${bindingLabel(key)})` : ''}`;
       // 좁은 패인의 ⋯ 메뉴 항목(ml-pane-controls.js)은 지금 방식을 글자로 — 막대 단추는 켜짐 색으로
       const label = b.classList.contains('ml-menu-item') ? b.querySelector('span') : null;
       if (label) label.textContent = `${CHAT_MODE_LABEL[mode]} — 바꾸기`;
