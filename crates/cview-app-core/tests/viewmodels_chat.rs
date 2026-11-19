@@ -1170,3 +1170,41 @@ async fn event_loop_delivers_engine_events() {
     assert!(snap.is_connected);
     assert!(serde_json::to_value(&snap).unwrap()["messages"].is_array());
 }
+
+// MARK: - 메시지를 쌓지 않는 뷰모델(앱 셸)
+
+#[tokio::test]
+async fn untracked_view_model_keeps_no_message_buffers() {
+    let vm = ChatViewModel::with_deps(ChatDeps {
+        track_messages: false,
+        ..Default::default()
+    });
+    let mut s = vm.lock();
+    s.last_connection_config = Some(ConnectionConfig {
+        chat_channel_id: "c".into(),
+        ..Default::default()
+    });
+    s.handle_event(ChatEngineEvent::Connected);
+    assert!(s.is_holding_for_backlog);
+    let batch = |p: &str| -> Vec<ChatMessage> {
+        (0..30)
+            .map(|i| ChatMessage::with_id(format!("{p}{i}"), "닉", "안녕").user_id("u"))
+            .collect()
+    };
+    s.handle_event(ChatEngineEvent::RecentMessages(batch("r")));
+    assert!(!s.is_holding_for_backlog, "지난 기록이 오면 보류를 푼다");
+    s.handle_event(ChatEngineEvent::NewMessages(batch("n")));
+    s.handle_event(ChatEngineEvent::Donations(vec![ChatMessage::with_id(
+        "d", "닉", "후원",
+    )
+    .user_id("u")
+    .message_type(MessageType::Donation)]));
+    // 환영 줄 하나만 — 받은 메시지는 버퍼·기록·대기열·통계 어디에도 남지 않는다.
+    assert_eq!(s.messages.len(), 1);
+    assert!(s.chat_history.is_empty());
+    assert_eq!(s.pending_count(), 0);
+    assert!(s.recent_message_timestamps.is_empty());
+    // 연결 상태·제한 같은 나머지 이벤트는 그대로 처리한다.
+    s.handle_event(ChatEngineEvent::Kicked);
+    assert!(s.error_message.is_some());
+}

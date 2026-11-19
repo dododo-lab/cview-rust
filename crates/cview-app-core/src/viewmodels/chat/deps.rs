@@ -241,6 +241,10 @@ pub struct ChatDeps {
     pub pacing: Arc<dyn PacingEnvironment>,
     pub toast: Arc<dyn ToastPresenter>,
     pub tts: Arc<dyn ChatTts>,
+    /// 받은 메시지를 뷰모델 버퍼(`messages`·`chat_history`·대기열·통계·멘션·스트림 알림)에 쌓을지.
+    /// 앱 셸은 엔진 이벤트를 그대로 웹 화면에 넘기고(`TappedChatEngine`) 이 버퍼를 읽지 않으므로 끈다 —
+    /// 켜 두면 세션마다 메시지 약 2,900개(3.6 MiB)를 붙잡고, 메시지가 오는 동안 33ms 마다 묶음 타이머를 돌렸다.
+    pub track_messages: bool,
 }
 
 impl Default for ChatDeps {
@@ -254,6 +258,7 @@ impl Default for ChatDeps {
             pacing: Arc::new(DefaultPacingEnvironment),
             toast: Arc::new(NoopToast),
             tts: Arc::new(NoopTts),
+            track_messages: true,
         }
     }
 }

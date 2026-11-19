@@ -339,6 +339,8 @@ impl AppServices {
         let search = SearchViewModel::new(api_arc, Arc::new(MemoryRecentSearchStore::default()));
         let chat = ChatViewModel::with_deps(ChatDeps {
             engine_factory: chat_engine_factory(cookies.clone(), sinks.chat_event.clone()),
+            // 웹 화면이 엔진 이벤트를 직접 받는다 — 뷰모델 메시지 버퍼는 읽는 곳이 없다.
+            track_messages: false,
             ..ChatDeps::default()
         });
 
@@ -480,6 +482,8 @@ impl AppServices {
             Arc::new(move |dto| emit(session_key.clone(), dto));
         let vm = ChatViewModel::with_deps(ChatDeps {
             engine_factory: chat_engine_factory(self.cookies.clone(), sink),
+            // 웹 화면이 엔진 이벤트를 직접 받는다 — 뷰모델 메시지 버퍼는 읽는 곳이 없다.
+            track_messages: false,
             ..ChatDeps::default()
         });
         map.insert(key.to_string(), vm.clone());
