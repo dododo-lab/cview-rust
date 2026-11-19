@@ -76,9 +76,12 @@ function liveMock([opts]) {
     multilive_add: () => { state.rev++; return state; }, multilive_select: ({ sessionId }) => { state.selectedId = sessionId; state.rev++; return state; },
     channel_follow: () => null, favorite_set: () => null, open_external: () => null, chat_donation_ranking: () => [],
     multilive_remove: ({ sessionId }) => { state.sessions = state.sessions.filter((x) => x.id !== sessionId); state.rev++; return JSON.parse(JSON.stringify(state)); },
-    following_channels_all: () => (opts.loggedOut ? Promise.reject(new Error('로그인이 필요합니다')) : [{ channelId: 'ch1', channelName: '한동숙' }]),
+    following_channels_all: () => (opts.loggedOut ? Promise.reject(new Error('로그인이 필요합니다'))
+      : new Promise((ok) => setTimeout(() => ok([{ channelId: 'ch1', channelName: '한동숙' }]), opts.followDelay || 0))), // followDelay: 캐시가 비어 늦게 오는 팔로우 상태(R14)
     favorites_list: () => [],
   };
+  // rail: 예전 시청 화면 머리줄의 팔로잉 라이브 레일(viewer-extras loadRail) 항목 수.
+  if (opts.rail) over.following_lives = () => Array.from({ length: opts.rail }, (_, i) => ({ ...live, channelId: `f${i}`, channelName: `팔로잉 ${i}`, channelImageUrl: `${location.origin}/__img/avatar/${(i % 6) + 1}.svg` }));
   if (opts.loggedOut) over.auth_status = () => ({ loggedIn: false, state: 'loggedOut' });
   // Rust 이벤트 흉내 — 멀티라이브 상태(multilive://state)·로그인(auth://changed). __emitState(fn) 는 상태를 고친 뒤 보낸다.
   const listeners = {};
@@ -596,6 +599,61 @@ await check('R03 state-only updates keep chip focus and an open "+N" menu (menu 
   await ctx.close();
 });
 
+/** 단독 보기 영상의 되감기 호출을 엿본다 — seekable 0~100초·현재 90초로 두고 iframe 의 seek·seekToLiveEdge 를 기록. */
+const spySeek = (page) => page.$eval(`${PANE} iframe`, (f) => {
+  const w = f.contentWindow;
+  const v = f.contentDocument.getElementById('video');
+  Object.defineProperty(v, 'seekable', { configurable: true, get: () => ({ length: 1, start: () => 0, end: () => 100 }) });
+  Object.defineProperty(v, 'currentTime', { configurable: true, get: () => 90, set: () => {} });
+  window.__seeks = [];
+  w.seek = (t) => { window.__seeks.push(t); };
+  w.seekToLiveEdge = () => { window.__seeks.push('live'); };
+});
+
+await check('R13 mouse-clicked chip (focused by Chromium/WebView2) leaves ←/→ seeking, Space playing and Delete harmless', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1600, channels: 3 });
+  // 1) 진짜 마우스 클릭으로 다른 채널로 바꾼다 — Chromium 은 누른 칩에 초점을 주고, 다시 그린 뒤에도 그 칩이 초점을 가졌었다.
+  await page.click('.ml-watch-chip[data-session-id="s1"]');
+  await page.waitForFunction(() => document.querySelector('.ml-watch-chip.active')?.dataset.sessionId === 's1');
+  await page.waitForSelector(`${PANE} iframe`);
+  await page.waitForFunction((sel) => { const f = document.querySelector(`${sel} iframe`); return f && f.contentDocument?.readyState === 'complete' && f.contentDocument.getElementById('video'); }, PANE);
+  await page.waitForTimeout(500);
+  assert.equal(await page.evaluate(() => Boolean(document.activeElement?.closest('.ml-watch-picker'))), false, '마우스로 바꾼 뒤 초점이 칩 줄에 남지 않는다');
+  // 2) 마우스를 누른 채(포인터 초점 — :focus-visible 아님) 칩에 초점이 있어도 칩 키보드는 끼어들지 않는다.
+  const r = await page.$eval('.ml-watch-chip[data-session-id="s2"]', (c) => { const b = c.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; });
+  await page.mouse.move(r.x, r.y);
+  await page.mouse.down();
+  // WebKit 은 단추에 마우스 초점을 주지 않는다 — Chromium 과 같게 포인터 초점을 흉내 낸다(키보드 모드가 아닌 focus()).
+  await page.$eval('.ml-watch-chip[data-session-id="s2"]', (c) => { if (document.activeElement !== c) c.focus(); });
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset?.sessionId), 's2', '포인터 초점');
+  await spySeek(page);
+  await clearIpc(page);
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForTimeout(120);
+  const st = await page.evaluate(() => ({ seeks: window.__seeks.slice(), focus: document.activeElement?.dataset?.sessionId || null}));
+  assert.deepEqual(st.seeks, [80], '← 는 10초 되감기');
+  assert.equal(st.focus, 's2', '← 가 칩 이동으로 새지 않는다');
+  await page.keyboard.press('Delete');
+  // Backspace 는 합성 이벤트로 — Playwright WebKit 은 진짜 Backspace 를 '뒤로 가기'로 처리해 페이지를 떠난다(앱의 WKWebView·WebView2 는 아니다).
+  await page.evaluate(() => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true })));
+  await page.waitForTimeout(200);
+  assert.deepEqual(await ipcOf(page, 'multilive_remove'), [], 'Delete·Backspace 로 채널을 닫지 않는다');
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+  // 3) 키보드(Tab)로 온 칩은 그대로 칩 키보드 — ← 는 옆 칩, 되감기 없음.
+  await page.evaluate(() => { document.activeElement?.blur?.(); window.__seeks.length = 0; });
+  await page.focus('.ml-watch-close[data-session-id="s2"]').catch(() => {});
+  await page.keyboard.press('Shift+Tab');
+  const kb = await page.evaluate(() => ({ id: document.activeElement?.dataset?.sessionId, chip: document.activeElement?.classList.contains('ml-watch-chip'), fv: document.activeElement?.matches(':focus-visible') }));
+  assert.deepEqual(kb, { id: 's2', chip: true, fv: true }, 'Shift+Tab 으로 칩에 온다');
+  await page.keyboard.press('ArrowLeft');
+  await page.waitForTimeout(120);
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset?.sessionId), 's1', '키보드 초점이면 ← 는 칩 이동');
+  assert.deepEqual(await page.evaluate(() => window.__seeks), [], '키보드 칩 이동은 되감지 않는다');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
 await check('R04 app-level Esc on a mouse-opened "+N" menu resets aria-expanded', async () => {
   const { ctx, page, errors } = await openWatch({ width: 1100, channels: 6 });
   await page.click('.ml-watch-more.end');
@@ -857,6 +915,29 @@ await check('R12 #viewer quality badge keeps keyboard focus across the 30s meta 
   await page.waitForTimeout(150);
   const st = await page.evaluate(() => ({ focus: document.activeElement?.classList.contains('vt-q-badge'), attached: document.querySelector('#viewer .meta-stats .vt-q-badge') !== null }));
   assert.deepEqual(st, { focus: true, attached: true });
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R14 #viewer re-fits the channel rail when the follow button shows up late (× and ⋯ stay visible)', async () => {
+  // 팔로잉 라이브 11개 레일, 팔로우 상태는 2.5초 늦게(캐시가 빈 첫 시청) — 그동안 레일은 팔로우 단추 없이 접혀 있다.
+  const { ctx, page, errors } = await openViewer({ width: 1240, rail: 11, followDelay: 2500 });
+  const fits = () => page.evaluate(() => {
+    const top = document.querySelector('#viewer .stage-top');
+    const t = top.getBoundingClientRect();
+    const vis = (sel) => { const el = document.querySelector(sel); if (!el) return null; const b = el.getBoundingClientRect(); return b.width > 0 && b.right <= t.right + 0.5 && b.left >= t.left - 0.5; };
+    return { follow: !document.querySelector('#viewer .vt-follow').hidden, close: vis('#viewer-close'), more: vis('#viewer-more'),
+      rail: document.querySelectorAll('#viewer .viewer-rail .rail-item:not([hidden])').length, overflow: top.scrollWidth - top.clientWidth };
+  });
+  const before = await fits();
+  assert.equal(before.follow, false, `아직 팔로우 상태 전 ${JSON.stringify(before)}`);
+  assert.ok(before.rail > 0 && before.close && before.more, `시작: 레일이 보이고 ×·⋯ 가 무대 안 ${JSON.stringify(before)}`);
+  await page.waitForFunction(() => !document.querySelector('#viewer .vt-follow').hidden, null, { timeout: 6000 });
+  await page.waitForTimeout(250);
+  const after = await fits();
+  assert.deepEqual({ close: after.close, more: after.more }, { close: true, more: true }, `팔로우 단추가 늦게 나타나도 ×·⋯ 가 무대 안 ${JSON.stringify(after)}`);
+  assert.ok(after.overflow <= 1, `위 막대가 넘치지 않는다 ${JSON.stringify(after)}`);
+  assert.ok(after.rail < before.rail, `레일을 다시 접는다 ${before.rail} → ${after.rail}`);
   assert.deepEqual(errors, []);
   await ctx.close();
 });

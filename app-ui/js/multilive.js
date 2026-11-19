@@ -263,6 +263,12 @@ export class MultiLivePage {
     // 칩 키보드 — ←/→ 옆 채널, Home/End 처음·끝(가려진 칩이면 창을 옮겨 보이게), Delete/Backspace 그 채널 닫기.
     // 기본 동작을 막아 시청 단축키(←/→ 되감기, ml-watch.js)로 새지 않는다.
     this.watchPicker.addEventListener('keydown', (e) => this.onChipKey(e));
+    // 칩 초점이 키보드로 왔는지 — WebView2·Chromium 은 마우스로 누른 칩에도 초점을 준다. 그 초점에서는 칩 키보드(←/→·Delete)가
+    // 끼어들면 안 된다(되감기·채널 닫기로 샌다). :focus-visible 은 키를 누르는 순간 참이 되어 keydown 에서 가를 수 없어 직접 잰다.
+    // 누르는 동안(pointerdown~pointerup) 들어온 초점이 포인터 초점이다(Chromium 은 pointerdown 에서 초점을 준다).
+    this.watchPicker.addEventListener('pointerdown', () => { this.chipPointerDown = true; }, { capture: true, passive: true });
+    for (const ev of ['pointerup', 'pointercancel']) window.addEventListener(ev, () => { if (this.chipPointerDown) setTimeout(() => { this.chipPointerDown = false; }); }, { capture: true, passive: true });
+    this.watchPicker.addEventListener('focusin', () => { this.chipKeyFocus = !this.chipPointerDown; });
     this.chipOverflow = document.createElement('div');
     this.chipOverflow.className = 'ml-watch-overflow';
     this.chipOverflow.setAttribute('role', 'menu');
@@ -1240,7 +1246,9 @@ export class MultiLivePage {
     this.chipPeek.close(); // 가리키던 칩이 떨어진다
     this.closeChipOverflow();
     // 다시 그려도 칩·× 의 키보드 초점은 같은 채널로 되돌린다(닫기 뒤 초점은 restoreChipFocus 가 따로 맡는다).
-    const had = picker.contains(document.activeElement) ? document.activeElement : null;
+    // 키보드로 온 초점(chipKeyFocus)만 — WebView2·Chromium 은 마우스로 누른 칩에도 초점을 주는데, 그걸 되살리면 그 뒤 ←/→ 가
+    // 되감기 대신 칩 이동, Delete 가 보던 채널 닫기가 됐다.
+    const had = picker.contains(document.activeElement) && this.chipKeyFocus ? document.activeElement : null;
     const keep = had && had.dataset.sessionId ? { id: had.dataset.sessionId, close: had.classList.contains('ml-watch-close') } : null;
     picker.innerHTML = `<button class="ml-watch-more start" aria-haspopup="menu" aria-expanded="false" hidden></button>${html}<button class="ml-watch-more end" aria-haspopup="menu" aria-expanded="false" hidden></button>`;
     // 지금 보는 칩이 늘 창 안에 오게 맞춘다(새로 연 채널이 숨은 쪽에 있으면 추가가 안 된 것처럼 보인다).
@@ -1465,6 +1473,8 @@ export class MultiLivePage {
   onChipKey(e) {
     const chip = e.target.closest?.('.ml-watch-chip');
     if (!chip || e.metaKey || e.ctrlKey || e.altKey) return;
+    // 키보드로 칩에 왔을 때만 — 마우스로 누른 칩에 남은 초점(WebView2·Chromium)에서는 ←/→ 되감기·Space 재생이 그대로 가야 한다.
+    if (!this.chipKeyFocus) return;
     const chips = [...this.watchPicker.querySelectorAll('.ml-watch-chip')];
     const i = chips.indexOf(chip);
     let next = -1;
@@ -1567,6 +1577,8 @@ export class MultiLivePage {
       case 'watch': {
         // 패인의 '라이브로 크게 보기' 또는 라이브 머리줄의 채널 고르기(data-session-id).
         const id = action.dataset.sessionId || sessionId;
+        // 마우스로 누른 칩은 초점을 내려놓는다(WebView2·Chromium 이 준 초점) — 남으면 Space 가 재생 대신 칩을 누른다.
+        if (e.detail > 0 && action.classList.contains('ml-watch-chip') && document.activeElement === action) action.blur();
         if (id && !(this.watchSlot != null && id === this.state.watchId)) window.dispatchEvent(new CustomEvent('cview:ml-watch', { detail: { sessionId: id } }));
         break;
       }

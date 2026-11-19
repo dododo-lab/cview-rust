@@ -106,6 +106,11 @@ export class ViewerTopBar {
     window.addEventListener('resize', () => fitPopover(this.menu, this.stage));
     onShortcuts(() => this.applyShortcutHints());
     this.applyShortcutHints();
+    // 팔로우 단추·배지가 늦게 나타나도(캐시가 비어 늦게 온 팔로우 상태, 시청 중 로그인) 레일 접기를 다시 잰다 —
+    // stage-top 은 overflow:hidden 이라 제 폭이 그대로여서 viewer-extras 의 ResizeObserver 가 울리지 않고, 오른쪽 ⋯·× 가 밖으로 밀렸다.
+    this.refit = new ResizeObserver(() => this.viewer.extras?.fitRail());
+    for (const g of top.querySelectorAll('.vt-group')) this.refit.observe(g);
+    this.refit.observe(this.badge);
     window.addEventListener(CHANNEL_SOCIAL_EVENT, (e) => {
       const d = e.detail || {};
       if (!this.social || d.channelId !== this.viewer.channelId) return;
