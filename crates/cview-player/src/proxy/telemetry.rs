@@ -31,6 +31,9 @@ pub const CONSECUTIVE_403_THRESHOLD: i64 = 3;
 
 const RESPONSE_TIME_WINDOW: usize = 20;
 const SEGMENT_FETCH_WINDOW: usize = 12;
+/// 디버그 로그 창(`take_perf_window`, 10초마다)에 쌓아 둘 세그먼트 표본 상한. 로그가 꺼져 있으면 아무도 꺼내지
+/// 않아 재생 내내 세그먼트마다 늘었다 — 오래된 것부터 버린다(로그가 켜져 있으면 창마다 몇 개뿐이라 닿지 않는다).
+const PERF_SAMPLE_CAP: usize = 512;
 
 /// 공급 공백의 원인.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -221,6 +224,10 @@ impl ProxyTelemetry {
         };
         let summary = {
             let mut s = self.lock();
+            if s.perf.fetch.len() >= PERF_SAMPLE_CAP {
+                s.perf.fetch.drain(..PERF_SAMPLE_CAP / 2);
+                s.perf.ttfb.drain(..PERF_SAMPLE_CAP / 2);
+            }
             s.perf.fetch.push(fetch);
             s.perf.ttfb.push(ttfb);
             if ttfb >= SEGMENT_TTFB_THRESHOLD || fetch >= SEGMENT_FETCH_THRESHOLD {
@@ -428,6 +435,22 @@ mod tests {
         assert!((w.ttfb_max - 1.8).abs() < 1e-9);
         // 꺼내면 비운다
         assert_eq!(t.take_perf_window(), None);
+    }
+
+    #[test]
+    fn perf_samples_stay_bounded_without_a_reader() {
+        // 디버그 로그가 꺼져 창을 꺼내는 쪽이 없어도 재생 시간만큼 늘지 않는다.
+        let t = ProxyTelemetry::default();
+        for i in 0..5000 {
+            t.record_segment_fetch_sample(0.5 + i as f64 * 1e-6, 0.1);
+        }
+        {
+            let s = t.lock();
+            assert!(s.perf.fetch.len() <= PERF_SAMPLE_CAP);
+            assert_eq!(s.perf.fetch.len(), s.perf.ttfb.len());
+        }
+        let w = t.take_perf_window().expect("최근 표본은 남는다");
+        assert!(w.segments > 0 && w.segments as usize <= PERF_SAMPLE_CAP);
     }
 
     #[test]
