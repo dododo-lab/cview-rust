@@ -107,6 +107,38 @@ export function trimFront(list, max) {
   return true;
 }
 
+/**
+ * 붙이기 간격 — 채팅 목록은 줄을 붙일 때마다 바닥 맞추기(snap)가 레이아웃을 한 번 돌린다. 그 비용은 붙인 줄 수보다
+ * 붙인 횟수에 더 든다(WebKit, 300줄 목록: 1줄 3ms·10줄 6ms·40줄 14ms). 메시지가 웹소켓 프레임마다 따로 오면
+ * 프레임마다 붙여 초당 수십 번 레이아웃을 돌렸다. 그래서 바로 앞 붙이기에서 FLUSH_GAP_MS 가 지나지 않았으면
+ * 그때까지 모았다가 한 번에 붙인다 — 한산한 채팅은 예전처럼 다음 프레임에 바로 붙는다.
+ */
+export const FLUSH_GAP_MS = 100;
+
+/**
+ * 묶어 붙이기 예약 — owner 의 flushScheduled·flushRaf·flushTimer·flushGap·lastFlushAt 을 쓴다.
+ * 보이면 (간격을 지킨 뒤) 다음 프레임, 창이 숨어 rAF 가 멈춰도 타이머로 결국 붙인다(숨은 창은 hiddenMs 마다).
+ */
+export function scheduleChatFlush(owner, run, { hiddenMs = 1000 } = {}) {
+  if (owner.flushScheduled) return;
+  owner.flushScheduled = true;
+  const hidden = document.hidden;
+  const wait = hidden ? 0 : Math.max(0, (owner.lastFlushAt || 0) + FLUSH_GAP_MS - performance.now());
+  const frame = () => { owner.flushRaf = requestAnimationFrame(run); };
+  if (wait > 0) owner.flushGap = setTimeout(frame, wait);
+  else frame();
+  owner.flushTimer = setTimeout(run, (hidden ? hiddenMs : 250) + wait);
+}
+
+/** 붙이기를 시작할 때(또는 버릴 때) — 남은 예약을 지우고 간격을 잰다. */
+export function flushStarted(owner, { ran = true } = {}) {
+  cancelAnimationFrame(owner.flushRaf);
+  clearTimeout(owner.flushTimer);
+  clearTimeout(owner.flushGap);
+  owner.flushScheduled = false;
+  if (ran) owner.lastFlushAt = performance.now();
+}
+
 function resyncAll() {
   for (const ref of followers) {
     const f = ref.deref();

@@ -10,7 +10,7 @@ import { MergedLineHost } from './merged-lines.js';
 import { applyChatSkin } from './chat-extras.js';
 import { chatPrefs, onChatPrefs, passesFilters, updateChatPrefs } from './chat-prefs.js';
 import { kbd } from './platform.js';
-import { chatFollower, trimFront } from './chat-follow.js';
+import { chatFollower, trimFront, scheduleChatFlush, flushStarted } from './chat-follow.js';
 import { MultiLiveAddDrawer } from './ml-add-drawer.js';
 import { verifiedBadge } from './verified-badge.js';
 
@@ -393,12 +393,8 @@ export class MultiChatPage {
   }
 
   scheduleFlush() {
-    if (this.flushScheduled) return;
-    this.flushScheduled = true;
-    // 보이면 다음 프레임, 창이 숨어 rAF 가 멈춰도 타이머로 결국 붙인다(가려진 창은 덜 자주).
-    const run = () => this.flushBacklog();
-    this.flushRaf = requestAnimationFrame(run);
-    this.flushTimer = setTimeout(run, document.hidden ? 1000 : 250);
+    // 보이면 다음 프레임(간격 FLUSH_GAP_MS 를 지켜 모아서), 창이 숨어 rAF 가 멈춰도 타이머로 결국 붙인다(가려진 창은 덜 자주).
+    scheduleChatFlush(this, () => this.flushBacklog());
   }
 
   queueBacklog(c, messages) {
@@ -413,9 +409,7 @@ export class MultiChatPage {
 
   /** 화면에 돌아왔을 때 — 모아 둔 통합 메시지를 한 번에 붙인다(닫힌 채널 것은 버린다). */
   flushBacklog() {
-    cancelAnimationFrame(this.flushRaf);
-    clearTimeout(this.flushTimer);
-    this.flushScheduled = false;
+    flushStarted(this);
     const list = this.backlog || [];
     this.backlog = [];
     this.backlogCount = 0;
