@@ -3463,6 +3463,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 /* 지표 칩은 두 줄까지 — 레일·단추에 밀린 좁은 제목 칸에서 칩이 서너 줄로 꺾여 영상을 가렸다. 넘치는 칩은 셋째 줄(숨김)로 통째로 빠진다
    (멀티라이브 패인 .ml-pane-stats 와 같은 방식). 순서: LIVE · 시청자 · 경과 · 화질/지연 · 누적. */
 .stage-top .meta-stats { max-height: 50px; overflow: hidden; }
+.stage-top .meta-chips { display: contents; }
+.stage-top .meta-stats .stat-acc { order: 2; }
+.stage-top .meta-stats .vt-q-badge { order: 1; }
 .stage-top .vt-group { display: flex; align-items: center; gap: 2px; flex: none; }
 .stage-top .vt-sep { flex: none; width: 1px; height: 20px; margin: 8px 4px 0; background: rgba(255, 255, 255, 0.22); }
 .vt-follow { flex: none; height: 32px; margin: 2px 4px 0 0; display: inline-flex; align-items: center; gap: 5px; padding: 0 12px 0 10px; border: 0; border-radius: var(--radius-pill);
@@ -3488,7 +3491,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .vt-q-badge:hover { background: rgba(255, 255, 255, 0.2); }
 .vt-q-badge.behind { box-shadow: inset 0 0 0 1px #ffb020; }
 .vt-q-badge.behind .vt-q-lat { color: #ffcf66; }
-.vt-q-badge:focus-visible { outline: 2px solid #00ffa3; outline-offset: 2px; }
+.vt-q-badge:focus-visible { outline: 2px solid #00ffa3; outline-offset: -2px; } /* 지표 줄은 overflow: hidden — 바깥 테두리는 잘린다 */
 /* ⋯ 메뉴 — 무대 오른쪽 위(위 막대 아래). 흐림 없이(재생 중인 영상 위 흐림은 프레임마다 다시 계산된다). */
 .vt-menu { position: absolute; right: 16px; top: 58px; z-index: 8; min-width: 220px; max-height: calc(100% - 120px); overflow-y: auto; padding: 5px; border-radius: var(--radius-ms);
   background: rgba(24, 25, 28, 0.95); border: 1px solid rgba(255, 255, 255, 0.12); color: #fff; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }

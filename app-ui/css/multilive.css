@@ -695,6 +695,7 @@
 .st-error .ml-watch-st { display: block; background: var(--error); }
 .ml-watch-tab.st-offline .ml-watch-chip:not(.active) .ellipsis { color: var(--text-tertiary); }
 .ml-watch-tab:is(:hover, :focus-within) .ml-watch-st { opacity: 0; }
+.ml-watch-state[hidden] { display: none; }
 .ml-watch-state { flex: none; font-size: var(--fs-micro); font-weight: 600; color: var(--text-tertiary); }
 /* "+N" — 이제 넘침 메뉴를 여는 단추(탭 순서에 있다) */
 .ml-watch-more:focus-visible { outline: 2px solid var(--primary-text); outline-offset: -2px; color: var(--text-primary); }
@@ -713,6 +714,7 @@
 .ml-wo-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .ml-wo-name { font-size: var(--fs-footnote); font-weight: 600; color: var(--text-primary); }
 .ml-wo-title { font-size: var(--fs-tiny); color: var(--text-secondary); }
+.ml-wo-state[hidden] { display: none; }
 .ml-wo-state { flex: none; margin-left: auto; font-size: var(--fs-tiny); font-weight: 600; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
 
 /* ── 채널 칩 미리보기 말풍선(ml-chip-peek.js) — 칩 바로 아래, 꼬리가 칩 가운데를 가리킨다 ── */
@@ -757,6 +759,10 @@
 :root[data-motion="reduced"] .ml-peek, :root[data-motion="reduced"] .ml-peek::before { animation: none; transition: none; }
 /* 단독 무대의 오버레이 채팅(z 6)이 패인 ⚙·⋯ 메뉴를 덮었다 — 메뉴는 패인 쌓임 맥락 안이라 z 로는 못 올린다. 채팅 왼쪽으로 비켜 연다. */
 .page-multilive.as-watch .ml-body.chat-overlay .ml-pane-menu { right: min(calc(var(--overlay-w, 320px) + 28px), calc(100% - 186px)); }
+/* 단독 보기 ⋯ 는 더 넓다(min 220px) — 예전 170px 기준(186px)이면 좁은 무대(약 568px 이하)에서 왼쪽 끝이 패인 밖으로 잘렸다.
+   폭은 패인 안(좌우 8px)으로 묶는다. */
+.page-multilive.as-watch .ml-body.chat-overlay .ml-pane.ml-single-target .ml-more-pane { right: min(calc(var(--overlay-w, 320px) + 28px), calc(100% - 236px)); }
+.page-multilive.as-watch .ml-pane.ml-single-target .ml-more-pane { max-width: calc(100% - 16px); }
 
 /* 패인 볼륨 슬라이더 키보드 초점 */
 .ml-vol .ml-vol-range:focus-visible { width: 64px; opacity: 1; margin: 0 8px 0 2px; outline: 2px solid var(--ml-media-accent); outline-offset: 3px; border-radius: 2px; }
@@ -900,7 +906,8 @@
    [아바타·제목·채널·지표 칩·화질/지연 배지] … [채널: 팔로우·즐겨찾기·링크] | [보기: 채팅 표시·새 창] [⋯] [×]
    멀티라이브 그리드 패인의 위 막대는 그대로 — 아래 규칙은 모두 단독 보기 무대 패인(.ml-single-target)에만 건다.
    폭 단계(패인 폭, 컨테이너 쿼리): 넓음(760~) 팔로우 글자까지 · 보통(521~759) 팔로우는 아이콘 · 좁음(~520) 두 묶음을 ⋯ 로. */
-.page-multilive.as-watch .ml-pane.ml-single-target .ml-pane-top :is(.ml-drag, [data-ml="select"], [data-ml="info"], [data-ml="retry"]) { display: none; }
+/* 단추만 숨긴다 — 아바타(div.ml-pane-avatar[data-ml="info"])도 data-ml="info" 라 예전 선택자가 아바타와 '눌러서 채널 정보' 길까지 지웠다. */
+.page-multilive.as-watch .ml-pane.ml-single-target .ml-pane-top :is(.ml-drag, button[data-ml="select"], button[data-ml="info"], button[data-ml="retry"]) { display: none; }
 .page-multilive.as-watch .ml-pane.ml-single-target .ml-more-pane .ml-grid-only { display: none; }
 .page-multilive.as-watch .ml-pane.ml-single-target .ml-pane-top .ml-wt-group { display: flex; align-items: center; gap: 2px; flex: none; }
 .page-multilive.as-watch .ml-pane.ml-single-target .ml-pane-top .ml-wt-sep { display: block; flex: none; width: 1px; height: 18px; margin: 6px 4px 0; background: rgba(255, 255, 255, 0.22); }
@@ -948,7 +955,7 @@
 .ml-menu-key:empty { display: none; }
 .page-multilive.as-watch .ml-pane.ml-single-target .ml-more-pane .ml-menu-key.ml-watch-only { display: inline; }
 .page-multilive.as-watch .ml-pane.ml-single-target .ml-more-pane .ml-menu-key.ml-watch-only:empty { display: none; }
-.page-multilive.as-watch .ml-pane.ml-single-target .ml-more-pane { min-width: 220px; }
+.page-multilive.as-watch .ml-pane.ml-single-target .ml-more-pane { min-width: min(220px, calc(100% - 16px)); }
 /* 보통 — 팔로우는 아이콘만(글자는 툴팁·aria-label 로) */
 @container (max-width: 759px) {
   .ml-wt-follow { width: 30px; padding: 0; justify-content: center; margin-right: 2px; }

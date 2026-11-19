@@ -1,4 +1,5 @@
 // CView 메인 — 사이드바 라우팅, 인증 상태, 시청 화면 연결.
+import { CHANNEL_SOCIAL_EVENT, channelSocialChanged, resetFollowOverrides } from './channel-actions.js';
 import { api, listen, Events, isTauri } from './api.js';
 import { toast, icons } from './dom.js';
 import { showShortcuts, showAbout, showUpdateCheck } from './app-sheets.js';
@@ -409,7 +410,10 @@ function onAuthChanged(status) {
   // 시작 때는 닉네임 없이 홈을 먼저 그린다 — 서버 확인으로 닉네임이 오면 인사말만 고친다.
   if (pages.home) pages.home.refreshGreetingName();
   if (wasLoggedIn !== isLoggedIn()) refreshSidebarFollowing();
-  if (viewer) viewer.refreshAuth();
+  if (wasLoggedIn !== isLoggedIn()) resetFollowOverrides();
+  if (viewer) viewer.refreshAuth(wasLoggedIn !== isLoggedIn());
+  // 시청 상단 바의 팔로우 단추는 로그인했을 때만 — 로그인·로그아웃하면 지금 채널 상태를 다시 읽는다(예전엔 그대로 남았다).
+  if (wasLoggedIn !== isLoggedIn() && pages.multilive) pages.multilive.watch.refreshAuth();
   if (wasLoggedIn !== isLoggedIn()) refreshChatAuth();
   if (wasLoggedIn !== isLoggedIn() && current && current !== 'search' && !(viewer && viewer.isOpen) && !liveListHidden()) {
     pages[current].show();
@@ -574,7 +578,8 @@ function installCardMenu() {
       else if (a === 'channel') openChannelPage(id);
       else if (a === 'chat') { if (viewer.isPlaying) viewer.close(); navigate('chat', { channelId: id }); }
       else if (a === 'fav') {
-        try { await api.favoriteSet(id, !isFav, name, image); toast(isFav ? '즐겨찾기에서 뺐습니다' : '즐겨찾기에 추가했습니다', 1500); refreshSidebarFollowing(); } catch (er) { toast(er.message); }
+        // 알림을 받아 사이드바·홈을 다시 읽는다(아래 CHANNEL_SOCIAL_EVENT) — 시청 상단 바 별도 함께 따라간다.
+        try { await api.favoriteSet(id, !isFav, name, image); toast(isFav ? '즐겨찾기에서 뺐습니다' : '즐겨찾기에 추가했습니다', 1500); channelSocialChanged(id, { favorite: !isFav }); } catch (er) { toast(er.message); }
       } else if (a === 'copy') navigator.clipboard.writeText(url).then(() => toast('링크를 복사했습니다', 1200), () => toast('링크를 복사하지 못했습니다'));
       else if (a === 'open') api.openExternal(url).catch((er) => toast(er.message));
     });
@@ -955,6 +960,8 @@ async function main() {
 
   listen(Events.authChanged, onAuthChanged);
   window.addEventListener('cview:login', login);
+  // 팔로우·즐겨찾기가 어디서든 바뀌면(상단 바·채팅 말풍선·채널 화면·카드 메뉴) 사이드바·홈 팔로잉(즐겨찾기 순서)을 다시 읽는다.
+  window.addEventListener(CHANNEL_SOCIAL_EVENT, () => refreshSidebarFollowing());
   loadChatPrefs();
   loadShortcuts();
   listen(Events.loginFailed, (p) => p && p.message && toast(p.message));

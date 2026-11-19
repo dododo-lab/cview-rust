@@ -178,8 +178,18 @@ export class Viewer {
         live.accumulateCount > 0 ? `<span class="stat stat-acc" title="누적 시청자">누적 ${esc(live.accumulateCountText)}명</span>` : '',
       ].filter(Boolean).join('')
       : '<span class="stat off">오프라인</span>';
-    meta.innerHTML = `<div class="meta-channel ellipsis">${channel}</div><div class="meta-stats">${stats}</div>`;
-    this.topbar?.attachBadge(); // 화질·지연 배지는 지표 줄 끝에(다시 그리면 다시 붙인다)
+    // 틀은 한 번만 만들고 칸 안만 바꾼다 — 30초마다(경과 시간)·팔로워가 오면 다시 그리는데, 통째로 바꾸면 지표 줄의
+    // 화질·지연 배지(viewer-topbar.js)가 떼였다 붙어 키보드 초점이 body 로 떨어지고 위 막대가 숨었다.
+    let line = meta.querySelector('.meta-channel');
+    let chips = meta.querySelector('.meta-chips');
+    if (!line || !chips) {
+      meta.innerHTML = '<div class="meta-channel ellipsis"></div><div class="meta-stats"><span class="meta-chips"></span></div>';
+      line = meta.querySelector('.meta-channel');
+      chips = meta.querySelector('.meta-chips');
+    }
+    if (line.innerHTML !== channel) line.innerHTML = channel;
+    if (chips.innerHTML !== stats) chips.innerHTML = stats;
+    this.topbar?.attachBadge(); // 화질·지연 배지는 칩 묶음 옆(형제) — 칩만 다시 그려도 떼이지 않는다
   }
 
   /** 팔로워 수는 라이브 상세에 없어 채널 정보로 따로 채운다 — 늦게 와도 같은 채널일 때만. */
@@ -322,7 +332,10 @@ export class Viewer {
     }
   }
 
-  refreshAuth() {
+  /** @param {boolean} [changed] 로그인 상태가 바뀌었는가 — 바뀌었을 때만 위 막대 팔로우 단추를 다시 읽는다. */
+  refreshAuth(changed = false) {
     this.chat.updateInput();
+    // 위 막대 팔로우 단추 — 로그인하면 나타나고 로그아웃하면 숨는다(지금 채널 상태를 다시 읽는다).
+    if (changed && this.channelId) this.topbar.load(this.channelId);
   }
 }

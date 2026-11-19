@@ -16,7 +16,7 @@ import { seekPlan } from './viewer-extras.js';
 import { compactCount } from './cards.js';
 import { kbd } from './platform.js';
 import { WatchInfoPanel } from './ml-watch-info.js';
-import { CHANNEL_ICON, loadChannelSocial, setFollow, setFavorite, copyLiveLink, openOnChzzk } from './channel-actions.js';
+import { CHANNEL_ICON, CHANNEL_SOCIAL_EVENT, loadChannelSocial, setFollow, setFavorite, copyLiveLink, openOnChzzk } from './channel-actions.js';
 
 const CHAT_MODES = ['side', 'overlay', 'hidden'];
 const CHAT_MODE_LABEL = { side: '채팅: 옆', overlay: '채팅: 영상 위', hidden: '채팅: 숨김' };
@@ -141,7 +141,7 @@ export class WatchTools {
     onShortcuts(() => this.applyShortcutHints());
     this.applyShortcutHints();
     // 다른 화면(채널 화면·카드 메뉴·채팅 말풍선)에서 바꾼 팔로우·즐겨찾기도 따라간다.
-    window.addEventListener('cview:channel-social', (e) => {
+    window.addEventListener(CHANNEL_SOCIAL_EVENT, (e) => {
       const d = e.detail || {};
       if (!this.social || d.channelId !== this.channelId) return;
       if (typeof d.following === 'boolean') this.social.following = d.following;
@@ -151,6 +151,11 @@ export class WatchTools {
   }
 
   // ── 상단 바 채널 묶음(팔로우·즐겨찾기) ─────────────
+
+  /** 로그인·로그아웃 — 팔로우 단추를 그 상태로 다시 읽는다(로그아웃이면 숨는다). */
+  refreshAuth() {
+    if (this.channelId) this.loadSocial(this.channelId);
+  }
 
   async loadSocial(channelId) {
     this.social = null;

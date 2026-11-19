@@ -7,7 +7,7 @@ import { esc, fitPopover, hideWithExit } from './dom.js';
 import { kbd } from './platform.js';
 import { currentBindings, bindingLabel, onShortcuts } from './shortcuts.js';
 import { bindMenuKeys, focusFirstMenuItem } from './ml-pane-controls.js';
-import { CHANNEL_ICON, loadChannelSocial, setFollow, setFavorite, copyLiveLink, openOnChzzk } from './channel-actions.js';
+import { CHANNEL_ICON, CHANNEL_SOCIAL_EVENT, loadChannelSocial, setFollow, setFavorite, copyLiveLink, openOnChzzk } from './channel-actions.js';
 
 const ICON = {
   chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg>',
@@ -106,7 +106,7 @@ export class ViewerTopBar {
     window.addEventListener('resize', () => fitPopover(this.menu, this.stage));
     onShortcuts(() => this.applyShortcutHints());
     this.applyShortcutHints();
-    window.addEventListener('cview:channel-social', (e) => {
+    window.addEventListener(CHANNEL_SOCIAL_EVENT, (e) => {
       const d = e.detail || {};
       if (!this.social || d.channelId !== this.viewer.channelId) return;
       if (typeof d.following === 'boolean') this.social.following = d.following;
@@ -119,9 +119,8 @@ export class ViewerTopBar {
   attachBadge() {
     const stats = this.viewer.header.querySelector('.meta-stats');
     if (!stats || this.badge.parentElement === stats) return;
-    // 누적 칩 앞에 — 한 줄에 다 못 들면 덜 중요한 누적이 먼저 빠진다.
-    const acc = stats.querySelector('.stat-acc');
-    if (acc) acc.before(this.badge); else stats.append(this.badge);
+    // 칩 묶음(.meta-chips, display: contents)의 형제 — 자리는 CSS order 로 경과 뒤·누적 앞(넘치면 누적이 먼저 빠진다).
+    stats.append(this.badge);
   }
 
   /** 화질·지연 — 플레이어 지표가 올 때마다(viewer-controls renderStatus). 바뀔 때만 쓴다. */

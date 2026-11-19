@@ -17,6 +17,12 @@
 // TB12 칩 키보드 — ←/→ 옆 칩, End/Home 끝(가려진 칩이면 창을 옮김), Delete 는 그 채널 닫기(초점은 옆 칩). 시청 단축키(←/→ 되감기)로 새지 않는다.
 // TB13 "+N" 넘침 메뉴 — 가려진 채널을 이름·상태와 함께, 창 안(fitPopover)에, Enter 로 그 채널을 라이브로, Esc 면 "+N" 로 초점. axe.
 // TB14 칩 상태 — 방송 종료·연결 중은 아바타 점(st-*)과 이름(aria-label)으로 알린다.
+// R01~R12 PR #138 적대적 리뷰 결함 회귀 — R01 Delete 자동 반복 무시, R02 마우스로 × 닫기(클릭 초점 흉내)는 초점을 옆 칩으로 옮기지 않음,
+//   R03 상태만 바뀌면 칩 초점·열린 "+N" 메뉴 유지(메뉴 상태 글자도 갱신), R04 마우스로 연 "+N" 을 앱 Esc 로 닫아도 aria-expanded 풀림,
+//   R05 "+N" 메뉴가 열린 채 휠로 넘기면 닫힘, R06 단독 보기 위 막대 아바타가 보이고 누르면 채널 정보, R07 채팅 '영상 위'+좁은 무대에서 ⋯ 가
+//   패인 안, R08 팔로우를 바꾼 뒤 다른 채널을 갔다 와도 바뀐 상태(서버 캐시보다 앞섬), R09 카드 메뉴로 바꾼 즐겨찾기가 상단 바 별에 반영,
+//   R10 상단 바 즐겨찾기 뒤 사이드바·홈 목록 다시 읽기, R11 로그아웃·로그인하면 팔로우 단추가 숨고 다시 나타남(단독 보기·#viewer),
+//   R12 #viewer 경과 시간 다시 그리기(30초)에도 화질 배지 키보드 초점 유지.
 // 저장소 루트에서: node tools/ui-regression/viewer-topbar.mjs   (Playwright·axe-core 가 필요하다.
 //   CVIEW_UI_BROWSER=webkit 이면 앱(macOS)과 같은 WebKit 엔진, CVIEW_UI_SHOTS=<폴더> 면 폭마다 장면을 PNG 로 남긴다.)
 import fs from 'node:fs';
@@ -34,6 +40,7 @@ const AXE = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 const WINDOWS_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0';
 const results = [];
 async function check(id, fn) {
+  if (process.env.CVIEW_ONLY && !id.startsWith(process.env.CVIEW_ONLY)) return; // 하나만 돌리기: CVIEW_ONLY=R07
   try { await fn(); results.push({ id, ok: true }); } catch (e) { results.push({ id, ok: false, error: e.message.split('\n').slice(0, 14).join('\n') }); }
 }
 
@@ -68,10 +75,16 @@ function liveMock([opts]) {
     multilive_watch: ({ sessionId }) => { state.watchId = sessionId; state.rev++; return state; },
     multilive_add: () => { state.rev++; return state; }, multilive_select: ({ sessionId }) => { state.selectedId = sessionId; state.rev++; return state; },
     channel_follow: () => null, favorite_set: () => null, open_external: () => null, chat_donation_ranking: () => [],
+    multilive_remove: ({ sessionId }) => { state.sessions = state.sessions.filter((x) => x.id !== sessionId); state.rev++; return JSON.parse(JSON.stringify(state)); },
     following_channels_all: () => (opts.loggedOut ? Promise.reject(new Error('로그인이 필요합니다')) : [{ channelId: 'ch1', channelName: '한동숙' }]),
     favorites_list: () => [],
   };
   if (opts.loggedOut) over.auth_status = () => ({ loggedIn: false, state: 'loggedOut' });
+  // Rust 이벤트 흉내 — 멀티라이브 상태(multilive://state)·로그인(auth://changed). __emitState(fn) 는 상태를 고친 뒤 보낸다.
+  const listeners = {};
+  window.__TAURI__.event.listen = async (name, cb) => { (listeners[name] ||= []).push(cb); return () => {}; };
+  window.__emit = (name, payload) => { for (const cb of listeners[name] || []) cb({ payload }); };
+  window.__emitState = (fn) => { if (fn) fn(state); state.rev++; window.__emit('multilive://state', JSON.parse(JSON.stringify(state))); };
   const orig = window.__TAURI__.core.invoke;
   window.__TAURI__.core.invoke = async (cmd, args) => {
     if (cmd !== 'ui_heartbeat') window.__ipc.push({ cmd, args: args ? JSON.parse(JSON.stringify(args)) : null });
@@ -81,9 +94,10 @@ function liveMock([opts]) {
 }
 
 const browser = await engine.launch();
-async function open({ width = 1280, height = 780, theme = 'dark', userAgent, ...opts } = {}) {
+async function open({ width = 1280, height = 780, theme = 'dark', userAgent, clock = false, ...opts } = {}) {
   const ctx = await browser.newContext({ viewport: { width, height }, colorScheme: theme, reducedMotion: 'reduce', ...(userAgent ? { userAgent } : {}) });
   const page = await ctx.newPage();
+  if (clock) await page.clock.install(); // 시계를 앞당겨 30초 타이머를 돌린다(R12) — 시간은 그대로 흐른다
   page.setDefaultTimeout(8000);
   const errors = [];
   // 채팅 표시 방식을 바꿀 때 WebKit 이 내는 무해한 'ResizeObserver loop' 알림은 빼고 센다(main 에서도 같다 — ml-view-picker.mjs 와 같은 처리).
@@ -387,8 +401,8 @@ await check('TB09 multilive grid panes keep their old top bar and menu', async (
   await page.waitForTimeout(400);
   const sel = '.ml-pane[data-slot="0"]';
   await page.$eval(sel, (p) => p.classList.add('ctl-visible'));
-  const top = await visibleSels(page, sel, ['.ml-wt-group', '.ml-q-badge', '.ml-pane-top [data-ml="select"]', '.ml-pane-top [data-ml="info"]', '.ml-pane-top [data-ml="retry"]', '.ml-drag']);
-  assert.deepEqual(top, ['.ml-pane-top [data-ml="select"]', '.ml-pane-top [data-ml="info"]', '.ml-pane-top [data-ml="retry"]', '.ml-drag'], '그리드 위 막대');
+  const top = await visibleSels(page, sel, ['.ml-wt-group', '.ml-q-badge', '.ml-pane-top button[data-ml="select"]', '.ml-pane-top button[data-ml="info"]', '.ml-pane-top button[data-ml="retry"]', '.ml-drag']);
+  assert.deepEqual(top, ['.ml-pane-top button[data-ml="select"]', '.ml-pane-top button[data-ml="info"]', '.ml-pane-top button[data-ml="retry"]', '.ml-drag'], '그리드 위 막대');
   await toggleMore(page, sel);
   const items = await page.$$eval(`${sel} .ml-more-pane > *`, (els) => els.filter((e) => e.getClientRects().length).map((e) => e.textContent.trim()));
   assert.deepEqual(items, ['라이브로 크게 보기', '이 패인 채팅 보기', '채널 정보', '다시 연결'], '그리드 ⋯ 메뉴는 예전 그대로');
@@ -525,6 +539,182 @@ await check('TB14 chip states: offline/loading dots and labels', async () => {
   await ctx.close();
 });
 
+
+// ── PR #138 리뷰 결함 회귀(R01~R12) ──
+const ipcOf = (page, cmd) => page.evaluate((c) => window.__ipc.filter((x) => x.cmd === c).map((x) => x.args), cmd);
+const clearIpc = (page) => page.evaluate(() => { window.__ipc.length = 0; });
+
+await check('R01 holding Delete on a chip closes only one channel (auto-repeat ignored)', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1600, channels: 6 });
+  await page.focus('.ml-watch-chip[data-session-id="s2"]');
+  await clearIpc(page);
+  const prevented = await page.$eval('.ml-watch-chip[data-session-id="s2"]', (c) => !c.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', repeat: true, bubbles: true, cancelable: true })));
+  await page.waitForTimeout(150);
+  assert.equal(prevented, true, '반복 입력도 기본 동작은 막는다');
+  assert.deepEqual(await ipcOf(page, 'multilive_remove'), [], '반복 입력으로는 닫지 않는다');
+  await page.keyboard.press('Delete');
+  await page.waitForTimeout(200);
+  for (let i = 0; i < 4; i++) await page.$eval(':focus', (c) => c.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', repeat: true, bubbles: true, cancelable: true }))).catch(() => {});
+  await page.waitForTimeout(200);
+  assert.deepEqual((await ipcOf(page, 'multilive_remove')).map((a) => a.sessionId), ['s2'], '처음 한 번만 닫는다');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R02 mouse close on × (click focuses it, as in Chromium/WebView2) does not move focus to a chip', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1600, channels: 6 });
+  await page.$eval('.ml-watch-close[data-session-id="s2"]', (x) => { x.focus(); x.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 })); });
+  await page.waitForFunction(() => !document.querySelector('.ml-watch-tab[data-session-id="s2"]'));
+  await page.waitForTimeout(150);
+  assert.equal(await page.evaluate(() => Boolean(document.activeElement?.closest('.ml-watch-picker'))), false, '마우스로 닫으면 초점이 칩 줄에 남지 않는다');
+  // 키보드(Enter, detail 0)로 닫으면 옆 칩으로
+  await page.focus('.ml-watch-close[data-session-id="s3"]');
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => !document.querySelector('.ml-watch-tab[data-session-id="s3"]'));
+  await page.waitForTimeout(150);
+  assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('ml-watch-chip') && document.activeElement.dataset.sessionId), 's4', '키보드로 닫으면 옆 칩');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R03 state-only updates keep chip focus and an open "+N" menu (menu state text refreshes)', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1100, channels: 6 });
+  await page.focus('.ml-watch-chip[data-session-id="s1"]');
+  await page.evaluate(() => window.__emitState((st) => { st.sessions[2].state = { kind: 'loading' }; st.sessions[1].state = { kind: 'error' }; }));
+  await page.waitForTimeout(250);
+  const a = await page.evaluate(() => ({ focus: document.activeElement?.dataset.sessionId, s2: document.querySelector('.ml-watch-tab[data-session-id="s2"]').className, s1: document.querySelector('.ml-watch-chip[data-session-id="s1"]').getAttribute('aria-label') }));
+  assert.equal(a.focus, 's1', '칩 초점 유지');
+  assert.match(a.s2, /st-loading/); assert.match(a.s1, /\(재생 오류\)/);
+  await page.click('.ml-watch-more.end');
+  await page.waitForTimeout(120);
+  const hiddenId = await page.$eval('.ml-watch-overflow [data-session-id]', (b) => b.dataset.sessionId);
+  await page.evaluate((id) => window.__emitState((st) => { st.sessions.find((x) => x.id === id).state = { kind: 'error' }; }), hiddenId);
+  await page.waitForTimeout(250);
+  const m = await page.evaluate((id) => ({ hidden: document.querySelector('.ml-watch-overflow').hidden, text: document.querySelector(`.ml-watch-overflow [data-session-id="${id}"] .ml-wo-state`).textContent }), hiddenId);
+  assert.deepEqual(m, { hidden: false, text: '재생 오류' }, '메뉴는 열린 채 상태 글자만 바뀐다');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R04 app-level Esc on a mouse-opened "+N" menu resets aria-expanded', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1100, channels: 6 });
+  await page.click('.ml-watch-more.end');
+  await page.waitForTimeout(120);
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+  assert.deepEqual(await page.evaluate(() => [document.querySelector('.ml-watch-overflow').hidden, document.querySelector('.ml-watch-more.end').getAttribute('aria-expanded'), Boolean(document.querySelector('.page-multilive.as-watch'))]), [true, 'false', true]);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R05 wheel over the chips closes the open "+N" menu', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1100, channels: 6 });
+  await page.click('.ml-watch-more.end');
+  await page.waitForTimeout(120);
+  const b = await page.locator('.ml-watch-picker').boundingBox();
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  await page.mouse.wheel(0, 100);
+  await page.waitForTimeout(150);
+  assert.deepEqual(await page.evaluate(() => [document.querySelector('.ml-watch-overflow').hidden, document.querySelector('.ml-watch-more.end')?.getAttribute('aria-expanded') ?? 'false']), [true, 'false']);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R06 single-view top bar keeps the avatar; clicking it opens channel info', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1600, channels: 3 });
+  const av = await page.$eval(`${PANE} .ml-pane-avatar`, (a) => ({ shown: a.getClientRects().length > 0 && getComputedStyle(a).display !== 'none', img: Boolean(a.querySelector('img')) }));
+  assert.deepEqual(av, { shown: true, img: true }, '아바타가 보인다');
+  await page.evaluate(() => { window.__opened = null; window.addEventListener('cview:open-channel', (e) => { window.__opened = e.detail.channelId; }); });
+  await wakeWatch(page);
+  await page.click(`${PANE} .ml-pane-avatar`);
+  assert.equal(await page.evaluate(() => window.__opened), 'ch1');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R07 overflow menu stays inside a narrow pane with chat "on video"', async () => {
+  for (const width of [700, 650]) { // 무대 약 568px 이하(1280 창 200% 근처)
+    const { ctx, page, errors } = await openWatch({ width });
+    await page.$eval(`${PANE} .ml-pane-top [data-mw="chatmode"]`, (b) => b.click()); // 옆 → 영상 위
+    await page.waitForFunction(() => document.querySelector('.ml-body.chat-overlay'));
+    await page.waitForTimeout(250);
+    await toggleMore(page);
+    const m = await menuInside(page, PANE, '.ml-more-pane');
+    assert.ok(m.inside, `${width}: ⋯ 메뉴가 패인 밖 ${m.r} / ${m.a}`);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+await check('R08 follow change survives switching channels (local state beats the server cache)', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1600, channels: 3 });
+  await page.click(`${PANE} .ml-wt-follow`); // 팔로잉 → 팔로우 끊기
+  await page.waitForTimeout(150);
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('cview:ml-watch', { detail: { sessionId: 's1' } })));
+  await page.waitForTimeout(400);
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('cview:ml-watch', { detail: { sessionId: 's0' } })));
+  await page.waitForTimeout(500);
+  assert.equal(await page.$eval(`${PANE} .ml-wt-follow`, (b) => b.textContent.trim()), '팔로우', '돌아와도 끊은 상태');
+  await clearIpc(page);
+  await wakeWatch(page);
+  await page.click(`${PANE} .ml-wt-follow`);
+  await page.waitForTimeout(150);
+  assert.deepEqual(await ipcOf(page, 'channel_follow'), [{ channelId: 'ch1', follow: true }], '다시 누르면 반대 요청');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R09 favorite changed from the card menu reaches the top-bar star', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1600, channels: 3 });
+  assert.equal(await page.$eval(`${PANE} .ml-pane-top [data-mw="fav"]`, (b) => b.getAttribute('aria-pressed')), 'false');
+  await page.evaluate(() => {
+    const card = document.createElement('div');
+    card.dataset.channelId = 'ch1'; card.dataset.channelName = '한동숙'; card.textContent = 'card';
+    Object.assign(card.style, { position: 'fixed', left: '300px', top: '300px', width: '40px', height: '40px', zIndex: 99 });
+    document.body.append(card);
+    card.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 300, clientY: 300 }));
+  });
+  await page.waitForSelector('.ctx-menu [data-ctx="fav"]');
+  await page.click('.ctx-menu [data-ctx="fav"]');
+  await page.waitForTimeout(250);
+  assert.equal(await page.$eval(`${PANE} .ml-pane-top [data-mw="fav"]`, (b) => b.getAttribute('aria-pressed')), 'true', '상단 바 별이 켜진다');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R10 favorite from the top bar refreshes sidebar/home lists', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1600, channels: 3 });
+  await clearIpc(page);
+  await wakeWatch(page);
+  await page.click(`${PANE} .ml-pane-top [data-mw="fav"]`);
+  await page.waitForTimeout(250);
+  const cmds = await page.evaluate(() => window.__ipc.map((c) => c.cmd));
+  const at = cmds.indexOf('favorite_set');
+  assert.ok(at >= 0 && cmds.slice(at + 1).includes('following_lives') && cmds.slice(at + 1).includes('favorites_list'), `다시 읽기: ${cmds.join(',')}`);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R11 logout/login hides and restores the follow button (single view)', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1600, channels: 3 });
+  const followShown = () => page.$eval(`${PANE} .ml-wt-follow`, (b) => !b.hidden);
+  assert.equal(await followShown(), true);
+  await page.evaluate(() => {
+    const inv = window.__TAURI__.core.invoke;
+    window.__TAURI__.core.invoke = async (c, a) => (c === 'following_channels_all' && window.__loggedOut ? Promise.reject(new Error('로그인이 필요합니다')) : inv(c, a));
+    window.__loggedOut = true;
+    window.__emit('auth://changed', { loggedIn: false, state: 'loggedOut' });
+  });
+  await page.waitForTimeout(300);
+  assert.equal(await followShown(), false, '로그아웃하면 숨는다');
+  await page.evaluate(() => { window.__loggedOut = false; window.__emit('auth://changed', { loggedIn: true, state: 'loggedIn', nickname: '도도' }); });
+  await page.waitForTimeout(300);
+  assert.equal(await followShown(), true, '로그인하면 다시 보인다');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
 // ── 예전 시청 화면(#viewer) — 라이브 칸이 가득 차 이 화면으로 연다 ──
 const VSTAGE = '#viewer .player-stage';
 async function openViewer(opts = {}) {
@@ -636,6 +826,37 @@ await check('TB10 viewer: keyboard, actions and axe', async () => {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(120);
   assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('vt-q-badge')), true);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+
+await check('R11 logout/login hides and restores the follow button (#viewer)', async () => {
+  const { ctx, page, errors } = await openViewer({ width: 1700 });
+  const shown = () => page.$eval('#viewer .vt-follow', (b) => !b.hidden);
+  assert.equal(await shown(), true);
+  await page.evaluate(() => {
+    const inv = window.__TAURI__.core.invoke;
+    window.__TAURI__.core.invoke = async (c, a) => (c === 'following_channels_all' && window.__loggedOut ? Promise.reject(new Error('로그인이 필요합니다')) : inv(c, a));
+    window.__loggedOut = true;
+    window.__emit('auth://changed', { loggedIn: false, state: 'loggedOut' });
+  });
+  await page.waitForTimeout(300);
+  assert.equal(await shown(), false, '로그아웃하면 숨는다');
+  await page.evaluate(() => { window.__loggedOut = false; window.__emit('auth://changed', { loggedIn: true, state: 'loggedIn', nickname: '도도' }); });
+  await page.waitForTimeout(300);
+  assert.equal(await shown(), true, '로그인하면 다시 보인다');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R12 #viewer quality badge keeps keyboard focus across the 30s meta redraw', async () => {
+  const { ctx, page, errors } = await openViewer({ width: 1700, clock: true });
+  await page.focus('#viewer .vt-q-badge');
+  await page.clock.fastForward(31000);
+  await page.waitForTimeout(150);
+  const st = await page.evaluate(() => ({ focus: document.activeElement?.classList.contains('vt-q-badge'), attached: document.querySelector('#viewer .meta-stats .vt-q-badge') !== null }));
+  assert.deepEqual(st, { focus: true, attached: true });
   assert.deepEqual(errors, []);
   await ctx.close();
 });

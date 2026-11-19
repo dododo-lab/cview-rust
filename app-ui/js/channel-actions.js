@@ -15,6 +15,30 @@ export const CHANNEL_ICON = {
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11 12 4l8 7v8a1 1 0 0 1-1 1h-4v-6h-6v6H5a1 1 0 0 1-1-1z"/></svg>',
 };
 
+/**
+ * 이 창에서 바뀐 팔로우·즐겨찾기 — 채널 id → { following?, favorite? }. 팔로우 목록(following_channels_all)은 서버 캐시라
+ * 바꾼 직후 1분 안에 다시 읽으면 바꾸기 전 상태가 돌아왔다(다시 누르면 같은 요청을 또 보냈다). 알게 된 마지막 값이 캐시보다 앞선다.
+ * 어디서 바꾸든(상단 바·채팅 말풍선·채널 화면·카드 메뉴) channelSocialChanged 로 알리면 여기와 열린 상단 바가 함께 따라간다.
+ */
+const overrides = new Map();
+export const CHANNEL_SOCIAL_EVENT = 'cview:channel-social';
+
+/** 팔로우·즐겨찾기가 바뀌었다고 알린다 — { following } 또는 { favorite } 중 바뀐 것만. */
+export function channelSocialChanged(channelId, change) {
+  if (!channelId) return;
+  overrides.set(channelId, { ...(overrides.get(channelId) || {}), ...change });
+  window.dispatchEvent(new CustomEvent(CHANNEL_SOCIAL_EVENT, { detail: { channelId, ...change } }));
+}
+
+/** 로그아웃·다른 계정 — 팔로우 덮어쓰기는 그 계정 것이라 버린다(즐겨찾기는 이 기기 저장이라 남긴다). */
+export function resetFollowOverrides() {
+  for (const [id, o] of overrides) {
+    if (!('following' in o)) continue;
+    const { following, ...rest } = o;
+    if (Object.keys(rest).length) overrides.set(id, rest); else overrides.delete(id);
+  }
+}
+
 /** 라이브 주소 — 링크 복사·치지직에서 열기. 순수 함수. */
 export function liveUrl(channelId) {
   return `https://chzzk.naver.com/live/${encodeURIComponent(channelId)}`;
@@ -30,10 +54,12 @@ export async function loadChannelSocial(channelId, loggedIn) {
     api.favoritesList(),
   ]);
   const list = follows.status === 'fulfilled' ? follows.value : null;
-  return {
-    following: Array.isArray(list) ? list.some((c) => c.channelId === channelId) : null,
-    favorite: favs.status === 'fulfilled' && Array.isArray(favs.value) ? favs.value.some((c) => c.channelId === channelId) : false,
-  };
+  const o = overrides.get(channelId) || {};
+  let following = Array.isArray(list) ? list.some((c) => c.channelId === channelId) : null;
+  if (following !== null && typeof o.following === 'boolean') following = o.following;
+  let favorite = favs.status === 'fulfilled' && Array.isArray(favs.value) ? favs.value.some((c) => c.channelId === channelId) : false;
+  if (typeof o.favorite === 'boolean') favorite = o.favorite;
+  return { following, favorite };
 }
 
 /** 팔로우 켜기·끄기 — 성공하면 새 값, 실패하면 null(알림은 여기서 띄운다). */
@@ -41,7 +67,7 @@ export async function setFollow(channelId, name, on) {
   try {
     await api.channelFollow(channelId, on);
     toast(on ? `${name || '채널'}을(를) 팔로우했습니다` : `${name || '채널'} 팔로우를 끊었습니다`, 1500);
-    window.dispatchEvent(new CustomEvent('cview:channel-social', { detail: { channelId, following: on } }));
+    channelSocialChanged(channelId, { following: on });
     return on;
   } catch (e) {
     toast(e.message || '팔로우를 바꾸지 못했습니다');
@@ -49,12 +75,12 @@ export async function setFollow(channelId, name, on) {
   }
 }
 
-/** 즐겨찾기 켜기·끄기 — 사이드바 목록도 다시 읽게 알린다. */
+/** 즐겨찾기 켜기·끄기 — 사이드바·홈 목록도 다시 읽게 알린다(app.js 가 CHANNEL_SOCIAL_EVENT 를 받는다). */
 export async function setFavorite(channelId, name, image, on) {
   try {
     await api.favoriteSet(channelId, on, name || '', image || null);
     toast(on ? '즐겨찾기에 추가했습니다' : '즐겨찾기에서 뺐습니다', 1500);
-    window.dispatchEvent(new CustomEvent('cview:channel-social', { detail: { channelId, favorite: on } }));
+    channelSocialChanged(channelId, { favorite: on }); // app.js 가 받아 사이드바·홈 즐겨찾기 순서를 다시 읽는다
     return on;
   } catch (e) {
     toast(e.message);
