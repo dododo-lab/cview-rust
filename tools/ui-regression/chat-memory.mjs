@@ -3,7 +3,8 @@
 //     본 이모티콘)도 상한 안이며, 문서 노드·이벤트 리스너가 늘지 않는다(Chromium 은 GC 뒤 JS 힙 증가도 본다).
 // M02 붙이기 간격 — 메시지가 웹소켓 프레임마다 하나씩 와도(초당 40개) 초당 붙이기는 12번 이하로 모은다
 //     (예전엔 메시지마다 붙여 초당 38번, 그때마다 바닥 맞추기가 레이아웃을 돌렸다 — WebKit 붙이기 비용 13%→7%).
-//     한산할 때 온 메시지는 기다리지 않고 다음 프레임에 바로 붙는다.
+//     한산할 때 온 메시지는 기다리지 않고 다음 프레임에 바로 붙는다. 붐빌 때(50ms 마다 10개)는 간격을 채우지 않고
+//     한 프레임 분량씩 바로 붙인다 — 100ms 를 다 모으면 20줄 넘게 한꺼번에 붙어 느린 PC 에서 프레임이 끊겼다(perf P04).
 // M03 패널을 버리면(멀티채팅 채널 닫기) 문서·창에 건 리스너와 이벤트 구독이 모두 풀린다 — 여닫기를 되풀이해도 늘지 않는다.
 // 저장소 루트에서: NODE_PATH=<Playwright 경로> node tools/ui-regression/chat-memory.mjs
 // CVIEW_UI_BROWSER=webkit 이면 WebKit 으로 검사한다(힙·리스너 수는 Chromium CDP 로만 잰다 — WebKit 은 DOM 기반 검사만).
@@ -160,16 +161,28 @@ await check('M02 per-frame messages are coalesced into at most ~10 appends per s
     await new Promise((r) => setTimeout(r, 400));
     const rate = flushes / ((performance.now() - t0) / 1000);
     const lastId = panel.list.lastElementChild?.dataset.id;
+    // 붐빌 때 — 50ms 마다 10개. 한 번에 붙이는 줄은 한 프레임 분량(약 10줄)에 머문다.
+    const batches = [];
+    panel.flushLines = () => { batches.push((panel.pendingLines || []).length); orig(); };
+    for (let i = 0; i < 30; i++) {
+      window.__emit('chat://session-event', { session: 'mem', event: { type: 'messages', messages: Array.from({ length: 10 }, window.__mk) } });
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    await new Promise((r) => setTimeout(r, 400));
+    panel.flushLines = orig;
+    const burst = batches.filter((n) => n > 0);
     // 한산할 때 — 조용히 있다가 온 한 줄은 바로 다음 프레임에 붙는다.
     await new Promise((r) => setTimeout(r, 300));
     const m = window.__mk();
     const a = performance.now();
     window.__emit('chat://session-event', { session: 'mem', event: { type: 'messages', messages: [m] } });
     while (panel.list.lastElementChild?.dataset.id !== m.id && performance.now() - a < 1000) await new Promise((r) => requestAnimationFrame(r));
-    return { sent, rate, lastId, expect: `syn-${350 + sent}`, lone: performance.now() - a, shown: panel.list.lastElementChild?.dataset.id === m.id };
+    return { sent, rate, lastId, expect: `syn-${350 + sent}`, burst, lone: performance.now() - a, shown: panel.list.lastElementChild?.dataset.id === m.id };
   });
   assert.equal(r.lastId, r.expect, '모은 메시지가 모두 순서대로 붙는다');
   assert.ok(r.rate <= 12, `초당 붙이기 ${r.rate.toFixed(1)}번(메시지 ${r.sent}개)`);
+  const avg = r.burst.reduce((a, b) => a + b, 0) / r.burst.length;
+  assert.ok(r.burst.reduce((a, b) => a + b, 0) === 300 && avg <= 12 && Math.max(...r.burst) <= 20, `붐빌 때 한 번에 붙인 줄 ${r.burst}`);
   assert.ok(r.shown && r.lone < 80, `한산할 때 한 줄이 ${r.lone.toFixed(0)}ms 뒤에 붙음`);
   assert.deepEqual(errors, []);
   await ctx.close();

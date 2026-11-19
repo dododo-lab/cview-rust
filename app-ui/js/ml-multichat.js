@@ -343,7 +343,7 @@ export class MultiLiveMergedChat {
     this.pending.push([c, ev.messages.slice(), Boolean(ev.recent)]);
     this.pendingCount += ev.messages.length;
     while (this.pending.length > 1 && this.pendingCount - this.pending[0][1].length >= MAX_LINES) this.pendingCount -= this.pending.shift()[1].length;
-    scheduleChatFlush(this, () => this.flush());
+    scheduleChatFlush(this, () => this.flush(), { pending: this.pendingCount });
   }
 
   /** 모아 둔 메시지를 통합 목록과 칸에 붙인다 — 단일 채팅과 같은 줄 렌더러(묶음·아바타·이모티콘 단독 확대·줄 메뉴). */

@@ -573,7 +573,7 @@ export class ChatPanel {
     if (this.pendingLines.length > this.maxLines) this.pendingLines = this.pendingLines.slice(-this.maxLines);
     // 보이면 다음 프레임(바로 앞 붙이기에서 FLUSH_GAP_MS 안이면 그때까지 모아서), 창이 숨어 rAF 가 멈춰도 타이머로
     // 결국 그린다. 숨은 동안은 덜 자주(1초) 모아 붙인다 — 보는 사람이 없어 늦어도 그만이고, 다시 보이면 rAF 가 바로 그린다.
-    scheduleChatFlush(this, () => this.flushLines(), { hiddenMs: HIDDEN_FLUSH_MS });
+    scheduleChatFlush(this, () => this.flushLines(), { hiddenMs: HIDDEN_FLUSH_MS, pending: this.pendingLines.length });
   }
 
   flushLines() {

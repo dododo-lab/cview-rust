@@ -116,15 +116,26 @@ export function trimFront(list, max) {
 export const FLUSH_GAP_MS = 100;
 
 /**
+ * 한 번에 붙일 줄 — 간격을 기다리는 동안 이만큼 모이면 더 기다리지 않고 다음 프레임에 붙인다. 붐빌 때 100ms 를
+ * 다 채우면 20줄 넘게 한꺼번에 붙어 그 프레임이 길어졌다(4배 감속 초당 200개에서 20ms 넘은 프레임 4% → 12%).
+ */
+export const FLUSH_BATCH_LINES = 8;
+
+/**
  * 묶어 붙이기 예약 — owner 의 flushScheduled·flushRaf·flushTimer·flushGap·lastFlushAt 을 쓴다.
  * 보이면 (간격을 지킨 뒤) 다음 프레임, 창이 숨어 rAF 가 멈춰도 타이머로 결국 붙인다(숨은 창은 hiddenMs 마다).
  */
-export function scheduleChatFlush(owner, run, { hiddenMs = 1000 } = {}) {
-  if (owner.flushScheduled) return;
+export function scheduleChatFlush(owner, run, { hiddenMs = 1000, pending = 0 } = {}) {
+  const full = pending >= FLUSH_BATCH_LINES;
+  const frame = () => { owner.flushGap = 0; owner.flushRaf = requestAnimationFrame(run); };
+  if (owner.flushScheduled) {
+    // 간격을 기다리는 중에 한 번 붙일 만큼 모였으면 바로 다음 프레임으로 당긴다.
+    if (full && owner.flushGap) { clearTimeout(owner.flushGap); frame(); }
+    return;
+  }
   owner.flushScheduled = true;
   const hidden = document.hidden;
-  const wait = hidden ? 0 : Math.max(0, (owner.lastFlushAt || 0) + FLUSH_GAP_MS - performance.now());
-  const frame = () => { owner.flushRaf = requestAnimationFrame(run); };
+  const wait = hidden || full ? 0 : Math.max(0, (owner.lastFlushAt || 0) + FLUSH_GAP_MS - performance.now());
   if (wait > 0) owner.flushGap = setTimeout(frame, wait);
   else frame();
   owner.flushTimer = setTimeout(run, (hidden ? hiddenMs : 250) + wait);
@@ -135,6 +146,7 @@ export function flushStarted(owner, { ran = true } = {}) {
   cancelAnimationFrame(owner.flushRaf);
   clearTimeout(owner.flushTimer);
   clearTimeout(owner.flushGap);
+  owner.flushGap = 0;
   owner.flushScheduled = false;
   if (ran) owner.lastFlushAt = performance.now();
 }

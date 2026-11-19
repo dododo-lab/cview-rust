@@ -394,7 +394,7 @@ export class MultiChatPage {
 
   scheduleFlush() {
     // 보이면 다음 프레임(간격 FLUSH_GAP_MS 를 지켜 모아서), 창이 숨어 rAF 가 멈춰도 타이머로 결국 붙인다(가려진 창은 덜 자주).
-    scheduleChatFlush(this, () => this.flushBacklog());
+    scheduleChatFlush(this, () => this.flushBacklog(), { pending: this.backlogCount });
   }
 
   queueBacklog(c, messages) {
