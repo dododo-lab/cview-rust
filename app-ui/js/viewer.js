@@ -13,6 +13,7 @@ import { noteConnectorLimit } from './live-connector.js';
 import { playPreroll, cancelPreroll } from './ads.js';
 import { verifiedBadge } from './verified-badge.js';
 import { liveHandlers } from './now-playing.js';
+import { ViewerTopBar } from './viewer-topbar.js';
 
 const PHASE_TEXT = {
   idle: '',
@@ -29,7 +30,7 @@ const PHASE_TEXT = {
 };
 
 export class Viewer {
-  constructor(root, { isLoggedIn, onClose }) {
+  constructor(root, { isLoggedIn, onClose, onAddMulti = null, onPopout = null }) {
     this.root = root;
     this.onClose = onClose;
     this.channelId = null;
@@ -69,6 +70,8 @@ export class Viewer {
     this.controls = new ViewerControls(this);
     this.panel = new PlayerPanel(this);
     this.extras = new ViewerExtras(this, { isLoggedIn });
+    // 위 막대 동작 묶음(채널·보기·⋯) — 채팅 표시 방식 단추(extras)를 '보기' 묶음으로 옮기므로 그 뒤에 만든다.
+    this.topbar = new ViewerTopBar(this, { isLoggedIn, onAddMulti, onPopout });
     // 시스템 '지금 재생 중'(macOS 섬·제어 센터)의 재생·일시정지 — 화면의 재생 버튼과 같은 길로.
     const fromSystem = (name) => () => {
       this.player.call(name);
@@ -172,10 +175,11 @@ export class Viewer {
         '<span class="stat live">LIVE</span>',
         `<span class="stat" title="현재 시청자"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>${esc(live.viewerCountText)}명</span>`,
         uptime ? `<span class="stat" title="방송 경과 시간"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>${esc(uptime)}</span>` : '',
-        live.accumulateCount > 0 ? `<span class="stat" title="누적 시청자">누적 ${esc(live.accumulateCountText)}명</span>` : '',
+        live.accumulateCount > 0 ? `<span class="stat stat-acc" title="누적 시청자">누적 ${esc(live.accumulateCountText)}명</span>` : '',
       ].filter(Boolean).join('')
       : '<span class="stat off">오프라인</span>';
     meta.innerHTML = `<div class="meta-channel ellipsis">${channel}</div><div class="meta-stats">${stats}</div>`;
+    this.topbar?.attachBadge(); // 화질·지연 배지는 지표 줄 끝에(다시 그리면 다시 붙인다)
   }
 
   /** 팔로워 수는 라이브 상세에 없어 채널 정보로 따로 채운다 — 늦게 와도 같은 채널일 때만. */
@@ -198,6 +202,7 @@ export class Viewer {
     if (settings) this.lastSettings = settings;
     this.root.hidden = false;
     this.renderHeader(null);
+    if (channelId !== this.topbar.loadedFor) { this.topbar.loadedFor = channelId; this.topbar.load(channelId); }
     this.syncNowPlaying(null);
     this.showOverlay(PHASE_TEXT.loadingInfo);
     this.status.textContent = '';
@@ -242,6 +247,8 @@ export class Viewer {
     this.cancelAd();
     this.root.hidden = true;
     this.channelId = null;
+    this.topbar.loadedFor = null;
+    this.topbar.closeMenu();
     this.syncNowPlaying(null);
     clearInterval(this.uptimeTimer);
     this.alerts.clear();

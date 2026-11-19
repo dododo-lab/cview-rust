@@ -547,28 +547,6 @@ async function addToMultiLive(channelId, { quiet = false } = {}) {
   syncLiveIndicators();
 }
 
-function installViewerMultiLiveButton() {
-  const close = document.getElementById('viewer-close');
-  const button = document.createElement('button');
-  button.className = 'icon-btn';
-  button.title = '멀티라이브에 추가';
-  button.innerHTML = multiLiveIcon;
-  button.addEventListener('click', () => {
-    const channelId = viewer.channelId;
-    if (channelId) addToMultiLive(channelId);
-  });
-  close.before(button);
-  // 새 플레이어 창으로 분리 (PLY-18, ⌘N) — 보조 창 안에서는 숨긴다.
-  if (!AUX) {
-    const pop = document.createElement('button');
-    pop.className = 'icon-btn';
-    pop.title = kbd('새 창으로 분리 (⌘N)');
-    pop.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="13" height="13" rx="2"/><path d="M10 4h10v10M20 4l-8 8"/></svg>';
-    pop.addEventListener('click', () => MENU_ACTIONS['window-player']());
-    button.before(pop);
-  }
-}
-
 /** 카드 우클릭 메뉴 — 원본 LiveCardActionMenu (NAV-10). */
 function installCardMenu() {
   document.addEventListener('contextmenu', async (e) => {
@@ -640,7 +618,7 @@ function installPalette() {
 // ── 메뉴·단축키·정보·오프라인 (SYS-01·02·03·09·12) ─────────────────
 
 // Esc 는 맨 위의 것 하나만 닫는다 — 메뉴·시트·입력란이 먼저 받고, 아무것도 없을 때만 시청 화면을 닫는다.
-const ESC_POPUPS = ':is(.quality-menu, .player-panel, .emoji-picker, .chat-tray, .dp-panel, .chat-autocomplete, .ml-pane-menu, .ml-more-menu):not([hidden], .exit-ghost)';
+const ESC_POPUPS = ':is(.quality-menu, .vt-menu, .player-panel, .emoji-picker, .chat-tray, .dp-panel, .chat-autocomplete, .ml-pane-menu, .ml-more-menu, .ml-watch-overflow):not([hidden], .exit-ghost)';
 const ESC_LAYERS = '.sheet-scrim:not(.leaving), .palette-scrim:not([hidden], .exit-ghost)';
 function escapeTaken(e) {
   if (e.defaultPrevented) return true;
@@ -848,10 +826,14 @@ async function main() {
   if (AUX !== 'stats') pages.home.attachReport(pages.stats);
   pages.media = new MediaPage(content, { onBack: goBack, onOpenChannel: openChannelPage });
   pages.channel = new ChannelPage(content, { onBack: goBack, onPlay: openChannel, onAddMulti: addToMultiLive });
-  viewer = new Viewer(document.getElementById('viewer'), { isLoggedIn, onClose: onViewerClosed });
+  // 위 막대 ⋯ 의 '멀티라이브에 추가'·'새 창으로 분리'(보조 창 안에서는 없다) — viewer-topbar.js
+  viewer = new Viewer(document.getElementById('viewer'), {
+    isLoggedIn, onClose: onViewerClosed,
+    onAddMulti: (id) => addToMultiLive(id),
+    onPopout: AUX ? null : () => MENU_ACTIONS['window-player'](),
+  });
   if (!AUX) insights = new InsightPanel(content, { isLoggedIn });
   bindMultiLiveAddButtons(addToMultiLive);
-  installViewerMultiLiveButton();
   if (!AUX) {
     document.querySelector('.viewer-header .page-title').insertAdjacentHTML('afterend', liveModeSwitch('live'));
     bindLiveModeSwitch(switchLiveMode);

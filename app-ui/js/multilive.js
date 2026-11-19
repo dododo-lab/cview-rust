@@ -22,7 +22,7 @@ import { snapshotPanes, playLayoutMotion, playExit, cancelExit, bindPaneDrag, re
 import { MultiLiveMergedChat } from './ml-multichat.js';
 import { deferDelete } from './confirm.js';
 import { ChipPeek } from './ml-chip-peek.js';
-import { WatchTools, watchTopHtml } from './ml-watch.js';
+import { WatchTools, watchTopHtml, watchStatusHtml } from './ml-watch.js';
 import { WatchInfoPanel } from './ml-watch-info.js';
 
 import { liveIcon, multiLiveIcon, liveModeSwitch, setLiveModeActive } from './live-mode.js';
@@ -91,9 +91,20 @@ export function pickTintHue(used, rand = Math.random) {
 
 /** 지우는 중(되돌리기 시간)인 프리셋 id — 그사이 프리셋 시트를 다시 열어도 다시 나타나지 않게 뺀다. */
 const deletingPresets = new Set();
-/** 라이브 머리줄에 한 번에 보이는 채널 칩 수, 휠 한 칸에 모을 delta(px). */
-const CHIP_WINDOW = 4;
+/** 휠 한 칸에 모을 delta(px). */
 const CHIP_WHEEL_STEP = 40;
+/**
+ * 라이브 머리줄에 한 번에 보이는 채널 칩 수 — 머리줄 폭을 따른다(2026-11-20 재배치). 예전엔 늘 4개라 넓은 창에서 칩 줄 양옆이
+ * 텅 비고 나머지는 "+N" 뒤에 숨었다. 순수 함수: [머리줄 폭 상한, 칩 수] — 1180px 까지는 예전처럼 4개, 2200px 넘으면 8개.
+ */
+const CHIP_WINDOW_STEPS = [[600, 2], [900, 3], [1180, 4], [1500, 5], [1850, 6], [2200, 7]];
+export function chipWindowFor(headerWidth) {
+  if (!(headerWidth > 0)) return 4;
+  for (const [max, n] of CHIP_WINDOW_STEPS) if (headerWidth <= max) return n;
+  return 8;
+}
+/** 칩의 재생 상태 — 아바타 모서리 점과 이름 뒤 읽기 글자. playing 은 표시하지 않는다. */
+const CHIP_STATE = { loading: '연결 중', idle: '대기 중', offline: '방송 종료', error: '재생 오류' };
 
 /**
  * 패인이 재생 중이거나 재생하려는가 — 디코드 예산으로 잠시 멈춘 패인(suspendLoading)은 영상이 멈춰 있어도
@@ -116,6 +127,7 @@ export class MultiLivePage {
    */
   constructor(content, { isLoggedIn, onAddChannel = null, onOpenChannel = null }) {
     this.isLoggedIn = isLoggedIn;
+    this.onAddChannel = onAddChannel; // 단독 보기 상단 바 ⋯ '멀티라이브에 추가'(ml-watch.js)도 같은 길
     this.root = document.createElement('section');
     this.root.className = 'page page-multilive';
     this.root.dataset.page = 'multilive';
@@ -218,17 +230,17 @@ export class MultiLivePage {
     // 채널 칩 줄을 머리줄 한가운데로 — 왼쪽 묶음과 오른쪽 도구의 폭 차이를 재서 빈칸에 얹는다(CSS .ml-head-gap).
     this.header = this.root.querySelector('.ml-header');
     this.headGaps = [this.root.querySelector('.ml-head-gap.before'), this.root.querySelector('.ml-head-gap.after')];
-    const centerObserver = new ResizeObserver(() => this.syncHeaderCenter());
+    const centerObserver = new ResizeObserver(() => { this.syncHeaderCenter(); this.syncChipWindowSize(); });
     for (const el of this.header.children) if (!el.classList.contains('ml-head-gap') && el !== this.watchPicker) centerObserver.observe(el);
     centerObserver.observe(this.header);
-    // 칩은 한 번에 CHIP_WINDOW 개까지만 — 나머지는 숨겨 두고 휠(세로·가로 모두)로 한 칸씩 넘겨 본다(사용자 요청 2026-10-31).
+    // 칩은 한 번에 this.chipWindow 개까지만(머리줄 폭에 따라 2~8, chipWindowFor) — 나머지는 숨겨 두고 휠(세로·가로 모두)로 한 칸씩 넘겨 본다(사용자 요청 2026-10-31).
     // 트랙패드는 작은 delta 가 잇달아 오니 모아서 CHIP_WHEEL_STEP 마다 한 칸. 창 안 칩이 좁은 머리줄에서 넘치면 예전처럼 가로로 넘긴다.
     this.chipStart = 0;
     this.chipWheel = 0;
     this.watchPicker.addEventListener('wheel', (e) => {
       const p = this.watchPicker;
       const d = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
-      if (this.chipCount() > CHIP_WINDOW) {
+      if (this.chipCount() > this.chipWindow) {
         e.preventDefault();
         if (Math.sign(d) !== Math.sign(this.chipWheel)) this.chipWheel = 0;
         this.chipWheel += e.deltaMode === 1 ? d * 40 : d;
@@ -242,11 +254,33 @@ export class MultiLivePage {
       e.preventDefault();
       p.scrollLeft += e.deltaY;
     }, { passive: false });
-    // 양끝 "+N" — 휠이 없는 마우스·키보드로도 넘긴다.
+    // 양끝 "+N" — 그쪽에 가려진 채널 목록(넘침 메뉴)을 연다. 휠로 한 칸씩 넘기는 것도 그대로.
+    this.chipWindow = 4;
     this.watchPicker.addEventListener('click', (e) => {
       const more = e.target.closest('.ml-watch-more');
-      if (more) this.shiftChipWindow(more.classList.contains('start') ? -1 : 1);
+      if (more) { e.stopPropagation(); this.toggleChipOverflow(more); }
     });
+    // 칩 키보드 — ←/→ 옆 채널, Home/End 처음·끝(가려진 칩이면 창을 옮겨 보이게), Delete/Backspace 그 채널 닫기.
+    // 기본 동작을 막아 시청 단축키(←/→ 되감기, ml-watch.js)로 새지 않는다.
+    this.watchPicker.addEventListener('keydown', (e) => this.onChipKey(e));
+    this.chipOverflow = document.createElement('div');
+    this.chipOverflow.className = 'ml-watch-overflow';
+    this.chipOverflow.setAttribute('role', 'menu');
+    this.chipOverflow.hidden = true;
+    // "+N" 자리에 두는 크기 0 기준점 — 메뉴는 그 안(offsetParent)에서 열리고, fitPopover 가 넘치면 기준점 반대쪽으로 맞춘다.
+    this.chipOverflowAnchor = document.createElement('div');
+    this.chipOverflowAnchor.className = 'ml-wo-anchor';
+    this.chipOverflowAnchor.append(this.chipOverflow);
+    this.header.append(this.chipOverflowAnchor);
+    bindMenuKeys(this.chipOverflow);
+    this.chipOverflow.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.closeChipOverflow(true); } else if (e.key === 'Tab') this.closeChipOverflow();
+    });
+    this.chipOverflow.addEventListener('click', (e) => { if (e.target.closest('[data-ml="watch"]')) this.closeChipOverflow(); });
+    document.addEventListener('pointerdown', (e) => {
+      if (!this.chipOverflow.hidden && !this.chipOverflow.contains(e.target) && !e.target.closest('.ml-watch-more')) this.closeChipOverflow();
+    });
+    window.addEventListener('resize', () => { if (!this.chipOverflow.hidden) this.placeChipOverflow(); });
     this.focusControls = this.root.querySelector('.ml-focus-controls');
     this.ratioInput = this.root.querySelector('.ml-ratio input');
     this.ratioOutput = this.root.querySelector('.ml-ratio output');
@@ -465,7 +499,7 @@ export class MultiLivePage {
         <div class="ml-pane-text">
           <div class="ml-pane-title ellipsis"></div>
           <div class="ml-pane-line"><span class="ml-pane-name ellipsis"></span><span class="ml-pane-vb"></span></div>
-          <div class="ml-pane-stats"></div>
+          <div class="ml-pane-statrow"><div class="ml-pane-stats"></div>${watchStatusHtml()}</div>
         </div>
         <div class="grow"></div>
         <button class="ml-pane-btn ml-sec ml-watch-btn" data-ml="watch" title="라이브로 크게 보기 — 다시 연결 없이 라이브 메뉴로" aria-label="라이브로 크게 보기">${PANE_ICON.live}</button>
@@ -1184,23 +1218,30 @@ export class MultiLivePage {
       const on = x.id === watched.id;
       const avatar = safeUrl(x.profileImageUrl);
       const name = x.channelName || x.channelId;
+      const kind = (x.state && x.state.kind) || 'playing';
+      const stateText = CHIP_STATE[kind] || '';
       // 지금 보는 칩만 글자 툴팁 — 나머지는 미리보기 말풍선(ml-chip-peek.js)이 대신한다(둘이 겹쳐 뜨지 않게).
       // 닫기(×)는 칩 단추 안에 넣을 수 없어(단추 안 단추) 칩과 나란히 두고, 칩의 아바타 자리에 겹쳐 띄운다 —
       // 브라우저 탭의 파비콘 → × 처럼 칩에 마우스를 올리거나 초점이 오면 아바타가 ×로 바뀐다(multilive.css .ml-watch-close).
-      return `<span class="ml-watch-tab${on ? ' active' : ''}" data-session-id="${esc(x.id)}"><button class="ml-watch-chip${on ? ' active' : ''}" data-ml="watch" data-session-id="${esc(x.id)}" aria-pressed="${on}" ${on ? `title="${esc(`${name} — 지금 보는 채널`)}"` : `aria-label="${esc(`${name} 라이브로 보기`)}"`}>
-        ${avatar ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="ml-watch-dot"></span>'}
-        <span class="ellipsis">${esc(name)}</span>${verifiedBadge(x.verifiedBadge, 'sm')}
+      // 상태(연결 중·방송 종료·오류)는 아바타 모서리 점 + 읽기 글자(aria-label, 보는 칩은 이름 뒤 글자)로.
+      const st = stateText ? ` st-${kind}` : '';
+      const label = `${name}${stateText ? ` (${stateText})` : ''}`;
+      return `<span class="ml-watch-tab${on ? ' active' : ''}${st}" data-session-id="${esc(x.id)}"><button class="ml-watch-chip${on ? ' active' : ''}" data-ml="watch" data-session-id="${esc(x.id)}" aria-pressed="${on}" aria-keyshortcuts="ArrowLeft ArrowRight Home End Delete" ${on ? `title="${esc(`${label} — 지금 보는 채널`)}"` : `aria-label="${esc(`${label} 라이브로 보기`)}"`}>
+        <span class="ml-watch-av">${avatar ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="ml-watch-dot"></span>'}<i class="ml-watch-st" aria-hidden="true"></i></span>
+        <span class="ellipsis">${esc(name)}</span>${verifiedBadge(x.verifiedBadge, 'sm')}${stateText && on ? `<span class="ml-watch-state">${esc(stateText)}</span>` : ''}
       </button><button class="ml-watch-close" data-ml="watch-close" data-session-id="${esc(x.id)}" title="채널 닫기" aria-label="${esc(`${name} 채널 닫기`)}">${ICON_CLOSE}</button></span>`;
     }).join('');
     // 상태 알림마다 다시 그리면 칩의 호버·키보드 초점이 날아간다 — 바뀐 때만.
     if (html === this.watchPickerHtml) return;
     this.watchPickerHtml = html;
     this.chipPeek.close(); // 가리키던 칩이 떨어진다
-    picker.innerHTML = `<button class="ml-watch-more start" tabindex="-1" hidden></button>${html}<button class="ml-watch-more end" tabindex="-1" hidden></button>`;
+    this.closeChipOverflow();
+    picker.innerHTML = `<button class="ml-watch-more start" aria-haspopup="menu" aria-expanded="false" hidden></button>${html}<button class="ml-watch-more end" aria-haspopup="menu" aria-expanded="false" hidden></button>`;
     // 지금 보는 칩이 늘 창 안에 오게 맞춘다(새로 연 채널이 숨은 쪽에 있으면 추가가 안 된 것처럼 보인다).
     const chips = [...picker.querySelectorAll('.ml-watch-chip')];
     const at = chips.findIndex((c) => c.classList.contains('active'));
-    if (at >= 0 && (at < this.chipStart || at >= this.chipStart + CHIP_WINDOW)) this.chipStart = at < this.chipStart ? at : at - CHIP_WINDOW + 1;
+    this.chipWindow = chipWindowFor(this.header.clientWidth);
+    if (at >= 0 && (at < this.chipStart || at >= this.chipStart + this.chipWindow)) this.chipStart = at < this.chipStart ? at : at - this.chipWindow + 1;
     this.applyChipWindow();
     // 칩이 넘치면 가로로 넘겨 보는데, 새로 연 채널(지금 보는 칩)이 넘친 쪽에 숨으면 추가가 안 된 것처럼 보였다 — 보이는 자리로.
     // 같은 알림에서 옆의 다른 방송 줄을 비웠다 다시 채우면 칩 줄이 잠깐 넘치지 않아 맞춘 자리가 0 으로 돌아갔다 —
@@ -1264,7 +1305,7 @@ export class MultiLivePage {
     this.chipPeek.close();
     // 새로 드러난 칩만 들어오는 쪽에서 살짝 미끄러져 나온다
     const tabs = this.watchPicker.querySelectorAll('.ml-watch-tab');
-    const shown = tabs[dir > 0 ? this.chipStart + CHIP_WINDOW - 1 : this.chipStart];
+    const shown = tabs[dir > 0 ? this.chipStart + this.chipWindow - 1 : this.chipStart];
     if (shown) {
       shown.classList.remove('enter-start', 'enter-end');
       void shown.offsetWidth;
@@ -1279,17 +1320,116 @@ export class MultiLivePage {
     const picker = this.watchPicker;
     const tabs = [...picker.querySelectorAll('.ml-watch-tab')];
     const n = tabs.length;
-    this.chipStart = Math.max(0, Math.min(this.chipStart, n - CHIP_WINDOW));
-    tabs.forEach((c, i) => { c.hidden = i < this.chipStart || i >= this.chipStart + CHIP_WINDOW; });
+    const w = this.chipWindow;
+    this.chipStart = Math.max(0, Math.min(this.chipStart, n - w));
+    tabs.forEach((c, i) => { c.hidden = i < this.chipStart || i >= this.chipStart + w; });
     const lead = this.chipStart;
-    const tail = Math.max(0, n - this.chipStart - CHIP_WINDOW);
+    const tail = Math.max(0, n - this.chipStart - w);
     for (const [el, count, label] of [[picker.querySelector('.ml-watch-more.start'), lead, '앞'], [picker.querySelector('.ml-watch-more.end'), tail, '뒤']]) {
       if (!el) continue;
       el.hidden = !count;
       el.textContent = `+${count}`;
-      el.title = `${label} 채널 ${count}개 더 보기 (마우스 휠)`;
-      el.setAttribute('aria-label', el.title);
+      el.title = `${label}쪽에 가려진 채널 ${count}개 — 눌러서 목록 · 휠로 넘기기`;
+      el.setAttribute('aria-label', `${label}쪽에 가려진 채널 ${count}개 목록`);
     }
+  }
+
+  /** 머리줄 폭이 바뀌면 보이는 칩 수를 다시 정한다(바뀔 때만 다시 나눈다). */
+  syncChipWindowSize() {
+    if (this.watchPicker.hidden) return;
+    const n = chipWindowFor(this.header.clientWidth);
+    if (n === this.chipWindow) return;
+    this.chipWindow = n;
+    const tabs = [...this.watchPicker.querySelectorAll('.ml-watch-tab')];
+    const at = tabs.findIndex((t) => t.classList.contains('active'));
+    if (at >= 0 && (at < this.chipStart || at >= this.chipStart + n)) this.chipStart = Math.max(0, at - n + 1);
+    this.applyChipWindow();
+    this.closeChipOverflow();
+    this.syncWatchPickerFade();
+  }
+
+  // ── "+N" 넘침 메뉴 — 그쪽에 가려진 채널을 이름·상태와 함께 늘어놓는다(고르면 그 채널을 라이브로) ──
+
+  toggleChipOverflow(more) {
+    if (!this.chipOverflow.hidden && this.chipOverflowFrom === more) { this.closeChipOverflow(true); return; }
+    this.closeChipOverflow();
+    const start = more.classList.contains('start');
+    const tabs = [...this.watchPicker.querySelectorAll('.ml-watch-tab')];
+    const hiddenTabs = start ? tabs.slice(0, this.chipStart) : tabs.slice(this.chipStart + this.chipWindow);
+    if (!hiddenTabs.length) return;
+    const byId = new Map((this.state?.sessions || []).map((x) => [x.id, x]));
+    this.chipOverflow.setAttribute('aria-label', `${start ? '앞' : '뒤'}쪽에 가려진 채널`);
+    this.chipOverflow.innerHTML = hiddenTabs.map((t) => {
+      const x = byId.get(t.dataset.sessionId) || {};
+      const name = x.channelName || x.channelId || '';
+      const kind = (x.state && x.state.kind) || 'playing';
+      const stateText = CHIP_STATE[kind] || '';
+      const avatar = safeUrl(x.profileImageUrl);
+      return `<button class="ml-menu-item ml-wo-item${stateText ? ` st-${kind}` : ''}" role="menuitem" data-ml="watch" data-session-id="${esc(t.dataset.sessionId)}">
+        <span class="ml-watch-av">${avatar ? `<img src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="ml-watch-dot"></span>'}<i class="ml-watch-st" aria-hidden="true"></i></span>
+        <span class="ml-wo-text"><span class="ml-wo-name ellipsis">${esc(name)}</span>${x.liveTitle ? `<span class="ml-wo-title ellipsis">${esc(x.liveTitle)}</span>` : ''}</span>
+        ${stateText ? `<span class="ml-wo-state">${esc(stateText)}</span>` : (x.viewerCountText ? `<span class="ml-wo-state">${esc(x.viewerCountText)}명</span>` : '')}
+      </button>`;
+    }).join('');
+    this.chipOverflowFrom = more;
+    more.setAttribute('aria-expanded', 'true');
+    this.chipPeek.close();
+    this.chipOverflow.hidden = false;
+    this.placeChipOverflow();
+    if (more.matches(':focus-visible')) focusFirstMenuItem(this.chipOverflow);
+  }
+
+  /** "+N" 바로 아래에 둔 뒤 창 안에 맞춘다(dom.js fitPopover — 넘치면 반대로 맞추고 폭·높이를 줄인다). */
+  placeChipOverflow() {
+    const more = this.chipOverflowFrom;
+    if (!more || this.chipOverflow.hidden) return;
+    const h = this.header.getBoundingClientRect();
+    const r = more.getBoundingClientRect();
+    const a = this.chipOverflowAnchor;
+    a.style.left = `${Math.round(r.left - h.left)}px`;
+    a.style.top = `${Math.round(r.bottom - h.top + 6)}px`;
+    a.style.width = `${Math.round(r.width)}px`;
+    fitPopover(this.chipOverflow);
+  }
+
+  closeChipOverflow(refocus = false) {
+    if (!this.chipOverflow || this.chipOverflow.hidden) return;
+    const from = this.chipOverflowFrom;
+    const inside = this.chipOverflow.contains(document.activeElement);
+    hideWithExit(this.chipOverflow);
+    from?.setAttribute('aria-expanded', 'false');
+    this.chipOverflowFrom = null;
+    if ((refocus || inside) && from?.isConnected && !from.hidden) from.focus({ preventScroll: true });
+  }
+
+  /** 칩 키보드 — 가려진 칩으로 가면 창을 옮겨 보이게 한 뒤 초점을 준다. */
+  onChipKey(e) {
+    const chip = e.target.closest?.('.ml-watch-chip');
+    if (!chip || e.metaKey || e.ctrlKey || e.altKey) return;
+    const chips = [...this.watchPicker.querySelectorAll('.ml-watch-chip')];
+    const i = chips.indexOf(chip);
+    let next = -1;
+    if (e.key === 'ArrowRight') next = Math.min(chips.length - 1, i + 1);
+    else if (e.key === 'ArrowLeft') next = Math.max(0, i - 1);
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = chips.length - 1;
+    else if (e.key === 'Delete' || e.key === 'Backspace') {
+      e.preventDefault();
+      // × 를 누른 것과 같은 길 — × 에 초점을 두고 누르면 닫은 뒤 옆 채널 칩으로 초점이 간다(restoreChipFocus).
+      const x = chip.closest('.ml-watch-tab')?.querySelector('.ml-watch-close');
+      if (x) { x.focus({ preventScroll: true }); x.click(); }
+      return;
+    } else return;
+    e.preventDefault();
+    if (next === i) return;
+    if (next < this.chipStart || next >= this.chipStart + this.chipWindow) {
+      this.chipStart = next < this.chipStart ? next : next - this.chipWindow + 1;
+      this.applyChipWindow();
+      this.chipPeek.close();
+    }
+    chips[next].focus({ preventScroll: true });
+    chips[next].closest('.ml-watch-tab')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    this.syncWatchPickerFade();
   }
 
   revealActiveWatchChip() {

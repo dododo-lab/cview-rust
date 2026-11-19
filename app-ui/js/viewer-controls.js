@@ -178,7 +178,7 @@ export class ViewerControls {
     this.stage.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
     // 영상 자리만 — 컨트롤·패널·메뉴를 빠르게 두 번 눌러도 전체 화면이 되지 않게(멀티라이브 패인과 같게).
     this.stage.addEventListener('dblclick', (e) => {
-      if (e.target.closest('.player-controls, .chzzk-bar, .player-panel, .stage-top, .quality-menu, .overlay-retry, button')) return;
+      if (e.target.closest('.player-controls, .chzzk-bar, .player-panel, .stage-top, .quality-menu, .vt-menu, .overlay-retry, button')) return;
       this.fullscreen(false);
     });
 
@@ -223,7 +223,7 @@ export class ViewerControls {
 
     // 위쪽 오버레이(채널·제목·바로 전환·창 동작)도 아래 막대와 함께 나타나고 숨는다.
     const top = stage.querySelector('.stage-top');
-    const menuOpen = () => !this.qualityMenu.hidden || Boolean(this.root.querySelector('.player-panel:not([hidden])'));
+    const menuOpen = () => !this.qualityMenu.hidden || Boolean(this.root.querySelector('.player-panel:not([hidden]), .vt-menu:not([hidden])'));
     const hide = () => {
       // 키보드 초점이 막대 안에 있으면 숨기지 않는다(마우스 클릭으로 생긴 초점은 :focus-visible 이 아니라 숨는다).
       const keyFocus = stage.querySelector(':is(button, input, select):focus-visible');
@@ -341,6 +341,7 @@ export class ViewerControls {
     const chosen = auto ? null : this.levels.find((l) => l.index === this.manualIndex);
     const height = (chosen && chosen.height) || (v && v.videoHeight) || this.currentHeight;
     this.qualityButton.textContent = height ? `${auto ? '자동 · ' : ''}${height}p` : '자동';
+    this.viewer.topbar?.syncBadge({ height, latency: this.latency, auto });
   }
 
   togglePlay() {
@@ -358,15 +359,18 @@ export class ViewerControls {
     this.flash('라이브로 이동');
   }
 
-  toggleQualityMenu() {
+  /** 화질 메뉴 — opener 는 누른 단추(아래 막대 화질 단추 또는 위 막대 화질·지연 배지). 닫으면 그 단추로 초점을 돌려준다. */
+  toggleQualityMenu(opener = null) {
     if (!this.qualityMenu.hidden) {
       this.closeQualityMenu(true);
       return;
     }
+    this.qualityOpener = opener;
+    this.viewer.topbar?.closeMenu();
     this.viewer.player.call('getLevels');
     this.renderQualityMenu();
     this.qualityMenu.hidden = false;
-    this.qualityButton.setAttribute('aria-expanded', 'true');
+    (this.qualityOpener || this.qualityButton).setAttribute('aria-expanded', 'true');
     // 열면 고른 항목(없으면 첫 항목)으로 초점(L-7).
     const first = this.qualityMenu.querySelector('[aria-checked="true"]') || this.qualityMenu.querySelector('[role="menuitemradio"]');
     first?.focus();
@@ -378,7 +382,10 @@ export class ViewerControls {
     const inside = this.qualityMenu.contains(document.activeElement);
     hideWithExit(this.qualityMenu);
     this.qualityButton.setAttribute('aria-expanded', 'false');
-    if (refocus || inside) this.qualityButton.focus();
+    const opener = this.qualityOpener || this.qualityButton;
+    opener.setAttribute('aria-expanded', 'false');
+    this.qualityOpener = null;
+    if (refocus || inside) opener.focus();
   }
 
   renderQualityMenu() {

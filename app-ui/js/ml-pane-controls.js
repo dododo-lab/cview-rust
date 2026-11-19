@@ -18,7 +18,7 @@ import {
   SHARPNESS_LEVELS, SHARPNESS_HELP, ENLARGED_ONLY_LABEL, ENLARGED_ONLY_HELP,
   sharpnessState, sharpnessReady, sharpnessArgs, setSharpness, sharpnessNote, sharpnessShort,
 } from './sharpness.js';
-import { watchBarHtml, watchBarEndHtml, WATCH_ICON } from './ml-watch.js';
+import { watchBarHtml, watchBarEndHtml, watchMenuHtml } from './ml-watch.js';
 import {
   RATES, RATE_NOTE, EQ_SUPPORTED, EQ_FREQS, freqLabel, loadEqPresets, loadPlayerSettings, savePlayerSettings,
   applyPlayerTools, clearPlayerTools, eqWanted, eqBands, eqOnPatch,
@@ -103,14 +103,14 @@ export function paneControlsHtml() {
         <button class="ml-pane-btn" data-mp="fullscreen" title="이 패인 전체 화면" aria-label="전체 화면">${I.fullscreen}</button>${watchBarEndHtml()}
       </div>
       <div class="ml-pane-menu ml-gear-menu" role="menu" hidden></div>
-      <div class="ml-pane-menu ml-more-pane" role="menu" hidden>
-        <button class="ml-menu-item ml-watch-btn" data-ml="watch">${I.live}<span>라이브로 크게 보기</span></button>
-        <button class="ml-menu-item" data-ml="select">${I.chat}<span>이 패인 채팅 보기</span></button>
-        <button class="ml-menu-item" data-ml="info">${I.info}<span>채널 정보</span></button>
-        <button class="ml-menu-item" data-ml="retry">${I.retry}<span>다시 연결</span></button>
-        <button class="ml-menu-item ml-narrow-only" data-mp="pip">${I.pip}<span>PiP</span></button>
-        <button class="ml-menu-item ml-narrow-only" data-ml="single">${I.expand}<span>이 채널만 크게</span></button>
-        <button class="ml-menu-item ml-watch-only" data-mw="chatmode">${WATCH_ICON.chat}<span>채팅 표시 방식</span></button>
+      <div class="ml-pane-menu ml-more-pane" role="menu" aria-label="더 보기" hidden>
+        <button class="ml-menu-item ml-watch-btn" role="menuitem" data-ml="watch">${I.live}<span>라이브로 크게 보기</span></button>
+        <button class="ml-menu-item ml-grid-only" role="menuitem" data-ml="select">${I.chat}<span>이 패인 채팅 보기</span></button>${watchMenuHtml({
+    info: `<button class="ml-menu-item" role="menuitem" data-ml="info">${I.info}<span>채널 정보</span></button>`,
+    retry: `<button class="ml-menu-item" role="menuitem" data-ml="retry">${I.retry}<span>다시 연결</span></button>`,
+    pip: `<button class="ml-menu-item ml-narrow-only" role="menuitem" data-mp="pip">${I.pip}<span>PiP</span><kbd class="ml-menu-key ml-watch-only" data-key-of="pip"></kbd></button>`,
+  })}
+        <button class="ml-menu-item ml-narrow-only" role="menuitem" data-ml="single">${I.expand}<span>이 채널만 크게</span></button>
       </div>`;
 }
 
@@ -147,6 +147,18 @@ export class PaneControls {
     this.el.addEventListener('click', (e) => this.onClick(e));
     bindMenuKeys(this.gearMenu);
     bindMenuKeys(this.moreMenu);
+    // 메뉴 안의 Esc 는 메뉴가 먼저 받는다 — 앱 전체 Esc(app.js escapeTaken)가 먼저 숨기면 연 단추로 초점을 돌려주지 못했다
+    // (단독 보기 위 막대 ⋯·화질 배지에서 Esc 를 누르면 초점이 body 로 떨어졌다).
+    for (const m of [this.gearMenu, this.moreMenu]) {
+      m.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        e.stopPropagation();
+        const back = this.menuButton;
+        this.closeMenus();
+        back?.focus({ preventScroll: true });
+      });
+    }
     this.gearMenu.addEventListener('input', (e) => this.onAdjustInput(e));
     this.gearMenu.addEventListener('change', (e) => this.onMenuChange(e));
     this.range.addEventListener('input', () => this.setGain(Number(this.range.value) / 100));
@@ -207,7 +219,7 @@ export class PaneControls {
   closeMenus() {
     hideWithExit(this.gearMenu);
     hideWithExit(this.moreMenu);
-    for (const b of this.el.querySelectorAll('[data-mp="gear"], [data-mp="more"]')) b.setAttribute('aria-expanded', 'false');
+    for (const b of this.el.querySelectorAll('[data-mp="gear"], [data-mp="quality"], [data-mp="more"]')) b.setAttribute('aria-expanded', 'false');
   }
 
   // ── 상태 ─────────────────────────────────
@@ -294,6 +306,31 @@ export class PaneControls {
     }
     const audioTitle = audible && this.gain > 0 ? '소리 끄기' : '이 패인 소리 켜기';
     if (this.audioButton.title !== audioTitle) this.audioButton.title = audioTitle;
+    if (this.stage) this.syncQualityBadge();
+  }
+
+  /**
+   * 단독 보기 위 막대의 화질·지연 배지(ml-watch.js watchStatusHtml) — ⚙ 메뉴 머리의 화질·지연과 같은 값.
+   * 700ms 마다 돌므로 값이 바뀔 때만 쓴다. 늦어지면(8초 넘게) 경고 색 — 누르면 ⚙ 에서 '라이브로 이동'.
+   */
+  syncQualityBadge() {
+    const b = this.qualityBadge || (this.qualityBadge = this.el.querySelector('.ml-q-badge'));
+    if (!b) return;
+    const v = this.video;
+    const chosen = this.manualIndex >= 0 ? this.levels.find((l) => l.index === this.manualIndex) : null;
+    const height = (chosen && chosen.height) || (v && v.videoHeight) || 0;
+    const lat = Number.isFinite(this.latency) && this.latency > 0 ? Math.round(this.latency * 10) / 10 : 0;
+    const auto = this.manualIndex < 0;
+    const key = `${height}|${lat}|${auto}`;
+    if (b.dataset.key === key) return;
+    b.dataset.key = key;
+    b.hidden = !height && !lat;
+    b.querySelector('.ml-q-res').textContent = height ? `${height}p` : '';
+    b.querySelector('.ml-q-lat').textContent = lat ? `${lat.toFixed(1)}초` : '';
+    b.classList.toggle('behind', liveBadgeState(lat).behind);
+    const label = `화질 ${height ? `${height}p` : '확인 중'}${auto ? ' (자동)' : ''} · 지연 ${lat ? `${lat.toFixed(1)}초` : '확인 중'}`;
+    b.title = `${label} — 눌러서 화질·지연 메뉴`;
+    b.setAttribute('aria-label', `${label}, 화질·지연 메뉴`);
   }
 
   // ── 동작 ─────────────────────────────────
@@ -301,7 +338,7 @@ export class PaneControls {
   onClick(e) {
     const menuItem = e.target.closest('.ml-pane-menu [data-ml], .ml-pane-menu [data-mp], .ml-pane-menu [data-mw]');
     const action = e.target.closest('[data-mp]');
-    if (!e.target.closest('.ml-pane-menu') && !e.target.closest('[data-mp="gear"], [data-mp="more"]')) this.closeMenus();
+    if (!e.target.closest('.ml-pane-menu') && !e.target.closest('[data-mp="gear"], [data-mp="quality"], [data-mp="more"]')) this.closeMenus();
     // 화면 보정(선명한 화면·밝기 등)은 여러 번 만지므로 메뉴를 닫지 않는다.
     if (menuItem && !e.target.closest('[data-keep-open]')) setTimeout(() => this.closeMenus(), 0);
     if (!action) return;
@@ -309,8 +346,9 @@ export class PaneControls {
     switch (action.dataset.mp) {
       case 'play': this.togglePlay(); break;
       case 'live': this.goLive(); break;
-      case 'gear': this.toggleMenu(this.gearMenu); break;
-      case 'more': this.toggleMenu(this.moreMenu); break;
+      case 'gear':
+      case 'quality': this.toggleMenu(this.gearMenu, action); break;
+      case 'more': this.toggleMenu(this.moreMenu, action); break;
       case 'pip': togglePipFor(this.video); break;
       case 'fullscreen': this.toggleFullscreen(); break;
       case 'level': this.chooseLevel(Number(action.dataset.level)); break;
@@ -324,7 +362,8 @@ export class PaneControls {
     }
   }
 
-  toggleMenu(menu) {
+  /** 메뉴 열고 닫기 — opener 는 누른 단추(⚙ 는 아래 막대 톱니와 위 화질·지연 배지 둘이 연다). Esc 면 그 단추로 초점을 돌려준다. */
+  toggleMenu(menu, opener = null) {
     const open = menu.hidden;
     this.closeMenus();
     if (!open) return;
@@ -335,7 +374,7 @@ export class PaneControls {
       if (this.stage) this.refreshSettings();
     }
     menu.hidden = false;
-    this.menuButton = this.el.querySelector(`[data-mp="${menu === this.gearMenu ? 'gear' : 'more'}"]`);
+    this.menuButton = opener || this.el.querySelector(`${menu === this.gearMenu ? '.ml-pane-bar ' : ''}[data-mp="${menu === this.gearMenu ? 'gear' : 'more'}"]`);
     this.menuButton?.setAttribute('aria-expanded', 'true');
     // 키보드로 열었으면 첫 항목으로 — 마우스로 열었으면 초점은 그대로(:focus-visible 이 아니다)
     if (this.menuButton?.matches(':focus-visible')) focusFirstMenuItem(menu);

@@ -92,12 +92,13 @@ const chips = () => page.evaluate(() => {
   const p = document.querySelector('.ml-watch-picker');
   return p.hidden ? [] : [...p.querySelectorAll('.ml-watch-chip')].map((b) => b.textContent.trim().replace('이름-', '') + (b.classList.contains('active') ? '*' : ''));
 });
-// 칩 줄 가운데가 머리줄 가운데와 얼마나 어긋났는지(px) — 머리줄은 좌우 패딩을 뺀 안쪽 폭 기준
-const centerOffset = () => page.evaluate(() => {
-  const h = document.querySelector('.ml-header'); const cs = getComputedStyle(h);
-  const hr = h.getBoundingClientRect(); const pr = document.querySelector('.ml-watch-picker').getBoundingClientRect();
-  const mid = (hr.left + parseFloat(cs.paddingLeft) + hr.right - parseFloat(cs.paddingRight)) / 2;
-  return Math.abs((pr.left + pr.right) / 2 - mid);
+// 머리줄 묶음 사이 간격(px) — 2026-11-20 재배치: [라이브|멀티라이브] │ [칩 줄] [채널 추가] 를 브라우저 탭처럼 붙여 둔다
+// (예전엔 칩 줄을 머리줄 한가운데 두어 넓은 창에서 세 묶음이 멀리 떨어졌다).
+const headGaps = () => page.evaluate(() => {
+  const seg = document.querySelector('.ml-header .live-mode-seg').getBoundingClientRect();
+  const pr = document.querySelector('.ml-watch-picker').getBoundingClientRect();
+  const add = document.querySelector('.ml-toolbar .ml-add').getBoundingClientRect();
+  return { segToPicker: Math.round(pr.left - seg.right), pickerToAdd: Math.round(add.left - pr.right) };
 });
 const shot = process.env.SHOT_DIR;
 // 머리줄 채널 추가 단추의 모양·이름 — 라벨·아이콘·가득 참 표시가 실제로 보이는지
@@ -139,7 +140,7 @@ await check('채널 추가 사이드바 줄을 눌러 연 채널도 머리줄에
   assert.deepEqual(await chips(), ['p1', 'p2', 'p3*']);
 });
 
-await check('사이드바 + 로 담은 채널은 머리줄에 생기고, 채널 줄은 머리줄 가운데에 있다', async () => {
+await check('사이드바 + 로 담은 채널은 머리줄에 생기고, 칩 줄은 전환 바로 옆·채널 추가는 칩 줄 바로 뒤에 붙는다', async () => {
   if (!(await page.isVisible('.ml-addrow-act[data-channel-id="p4"]'))) {
     await page.evaluate(() => [...document.querySelectorAll('[data-ml="add"]')].find((b) => b.offsetParent).click());
   }
@@ -149,8 +150,9 @@ await check('사이드바 + 로 담은 채널은 머리줄에 생기고, 채널 
   assert.equal(await page.locator('.ml-watch-rail, .ml-header .rail-item').count(), 0, '머리줄에 다른 방송 줄이 없다');
   await page.keyboard.press('Escape'); // 사이드바 닫기 — 열린 채로는 머리줄 폭이 좁다
   await settle();
-  const off = await centerOffset();
-  assert.ok(off <= 1, `채널 줄이 가운데에서 ${off}px 어긋남`);
+  const g = await headGaps();
+  assert.ok(g.segToPicker >= 0 && g.segToPicker <= 28, `전환 → (구분선) → 칩 줄 간격 ${g.segToPicker}px`);
+  assert.ok(g.pickerToAdd >= 0 && g.pickerToAdd <= 12, `칩 줄 → 채널 추가 간격 ${g.pickerToAdd}px`);
   if (shot) await page.screenshot({ path: path.join(shot, 'picker-4.png'), clip: { x: 0, y: 0, width: 1280, height: 120 } });
 });
 
@@ -206,7 +208,7 @@ await check('가득 차면 채널 추가 단추가 점선·흐린 모양으로 �
   if (shot) await page.screenshot({ path: path.join(shot, 'add-full.png'), clip: { x: 0, y: 0, width: 1280, height: 70 } });
 });
 
-await check('칩은 4개만 보이고 휠로 한 칸씩 넘긴다, 지금 보는 칩은 창 안', async () => {
+await check('칩은 4개만 보이고(이 폭에서) 휠로 한 칸씩 넘긴다, 지금 보는 칩은 창 안, "+N" 은 가려진 채널 메뉴', async () => {
   const view = () => page.evaluate(() => {
     const p = document.querySelector('.ml-watch-picker');
     const shown = [...p.querySelectorAll('.ml-watch-chip')].filter((c) => !c.closest('.ml-watch-tab').hidden).map((c) => c.textContent.trim().replace('이름-', '') + (c.classList.contains('active') ? '*' : ''));
@@ -224,10 +226,17 @@ await check('칩은 4개만 보이고 휠로 한 칸씩 넘긴다, 지금 보는
   await page.waitForTimeout(100);
   assert.deepEqual((await view()).shown, ['p3', 'p4', 'p5', 'p6*']);
   if (shot) await page.screenshot({ path: path.join(shot, 'window.png'), clip: { x: 0, y: 0, width: 1280, height: 70 } });
+  // "+N" — 가려진 채널(p2) 목록이 열리고, 칩 창은 그대로. Esc 면 닫고 "+N" 로 초점.
   await page.click('.ml-watch-more.start');
-  assert.deepEqual(await view(), { shown: ['p2', 'p3', 'p4', 'p5'], start: '', end: '+1' });
-  await page.mouse.wheel(0, 100);
-  await page.waitForTimeout(100);
+  await page.waitForTimeout(120);
+  const menu = await page.evaluate(() => { const m = document.querySelector('.ml-watch-overflow'); return { hidden: m.hidden, items: [...m.querySelectorAll('[data-ml="watch"]')].map((b) => b.dataset.sessionId) }; });
+  assert.deepEqual(menu, { hidden: false, items: ['s-p2'] });
+  assert.deepEqual(await view(), { shown: ['p3', 'p4', 'p5', 'p6*'], start: '+1', end: '' });
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(120);
+  assert.equal(await page.evaluate(() => document.querySelector('.ml-watch-overflow').hidden), true);
+  assert.ok(await page.evaluate(() => document.activeElement?.classList.contains('ml-watch-more')), 'Esc 면 +N 로 초점');
+  assert.ok(await page.evaluate(() => document.querySelector('[data-page="multilive"]').classList.contains('as-watch')), 'Esc 는 메뉴만 닫는다(단독 보기 그대로)');
 });
 
 await check('머리줄이 넘쳐도 지금 보는 칩이 보인다', async () => {

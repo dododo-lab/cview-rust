@@ -3456,6 +3456,64 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .stage-top .rail-item { background: rgba(255, 255, 255, 0.35); }
 .stage-top .rail-item:hover { background: #00ffa3; }
 .stage-top .rail-item .avatar { border-color: rgba(0, 0, 0, 0.6); box-shadow: none; }
+/* ── 시청 화면 위 막대 묶음(viewer-topbar.js, 2026-11-20) — 라이브 단독 보기 상단 바와 같은 짜임.
+   [채널 정보·지표·화질/지연] [레일] … [채널: 팔로우·즐겨찾기·링크] | [보기: 채팅 표시·새 창] [⋯] [×]
+   폭 단계(무대 폭 @container vstage): 넓음(860~) 팔로우 글자까지 · 보통(641~859) 팔로우는 아이콘 · 좁음(~640) 두 묶음을 ⋯ 로. */
+#viewer .player-stage { container: vstage / inline-size; }
+/* 지표 칩은 두 줄까지 — 레일·단추에 밀린 좁은 제목 칸에서 칩이 서너 줄로 꺾여 영상을 가렸다. 넘치는 칩은 셋째 줄(숨김)로 통째로 빠진다
+   (멀티라이브 패인 .ml-pane-stats 와 같은 방식). 순서: LIVE · 시청자 · 경과 · 화질/지연 · 누적. */
+.stage-top .meta-stats { max-height: 50px; overflow: hidden; }
+.stage-top .vt-group { display: flex; align-items: center; gap: 2px; flex: none; }
+.stage-top .vt-sep { flex: none; width: 1px; height: 20px; margin: 8px 4px 0; background: rgba(255, 255, 255, 0.22); }
+.vt-follow { flex: none; height: 32px; margin: 2px 4px 0 0; display: inline-flex; align-items: center; gap: 5px; padding: 0 12px 0 10px; border: 0; border-radius: var(--radius-pill);
+  background: #fff; color: #111; font-size: var(--fs-footnote); font-weight: 700; line-height: 1; white-space: nowrap; cursor: pointer; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35); }
+.vt-follow[hidden] { display: none; }
+.vt-follow .vt-ico { display: inline-grid; place-items: center; }
+.vt-follow svg { width: 15px; height: 15px; }
+.vt-follow:hover:not(:disabled) { background: #e9e9ec; }
+.vt-follow.on { background: rgba(255, 255, 255, 0.14); color: #fff; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28); }
+.vt-follow.on svg { color: #00ffa3; }
+.vt-follow.on:hover:not(:disabled) { background: rgba(255, 255, 255, 0.22); }
+.vt-follow:disabled { opacity: 0.6; cursor: progress; }
+.vt-follow:focus-visible { outline: 2px solid #00ffa3; outline-offset: 2px; }
+.stage-top .icon-btn[data-vt="fav"].on { color: #ffd84d; }
+.stage-top .icon-btn[aria-expanded="true"] { background: rgba(255, 255, 255, 0.16); }
+.vt-q-badge { flex: none; height: 22px; padding: 0 8px; display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: var(--radius-xs);
+  background: rgba(0, 0, 0, 0.55); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18); color: #fff; font-size: var(--fs-footnote); font-weight: 700;
+  font-variant-numeric: tabular-nums; white-space: nowrap; cursor: pointer; }
+.vt-q-badge[hidden] { display: none; }
+.vt-q-badge .vt-q-lat { font-weight: 600; color: rgba(255, 255, 255, 0.72); }
+.vt-q-badge :empty { display: none; }
+.vt-q-badge .vt-q-res:not(:empty) + .vt-q-lat:not(:empty)::before { content: "·"; margin-right: 6px; opacity: 0.6; }
+.vt-q-badge:hover { background: rgba(255, 255, 255, 0.2); }
+.vt-q-badge.behind { box-shadow: inset 0 0 0 1px #ffb020; }
+.vt-q-badge.behind .vt-q-lat { color: #ffcf66; }
+.vt-q-badge:focus-visible { outline: 2px solid #00ffa3; outline-offset: 2px; }
+/* ⋯ 메뉴 — 무대 오른쪽 위(위 막대 아래). 흐림 없이(재생 중인 영상 위 흐림은 프레임마다 다시 계산된다). */
+.vt-menu { position: absolute; right: 16px; top: 58px; z-index: 8; min-width: 220px; max-height: calc(100% - 120px); overflow-y: auto; padding: 5px; border-radius: var(--radius-ms);
+  background: rgba(24, 25, 28, 0.95); border: 1px solid rgba(255, 255, 255, 0.12); color: #fff; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
+.vt-menu[hidden] { display: none; }
+.vt-menu .vt-label { padding: 6px 9px 3px; font-size: var(--fs-micro); font-weight: 700; color: rgba(255, 255, 255, 0.55); }
+.vt-menu .vt-label:first-child { padding-top: 3px; }
+.vt-menu .vt-sep-line { height: 1px; margin: 4px 6px; background: rgba(255, 255, 255, 0.12); }
+.vt-item { width: 100%; display: flex; align-items: center; gap: 9px; padding: 6px 9px; border: 0; border-radius: var(--radius-sm); background: none; color: #fff;
+  font-size: var(--fs-footnote); text-align: left; cursor: pointer; }
+.vt-item svg { width: 14px; height: 14px; flex: none; color: rgba(255, 255, 255, 0.72); }
+.vt-item:hover, .vt-item:focus-visible { background: rgba(255, 255, 255, 0.12); }
+.vt-item:focus-visible { outline: 2px solid #00ffa3; outline-offset: -2px; }
+.vt-item[hidden], .vt-menu .vt-narrow { display: none; }
+.vt-key { margin-left: auto; padding-left: 14px; font: inherit; font-size: var(--fs-tiny); font-weight: 600; color: rgba(255, 255, 255, 0.5); white-space: nowrap; }
+.vt-key:empty { display: none; }
+@container vstage (max-width: 859px) {
+  .vt-follow { width: 32px; padding: 0; justify-content: center; margin-right: 2px; }
+  .vt-follow .vt-label { display: none; }
+}
+@container vstage (max-width: 640px) {
+  .stage-top :is(.vt-group, .vt-sep) { display: none; }
+  .stage-top .meta-stats .stat-acc { display: none; }
+  .vt-menu .vt-narrow:not([hidden]) { display: flex; }
+  .vt-q-badge { display: none; }
+}
 .stage-top .rail-item[hidden], .stage-top .rail-more[hidden] { display: none; }
 .stage-top .rail-more { flex: none; height: 32px; min-width: 32px; padding: 0 8px; border-radius: var(--radius-lg); border: 1px solid rgba(255, 255, 255, 0.28);
   background: rgba(0, 0, 0, 0.3); color: #fff; font-size: var(--fs-footnote); font-weight: 700; cursor: pointer; }
