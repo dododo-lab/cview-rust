@@ -1170,3 +1170,80 @@ async fn event_loop_delivers_engine_events() {
     assert!(snap.is_connected);
     assert!(serde_json::to_value(&snap).unwrap()["messages"].is_array());
 }
+
+// MARK: - 메시지를 쌓지 않는 뷰모델(앱 셸)
+
+#[tokio::test]
+async fn untracked_view_model_keeps_no_message_buffers() {
+    let vm = ChatViewModel::with_deps(ChatDeps {
+        track_messages: false,
+        ..Default::default()
+    });
+    let mut s = vm.lock();
+    s.last_connection_config = Some(ConnectionConfig {
+        chat_channel_id: "c".into(),
+        ..Default::default()
+    });
+    s.handle_event(ChatEngineEvent::Connected);
+    assert!(s.is_holding_for_backlog);
+    let batch = |p: &str| -> Vec<ChatMessage> {
+        (0..30)
+            .map(|i| ChatMessage::with_id(format!("{p}{i}"), "닉", "안녕").user_id("u"))
+            .collect()
+    };
+    s.handle_event(ChatEngineEvent::RecentMessages(batch("r")));
+    assert!(!s.is_holding_for_backlog, "지난 기록이 오면 보류를 푼다");
+    s.handle_event(ChatEngineEvent::NewMessages(batch("n")));
+    s.handle_event(ChatEngineEvent::Donations(vec![ChatMessage::with_id(
+        "d", "닉", "후원",
+    )
+    .user_id("u")
+    .message_type(MessageType::Donation)]));
+    // 환영 줄 하나만 — 받은 메시지는 버퍼·기록·대기열·통계 어디에도 남지 않는다.
+    assert_eq!(s.messages.len(), 1);
+    assert!(s.chat_history.is_empty());
+    assert_eq!(s.pending_count(), 0);
+    assert!(s.recent_message_timestamps.is_empty());
+    // 연결 상태·제한 같은 나머지 이벤트는 그대로 처리한다.
+    s.handle_event(ChatEngineEvent::Kicked);
+    assert!(s.error_message.is_some());
+}
+
+#[tokio::test]
+async fn untracked_view_model_expires_sent_echo_keys_and_still_reclaims() {
+    // 받은 메시지를 쌓지 않는 뷰모델은 dedupe_for_ingress 를 타지 않는다 — 에코 열쇠는 넣을 때 만료분을 비운다.
+    let vm = ChatViewModel::with_deps(ChatDeps {
+        track_messages: false,
+        ..Default::default()
+    });
+    let mut s = vm.lock();
+    s.current_user_uid = Some("me".into());
+    s.handle_event(ChatEngineEvent::Connected);
+    let past = Utc::now() - chrono::Duration::seconds(60);
+    for i in 0..50 {
+        s.remember_sent_echo_key(format!("me_old{i}"), past);
+    }
+    // 오래된 50개는 1분 전에 5초 수명으로 들어갔으니 지금 넣을 때 모두 빠진다.
+    s.handle_event(ChatEngineEvent::NewMessages(vec![ChatMessage::with_id(
+        "x",
+        "닉",
+        "아무 글",
+    )
+    .user_id("u")]));
+    s.remember_sent_echo_key("me_새 글".into(), Utc::now());
+    assert_eq!(
+        s.recent_sent_echo_keys.keys().collect::<Vec<_>>(),
+        vec!["me_새 글"]
+    );
+    // 거부된 전송 되돌리기는 그대로 — 에코 줄과 열쇠를 지운다.
+    let id = "me_7".to_string();
+    s.messages.push(item(&id, "me", "새 글"));
+    s.remember_pending_echo(7, &id, "me_새 글");
+    s.handle_event(ChatEngineEvent::SendRejected {
+        tid: Some(7),
+        ret_code: -1,
+        message: None,
+    });
+    assert!(!s.messages.iter().any(|m| m.id == id));
+    assert!(s.recent_sent_echo_keys.is_empty());
+}

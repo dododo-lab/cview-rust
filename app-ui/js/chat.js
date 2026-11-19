@@ -13,7 +13,7 @@ import { installChatExtras } from './chat-extras.js';
 import { nickColorClass } from './nick-color.js';
 import { avatarHtml } from './chat-avatar.js';
 import { kbd } from './platform.js';
-import { chatFollower, trimFront } from './chat-follow.js';
+import { chatFollower, trimFront, scheduleChatFlush, flushStarted } from './chat-follow.js';
 import { openUserPop, closeUserPop } from './chat-user-pop.js';
 import { installChatActions, lineCopyText } from './chat-actions.js';
 import { ChatComposer } from './chat-composer.js';
@@ -472,9 +472,7 @@ export class ChatPanel {
 
   /** 닫거나 채널을 바꿀 때 이전 메시지 묶음과 후크가 뒤늦게 실행되지 않게 한다. */
   cancelPendingLines() {
-    cancelAnimationFrame(this.flushRaf);
-    clearTimeout(this.flushTimer);
-    this.flushScheduled = false;
+    flushStarted(this, { ran: false });
     this.pendingLines = [];
   }
 
@@ -573,20 +571,13 @@ export class ChatPanel {
     this.pendingLines = (this.pendingLines || []).concat(shown);
     // 안 보이는 동안 쌓여도 화면에 남을 만큼만 그린다.
     if (this.pendingLines.length > this.maxLines) this.pendingLines = this.pendingLines.slice(-this.maxLines);
-    if (!this.flushScheduled) {
-      this.flushScheduled = true;
-      // 보이면 다음 프레임, 창이 숨어 rAF 가 멈춰도 타이머로 결국 그린다. 숨은 동안은 덜 자주(1초) 모아 붙인다 —
-      // 보는 사람이 없어 늦어도 그만이고, 다시 보이면 rAF 가 바로 그린다.
-      const run = () => this.flushLines();
-      this.flushRaf = requestAnimationFrame(run);
-      this.flushTimer = setTimeout(run, document.hidden ? HIDDEN_FLUSH_MS : 250);
-    }
+    // 보이면 다음 프레임(바로 앞 붙이기에서 FLUSH_GAP_MS 안이면 그때까지 모아서), 창이 숨어 rAF 가 멈춰도 타이머로
+    // 결국 그린다. 숨은 동안은 덜 자주(1초) 모아 붙인다 — 보는 사람이 없어 늦어도 그만이고, 다시 보이면 rAF 가 바로 그린다.
+    scheduleChatFlush(this, () => this.flushLines(), { hiddenMs: HIDDEN_FLUSH_MS, pending: this.pendingLines.length });
   }
 
   flushLines() {
-    cancelAnimationFrame(this.flushRaf);
-    clearTimeout(this.flushTimer);
-    this.flushScheduled = false;
+    flushStarted(this);
     const shown = this.pendingLines || [];
     this.pendingLines = [];
     if (!shown.length) return;
@@ -625,6 +616,8 @@ export class ChatPanel {
   }
 
   onScroll() {
+    // 버린 패널 — 목록을 떼어 낼 때 오는 마지막 scroll 이 '여기까지 읽음' 타이머(3초)를 다시 걸어 패널을 붙들었다.
+    if (this.destroyed) return;
     if (this.atBottom) {
       this.unread = 0;
       this.renderJump();

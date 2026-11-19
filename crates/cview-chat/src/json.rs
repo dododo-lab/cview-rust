@@ -24,6 +24,13 @@ pub fn to_foundation_json(value: &Value) -> String {
     out
 }
 
+/// [`to_foundation_json`] 의 객체판 — 맵을 `Value` 로 감싸려고 통째로 복제하지 않는다.
+pub fn map_to_foundation_json(map: &Map<String, Value>) -> String {
+    let mut out = String::new();
+    write_object(&mut out, map);
+    out
+}
+
 fn write_value(out: &mut String, value: &Value) {
     match value {
         Value::Null => out.push_str("null"),

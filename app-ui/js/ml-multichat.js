@@ -19,7 +19,7 @@ import { mentionInto } from './chat-composer.js';
 import { panelOf } from './chat.js';
 import { applyChatSkin } from './chat-extras.js';
 import { onChatPrefs, passesFilters } from './chat-prefs.js';
-import { chatFollower, followAppend, trimFront } from './chat-follow.js';
+import { chatFollower, followAppend, trimFront, scheduleChatFlush, flushStarted } from './chat-follow.js';
 import { bindMenuKeys, focusFirstMenuItem } from './ml-pane-controls.js';
 import { verifiedBadge } from './verified-badge.js';
 
@@ -343,19 +343,12 @@ export class MultiLiveMergedChat {
     this.pending.push([c, ev.messages.slice(), Boolean(ev.recent)]);
     this.pendingCount += ev.messages.length;
     while (this.pending.length > 1 && this.pendingCount - this.pending[0][1].length >= MAX_LINES) this.pendingCount -= this.pending.shift()[1].length;
-    if (!this.flushScheduled) {
-      this.flushScheduled = true;
-      const run = () => this.flush();
-      this.flushRaf = requestAnimationFrame(run);
-      this.flushTimer = setTimeout(run, document.hidden ? 1000 : 250);
-    }
+    scheduleChatFlush(this, () => this.flush(), { pending: this.pendingCount });
   }
 
   /** 모아 둔 메시지를 통합 목록과 칸에 붙인다 — 단일 채팅과 같은 줄 렌더러(묶음·아바타·이모티콘 단독 확대·줄 메뉴). */
   flush() {
-    cancelAnimationFrame(this.flushRaf);
-    clearTimeout(this.flushTimer);
-    this.flushScheduled = false;
+    flushStarted(this);
     const batch = this.pending;
     this.pending = [];
     this.pendingCount = 0;

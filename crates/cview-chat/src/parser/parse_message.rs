@@ -7,7 +7,8 @@ use serde_json::{Map, Value};
 
 use super::{body_str, ChatMessageParser};
 use crate::json::{
-    any_int, fnv1a, ns_bool, ns_int, ns_object, ns_object_array, ns_str, to_foundation_json,
+    any_int, fnv1a, map_to_foundation_json, ns_bool, ns_int, ns_object, ns_object_array, ns_str,
+    to_foundation_json,
 };
 use crate::protocol::ChatProtocolMessage;
 use cview_core::models::chat::{
@@ -404,7 +405,7 @@ fn extras_fingerprint(value: Option<&Value>, normalized: Option<&Dict>) -> Strin
         return String::new();
     };
     if let Some(obj) = normalized {
-        return to_foundation_json(&Value::Object(obj.clone()));
+        return map_to_foundation_json(obj);
     }
     match value {
         Value::String(text) => match serde_json::from_str::<Value>(text) {

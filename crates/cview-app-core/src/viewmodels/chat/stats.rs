@@ -78,6 +78,8 @@ impl ChatState {
         let weak = self.this.clone();
         self.stats_task = Some(TaskSlot::spawn(move |id| async move {
             let mut ticker = tokio::time::interval(Self::STATS_INTERVAL);
+            // 잠자기에서 깨어나도 밀린 틱을 몰아서 돌리지 않는다.
+            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             ticker.tick().await;
             loop {
                 ticker.tick().await;

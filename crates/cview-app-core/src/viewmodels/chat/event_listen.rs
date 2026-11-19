@@ -81,6 +81,12 @@ impl ChatState {
                 self.connection_state = ChatConnectionState::Reconnecting { attempt: 0 };
             }
             ChatEngineEvent::StateChanged(state) => self.connection_state = state,
+            // 메시지를 쌓지 않는 뷰모델(앱 셸) — 접속 직후 보류만 풀고 버린다.
+            ChatEngineEvent::NewMessages(_) | ChatEngineEvent::Donations(_)
+                if !self.deps.track_messages => {}
+            ChatEngineEvent::RecentMessages(_) if !self.deps.track_messages => {
+                self.end_backlog_hold();
+            }
             ChatEngineEvent::NewMessages(msgs) => {
                 self.append_filtered_messages(msgs, source, false);
             }

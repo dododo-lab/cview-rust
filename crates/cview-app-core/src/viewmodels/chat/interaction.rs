@@ -125,8 +125,7 @@ impl ChatViewModel {
                 s.append_to_history(vec![local.clone()]);
                 let echo_key = format!("{}_{}", local.user_id, local.content);
                 s.append_message(local);
-                s.recent_sent_echo_keys
-                    .insert(echo_key.clone(), now + ChronoDuration::seconds(5));
+                s.remember_sent_echo_key(echo_key.clone(), now);
                 if s.remember_pending_echo(tid, &id, &echo_key) {
                     MessageSendOutcome::Failed
                 } else {
@@ -212,6 +211,18 @@ impl ChatState {
         }
         self.handle_command_result(result);
         Some(MessageSendOutcome::HandledLocally)
+    }
+
+    /// 보낸 글의 에코 열쇠(5초). 만료된 열쇠는 여기서도 비운다 — 받은 메시지를 쌓지 않는 뷰모델
+    /// (`ChatDeps::track_messages` 가 거짓, 앱 셸)은 정리 경로인 `dedupe_for_ingress` 를 타지 않아 재연결 전까지 쌓였다.
+    pub fn remember_sent_echo_key(&mut self, echo_key: String, now: chrono::DateTime<Utc>) {
+        if !self.recent_sent_echo_keys.is_empty() {
+            self.recent_sent_echo_keys.retain(|_, exp| *exp > now);
+        }
+        self.recent_sent_echo_keys.insert(
+            echo_key,
+            now + ChronoDuration::seconds(Self::SENT_ECHO_KEY_TTL_SECS),
+        );
     }
 
     /// 전송 tid 와 로컬 에코를 묶는다. 이미 거절이 와 있었으면 즉시 회수하고 `true`.

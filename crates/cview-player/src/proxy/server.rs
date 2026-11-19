@@ -768,7 +768,7 @@ impl MediaStream {
                     let piece = match self.window {
                         Some(w) => {
                             let reached_end = self.upstream_offset > w.last;
-                            let part = w.slice(&chunk, offset).map(Bytes::copy_from_slice);
+                            let part = w.slice(&chunk, offset).map(|p| chunk.slice_ref(p));
                             if reached_end {
                                 // 창 끝을 넘겼다 — 상류 나머지를 받지 않는다(정상 완료).
                                 self.upstream = None;
