@@ -31,7 +31,8 @@
 //   R19 판이 미끄러지는 도중 제자리로 돌아오면 옛 목표로 갔다 튀지 않음, R20 × 누름 .88, R21 "+N" 초점 링이 칩 줄에 잘리지 않음,
 //   (재검토) R23 칩을 더해 칩 줄이 넘치게 될 때 왼쪽 잘림·끝 프레임 튐 없음, R24 휠 넘김 직후 다시 그려도 들어오던 칩이 피어나지 않음,
 //   R25 숨었던 판이 다른 칩을 고르며 다시 나타날 때 옅게 나타남, R24 는 옅게 들어오던 칩의 투명도 연속성도,
-//   R27 넘치지 않는 칩 줄에 칩을 더하면 폭이 움직이고 판은 한 번만 미끄러져 맞음, R23 은 끝 무렵 튐(프레임당 ≤6px), R26 판이 미끄러지는 중 상태 글자가 붙어도 이어서 감, R18 은 미끄러짐 연속성,
+//   R27 넘치지 않는 칩 줄에 칩을 더하면 폭이 움직이고 판은 한 번만 미끄러져(도중 취소 없음) 맞음,
+//   R28 칩 줄 폭이 움직이는 중 상태 글자가 붙어도(넘치지 않음·넘치게 됨) 칩이 튀거나 왼쪽으로 잘리지 않음, R23 은 끝 무렵 튐(프레임당 ≤6px), R26 판이 미끄러지는 중 상태 글자가 붙어도 이어서 감, R18 은 미끄러짐 연속성,
 //   R22 고르지 않은 칩의 상태 점 둘레에 칩 줄 바탕과 다른 고리가 없음(아바타를 도려냄).
 // R01~R12 PR #138 적대적 리뷰 결함 회귀 — R01 Delete 자동 반복 무시, R02 마우스로 × 닫기(클릭 초점 흉내)는 초점을 옆 칩으로 옮기지 않음,
 //   R03 상태만 바뀌면 칩 초점·열린 "+N" 메뉴 유지(메뉴 상태 글자도 갱신), R04 마우스로 연 "+N" 을 앱 Esc 로 닫아도 aria-expanded 풀림,
@@ -1461,6 +1462,16 @@ await check('R27 adding a chip in a non-overflowing row: the row width animates,
   await page.mouse.move(5, 400);
   await page.waitForTimeout(400);
   const w0 = (await rectOf(page, '.ml-watch-picker')).width;
+  // 판의 움직임(애니메이션 객체)을 프레임마다 모아 cancel 이벤트를 센다 — 반올림 흔들림에 끊기면 420ms 전에 취소·교체된다
+  const cancels = page.evaluate(() => new Promise((res) => {
+    const g = document.querySelector('.ml-chip-glider'); const seen = new Set(); let cancelled = 0; const t0 = performance.now();
+    const step = () => {
+      for (const a of g.getAnimations()) if (!(a instanceof CSSTransition) && !seen.has(a)) { seen.add(a); a.addEventListener('cancel', () => { cancelled++; }); }
+      if (performance.now() - t0 < 800) requestAnimationFrame(step); else res({ seen: seen.size, cancelled });
+    };
+    step();
+  }));
+  cancels.catch(() => {});
   const track = trackChips(page, 900, '.ml-watch-tab:not([hidden]), .ml-chip-glider');
   // 이름이 긴 채널 — 판이 충분히 멀리(> 71px) 미끄러져야 340ms 때 스프링이 목표를 1px 넘게 지나쳐 있다
   await addSession(page, 's9', 3, '이름이 꽤 긴 새 채널 하나');
@@ -1468,7 +1479,9 @@ await check('R27 adding a chip in a non-overflowing row: the row width animates,
   await page.waitForTimeout(620);
   const gliding = await page.$eval('.ml-chip-glider', (g) => g.getAnimations().filter((a) => !(a instanceof CSSTransition) && a.playState === 'running').length);
   const j = await track;
+  const c = await cancels;
   const p = await page.$eval('.ml-watch-picker', (e) => ({ w: e.getBoundingClientRect().width, over: e.scrollWidth - e.clientWidth, anim: e.classList.contains('ml-chips-anim') }));
+  assert.ok(c.seen >= 1 && c.cancelled === 0, `판의 미끄러짐이 도중에 취소·교체되지 않는다 ${JSON.stringify(c)}`);
   assert.ok(p.over <= 1 && p.w - w0 > 110, `넘치지 않고 칩 줄이 넓어졌다 ${w0} → ${JSON.stringify(p)}`);
   assert.ok(j.pickerAnim, '칩 줄 폭이 움직였다');
   assert.equal(p.anim, false, '폭 움직임이 끝나면 오른쪽 붙임을 뗀다');
@@ -1480,6 +1493,43 @@ await check('R27 adding a chip in a non-overflowing row: the row width animates,
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+for (const [label, cap] of [['fits', null], ['becomes overflowing', 440]]) {
+  await check(`R28 status text arriving while the row width animates (${label}): chips continue (FLIP), none clipped on the left`, async () => {
+    const { ctx, page, errors } = await openWatch({ width: 1900, channels: 3, motion: true });
+    await page.mouse.move(5, 400);
+    if (cap) await page.addStyleTag({ content: `.page-multilive.as-watch .ml-watch-picker { max-width: ${cap}px; }` });
+    await page.waitForTimeout(400);
+    await addSession(page, 's9', 3);
+    await page.waitForFunction(() => { const p = document.querySelector('.ml-watch-picker'); return p.getAnimations().some((a) => a.effect?.target === p && a.playState === 'running'); }, null, { polling: 'raf', timeout: 2000 });
+    await page.waitForTimeout(100);
+    const track = trackChips(page, 700);
+    // 보는 칩(s0)에 상태 글자 — 같은 짜임(제자리 갱신) 경로. 상태 알림은 동기로 처리돼 같은 작업 안에서 앞뒤 자리를 잰다
+    // (새 움직임은 첫 프레임 전이라 시작 값에 있다) — 프레임 밀림과 상관없는 순간 튐.
+    const r = await page.evaluate(() => {
+      const at = () => Object.fromEntries([...document.querySelectorAll('.ml-watch-tab:not([hidden])')].map((t) => [t.dataset.sessionId, t.getBoundingClientRect().left]));
+      const before = at();
+      window.__emitState((st) => { st.sessions.find((x) => x.id === 's0').state = { kind: 'offline' }; });
+      const after = at();
+      return { stated: !!document.querySelector('.ml-watch-tab.active .ml-watch-state')?.textContent,
+        jump: Math.max(0, ...Object.keys(before).filter((id) => id in after).map((id) => Math.abs(after[id] - before[id]))) };
+    });
+    const j = await track;
+    assert.ok(r.stated, '상태 글자가 붙었다');
+    assert.ok(r.jump <= 3, `상태 글자가 붙는 순간 칩이 튄다 ${r.jump.toFixed(1)}px`);
+    // WebKit 은 칩 줄 폭과 칩 이동의 첫 프레임이 1~2px 어긋날 때가 있다 — 옛 결함은 상태 글자 폭(~45px)만큼 잘렸다
+    assert.ok(j.leftOut <= 3, `칩 줄 왼쪽 밖으로 나간 칩 ${JSON.stringify(j)}`);
+    const late = Math.max(0, ...Object.values(j.lateJump));
+    await settleAnims(page);
+    const over = await page.$eval('.ml-watch-picker', (p) => p.scrollWidth - p.clientWidth);
+    if (cap) assert.ok(over > 1, `상태 글자로 칩 줄이 넘친다 ${over}`);
+    else assert.ok(over <= 1, `넘치지 않는다 ${over}`);
+    const fit = await gliderFit(page);
+    assert.ok(fit != null && fit <= 1.5, `끝나면 판이 맞다 ${fit} (late ${late})`);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+}
 
 await browser.close();
 server.close();

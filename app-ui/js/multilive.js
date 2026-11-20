@@ -1251,16 +1251,19 @@ export class MultiLivePage {
     // 그대로라 ResizeObserver 가 부르지 않으니 여기서 판을 다시 놓는다.
     // 판이 미끄러지는 중이면 그 자리에서 이어 간다(끊고 순간 이동하지 않게).
     // 칩 줄 폭이 움직이는 중에 상태 글자로 폭이 또 바뀌면 지금 폭에서 새 폭으로 다시 잡는다 — 옛 목표 폭으로 가는 동안
-    // 오른쪽 붙임 아래 넘친 칩이 왼쪽으로 잘리고 끝 프레임에 새 폭으로 튀었다.
+    // 오른쪽 붙임 아래 넘친 칩이 왼쪽으로 잘리고 끝 프레임에 새 폭으로 튀었다. 그 사이 칩 자리는 FLIP 으로 잇는다 — 새 짜임이
+    // 넘쳐 폭을 움직이지 않으면 칩 줄 폭이 상한으로·붙임이 왼쪽으로 한 프레임에 바뀌어 칩이 모두 옆으로 튀었다.
     if (html === this.watchPickerHtml) {
       const widthAnim = picker.getAnimations().find((a) => a.effect?.target === picker && a.playState === 'running');
       const fromW = widthAnim ? picker.getBoundingClientRect().width : null;
+      const places = widthAnim ? this.chipPlaces() : null;
       if (this.applyChipStates(list)) {
         if (widthAnim) {
           this.chipAnimGen++; // 끊긴 움직임의 끝 처리(done)는 건너뛴다
           widthAnim.cancel();
           picker.classList.remove('ml-chips-anim');
           this.animatePickerWidth(fromW);
+          this.flipChips(places);
         }
         this.placeChipGlider(this.gliderRect());
       }
@@ -1584,6 +1587,29 @@ export class MultiLivePage {
     // 피어나는 칩의 transform 은 scale 뿐이라(가운데 기준) 왼쪽 자리 계산에서 뺀다
     if (bloom == null && cs.transform && cs.transform !== 'none') shift += new DOMMatrixReadOnly(cs.transform).m41;
     return { left: frame.left + t.offsetLeft + shift, bloom, opacity: Number(cs.opacity) };
+  }
+
+  /** 보이는 칩의 지금 화면 위 자리(채널 id → chipPlace). */
+  chipPlaces() {
+    const frame = this.pickerFrame();
+    const m = new Map();
+    for (const t of this.watchPicker.querySelectorAll('.ml-watch-tab:not([hidden])')) m.set(t.dataset.sessionId, this.chipPlace(t, frame));
+    return m;
+  }
+
+  /** 다시 그리지 않고 칩 줄 짜임만 바뀌었을 때 — 보이는 칩을 `places`(옛 화면 위 자리)에서 새 자리로 미끄러뜨린다. */
+  flipChips(places) {
+    if (!places || !motionEnabled()) return;
+    const frame = this.pickerFrame();
+    for (const t of this.watchPicker.querySelectorAll('.ml-watch-tab:not([hidden])')) {
+      const was = places.get(t.dataset.sessionId);
+      if (!was) continue;
+      const dx = was.left - (frame.left + t.offsetLeft);
+      if (Math.abs(dx) < 1) continue;
+      // 진행 중인 이동은 was 에 이미 들어 있어 새 움직임이 덮어 이어 간다. 피어나는 칩은 transform 을 피어남이 써서 translate 로.
+      if (was.bloom != null) t.animate([{ translate: `${dx}px` }, { translate: '0px' }], { duration: 340, easing: 'cubic-bezier(.2, 0, 0, 1)' });
+      else t.animate([{ transform: `translateX(${dx}px)` }, { transform: 'none' }], { duration: 340, easing: 'cubic-bezier(.2, 0, 0, 1)' });
+    }
   }
 
   /** 칩·판·칩 줄의 지금 자리 — 다시 그리기 전에. 칩 줄이 보이지 않거나 모션 줄이기면 null. */
