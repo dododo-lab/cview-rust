@@ -1248,7 +1248,8 @@ export class MultiLivePage {
     // 상태 알림마다 다시 그리면 칩의 호버·키보드 초점이 날아간다 — 짜임(채널·순서·보는 채널)이 바뀐 때만. 상태는 제자리에서.
     // 상태 글자(연결 중·방송 종료)가 생기거나 사라지면 고른 칩 폭이 바뀐다 — 칩 줄이 좁아 가로로 넘칠 때는 칩 줄 바깥 크기가
     // 그대로라 ResizeObserver 가 부르지 않으니 여기서 판을 다시 놓는다.
-    if (html === this.watchPickerHtml) { if (this.applyChipStates(list)) this.placeChipGlider(); return; }
+    // 판이 미끄러지는 중이면 그 자리에서 이어 간다(끊고 순간 이동하지 않게).
+    if (html === this.watchPickerHtml) { if (this.applyChipStates(list)) this.placeChipGlider(this.gliderRect()); return; }
     this.watchPickerHtml = html;
     this.chipPeek.close(); // 가리키던 칩이 떨어진다
     this.closeChipOverflow();
@@ -1540,7 +1541,7 @@ export class MultiLivePage {
   }
 
   // ── 칩 모션 — 판이 지금 보는 칩으로 미끄러지고(전환 스위치와 같은 스프링), 칩을 더하거나 닫으면 남은 칩이 새 자리로
-  //    미끄러진다(FLIP). 움직이는 것은 칩의 transform·opacity, 판의 translate·width, 그리고 칩 줄 폭(아래)뿐이다.
+  //    미끄러진다(FLIP). 움직이는 것은 칩의 transform·opacity(피어나며 옮기는 칩은 translate 도), 판의 translate·width, 그리고 칩 줄 폭(아래)뿐이다.
   //    칩 줄은 머리줄 오른쪽 끝에 붙어 있어 오른쪽 끝이 움직이지 않는다 — 그래서 자리는 모두 "오른쪽 끝 기준"으로 잰다:
   //    판은 right: 0 에서 translate 로 놓고, 칩을 더하거나 닫는 동안 칩 줄 폭을 옛 폭에서 새 폭으로 옮기며 그동안 칩을
   //    오른쪽에 붙인다(.ml-chips-anim). 예전엔 칩 줄 왼쪽 끝이 바로 줄어 왼쪽 칩·판이 칩 줄 밖(잘리는 곳)에서 출발했다.
@@ -1555,18 +1556,17 @@ export class MultiLivePage {
     return { left, right: r.left + p.clientLeft + p.clientWidth, width: r.width };
   }
 
-  /** 지금 화면에서 칩의 왼쪽 x — transform 은 빼고(레이아웃 자리) 진행 중인 FLIP 이동만 더한다. 피어나는 중이면 그 경과 시간. */
+  /**
+   * 지금 화면에서 칩의 왼쪽 x — 레이아웃 자리(offsetLeft)에 진행 중인 이동(transform 의 x, 피어나는 칩은 translate)만 더한다.
+   * 피어나는 중(id 'chip-bloom' — 옅게 나타나기·창 넘김 CSS 들어오기는 아니다)이면 그 경과 시간도.
+   */
   chipPlace(t, frame) {
-    let shift = 0;
     let bloom = null;
-    for (const a of t.getAnimations()) {
-      if (a.playState !== 'running' || !(a.effect instanceof KeyframeEffect)) continue;
-      if (a.effect.getKeyframes().some((k) => k.opacity != null)) bloom = a.currentTime;
-    }
-    if (bloom == null) {
-      const tf = getComputedStyle(t).transform;
-      if (tf && tf !== 'none') shift = new DOMMatrixReadOnly(tf).m41;
-    }
+    for (const a of t.getAnimations()) if (a.id === 'chip-bloom' && a.playState === 'running') bloom = a.currentTime;
+    const cs = getComputedStyle(t);
+    let shift = parseFloat(cs.translate) || 0; // "none" | "Npx" | "Npx Npx"
+    // 피어나는 칩의 transform 은 scale 뿐이라(가운데 기준) 왼쪽 자리 계산에서 뺀다
+    if (bloom == null && cs.transform && cs.transform !== 'none') shift += new DOMMatrixReadOnly(cs.transform).m41;
     return { left: frame.left + t.offsetLeft + shift, bloom };
   }
 
@@ -1609,23 +1609,36 @@ export class MultiLivePage {
       const was = before.tabs.get(id);
       if (!before.all.has(id)) plan.push([t, 'bloom', 0]);
       else if (!was) plan.push([t, 'fade', 0]);
-      else if (was.bloom != null) plan.push([t, 'bloom', was.bloom]);
+      else if (was.bloom != null) plan.push([t, 'bloom', was.bloom, was.left - (frame.left + t.offsetLeft)]);
       else plan.push([t, 'move', was.left - (frame.left + t.offsetLeft)]);
     }
     // 칩 줄 폭 — 옛 폭에서 새 폭으로(그동안 칩은 오른쪽에 붙어 제자리). 머리줄 안의 칩 줄 하나만 다시 배치된다.
+    // 새 짜임이 칩 줄을 넘치면(가로로 넘겨 보는 상태) 폭은 움직이지 않는다 — 그동안 오른쪽에 붙이면 넘친 부분이 넘겨 볼 수
+    // 없는 왼쪽으로 나가 칩이 잘리고, 끝나는 프레임에 붙임을 떼면 칩 전체가 넘친 만큼 튀었다. 칩은 FLIP 으로 옛 자리에서 온다.
     const w = frame.width;
-    if (Math.abs(before.pickerW - w) >= 1) {
+    if (Math.abs(before.pickerW - w) >= 1 && picker.scrollWidth <= picker.clientWidth + 1) {
       picker.classList.add('ml-chips-anim');
       const a = picker.animate([{ width: `${before.pickerW}px` }, { width: `${w}px` }], { duration: 340, easing: 'cubic-bezier(.2, 0, 0, 1)' });
-      const done = () => { if (!picker.getAnimations().some((x) => x !== a && x.effect?.target === picker)) picker.classList.remove('ml-chips-anim'); };
+      const done = () => {
+        if (picker.getAnimations().some((x) => x !== a && x.effect?.target === picker)) return; // 다음 움직임이 이어받았다
+        picker.classList.remove('ml-chips-anim');
+        // 붙임을 뗀 제자리로 — 판·넘겨 본 자리·끝 흐림을 다시 맞춘다(판이 아직 미끄러지는 중이면 그 자리에서 이어 간다)
+        this.placeChipGlider(this.gliderRect());
+        if (this.watchPickerReveal) this.revealActiveWatchChip();
+        this.syncWatchPickerFade();
+      };
       a.onfinish = done;
       a.oncancel = done;
     }
     this.placeChipGlider(before.glider);
-    for (const [t, kind, v] of plan) {
+    for (const [t, kind, v, dx] of plan) {
       if (kind === 'bloom') {
         const a = t.animate([{ opacity: 0, transform: 'scale(.6)' }, { opacity: 1, transform: 'none' }], { duration: 320, easing: 'cubic-bezier(.34, 1.4, .64, 1)' });
+        a.id = 'chip-bloom';
         if (v) a.currentTime = Math.min(v, 319);
+        // 피어나는 중에 자리가 바뀌면(오른쪽에 칩이 더 붙는 등) 다른 칩처럼 옛 자리에서 미끄러진다 — transform 은 피어남이
+        // 쓰고 있어 translate 로(transform 바깥에서 더해진다).
+        if (dx && Math.abs(dx) >= 1) t.animate([{ translate: `${dx}px` }, { translate: '0px' }], { duration: 340, easing: 'cubic-bezier(.2, 0, 0, 1)' });
       } else if (kind === 'fade') t.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: 'ease-out' });
       else if (Math.abs(v) >= 1) t.animate([{ transform: `translateX(${v}px)` }, { transform: 'none' }], { duration: 340, easing: 'cubic-bezier(.2, 0, 0, 1)' });
     }
@@ -1640,8 +1653,10 @@ export class MultiLivePage {
     const g = this.chipGlider;
     if (!g.isConnected || picker.hidden || picker.closest('[hidden]')) return;
     const tab = picker.querySelector('.ml-watch-tab.active:not([hidden])');
+    // 판이 스스로 건 움직임(id 'glider')만 끊는다 — opacity CSS 전환(나타남·숨음 페이드)까지 끊으면 툭 튄다.
+    const stop = () => { for (const a of g.getAnimations()) if (a.id === 'glider') a.cancel(); };
     if (!tab || !tab.offsetWidth) {
-      for (const a of g.getAnimations()) a.cancel();
+      stop();
       g.style.opacity = '0';
       picker.classList.remove('has-glider');
       return;
@@ -1663,10 +1678,10 @@ export class MultiLivePage {
     }
     const slide = fx != null && (Math.abs(fx - x) >= 1 || Math.abs(from.width - w) >= 1);
     // 새로 미끄러지지 않아도 자리가 바뀌었으면 진행 중인 옛 움직임은 끊는다 — 옛 목표로 갔다가 끝에서 튀지 않게.
-    if (!slide) { if (changed) for (const a of g.getAnimations()) a.cancel(); return; }
-    for (const a of g.getAnimations()) a.cancel();
-    g.animate([{ translate: `${fx}px` }, { translate }], { duration: 420, easing: 'cubic-bezier(.34, 1.25, .64, 1)' });
-    g.animate([{ width: `${from.width}px` }, { width }], { duration: 320, easing: 'cubic-bezier(.2, 0, 0, 1)' });
+    if (!slide) { if (changed) stop(); return; }
+    stop();
+    g.animate([{ translate: `${fx}px` }, { translate }], { duration: 420, easing: 'cubic-bezier(.34, 1.25, .64, 1)', id: 'glider' });
+    g.animate([{ width: `${from.width}px` }, { width }], { duration: 320, easing: 'cubic-bezier(.2, 0, 0, 1)', id: 'glider' });
   }
 
   /** 채널 칩 줄 끝 흐림 — 다른 방송 줄처럼 가려진 칩이 있는 쪽만. */
