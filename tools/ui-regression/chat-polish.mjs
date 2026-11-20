@@ -6,11 +6,12 @@
 // CP03 fitPopover — 창 왼쪽 끝 버튼의 오른쪽 정렬 메뉴는 반대쪽 정렬로 뒤집고, 오른쪽 끝 왼쪽 정렬 메뉴도 뒤집는다.
 //      아래가 모자라면 남은 높이로 줄여 안에서 스크롤하고, 아래가 120px 도 안 되고 위가 더 넓으면 위로 연다.
 //      여는 모션이 도는 중에 불러도 자리 잡은 뒤 기준으로 맞는다. 다시 열면 인라인 값을 지우고 다시 잰다.
-// CP04 멀티라이브 채팅 도구를 펼쳐도 머리줄 단추가 패널 밖으로 잘리지 않는다 — '채팅 그리드'처럼 긴 제목·380px.
+// CP04 멀티라이브 채팅 도구는 머리 줄 안에서 펼친다 — 둘째 줄로 내려가지 않고(머리 높이·'⋯' 자리 그대로), 그동안 제목·상태·다른 단추는
+//      비키며, 도구는 모두 패널 안·'⋯' 왼쪽에 든다(260~460px, '채팅 그리드'처럼 긴 제목). 접으면 제목이 돌아온다.
 // CP05 입력창 자리 글이 연결 상태를 알린다(연결 중·끊김). 보내는 동안은 흐려지지 않는다(.sending, aria-busy).
 // CP06 '새 메시지' 단추가 입력창 위 안내(로그인 안내·'로그인' 링크)를 덮지 않는다.
 // CP07 메시지를 기다리는 안내는 목록 한가운데에 있다(통합 목록·칸).
-// CP08 멘션 모음(@)은 머리 바로 아래에 열린다 — 좁은 패널에서 도구가 둘째 줄로 내려가도 그 줄(@ 단추)을 덮지 않는다.
+// CP08 멘션 모음(@)은 머리 바로 아래에 열린다 — 머리 높이가 바뀌어도 머리(@ 단추)를 덮지 않는다.
 // CP09 낮은 패널(400→236px, 4px씩)에서도 채팅 보기 메뉴가 패널 안(아래 여백 8px)에 들고 마지막 항목까지 스크롤로 닿는다.
 // 메뉴 자리는 모두 여는 모션(mo-pop-down: translate·scale)이 끝나 자리 잡은 뒤 잰다 — 모션 첫 프레임은 폭 97%·4px 위로 재진다.
 // 저장소 루트에서: node tools/ui-regression/chat-polish.mjs   (Playwright 가 필요하다)
@@ -255,23 +256,48 @@ await check('CP09 view menu in a short multilive chat panel keeps the last item 
   await ctx.close();
 });
 
-await check('CP04 multilive chat header keeps every tool inside the panel when tools open (380px, long title)', async () => {
-  for (const [width, title] of [[380, '채팅 그리드'], [460, '채팅 포커스'], [300, '멀티채팅']]) {
+await check('CP04 multilive chat tools open on the header row: title/state/other buttons step aside, every tool inside the panel', async () => {
+  for (const [width, title] of [[380, '채팅 그리드'], [460, '채팅 포커스'], [300, '멀티채팅'], [260, '채팅 그리드']]) {
     const { ctx, page, errors } = await mount({ width, kind: 'ml', mode: 'grid', title });
-    await openTools(page);
-    const r = await page.evaluate(() => {
+    const geom = () => page.evaluate(() => {
       const panel = document.querySelector('#cpbox .chat').getBoundingClientRect();
       const header = document.querySelector('#cpbox .chat-header');
+      const toggle = header.querySelector('.chat-tools-toggle').getBoundingClientRect();
+      const tools = [...header.querySelectorAll('.chat-tools-inner .chat-hbtn')].filter((b) => b.getClientRects().length && !b.closest('[hidden]'))
+        .map((b) => ({ label: b.getAttribute('aria-label') || b.textContent.trim(), r: b.getBoundingClientRect() }));
       const out = [...header.querySelectorAll('button')].filter((b) => b.getClientRects().length && !b.closest('[hidden]'))
-        .map((b) => ({ label: b.getAttribute('aria-label') || b.textContent.trim(), r: b.getBoundingClientRect() }))
-        .filter((x) => x.r.width && (x.r.right > panel.right + 0.5 || x.r.left < panel.left - 0.5))
+        .map((b) => ({ label: b.getAttribute('aria-label') || b.textContent.trim(), r: b.getBoundingClientRect(), vis: getComputedStyle(b).visibility }))
+        .filter((x) => x.r.width && x.vis === 'visible' && (x.r.right > panel.right + 0.5 || x.r.left < panel.left - 0.5))
         .map((x) => x.label);
       const t = header.querySelector('strong');
-      return { out, titleClipped: t.scrollWidth > t.clientWidth + 1, title: t.textContent };
+      // '⋯' 앞에서 비키는 것(서랍·'⋯'·빈칸 제외) 중 아직 보이는 것
+      const shown = [...header.children].filter((c) => !c.matches('.grow, .chat-tools, .chat-tools-toggle') && !c.hidden && getComputedStyle(c).display !== 'none')
+        .filter((c) => c.getBoundingClientRect().width > 0.5 && getComputedStyle(c).opacity !== '0')
+        .map((c) => c.className || c.tagName);
+      return {
+        out, shown, headerH: header.getBoundingClientRect().height, toggleX: toggle.left,
+        toolsInside: tools.every((x) => x.r.left >= panel.left - 0.5 && x.r.right <= toggle.left + 0.5), toolCount: tools.length,
+        toolW: Math.min(...tools.map((x) => x.r.width)),
+        title: t.textContent, titleVisible: getComputedStyle(t).visibility === 'visible' && t.getBoundingClientRect().width > 0, titleClipped: t.scrollWidth > t.clientWidth + 1,
+      };
     });
+    const before = await geom();
+    await openTools(page);
+    const r = await geom();
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/cp04-header-${width}.png` });
     assert.deepEqual(r.out, [], `${width}px: 패널 밖 단추 ${r.out}`);
-    if (width < 460) assert.equal(r.titleClipped, false, `${width}px: 제목 '${r.title}'이 잘렸다`);
+    assert.ok(r.toolCount >= 7 && r.toolsInside, `${width}px: 도구 ${r.toolCount}개가 패널 안·'⋯' 왼쪽에 다 들지 않는다`);
+    assert.ok(r.toolW >= 20, `${width}px: 도구 칸이 ${r.toolW}px 로 너무 좁다`);
+    // 둘째 줄로 내려가지 않는다 — 머리 높이와 '⋯' 자리가 그대로다
+    assert.equal(r.headerH, before.headerH, `${width}px: 머리 높이 ${before.headerH} → ${r.headerH}`);
+    assert.ok(Math.abs(r.toggleX - before.toggleX) < 0.5, `${width}px: '⋯' 가 ${before.toggleX} → ${r.toggleX} 로 움직였다`);
+    assert.deepEqual(r.shown, [], `${width}px: 펼친 동안 비키지 않은 머리 내용 ${r.shown}`);
+    // 접으면 제목이 다시 보인다
+    await page.click('#cpbox [data-chat="tools"]');
+    await page.waitForTimeout(600);
+    const back = await geom();
+    assert.equal(back.titleVisible, true, `${width}px: 접은 뒤 제목 '${back.title}'이 돌아오지 않았다`);
+    assert.equal(back.headerH, before.headerH);
     assert.deepEqual(errors, []);
     await ctx.close();
   }
@@ -369,7 +395,7 @@ await check('CP07 waiting placeholder sits in the middle of the list', async () 
   await ctx.close();
 });
 
-await check('CP08 mention tray opens below the header even when tools wrap to a second row', async () => {
+await check('CP08 mention tray opens below the header and never covers the @ button', async () => {
   for (const width of [300, 420]) {
     const { ctx, page, errors } = await mount({ width });
     await openTools(page);
