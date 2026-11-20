@@ -1262,7 +1262,13 @@ export class MultiLivePage {
           this.chipAnimGen++; // 끊긴 움직임의 끝 처리(done)는 건너뛴다
           widthAnim.cancel();
           picker.classList.remove('ml-chips-anim');
-          this.animatePickerWidth(fromW);
+          // 넘치게 되면(폭을 움직이지 않으면) 보는 칩 드러내기 스크롤이 나중에 ResizeObserver 에서 돌아 FLIP 에 빠졌다 —
+          // 새 자리를 재기 전에 먼저 맞춘다(pickerFrame 이 scrollLeft 를 넣어 잰다). 폭을 움직이는 동안(오른쪽 붙임)엔 넘친 쪽이
+          // 넘겨 볼 수 없는 왼쪽이라 드러내지 않는다 — WebKit 은 그때 scrollLeft 를 음수로 옮겼다. 끝 처리가 드러낸다.
+          if (!this.animatePickerWidth(fromW)) {
+            if (this.watchPickerReveal) this.revealActiveWatchChip();
+            this.syncWatchPickerFade();
+          }
           this.flipChips(places);
         }
         this.placeChipGlider(this.gliderRect());
@@ -1553,6 +1559,9 @@ export class MultiLivePage {
     // 칩을 감싼 틀(.ml-watch-tab, position: relative)로 잰다 — 칩의 offsetLeft 는 그 틀 기준이 된다.
     const active = picker.querySelector('.ml-watch-tab.active');
     if (!active) return;
+    // 칩 줄 폭이 움직이는 동안(오른쪽 붙임)엔 넘친 쪽이 넘겨 볼 수 없는 왼쪽이다 — 드러내면 WebKit 은 scrollLeft 를 음수로
+    // 옮겼다. 폭 움직임 끝 처리가 다시 부른다.
+    if (picker.classList.contains('ml-chips-anim')) return;
     // 칩 줄은 판(.ml-chip-glider)을 품어 position: relative — 그때 offsetLeft 는 이미 칩 줄 기준이다.
     const left = active.offsetParent === picker ? active.offsetLeft : active.offsetLeft - picker.offsetLeft;
     if (left < picker.scrollLeft) picker.scrollLeft = left - 12;
@@ -1605,11 +1614,18 @@ export class MultiLivePage {
       const was = places.get(t.dataset.sessionId);
       if (!was) continue;
       const dx = was.left - (frame.left + t.offsetLeft);
-      if (Math.abs(dx) < 1) continue;
-      // 진행 중인 이동은 was 에 이미 들어 있어 새 움직임이 덮어 이어 간다. 피어나는 칩은 transform 을 피어남이 써서 translate 로.
-      if (was.bloom != null) t.animate([{ translate: `${dx}px` }, { translate: '0px' }], { duration: 340, easing: 'cubic-bezier(.2, 0, 0, 1)' });
-      else t.animate([{ transform: `translateX(${dx}px)` }, { transform: 'none' }], { duration: 340, easing: 'cubic-bezier(.2, 0, 0, 1)' });
+      // 진행 중인 이동은 was 에 이미 들어 있다 — 옛 이동을 끊고 dx 에서 새로 잇는다. 끊지 않고 건너뛰면(dx 가 0 근처) 옛 이동이
+      // 새 자리 위에 겹쳐 한 번에 튀었다. 피어나는 칩은 transform 을 피어남이 써서 translate 로.
+      for (const a of t.getAnimations()) if (a.id === 'chip-move') a.cancel();
+      if (Math.abs(dx) < 0.5) continue;
+      this.moveChip(t, dx, was.bloom != null);
     }
+  }
+
+  /** 칩을 dx 만큼 옆에서 제자리로(FLIP 이동, id 'chip-move'). 피어나는 칩은 transform 대신 translate. */
+  moveChip(t, dx, blooming) {
+    const kf = blooming ? [{ translate: `${dx}px` }, { translate: '0px' }] : [{ transform: `translateX(${dx}px)` }, { transform: 'none' }];
+    t.animate(kf, { duration: 340, easing: 'cubic-bezier(.2, 0, 0, 1)', id: 'chip-move' });
   }
 
   /** 칩·판·칩 줄의 지금 자리 — 다시 그리기 전에. 칩 줄이 보이지 않거나 모션 줄이기면 null. */
@@ -1664,10 +1680,10 @@ export class MultiLivePage {
         if (v) a.currentTime = Math.min(v, 319);
         // 피어나는 중에 자리가 바뀌면(오른쪽에 칩이 더 붙는 등) 다른 칩처럼 옛 자리에서 미끄러진다 — transform 은 피어남이
         // 쓰고 있어 translate 로(transform 바깥에서 더해진다).
-        if (extra && Math.abs(extra) >= 1) t.animate([{ translate: `${extra}px` }, { translate: '0px' }], { duration: 340, easing: 'cubic-bezier(.2, 0, 0, 1)' });
+        if (extra && Math.abs(extra) >= 1) this.moveChip(t, extra, true);
       } else if (kind === 'fade') t.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: 'ease-out' });
       else {
-        if (Math.abs(v) >= 1) t.animate([{ transform: `translateX(${v}px)` }, { transform: 'none' }], { duration: 340, easing: 'cubic-bezier(.2, 0, 0, 1)' });
+        if (Math.abs(v) >= 1) this.moveChip(t, v, false);
         // 옅게 나타나던(창 넘김 CSS 들어오기·fade) 칩 — 새 요소라 곧바로 1 이 되지 않게 그 투명도에서 이어 간다
         if (extra < 0.99) t.animate([{ opacity: extra }, { opacity: 1 }], { duration: Math.round(80 + 140 * (1 - extra)), easing: 'ease-out' });
       }
@@ -1678,11 +1694,12 @@ export class MultiLivePage {
    * 칩 줄 폭을 `fromW` 에서 지금(새 짜임) 폭으로 — 그동안 칩은 오른쪽에 붙어 제자리(.ml-chips-anim). 머리줄 안의 칩 줄 하나만
    * 다시 배치된다. 새 짜임이 칩 줄을 넘치면(가로로 넘겨 보는 상태) 폭은 움직이지 않는다 — 그동안 오른쪽에 붙이면 넘친 부분이
    * 넘겨 볼 수 없는 왼쪽으로 나가 칩이 잘리고, 끝나는 프레임에 붙임을 떼면 칩 전체가 넘친 만큼 튀었다. 칩은 FLIP 으로 옛 자리에서 온다.
+   * 움직이기 시작했으면 true.
    */
   animatePickerWidth(fromW) {
     const picker = this.watchPicker;
     const w = picker.getBoundingClientRect().width;
-    if (fromW == null || Math.abs(fromW - w) < 1 || picker.scrollWidth > picker.clientWidth + 1) return;
+    if (fromW == null || Math.abs(fromW - w) < 1 || picker.scrollWidth > picker.clientWidth + 1) return false;
     picker.classList.add('ml-chips-anim');
     const a = picker.animate([{ width: `${fromW}px` }, { width: `${w}px` }], { duration: 340, easing: 'cubic-bezier(.2, 0, 0, 1)' });
     const gen = this.chipAnimGen;
@@ -1695,6 +1712,7 @@ export class MultiLivePage {
       if (this.watchPickerReveal) this.revealActiveWatchChip();
       this.syncWatchPickerFade();
     };
+    return true;
   }
 
   /**
