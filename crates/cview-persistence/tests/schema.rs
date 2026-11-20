@@ -12,12 +12,9 @@ use cview_persistence::schema::{
 use cview_persistence::DataStore;
 use rusqlite::Connection;
 use std::collections::HashSet;
-use std::path::Path;
 
 fn golden_shape() -> SchemaShape {
-    let path =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/user-schema-v1.shape.json");
-    serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap()
+    serde_json::from_str(include_str!("fixtures/user-schema-v1.shape.json")).unwrap()
 }
 
 fn live_shape() -> SchemaShape {

@@ -12,7 +12,7 @@ import sys
 import tempfile
 from contextlib import contextmanager
 
-ROOT = Path(r'C:\CViewUpdates')
+ROOT = Path(r'C:\CViewUpdates') if os.name == 'nt' else Path('/srv/cview-updates')
 BASE = 'https://cv.dododo.app'
 PROTOCOL = 'cview-release-v1'
 # 앱이 검증하는 피드 서명. 게이트웨이가 이 기능을 알리지 않으면 클라이언트는 게시하지 않는다.

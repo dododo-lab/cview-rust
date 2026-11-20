@@ -28,6 +28,8 @@ def atomic_write(path, data):
     try:
         with os.fdopen(descriptor, 'wb') as out:
             out.write(data)
+            if os.name != 'nt':
+                os.fchmod(out.fileno(), 0o644)
             out.flush()
             os.fsync(out.fileno())
         os.replace(temporary, path)

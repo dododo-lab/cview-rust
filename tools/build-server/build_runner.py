@@ -1,4 +1,4 @@
-"""Detached Windows build process; called only by the installed queue tools."""
+"""Detached Windows-target build process for the installed queue tools."""
 import argparse
 import json
 import os
@@ -119,14 +119,29 @@ def run(root, job):
             env = os.environ.copy()
             env.pop('CVIEW_UPDATE_URL', None)
             env.update(common.build_environment(current.get('build_env', {})))
+
             def start(lane, lane_log):
-                return subprocess.Popen(['powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-                                         '-File', str(Path(__file__).with_name('Build-Windows.ps1')), '-Root', str(root),
-                                         '-SourcePath', str(source), '-OutputPath', str(directory / 'artifacts'),
-                                         '-LogPath', str(lane_log), '-Lane', lane,
-                                         '-TargetDir', str(root / common.LANE_TARGET_DIRS[lane])],
-                                        stdin=subprocess.DEVNULL, env=env)
-            failed = run_lanes([name for name, _ in common.LANES], directory / 'windows.log', start)
+                target_dir = root / common.LANE_TARGET_DIRS[lane]
+                artifacts = directory / 'artifacts'
+                if os.name == 'nt':
+                    return subprocess.Popen([
+                        'powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+                        '-File', str(Path(__file__).with_name('Build-Windows.ps1')), '-Root', str(root),
+                        '-SourcePath', str(source), '-OutputPath', str(artifacts),
+                        '-LogPath', str(lane_log), '-Lane', lane, '-TargetDir', str(target_dir),
+                    ], stdin=subprocess.DEVNULL, env=env)
+                with lane_log.open('ab') as log:
+                    return subprocess.Popen([
+                        '/bin/bash', str(Path(__file__).with_name('Build-Windows.sh')), str(root),
+                        str(source), lane, str(target_dir), str(artifacts), current['version'], current['mode'],
+                    ], stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, env=env)
+
+            lanes = [name for name, _ in common.LANES]
+            groups = [lanes] if os.name == 'nt' else ([lane] for lane in lanes)
+            for group in groups:
+                failed = run_lanes(group, directory / 'windows.log', start)
+                if failed:
+                    break
             if failed:
                 raise ValueError('Windows build lane failed: ' + ', '.join(failed))
             files = {}
@@ -136,8 +151,10 @@ def run(root, job):
                     raise ValueError('Wrong PE architecture: ' + arch)
                 name = f'CView_{current["version"]}_{arch}-setup.exe'
                 files[name] = common.describe(directory / 'artifacts' / name)
-            common.write_json(directory / 'windows.json',
-                              {'state': 'succeeded', 'finished': common.now(), 'files': files})
+            result = {'state': 'succeeded', 'finished': common.now(), 'files': files}
+            if os.name != 'nt' and current['mode'] == common.WINDOWS_RELEASE_MODE:
+                result['tests'] = common.metadata(common.describe(directory / 'artifacts' / common.WINDOWS_TEST_ARCHIVE))
+            common.write_json(directory / 'windows.json', result)
         return 0
     except Exception as error:
         common.write_json(directory / 'windows.json', {'state': 'failed', 'finished': common.now(), 'error': str(error)})

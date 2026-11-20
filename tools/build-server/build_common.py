@@ -21,6 +21,9 @@ import zipfile
 
 PROTOCOL = 'cview-build-v1'
 WINDOWS_RELEASE_FEATURE = 'windows-release-v1'
+WINDOWS_CROSS_BUILD_FEATURE = 'windows-cross-build-v1'
+WINDOWS_RUNTIME_FEATURE = 'windows-release-parallels-v1'
+WINDOWS_TEST_ARCHIVE = 'x64-tests.zip'
 WINDOWS_RELEASE_MODE = 'windows-release'
 MAX_SOURCE = 128 * 1024**2
 MAX_EXPANDED = 256 * 1024**2
@@ -71,6 +74,34 @@ def metadata(value, limit=MAX_ARTIFACT):
             or not isinstance(value['sha256'], str) or not re.fullmatch('[a-f0-9]{64}', value['sha256'])):
         raise ValueError('Invalid file size or SHA-256')
     return value
+
+
+def validate_windows_runtime(report, files, tests, version):
+    if (not isinstance(report, dict) or report.get('host_architecture') != 'Arm64'
+            or type(report.get('session_id')) is not int or report['session_id'] <= 0
+            or 'error' not in report or report['error'] is not None):
+        raise ValueError('An interactive Windows ARM64 validation report is required')
+    tested = report.get('installers')
+    if not isinstance(tested, list) or len(tested) != len(TARGETS):
+        raise ValueError('Both Windows installers must be tested')
+    installers = []
+    for arch in TARGETS:
+        name = f'CView_{version}_{arch}-setup.exe'
+        installer = {'architecture': arch, 'installer_sha256': files[name]['sha256'],
+                     'installed': True, 'webview2_started': True}
+        if not any(isinstance(item, dict) and item.get('installed') is True
+                   and item.get('webview2_started') is True and item == installer for item in tested):
+            raise ValueError('Windows did not confirm installation and startup for ' + name)
+        installers.append(installer)
+    test_result = report.get('x64_tests')
+    if (not isinstance(test_result, dict) or test_result.get('sha256') != metadata(tests)['sha256']
+            or any(type(test_result.get(key)) is not int for key in ('suites', 'passed', 'failed', 'ignored'))
+            or min(test_result['suites'], test_result['passed']) <= 0
+            or test_result['failed'] != 0 or test_result['ignored'] < 0):
+        raise ValueError('The exact Windows x64 test archive must pass in Parallels')
+    return {'host_architecture': 'Arm64', 'session_id': report['session_id'], 'error': None,
+            'installers': installers, 'x64_tests': {key: test_result[key]
+                                                    for key in ('sha256', 'suites', 'passed', 'failed', 'ignored')}}
 
 
 def write_json(path, value):
@@ -299,6 +330,8 @@ def submit(root, job, stream, expected, start=True, mode='build-only', build_env
         version = validate_archive(source)
         record = {'job': job, 'version': version, 'source': expected, 'created': now(),
                   'mode': mode, 'build_env': build_env}
+        if start and os.name != 'nt' and mode == WINDOWS_RELEASE_MODE:
+            record['windows_backend'] = 'xwin'
         if mode == 'build-only':
             record['macos_notarized'] = False
         write_json(directory / 'job.json', record)
@@ -308,18 +341,20 @@ def submit(root, job, stream, expected, start=True, mode='build-only', build_env
 
 
 def start_windows(root, job):
-    if os.name != 'nt':
-        raise ValueError('The coordinator must run on Windows')
     directory = job_path(root, job)
-    with (directory / 'windows.log').open('ab') as output:
-        process = subprocess.Popen([sys.executable, str(Path(__file__).with_name('build_runner.py')),
-                                    '--root', str(root), '--job', job], stdin=subprocess.DEVNULL,
-                                   stdout=output, stderr=subprocess.STDOUT,
-                                   # Windows OpenSSH kills its session job on disconnect.
-                                   # Break away from that job as well as the console; do not
-                                   # inherit its stdout/stderr pipe handles (close_fds=True).
-                                   creationflags=(subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-                                                  | subprocess.CREATE_BREAKAWAY_FROM_JOB),
-                                   close_fds=True)
+    if os.name == 'nt':
+        # Windows OpenSSH kills its session job on disconnect.
+        detach = {'creationflags': (subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+                                     | subprocess.CREATE_BREAKAWAY_FROM_JOB)}
+    else:
+        detach = {'start_new_session': True}
+    try:
+        with (directory / 'windows.log').open('ab') as output:
+            process = subprocess.Popen([sys.executable, str(Path(__file__).with_name('build_runner.py')),
+                                        '--root', str(root), '--job', job], stdin=subprocess.DEVNULL,
+                                       stdout=output, stderr=subprocess.STDOUT, close_fds=True, **detach)
+    except OSError as error:
+        write_json(directory / 'windows.json', {'state': 'failed', 'finished': now(), 'error': str(error)})
+        raise
     # The runner owns windows.json; avoid overwriting its result after a fast failure.
     write_json(directory / 'windows-process.json', {'pid': process.pid, 'started': now()})

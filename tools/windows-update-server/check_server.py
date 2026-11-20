@@ -3,8 +3,13 @@
 import argparse
 import hashlib
 import json
+from pathlib import Path
+import sys
 import urllib.request
 from urllib.parse import urlsplit
+
+# The gateway invokes this script with -I, which omits the script directory.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from publish import public_base
 
 

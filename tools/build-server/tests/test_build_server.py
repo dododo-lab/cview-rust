@@ -379,6 +379,34 @@ class BuildTests(unittest.TestCase):
             self.dispatch('complete-windows', verified_windows=files)
         self.assertFalse((directory / 'receipt.json').exists())
 
+    def test_ubuntu_release_requires_bound_windows_runtime_results(self):
+        self.submit(mode=common.WINDOWS_RELEASE_MODE)
+        directory = common.job_path(self.root, self.job)
+        record = common.read_json(directory / 'job.json')
+        common.write_json(directory / 'job.json', {**record, 'windows_backend': 'xwin'})
+        files = self.windows_success()
+        archive = directory / 'artifacts' / common.WINDOWS_TEST_ARCHIVE
+        archive.write_bytes(b'isolated x64 test archive')
+        tests = common.describe(archive)
+        state = common.read_json(directory / 'windows.json')
+        common.write_json(directory / 'windows.json', {**state, 'tests': tests})
+        self.assertEqual(self.dispatch('windows-tests')['file'], tests)
+        with self.assertRaisesRegex(ValueError, 'interactive Windows'):
+            self.dispatch('complete-windows', verified_windows=files)
+        report = {'host_architecture': 'Arm64', 'session_id': 1, 'error': None,
+                  'installers': [{'architecture': arch, 'installer_sha256': files[f'CView_1.2.3_{arch}-setup.exe']['sha256'],
+                                  'installed': True, 'webview2_started': True}
+                                 for arch in common.TARGETS],
+                  'x64_tests': {'sha256': '0' * 64, 'suites': 40, 'passed': 2041, 'failed': 0, 'ignored': 3}}
+        with self.assertRaisesRegex(ValueError, 'exact Windows x64 test archive'):
+            self.dispatch('complete-windows', verified_windows=files, windows_runtime=report)
+        report['x64_tests']['sha256'] = tests['sha256']
+        result = self.dispatch('complete-windows', verified_windows=files, windows_runtime=report)
+        self.assertEqual(result['state'], 'succeeded')
+        receipt = common.read_json(directory / 'receipt.json')
+        self.assertTrue(receipt['installation_tested'])
+        self.assertEqual(receipt['windows_runtime'], report)
+
     def test_job_mode_and_compile_environment_cannot_change_on_retry(self):
         self.submit(mode=common.WINDOWS_RELEASE_MODE, build_env={'CVIEW_UPDATE_URL': 'https://example.test/feed.json'})
         for options in ({}, {'mode': common.WINDOWS_RELEASE_MODE},
@@ -401,6 +429,9 @@ class BuildTests(unittest.TestCase):
         with patch.object(client.shutil, 'which', return_value='/installed/7zz'), \
              patch.object(client.os, 'access', return_value=True), patch.object(client, 'rpc', return_value=response):
             with self.assertRaisesRegex(ValueError, 'redeploy'):
+                client.preflight(config, windows_release=True)
+            response['features'] = [common.WINDOWS_CROSS_BUILD_FEATURE]
+            with self.assertRaisesRegex(ValueError, 'require native Windows tests'):
                 client.preflight(config, windows_release=True)
             response['features'] = [common.WINDOWS_RELEASE_FEATURE]
             response['server_name'] = 'OTHER'
@@ -445,7 +476,7 @@ class BuildTests(unittest.TestCase):
             self.assertNotIn('complete-windows', calls)
             self.assertFalse(output.exists())
             audits.append(command[command.index('--machine') + 1])
-        with patch.object(client, 'preflight'), patch.object(client, 'rpc', side_effect=self.release_rpc(calls)), \
+        with patch.object(client, 'preflight', return_value={}), patch.object(client, 'rpc', side_effect=self.release_rpc(calls)), \
              patch.object(client, 'run', side_effect=audit), patch.dict(os.environ,
                  {'APPLE_PASSWORD': 'do-not-forward', 'CVIEW_UPDATE_URL': 'https://example.test/feed.json'}, clear=True):
             receipt = client.release_windows(config, source, '1.2.3', output)
@@ -465,7 +496,7 @@ class BuildTests(unittest.TestCase):
         original.write_bytes(b'previous successful output')
         for outcome, corrupt, message in [('failed', False, 'compiler failed'), ('succeeded', True, 'SHA-256')]:
             calls = []
-            with self.subTest(outcome=outcome), patch.object(client, 'preflight'), \
+            with self.subTest(outcome=outcome), patch.object(client, 'preflight', return_value={}), \
                  patch.object(client, 'rpc', side_effect=self.release_rpc(calls, outcome, corrupt)), \
                  patch.object(client, 'run'), self.assertRaisesRegex((ValueError, RuntimeError), message):
                 client.release_windows(config, source, '1.2.3', output)
@@ -479,7 +510,7 @@ class BuildTests(unittest.TestCase):
         def audit(command, *args):
             if '0xaa64' in command:
                 raise subprocess.CalledProcessError(1, command)
-        with patch.object(client, 'preflight'), patch.object(client, 'rpc', side_effect=self.release_rpc(calls)), \
+        with patch.object(client, 'preflight', return_value={}), patch.object(client, 'rpc', side_effect=self.release_rpc(calls)), \
              patch.object(client, 'run', side_effect=audit), self.assertRaises(subprocess.CalledProcessError):
             client.release_windows(config, source, '1.2.3', output)
         self.assertNotIn('complete-windows', calls)
@@ -488,7 +519,7 @@ class BuildTests(unittest.TestCase):
 
     def test_release_source_version_mismatch_stops_before_upload(self):
         source, config = self.release_fixture()
-        with patch.object(client, 'preflight'), patch.object(client, 'rpc') as rpc, \
+        with patch.object(client, 'preflight', return_value={}), patch.object(client, 'rpc') as rpc, \
              self.assertRaisesRegex(ValueError, 'version differs'):
             client.release_windows(config, source, '1.2.4', self.root / 'dist')
         rpc.assert_not_called()
@@ -499,7 +530,7 @@ class BuildTests(unittest.TestCase):
         self.windows_success()
         (common.job_path(self.root, self.job) / 'windows.log').write_text('existing build log')
         calls = []
-        with patch.object(client, 'preflight'), patch.object(client, 'rpc', side_effect=self.release_rpc(calls)), \
+        with patch.object(client, 'preflight', return_value={}), patch.object(client, 'rpc', side_effect=self.release_rpc(calls)), \
              patch.object(client, 'run'), patch.dict(os.environ, {}, clear=True):
             receipt = client.release_windows(config, source, '1.2.3', self.root / 'dist', job=self.job)
         self.assertNotIn('submit', calls)
@@ -510,7 +541,7 @@ class BuildTests(unittest.TestCase):
     def test_release_timeout_preserves_job_without_export(self):
         source, config = self.release_fixture()
         calls = []
-        with patch.object(client, 'preflight'), patch.object(client, 'rpc', side_effect=self.release_rpc(calls, 'queued')), \
+        with patch.object(client, 'preflight', return_value={}), patch.object(client, 'rpc', side_effect=self.release_rpc(calls, 'queued')), \
              patch.object(client.time, 'monotonic', side_effect=[0, 1]), self.assertRaisesRegex(TimeoutError, 'preserved'):
             client.release_windows(config, source, '1.2.3', self.root / 'dist', timeout=1)
         self.assertNotIn('complete-windows', calls)

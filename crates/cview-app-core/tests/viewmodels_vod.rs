@@ -858,7 +858,7 @@ async fn watch_later_toggle_and_library() {
     assert_eq!(vm.read().library_state, VodLoadState::Empty);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn search_debounces_and_pages() {
     let kit = Kit::new(Transport::new(Mode::Ok, 20, &[]), None, vec![]);
     let vm = kit.vm();

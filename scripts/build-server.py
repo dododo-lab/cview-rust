@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Submit source to the Windows build server, or run its local macOS worker."""
+"""Submit source for Windows builds, or run the local macOS worker."""
 import argparse
 import json
 import os
@@ -110,8 +110,20 @@ def preflight(config, windows_release=False):
     result = rpc(config, {'action': 'preflight'})
     if result['protocol'] != common.PROTOCOL or result['server_name'].casefold() != config['server_name'].casefold():
         raise ValueError('Wrong build server or protocol')
-    if windows_release and common.WINDOWS_RELEASE_FEATURE not in result.get('features', []):
+    features = result.get('features', [])
+    if windows_release and common.WINDOWS_RELEASE_FEATURE not in features:
+        if common.WINDOWS_CROSS_BUILD_FEATURE in features:
+            raise ValueError('This build server cross-compiles Windows installers. Formal releases require native Windows tests.')
         raise ValueError('Build gateway needs redeploy: missing ' + common.WINDOWS_RELEASE_FEATURE)
+    if windows_release and common.WINDOWS_CROSS_BUILD_FEATURE in features:
+        if common.WINDOWS_RUNTIME_FEATURE not in features:
+            raise ValueError('Ubuntu build gateway lacks Parallels release validation')
+        from test_parallels import available
+        validation = config.get('windows_validation', {})
+        if (not isinstance(validation, dict) or not validation.get('vm') or not validation.get('host')
+                or not all(isinstance(validation[key], str) for key in ('vm', 'host'))):
+            raise ValueError('Set windows_validation.vm and windows_validation.host in build server.json')
+        available(validation['vm'], validation['host'])
     return result
 
 
@@ -138,7 +150,8 @@ def release_windows(config, source, version, output, job=None, timeout=14400):
     """Build only Windows; the caller owns macOS notarization and publishing."""
     if not re.fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version) or timeout <= 0:
         raise ValueError('Invalid release version or timeout')
-    preflight(config, windows_release=True)
+    server = preflight(config, windows_release=True)
+    runtime_required = common.WINDOWS_RUNTIME_FEATURE in server.get('features', [])
     build_env = common.build_environment({key: os.environ[key] for key in ('CVIEW_UPDATE_URL',) if key in os.environ})
     if job:
         current = rpc(config, {'action': 'status', 'job': common.checked_id(job)})
@@ -188,13 +201,31 @@ def release_windows(config, source, version, output, job=None, timeout=14400):
             staging = Path(tmp)
             with (directory / 'audit.log').open('ab', buffering=0) as log:
                 files = download_windows(config, current, staging, log)
-            rpc(config, {'action': 'complete-windows', 'job': job, 'verified_windows': files})
+            completion = {'action': 'complete-windows', 'job': job, 'verified_windows': files}
+            if runtime_required or current.get('windows_backend') == 'xwin':
+                from test_parallels import run as validate_in_windows
+                runtime_required = True
+                tests = common.metadata(current['windows'].get('tests'))
+                archive = staging / common.WINDOWS_TEST_ARCHIVE
+                rpc(config, {'action': 'windows-tests', 'job': job}, download=archive)
+                if common.describe(archive) != tests:
+                    raise ValueError('Downloaded Windows test archive hash differs')
+                print('Running Windows x64 tests and both installer checks in Parallels', flush=True)
+                validation = config['windows_validation']
+                installers = tuple(staging / f'CView_{version}_{arch}-setup.exe' for arch in common.TARGETS)
+                completion['windows_runtime'] = validate_in_windows(
+                    validation['vm'], validation['host'], installers, archive)
+            rpc(config, completion)
             rpc(config, {'action': 'receipt', 'job': job}, download=staging / 'receipt.json')
             receipt = common.read_json(staging / 'receipt.json')
             check_identity(receipt)
             if (receipt.get('files') != files or receipt.get('windows_dependency_audit') != 'passed-on-mac'
                     or receipt.get('published') is not False):
                 raise ValueError('Windows build receipt differs from verified artifacts')
+            if runtime_required:
+                if receipt.get('installation_tested') is not True:
+                    raise ValueError('Windows installer verification is missing from the release receipt')
+                common.validate_windows_runtime(receipt.get('windows_runtime'), files, tests, version)
             output = common.safe(Path(output).resolve())
             output.mkdir(parents=True, exist_ok=True)
             for name, expected in files.items():

@@ -27,10 +27,11 @@
 #   3) 버전 patch+1(--minor/--major 면 그 자리 +1, 아래 자리 0)·빌드 번호 +1.
 #   4) 빌드 → DMG 서명 → 공증(Accepted 확인) → 스테이플 → 확인.
 #      여기서 하나라도 실패하면 올린 파일을 git 으로 되돌리고 끝낸다(trap).
-#   4b) 같은 소스 스냅샷으로 Windows 서버의 MSVC x64·ARM64 NSIS 설치 파일 두 개를 만든다. 둘 다 있어야 게시한다.
-#       DMG 직후 백그라운드로 서버에 제출해 공증 대기와 겹친다(로그 $TARGET/windows-build-<버전>.log).
+#   4b) 같은 소스 스냅샷으로 빌드 서버에서 MSVC x64·ARM64 NSIS 설치 파일을 만든다. 둘 다 있어야 게시한다.
+#       버전을 올린 직후 백그라운드로 제출해 Mac 빌드·공증과 겹친다(로그 $TARGET/windows-build-<버전>.log).
 #       Mac 작업자는 이 Windows 전용 작업을 가져가지 않는다. macOS 서명·공증은 이 스크립트가 담당한다.
 #       서버에서 PE 아키텍처를 확인하고, Mac에서 두 파일을 받아 SHA-256과 설치 파일 내부 DLL을 검사한다.
+#       Ubuntu 경로는 Parallels에서 Windows x64 테스트와 두 설치 파일의 설치·WebView2 시작을 확인한다.
 #       검사 통과 후 dist/CView_X.Y.Z_{x64,arm64}-setup.exe 및 CView_X.Y.Z_windows-build.json을 저장한다.
 #       코드 서명 인증서가 없어 Windows 설치 파일은 미서명이다(SmartScreen 경고).
 #       버전을 올리기 전에 전용 SSH 접속·서버 기능·MSVC 도구와 Mac의 7zz·llvm-readobj를 확인한다.

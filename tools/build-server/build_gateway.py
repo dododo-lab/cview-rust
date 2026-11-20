@@ -1,6 +1,7 @@
 """Forced SSH command for the build queue. Never accepts a shell command or path."""
 import argparse
 import json
+import os
 from pathlib import Path
 import shutil
 import socket
@@ -26,14 +27,20 @@ def dispatch(root, request, stream):
             log.seek(max(0, path.stat().st_size - 32768))
             return {'text': log.read().decode('utf-8', 'replace')}, None
     if action == 'preflight':
-        result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
-                                 '-File', str(Path(__file__).with_name('Build-Windows.ps1')),
-                                 '-Root', str(root), '-CheckOnly'], capture_output=True, text=True, timeout=60)
+        if os.name == 'nt':
+            command = ['powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+                       '-File', str(Path(__file__).with_name('Build-Windows.ps1')), '-Root', str(root), '-CheckOnly']
+            features = [common.WINDOWS_RELEASE_FEATURE]
+        else:
+            command = ['/bin/bash', str(Path(__file__).with_name('Build-Windows.sh')), str(root), '--check-only']
+            features = [common.WINDOWS_CROSS_BUILD_FEATURE, common.WINDOWS_RELEASE_FEATURE,
+                        common.WINDOWS_RUNTIME_FEATURE]
+        result = subprocess.run(command, capture_output=True, text=True, timeout=60)
         if result.returncode:
             raise ValueError('Windows toolchain preflight failed: ' + result.stdout + result.stderr)
         return {'protocol': common.PROTOCOL, 'server_name': socket.gethostname(),
                 'toolchain': result.stdout.strip(), 'mode': 'build-only',
-                'features': [common.WINDOWS_RELEASE_FEATURE]}, None
+                'features': features}, None
     if action == 'submit':
         return common.submit(root, request['job'], stream, request['source'],
                              mode=request.get('mode', 'build-only'), build_env=request.get('build_env', {})), None
@@ -67,7 +74,7 @@ def dispatch(root, request, stream):
     current = common.status(root, job)
     if action == 'status':
         return current, None
-    if action in ('source', 'artifact', 'log', 'receipt'):
+    if action in ('source', 'artifact', 'windows-tests', 'log', 'receipt'):
         if action == 'source':
             path, expected = directory / 'source.zip', current['source']
         elif action == 'artifact':
@@ -81,6 +88,12 @@ def dispatch(root, request, stream):
                 raise ValueError('Artifact build is not complete')
             path = directory / 'artifacts' / name
             expected = current[platform]['files'][name]
+        elif action == 'windows-tests':
+            if (current['mode'] != common.WINDOWS_RELEASE_MODE
+                    or current['windows']['state'] != 'succeeded' or 'tests' not in current['windows']):
+                raise ValueError('Windows release tests are unavailable for this job')
+            path = directory / 'artifacts' / common.WINDOWS_TEST_ARCHIVE
+            expected = common.metadata(current['windows']['tests'])
         elif action == 'receipt':
             path = directory / 'receipt.json'
             expected = common.describe(path)
@@ -107,14 +120,21 @@ def dispatch(root, request, stream):
             for name, expected in files.items():
                 if common.describe(directory / 'artifacts' / name) != expected:
                     raise ValueError('Stored artifact differs')
+            evidence = {'installation_tested': False}
+            if current.get('windows_backend') == 'xwin' or 'tests' in current['windows']:
+                tests = common.metadata(current['windows'].get('tests'))
+                if common.describe(directory / 'artifacts' / common.WINDOWS_TEST_ARCHIVE) != tests:
+                    raise ValueError('Stored Windows test archive differs')
+                evidence = {'installation_tested': True,
+                            'windows_runtime': common.validate_windows_runtime(
+                                request.get('windows_runtime'), files, tests, current['version'])}
             receipt = directory / 'receipt.json'
             if not receipt.exists():
                 common.write_json(receipt,
                                   {'job': job, 'version': current['version'], 'source': current['source'],
                                    'build_env': current.get('build_env', {}), 'files': files, 'finished': common.now(),
                                    'mode': common.WINDOWS_RELEASE_MODE, 'windows_signed': False,
-                                   'windows_dependency_audit': 'passed-on-mac', 'installation_tested': False,
-                                   'published': False})
+                                   'windows_dependency_audit': 'passed-on-mac', **evidence, 'published': False})
             return common.status(root, job), None
         if current['mode'] != 'build-only':
             raise ValueError('macOS is handled by the formal release script for this job')

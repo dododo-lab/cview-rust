@@ -30,18 +30,20 @@ CVIEW_RELEASE_NOTES_FILE=/절대/경로/notes.txt scripts/release-macos.sh --dmg
 
 설명을 생략하면 이전 태그 이후 Git 변경 목록을 사용한다. Windows 설치 파일은 현재 미서명이며 SmartScreen 안내를 자동 추가한다. `--no-notarize`는 사용자가 명시적으로 공증 생략을 허용할 때만 사용한다. `CVIEW_SKIP_WINDOWS`는 배포에서 거부하고, Windows arm64만 빼고 게시하는 경로도 없다. 개발용 빌드에는 자동 게시를 적용하지 않는다.
 
-### Windows 서버 빌드
+### Windows 설치 파일 빌드
 
 | 설치 파일 | Rust 타깃 | 도구 |
 | --- | --- | --- |
-| `CView_<버전>_x64-setup.exe` | `x86_64-pc-windows-msvc` | 서버의 MSVC x64 도구·Rust·Tauri CLI |
-| `CView_<버전>_arm64-setup.exe` | `aarch64-pc-windows-msvc` | 서버의 MSVC ARM64 도구·Rust·Tauri CLI |
+| `CView_<버전>_x64-setup.exe` | `x86_64-pc-windows-msvc` | Ubuntu의 cargo-xwin·LLVM·Tauri CLI·NSIS |
+| `CView_<버전>_arm64-setup.exe` | `aarch64-pc-windows-msvc` | Ubuntu의 cargo-xwin·LLVM·Tauri CLI·NSIS |
 
 정식 릴리스는 `scripts/build-server.py release-windows`로 서버에 같은 버전의 소스 스냅샷을 전송한다.
-DMG 생성 직후 백그라운드로 시작해 macOS 공증 대기와 겹치며, Mac 자동 작업자는 이 Windows 전용 작업을 가져가지 않는다.
+버전을 올린 직후 백그라운드로 시작해 macOS 빌드·공증과 겹치며, Mac 자동 작업자는 이 Windows 전용 작업을 가져가지 않는다.
 Mac의 MinGW·NSIS·Windows Rust 타깃은 필요하지 않다. Mac에는 다운로드한 설치 파일을 검사할 `7zz`(`brew install sevenzip`)와
 `llvm-readobj`가 있어야 한다. 전용 SSH 접속·키·호스트와 `readobj` 경로는 `~/.config/cview-build/server.json`에 둔다.
 [빌드 서버 설치·설정](../build-server/README.md)을 따른다. 서버 기능(`windows-release-v1`)이나 도구가 없으면 버전을 올리기 전에 중단한다.
+Ubuntu 경로에서는 Mac에 로그인한 Parallels Windows ARM64 게스트가 필요하다. 릴리스 빌드는 같은 스냅샷의
+x64 단위·통합 테스트를 Windows의 x64 에뮬레이션에서 실행하고 두 설치 파일의 설치와 WebView2 시작을 확인한다.
 
 NSIS 설치 프로그램은 두 판 모두 x86 실행 파일이다. 서버는 앱 `cview-app.exe`의 PE Machine(x64 `0x8664`, ARM64 `0xaa64`)을 확인하고,
 Mac은 실제 설치 파일 내부 앱의 아키텍처를 다시 확인한다. MSVC CRT는 `-C target-feature=+crt-static`로 정적 링크한다.
@@ -140,6 +142,20 @@ curl -fsS https://cv.dododo.app/releases/latest.json | python3 -m json.tool
 ```
 
 앱에서는 설정의 업데이트 확인이 최신 버전을 보여 주고, 새 버전이 있을 때 "업데이트 설치"가 다운로드·검증까지 진행되면 된다. 공인 IP가 바뀌면 DNS A 레코드도 바뀌어야 외부 사용자가 접속할 수 있다.
+
+### Ubuntu 업데이트 서버
+
+Ubuntu에서 게이트웨이는 `/srv/cview-updates`를 사용한다. 웹 서버의 문서 루트는
+`/srv/cview-updates/site`다. `incoming`, `tools`와 SSH 키는 문서 루트 밖에 둔다.
+기존 `releases/<버전>/manifest.json`, 설치 파일과 `releases/latest.json`을 복원할 때 서명과 SHA-256을 먼저 검증한다.
+공개 호스트 이름을 유지하면 복원한 피드와 앱의 URL을 바꾸지 않고 사용할 수 있다.
+
+게시 전용 계정은 `site`와 `incoming`에 쓰고 웹 서버는 `site`를 읽는다. 상위 디렉터리는 root가 소유하고
+게시 계정 그룹에 쓰기를 허용하는 sticky 디렉터리로 둔다. `tools`와 그 파일은 root 소유로 유지한다.
+공개 키는 `authorized_keys`에 `restrict`, 허용된 출발지 `from=` 및
+`command="/usr/bin/python3 -I -B /srv/cview-updates/tools/release_gateway.py"`를 적용해 등록한다.
+Mac의 로컬 설정에 새 호스트 이름과 SSH 호스트 공개 키를 고정한 뒤 아래 사전 점검과 전송 시험을 실행한다.
+서버 안에서도 `python3 -I -B /srv/cview-updates/tools/check_server.py --base-url https://cv.dododo.app --download`로 확인한다.
 
 ## 사전 점검과 전송 시험
 

@@ -1,12 +1,12 @@
-# Windows 서버와 Mac으로 세 플랫폼 빌드
+# 빌드 서버와 Mac으로 세 플랫폼 빌드
 
-Windows 서버에 올린 **같은 소스 스냅샷**으로 Windows x64·ARM64 설치 파일과 macOS Apple Silicon DMG를 만든다.
-Windows는 서버의 MSVC 도구를 사용한다. macOS는 Apple SDK와 서명 인증서가 있는 Mac에서 만든다.
+빌드 서버에 올린 **같은 소스 스냅샷**으로 Windows x64·ARM64 설치 파일과 macOS Apple Silicon DMG를 만든다.
+정식 운영 서버는 [Ubuntu](#ubuntu에서-windows-교차-빌드)다. macOS는 Apple SDK와 서명 인증서가 있는 Mac에서 만든다.
 Mac의 작업자가 서버 큐를 가져오는 구조여서 Mac에 SSH 수신 서비스를 열 필요가 없다.
 
 ```mermaid
 flowchart LR
-    A[소스 업로드 후 Submit-Build.ps1] --> Q[Windows 서버 빌드 큐]
+    A[Windows 서버의 Submit-Build.ps1] --> Q[빌드 서버 큐]
     M[Mac에서 build-server.py submit] --> Q
     Q --> W[Windows MSVC x64 및 ARM64 빌드]
     Q --> P[Mac 작업자가 SSH로 소스 가져오기]
@@ -21,11 +21,11 @@ flowchart LR
 Developer ID 서명을 적용하지만 Apple 공증은 하지 않는다. Windows 설치 파일은 미서명이며 SmartScreen 경고가 뜰 수 있다.
 배포용 릴리스는 기존 `scripts/release-macos.sh --dmg` / `scripts/release-with-prs.sh` 경로를 사용한다.
 
-## 정식 릴리스의 Windows 서버 빌드
+## 정식 릴리스의 Windows 빌드
 
 정식 릴리스 명령은 그대로 `scripts/release-macos.sh --dmg`다. 버전 증가 전에 `windows-preflight`로
 전용 SSH 접속·호스트·`windows-release-v1` 기능·서버 도구·Mac의 `7zz`·`llvm-readobj`를 점검한다.
-DMG 생성 직후 아래 작업을 백그라운드로 시작해 macOS 공증 대기와 겹친다.
+버전을 올린 직후 아래 작업을 백그라운드로 시작해 macOS 빌드·공증과 겹친다.
 
 ```sh
 python3 scripts/build-server.py release-windows --source "$PWD" --version <릴리스-버전> --output dist
@@ -48,9 +48,9 @@ Windows 빌드가 실패하면 원인을 수정하고 새 작업을 제출한다
 Apple 공증 자격·서명 키·기타 환경 변수는 서버에 전달하지 않는다. 미지정 시 서버 프로세스의 기존 URL 설정도 사용하지 않는다.
 Windows 전용 작업에는 Mac 자동 작업자 실행이 필요하지 않으며 정식 릴리스 프로세스가 직접 기다리고 검증한다.
 
-## 빌드 시간(세 갈래 동시 빌드)
+## Windows 서버에서의 세 갈래 동시 빌드
 
-릴리스 빌드에서는 `build_runner.py`가 `Build-Windows.ps1`을 세 갈래(`-Lane check|x64|arm64`)로 동시에 실행한다.
+Windows 서버를 사용할 때는 `build_runner.py`가 `Build-Windows.ps1`을 세 갈래(`-Lane check|x64|arm64`)로 동시에 실행한다.
 각 갈래는 다른 `CARGO_TARGET_DIR`(`target-check`·`target`·`target-arm64`)을 써서 cargo 잠금에 막히지 않는다.
 한 갈래가 실패하면 나머지 갈래는 프로세스 트리째 멈춘다. 갈래 로그는 `windows.log`에 차례대로 붙는다. 마지막 `Lanes:` 줄에 갈래별 소요 시간이 남는다.
 `target-check`·`target-arm64`는 바꾼 뒤 첫 빌드에서 한 번 처음부터 컴파일한다.
@@ -79,6 +79,48 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\Install-BuildServer.ps1 `
 
 설치 로그는 `C:\CViewBuild\setup.log`다. 다운로드나 설치가 실패하면 같은 명령으로 다시 실행할 수 있다.
 Visual Studio가 재부팅을 요청하면 진행 중인 작업을 확인한 뒤 재부팅하고 사전 점검을 다시 한다.
+
+## Ubuntu에서 Windows 교차 빌드
+
+Ubuntu 빌드 서버는 CView의 MSVC x64·ARM64 타깃과 정적 CRT를 유지하고, LLVM과 NSIS로 설치 파일을 만든다.
+Rust 워크스페이스의 포맷과 x64 Clippy, ARM64 앱 Clippy를 검사한다. 서버에 할당된 메모리 안에서 동작하도록
+한 번에 한 갈래씩 실행하며 Cargo는 갈래당 컴파일 작업을 3개까지 실행한다.
+
+서버에 Rustup과 C 빌드 도구, LLVM·Clang·LLD·NSIS를 설치한다. Tauri CLI 2.12의 Linux 호스트
+트레이 라이브러리 검사에는 `pkg-config`와 `libayatana-appindicator3-dev`가 필요하다.
+Microsoft 빌드 도구 사용 조건을 확인한 뒤
+다운로드한 `cargo-xwin`과 기존 Windows 서버와 같은 버전의 `cargo-tauri` 실행 파일의 SHA-256을 확인한다.
+관리자 계정에서 이 폴더의 Python 파일과 두 셸 스크립트를 함께 배치한 뒤 설치한다.
+
+```sh
+sudo bash Install-BuildServer.sh /path/to/build-key.pub <Mac-Tailscale-IP> /path/to/cargo-xwin /path/to/cargo-tauri
+```
+
+작업과 캐시는 `/srv/cview-build`의 전용 계정에 보관한다. SSH의 고정 명령과 공개 키는 root가 관리한다.
+Mac의 `~/.config/cview-build/server.json`에 기존 SSH 설정과 함께
+`"windows_validation": {"vm": "<Parallels VM 이름>", "host": "<Mac 사설 IPv4>"}`를 지정한다.
+`windows-preflight`는 Ubuntu 도구, Mac의 설치 파일 검사 도구, 로그인한 Windows ARM64 데스크톱과
+게스트에서 Mac으로의 연결을 확인한다.
+
+정식 배포는 기존 `scripts/release-macos.sh --dmg`를 사용한다. Ubuntu에서 두 NSIS 설치 파일과 같은
+스냅샷의 Windows x64 단위·통합 테스트 실행 파일을 빌드한다. Mac은 설치 파일의 해시·PE 아키텍처·DLL을
+검사한 뒤 Parallels에서 x64 테스트를 실행하고 x64와 ARM64 설치·WebView2 시작을 확인한다.
+x64 코드는 Windows 11 ARM64의 x64 에뮬레이션에서 실행된다. 서버는 검증 기록의 테스트 아카이브와
+두 설치 파일 해시가 해당 작업의 산출물과 일치할 때만 릴리스 빌드 기록을 만든다.
+
+Windows의 분리된 계정에서 설치·시작을 검사하려면 x64·ARM64 설치 파일과 `Test-WindowsInstallers.ps1`을
+전용 작업 폴더에 둔다. 스크립트에 그 폴더를 `-Directory`로 넘기고 관리자 권한으로 `-Action Prepare`,
+로그인한 Windows 데스크톱의 사용자 세션에서 `-Action Launch`, 관리자 권한으로 `-Action Cleanup`을 실행한다.
+검사는 설치된 실행 파일의 PE 아키텍처와 WebView2 시작 여부를 확인하고 설치 파일의 SHA-256을 기록한다.
+ARM64 Windows에서 x64 테스트를 실행하면 Windows의 x64 에뮬레이션을 사용한다.
+
+Parallels의 Windows 데스크톱에 로그인돼 있으면 Mac에서도 이 검사를 실행할 수 있다.
+이때 `--host`는 게스트에서 접근할 수 있는 Mac의 사설 IPv4 주소다.
+
+```sh
+python3 tools/build-server/test_parallels.py --vm '<VM 이름>' --host '<Mac 사설 IPv4>' \
+  /path/to/CView_<버전>_x64-setup.exe /path/to/CView_<버전>_arm64-setup.exe
+```
 
 ## Mac 설정
 
