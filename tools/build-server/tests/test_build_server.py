@@ -552,13 +552,14 @@ class BuildTests(unittest.TestCase):
         self.assertFalse(output.exists())
 
     def test_parallels_transport_retry_is_opt_in(self):
-        failed = subprocess.CompletedProcess([], 1, '', 'PrlJob_GetRetCode: Invalid argument')
+        retcode_error = subprocess.CompletedProcess([], 1, '', 'PrlJob_GetRetCode: Invalid argument')
+        result_error = subprocess.CompletedProcess([], 1, '', 'PrlJob_GetResult: Invalid argument')
         passed = subprocess.CompletedProcess([], 0, 'ready', '')
-        with patch.object(parallels.subprocess, 'run', side_effect=[failed, passed]) as run, \
+        with patch.object(parallels.subprocess, 'run', side_effect=[retcode_error, result_error, passed]) as run, \
              patch.object(parallels.time, 'sleep'):
             self.assertEqual(parallels.guest('Windows', '', retry_transport=True), 'ready')
-            self.assertEqual(run.call_count, 2)
-        with patch.object(parallels.subprocess, 'run', return_value=failed) as run, \
+            self.assertEqual(run.call_count, 3)
+        with patch.object(parallels.subprocess, 'run', return_value=retcode_error) as run, \
              self.assertRaisesRegex(RuntimeError, 'PrlJob_GetRetCode'):
             parallels.guest('Windows', '')
         run.assert_called_once()

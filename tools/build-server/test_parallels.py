@@ -19,6 +19,8 @@ import zipfile
 
 import build_common as common
 
+TRANSPORT_ERRORS = ('PrlJob_GetRetCode: Invalid argument', 'PrlJob_GetResult: Invalid argument')
+
 
 class TransferHandler(SimpleHTTPRequestHandler):
     def list_directory(self, path):
@@ -39,8 +41,9 @@ def guest(vm, script, desktop=False, retry_transport=False):
         if not result.returncode:
             return result.stdout
         error = (result.stdout + result.stderr).strip()
-        if attempt == attempts - 1 or 'PrlJob_GetRetCode: Invalid argument' not in error:
+        if attempt == attempts - 1 or not any(message in error for message in TRANSPORT_ERRORS):
             raise RuntimeError(error)
+        print('Retrying a Parallels guest command after a transport error', flush=True)
         time.sleep(2)
 
 
@@ -98,6 +101,7 @@ $script=Join-Path $directory '{script.name}'
             verified = False
             try:
                 # Directory creation and hash-checked downloads can safely be replayed.
+                print('Transferring installers and test suites to Windows', flush=True)
                 guest(vm, setup + '\nNew-Item -ItemType Directory -Path $directory -Force | Out-Null',
                       retry_transport=True)
                 for name, digest in hashes.items():
@@ -108,8 +112,10 @@ if ((Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant() -ne '{digest}
     throw 'Transferred file SHA-256 differs: {name}'
 }}
 """, retry_transport=True)
+                print('Preparing the isolated Windows test profile', flush=True)
                 guest(vm, setup + '\n& $script -Directory $directory -Action Prepare')
                 prepared = True
+                print('Running the Windows tests and launching both installed apps', flush=True)
                 output = guest(vm, setup + '\n& $script -Directory $directory -Action Launch', desktop=True)
                 report, _ = json.JSONDecoder().raw_decode(output[output.index('{'):])
                 expected = {arch: {
