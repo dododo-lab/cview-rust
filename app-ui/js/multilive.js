@@ -219,6 +219,7 @@ export class MultiLivePage {
     this.headAdd = this.root.querySelector('.ml-toolbar .ml-add');
     this.watchPicker = this.root.querySelector('.ml-watch-picker');
     // 지금 보는 칩 아래로 미끄러지는 판(전환 스위치의 .seg-glider 와 같은 말) — 칩 줄을 다시 그려도 같은 요소를 다시 붙인다.
+    this.chipAnimGen = 0; // 칩 줄 폭 움직임 세대 — 끊긴 움직임의 끝 처리를 건너뛰려고
     this.chipGlider = document.createElement('span');
     this.chipGlider.className = 'ml-chip-glider';
     this.chipGlider.setAttribute('aria-hidden', 'true');
@@ -1249,7 +1250,22 @@ export class MultiLivePage {
     // 상태 글자(연결 중·방송 종료)가 생기거나 사라지면 고른 칩 폭이 바뀐다 — 칩 줄이 좁아 가로로 넘칠 때는 칩 줄 바깥 크기가
     // 그대로라 ResizeObserver 가 부르지 않으니 여기서 판을 다시 놓는다.
     // 판이 미끄러지는 중이면 그 자리에서 이어 간다(끊고 순간 이동하지 않게).
-    if (html === this.watchPickerHtml) { if (this.applyChipStates(list)) this.placeChipGlider(this.gliderRect()); return; }
+    // 칩 줄 폭이 움직이는 중에 상태 글자로 폭이 또 바뀌면 지금 폭에서 새 폭으로 다시 잡는다 — 옛 목표 폭으로 가는 동안
+    // 오른쪽 붙임 아래 넘친 칩이 왼쪽으로 잘리고 끝 프레임에 새 폭으로 튀었다.
+    if (html === this.watchPickerHtml) {
+      const widthAnim = picker.getAnimations().find((a) => a.effect?.target === picker && a.playState === 'running');
+      const fromW = widthAnim ? picker.getBoundingClientRect().width : null;
+      if (this.applyChipStates(list)) {
+        if (widthAnim) {
+          this.chipAnimGen++; // 끊긴 움직임의 끝 처리(done)는 건너뛴다
+          widthAnim.cancel();
+          picker.classList.remove('ml-chips-anim');
+          this.animatePickerWidth(fromW);
+        }
+        this.placeChipGlider(this.gliderRect());
+      }
+      return;
+    }
     this.watchPickerHtml = html;
     this.chipPeek.close(); // 가리키던 칩이 떨어진다
     this.closeChipOverflow();
@@ -1558,7 +1574,7 @@ export class MultiLivePage {
 
   /**
    * 지금 화면에서 칩의 왼쪽 x — 레이아웃 자리(offsetLeft)에 진행 중인 이동(transform 의 x, 피어나는 칩은 translate)만 더한다.
-   * 피어나는 중(id 'chip-bloom' — 옅게 나타나기·창 넘김 CSS 들어오기는 아니다)이면 그 경과 시간도.
+   * 피어나는 중(id 'chip-bloom' — 옅게 나타나기·창 넘김 CSS 들어오기는 아니다)이면 그 경과 시간도, 그리고 지금 투명도.
    */
   chipPlace(t, frame) {
     let bloom = null;
@@ -1567,7 +1583,7 @@ export class MultiLivePage {
     let shift = parseFloat(cs.translate) || 0; // "none" | "Npx" | "Npx Npx"
     // 피어나는 칩의 transform 은 scale 뿐이라(가운데 기준) 왼쪽 자리 계산에서 뺀다
     if (bloom == null && cs.transform && cs.transform !== 'none') shift += new DOMMatrixReadOnly(cs.transform).m41;
-    return { left: frame.left + t.offsetLeft + shift, bloom };
+    return { left: frame.left + t.offsetLeft + shift, bloom, opacity: Number(cs.opacity) };
   }
 
   /** 칩·판·칩 줄의 지금 자리 — 다시 그리기 전에. 칩 줄이 보이지 않거나 모션 줄이기면 null. */
@@ -1599,6 +1615,7 @@ export class MultiLivePage {
   animateChips(before) {
     const picker = this.watchPicker;
     // 앞선 칩 줄 폭 움직임은 끊고(옛 자리는 measureChips 가 움직이던 그대로 쟀다) 새 짜임의 제자리로 잰다.
+    this.chipAnimGen++; // 끊긴 칩 줄 폭 움직임의 끝 처리(done — 비동기 cancel 이벤트)는 건너뛴다
     for (const a of picker.getAnimations()) if (a.effect?.target === picker) a.cancel();
     picker.classList.remove('ml-chips-anim');
     if (!before) { this.placeChipGlider(); return; }
@@ -1610,38 +1627,48 @@ export class MultiLivePage {
       if (!before.all.has(id)) plan.push([t, 'bloom', 0]);
       else if (!was) plan.push([t, 'fade', 0]);
       else if (was.bloom != null) plan.push([t, 'bloom', was.bloom, was.left - (frame.left + t.offsetLeft)]);
-      else plan.push([t, 'move', was.left - (frame.left + t.offsetLeft)]);
+      else plan.push([t, 'move', was.left - (frame.left + t.offsetLeft), was.opacity]);
     }
-    // 칩 줄 폭 — 옛 폭에서 새 폭으로(그동안 칩은 오른쪽에 붙어 제자리). 머리줄 안의 칩 줄 하나만 다시 배치된다.
-    // 새 짜임이 칩 줄을 넘치면(가로로 넘겨 보는 상태) 폭은 움직이지 않는다 — 그동안 오른쪽에 붙이면 넘친 부분이 넘겨 볼 수
-    // 없는 왼쪽으로 나가 칩이 잘리고, 끝나는 프레임에 붙임을 떼면 칩 전체가 넘친 만큼 튀었다. 칩은 FLIP 으로 옛 자리에서 온다.
-    const w = frame.width;
-    if (Math.abs(before.pickerW - w) >= 1 && picker.scrollWidth <= picker.clientWidth + 1) {
-      picker.classList.add('ml-chips-anim');
-      const a = picker.animate([{ width: `${before.pickerW}px` }, { width: `${w}px` }], { duration: 340, easing: 'cubic-bezier(.2, 0, 0, 1)' });
-      const done = () => {
-        if (picker.getAnimations().some((x) => x !== a && x.effect?.target === picker)) return; // 다음 움직임이 이어받았다
-        picker.classList.remove('ml-chips-anim');
-        // 붙임을 뗀 제자리로 — 판·넘겨 본 자리·끝 흐림을 다시 맞춘다(판이 아직 미끄러지는 중이면 그 자리에서 이어 간다)
-        this.placeChipGlider(this.gliderRect());
-        if (this.watchPickerReveal) this.revealActiveWatchChip();
-        this.syncWatchPickerFade();
-      };
-      a.onfinish = done;
-      a.oncancel = done;
-    }
+    this.animatePickerWidth(before.pickerW);
     this.placeChipGlider(before.glider);
-    for (const [t, kind, v, dx] of plan) {
+    for (const [t, kind, v, extra] of plan) { // extra: 피어나는 칩은 옮길 거리, 미끄러지는 칩은 옛 투명도
       if (kind === 'bloom') {
         const a = t.animate([{ opacity: 0, transform: 'scale(.6)' }, { opacity: 1, transform: 'none' }], { duration: 320, easing: 'cubic-bezier(.34, 1.4, .64, 1)' });
         a.id = 'chip-bloom';
         if (v) a.currentTime = Math.min(v, 319);
         // 피어나는 중에 자리가 바뀌면(오른쪽에 칩이 더 붙는 등) 다른 칩처럼 옛 자리에서 미끄러진다 — transform 은 피어남이
         // 쓰고 있어 translate 로(transform 바깥에서 더해진다).
-        if (dx && Math.abs(dx) >= 1) t.animate([{ translate: `${dx}px` }, { translate: '0px' }], { duration: 340, easing: 'cubic-bezier(.2, 0, 0, 1)' });
+        if (extra && Math.abs(extra) >= 1) t.animate([{ translate: `${extra}px` }, { translate: '0px' }], { duration: 340, easing: 'cubic-bezier(.2, 0, 0, 1)' });
       } else if (kind === 'fade') t.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: 'ease-out' });
-      else if (Math.abs(v) >= 1) t.animate([{ transform: `translateX(${v}px)` }, { transform: 'none' }], { duration: 340, easing: 'cubic-bezier(.2, 0, 0, 1)' });
+      else {
+        if (Math.abs(v) >= 1) t.animate([{ transform: `translateX(${v}px)` }, { transform: 'none' }], { duration: 340, easing: 'cubic-bezier(.2, 0, 0, 1)' });
+        // 옅게 나타나던(창 넘김 CSS 들어오기·fade) 칩 — 새 요소라 곧바로 1 이 되지 않게 그 투명도에서 이어 간다
+        if (extra < 0.99) t.animate([{ opacity: extra }, { opacity: 1 }], { duration: Math.round(80 + 140 * (1 - extra)), easing: 'ease-out' });
+      }
     }
+  }
+
+  /**
+   * 칩 줄 폭을 `fromW` 에서 지금(새 짜임) 폭으로 — 그동안 칩은 오른쪽에 붙어 제자리(.ml-chips-anim). 머리줄 안의 칩 줄 하나만
+   * 다시 배치된다. 새 짜임이 칩 줄을 넘치면(가로로 넘겨 보는 상태) 폭은 움직이지 않는다 — 그동안 오른쪽에 붙이면 넘친 부분이
+   * 넘겨 볼 수 없는 왼쪽으로 나가 칩이 잘리고, 끝나는 프레임에 붙임을 떼면 칩 전체가 넘친 만큼 튀었다. 칩은 FLIP 으로 옛 자리에서 온다.
+   */
+  animatePickerWidth(fromW) {
+    const picker = this.watchPicker;
+    const w = picker.getBoundingClientRect().width;
+    if (fromW == null || Math.abs(fromW - w) < 1 || picker.scrollWidth > picker.clientWidth + 1) return;
+    picker.classList.add('ml-chips-anim');
+    const a = picker.animate([{ width: `${fromW}px` }, { width: `${w}px` }], { duration: 340, easing: 'cubic-bezier(.2, 0, 0, 1)' });
+    const gen = this.chipAnimGen;
+    a.onfinish = () => {
+      if (gen !== this.chipAnimGen) return; // 다음 그리기가 이어받았다
+      picker.classList.remove('ml-chips-anim');
+      // 붙임을 뗀 제자리로 — 레이아웃은 그대로라 판이 아직 미끄러지는 중이면 건드리지 않는다(다시 시작하면 스프링이 끊기고
+      // 두 번 튄다). 넘겨 본 자리·끝 흐림은 다시 맞춘다.
+      if (!this.chipGlider.getAnimations().some((x) => x.id === 'glider')) this.placeChipGlider();
+      if (this.watchPickerReveal) this.revealActiveWatchChip();
+      this.syncWatchPickerFade();
+    };
   }
 
   /**
@@ -1667,6 +1694,11 @@ export class MultiLivePage {
     const translate = `${x}px`; // 한 값 — style.translate 는 "Npx 0px" 를 "Npx" 로 돌려줘 비교가 어긋난다
     const width = `${w}px`;
     const changed = g.style.translate !== translate || g.style.width !== width;
+    // 칩 줄 폭이 움직이는 동안 ResizeObserver 가 프레임마다 부르는데, offsetLeft·clientWidth 가 정수로 반올림돼 목표가 1px 씩
+    // 흔들린다 — 그걸 "자리가 바뀜"으로 보고 미끄러지던 판을 끊으면 판이 한 프레임에 목표로 튀었다. 미끄러지는 중의 1.5px
+    // 미만 흔들림은 목표만 고치고 움직임은 그대로 둔다(끝에서 1px 남짓 맞춰진다).
+    const wobble = Math.abs((parseFloat(g.style.translate) || 0) - x) < 1.5 && Math.abs((parseFloat(g.style.width) || 0) - w) < 1.5
+      && g.getAnimations().some((a) => a.id === 'glider'); // 진행 중(멈춘 것 포함 — 끝나거나 끊긴 것은 목록에 없다)
     if (changed) g.style.translate = translate;
     if (changed) g.style.width = width;
     g.style.opacity = '1';
@@ -1678,7 +1710,7 @@ export class MultiLivePage {
     }
     const slide = fx != null && (Math.abs(fx - x) >= 1 || Math.abs(from.width - w) >= 1);
     // 새로 미끄러지지 않아도 자리가 바뀌었으면 진행 중인 옛 움직임은 끊는다 — 옛 목표로 갔다가 끝에서 튀지 않게.
-    if (!slide) { if (changed) stop(); return; }
+    if (!slide) { if (changed && !wobble) stop(); return; }
     stop();
     g.animate([{ translate: `${fx}px` }, { translate }], { duration: 420, easing: 'cubic-bezier(.34, 1.25, .64, 1)', id: 'glider' });
     g.animate([{ width: `${from.width}px` }, { width }], { duration: 320, easing: 'cubic-bezier(.2, 0, 0, 1)', id: 'glider' });
