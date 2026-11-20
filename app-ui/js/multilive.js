@@ -218,12 +218,18 @@ export class MultiLivePage {
     // 머리줄 채널 추가 — 멀티라이브가 가득 차면 같은 단추가 "채널 고르기"로 바뀐다(ml-view-picker.js syncHeaderAddButton).
     this.headAdd = this.root.querySelector('.ml-toolbar .ml-add');
     this.watchPicker = this.root.querySelector('.ml-watch-picker');
+    // 지금 보는 칩 아래로 미끄러지는 판(전환 스위치의 .seg-glider 와 같은 말) — 칩 줄을 다시 그려도 같은 요소를 다시 붙인다.
+    this.chipAnimGen = 0; // 칩 줄 폭 움직임 세대 — 끊긴 움직임의 끝 처리를 건너뛰려고
+    this.chipGlider = document.createElement('span');
+    this.chipGlider.className = 'ml-chip-glider';
+    this.chipGlider.setAttribute('aria-hidden', 'true');
     this.watchPicker.addEventListener('scroll', () => this.syncWatchPickerFade(), { passive: true });
     // 직접 넘겨 보기 시작하면 지금 보는 칩으로 되돌리지 않는다.
     for (const ev of ['wheel', 'pointerdown']) this.watchPicker.addEventListener(ev, () => { this.watchPickerReveal = false; }, { passive: true });
     new ResizeObserver(() => {
       if (this.watchPickerReveal) this.revealActiveWatchChip();
       this.syncWatchPickerFade();
+      this.placeChipGlider();
     }).observe(this.watchPicker);
     // 칩에 마우스를 올리면 말풍선으로 그 채널 미리보기(썸네일·제목·시청자 + 소리 없는 영상)
     this.chipPeek = new ChipPeek(this.watchPicker, (id) => (this.state?.sessions || []).find((x) => x.id === id));
@@ -1241,7 +1247,36 @@ export class MultiLivePage {
       </button><button class="ml-watch-close" data-ml="watch-close" data-session-id="${esc(x.id)}" title="채널 닫기" aria-label="${esc(`${name} 채널 닫기`)}">${ICON_CLOSE}</button></span>`;
     }).join('');
     // 상태 알림마다 다시 그리면 칩의 호버·키보드 초점이 날아간다 — 짜임(채널·순서·보는 채널)이 바뀐 때만. 상태는 제자리에서.
-    if (html === this.watchPickerHtml) { this.applyChipStates(list); return; }
+    // 상태 글자(연결 중·방송 종료)가 생기거나 사라지면 고른 칩 폭이 바뀐다 — 칩 줄이 좁아 가로로 넘칠 때는 칩 줄 바깥 크기가
+    // 그대로라 ResizeObserver 가 부르지 않으니 여기서 판을 다시 놓는다.
+    // 판이 미끄러지는 중이면 그 자리에서 이어 간다(끊고 순간 이동하지 않게).
+    // 칩 줄 폭이 움직이는 중에 상태 글자로 폭이 또 바뀌면 지금 폭에서 새 폭으로 다시 잡는다 — 옛 목표 폭으로 가는 동안
+    // 오른쪽 붙임 아래 넘친 칩이 왼쪽으로 잘리고 끝 프레임에 새 폭으로 튀었다. 그 사이 칩 자리는 FLIP 으로 잇는다 — 새 짜임이
+    // 넘쳐 폭을 움직이지 않으면 칩 줄 폭이 상한으로·붙임이 왼쪽으로 한 프레임에 바뀌어 칩이 모두 옆으로 튀었다.
+    if (html === this.watchPickerHtml) {
+      const widthAnim = picker.getAnimations().find((a) => a.effect?.target === picker && a.playState === 'running');
+      const fromW = widthAnim ? picker.getBoundingClientRect().width : null;
+      const places = widthAnim ? this.chipPlaces() : null;
+      // 판도 바꾸기 전 화면 위 자리로 — 아래 드러내기 스크롤 뒤에 재면 판(칩 줄 안의 자식)이 이미 내용과 함께 옮겨져 튀었다
+      const glider = widthAnim ? this.gliderRect() : null;
+      if (this.applyChipStates(list)) {
+        if (widthAnim) {
+          this.chipAnimGen++; // 끊긴 움직임의 끝 처리(done)는 건너뛴다
+          widthAnim.cancel();
+          picker.classList.remove('ml-chips-anim');
+          // 넘치게 되면(폭을 움직이지 않으면) 보는 칩 드러내기 스크롤이 나중에 ResizeObserver 에서 돌아 FLIP 에 빠졌다 —
+          // 새 자리를 재기 전에 먼저 맞춘다(pickerFrame 이 scrollLeft 를 넣어 잰다). 폭을 움직이는 동안(오른쪽 붙임)엔 넘친 쪽이
+          // 넘겨 볼 수 없는 왼쪽이라 드러내지 않는다 — WebKit 은 그때 scrollLeft 를 음수로 옮겼다. 끝 처리가 드러낸다.
+          if (!this.animatePickerWidth(fromW)) {
+            if (this.watchPickerReveal) this.revealActiveWatchChip();
+            this.syncWatchPickerFade();
+          }
+          this.flipChips(places);
+        }
+        this.placeChipGlider(widthAnim ? glider : this.gliderRect());
+      }
+      return;
+    }
     this.watchPickerHtml = html;
     this.chipPeek.close(); // 가리키던 칩이 떨어진다
     this.closeChipOverflow();
@@ -1250,7 +1285,11 @@ export class MultiLivePage {
     // 되감기 대신 칩 이동, Delete 가 보던 채널 닫기가 됐다.
     const had = picker.contains(document.activeElement) && this.chipKeyFocus ? document.activeElement : null;
     const keep = had && had.dataset.sessionId ? { id: had.dataset.sessionId, close: had.classList.contains('ml-watch-close') } : null;
+    // 칩 추가·닫기·보는 채널 바꾸기 — 바뀌기 전 칩·판의 화면 위 자리(FLIP). 처음 그릴 때·숨어 있을 때·모션 줄이기면 재지 않는다.
+    const before = this.measureChips();
     picker.innerHTML = `<button class="ml-watch-more start" aria-haspopup="menu" aria-expanded="false" hidden></button>${html}<button class="ml-watch-more end" aria-haspopup="menu" aria-expanded="false" hidden></button>`;
+    picker.prepend(this.chipGlider);
+    this.chipMoreCounts = null; // 새 "+N" — 수가 처음 정해질 때는 튀지 않는다
     // 지금 보는 칩이 늘 창 안에 오게 맞춘다(새로 연 채널이 숨은 쪽에 있으면 추가가 안 된 것처럼 보인다).
     const chips = [...picker.querySelectorAll('.ml-watch-chip')];
     const at = chips.findIndex((c) => c.classList.contains('active'));
@@ -1269,6 +1308,7 @@ export class MultiLivePage {
     this.watchPickerReveal = true;
     this.revealActiveWatchChip();
     this.syncWatchPickerFade();
+    this.animateChips(before);
     requestAnimationFrame(() => {
       if (this.watchPickerReveal) this.revealActiveWatchChip();
       this.syncWatchPickerFade();
@@ -1279,6 +1319,7 @@ export class MultiLivePage {
   /** 칩 상태(연결 중·방송 종료·오류)를 제자리에서 — 아바타 점 class, 이름(aria-label/title), 보는 칩의 상태 글자, 열린 "+N" 메뉴 항목. */
   applyChipStates(list) {
     const picker = this.watchPicker;
+    let resized = false; // 고른 칩의 상태 글자가 바뀌었다(칩 폭이 바뀜)
     for (const x of list) {
       const tab = picker.querySelector(`.ml-watch-tab[data-session-id="${CSS.escape(x.id)}"]`);
       if (!tab) continue;
@@ -1303,11 +1344,12 @@ export class MultiLivePage {
       }
       const stEl = chip.querySelector('.ml-watch-state');
       const showText = on && text ? text : '';
-      if (stEl.textContent !== showText) stEl.textContent = showText;
+      if (stEl.textContent !== showText) { stEl.textContent = showText; resized = true; }
       stEl.hidden = !showText;
       const item = this.chipOverflow && !this.chipOverflow.hidden ? this.chipOverflow.querySelector(`[data-session-id="${CSS.escape(x.id)}"]`) : null;
       if (item) this.paintOverflowItemState(item, x);
     }
+    return resized;
   }
 
   /** "+N" 메뉴 항목의 상태 점·글자(상태가 없으면 시청자 수). */
@@ -1366,6 +1408,7 @@ export class MultiLivePage {
   shiftChipWindow(dir) {
     this.closeChipOverflow(); // 열린 "+N" 목록은 창이 옮겨지면 낡는다
     const before = this.chipStart;
+    const glider = this.gliderRect();
     this.chipStart += dir;
     this.applyChipWindow();
     if (this.chipStart === before) return;
@@ -1380,6 +1423,7 @@ export class MultiLivePage {
     }
     this.watchPicker.scrollLeft = dir > 0 ? this.watchPicker.scrollWidth : 0;
     this.syncWatchPickerFade();
+    this.placeChipGlider(glider);
   }
 
   /** 창 밖 칩은 숨기고 양끝에 가려진 개수(+N)를 단다. */
@@ -1394,11 +1438,17 @@ export class MultiLivePage {
     const tail = Math.max(0, n - this.chipStart - w);
     for (const [el, count, label] of [[picker.querySelector('.ml-watch-more.start'), lead, '앞'], [picker.querySelector('.ml-watch-more.end'), tail, '뒤']]) {
       if (!el) continue;
+      const was = el.hidden ? 0 : Number(el.textContent.slice(1)) || 0;
       el.hidden = !count;
       el.textContent = `+${count}`;
+      // 가려진 수가 바뀌면 숫자가 살짝 튄다(합성 단계 transform·opacity) — 처음 정해질 때·모션 줄이기면 없다.
+      if (count && was && was !== count && this.chipMoreCounts && motionEnabled()) {
+        el.animate([{ transform: `translateY(${count > was ? 40 : -40}%)`, opacity: 0.2 }, { transform: 'none', opacity: 1 }], { duration: 260, easing: 'cubic-bezier(.34, 1.4, .64, 1)' });
+      }
       el.title = `${label}쪽에 가려진 채널 ${count}개 — 눌러서 목록 · 휠로 넘기기`;
       el.setAttribute('aria-label', `${label}쪽에 가려진 채널 ${count}개 목록`);
     }
+    this.chipMoreCounts = true;
   }
 
   /** 머리줄 폭이 바뀌면 보이는 칩 수를 다시 정한다(바뀔 때만 다시 나눈다). */
@@ -1413,6 +1463,7 @@ export class MultiLivePage {
     this.applyChipWindow();
     this.closeChipOverflow();
     this.syncWatchPickerFade();
+    this.placeChipGlider();
   }
 
   // ── "+N" 넘침 메뉴 — 그쪽에 가려진 채널을 이름·상태와 함께 늘어놓는다(고르면 그 채널을 라이브로) ──
@@ -1494,9 +1545,11 @@ export class MultiLivePage {
     e.preventDefault();
     if (next === i) return;
     if (next < this.chipStart || next >= this.chipStart + this.chipWindow) {
+      const glider = this.gliderRect();
       this.chipStart = next < this.chipStart ? next : next - this.chipWindow + 1;
       this.applyChipWindow();
       this.chipPeek.close();
+      this.placeChipGlider(glider);
     }
     chips[next].focus({ preventScroll: true });
     chips[next].closest('.ml-watch-tab')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
@@ -1508,9 +1561,205 @@ export class MultiLivePage {
     // 칩을 감싼 틀(.ml-watch-tab, position: relative)로 잰다 — 칩의 offsetLeft 는 그 틀 기준이 된다.
     const active = picker.querySelector('.ml-watch-tab.active');
     if (!active) return;
-    const left = active.offsetLeft - picker.offsetLeft;
+    // 칩 줄 폭이 움직이는 동안(오른쪽 붙임)엔 넘친 쪽이 넘겨 볼 수 없는 왼쪽이다 — 드러내면 WebKit 은 scrollLeft 를 음수로
+    // 옮겼다. 폭 움직임 끝 처리가 다시 부른다.
+    if (picker.classList.contains('ml-chips-anim')) return;
+    // 칩 줄은 판(.ml-chip-glider)을 품어 position: relative — 그때 offsetLeft 는 이미 칩 줄 기준이다.
+    const left = active.offsetParent === picker ? active.offsetLeft : active.offsetLeft - picker.offsetLeft;
     if (left < picker.scrollLeft) picker.scrollLeft = left - 12;
     else if (left + active.offsetWidth > picker.scrollLeft + picker.clientWidth) picker.scrollLeft = left + active.offsetWidth - picker.clientWidth + 12;
+  }
+
+  // ── 칩 모션 — 판이 지금 보는 칩으로 미끄러지고(전환 스위치와 같은 스프링), 칩을 더하거나 닫으면 남은 칩이 새 자리로
+  //    미끄러진다(FLIP). 움직이는 것은 칩의 transform·opacity(피어나며 옮기는 칩은 translate 도), 판의 translate·width, 그리고 칩 줄 폭(아래)뿐이다.
+  //    칩 줄은 머리줄 오른쪽 끝에 붙어 있어 오른쪽 끝이 움직이지 않는다 — 그래서 자리는 모두 "오른쪽 끝 기준"으로 잰다:
+  //    판은 right: 0 에서 translate 로 놓고, 칩을 더하거나 닫는 동안 칩 줄 폭을 옛 폭에서 새 폭으로 옮기며 그동안 칩을
+  //    오른쪽에 붙인다(.ml-chips-anim). 예전엔 칩 줄 왼쪽 끝이 바로 줄어 왼쪽 칩·판이 칩 줄 밖(잘리는 곳)에서 출발했다.
+  //    재기는 transform 을 빼고(offsetLeft) — 피어나거나 미끄러지는 도중에 다시 그려도 줄어든 좌표를 재지 않는다 — 지금
+  //    미끄러진 만큼(computed transform)은 더해 이어 간다. 모션 줄이기면 재지도 움직이지도 않고 판만 제자리에 놓는다. ──
+
+  /** 칩 줄 안쪽(padding box) 오른쪽 끝의 화면 x 와 그 기준의 내용 좌표 변환 — 칩 x(내용) → 화면 x. */
+  pickerFrame() {
+    const p = this.watchPicker;
+    const r = p.getBoundingClientRect();
+    const left = r.left + p.clientLeft - p.scrollLeft; // 내용 좌표 0 의 화면 x
+    return { left, right: r.left + p.clientLeft + p.clientWidth, width: r.width };
+  }
+
+  /**
+   * 지금 화면에서 칩의 왼쪽 x — 레이아웃 자리(offsetLeft)에 진행 중인 이동(transform 의 x, 피어나는 칩은 translate)만 더한다.
+   * 피어나는 중(id 'chip-bloom' — 옅게 나타나기·창 넘김 CSS 들어오기는 아니다)이면 그 경과 시간도, 그리고 지금 투명도.
+   */
+  chipPlace(t, frame) {
+    let bloom = null;
+    for (const a of t.getAnimations()) if (a.id === 'chip-bloom' && a.playState === 'running') bloom = a.currentTime;
+    const cs = getComputedStyle(t);
+    let shift = parseFloat(cs.translate) || 0; // "none" | "Npx" | "Npx Npx"
+    // 피어나는 칩의 transform 은 scale 뿐이라(가운데 기준) 왼쪽 자리 계산에서 뺀다
+    if (bloom == null && cs.transform && cs.transform !== 'none') shift += new DOMMatrixReadOnly(cs.transform).m41;
+    return { left: frame.left + t.offsetLeft + shift, bloom, opacity: Number(cs.opacity) };
+  }
+
+  /** 보이는 칩의 지금 화면 위 자리(채널 id → chipPlace). */
+  chipPlaces() {
+    const frame = this.pickerFrame();
+    const m = new Map();
+    for (const t of this.watchPicker.querySelectorAll('.ml-watch-tab:not([hidden])')) m.set(t.dataset.sessionId, this.chipPlace(t, frame));
+    return m;
+  }
+
+  /** 다시 그리지 않고 칩 줄 짜임만 바뀌었을 때 — 보이는 칩을 `places`(옛 화면 위 자리)에서 새 자리로 미끄러뜨린다. */
+  flipChips(places) {
+    if (!places || !motionEnabled()) return;
+    const frame = this.pickerFrame();
+    for (const t of this.watchPicker.querySelectorAll('.ml-watch-tab:not([hidden])')) {
+      const was = places.get(t.dataset.sessionId);
+      if (!was) continue;
+      const dx = was.left - (frame.left + t.offsetLeft);
+      // 진행 중인 이동은 was 에 이미 들어 있다 — 옛 이동을 끊고 dx 에서 새로 잇는다. 끊지 않고 건너뛰면(dx 가 0 근처) 옛 이동이
+      // 새 자리 위에 겹쳐 한 번에 튀었다. 피어나는 칩은 transform 을 피어남이 써서 translate 로.
+      for (const a of t.getAnimations()) if (a.id === 'chip-move') a.cancel();
+      if (Math.abs(dx) < 0.5) continue;
+      this.moveChip(t, dx, was.bloom != null);
+    }
+  }
+
+  /** 칩을 dx 만큼 옆에서 제자리로(FLIP 이동, id 'chip-move'). 피어나는 칩은 transform 대신 translate. */
+  moveChip(t, dx, blooming) {
+    const kf = blooming ? [{ translate: `${dx}px` }, { translate: '0px' }] : [{ transform: `translateX(${dx}px)` }, { transform: 'none' }];
+    t.animate(kf, { duration: 340, easing: 'cubic-bezier(.2, 0, 0, 1)', id: 'chip-move' });
+  }
+
+  /** 칩·판·칩 줄의 지금 자리 — 다시 그리기 전에. 칩 줄이 보이지 않거나 모션 줄이기면 null. */
+  measureChips() {
+    const picker = this.watchPicker;
+    if (picker.hidden || !this.watchPickerHtml || !motionEnabled() || picker.closest('[hidden]')) return null;
+    const frame = this.pickerFrame();
+    const tabs = new Map();
+    const all = new Set();
+    for (const t of picker.querySelectorAll('.ml-watch-tab')) {
+      all.add(t.dataset.sessionId);
+      if (!t.hidden) tabs.set(t.dataset.sessionId, this.chipPlace(t, frame));
+    }
+    return { tabs, all, glider: this.gliderRect(), pickerW: frame.width };
+  }
+
+  /** 판의 지금 화면 위 자리(움직이는 중이면 그 순간 자리) — 보이지 않으면 null. */
+  gliderRect() {
+    const g = this.chipGlider;
+    if (!g.isConnected || g.style.opacity !== '1' || !motionEnabled()) return null;
+    const r = g.getBoundingClientRect();
+    return r.width ? { right: r.right, width: r.width } : null;
+  }
+
+  /**
+   * 다시 그린 뒤 — 판을 새 칩으로, 자리를 옮긴 칩은 옛 자리에서, 정말 새로 생긴 채널의 칩만 작게 피어나며(피어나던 칩은
+   * 그 자리에서 이어서), 창이 옮겨져 새로 보인 기존 칩은 옅게 나타나며. 칩 줄 폭은 옛 폭에서 새 폭으로.
+   */
+  animateChips(before) {
+    const picker = this.watchPicker;
+    // 앞선 칩 줄 폭 움직임은 끊고(옛 자리는 measureChips 가 움직이던 그대로 쟀다) 새 짜임의 제자리로 잰다.
+    this.chipAnimGen++; // 끊긴 칩 줄 폭 움직임의 끝 처리(done — 비동기 cancel 이벤트)는 건너뛴다
+    for (const a of picker.getAnimations()) if (a.effect?.target === picker) a.cancel();
+    picker.classList.remove('ml-chips-anim');
+    if (!before) { this.placeChipGlider(); return; }
+    const frame = this.pickerFrame();
+    const plan = [];
+    for (const t of picker.querySelectorAll('.ml-watch-tab:not([hidden])')) {
+      const id = t.dataset.sessionId;
+      const was = before.tabs.get(id);
+      if (!before.all.has(id)) plan.push([t, 'bloom', 0]);
+      else if (!was) plan.push([t, 'fade', 0]);
+      else if (was.bloom != null) plan.push([t, 'bloom', was.bloom, was.left - (frame.left + t.offsetLeft)]);
+      else plan.push([t, 'move', was.left - (frame.left + t.offsetLeft), was.opacity]);
+    }
+    this.animatePickerWidth(before.pickerW);
+    this.placeChipGlider(before.glider);
+    for (const [t, kind, v, extra] of plan) { // extra: 피어나는 칩은 옮길 거리, 미끄러지는 칩은 옛 투명도
+      if (kind === 'bloom') {
+        const a = t.animate([{ opacity: 0, transform: 'scale(.6)' }, { opacity: 1, transform: 'none' }], { duration: 320, easing: 'cubic-bezier(.34, 1.4, .64, 1)' });
+        a.id = 'chip-bloom';
+        if (v) a.currentTime = Math.min(v, 319);
+        // 피어나는 중에 자리가 바뀌면(오른쪽에 칩이 더 붙는 등) 다른 칩처럼 옛 자리에서 미끄러진다 — transform 은 피어남이
+        // 쓰고 있어 translate 로(transform 바깥에서 더해진다).
+        if (extra && Math.abs(extra) >= 1) this.moveChip(t, extra, true);
+      } else if (kind === 'fade') t.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, easing: 'ease-out' });
+      else {
+        if (Math.abs(v) >= 1) this.moveChip(t, v, false);
+        // 옅게 나타나던(창 넘김 CSS 들어오기·fade) 칩 — 새 요소라 곧바로 1 이 되지 않게 그 투명도에서 이어 간다
+        if (extra < 0.99) t.animate([{ opacity: extra }, { opacity: 1 }], { duration: Math.round(80 + 140 * (1 - extra)), easing: 'ease-out' });
+      }
+    }
+  }
+
+  /**
+   * 칩 줄 폭을 `fromW` 에서 지금(새 짜임) 폭으로 — 그동안 칩은 오른쪽에 붙어 제자리(.ml-chips-anim). 머리줄 안의 칩 줄 하나만
+   * 다시 배치된다. 새 짜임이 칩 줄을 넘치면(가로로 넘겨 보는 상태) 폭은 움직이지 않는다 — 그동안 오른쪽에 붙이면 넘친 부분이
+   * 넘겨 볼 수 없는 왼쪽으로 나가 칩이 잘리고, 끝나는 프레임에 붙임을 떼면 칩 전체가 넘친 만큼 튀었다. 칩은 FLIP 으로 옛 자리에서 온다.
+   * 움직이기 시작했으면 true.
+   */
+  animatePickerWidth(fromW) {
+    const picker = this.watchPicker;
+    const w = picker.getBoundingClientRect().width;
+    if (fromW == null || Math.abs(fromW - w) < 1 || picker.scrollWidth > picker.clientWidth + 1) return false;
+    picker.classList.add('ml-chips-anim');
+    const a = picker.animate([{ width: `${fromW}px` }, { width: `${w}px` }], { duration: 340, easing: 'cubic-bezier(.2, 0, 0, 1)' });
+    const gen = this.chipAnimGen;
+    a.onfinish = () => {
+      if (gen !== this.chipAnimGen) return; // 다음 그리기가 이어받았다
+      picker.classList.remove('ml-chips-anim');
+      // 붙임을 뗀 제자리로 — 레이아웃은 그대로라 판이 아직 미끄러지는 중이면 건드리지 않는다(다시 시작하면 스프링이 끊기고
+      // 두 번 튄다). 넘겨 본 자리·끝 흐림은 다시 맞춘다.
+      if (!this.chipGlider.getAnimations().some((x) => x.id === 'glider')) this.placeChipGlider();
+      if (this.watchPickerReveal) this.revealActiveWatchChip();
+      this.syncWatchPickerFade();
+    };
+    return true;
+  }
+
+  /**
+   * 판을 지금 보는 칩 밑에 놓는다 — 칩 줄 오른쪽 끝(right: 0) 기준 translate(음수)라, 칩 줄 폭이 움직이는 동안에도 제자리다.
+   * `from`(옛 화면 위 자리)이 있으면 거기서 미끄러진다. 보는 칩이 가려졌으면 판도 숨는다.
+   */
+  placeChipGlider(from = null) {
+    const picker = this.watchPicker;
+    const g = this.chipGlider;
+    if (!g.isConnected || picker.hidden || picker.closest('[hidden]')) return;
+    const tab = picker.querySelector('.ml-watch-tab.active:not([hidden])');
+    // 판이 스스로 건 움직임(id 'glider')만 끊는다 — opacity CSS 전환(나타남·숨음 페이드)까지 끊으면 툭 튄다.
+    const stop = () => { for (const a of g.getAnimations()) if (a.id === 'glider') a.cancel(); };
+    if (!tab || !tab.offsetWidth) {
+      stop();
+      g.style.opacity = '0';
+      picker.classList.remove('has-glider');
+      return;
+    }
+    // 내용 좌표 — 칩 오른쪽 끝에서 칩 줄 안쪽 너비를 뺀 값(칩 줄이 오른쪽에 칩을 붙이는 동안 변하지 않는다)
+    const x = tab.offsetLeft + tab.offsetWidth - picker.clientWidth;
+    const w = tab.offsetWidth;
+    const translate = `${x}px`; // 한 값 — style.translate 는 "Npx 0px" 를 "Npx" 로 돌려줘 비교가 어긋난다
+    const width = `${w}px`;
+    const changed = g.style.translate !== translate || g.style.width !== width;
+    // 칩 줄 폭이 움직이는 동안 ResizeObserver 가 프레임마다 부르는데, offsetLeft·clientWidth 가 정수로 반올림돼 목표가 1px 씩
+    // 흔들린다 — 그걸 "자리가 바뀜"으로 보고 미끄러지던 판을 끊으면 판이 한 프레임에 목표로 튀었다. 미끄러지는 중의 1.5px
+    // 미만 흔들림은 목표만 고치고 움직임은 그대로 둔다(끝에서 1px 남짓 맞춰진다).
+    const wobble = Math.abs((parseFloat(g.style.translate) || 0) - x) < 1.5 && Math.abs((parseFloat(g.style.width) || 0) - w) < 1.5
+      && g.getAnimations().some((a) => a.id === 'glider'); // 진행 중(멈춘 것 포함 — 끝나거나 끊긴 것은 목록에 없다)
+    if (changed) g.style.translate = translate;
+    if (changed) g.style.width = width;
+    g.style.opacity = '1';
+    picker.classList.add('has-glider');
+    let fx = null;
+    if (from) {
+      const f = this.pickerFrame();
+      fx = from.right - f.right + picker.scrollLeft;
+    }
+    const slide = fx != null && (Math.abs(fx - x) >= 1 || Math.abs(from.width - w) >= 1);
+    // 새로 미끄러지지 않아도 자리가 바뀌었으면 진행 중인 옛 움직임은 끊는다 — 옛 목표로 갔다가 끝에서 튀지 않게.
+    if (!slide) { if (changed && !wobble) stop(); return; }
+    stop();
+    g.animate([{ translate: `${fx}px` }, { translate }], { duration: 420, easing: 'cubic-bezier(.34, 1.25, .64, 1)', id: 'glider' });
+    g.animate([{ width: `${from.width}px` }, { width }], { duration: 320, easing: 'cubic-bezier(.2, 0, 0, 1)', id: 'glider' });
   }
 
   /** 채널 칩 줄 끝 흐림 — 다른 방송 줄처럼 가려진 칩이 있는 쪽만. */

@@ -17,6 +17,24 @@
 // TB12 칩 키보드 — ←/→ 옆 칩, End/Home 끝(가려진 칩이면 창을 옮김), Delete 는 그 채널 닫기(초점은 옆 칩). 시청 단축키(←/→ 되감기)로 새지 않는다.
 // TB13 "+N" 넘침 메뉴 — 가려진 채널을 이름·상태와 함께, 창 안(fitPopover)에, Enter 로 그 채널을 라이브로, Esc 면 "+N" 로 초점. axe.
 // TB14 칩 상태 — 방송 종료·연결 중은 아바타 점(st-*)과 이름(aria-label)으로 알린다.
+// TB15 오른쪽 배치(2026-11-20 시안 B) — 제목·전환은 왼쪽, [칩 줄][채널 추가]는 붙어서 오른쪽 끝(멀티라이브 보기의 채널 추가와 같은 자리),
+//      사이는 창 끌기 빈칸. 탭 순서가 보이는 순서(전환 → 칩 → 추가)와 같다. 좁은 폭에서도 넘치지 않는다.
+// TB16 미끄러지는 판 — 지금 보는 칩 밑에 판(.ml-chip-glider)이 꼭 맞고, 다른 칩을 고르면 따라간다(모션이면 translate·width 만 움직여
+//      끝에는 다시 꼭 맞음). 보는 칩이 창 밖으로 가려지면 판도 숨는다.
+// TB17 칩 추가·닫기 레이아웃 모션(FLIP) — 새 칩은 opacity·transform 으로 피어나고, 남은 칩은 transform 으로 새 자리로 미끄러진다.
+//      모션 줄이기면 칩 줄에 아무 애니메이션도 없다.
+// TB18 마이크로 인터랙션 — × 는 숨을 때 작게·돌아 있다가 칩을 가리키면 제 크기(아바타는 줄며 사라짐), 칩 누름 .95, 가리키면 아바타 1.08,
+//      "+N" 가리킴·펼침 판. 전환 속성은 합성 단계(transform·scale·rotate·opacity)와 색뿐 — 크기·위치 전환이 없다.
+// R15~R22 PR #139 적대적 리뷰 결함 회귀 — R15 칩 줄이 넘치는 좁은 머리줄에서 상태 글자만 바뀌어도 판이 고른 칩에 맞음,
+//   R16 오른쪽 끝 칩 줄에서 칩을 닫는 동안 왼쪽 칩·판이 칩 줄 밖(잘리는 곳)으로 나가지 않음, R17 "+N" 메뉴로 가려진 채널을 고르면
+//   창 이동으로 새로 보인 기존 칩은 피어나지 않음(진짜 새 채널만), R18 피어나는 중에 다시 그려도 피어남이 이어지고 옆으로 튀지 않음,
+//   R19 판이 미끄러지는 도중 제자리로 돌아오면 옛 목표로 갔다 튀지 않음, R20 × 누름 .88, R21 "+N" 초점 링이 칩 줄에 잘리지 않음,
+//   (재검토) R23 칩을 더해 칩 줄이 넘치게 될 때 왼쪽 잘림·끝 프레임 튐 없음, R24 휠 넘김 직후 다시 그려도 들어오던 칩이 피어나지 않음,
+//   R25 숨었던 판이 다른 칩을 고르며 다시 나타날 때 옅게 나타남, R24 는 옅게 들어오던 칩의 투명도 연속성도,
+//   R27 넘치지 않는 칩 줄에 칩을 더하면 폭이 움직이고 판은 한 번만 미끄러져(도중 취소 없음) 맞음,
+//   R28 칩 줄 폭이 움직이는 중 상태 글자가 붙어도(넘치지 않음·넘치게 됨·보는 칩이 오른쪽 끝) 칩·줄 가장자리가 튀거나
+//       왼쪽으로 잘리지 않음(넘치지 않으면 폭 움직임을 새로 건다), R23 은 끝 무렵 튐(프레임당 ≤6px), R26 판이 미끄러지는 중 상태 글자가 붙어도 이어서 감, R18 은 미끄러짐 연속성,
+//   R22 고르지 않은 칩의 상태 점 둘레에 칩 줄 바탕과 다른 고리가 없음(아바타를 도려냄).
 // R01~R12 PR #138 적대적 리뷰 결함 회귀 — R01 Delete 자동 반복 무시, R02 마우스로 × 닫기(클릭 초점 흉내)는 초점을 옆 칩으로 옮기지 않음,
 //   R03 상태만 바뀌면 칩 초점·열린 "+N" 메뉴 유지(메뉴 상태 글자도 갱신), R04 마우스로 연 "+N" 을 앱 Esc 로 닫아도 aria-expanded 풀림,
 //   R05 "+N" 메뉴가 열린 채 휠로 넘기면 닫힘, R06 단독 보기 위 막대 아바타가 보이고 누르면 채널 정보, R07 채팅 '영상 위'+좁은 무대에서 ⋯ 가
@@ -97,8 +115,9 @@ function liveMock([opts]) {
 }
 
 const browser = await engine.launch();
-async function open({ width = 1280, height = 780, theme = 'dark', userAgent, clock = false, ...opts } = {}) {
-  const ctx = await browser.newContext({ viewport: { width, height }, colorScheme: theme, reducedMotion: 'reduce', ...(userAgent ? { userAgent } : {}) });
+async function open({ width = 1280, height = 780, theme = 'dark', userAgent, clock = false, motion = false, ...opts } = {}) {
+  // motion: 모션을 켠 채로(TB16·TB17 — 칩 줄 애니메이션). 기본은 모션 줄이기(전환이 끝 상태로 바로).
+  const ctx = await browser.newContext({ viewport: { width, height }, colorScheme: theme, reducedMotion: motion ? 'no-preference' : 'reduce', ...(userAgent ? { userAgent } : {}) });
   const page = await ctx.newPage();
   if (clock) await page.clock.install(); // 시계를 앞당겨 30초 타이머를 돌린다(R12) — 시간은 그대로 흐른다
   page.setDefaultTimeout(8000);
@@ -425,8 +444,10 @@ const headerState = (page) => page.evaluate(() => {
   const shown = tabs.filter((t) => !t.hidden);
   const more = (k) => { const m = p.querySelector(`.ml-watch-more.${k}`); return m.hidden ? 0 : Number(m.textContent.slice(1)); };
   const active = p.querySelector('.ml-watch-tab.active').getBoundingClientRect();
+  const innerRight = h.getBoundingClientRect().right - parseFloat(getComputedStyle(h).paddingRight);
   return {
     headerW: h.clientWidth, overflow: h.scrollWidth - h.clientWidth, segToPicker: Math.round(pr.left - seg.right), pickerToAdd: Math.round(add.left - pr.right),
+    addToEnd: Math.round(innerRight - add.right),
     addInside: add.right <= h.getBoundingClientRect().right + 0.5, total: tabs.length, shown: shown.length, start: more('start'), end: more('end'),
     activeInside: active.left >= pr.left - 0.5 && active.right <= pr.right + 0.5,
     clipped: shown.map((t) => { const e = t.querySelector('.ellipsis'); return e.scrollWidth - e.clientWidth > 1 ? e.textContent : null; }).filter(Boolean),
@@ -441,8 +462,9 @@ for (const [label, win, zoom] of ZOOMS) {
     const st = await headerState(page);
     assert.equal(st.overflow <= 1, true, `머리줄 넘침 ${st.overflow}px`);
     assert.ok(st.addInside, '채널 추가가 머리줄 안');
-    assert.ok(st.segToPicker >= 0 && st.segToPicker <= 28, `전환 → 칩 줄 ${st.segToPicker}px`);
+    assert.ok(st.segToPicker >= 8, `전환 → 칩 줄 사이 빈칸 ${st.segToPicker}px`);
     assert.ok(st.pickerToAdd >= 0 && st.pickerToAdd <= 12, `칩 줄 → 채널 추가 ${st.pickerToAdd}px`);
+    assert.ok(st.addToEnd >= 8 && st.addToEnd <= 12, `채널 추가가 오른쪽 끝 ${st.addToEnd}px`);
     assert.equal(st.shown, Math.min(6, chipWindowFor(st.headerW)), `머리줄 ${st.headerW}px 에 칩 ${st.shown}개`);
     assert.equal(st.start + st.end + st.shown, st.total, '+N 이 가려진 수와 같다');
     assert.ok(st.activeInside, '보는 칩이 칩 줄 안');
@@ -941,6 +963,608 @@ await check('R14 #viewer re-fits the channel rail when the follow button shows u
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+// ── 오른쪽 배치·칩 줄 모션(2026-11-20) ──
+const rectOf = (page, sel) => page.$eval(sel, (e) => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width }; });
+
+for (const width of [2000, 1280, 760]) {
+  await check(`TB15 right layout at ${width}px: switch left, chips + add packed at the right end, drag gap between, tab order follows`, async () => {
+    const { ctx, page, errors } = await openWatch({ width, channels: 6, theme: 'light' });
+    await page.mouse.move(5, 400);
+    const st = await headerState(page);
+    assert.equal(st.overflow <= 1, true, `머리줄 넘침 ${st.overflow}px`);
+    assert.ok(st.pickerToAdd >= 0 && st.pickerToAdd <= 12, `칩 줄 → 채널 추가 ${st.pickerToAdd}px`);
+    assert.ok(st.addToEnd >= 8 && st.addToEnd <= 12, `채널 추가 → 오른쪽 끝 ${st.addToEnd}px`);
+    const lay = await page.evaluate(() => {
+      const h = document.querySelector('.ml-header');
+      const r = (e) => e.getBoundingClientRect();
+      const title = r(h.querySelector('.page-title')); const seg = r(h.querySelector('.live-mode-seg'));
+      const gap = h.querySelector('.ml-head-gap.after'); const g = r(gap); const p = r(h.querySelector('.ml-watch-picker'));
+      const order = [h.querySelector('.live-mode-seg .seg.active'), h.querySelector('.ml-watch-tab:not([hidden]) .ml-watch-chip'), h.querySelector('.ml-toolbar .ml-add')];
+      const domOrdered = order.every((e, i) => i === 0 || (order[i - 1].compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING));
+      const xs = order.map((e) => r(e).left);
+      return { titleToSeg: seg.left - title.right, gapBetween: g.left >= seg.right - 0.5 && g.right <= p.left + 0.5, drag: gap.hasAttribute('data-tauri-drag-region'),
+        gapW: g.width, domOrdered, visualOrdered: xs[0] < xs[1] && xs[1] < xs[2], sep: getComputedStyle(h.querySelector('.ml-head-gap.before')).display };
+    });
+    assert.ok(lay.titleToSeg >= 0 && lay.titleToSeg <= 16, `제목 → 전환 ${lay.titleToSeg}px (전환은 왼쪽에 그대로)`);
+    assert.ok(lay.gapBetween && lay.drag, '전환과 칩 줄 사이 빈칸은 창 끌기 자리');
+    if (width >= 1280) assert.ok(lay.gapW >= 40, `넓은 창: 빈칸 ${lay.gapW}px`);
+    assert.equal(lay.sep, 'none', '예전 구분선은 없다');
+    assert.ok(lay.domOrdered && lay.visualOrdered, '탭 순서 = 보이는 순서(전환 → 칩 → 채널 추가)');
+    // 멀티라이브 보기로 바꿔도 채널 추가 단추는 같은 자리
+    const addWatch = await rectOf(page, '.ml-toolbar .ml-add');
+    await page.click('.page-multilive .live-mode-seg [data-live-mode="multilive"]');
+    await page.waitForFunction(() => !document.querySelector('.page-multilive.as-watch') && document.querySelector('.page-multilive:not([hidden]) .ml-toolbar .ml-add')?.offsetParent);
+    await page.waitForTimeout(250);
+    const addMl = await rectOf(page, '.page-multilive .ml-toolbar .ml-add');
+    assert.ok(Math.abs(addMl.right - addWatch.right) <= 1, `채널 추가 오른쪽 끝: 라이브 ${addWatch.right} / 멀티라이브 ${addMl.right}`);
+    await shot(page, `right-layout-${width}`);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+}
+
+/** 판과 지금 보는 칩의 어긋남(px) — 판이 숨었으면 null. */
+const gliderFit = (page) => page.evaluate(() => {
+  const g = document.querySelector('.ml-chip-glider');
+  const t = document.querySelector('.ml-watch-tab.active:not([hidden])');
+  if (!g || getComputedStyle(g).opacity === '0' || !t) return null;
+  const a = g.getBoundingClientRect(); const b = t.getBoundingClientRect();
+  return Math.max(Math.abs(a.left - b.left), Math.abs(a.right - b.right));
+});
+const settleAnims = (page) => page.waitForFunction(() => document.querySelector('.ml-watch-picker').getAnimations({ subtree: true }).every((a) => a.playState !== 'running'), null, { timeout: 3000 });
+/** 칩 줄 안에서 돌고 있는 애니메이션 — 대상·움직이는 속성. */
+const runningAnims = (page) => page.evaluate(() => document.querySelector('.ml-watch-picker').getAnimations({ subtree: true }).filter((a) => a.playState === 'running').map((a) => {
+  const t = a.effect.target;
+  const props = [...new Set(a.effect.getKeyframes().flatMap((k) => Object.keys(k).filter((x) => !['offset', 'easing', 'composite', 'computedOffset'].includes(x))))];
+  return { el: t.classList.contains('ml-chip-glider') ? 'glider' : t.classList.contains('ml-watch-picker') ? 'picker' : t.classList.contains('ml-watch-tab') ? `tab:${t.dataset.sessionId}` : t.className, props, css: a instanceof CSSAnimation || a instanceof CSSTransition };
+}));
+const watchChip = async (page, id) => {
+  await page.click(`.ml-watch-chip[data-session-id="${id}"]`);
+  await page.waitForFunction((i) => document.querySelector('.ml-watch-tab.active')?.dataset.sessionId === i, id);
+};
+
+await check('TB16 sliding glider: fits the watched chip, follows a new pick (translate/width only), hides when the chip is scrolled away', async () => {
+  for (const motion of [false, true]) {
+    const { ctx, page, errors } = await openWatch({ width: 1600, channels: 6, motion });
+    await page.mouse.move(5, 400);
+    const fit0 = await gliderFit(page);
+    assert.ok(fit0 != null && fit0 <= 1, `판이 지금 보는 칩에 맞다 ${fit0}`);
+    const bg = await page.$eval('.ml-watch-chip.active', (c) => [c.closest('.ml-watch-picker').classList.contains('has-glider'), getComputedStyle(c).backgroundColor]);
+    assert.deepEqual(bg, [true, 'rgba(0, 0, 0, 0)'], '판이 놓이면 고른 칩은 제 면이 없다');
+    await watchChip(page, 's2');
+    if (motion) {
+      const anims = await runningAnims(page);
+      const g = anims.filter((a) => a.el === 'glider');
+      assert.ok(g.length >= 1, `판이 미끄러진다 ${JSON.stringify(anims)}`);
+      for (const a of anims) assert.ok(a.css || a.props.every((x) => ({ glider: ['translate', 'width'], picker: ['width'] }[a.el] || ['transform', 'opacity', 'translate']).includes(x)), `합성 단계 속성만 ${JSON.stringify(a)}`);
+      await settleAnims(page);
+    }
+    const fit1 = await gliderFit(page);
+    assert.ok(fit1 != null && fit1 <= 1, `새로 고른 칩에 판이 맞다 ${fit1} (motion ${motion})`);
+    // 휠로 창을 넘겨 보는 칩(s0)이 정말 가려지면 판도 숨고, 되돌려 다시 보이면 다시 맞는다 — 창을 줄여 칩 창을 작게(6개 중 ≤4)
+    await page.setViewportSize({ width: 1000, height: 780 });
+    await page.waitForFunction(() => document.querySelectorAll('.ml-watch-tab:not([hidden])').length <= 4);
+    await watchChip(page, 's0');
+    await settleAnims(page);
+    const wheel = async (dy) => { const box = await rectOf(page, '.ml-watch-picker'); await page.mouse.move(box.left + 40, box.top + 10); await page.mouse.wheel(0, dy); await page.waitForTimeout(80); };
+    for (let i = 0; i < 6 && !(await page.$eval('.ml-watch-tab.active', (t) => t.hidden)); i++) await wheel(120);
+    await settleAnims(page); // 창이 옮겨지면 판도 미끄러진다 — 다 간 뒤에 잰다
+    assert.equal(await page.$eval('.ml-watch-tab.active', (t) => t.hidden), true, '보는 칩이 창 밖으로 갔다');
+    assert.equal(await gliderFit(page), null, '보는 칩이 가려지면 판도 숨는다');
+    for (let i = 0; i < 6 && (await page.$eval('.ml-watch-tab.active', (t) => t.hidden)); i++) await wheel(-120);
+    await settleAnims(page);
+    const fit2 = await gliderFit(page);
+    assert.ok(fit2 != null && fit2 <= 1, `다시 보이면 판이 칩에 맞다 ${fit2} (motion ${motion})`);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+await check('TB17 chip add/close layout motion (FLIP): new chip blooms, others slide; nothing animates with reduced motion', async () => {
+  for (const motion of [true, false]) {
+    const { ctx, page, errors } = await openWatch({ width: 1900, channels: 3, motion });
+    await page.mouse.move(5, 400);
+    await page.evaluate(() => window.__emitState((st) => { const n = JSON.parse(JSON.stringify(st.sessions[1])); Object.assign(n, { id: 's9', slot: 3, channelId: 'ch9', channelName: '새 채널' }); st.sessions.push(n); }));
+    await page.waitForSelector('.ml-watch-tab[data-session-id="s9"]:not([hidden])');
+    const add = await runningAnims(page);
+    if (motion) {
+      const born = add.find((a) => a.el === 'tab:s9');
+      assert.ok(born && born.props.includes('opacity') && born.props.includes('transform'), `새 칩이 피어난다 ${JSON.stringify(add)}`);
+      assert.ok(add.some((a) => /^tab:s[01]$/.test(a.el) && a.props.join() === 'transform'), `남은 칩이 새 자리로 미끄러진다 ${JSON.stringify(add)}`);
+      await settleAnims(page);
+    } else assert.deepEqual(add.filter((a) => !a.css), [], '모션 줄이기: JS 애니메이션 없음');
+    await page.evaluate(() => window.__emitState((st) => { st.sessions = st.sessions.filter((x) => x.id !== 's1'); }));
+    await page.waitForFunction(() => !document.querySelector('.ml-watch-tab[data-session-id="s1"]'));
+    const rm = await runningAnims(page);
+    // 칩 줄은 오른쪽 끝에 붙어 있어 닫은 칩의 왼쪽 칩들이 오른쪽으로 미끄러진다(오른쪽 칩은 제자리)
+    if (motion) assert.ok(rm.some((a) => a.el === 'tab:s0' && a.props.join() === 'transform'), `닫은 뒤 남은 칩이 미끄러진다 ${JSON.stringify(rm)}`);
+    else assert.deepEqual(rm.filter((a) => !a.css), [], '모션 줄이기: JS 애니메이션 없음');
+    await settleAnims(page);
+    const fitEnd = await gliderFit(page);
+    assert.ok(fitEnd != null && fitEnd <= 1, `끝나면 판이 보는 칩에 맞다 ${fitEnd}`);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+await check('TB18 micro-interactions: close morph, press scale, hover avatar lift, "+N" states, compositor-only transitions', async () => {
+  // 모션 줄이기면 가리킴의 크기 변화가 없다(motion.css) — 아바타는 그대로
+  {
+    const { ctx, page } = await openWatch({ width: 1100, channels: 6 });
+    await page.hover('.ml-watch-tab:not(.active):not([hidden]) .ml-watch-chip .ellipsis');
+    await page.waitForTimeout(60);
+    assert.equal(await page.$eval('.ml-watch-tab:not(.active):not([hidden]):hover .ml-watch-av', (e) => getComputedStyle(e).scale), 'none', '모션 줄이기: 아바타 크기 그대로');
+    await ctx.close();
+  }
+  const { ctx, page, errors } = await openWatch({ width: 1100, channels: 6, theme: 'light', motion: true });
+  await page.mouse.move(5, 400);
+  await page.waitForTimeout(500);
+  const sel = '.ml-watch-tab:not(.active):not([hidden])';
+  const id = await page.$eval(sel, (t) => t.dataset.sessionId);
+  const T = `.ml-watch-tab[data-session-id="${id}"]`;
+  const look = () => page.$eval(T, (t) => {
+    const c = getComputedStyle(t.querySelector('.ml-watch-close')); const av = getComputedStyle(t.querySelector('.ml-watch-av')); const img = getComputedStyle(t.querySelector('.ml-watch-chip img, .ml-watch-dot'));
+    return { x: [c.opacity, c.scale, c.rotate], av: av.scale, img: [img.opacity, img.scale] };
+  });
+  assert.deepEqual(await look(), { x: ['0', '0.5', '-90deg'], av: 'none', img: ['0.78', 'none'] }, '쉴 때 × 는 작게·돌아 숨는다');
+  await page.hover(`${T} .ml-watch-chip .ellipsis`);
+  await page.waitForTimeout(500);
+  const hov = await look();
+  assert.deepEqual(hov.x, ['1', '1', '0deg'], '가리키면 × 가 제 크기');
+  assert.equal(hov.av, '1.08', '가리키면 아바타 자리가 살짝 커진다');
+  assert.deepEqual(hov.img, ['0', '0.5'], '아바타는 줄며 사라진다');
+  // 누름 — 누른 채 밖으로 나가 떼면 클릭이 아니다
+  const c = await rectOf(page, `${T} .ml-watch-chip`);
+  await page.mouse.move(c.left + c.width / 2, c.top + 8);
+  await page.mouse.down();
+  await page.waitForTimeout(250);
+  assert.equal(await page.$eval(`${T} .ml-watch-chip`, (b) => getComputedStyle(b).scale), '0.95', '누르면 .95');
+  await page.mouse.move(5, 400);
+  await page.mouse.up();
+  // "+N" — 가리키면 떠 있는 판, 펼치면 브랜드색 고리
+  const more = '.ml-watch-more.end:not([hidden])';
+  const shadow = () => page.$eval(more, (b) => getComputedStyle(b).boxShadow);
+  assert.equal(await shadow(), 'none');
+  await page.hover(more);
+  await page.waitForTimeout(300);
+  assert.notEqual(await shadow(), 'none', '"+N" 가리킴 판');
+  await page.click(more);
+  await page.waitForSelector('.ml-watch-overflow:not([hidden])');
+  await page.waitForTimeout(300);
+  assert.match(await shadow(), /inset/, '펼친 "+N" 고리');
+  await page.keyboard.press('Escape');
+  // 전환 속성 — 크기·위치(레이아웃) 전환이 없다
+  const props = await page.evaluate(() => ['.ml-watch-chip', '.ml-watch-close', '.ml-watch-more', '.ml-watch-av', '.ml-watch-chip img', '.ml-chip-glider']
+    .map((q) => [q, getComputedStyle(document.querySelector(q)).transitionProperty]));
+  for (const [q, p] of props) assert.ok(!/\b(all|width|height|left|top|right|bottom|margin|padding|max-width|transform-origin)\b/.test(p), `${q} 전환 속성 ${p}`);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// ── PR #139 적대적 리뷰 결함 회귀 ──
+const insidePicker = (page) => page.evaluate(() => {
+  const p = document.querySelector('.ml-watch-picker').getBoundingClientRect();
+  const out = [];
+  for (const e of document.querySelectorAll('.ml-watch-tab:not([hidden]), .ml-chip-glider')) {
+    if (e.classList.contains('ml-chip-glider') && getComputedStyle(e).opacity === '0') continue;
+    const r = e.getBoundingClientRect();
+    if (r.left < p.left - 1 || r.right > p.right + 1) out.push(`${e.dataset.sessionId || 'glider'} ${Math.round(r.left)}..${Math.round(r.right)} / ${Math.round(p.left)}..${Math.round(p.right)}`);
+  }
+  return out;
+});
+
+/**
+ * ms 동안 매 프레임 — 요소(칩은 채널 id, 판은 'glider')별 한 프레임 최대 이동(px), `late` ms 뒤 프레임들만의 최대 이동(lateJump),
+ * 같은 프레임 s0 이동과의 최대 차(relJump), 칩이 칩 줄 왼쪽 밖(넘겨 본 만큼은 빼고)으로 나간 최대 거리, 칩 줄 폭 애니메이션을 본 적 있는지, 판과 보는 칩의 최대 어긋남(gliderOff).
+ * 앞선 단언이 실패해도 매달린 evaluate 가 처리 안 된 거부로 실행을 끊지 않게 catch 를 달아 둔다(await 하면 그대로 거부된다).
+ */
+const trackChips = (page, ms, sel = '.ml-watch-tab:not([hidden])', late = Infinity) => {
+  const run = page.evaluate(([ms, sel, late]) => new Promise((res) => {
+    const prev = new Map(); const jump = {}; const lateJump = {}; const relJump = {}; let leftOut = 0; let pickerAnim = false; let gliderOff = 0; const t0 = performance.now();
+    const pk = document.querySelector('.ml-watch-picker');
+    const step = () => {
+      const now = performance.now() - t0;
+      const p = pk.getBoundingClientRect();
+      pickerAnim ||= pk.getAnimations().some((a) => a.effect?.target === pk && a.playState === 'running');
+      const delta = {};
+      for (const e of document.querySelectorAll(sel)) {
+        const id = e.dataset.sessionId || 'glider'; const x = e.getBoundingClientRect().left;
+        if (prev.has(id)) {
+          delta[id] = x - prev.get(id);
+          const d = Math.abs(x - prev.get(id));
+          jump[id] = Math.round(Math.max(jump[id] || 0, d));
+          if (now > late) lateJump[id] = Math.round(Math.max(lateJump[id] || 0, d) * 10) / 10;
+        }
+        prev.set(id, x);
+        // 넘겨 본 만큼(scrollLeft > 0)의 왼쪽은 넘겨 볼 수 있어 잘림이 아니다
+        if (id !== 'glider') leftOut = Math.max(leftOut, Math.round(p.left - Math.max(0, pk.scrollLeft) - x));
+      }
+      // s0 과 같은 프레임 이동의 차 — 프레임이 밀려 모두 함께 크게 움직인 것과, 한 칩만 순간 이동한 것을 가른다
+      if ('s0' in delta) for (const [id, d] of Object.entries(delta)) relJump[id] = Math.round(Math.max(relJump[id] || 0, Math.abs(d - delta.s0)));
+      const g = document.querySelector('.ml-chip-glider'); const t = document.querySelector('.ml-watch-tab.active:not([hidden])');
+      if (g && t && getComputedStyle(g).opacity !== '0') { const a = g.getBoundingClientRect(); const b = t.getBoundingClientRect(); gliderOff = Math.max(gliderOff, Math.round(Math.max(Math.abs(a.left - b.left), Math.abs(a.right - b.right)))); }
+      if (now < ms) requestAnimationFrame(step); else res({ jump, lateJump, relJump, leftOut, pickerAnim, gliderOff });
+    };
+    step();
+  }), [ms, sel, late]);
+  run.catch(() => {});
+  return run;
+};
+const addSession = (page, id, slot, name = `새 ${id}`) => page.evaluate(([i, sl, nm]) => window.__emitState((st) => { const n = JSON.parse(JSON.stringify(st.sessions[1])); Object.assign(n, { id: i, slot: sl, channelId: `c${i}`, channelName: nm }); st.sessions.push(n); }), [id, slot, name]);
+const maxJump = (j) => Math.max(0, ...Object.values(j.jump));
+
+await check('R15 narrow overflowing header: a state-only change (status text) still re-fits the glider', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1000, channels: 6 });
+  await page.mouse.move(5, 400);
+  // 칩 줄이 머리줄에 눌려 가로로 넘치는 상태 — 칩 줄 바깥 크기가 칩 폭과 상관없이 고정된다(실제로는 아주 좁은 머리줄·큰 글꼴)
+  await page.addStyleTag({ content: '.page-multilive.as-watch .ml-watch-picker { max-width: 240px; }' });
+  await page.waitForTimeout(150);
+  const over = await page.$eval('.ml-watch-picker', (p) => p.scrollWidth - p.clientWidth);
+  assert.ok(over > 0, `칩 줄이 넘친다 ${over}px`);
+  for (const kind of ['loading', 'playing', 'offline']) {
+    await page.evaluate((k) => window.__emitState((st) => { st.sessions[0].state = { kind: k }; }), kind);
+    await page.waitForTimeout(120);
+    const fit = await gliderFit(page);
+    assert.ok(fit != null && fit <= 1, `${kind}: 판이 고른 칩에 맞다 ${fit}`);
+  }
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R16 closing a chip in the right-aligned row: chips and glider stay inside the row while sliding', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1600, channels: 4, motion: true });
+  await page.mouse.move(5, 400);
+  await page.waitForTimeout(400);
+  await page.evaluate(() => window.__emitState((st) => { st.sessions = st.sessions.filter((x) => x.id !== 's2'); }));
+  await page.waitForFunction(() => !document.querySelector('.ml-watch-tab[data-session-id="s2"]'));
+  const bad = [];
+  for (let i = 0; i < 8; i++) { bad.push(...(await insidePicker(page))); await page.waitForTimeout(40); }
+  assert.deepEqual(bad, [], '칩 줄 밖으로 나간 칩·판');
+  await settleAnims(page);
+  const fit = await gliderFit(page);
+  assert.ok(fit != null && fit <= 1, `끝나면 판이 맞다 ${fit}`);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R17 picking a hidden channel from "+N": revealed existing chips do not bloom', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1100, channels: 6, motion: true });
+  await page.mouse.move(5, 400);
+  await page.waitForTimeout(400);
+  await page.click('.ml-watch-more.end:not([hidden])');
+  await page.waitForSelector('.ml-watch-overflow:not([hidden])');
+  const id = await page.$eval('.ml-watch-overflow [data-ml="watch"]:last-child', (b) => b.dataset.sessionId);
+  await page.click(`.ml-watch-overflow [data-session-id="${id}"]`);
+  await page.waitForFunction((i) => document.querySelector('.ml-watch-tab.active')?.dataset.sessionId === i, id);
+  const anims = await runningAnims(page);
+  const bloom = anims.filter((a) => a.el.startsWith('tab:') && a.props.includes('opacity') && a.props.includes('transform'));
+  assert.deepEqual(bloom, [], `기존 채널이 새 칩처럼 피어난다 ${JSON.stringify(anims)}`);
+  await settleAnims(page);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R18 re-render while a new chip blooms: the bloom continues and it slides like the others (no one-frame jump)', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1900, channels: 3, motion: true });
+  await page.mouse.move(5, 400);
+  await page.waitForTimeout(400);
+  await addSession(page, 's9', 3);
+  await page.waitForSelector('.ml-watch-tab[data-session-id="s9"]');
+  // s9 를 피어나는 도중(150ms)으로 — 첫 프레임이 언제 시작됐는지에 따라 달라지지 않게
+  await page.$eval('.ml-watch-tab[data-session-id="s9"]', (t) => { for (const a of t.getAnimations()) if (a.effect.getKeyframes().some((k) => k.opacity != null)) a.currentTime = 150; });
+  const track = trackChips(page, 600); // s10 이 붙는 동안 — s9 도 다른 칩처럼 옛 자리에서 미끄러져야 한다(순간 이동 없이)
+  await addSession(page, 's10', 4);
+  await page.waitForSelector('.ml-watch-tab[data-session-id="s10"]');
+  const of = (id) => page.$eval(`.ml-watch-tab[data-session-id="${id}"]`, (t) => t.getAnimations().filter((a) => a.playState === 'running' && a.effect.getKeyframes().some((k) => k.opacity != null)).map((a) => a.currentTime));
+  const [s9, s10] = [await of('s9'), await of('s10')];
+  const j = await track;
+  assert.ok(s9.length === 1 && s10.length === 1 && s9[0] >= 140 && s9[0] - s10[0] >= 100, `s9 는 처음부터가 아니라 이어서 피어난다 ${JSON.stringify({ s9, s10 })}`);
+  assert.ok((j.relJump.s9 ?? 0) < 40, `피어나던 s9 가 다른 칩과 달리 한 프레임에 튀지 않는다 ${JSON.stringify(j)}`);
+  await settleAnims(page);
+  const fit = await gliderFit(page);
+  assert.ok(fit != null && fit <= 1, `판 ${fit}`);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R19 glider returning to its start mid-slide does not finish at the old target and jump', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1600, channels: 4, motion: true });
+  await page.mouse.move(5, 400);
+  await page.waitForTimeout(400);
+  await page.click('.ml-watch-chip[data-session-id="s2"]');
+  await page.waitForFunction(() => document.querySelector('.ml-watch-tab.active')?.dataset.sessionId === 's2');
+  // 판을 출발점(s0)에 멈춰 두고 s0 으로 되돌아간다 — 옛 움직임(→ s2)이 남아 있으면 다시 돌릴 때 s2 로 간다
+  await page.evaluate(() => { for (const a of document.querySelector('.ml-chip-glider').getAnimations()) { a.pause(); a.currentTime = 0; } });
+  await page.click('.ml-watch-chip[data-session-id="s0"]');
+  await page.waitForFunction(() => document.querySelector('.ml-watch-tab.active')?.dataset.sessionId === 's0');
+  await page.evaluate(() => { for (const a of document.querySelector('.ml-chip-glider').getAnimations()) a.play(); });
+  await page.waitForTimeout(250);
+  const fit = await gliderFit(page);
+  assert.ok(fit != null && fit <= 2, `되돌아온 판이 s0 에 있다 ${fit}`);
+  await settleAnims(page);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R20 pressing a chip close (×) gives press feedback (.88)', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1600, channels: 4, motion: true });
+  await page.mouse.move(5, 400);
+  const T = '.ml-watch-tab[data-session-id="s1"]';
+  await page.hover(`${T} .ml-watch-chip .ellipsis`);
+  await page.waitForTimeout(400);
+  const x = await rectOf(page, `${T} .ml-watch-close`);
+  await page.mouse.move(x.left + x.width / 2, x.top + 10);
+  await page.mouse.down();
+  await page.waitForTimeout(250);
+  const sc = await page.$eval(`${T} .ml-watch-close`, (b) => getComputedStyle(b).scale);
+  await page.mouse.move(5, 400);
+  await page.mouse.up();
+  assert.equal(sc, '0.88');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R21 keyboard focus ring on "+N" is not clipped by the chip row', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1100, channels: 6 });
+  await page.mouse.move(5, 400);
+  const last = await page.$$eval('.ml-watch-tab:not([hidden]) .ml-watch-close', (xs) => xs.length);
+  assert.ok(last > 0);
+  await page.$$eval('.ml-watch-tab:not([hidden]) .ml-watch-close', (xs) => xs[xs.length - 1].focus());
+  await page.keyboard.press('Tab');
+  assert.equal(await page.evaluate(() => document.activeElement.matches('.ml-watch-more.end:focus-visible')), true, '"+N" 에 키보드 초점');
+  await page.waitForTimeout(350); // 고리가 바깥에서 조여 드는 등장(motion.css mo-focus-ring)이 끝난 뒤
+  const ring = await page.$eval('.ml-watch-more.end', (b) => {
+    const cs = getComputedStyle(b); const r = b.getBoundingClientRect(); const p = b.parentElement; const pr = p.getBoundingClientRect();
+    const out = parseFloat(cs.outlineWidth) + parseFloat(cs.outlineOffset);
+    const box = { top: pr.top + p.clientTop, bottom: pr.top + p.clientTop + p.clientHeight, left: pr.left + p.clientLeft, right: pr.left + p.clientLeft + p.clientWidth };
+    return { clipTop: Math.max(0, box.top - (r.top - out)), clipBottom: Math.max(0, r.bottom + out - box.bottom), clipRight: Math.max(0, r.right + out - box.right), style: cs.outlineStyle };
+  });
+  assert.deepEqual(ring, { clipTop: 0, clipBottom: 0, clipRight: 0, style: 'solid' });
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R22 status dot on an unselected chip has no off-colour ring (avatar is cut out instead)', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1900, channels: 6, theme: 'dark' });
+  await page.mouse.move(5, 400);
+  const st = await page.$eval('.ml-watch-tab.st-offline:not(.active)', (t) => ({
+    ring: getComputedStyle(t.querySelector('.ml-watch-st')).boxShadow,
+    mask: (() => { const cs = getComputedStyle(t.querySelector('img, .ml-watch-dot')); return cs.maskImage || cs.webkitMaskImage; })(),
+  }));
+  assert.equal(st.ring, 'none', '점 고리 없음');
+  assert.match(st.mask, /radial-gradient/, '아바타에서 점 자리를 도려낸다');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R23 adding a chip that makes the row overflow: no chip clipped on the left, no jump at the end, glider fits', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1900, channels: 3, motion: true });
+  await page.mouse.move(5, 400);
+  await page.addStyleTag({ content: '.page-multilive.as-watch .ml-watch-picker { max-width: 380px; }' });
+  await page.waitForTimeout(400);
+  const over = () => page.$eval('.ml-watch-picker', (p) => p.scrollWidth - p.clientWidth);
+  assert.ok((await over()) <= 1, `처음엔 넘치지 않는다 ${await over()}`);
+  // 칩 이동(340ms, 끝으로 갈수록 느려짐)이 거의 끝난 270ms 뒤에는 기존 칩이 한 프레임에 몇 px 도 움직이지 않아야 한다 —
+  // 옛 결함은 폭 움직임이 끝나는 프레임에 붙임을 떼며 넘친 만큼(~30px) 튀었다
+  const track = trackChips(page, 700, '.ml-watch-tab:not([hidden])', 270);
+  await addSession(page, 's9', 3);
+  await page.waitForSelector('.ml-watch-tab[data-session-id="s9"]').catch(() => {});
+  const j = await track;
+  assert.ok((await over()) > 1, '칩을 더하면 넘친다');
+  const late = Math.max(0, ...['s0', 's1', 's2'].map((id) => j.lateJump[id] ?? 0));
+  assert.ok(late <= 6, `끝 무렵 기존 칩이 튄다 ${late}px ${JSON.stringify(j)}`);
+  assert.ok(maxJump(j) < 50, `한 프레임에 튄 칩 ${JSON.stringify(j)}`);
+  assert.ok(j.leftOut <= 1, `칩 줄 왼쪽 밖으로 나간 칩 ${JSON.stringify(j)}`);
+  await settleAnims(page);
+  assert.equal(await page.$eval('.ml-watch-picker', (p) => p.classList.contains('ml-chips-anim')), false);
+  const fit = await gliderFit(page);
+  assert.ok(fit != null && fit <= 1, `끝나면 판이 보는 칩에 맞다 ${fit}`);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R24 re-render right after a wheel step: chips sliding in (CSS enter) do not restart as a bloom, nor pop to full opacity', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1100, channels: 6, motion: true });
+  await page.mouse.move(5, 400);
+  await page.waitForTimeout(400);
+  const box = await rectOf(page, '.ml-watch-picker');
+  await page.mouse.move(box.left + 40, box.top + 10);
+  await page.mouse.wheel(0, 120);
+  await page.waitForFunction(() => [...document.querySelectorAll('.ml-watch-tab:not([hidden])')].some((t) => Number(getComputedStyle(t).opacity) < 0.75), null, { timeout: 2000, polling: 'raf' });
+  // 들어오는 중에 다른 칩을 고른다(다시 그리기) — 마우스 클릭은 Playwright 가 움직임이 멈추길 기다려 직접 부른다.
+  // 다시 그린 첫 프레임에 — 옅던 칩이 1 로 튀지 않고 그 투명도에서 이어 가는지, 작게(scale) 피어나지 않는지
+  const r = await page.evaluate(() => new Promise((res) => {
+    const op = () => Object.fromEntries([...document.querySelectorAll('.ml-watch-tab:not([hidden])')].map((t) => [t.dataset.sessionId, Number(getComputedStyle(t).opacity)]));
+    const before = op();
+    const old = document.querySelector('.ml-watch-tab');
+    document.querySelector('.ml-watch-tab:not([hidden]):not(.active) .ml-watch-chip').click();
+    const t0 = performance.now();
+    const step = () => {
+      if (document.querySelector('.ml-watch-tab') !== old || performance.now() - t0 > 1500) {
+        const scaled = [...document.querySelectorAll('.ml-watch-tab')].flatMap((t) => t.getAnimations()
+          .filter((a) => a.playState === 'running' && a.effect.getKeyframes().some((k) => /scale/.test(k.transform || ''))).map(() => t.dataset.sessionId));
+        res({ before, after: op(), scaled, rerendered: document.querySelector('.ml-watch-tab') !== old });
+      } else requestAnimationFrame(step);
+    };
+    step();
+  }));
+  assert.ok(r.rerendered, '칩 줄을 다시 그렸다');
+  assert.deepEqual(r.scaled, [], '기존 칩이 작게(scale .6)부터 피어난다');
+  const faint = Object.keys(r.before).filter((id) => r.before[id] < 0.75 && id in r.after);
+  assert.ok(faint.length > 0, `옅게 들어오던 칩이 있다 ${JSON.stringify(r)}`);
+  for (const id of faint) assert.ok(r.after[id] < r.before[id] + 0.35, `${id} 투명도가 이어진다 ${r.before[id].toFixed(2)} → ${r.after[id].toFixed(2)}`);
+  await settleAnims(page);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R25 glider fades in (not a pop) when it reappears — watched chip scrolled away, then another visible chip is picked', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1000, channels: 6, motion: true });
+  await page.mouse.move(5, 400);
+  await page.waitForFunction(() => document.querySelectorAll('.ml-watch-tab:not([hidden])').length <= 4);
+  await watchChip(page, 's0');
+  await settleAnims(page);
+  const wheel = async (dy) => { const box = await rectOf(page, '.ml-watch-picker'); await page.mouse.move(box.left + 40, box.top + 10); await page.mouse.wheel(0, dy); await page.waitForTimeout(80); };
+  for (let i = 0; i < 6 && !(await page.$eval('.ml-watch-tab.active', (t) => t.hidden)); i++) await wheel(120);
+  await settleAnims(page);
+  await page.waitForTimeout(300);
+  await page.mouse.move(5, 400);
+  assert.equal(await page.$eval('.ml-chip-glider', (g) => getComputedStyle(g).opacity), '0', '보는 칩이 가려져 판이 숨었다');
+  const samples = page.evaluate(() => new Promise((res) => {
+    const out = []; const t0 = performance.now();
+    const step = () => { out.push(Number(getComputedStyle(document.querySelector('.ml-chip-glider')).opacity)); if (performance.now() - t0 < 700) requestAnimationFrame(step); else res(out); };
+    step();
+  }));
+  samples.catch(() => {});
+  await page.evaluate(() => document.querySelector('.ml-watch-tab:not([hidden]):not(.active) .ml-watch-chip').click());
+  const op = await samples;
+  assert.equal(op.at(-1), 1, '다시 보인다');
+  assert.ok(op.some((o) => o > 0.02 && o < 0.98), `옅게 나타난다(중간 값이 있다) ${op.map((o) => o.toFixed(2)).join(' ')}`);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R26 status text appearing while the glider slides: it continues from where it is (no cancel-and-jump)', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1600, channels: 4, motion: true });
+  await page.mouse.move(5, 400);
+  await page.waitForTimeout(400);
+  const left = (q) => page.$eval(q, (e) => e.getBoundingClientRect().left);
+  const s0 = await left('.ml-watch-tab[data-session-id="s0"]');
+  // s2 를 고르고, 판의 미끄러짐이 시작된 그 프레임에 출발점(s0)에서 멈춘다 — 그 채 s2 에 상태 글자가 붙으면 끊고 s2 로
+  // 순간 이동하면 안 되고 지금 자리에서 다시 미끄러져야 한다
+  const paused = await page.evaluate(() => new Promise((res) => {
+    const g = document.querySelector('.ml-chip-glider');
+    document.querySelector('.ml-watch-chip[data-session-id="s2"]').click();
+    const t0 = performance.now();
+    const step = () => {
+      const anims = g.getAnimations().filter((a) => !(a instanceof CSSTransition) && a.playState === 'running');
+      if (anims.length) { for (const a of anims) { a.pause(); a.currentTime = 0; } res(anims.length); } else if (performance.now() - t0 > 2000) res(0); else requestAnimationFrame(step);
+    };
+    step();
+  }));
+  assert.ok(paused >= 1, `판의 미끄러짐을 출발점에 멈췄다 ${paused}`);
+  assert.equal(await page.$eval('.ml-watch-tab.active', (t) => t.dataset.sessionId), 's2');
+  const s2 = await left('.ml-watch-tab[data-session-id="s2"]');
+  assert.ok(Math.abs(s2 - s0) > 60, `s0 과 s2 가 떨어져 있다 ${s0} ${s2}`);
+  await page.evaluate(() => window.__emitState((st) => { st.sessions.find((x) => x.id === 's2').state = { kind: 'loading' }; }));
+  await page.waitForFunction(() => document.querySelector('.ml-watch-tab.active .ml-watch-state')?.textContent);
+  const g = await left('.ml-chip-glider');
+  assert.ok(Math.abs(g - s0) < 20, `판이 지금 자리(s0 ${Math.round(s0)})에서 이어 간다 — 판 ${Math.round(g)}, s2 ${Math.round(s2)}`);
+  await settleAnims(page);
+  const fit = await gliderFit(page);
+  // 상태 글자가 붙은 칩은 폭이 소수 px — 판은 offsetWidth(정수)로 놓아 1px 남짓 반올림 차이가 난다
+  assert.ok(fit != null && fit <= 1.5, `상태 글자가 붙은 칩에 판이 맞다 ${fit}`);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('R27 adding a chip in a non-overflowing row: the row width animates, the glider follows once (not restarted) and fits', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1900, channels: 3, motion: true });
+  await page.mouse.move(5, 400);
+  await page.waitForTimeout(400);
+  const w0 = (await rectOf(page, '.ml-watch-picker')).width;
+  // 판의 움직임(애니메이션 객체)을 프레임마다 모아 cancel 이벤트를 센다 — 반올림 흔들림에 끊기면 420ms 전에 취소·교체된다
+  const cancels = page.evaluate(() => new Promise((res) => {
+    const g = document.querySelector('.ml-chip-glider'); const seen = new Set(); let cancelled = 0; const t0 = performance.now();
+    const step = () => {
+      for (const a of g.getAnimations()) if (!(a instanceof CSSTransition) && !seen.has(a)) { seen.add(a); a.addEventListener('cancel', () => { cancelled++; }); }
+      if (performance.now() - t0 < 800) requestAnimationFrame(step); else res({ seen: seen.size, cancelled });
+    };
+    step();
+  }));
+  cancels.catch(() => {});
+  const track = trackChips(page, 900, '.ml-watch-tab:not([hidden]), .ml-chip-glider');
+  // 이름이 긴 채널 — 판이 충분히 멀리(> 71px) 미끄러져야 340ms 때 스프링이 목표를 1px 넘게 지나쳐 있다
+  await addSession(page, 's9', 3, '이름이 꽤 긴 새 채널 하나');
+  // 판 스프링(420ms)은 칩 줄 폭 움직임(340ms)이 끝날 때 아직 목표를 지나쳐 있다 — 그때 다시 시작하면 ~760ms 로 늘고 두 번 튄다
+  await page.waitForTimeout(620);
+  const gliding = await page.$eval('.ml-chip-glider', (g) => g.getAnimations().filter((a) => !(a instanceof CSSTransition) && a.playState === 'running').length);
+  const j = await track;
+  const c = await cancels;
+  const p = await page.$eval('.ml-watch-picker', (e) => ({ w: e.getBoundingClientRect().width, over: e.scrollWidth - e.clientWidth, anim: e.classList.contains('ml-chips-anim') }));
+  assert.ok(c.seen >= 1 && c.cancelled === 0, `판의 미끄러짐이 도중에 취소·교체되지 않는다 ${JSON.stringify(c)}`);
+  assert.ok(p.over <= 1 && p.w - w0 > 110, `넘치지 않고 칩 줄이 넓어졌다 ${w0} → ${JSON.stringify(p)}`);
+  assert.ok(j.pickerAnim, '칩 줄 폭이 움직였다');
+  assert.equal(p.anim, false, '폭 움직임이 끝나면 오른쪽 붙임을 뗀다');
+  assert.equal(gliding, 0, '판은 한 번만 미끄러진다(폭 움직임 끝에 다시 시작하지 않는다)');
+  // 프레임이 밀리면 모두 함께 크게 움직인다 — 같은 프레임 s0 이동과의 차로 판의 순간 이동만 본다
+  assert.ok((j.relJump.glider ?? 0) < 50, `판이 한 프레임에 튄다 ${JSON.stringify(j)}`);
+  assert.ok(j.gliderOff < 40, `판이 보는 칩에서 크게 벗어나지 않는다 ${JSON.stringify(j)}`);
+  const fit = await gliderFit(page);
+  assert.ok(fit != null && fit <= 1, `끝나면 판이 보는 칩에 맞다 ${fit}`);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// [이름, 칩 줄 상한, 먼저 볼 채널, 새 채널을 앞에 넣기]
+for (const [label, cap, watch, front] of [['fits', null, null, false], ['becomes overflowing', 440, null, false], ['becomes overflowing, watched chip at the right end', 440, 's2', true]]) {
+  await check(`R28 status text arriving while the row width animates (${label}): chips and row edge continue, none clipped on the left`, async () => {
+    const { ctx, page, errors } = await openWatch({ width: 1900, channels: 3, motion: true });
+    await page.mouse.move(5, 400);
+    if (cap) await page.addStyleTag({ content: `.page-multilive.as-watch .ml-watch-picker { max-width: ${cap}px; }` });
+    if (watch) {
+      await page.evaluate((id) => window.dispatchEvent(new CustomEvent('cview:ml-watch', { detail: { sessionId: id } })), watch);
+      await page.waitForFunction((id) => document.querySelector('.ml-watch-tab.active')?.dataset.sessionId === id, watch);
+    }
+    await page.waitForTimeout(500);
+    const active = watch || 's0';
+    await page.evaluate((f) => window.__emitState((st) => { const n = JSON.parse(JSON.stringify(st.sessions[1])); Object.assign(n, { id: 's9', slot: 3, channelId: 'cs9', channelName: '새 s9' }); if (f) st.sessions.unshift(n); else st.sessions.push(n); }), front);
+    await page.waitForFunction(() => { const p = document.querySelector('.ml-watch-picker'); return p.getAnimations().some((a) => a.effect?.target === p && a.playState === 'running'); }, null, { polling: 'raf', timeout: 2000 });
+    await page.waitForTimeout(100);
+    // 보는 칩에 상태 글자 — 같은 짜임(제자리 갱신) 경로. 상태 알림은 동기로 처리돼 같은 작업 안에서 앞뒤 자리·폭을 잰다
+    // (새 움직임은 첫 프레임 전이라 시작 값에 있다 — 프레임 밀림과 상관없는 순간 튐). 이어 첫 두 프레임도 — ResizeObserver 의
+    // 드러내기 스크롤처럼 다음 프레임에 일어나는 튐.
+    const r = await page.evaluate((id) => new Promise((res) => {
+      const p = document.querySelector('.ml-watch-picker');
+      const g = document.querySelector('.ml-chip-glider');
+      const at = () => ({ w: p.getBoundingClientRect().width, sl: p.scrollLeft, gOff: g.getBoundingClientRect().left - document.querySelector('.ml-watch-tab.active').getBoundingClientRect().left, ...Object.fromEntries([...document.querySelectorAll('.ml-watch-tab:not([hidden])')].map((t) => [t.dataset.sessionId, t.getBoundingClientRect().left])) });
+      const widthAnims = () => p.getAnimations().filter((a) => a.effect?.target === p && a.playState === 'running');
+      const old = widthAnims();
+      const frames = [at()];
+      window.__emitState((st) => { st.sessions.find((x) => x.id === id).state = { kind: 'offline' }; });
+      frames.push(at());
+      const fresh = widthAnims().filter((a) => !old.includes(a)).length;
+      // 칩마다 옆으로 옮기는 움직임(translateX·translate)은 하나만 — 옛 이동을 끊지 않고 두면 새 이동이 0 근처라 건너뛸 때
+      // 옛 이동이 새 자리 위에 겹쳐 튄다(그 경우는 드물게만 나서 겹친 수로 잰다)
+      const moves = Object.fromEntries([...document.querySelectorAll('.ml-watch-tab:not([hidden])')].map((t) => [t.dataset.sessionId, t.getAnimations()
+        .filter((a) => !(a instanceof CSSAnimation) && a.playState === 'running' && a.effect.getKeyframes().some((k) => /translate/.test(k.transform || '') || (k.translate && k.translate !== 'none'))).length]));
+      const stated = !!document.querySelector('.ml-watch-tab.active .ml-watch-state')?.textContent;
+      requestAnimationFrame(() => { frames.push(at()); requestAnimationFrame(() => { frames.push(at()); res({ frames, fresh, stated, moves }); }); });
+    }), active);
+    // 그 뒤 — 왼쪽 잘림(앞에 더한 칩이 폭 움직임 동안 피어나며 잘리는 것은 칩 추가 쪽 일이라 상태 글자 뒤부터 잰다)
+    const j = await trackChips(page, 600);
+    const d = (a, b, k) => Math.abs(r.frames[b][k] - r.frames[a][k]);
+    const ids = Object.keys(r.frames[0]).filter((k) => !['w', 'sl', 'gOff'].includes(k) && r.frames.every((f) => k in f));
+    // 판도 보는 칩과의 어긋남이 그 순간 바뀌지 않는다 — 드러내기 스크롤 뒤에 판 자리를 재면 판만 스크롤만큼 튀었다
+    assert.ok(d(0, 1, 'gOff') <= 3, `상태 글자가 붙는 순간 판이 보는 칩에서 튄다 ${d(0, 1, 'gOff').toFixed(1)}px ${JSON.stringify(r.frames.map((f) => f.gOff))}`);
+    const sync = Math.max(0, ...ids.map((k) => d(0, 1, k)));
+    assert.ok(r.stated, '상태 글자가 붙었다');
+    assert.ok(Object.values(r.moves).every((n) => n <= 1), `옛 이동이 끊기지 않고 겹쳐 있다 ${JSON.stringify(r.moves)}`);
+    assert.ok(sync <= 3, `상태 글자가 붙는 순간 칩이 튄다 ${sync.toFixed(1)}px ${JSON.stringify(r.frames)}`);
+    // 보는 칩 드러내기 스크롤은 FLIP 이 재기 전에 끝나야 한다 — 다음 프레임(ResizeObserver)에 스크롤이 바뀌면 그만큼 모든 칩이
+    // 튄다(옛 결함 ~30px). 칩 자리의 프레임 사이 이동은 WebKit 의 긴 프레임에 FLIP 진행이 섞여 기준으로 쓰지 않는다.
+    // (넘치지 않는 경우는 폭이 움직이는 동안 오른쪽 붙임이라 WebKit 이 scrollLeft 를 음수로 보고하며 폭 따라 바뀐다 — 넘침 경우만)
+    assert.ok(Math.max(d(1, 2, 'sl'), d(2, 3, 'sl')) <= 0.5, `상태 글자 뒤 다음 프레임에 칩 줄이 스크롤된다 ${JSON.stringify(r.frames.map((f) => f.sl))}`);
+    // WebKit 은 칩 줄 폭과 칩 이동의 첫 프레임이 1~2px 어긋날 때가 있다 — 옛 결함은 상태 글자 폭(~45px)만큼 잘렸다
+    assert.ok(j.leftOut <= 3, `칩 줄 왼쪽 밖으로 나간 칩 ${JSON.stringify(j)}`);
+    if (!cap) {
+      // 넘치지 않으면 칩 줄 폭도 지금 폭에서 새 폭으로 다시 움직인다 — 한 프레임에 새 폭으로 바뀌면 줄 가장자리가 튄다
+      assert.ok(r.fresh >= 1, '상태 글자 뒤 칩 줄 폭 움직임을 새로 건다');
+      const dw = d(0, 1, 'w');
+      // WebKit 은 새 움직임을 한 프레임 진행한 값으로 시작할 때가 있다(~5px) — 다시 잡지 않으면 남은 폭(~70px)이 한 번에 바뀐다
+      assert.ok(dw <= 12, `상태 글자가 붙는 순간 칩 줄 폭이 바뀐다 ${dw.toFixed(1)}px ${JSON.stringify(r.frames.map((f) => f.w))}`);
+    }
+    await settleAnims(page);
+    const over = await page.$eval('.ml-watch-picker', (p) => p.scrollWidth - p.clientWidth);
+    if (cap) assert.ok(over > 1, `상태 글자로 칩 줄이 넘친다 ${over}`);
+    else assert.ok(over <= 1, `넘치지 않는다 ${over}`);
+    const fit = await gliderFit(page);
+    assert.ok(fit != null && fit <= 1.5, `끝나면 판이 맞다 ${fit}`);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+}
 
 await browser.close();
 server.close();

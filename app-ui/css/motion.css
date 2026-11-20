@@ -421,20 +421,16 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
 .toast-timer { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--primary); opacity: .7; transform-origin: left center; animation: mo-timer linear both; }
 @keyframes mo-timer { from { scale: 1 1; } to { scale: 0 1; } }
 
-/* ── 라이브 단독 보기 머리줄 채널 고르기 — 칩은 한 판 안에 있어(넘치면 가로로 넘김) 뜨거나 번지면 판 끝에서 잘린다.
-   누르면 살짝 눌리고, 올리면 아바타만 커진다. 고른 칩의 떠 있는 판은 multilive.css ── */
-.ml-watch-chip { transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out), box-shadow var(--dur-3) var(--ease-out), scale .3s var(--ease-spring); }
-.ml-watch-chip:active { scale: .96; transition-duration: var(--dur-1); }
-.ml-watch-chip img { transition: scale .3s var(--ease-spring); }
-.ml-watch-chip:hover img { scale: 1.08; }
+/* ── 라이브 단독 보기 머리줄 채널 칩 — 판·누름·아바타·× 모핑은 multilive.css "칩 줄 — 요즘 방식으로 다듬기"(2026-11-20) 한곳에서 정한다.
+   칩은 한 판 안에 있어(넘치면 가로로 넘김) 뜨거나 번지면 판 끝에서 잘린다 — 칩은 제자리, 아바타만 커진다. ── */
 
-/* ── 모션 줄이기 — 위에서 더한 반복 없는 모션도 끈다(시간 0 전역 규칙 + 이동·크기 없앰) ── */
+/* ── 모션 줄이기 — 위에서 더한 반복 없는 모션도 끈다(시간 0 전역 규칙 + 가리킴의 이동·크기 없앰) ── */
 @media (prefers-reduced-motion: reduce) {
   .toast-timer { display: none; }
-  .ml-watch-chip:hover, .ml-watch-chip:hover img { translate: none !important; scale: none !important; }
+  .ml-watch-chip:hover, .ml-watch-chip :is(.ml-watch-av, img, .ml-watch-dot) { translate: none !important; scale: none !important; }
 }
 :root[data-motion="reduced"] .toast-timer { display: none; }
-:root[data-motion="reduced"] :is(.ml-watch-chip:hover, .ml-watch-chip:hover img) { translate: none !important; scale: none !important; }
+:root[data-motion="reduced"] :is(.ml-watch-chip:hover, .ml-watch-chip .ml-watch-av, .ml-watch-chip img, .ml-watch-chip .ml-watch-dot) { translate: none !important; scale: none !important; }
 
 /* ══ 아이콘 호버 (2026-10-24) — 사이드바·계정 메뉴 아이콘이 마우스를 올리면 제 모양대로 한 번 움직인다 ══
    - motion.js installIconHover 가 들어올 때 .hm 을 달고 hm-* 가 모두 끝나면 뗀다(스쳐도 끝까지, 다시 들어와도 겹치지 않게).
