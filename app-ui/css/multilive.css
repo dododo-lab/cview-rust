@@ -676,11 +676,13 @@
    지금: [라이브|멀티라이브] │ [칩 … 머리줄 폭에 따라 2~8개] [+ 채널 추가] ……(창 끌기 빈칸)
    브라우저 탭처럼 "어떤 채널을 볼지(전환·추가·닫기)"는 이 줄, "지금 채널의 정보·동작"은 영상 위 상단 바(ml-watch.js)가 맡는다.
    멀티라이브 보기(칩 줄 없음)의 머리줄은 그대로다. */
-.page-multilive.as-watch .ml-head-gap.before { flex: 0 0 1px; align-self: center; height: 18px; margin: 0 2px; background: var(--border-subtle); }
-.page-multilive.as-watch .ml-watch-picker { flex: 0 1 auto; }
-.page-multilive.as-watch .ml-toolbar { order: 2; margin-right: 0; }
-.page-multilive.as-watch .ml-head-gap.after { order: 3; flex: 1 1 0; }
-.page-multilive.as-watch .ml-watch-picker[hidden] + .ml-head-gap.after { flex-basis: 0; }
+/* 오른쪽 배치(2026-11-20, 사용자 요청 "머리줄 버튼을 우측에" — 시안 B): [아이콘·라이브|멀티라이브] ……(창 끌기 빈칸)…… [칩 … +N] [+ 채널 추가]
+   제목·전환 스위치는 라이브 목록·멀티라이브 화면과 같은 자리에 두고, 채널을 고르는 묶음만 오른쪽 끝으로 — 채널 추가 단추도
+   멀티라이브 보기와 같은 자리(오른쪽 끝에서 10px)다. 빈칸이 줄 때 가장 먼저 줄고(기본 폭 0), 탭 순서는 DOM 그대로(전환 → 칩 → 추가). */
+.page-multilive.as-watch .ml-head-gap.before { display: none; }
+.page-multilive.as-watch .ml-head-gap.after { order: 1; flex: 1 1 0; }
+.page-multilive.as-watch .ml-watch-picker { order: 2; flex: 0 1 auto; }
+.page-multilive.as-watch .ml-toolbar { order: 3; margin-right: 10px; }
 /* 이름 폭 — 넓은 머리줄에서는 잘리지 않게 넉넉히(전체 이름은 미리보기 말풍선·title) */
 .ml-watch-chip { max-width: 168px; }
 .ml-watch-chip.active { max-width: 232px; }
@@ -1233,3 +1235,62 @@
    예전엔 오른쪽 열 패인의 ⚙·⋯·닫기가 채팅(z 6) 밑에 깔려 눌리지 않았다. */
 .ml-stage .ml-pane.under-chat :is(.ml-pane-top, .ml-pane-bar) { padding-right: calc(var(--chat-overlap, 0px) + 8px); }
 .ml-stage .ml-pane.under-chat .ml-pane-menu { right: calc(var(--chat-overlap, 0px) + 8px); }
+
+/* ══ 라이브 머리줄 칩 줄 — 요즘 방식으로 다듬기(2026-11-20) ═══════════════════════════════
+   - 홈·판: 옆의 [라이브|멀티라이브] 전환과 같은 오목한 알약 홈(--seg-track)에, 지금 보는 칩 아래로 떠 있는 판(.ml-chip-glider)이
+     스프링으로 미끄러진다(multilive.js placeChipGlider — 전환 스위치의 .seg-glider 와 같은 색·그림자·곡선).
+   - 칩: 알약 모양. 가리키면 옅은 판이 번지고 아바타가 살짝 커지며(스프링) 또렷해진다. 누르면 .95 로 들어갔다 스프링으로 돌아온다.
+   - 닫기(×): 아바타가 작아지며 사라지는 자리에서 × 가 돌며 커진다(파비콘 → × 모핑). 가리키면 빨간 면.
+   - "+N": 알약. 가리키면 들어 올린 판, 펼치면 브랜드색 고리. 수가 바뀌면 숫자가 튄다(JS).
+   - 칩을 더하거나 닫으면 남은 칩이 새 자리로 미끄러지고 새 칩은 작게 피어난다(JS FLIP).
+   움직이는 것은 transform·scale·rotate·opacity 와 판의 translate·width 뿐이다. 모션 줄이기는 app.css 의 전역 규칙이 전환을 끝 상태로
+   바로 보내고, JS 모션은 motionEnabled() 로 건너뛴다. */
+.ml-watch-picker {
+  --seg-thumb: var(--surface-overlay);
+  position: relative; isolation: isolate; gap: 3px; padding: 2px;
+  border-radius: var(--btn-radius); background: var(--seg-track); border-color: var(--seg-track-edge); box-shadow: var(--seg-track-inset);
+}
+:root[data-theme="light"] .ml-watch-picker { --seg-thumb: var(--surface-popover); }
+@media (prefers-color-scheme: light) { :root[data-theme="system"] .ml-watch-picker { --seg-thumb: var(--surface-popover); } }
+.ml-chip-glider {
+  position: absolute; left: 0; top: 2px; bottom: 2px; z-index: -1; width: 0; opacity: 0; pointer-events: none;
+  border-radius: var(--btn-radius); background: var(--seg-thumb); box-shadow: var(--seg-thumb-shadow);
+  transition: opacity var(--dur-2) var(--ease-out);
+}
+/* 판이 놓이면 고른 칩은 제 면을 내려놓는다(판이 그 면이다). 판이 없을 때(첫 그림 전)는 예전처럼 칩이 스스로 떠 있다. */
+.ml-watch-picker.has-glider .ml-watch-chip.active { background: transparent; box-shadow: none; }
+.ml-watch-chip, .ml-watch-chip.active { border-radius: var(--btn-radius); }
+.ml-watch-chip { padding-right: 12px; }
+.ml-watch-chip {
+  transition: background-color var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), scale .34s var(--ease-spring);
+}
+.ml-watch-chip:active { scale: .95; transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-1); }
+.ml-watch-chip:focus-visible { outline-offset: -1px; }
+.ml-watch-chip .ml-watch-av { transition: scale .34s var(--ease-spring); }
+.ml-watch-chip:not(.active):is(:hover, :focus-visible, [aria-describedby]) .ml-watch-av { scale: 1.08; }
+.ml-watch-tab:hover .ml-watch-chip:not(.active), .ml-watch-chip:not(.active)[aria-describedby] { background: var(--hover); }
+/* 닫기(×) — 아바타가 줄며 사라지는 자리에서 × 가 돌며 커진다 */
+.ml-watch-close, .ml-watch-tab.active .ml-watch-close { scale: .5; rotate: -90deg; }
+.ml-watch-close {
+  transition: opacity var(--dur-2) var(--ease-out), scale .34s var(--ease-spring), rotate .34s var(--ease-spring),
+    color var(--dur-2) var(--ease-out), background-color var(--dur-2) var(--ease-out);
+}
+.ml-watch-tab:is(:hover, :focus-within) .ml-watch-close { scale: 1; rotate: 0deg; }
+.ml-watch-chip :is(img, .ml-watch-dot) { transition: opacity var(--dur-2) var(--ease-out), filter var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), scale .3s var(--ease-spring); }
+.ml-watch-tab:is(:hover, :focus-within) .ml-watch-chip :is(img, .ml-watch-dot) { scale: .5; }
+.ml-watch-close:hover { color: #fff; background: var(--error); }
+.ml-watch-close:active { scale: .88; transition-duration: var(--dur-1); }
+/* "+N" — 알약, 가리키면 들어 올린 판, 펼치면 브랜드색 고리 */
+.ml-watch-more {
+  height: 24px; min-width: 30px; padding: 0 8px; border-radius: var(--btn-radius); background: var(--hover); color: var(--text-secondary);
+  transition: color var(--dur-2) var(--ease-out), background-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out), scale .34s var(--ease-spring);
+}
+.ml-watch-more:hover { color: var(--text-primary); background: var(--seg-thumb); box-shadow: var(--seg-thumb-shadow); }
+.ml-watch-more:active { scale: .92; transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-1); }
+.ml-watch-more[aria-expanded="true"] { color: var(--primary-text); background: var(--seg-thumb); box-shadow: var(--seg-thumb-shadow), inset 0 0 0 1.5px var(--primary); }
+.ml-watch-more:focus-visible { outline-offset: 1px; }
+/* 넘침 메뉴 — "+N" 에서 아래로 살짝 커지며 */
+.ml-watch-overflow:not([hidden]) { animation: mo-pop-down var(--dur-2) var(--ease-out) both; transform-origin: top center; }
+/* 고른 칩의 아바타 링·상태 점 테두리 — 링 사이 틈은 판 색(예전 고른 칩 면 --surface-base 는 판과 달라 틈이 비쳤다) */
+.ml-watch-picker .ml-watch-chip.active :is(img, .ml-watch-dot), .ml-watch-picker .ml-watch-tab.active .ml-watch-close { box-shadow: 0 0 0 2px var(--seg-thumb), 0 0 0 4px var(--primary); }
+.ml-watch-picker .ml-watch-chip.active .ml-watch-st { box-shadow: 0 0 0 2px var(--seg-thumb); }

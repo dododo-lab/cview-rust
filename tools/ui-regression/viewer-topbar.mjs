@@ -17,6 +17,14 @@
 // TB12 칩 키보드 — ←/→ 옆 칩, End/Home 끝(가려진 칩이면 창을 옮김), Delete 는 그 채널 닫기(초점은 옆 칩). 시청 단축키(←/→ 되감기)로 새지 않는다.
 // TB13 "+N" 넘침 메뉴 — 가려진 채널을 이름·상태와 함께, 창 안(fitPopover)에, Enter 로 그 채널을 라이브로, Esc 면 "+N" 로 초점. axe.
 // TB14 칩 상태 — 방송 종료·연결 중은 아바타 점(st-*)과 이름(aria-label)으로 알린다.
+// TB15 오른쪽 배치(2026-11-20 시안 B) — 제목·전환은 왼쪽, [칩 줄][채널 추가]는 붙어서 오른쪽 끝(멀티라이브 보기의 채널 추가와 같은 자리),
+//      사이는 창 끌기 빈칸. 탭 순서가 보이는 순서(전환 → 칩 → 추가)와 같다. 좁은 폭에서도 넘치지 않는다.
+// TB16 미끄러지는 판 — 지금 보는 칩 밑에 판(.ml-chip-glider)이 꼭 맞고, 다른 칩을 고르면 따라간다(모션이면 translate·width 만 움직여
+//      끝에는 다시 꼭 맞음). 보는 칩이 창 밖으로 가려지면 판도 숨는다.
+// TB17 칩 추가·닫기 레이아웃 모션(FLIP) — 새 칩은 opacity·transform 으로 피어나고, 남은 칩은 transform 으로 새 자리로 미끄러진다.
+//      모션 줄이기면 칩 줄에 아무 애니메이션도 없다.
+// TB18 마이크로 인터랙션 — × 는 숨을 때 작게·돌아 있다가 칩을 가리키면 제 크기(아바타는 줄며 사라짐), 칩 누름 .95, 가리키면 아바타 1.08,
+//      "+N" 가리킴·펼침 판. 전환 속성은 합성 단계(transform·scale·rotate·opacity)와 색뿐 — 크기·위치 전환이 없다.
 // R01~R12 PR #138 적대적 리뷰 결함 회귀 — R01 Delete 자동 반복 무시, R02 마우스로 × 닫기(클릭 초점 흉내)는 초점을 옆 칩으로 옮기지 않음,
 //   R03 상태만 바뀌면 칩 초점·열린 "+N" 메뉴 유지(메뉴 상태 글자도 갱신), R04 마우스로 연 "+N" 을 앱 Esc 로 닫아도 aria-expanded 풀림,
 //   R05 "+N" 메뉴가 열린 채 휠로 넘기면 닫힘, R06 단독 보기 위 막대 아바타가 보이고 누르면 채널 정보, R07 채팅 '영상 위'+좁은 무대에서 ⋯ 가
@@ -97,8 +105,9 @@ function liveMock([opts]) {
 }
 
 const browser = await engine.launch();
-async function open({ width = 1280, height = 780, theme = 'dark', userAgent, clock = false, ...opts } = {}) {
-  const ctx = await browser.newContext({ viewport: { width, height }, colorScheme: theme, reducedMotion: 'reduce', ...(userAgent ? { userAgent } : {}) });
+async function open({ width = 1280, height = 780, theme = 'dark', userAgent, clock = false, motion = false, ...opts } = {}) {
+  // motion: 모션을 켠 채로(TB16·TB17 — 칩 줄 애니메이션). 기본은 모션 줄이기(전환이 끝 상태로 바로).
+  const ctx = await browser.newContext({ viewport: { width, height }, colorScheme: theme, reducedMotion: motion ? 'no-preference' : 'reduce', ...(userAgent ? { userAgent } : {}) });
   const page = await ctx.newPage();
   if (clock) await page.clock.install(); // 시계를 앞당겨 30초 타이머를 돌린다(R12) — 시간은 그대로 흐른다
   page.setDefaultTimeout(8000);
@@ -425,8 +434,10 @@ const headerState = (page) => page.evaluate(() => {
   const shown = tabs.filter((t) => !t.hidden);
   const more = (k) => { const m = p.querySelector(`.ml-watch-more.${k}`); return m.hidden ? 0 : Number(m.textContent.slice(1)); };
   const active = p.querySelector('.ml-watch-tab.active').getBoundingClientRect();
+  const innerRight = h.getBoundingClientRect().right - parseFloat(getComputedStyle(h).paddingRight);
   return {
     headerW: h.clientWidth, overflow: h.scrollWidth - h.clientWidth, segToPicker: Math.round(pr.left - seg.right), pickerToAdd: Math.round(add.left - pr.right),
+    addToEnd: Math.round(innerRight - add.right),
     addInside: add.right <= h.getBoundingClientRect().right + 0.5, total: tabs.length, shown: shown.length, start: more('start'), end: more('end'),
     activeInside: active.left >= pr.left - 0.5 && active.right <= pr.right + 0.5,
     clipped: shown.map((t) => { const e = t.querySelector('.ellipsis'); return e.scrollWidth - e.clientWidth > 1 ? e.textContent : null; }).filter(Boolean),
@@ -441,8 +452,9 @@ for (const [label, win, zoom] of ZOOMS) {
     const st = await headerState(page);
     assert.equal(st.overflow <= 1, true, `머리줄 넘침 ${st.overflow}px`);
     assert.ok(st.addInside, '채널 추가가 머리줄 안');
-    assert.ok(st.segToPicker >= 0 && st.segToPicker <= 28, `전환 → 칩 줄 ${st.segToPicker}px`);
+    assert.ok(st.segToPicker >= 8, `전환 → 칩 줄 사이 빈칸 ${st.segToPicker}px`);
     assert.ok(st.pickerToAdd >= 0 && st.pickerToAdd <= 12, `칩 줄 → 채널 추가 ${st.pickerToAdd}px`);
+    assert.ok(st.addToEnd >= 8 && st.addToEnd <= 12, `채널 추가가 오른쪽 끝 ${st.addToEnd}px`);
     assert.equal(st.shown, Math.min(6, chipWindowFor(st.headerW)), `머리줄 ${st.headerW}px 에 칩 ${st.shown}개`);
     assert.equal(st.start + st.end + st.shown, st.total, '+N 이 가려진 수와 같다');
     assert.ok(st.activeInside, '보는 칩이 칩 줄 안');
@@ -938,6 +950,177 @@ await check('R14 #viewer re-fits the channel rail when the follow button shows u
   assert.deepEqual({ close: after.close, more: after.more }, { close: true, more: true }, `팔로우 단추가 늦게 나타나도 ×·⋯ 가 무대 안 ${JSON.stringify(after)}`);
   assert.ok(after.overflow <= 1, `위 막대가 넘치지 않는다 ${JSON.stringify(after)}`);
   assert.ok(after.rail < before.rail, `레일을 다시 접는다 ${before.rail} → ${after.rail}`);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// ── 오른쪽 배치·칩 줄 모션(2026-11-20) ──
+const rectOf = (page, sel) => page.$eval(sel, (e) => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width }; });
+
+for (const width of [2000, 1280, 760]) {
+  await check(`TB15 right layout at ${width}px: switch left, chips + add packed at the right end, drag gap between, tab order follows`, async () => {
+    const { ctx, page, errors } = await openWatch({ width, channels: 6, theme: 'light' });
+    await page.mouse.move(5, 400);
+    const st = await headerState(page);
+    assert.equal(st.overflow <= 1, true, `머리줄 넘침 ${st.overflow}px`);
+    assert.ok(st.pickerToAdd >= 0 && st.pickerToAdd <= 12, `칩 줄 → 채널 추가 ${st.pickerToAdd}px`);
+    assert.ok(st.addToEnd >= 8 && st.addToEnd <= 12, `채널 추가 → 오른쪽 끝 ${st.addToEnd}px`);
+    const lay = await page.evaluate(() => {
+      const h = document.querySelector('.ml-header');
+      const r = (e) => e.getBoundingClientRect();
+      const title = r(h.querySelector('.page-title')); const seg = r(h.querySelector('.live-mode-seg'));
+      const gap = h.querySelector('.ml-head-gap.after'); const g = r(gap); const p = r(h.querySelector('.ml-watch-picker'));
+      const order = [h.querySelector('.live-mode-seg .seg.active'), h.querySelector('.ml-watch-tab:not([hidden]) .ml-watch-chip'), h.querySelector('.ml-toolbar .ml-add')];
+      const domOrdered = order.every((e, i) => i === 0 || (order[i - 1].compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING));
+      const xs = order.map((e) => r(e).left);
+      return { titleToSeg: seg.left - title.right, gapBetween: g.left >= seg.right - 0.5 && g.right <= p.left + 0.5, drag: gap.hasAttribute('data-tauri-drag-region'),
+        gapW: g.width, domOrdered, visualOrdered: xs[0] < xs[1] && xs[1] < xs[2], sep: getComputedStyle(h.querySelector('.ml-head-gap.before')).display };
+    });
+    assert.ok(lay.titleToSeg >= 0 && lay.titleToSeg <= 16, `제목 → 전환 ${lay.titleToSeg}px (전환은 왼쪽에 그대로)`);
+    assert.ok(lay.gapBetween && lay.drag, '전환과 칩 줄 사이 빈칸은 창 끌기 자리');
+    if (width >= 1280) assert.ok(lay.gapW >= 40, `넓은 창: 빈칸 ${lay.gapW}px`);
+    assert.equal(lay.sep, 'none', '예전 구분선은 없다');
+    assert.ok(lay.domOrdered && lay.visualOrdered, '탭 순서 = 보이는 순서(전환 → 칩 → 채널 추가)');
+    // 멀티라이브 보기로 바꿔도 채널 추가 단추는 같은 자리
+    const addWatch = await rectOf(page, '.ml-toolbar .ml-add');
+    await page.click('.page-multilive .live-mode-seg [data-live-mode="multilive"]');
+    await page.waitForFunction(() => !document.querySelector('.page-multilive.as-watch') && document.querySelector('.page-multilive:not([hidden]) .ml-toolbar .ml-add')?.offsetParent);
+    await page.waitForTimeout(250);
+    const addMl = await rectOf(page, '.page-multilive .ml-toolbar .ml-add');
+    assert.ok(Math.abs(addMl.right - addWatch.right) <= 1, `채널 추가 오른쪽 끝: 라이브 ${addWatch.right} / 멀티라이브 ${addMl.right}`);
+    await shot(page, `right-layout-${width}`);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+}
+
+/** 판과 지금 보는 칩의 어긋남(px) — 판이 숨었으면 null. */
+const gliderFit = (page) => page.evaluate(() => {
+  const g = document.querySelector('.ml-chip-glider');
+  const t = document.querySelector('.ml-watch-tab.active:not([hidden])');
+  if (!g || getComputedStyle(g).opacity === '0' || !t) return null;
+  const a = g.getBoundingClientRect(); const b = t.getBoundingClientRect();
+  return Math.max(Math.abs(a.left - b.left), Math.abs(a.right - b.right));
+});
+const settleAnims = (page) => page.waitForFunction(() => document.querySelector('.ml-watch-picker').getAnimations({ subtree: true }).every((a) => a.playState !== 'running'), null, { timeout: 3000 });
+/** 칩 줄 안에서 돌고 있는 애니메이션 — 대상·움직이는 속성. */
+const runningAnims = (page) => page.evaluate(() => document.querySelector('.ml-watch-picker').getAnimations({ subtree: true }).filter((a) => a.playState === 'running').map((a) => {
+  const t = a.effect.target;
+  const props = [...new Set(a.effect.getKeyframes().flatMap((k) => Object.keys(k).filter((x) => !['offset', 'easing', 'composite', 'computedOffset'].includes(x))))];
+  return { el: t.classList.contains('ml-chip-glider') ? 'glider' : t.classList.contains('ml-watch-tab') ? `tab:${t.dataset.sessionId}` : t.className, props, css: a instanceof CSSAnimation || a instanceof CSSTransition };
+}));
+const watchChip = async (page, id) => {
+  await page.click(`.ml-watch-chip[data-session-id="${id}"]`);
+  await page.waitForFunction((i) => document.querySelector('.ml-watch-tab.active')?.dataset.sessionId === i, id);
+};
+
+await check('TB16 sliding glider: fits the watched chip, follows a new pick (translate/width only), hides when the chip is scrolled away', async () => {
+  for (const motion of [false, true]) {
+    const { ctx, page, errors } = await openWatch({ width: 1600, channels: 6, motion });
+    await page.mouse.move(5, 400);
+    const fit0 = await gliderFit(page);
+    assert.ok(fit0 != null && fit0 <= 1, `판이 지금 보는 칩에 맞다 ${fit0}`);
+    const bg = await page.$eval('.ml-watch-chip.active', (c) => [c.closest('.ml-watch-picker').classList.contains('has-glider'), getComputedStyle(c).backgroundColor]);
+    assert.deepEqual(bg, [true, 'rgba(0, 0, 0, 0)'], '판이 놓이면 고른 칩은 제 면이 없다');
+    await watchChip(page, 's2');
+    if (motion) {
+      const anims = await runningAnims(page);
+      const g = anims.filter((a) => a.el === 'glider');
+      assert.ok(g.length >= 1, `판이 미끄러진다 ${JSON.stringify(anims)}`);
+      for (const a of anims) assert.ok(a.css || a.props.every((x) => (a.el === 'glider' ? ['translate', 'width'] : ['transform', 'opacity']).includes(x)), `합성 단계 속성만 ${JSON.stringify(a)}`);
+      await settleAnims(page);
+    }
+    const fit1 = await gliderFit(page);
+    assert.ok(fit1 != null && fit1 <= 1, `새로 고른 칩에 판이 맞다 ${fit1} (motion ${motion})`);
+    // 휠로 창을 넘겨 보는 칩이 가려지면 판도 숨는다
+    const box = await rectOf(page, '.ml-watch-picker');
+    for (let i = 0; i < 4; i++) { await page.mouse.move(box.left + 40, box.top + 10); await page.mouse.wheel(0, 120); await page.waitForTimeout(60); }
+    await settleAnims(page); // 창이 옮겨지면 판도 미끄러진다 — 다 간 뒤에 잰다
+    const hiddenActive = await page.$eval('.ml-watch-tab.active', (t) => t.hidden);
+    const fit2 = await gliderFit(page);
+    if (hiddenActive) assert.equal(fit2, null, '보는 칩이 가려지면 판도 숨는다');
+    else assert.ok(fit2 != null && fit2 <= 1, `판이 칩에 맞다 ${fit2} (motion ${motion})`);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+await check('TB17 chip add/close layout motion (FLIP): new chip blooms, others slide; nothing animates with reduced motion', async () => {
+  for (const motion of [true, false]) {
+    const { ctx, page, errors } = await openWatch({ width: 1900, channels: 3, motion });
+    await page.mouse.move(5, 400);
+    await page.evaluate(() => window.__emitState((st) => { const n = JSON.parse(JSON.stringify(st.sessions[1])); Object.assign(n, { id: 's9', slot: 3, channelId: 'ch9', channelName: '새 채널' }); st.sessions.push(n); }));
+    await page.waitForSelector('.ml-watch-tab[data-session-id="s9"]:not([hidden])');
+    const add = await runningAnims(page);
+    if (motion) {
+      const born = add.find((a) => a.el === 'tab:s9');
+      assert.ok(born && born.props.includes('opacity') && born.props.includes('transform'), `새 칩이 피어난다 ${JSON.stringify(add)}`);
+      assert.ok(add.some((a) => /^tab:s[01]$/.test(a.el) && a.props.join() === 'transform'), `남은 칩이 새 자리로 미끄러진다 ${JSON.stringify(add)}`);
+      await settleAnims(page);
+    } else assert.deepEqual(add.filter((a) => !a.css), [], '모션 줄이기: JS 애니메이션 없음');
+    await page.evaluate(() => window.__emitState((st) => { st.sessions = st.sessions.filter((x) => x.id !== 's1'); }));
+    await page.waitForFunction(() => !document.querySelector('.ml-watch-tab[data-session-id="s1"]'));
+    const rm = await runningAnims(page);
+    // 칩 줄은 오른쪽 끝에 붙어 있어 닫은 칩의 왼쪽 칩들이 오른쪽으로 미끄러진다(오른쪽 칩은 제자리)
+    if (motion) assert.ok(rm.some((a) => a.el === 'tab:s0' && a.props.join() === 'transform'), `닫은 뒤 남은 칩이 미끄러진다 ${JSON.stringify(rm)}`);
+    else assert.deepEqual(rm.filter((a) => !a.css), [], '모션 줄이기: JS 애니메이션 없음');
+    await settleAnims(page);
+    assert.ok((await gliderFit(page)) <= 1, '끝나면 판이 보는 칩에 맞다');
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+await check('TB18 micro-interactions: close morph, press scale, hover avatar lift, "+N" states, compositor-only transitions', async () => {
+  // 모션 줄이기면 가리킴의 크기 변화가 없다(motion.css) — 아바타는 그대로
+  {
+    const { ctx, page } = await openWatch({ width: 1100, channels: 6 });
+    await page.hover('.ml-watch-tab:not(.active):not([hidden]) .ml-watch-chip .ellipsis');
+    await page.waitForTimeout(60);
+    assert.equal(await page.$eval('.ml-watch-tab:not(.active):not([hidden]):hover .ml-watch-av', (e) => getComputedStyle(e).scale), 'none', '모션 줄이기: 아바타 크기 그대로');
+    await ctx.close();
+  }
+  const { ctx, page, errors } = await openWatch({ width: 1100, channels: 6, theme: 'light', motion: true });
+  await page.mouse.move(5, 400);
+  await page.waitForTimeout(500);
+  const sel = '.ml-watch-tab:not(.active):not([hidden])';
+  const id = await page.$eval(sel, (t) => t.dataset.sessionId);
+  const T = `.ml-watch-tab[data-session-id="${id}"]`;
+  const look = () => page.$eval(T, (t) => {
+    const c = getComputedStyle(t.querySelector('.ml-watch-close')); const av = getComputedStyle(t.querySelector('.ml-watch-av')); const img = getComputedStyle(t.querySelector('.ml-watch-chip img, .ml-watch-dot'));
+    return { x: [c.opacity, c.scale, c.rotate], av: av.scale, img: [img.opacity, img.scale] };
+  });
+  assert.deepEqual(await look(), { x: ['0', '0.5', '-90deg'], av: 'none', img: [await page.$eval(`${T} img`, (i) => getComputedStyle(i).opacity), 'none'] }, '쉴 때 × 는 작게·돌아 숨는다');
+  await page.hover(`${T} .ml-watch-chip .ellipsis`);
+  await page.waitForTimeout(500);
+  const hov = await look();
+  assert.deepEqual(hov.x, ['1', '1', '0deg'], '가리키면 × 가 제 크기');
+  assert.equal(hov.av, '1.08', '가리키면 아바타 자리가 살짝 커진다');
+  assert.deepEqual(hov.img, ['0', '0.5'], '아바타는 줄며 사라진다');
+  // 누름 — 누른 채 밖으로 나가 떼면 클릭이 아니다
+  const c = await rectOf(page, `${T} .ml-watch-chip`);
+  await page.mouse.move(c.left + c.width / 2, c.top + 8);
+  await page.mouse.down();
+  await page.waitForTimeout(250);
+  assert.equal(await page.$eval(`${T} .ml-watch-chip`, (b) => getComputedStyle(b).scale), '0.95', '누르면 .95');
+  await page.mouse.move(5, 400);
+  await page.mouse.up();
+  // "+N" — 가리키면 떠 있는 판, 펼치면 브랜드색 고리
+  const more = '.ml-watch-more.end:not([hidden])';
+  const shadow = () => page.$eval(more, (b) => getComputedStyle(b).boxShadow);
+  assert.equal(await shadow(), 'none');
+  await page.hover(more);
+  await page.waitForTimeout(300);
+  assert.notEqual(await shadow(), 'none', '"+N" 가리킴 판');
+  await page.click(more);
+  await page.waitForSelector('.ml-watch-overflow:not([hidden])');
+  await page.waitForTimeout(300);
+  assert.match(await shadow(), /inset/, '펼친 "+N" 고리');
+  await page.keyboard.press('Escape');
+  // 전환 속성 — 크기·위치(레이아웃) 전환이 없다
+  const props = await page.evaluate(() => ['.ml-watch-chip', '.ml-watch-close', '.ml-watch-more', '.ml-watch-av', '.ml-watch-chip img', '.ml-chip-glider']
+    .map((q) => [q, getComputedStyle(document.querySelector(q)).transitionProperty]));
+  for (const [q, p] of props) assert.ok(!/\b(all|width|height|left|top|right|bottom|margin|padding|max-width|transform-origin)\b/.test(p), `${q} 전환 속성 ${p}`);
   assert.deepEqual(errors, []);
   await ctx.close();
 });

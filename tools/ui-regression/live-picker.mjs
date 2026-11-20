@@ -92,13 +92,14 @@ const chips = () => page.evaluate(() => {
   const p = document.querySelector('.ml-watch-picker');
   return p.hidden ? [] : [...p.querySelectorAll('.ml-watch-chip')].map((b) => b.textContent.trim().replace('이름-', '') + (b.classList.contains('active') ? '*' : ''));
 });
-// 머리줄 묶음 사이 간격(px) — 2026-11-20 재배치: [라이브|멀티라이브] │ [칩 줄] [채널 추가] 를 브라우저 탭처럼 붙여 둔다
-// (예전엔 칩 줄을 머리줄 한가운데 두어 넓은 창에서 세 묶음이 멀리 떨어졌다).
+// 머리줄 묶음 사이 간격(px) — 2026-11-20 오른쪽 배치: [라이브|멀티라이브] ……(창 끌기 빈칸)…… [칩 줄] [채널 추가] — 칩 줄과 채널 추가는
+// 붙어서 오른쪽 끝에(채널 추가는 멀티라이브 보기와 같은 자리, 끝에서 10px). 예전엔 칩 줄을 전환 바로 옆에 붙였다(#138).
 const headGaps = () => page.evaluate(() => {
   const seg = document.querySelector('.ml-header .live-mode-seg').getBoundingClientRect();
   const pr = document.querySelector('.ml-watch-picker').getBoundingClientRect();
   const add = document.querySelector('.ml-toolbar .ml-add').getBoundingClientRect();
-  return { segToPicker: Math.round(pr.left - seg.right), pickerToAdd: Math.round(add.left - pr.right) };
+  const h = document.querySelector('.ml-header'); const hr = h.getBoundingClientRect();
+  return { segToPicker: Math.round(pr.left - seg.right), pickerToAdd: Math.round(add.left - pr.right), addToEnd: Math.round(hr.right - parseFloat(getComputedStyle(h).paddingRight) - add.right) };
 });
 const shot = process.env.SHOT_DIR;
 // 머리줄 채널 추가 단추의 모양·이름 — 라벨·아이콘·가득 참 표시가 실제로 보이는지
@@ -140,7 +141,7 @@ await check('채널 추가 사이드바 줄을 눌러 연 채널도 머리줄에
   assert.deepEqual(await chips(), ['p1', 'p2', 'p3*']);
 });
 
-await check('사이드바 + 로 담은 채널은 머리줄에 생기고, 칩 줄은 전환 바로 옆·채널 추가는 칩 줄 바로 뒤에 붙는다', async () => {
+await check('사이드바 + 로 담은 채널은 머리줄에 생기고, 칩 줄·채널 추가는 붙어서 머리줄 오른쪽 끝에 있다', async () => {
   if (!(await page.isVisible('.ml-addrow-act[data-channel-id="p4"]'))) {
     await page.evaluate(() => [...document.querySelectorAll('[data-ml="add"]')].find((b) => b.offsetParent).click());
   }
@@ -151,8 +152,9 @@ await check('사이드바 + 로 담은 채널은 머리줄에 생기고, 칩 줄
   await page.keyboard.press('Escape'); // 사이드바 닫기 — 열린 채로는 머리줄 폭이 좁다
   await settle();
   const g = await headGaps();
-  assert.ok(g.segToPicker >= 0 && g.segToPicker <= 28, `전환 → (구분선) → 칩 줄 간격 ${g.segToPicker}px`);
+  assert.ok(g.segToPicker >= 40, `전환과 칩 줄 사이에 창 끌기 빈칸 ${g.segToPicker}px`);
   assert.ok(g.pickerToAdd >= 0 && g.pickerToAdd <= 12, `칩 줄 → 채널 추가 간격 ${g.pickerToAdd}px`);
+  assert.ok(g.addToEnd >= 8 && g.addToEnd <= 12, `채널 추가 → 머리줄 오른쪽 끝 ${g.addToEnd}px`);
   if (shot) await page.screenshot({ path: path.join(shot, 'picker-4.png'), clip: { x: 0, y: 0, width: 1280, height: 120 } });
 });
 
