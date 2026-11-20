@@ -1918,14 +1918,26 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 /* 머리줄 도구 서랍 — 평소 '⋯' 하나만 보이고, 누르면 아이콘들이 그 왼쪽으로 미끄러져 나온다.
    폭은 0fr→1fr 격자 전환으로 늘이고, 아이콘은 오른쪽에서 왼쪽 순서로 살짝 늦게 떠오른다. */
 .chat-header .icon-btn { flex: none; }
+/* 서랍은 머리 줄보다 넓어지지 않는다(넘치면 줄어들고 안쪽이 잘린다). */
 .chat-tools {
-  display: grid; grid-template-columns: 0fr; flex: none; overflow: hidden;
+  display: grid; grid-template-columns: 0fr; flex: 0 1 auto; min-width: 0; overflow: hidden;
   transition: grid-template-columns .28s cubic-bezier(.2, .8, .2, 1);
 }
 .chat-tools.open { grid-template-columns: 1fr; }
 .chat-tools.settled { overflow: visible; }
 .chat-tools-inner { display: flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; }
 .chat-tools-inner > * { flex: none; }
+/* 좁은 채팅에서는 아이콘 칸을 줄여 펼친 도구가 한 줄에 다 들어가게 한다 — 도구 8개(멀티라이브)는 306px,
+   도구 7개 + '⋯' 뒤 단추(단일 보기 접기·멀티채팅 칸 닫기)는 312px 이 있어야 28px 칸이 들어간다. 최소 폭은 260px. */
+@container chatpanel (max-width: 311px) {
+  .chat-tools-inner { gap: 0; }
+  .chat-tools-inner .chat-hbtn { width: 24px; }
+}
+@container chatpanel (max-width: 271px) {
+  .chat-tools-inner .chat-hbtn { width: 22px; }
+}
+/* 그래도 모자라면(도구가 더 늘어난 경우) 다 펼친 뒤에 칸이 20px 까지 줄어든다. 펼치는 동안에는 제 폭으로 미끄러져 나온다. */
+.chat-header .chat-tools.settled .chat-tools-inner > .chat-hbtn { flex: 0 1 auto; min-width: 20px; }
 .chat-tools.settled .chat-tools-inner { overflow: visible; }
 .chat-tools-inner > * {
   opacity: 0; transform: translateX(14px);
@@ -1938,18 +1950,28 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .chat-tools.open .chat-tools-inner > :nth-last-child(4) { transition-delay: .08s; }
 .chat-tools.open .chat-tools-inner > :nth-last-child(5) { transition-delay: .10s; }
 .chat-tools.open .chat-tools-inner > :nth-last-child(n+6) { transition-delay: .12s; }
-/* 펼친 동안에는 연결 상태 글자를 비켜 아이콘 자리를 내고, 그래도 좁으면 제목이 말줄임으로 줄어든다. */
-.chat-header .chat-state { transition: max-width .28s cubic-bezier(.2, .8, .2, 1), opacity .18s ease, margin .28s cubic-bezier(.2, .8, .2, 1); max-width: 160px; }
-.chat-header.tools-open .chat-state { max-width: 0; opacity: 0; margin-left: calc(-1 * var(--sp-sm)); overflow: hidden; }
-.chat-header.tools-open strong { flex: 0 1 auto; }
-/* 좁은 채팅(최소 폭 가까이)에서는 펼친 도구가 제목 줄에 다 들어가지 않는다 — 머리 아래 둘째 줄에 오른쪽 맞춤으로 꺼낸다. */
-.chat { container: chatpanel / inline-size; }
-@container chatpanel (max-width: 339px) {
-  .chat-header.tools-open { flex-wrap: wrap; row-gap: 2px; padding-top: 6px; padding-bottom: 6px; }
-  .chat-header.tools-open .chat-state { max-width: 160px; opacity: 1; margin-left: 0; }
-  .chat-header.tools-open .chat-tools { order: 2; flex-basis: 100%; }
-  .chat-header.tools-open .chat-tools-inner { justify-content: flex-end; }
+/* 펼친 동안에는 '⋯' 앞의 머리 내용(제목·인증 표시·연결 상태·채팅 접기·후원 목록 단추)이 잠시 비켜 줄 전체를 도구에 내준다.
+   예전엔 좁은 채팅에서 도구가 머리 아래 둘째 줄로 내려가 머리가 두 줄이 됐다. 이제 폭과 관계없이 한 줄이다 —
+   비키는 것은 먼저 흐려지면서 폭이 0 으로 접히고(오른쪽에 붙은 서랍이 그만큼 왼쪽으로 미끄러져 나온다), 접으면 폭이 먼저 돌아온 뒤 다시 떠오른다.
+   '⋯' 뒤에 붙은 단추(단일 보기의 채팅 접기·멀티채팅 칸 닫기)는 그대로 둔다 — 그것까지 접으면 방금 누른 '⋯' 가 포인터 아래에서 밀려난다.
+   단추의 누름·호버 전환(motion.css)을 덮지 않도록 같은 목록에 폭·여백·보임 전환을 더한다. max-width 는 0 까지 전환되게 바탕값을 둔다(우선순위 0). */
+:where(.chat-header) > :where(:not(.grow, .chat-tools, .chat-tools-toggle)) { max-width: 100%; }
+.chat-header .chat-state { max-width: 160px; }
+.chat-header > :not(.grow, .chat-tools, .chat-tools-toggle, .chat-tools-toggle ~ *) {
+  transition-property: background, color, border-color, box-shadow, opacity, scale, max-width, margin, visibility;
+  transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), .18s, .32s, .28s, .28s, 0s;
+  transition-delay: 0s, 0s, 0s, 0s, .1s, 0s, 0s, 0s, 0s;
+  transition-timing-function: var(--ease-out), var(--ease-out), var(--ease-out), var(--ease-out), ease, var(--ease-spring), cubic-bezier(.2, .8, .2, 1), cubic-bezier(.2, .8, .2, 1), linear;
 }
+.chat .chat-header.tools-open > :not(.grow, .chat-tools, .chat-tools-toggle, .chat-tools-toggle ~ *) {
+  flex-shrink: 1000; min-width: 0; max-width: 0; margin-left: calc(-1 * var(--sp-sm)); margin-right: 0; overflow: hidden;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), .12s, .32s, .28s, .28s, 0s;
+  transition-delay: 0s, 0s, 0s, 0s, 0s, 0s, 0s, 0s, .28s;
+}
+/* 연결 상태는 바뀔 때 화면 읽기가 알리는 자리(role=status)라 접혀 있어도 접근성 트리에 남긴다. */
+.chat .chat-header.tools-open > .chat-state { visibility: inherit; }
+.chat { container: chatpanel / inline-size; }
 .chat-tools-toggle svg { transition: transform .28s cubic-bezier(.2, .8, .2, 1); }
 .chat-tools-toggle[aria-expanded="true"] { color: var(--primary-text); background: var(--primary-dim); }
 .chat-tools-toggle[aria-expanded="true"] svg { transform: rotate(90deg); }
@@ -1959,9 +1981,9 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 }
 .chat-tools-dot[hidden] { display: none; }
 @media (prefers-reduced-motion: reduce) {
-  .chat-tools, .chat-tools-inner > *, .chat-tools-toggle svg, .chat-header .chat-state { transition: none !important; }
+  .chat-tools, .chat-tools-inner > *, .chat-tools-toggle svg, .chat-header > * { transition: none !important; }
 }
-:root[data-motion="reduced"] :is(.chat-tools, .chat-tools-inner > *, .chat-tools-toggle svg, .chat-header .chat-state) { transition: none !important; }
+:root[data-motion="reduced"] :is(.chat-tools, .chat-tools-inner > *, .chat-tools-toggle svg, .chat-header > *) { transition: none !important; }
 .mention-count {
   position: absolute; top: -2px; right: -2px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: var(--radius-sm);
   background: var(--primary); color: var(--on-primary); font-size: var(--fs-nano); font-weight: 800; display: grid; place-items: center;
@@ -2741,7 +2763,6 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 /* 그리드 칸 머리 — 짧은 채널명·연결 상태는 줄이지 않는다. 도구는 ChatPanel 의 '⋯' 서랍에 접혀 있다 (F12) */
 .mc-pane .chat-header .mc-name { flex: 0 0 auto; max-width: 45%; }
 .mc-pane .chat-header .chat-state { flex: none; white-space: nowrap; }
-.mc-pane .chat-header.tools-open .mc-name { flex: 0 1 auto; }
 .chat-line.search-hidden { display: none !important; }
 .chat-line.search-hit .text { background: color-mix(in srgb, var(--warning) 22%, transparent); border-radius: var(--radius-xxs); }
 
