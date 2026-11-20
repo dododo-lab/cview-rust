@@ -1488,7 +1488,8 @@ await check('R27 adding a chip in a non-overflowing row: the row width animates,
   assert.ok(j.pickerAnim, '칩 줄 폭이 움직였다');
   assert.equal(p.anim, false, '폭 움직임이 끝나면 오른쪽 붙임을 뗀다');
   assert.equal(gliding, 0, '판은 한 번만 미끄러진다(폭 움직임 끝에 다시 시작하지 않는다)');
-  assert.ok((j.jump.glider ?? 0) < 50 && maxJump(j) < 50, `한 프레임에 튄 것 ${JSON.stringify(j)}`);
+  // 프레임이 밀리면 모두 함께 크게 움직인다 — 같은 프레임 s0 이동과의 차로 판의 순간 이동만 본다
+  assert.ok((j.relJump.glider ?? 0) < 50, `판이 한 프레임에 튄다 ${JSON.stringify(j)}`);
   assert.ok(j.gliderOff < 40, `판이 보는 칩에서 크게 벗어나지 않는다 ${JSON.stringify(j)}`);
   const fit = await gliderFit(page);
   assert.ok(fit != null && fit <= 1, `끝나면 판이 보는 칩에 맞다 ${fit}`);
@@ -1516,7 +1517,8 @@ for (const [label, cap, watch, front] of [['fits', null, null, false], ['becomes
     // 드러내기 스크롤처럼 다음 프레임에 일어나는 튐.
     const r = await page.evaluate((id) => new Promise((res) => {
       const p = document.querySelector('.ml-watch-picker');
-      const at = () => ({ w: p.getBoundingClientRect().width, sl: p.scrollLeft, ...Object.fromEntries([...document.querySelectorAll('.ml-watch-tab:not([hidden])')].map((t) => [t.dataset.sessionId, t.getBoundingClientRect().left])) });
+      const g = document.querySelector('.ml-chip-glider');
+      const at = () => ({ w: p.getBoundingClientRect().width, sl: p.scrollLeft, gOff: g.getBoundingClientRect().left - document.querySelector('.ml-watch-tab.active').getBoundingClientRect().left, ...Object.fromEntries([...document.querySelectorAll('.ml-watch-tab:not([hidden])')].map((t) => [t.dataset.sessionId, t.getBoundingClientRect().left])) });
       const widthAnims = () => p.getAnimations().filter((a) => a.effect?.target === p && a.playState === 'running');
       const old = widthAnims();
       const frames = [at()];
@@ -1533,7 +1535,9 @@ for (const [label, cap, watch, front] of [['fits', null, null, false], ['becomes
     // 그 뒤 — 왼쪽 잘림(앞에 더한 칩이 폭 움직임 동안 피어나며 잘리는 것은 칩 추가 쪽 일이라 상태 글자 뒤부터 잰다)
     const j = await trackChips(page, 600);
     const d = (a, b, k) => Math.abs(r.frames[b][k] - r.frames[a][k]);
-    const ids = Object.keys(r.frames[0]).filter((k) => k !== 'w' && k !== 'sl' && r.frames.every((f) => k in f));
+    const ids = Object.keys(r.frames[0]).filter((k) => !['w', 'sl', 'gOff'].includes(k) && r.frames.every((f) => k in f));
+    // 판도 보는 칩과의 어긋남이 그 순간 바뀌지 않는다 — 드러내기 스크롤 뒤에 판 자리를 재면 판만 스크롤만큼 튀었다
+    assert.ok(d(0, 1, 'gOff') <= 3, `상태 글자가 붙는 순간 판이 보는 칩에서 튄다 ${d(0, 1, 'gOff').toFixed(1)}px ${JSON.stringify(r.frames.map((f) => f.gOff))}`);
     const sync = Math.max(0, ...ids.map((k) => d(0, 1, k)));
     assert.ok(r.stated, '상태 글자가 붙었다');
     assert.ok(Object.values(r.moves).every((n) => n <= 1), `옛 이동이 끊기지 않고 겹쳐 있다 ${JSON.stringify(r.moves)}`);
@@ -1541,7 +1545,7 @@ for (const [label, cap, watch, front] of [['fits', null, null, false], ['becomes
     // 보는 칩 드러내기 스크롤은 FLIP 이 재기 전에 끝나야 한다 — 다음 프레임(ResizeObserver)에 스크롤이 바뀌면 그만큼 모든 칩이
     // 튄다(옛 결함 ~30px). 칩 자리의 프레임 사이 이동은 WebKit 의 긴 프레임에 FLIP 진행이 섞여 기준으로 쓰지 않는다.
     // (넘치지 않는 경우는 폭이 움직이는 동안 오른쪽 붙임이라 WebKit 이 scrollLeft 를 음수로 보고하며 폭 따라 바뀐다 — 넘침 경우만)
-    if (cap) assert.ok(Math.max(d(1, 2, 'sl'), d(2, 3, 'sl')) <= 0.5, `상태 글자 뒤 다음 프레임에 칩 줄이 스크롤된다 ${JSON.stringify(r.frames.map((f) => f.sl))}`);
+    assert.ok(Math.max(d(1, 2, 'sl'), d(2, 3, 'sl')) <= 0.5, `상태 글자 뒤 다음 프레임에 칩 줄이 스크롤된다 ${JSON.stringify(r.frames.map((f) => f.sl))}`);
     // WebKit 은 칩 줄 폭과 칩 이동의 첫 프레임이 1~2px 어긋날 때가 있다 — 옛 결함은 상태 글자 폭(~45px)만큼 잘렸다
     assert.ok(j.leftOut <= 3, `칩 줄 왼쪽 밖으로 나간 칩 ${JSON.stringify(j)}`);
     if (!cap) {

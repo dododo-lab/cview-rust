@@ -1257,6 +1257,8 @@ export class MultiLivePage {
       const widthAnim = picker.getAnimations().find((a) => a.effect?.target === picker && a.playState === 'running');
       const fromW = widthAnim ? picker.getBoundingClientRect().width : null;
       const places = widthAnim ? this.chipPlaces() : null;
+      // 판도 바꾸기 전 화면 위 자리로 — 아래 드러내기 스크롤 뒤에 재면 판(칩 줄 안의 자식)이 이미 내용과 함께 옮겨져 튀었다
+      const glider = widthAnim ? this.gliderRect() : null;
       if (this.applyChipStates(list)) {
         if (widthAnim) {
           this.chipAnimGen++; // 끊긴 움직임의 끝 처리(done)는 건너뛴다
@@ -1271,7 +1273,7 @@ export class MultiLivePage {
           }
           this.flipChips(places);
         }
-        this.placeChipGlider(this.gliderRect());
+        this.placeChipGlider(widthAnim ? glider : this.gliderRect());
       }
       return;
     }
