@@ -171,6 +171,8 @@ print(version, build)
 PY
 )
   echo "   → v$version (빌드 $build)"
+  # Windows 서버는 --locked로 빌드하므로 스냅샷을 만들기 전에 작업공간 버전을 잠금 파일에 반영한다.
+  cargo metadata --format-version 1 --filter-platform "$(rustc -vV | sed -n 's/^host: //p')" >/dev/null
   # 예전 DMG 를 다시 쓰지 않게 지운다.
   rm -f "$TARGET"/release/bundle/dmg/*.dmg(N) dist/CView_${version}_arm64.dmg(N)
   # x64·arm64 둘 다 만든다(CVIEW_SKIP_WINDOWS 는 위에서 거부). 하나라도 실패하면 버전을 되돌린다.
