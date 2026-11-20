@@ -182,7 +182,11 @@ PY
   # 버전을 올린 현재 소스를 불변 스냅샷으로 전송한다. Mac 공증 자격·서명 키는 전송하지 않는다.
   build_windows_installers() {
     trap - EXIT INT TERM
-    python3 scripts/build-server.py release-windows --source "$PWD" --version "$version" --output dist
+    local -a resume_args=()
+    if [[ -n "${CVIEW_WINDOWS_RELEASE_JOB:-}" ]]; then
+      resume_args+=(--job "$CVIEW_WINDOWS_RELEASE_JOB")
+    fi
+    python3 scripts/build-server.py release-windows --source "$PWD" --version "$version" --output dist "${resume_args[@]}"
   }
   win_log="$TARGET/windows-build-$version.log"
   step "Windows 서버 빌드(x64·ARM64)를 백그라운드로 시작 — 로그: $win_log"

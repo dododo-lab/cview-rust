@@ -18,6 +18,7 @@ sys.path.insert(0, str(TOOLS))
 import build_common as common
 import build_gateway as gateway
 import build_runner as runner
+import test_parallels as parallels
 
 spec = importlib.util.spec_from_file_location('build_client', TOOLS.parents[1] / 'scripts/build-server.py')
 client = importlib.util.module_from_spec(spec)
@@ -537,6 +538,30 @@ class BuildTests(unittest.TestCase):
         self.assertNotIn('claim', calls)
         self.assertEqual(len(receipt['files']), 2)
         self.assertEqual(receipt['job'], self.job)
+
+    def test_release_resume_rejects_a_different_checkout(self):
+        source, config = self.release_fixture()
+        self.submit(mode=common.WINDOWS_RELEASE_MODE)
+        self.windows_success()
+        (source / 'app-ui/index.html').write_text('<p>modified source</p>')
+        calls, output = [], self.root / 'dist'
+        with patch.object(client, 'preflight', return_value={}), patch.object(client, 'rpc', side_effect=self.release_rpc(calls)), \
+             patch.dict(os.environ, {}, clear=True), self.assertRaisesRegex(ValueError, 'source differs'):
+            client.release_windows(config, source, '1.2.3', output, job=self.job)
+        self.assertEqual(calls, ['status', 'source'])
+        self.assertFalse(output.exists())
+
+    def test_parallels_transport_retry_is_opt_in(self):
+        failed = subprocess.CompletedProcess([], 1, '', 'PrlJob_GetRetCode: Invalid argument')
+        passed = subprocess.CompletedProcess([], 0, 'ready', '')
+        with patch.object(parallels.subprocess, 'run', side_effect=[failed, passed]) as run, \
+             patch.object(parallels.time, 'sleep'):
+            self.assertEqual(parallels.guest('Windows', '', retry_transport=True), 'ready')
+            self.assertEqual(run.call_count, 2)
+        with patch.object(parallels.subprocess, 'run', return_value=failed) as run, \
+             self.assertRaisesRegex(RuntimeError, 'PrlJob_GetRetCode'):
+            parallels.guest('Windows', '')
+        run.assert_called_once()
 
     def test_release_timeout_preserves_job_without_export(self):
         source, config = self.release_fixture()

@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import zipfile
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
@@ -153,7 +154,8 @@ def release_windows(config, source, version, output, job=None, timeout=14400):
     server = preflight(config, windows_release=True)
     runtime_required = common.WINDOWS_RUNTIME_FEATURE in server.get('features', [])
     build_env = common.build_environment({key: os.environ[key] for key in ('CVIEW_UPDATE_URL',) if key in os.environ})
-    if job:
+    resume = job is not None
+    if resume:
         current = rpc(config, {'action': 'status', 'job': common.checked_id(job)})
     else:
         with tempfile.TemporaryDirectory(prefix='cview-windows-release-') as tmp:
@@ -175,6 +177,17 @@ def release_windows(config, source, version, output, job=None, timeout=14400):
             raise ValueError('Windows job source, mode, version or environment differs from this release')
 
     check_identity(current)
+    if resume:
+        with tempfile.TemporaryDirectory(prefix='cview-windows-resume-') as tmp:
+            archive = Path(tmp).resolve() / 'source.zip'
+            rpc(config, {'action': 'source', 'job': job}, download=archive)
+            if common.describe(archive) != identity['source'] or common.validate_archive(archive) != version:
+                raise ValueError('Windows job source archive does not match its receipt')
+            with zipfile.ZipFile(archive) as saved:
+                names = common.source_files(source)
+                if (set(saved.namelist()) != set(names)
+                        or any(saved.read(name) != common.safe(source / name).read_bytes() for name in names)):
+                    raise ValueError('Windows job source differs from the release checkout')
     directory = common.safe(config['work_dir'] / job)
     directory.mkdir(parents=True, exist_ok=True)
     common.write_json(directory / 'release-job.json', identity)

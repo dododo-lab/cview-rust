@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import tempfile
 import threading
+import time
 import uuid
 import zipfile
 
@@ -24,18 +25,23 @@ class TransferHandler(SimpleHTTPRequestHandler):
         self.send_error(404)
 
 
-def guest(vm, script, desktop=False):
+def guest(vm, script, desktop=False, retry_transport=False):
     encoded = base64.b64encode(script.encode('utf-16-le')).decode('ascii')
     command = ['prlctl', 'exec', vm]
     if desktop:
         command.append('--current-user')
     command += ['powershell.exe', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
                 '-EncodedCommand', encoded]
-    result = subprocess.run(command, capture_output=True, text=True, encoding='utf-8',
-                            errors='replace', timeout=540)
-    if result.returncode:
-        raise RuntimeError((result.stdout + result.stderr).strip())
-    return result.stdout
+    attempts = 3 if retry_transport else 1
+    for attempt in range(attempts):
+        result = subprocess.run(command, capture_output=True, text=True, encoding='utf-8',
+                                errors='replace', timeout=540)
+        if not result.returncode:
+            return result.stdout
+        error = (result.stdout + result.stderr).strip()
+        if attempt == attempts - 1 or 'PrlJob_GetRetCode: Invalid argument' not in error:
+            raise RuntimeError(error)
+        time.sleep(2)
 
 
 def available(vm, host):
@@ -53,7 +59,7 @@ try {{
 }} finally {{ $socket.Dispose() }}
 [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
 (Get-Process -Id $PID).SessionId
-""", desktop=True)
+""", desktop=True, retry_transport=True)
     if not re.search(r'(?m)^Arm64\s*\n[1-9][0-9]*\s*$', output):
         raise ValueError('The Parallels Windows ARM64 desktop must be running and signed in')
 
@@ -91,7 +97,9 @@ $script=Join-Path $directory '{script.name}'
             prepared = False
             verified = False
             try:
-                guest(vm, setup + '\nNew-Item -ItemType Directory -Path $directory -Force | Out-Null')
+                # Directory creation and hash-checked downloads can safely be replayed.
+                guest(vm, setup + '\nNew-Item -ItemType Directory -Path $directory -Force | Out-Null',
+                      retry_transport=True)
                 for name, digest in hashes.items():
                     guest(vm, setup + f"""
 $path=Join-Path $directory '{name}'
@@ -99,7 +107,7 @@ Invoke-WebRequest -Uri '{base}/{name}' -UseBasicParsing -OutFile $path -TimeoutS
 if ((Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant() -ne '{digest}') {{
     throw 'Transferred file SHA-256 differs: {name}'
 }}
-""")
+""", retry_transport=True)
                 guest(vm, setup + '\n& $script -Directory $directory -Action Prepare')
                 prepared = True
                 output = guest(vm, setup + '\n& $script -Directory $directory -Action Launch', desktop=True)

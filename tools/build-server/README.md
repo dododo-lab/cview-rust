@@ -37,11 +37,14 @@ python3 scripts/build-server.py release-windows --source "$PWD" --version <릴�
 이 기록은 Windows 빌드 완료 기록이며 릴리스 게시 완료 기록(`*_publish-receipt.json`)은 정식 스크립트가 이후에 따로 만든다.
 `release-windows` 자체는 버전을 올리거나 macOS 공증·게시·Git 푸시를 하지 않는다.
 
-Mac 측 다운로드·검사만 중단됐다면 같은 소스를 받은 작업 ID로 재개할 수 있다.
+Mac 측 다운로드·검사만 중단됐다면 같은 소스를 받은 작업 ID로 정식 배포를 재개할 수 있다.
+스크립트가 버전을 다시 맞춘 뒤 서버의 소스 파일을 현재 체크아웃과 대조하고 Windows 검증을 재개한다.
 
 ```sh
-python3 scripts/build-server.py release-windows --job <작업-ID> --version <릴리스-버전> --output dist
+CVIEW_WINDOWS_RELEASE_JOB=<작업-ID> scripts/release-with-prs.sh
 ```
+
+Windows 단계만 재개할 때는 `release-windows --job <작업-ID>`와 함께 같은 버전의 소스 경로를 `--source`로 전달한다.
 
 Windows 빌드가 실패하면 원인을 수정하고 새 작업을 제출한다. Mac의 대기를 중단해도 서버 작업과 원본·로그는 보존된다.
 컴파일 시 `CVIEW_UPDATE_URL`을 지정했다면 그 공개 HTTPS 주소만 명시적으로 전달한다.
