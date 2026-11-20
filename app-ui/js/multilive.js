@@ -10,7 +10,8 @@ import { playPreroll, cancelPreroll } from './ads.js';
 import { noteConnectorLimit } from './live-connector.js';
 import { esc, safeUrl, toast, imageSrc, streamEndedArt, dismiss, hideWithExit, fitPopover } from './dom.js';
 import { PlayerBridge } from './player.js';
-import { ChatPanel } from './chat.js';
+import { ChatPanel, showMenu } from './chat.js';
+import { loadChannelSocial, setFollow, setFavorite, copyLiveLink, openOnChzzk } from './channel-actions.js';
 import { StreamAlerts } from './donations.js';
 import { PaneControls, paneControlsHtml, PANE_ICON, bindMenuKeys, focusFirstMenuItem } from './ml-pane-controls.js';
 import { installChatSplitter } from './splitter.js';
@@ -262,9 +263,18 @@ export class MultiLivePage {
     }, { passive: false });
     // 양끝 "+N" — 그쪽에 가려진 채널 목록(넘침 메뉴)을 연다. 휠로 한 칸씩 넘기는 것도 그대로.
     this.chipWindow = 4;
+    this.chipMenuSeq = 0;
     this.watchPicker.addEventListener('click', (e) => {
       const more = e.target.closest('.ml-watch-more');
       if (more) { e.stopPropagation(); this.toggleChipOverflow(more); }
+    });
+    // 채널 칩 우클릭 — 해당 채널 동작(전환·채널 정보·채팅만 열기·다시 연결·팔로우·즐겨찾기·링크·닫기) 메뉴.
+    this.watchPicker.addEventListener('contextmenu', (e) => {
+      const tab = e.target.closest('.ml-watch-tab[data-session-id]');
+      if (!tab) return;
+      e.preventDefault();
+      e.stopPropagation();
+      this.openChipMenu(tab.dataset.sessionId, tab, e.clientX, e.clientY);
     });
     // 칩 키보드 — ←/→ 옆 채널, Home/End 처음·끝(가려진 칩이면 창을 옮겨 보이게), Delete/Backspace 그 채널 닫기.
     // 기본 동작을 막아 시청 단축키(←/→ 되감기, ml-watch.js)로 새지 않는다.
@@ -287,8 +297,19 @@ export class MultiLivePage {
     bindMenuKeys(this.chipOverflow);
     this.chipOverflow.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.closeChipOverflow(true); } else if (e.key === 'Tab') this.closeChipOverflow();
+      else if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+        const item = e.target.closest?.('.ml-wo-item[data-session-id]');
+        if (item) { e.preventDefault(); e.stopPropagation(); this.openChipMenu(item.dataset.sessionId, item, 0, 0); }
+      }
     });
     this.chipOverflow.addEventListener('click', (e) => { if (e.target.closest('[data-ml="watch"]')) this.closeChipOverflow(); });
+    this.chipOverflow.addEventListener('contextmenu', (e) => {
+      const item = e.target.closest('.ml-wo-item[data-session-id]');
+      if (!item) return;
+      e.preventDefault();
+      e.stopPropagation();
+      this.openChipMenu(item.dataset.sessionId, item, e.clientX, e.clientY);
+    });
     document.addEventListener('pointerdown', (e) => {
       if (!this.chipOverflow.hidden && !this.chipOverflow.contains(e.target) && !e.target.closest('.ml-watch-more')) this.closeChipOverflow();
     });
@@ -1231,7 +1252,7 @@ export class MultiLivePage {
     const list = watched ? sessions.filter((x) => x.slot != null) : [];
     const picker = this.watchPicker;
     picker.hidden = list.length < 2;
-    if (picker.hidden) { this.chipPeek.close(); picker.innerHTML = ''; this.watchPickerHtml = ''; this.restoreChipFocus(list); return; }
+    if (picker.hidden) { this.chipMenuSeq++; this.chipPeek.close(); picker.innerHTML = ''; this.watchPickerHtml = ''; this.restoreChipFocus(list); return; }
     const html = list.map((x) => {
       const on = x.id === watched.id;
       const avatar = safeUrl(x.profileImageUrl);
@@ -1528,6 +1549,13 @@ export class MultiLivePage {
     if (!this.chipKeyFocus) return;
     const chips = [...this.watchPicker.querySelectorAll('.ml-watch-chip')];
     const i = chips.indexOf(chip);
+    // 메뉴 키·Shift+F10 — 우클릭과 같은 채널 메뉴(macOS 에는 메뉴 키가 없고 WKWebView 는 Shift+F10 을 contextmenu 로 바꾸지 않는다)
+    if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+      e.preventDefault();
+      const tab = chip.closest('.ml-watch-tab[data-session-id]');
+      if (tab) this.openChipMenu(tab.dataset.sessionId, chip, 0, 0);
+      return;
+    }
     let next = -1;
     if (e.key === 'ArrowRight') next = Math.min(chips.length - 1, i + 1);
     else if (e.key === 'ArrowLeft') next = Math.max(0, i - 1);
@@ -1775,6 +1803,93 @@ export class MultiLivePage {
     // 라이브 단독 보기에서 보는 채널을 닫으면 — 둘러보다 연 방송이면 보던 화면(인기·카테고리 등)으로 돌아간다(app.js).
     if (this.watchSlot != null && sessionId === this.state.watchId) window.dispatchEvent(new CustomEvent('cview:ml-watch-close', { detail: { remove: true } }));
     else this.run(api.multiLiveRemove(sessionId));
+  }
+
+  /** 지정한 채널만 남기고 나머지 열린 채널을 닫는다. */
+  async closeOtherSessions(keepId) {
+    const others = (this.state?.sessions || []).filter((x) => x.slot != null && x.id !== keepId);
+    if (!others.length) return;
+    // 지금 보는 채널이 닫힐 목록에 있으면, 남길 채널을 먼저 무대에 올린 뒤 나머지를 뺀다(무대가 비는 순간 멀티라이브로 끌려가지 않게).
+    if (this.watchSlot != null && this.state.watchId !== keepId) {
+      await this.run(api.multiLiveWatch(keepId));
+    }
+    for (const o of others) {
+      await this.run(api.multiLiveRemove(o.id));
+    }
+  }
+
+  /** 라이브 머리줄 채널 칩(또는 "+N" 넘침 항목) 우클릭 메뉴. */
+  async openChipMenu(sessionId, anchor, x, y) {
+    const sessions = (this.state?.sessions || []).filter((s) => s.slot != null);
+    const s = sessions.find((item) => item.id === sessionId);
+    if (!s) return;
+    const anchorRect = !x && !y && anchor?.isConnected ? anchor.getBoundingClientRect() : null;
+    this.chipPeek.close();
+    this.closeChipOverflow();
+    const seq = ++this.chipMenuSeq;
+    const social = await loadChannelSocial(s.channelId, this.isLoggedIn());
+    if (seq !== this.chipMenuSeq || this.root.hidden) return;
+    const currentSessions = (this.state?.sessions || []).filter((item) => item.slot != null);
+    const live = currentSessions.find((item) => item.id === sessionId);
+    if (!live) return;
+    // 마우스로 연 메뉴 — 우클릭이 칩에 준 포인터 초점(WebView2·Chromium)을 놓는다. 그대로 두면 showMenu 가 항목을 고른 뒤
+    // 그 칩으로 초점을 돌려 키보드 초점으로 잡히고(chipKeyFocus), ←/→ 되감기가 칩 이동으로·Delete 가 채널 닫기로 샌다.
+    if ((x || y) && anchor?.contains(document.activeElement)) document.activeElement.blur();
+    const mx = x || (anchorRect ? Math.round(anchorRect.left + 8) : 0);
+    const my = y || (anchorRect ? Math.round(anchorRect.bottom + 4) : 0);
+    const isCurrent = this.watchSlot != null && live.id === this.state.watchId;
+    const others = currentSessions.filter((item) => item.id !== live.id);
+    const name = live.channelName || live.channelId;
+    const items = [
+      ...(!isCurrent ? [['watch', '이 채널 보기']] : []),
+      ['channel', '채널 정보'],
+      ['chat', '채팅만 열기'],
+      ['retry', '다시 연결'],
+      ['-'],
+      ...(typeof social.following === 'boolean' ? [['follow', social.following ? '팔로우 끊기' : '팔로우']] : []),
+      ['fav', social.favorite ? '즐겨찾기 해제' : '즐겨찾기 추가'],
+      ['copy', '방송 링크 복사'],
+      ['open', '치지직에서 열기'],
+      ['-'],
+      ['close', '채널 닫기', 'danger'],
+      ...(others.length ? [['close-others', '다른 채널 모두 닫기', 'danger']] : []),
+    ];
+    showMenu(mx, my, items, async (action) => {
+      switch (action) {
+        case 'watch':
+          window.dispatchEvent(new CustomEvent('cview:ml-watch', { detail: { sessionId: live.id } }));
+          break;
+        case 'channel':
+          window.dispatchEvent(new CustomEvent('cview:open-channel', { detail: { channelId: live.channelId } }));
+          break;
+        case 'chat':
+          window.dispatchEvent(new CustomEvent('cview:navigate', { detail: { route: 'chat', params: { channelId: live.channelId } } }));
+          break;
+        case 'retry':
+          toast('다시 연결합니다', 1200);
+          this.run(api.multiLiveRetry(live.id));
+          break;
+        case 'follow':
+          if (typeof social.following === 'boolean') await setFollow(live.channelId, name, !social.following);
+          break;
+        case 'fav':
+          await setFavorite(live.channelId, name, live.profileImageUrl, !social.favorite);
+          break;
+        case 'copy':
+          copyLiveLink(live.channelId);
+          break;
+        case 'open':
+          openOnChzzk(live.channelId);
+          break;
+        case 'close':
+          this.closeSession(live.id);
+          break;
+        case 'close-others':
+          await this.closeOtherSessions(live.id);
+          break;
+        default: break;
+      }
+    });
   }
 
   async onClick(e) {

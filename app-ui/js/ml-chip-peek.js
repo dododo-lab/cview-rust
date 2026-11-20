@@ -77,6 +77,7 @@ export class ChipPeek {
   }
 
   show(chip) {
+    if (document.querySelector('.ctx-menu')) { this.close(); return; }
     const s = chip.isConnected && this.picker.offsetParent !== null ? this.sessionOf(chip.dataset.sessionId) : null;
     if (!s) { this.close(); return; }
     const thumb = safeUrl(s.thumbnailUrl);

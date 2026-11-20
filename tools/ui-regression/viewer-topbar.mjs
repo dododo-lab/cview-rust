@@ -1566,6 +1566,57 @@ for (const [label, cap, watch, front] of [['fits', null, null, false], ['becomes
   });
 }
 
+// CM01~CM03 채널 칩 우클릭 메뉴(2026-11-20) — 우클릭·메뉴 키로 열고, 고른 뒤 포인터 초점이 칩 키보드로 새지 않는다.
+const chipMenuItems = (page) => page.$$eval('.ctx-menu .ctx-item', (b) => b.map((x) => x.dataset.ctx));
+await check('CM01 chip right-click menu: channel actions, copy link, focus does not turn into chip keyboard focus', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1600, channels: 3 });
+  const box = await page.$eval('.ml-watch-tab[data-session-id="s1"] .ml-watch-chip', (c) => { const r = c.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+  await page.mouse.click(box.x, box.y, { button: 'right' });
+  await page.waitForSelector('.ctx-menu');
+  const items = await chipMenuItems(page);
+  for (const k of ['watch', 'channel', 'chat', 'retry', 'fav', 'copy', 'open', 'close', 'close-others']) assert.ok(items.includes(k), `메뉴에 ${k} ${items}`);
+  await page.waitForTimeout(500); // 가리킴 미리보기 지연(350ms)이 지나도 — 마우스는 칩 위에 그대로
+  assert.equal(await page.$('#ml-peek:not([hidden])'), null, '메뉴가 열린 동안 칩 미리보기가 없다');
+  await page.click('.ctx-menu [data-ctx="copy"]');
+  await page.waitForTimeout(150);
+  assert.ok((await page.evaluate(() => window.__copied)).some((t) => /ch2/.test(t)), '그 채널 링크를 복사');
+  assert.equal(await page.evaluate(() => !!document.activeElement?.closest('.ml-watch-picker')), false, '고른 뒤 초점이 칩으로 돌아가지 않는다');
+  await page.evaluate(() => window.__ipc.splice(0));
+  await page.keyboard.press('Delete');
+  await page.waitForTimeout(150);
+  assert.ok(!(await page.evaluate(() => window.__ipc.splice(0))).some((c) => c.cmd === 'multilive_remove'), 'Delete 가 채널 닫기로 새지 않는다');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('CM02 chip menu "close others": keeps that channel on stage and closes the rest', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1600, channels: 3 });
+  await page.click('.ml-watch-tab[data-session-id="s2"] .ml-watch-chip', { button: 'right' });
+  await page.waitForSelector('.ctx-menu');
+  await page.evaluate(() => window.__ipc.splice(0));
+  await page.click('.ctx-menu [data-ctx="close-others"]');
+  await page.waitForFunction(() => window.__ipc.filter((c) => c.cmd === 'multilive_remove').length >= 2);
+  const calls = (await page.evaluate(() => window.__ipc.splice(0))).filter((c) => /^multilive_(watch|remove)$/.test(c.cmd)).map((c) => `${c.cmd}:${c.args.sessionId}`);
+  assert.deepEqual(calls, ['multilive_watch:s2', 'multilive_remove:s0', 'multilive_remove:s1'], `먼저 남길 채널로 바꾸고 나머지를 닫는다 ${calls}`);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('CM03 chip menu by keyboard: Shift+F10 on a focused chip opens it (first item focused), Esc returns focus to the chip', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1600, channels: 3 });
+  await page.focus('.ml-watch-chip.active');
+  await page.keyboard.press('Shift+F10');
+  await page.waitForSelector('.ctx-menu');
+  assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('ctx-item')), true, '첫 항목에 초점');
+  assert.ok(!(await chipMenuItems(page)).includes('watch'), '보는 채널에는 "이 채널 보기"가 없다');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(100);
+  assert.equal(await page.$('.ctx-menu'), null);
+  assert.equal(await page.evaluate(() => document.activeElement?.closest('.ml-watch-tab')?.dataset.sessionId), 's0', 'Esc 면 칩으로 초점');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
 await browser.close();
 server.close();
 let fail = 0;
