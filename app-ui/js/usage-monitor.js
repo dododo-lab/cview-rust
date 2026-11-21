@@ -12,8 +12,9 @@ const store = {
   latest: null, // 마지막 LiveUsage(종류별 내역 포함)
   subs: new Set(),
   watchers: new Set(),
-  live: false,
+  live: null, // Rust 에 마지막으로 보낸 실시간 받기(null = 모름 — 다음 맞추기에서 꼭 보낸다)
   liveSeq: 0,
+  retry: 0,
   ready: null,
 };
 
@@ -47,6 +48,8 @@ export function initUsage() {
     });
     listen(Events.appearanceChanged, (a) => onAppearance(a));
     document.addEventListener('visibilitychange', () => syncLive());
+    // 창을 다시 불러오면 Rust 쪽 실시간 받기가 켜진 채 남아 있을 수 있다 — 부른 쪽이 watchUsage 를 마친 뒤 한 번 맞춘다.
+    setTimeout(() => syncLive(), 0);
     return true;
   })();
   return store.ready;
@@ -54,6 +57,16 @@ export function initUsage() {
 
 function keepMs() {
   return Math.max(1, (store.status && store.status.historyMinutes) || 15) * 60000;
+}
+
+/** 채운 기록을 시각 순으로 끼워 넣는다(같은 시각은 하나) — 채우는 동안 들어온 실시간 표본이 있어도 버리지 않게. */
+function merge(list) {
+  if (!list || !list.length) return;
+  const byT = new Map(store.samples.map((s) => [s.t, s]));
+  for (const s of list) byT.set(s.t, s);
+  const a = [...byT.values()].sort((x, y) => x.t - y.t);
+  const oldest = a[a.length - 1].t - keepMs();
+  store.samples = a.filter((s) => s.t >= oldest);
 }
 
 function push(s) {
@@ -97,18 +110,25 @@ async function syncLive() {
   if (want === store.live) return;
   store.live = want;
   const seq = ++store.liveSeq;
+  clearTimeout(store.retry);
+  // 숨어 있던 동안 쌓인 기록은 켜기 전 마지막 표본 뒤부터 채운다(그동안 이벤트는 오지 않았다).
+  const last = store.samples[store.samples.length - 1];
   try {
     const st = await api.usageWatch(want);
     if (seq !== store.liveSeq) return;
     store.status = st;
     if (want) {
-      // 숨어 있던 동안 쌓인 기록을 채운다(그동안 이벤트는 오지 않았다).
-      const last = store.samples[store.samples.length - 1];
       const h = await api.usageHistory(last ? last.t : null);
-      for (const s of (h && h.samples) || []) push(s);
-      if (st.latest) store.latest = st.latest;
+      merge(h && h.samples);
+      if (st.latest && (!store.latest || st.latest.sample.t >= store.latest.sample.t)) store.latest = st.latest;
     }
-  } catch { /* 다음 변화 때 다시 */ }
+  } catch {
+    // 보내지 못했다 — 모름으로 되돌리고 잠시 뒤 다시 맞춘다(안 그러면 원하는 상태가 바뀔 때까지 칩이 멈춰 있었다).
+    if (seq === store.liveSeq) {
+      store.live = null;
+      store.retry = setTimeout(() => syncLive(), 5000);
+    }
+  }
   notify('status');
 }
 

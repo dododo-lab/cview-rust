@@ -107,8 +107,6 @@ pub struct UsageStatus {
 
 struct State {
     config: UsageConfig,
-    /// 설정이 바뀔 때마다 늘린다 — 잠든 표본 스레드가 다음 표본을 기다리다 깨어 새 간격으로 다시 잡는다.
-    generation: u64,
     /// 화면이 실시간 표본을 받고 있나.
     live: bool,
     history: History,
@@ -152,7 +150,6 @@ impl UsageMonitor {
         Arc::new(Self {
             state: Mutex::new(State {
                 config,
-                generation: 0,
                 live: false,
                 history: History::new(config.keep, config.interval),
                 latest: None,
@@ -190,7 +187,6 @@ impl UsageMonitor {
         }
         st.config = config;
         st.history.set_window(config.keep, config.interval);
-        st.generation = st.generation.wrapping_add(1);
         drop(st);
         self.cv.notify_all();
     }
@@ -242,39 +238,41 @@ impl UsageMonitor {
         let mut warm = false;
         loop {
             // 꺼져 있으면 여기서 잠든다 — 켜질 때까지 CPU 를 쓰지 않는다.
-            let (interval, generation) = {
+            let interval = {
                 let mut st = lock(&self.state);
                 while !st.config.enabled {
                     warm = false;
                     st = self.cv.wait(st).unwrap_or_else(|e| e.into_inner());
                 }
-                (st.config.interval, st.generation)
+                st.config.interval
             };
             let tick = Instant::now();
             let s = sampler.get_or_insert_with(Sampler::new);
+            s.interval = interval;
             if !warm {
                 // 켜진 직후 — 기준(CPU 시간·GPU 누계·수신 바이트)만 잡고 버린다. 꺼져 있던 동안의 평균이 튀지 않게.
                 s.reset();
                 let _ = s.sample();
-                lock(&self.state).gpu = s.support();
+                let support = s.support();
+                lock(&self.state).gpu = support;
                 warm = true;
             } else {
                 let live = s.sample();
-                {
-                    let mut st = lock(&self.state);
-                    st.gpu = s.support();
-                }
+                // 지원 여부는 잠금 밖에서(IOKit·PDH 를 부르지 않고 방금 읽은 값으로) 정한다.
+                let support = s.support();
+                lock(&self.state).gpu = support;
                 if self.record(live.clone()) {
                     emit(&live);
                 }
             }
-            // 다음 표본까지 — 설정이 바뀌면(간격·끄기) 바로 깨어 다시 잡는다.
-            let deadline = tick + interval;
+            // 다음 표본까지 — 직전 표본 + 지금 간격. 설정이 바뀌면 깨어 새 간격으로 다시 잡되, 직전 표본에서 간격보다
+            // 일찍 재지는 않는다(짧은 구간으로 나눈 CPU 가 한 번 낮게 나왔다). 꺼지면 바로 위에서 잠든다.
             let mut st = lock(&self.state);
             loop {
-                if st.generation != generation || !st.config.enabled {
+                if !st.config.enabled {
                     break;
                 }
+                let deadline = tick + st.config.interval;
                 let now = Instant::now();
                 if now >= deadline {
                     break;
@@ -298,14 +296,28 @@ struct Sampler {
     gpu: Option<gpu_windows::GpuProbe>,
     last_rx: u64,
     last_at: Instant,
+    /// 지금 표본 간격 — GPU 수집 예산을 정할 때.
+    interval: Duration,
     /// GPU 를 몇 표본에 한 번 읽나(수집이 느리면 늘린다).
     gpu_stride: u32,
     tick: u32,
     last_gpu: GpuReading,
 }
 
-/// GPU 수집 한 번이 이보다 오래 걸리면 간격을 늘린다.
-const GPU_SLOW: Duration = Duration::from_millis(6);
+/// GPU 수집에 쓰는 시간을 표본 간격의 이만큼 아래로 — 넘으면 몇 표본에 한 번만 읽는다
+/// (인스턴스가 많은 Windows PC 에서 PDH 수집 한 번이 수십 ms 걸릴 수 있다).
+const GPU_BUDGET: f64 = 0.01;
+/// GPU 를 아무리 느려도 이만큼 표본에 한 번은 읽는다.
+const GPU_STRIDE_MAX: u32 = 120;
+
+/// GPU 수집 간격(표본 수) — 한 번에 `took` 걸리면 평균이 간격의 [`GPU_BUDGET`] 이하가 되게. 순수 함수.
+pub fn gpu_stride(took: Duration, interval: Duration) -> u32 {
+    let budget = interval.as_secs_f64() * GPU_BUDGET;
+    if budget <= 0.0 {
+        return 1;
+    }
+    ((took.as_secs_f64() / budget).ceil() as u32).clamp(1, GPU_STRIDE_MAX)
+}
 
 impl Sampler {
     fn new() -> Self {
@@ -317,6 +329,7 @@ impl Sampler {
             gpu: gpu_windows::GpuProbe::new(),
             last_rx: cview_core::utils::traffic::received_bytes(),
             last_at: Instant::now(),
+            interval: Duration::from_secs(1),
             gpu_stride: 1,
             tick: 0,
             last_gpu: GpuReading::default(),
@@ -344,11 +357,13 @@ impl Sampler {
         }
         #[cfg(windows)]
         if let Some(g) = &self.gpu {
+            // 수집이 계속 실패하면(카운터 서비스 꺼짐 등) '지원 안 됨'으로.
+            let ok = g.healthy();
             return GpuSupport {
                 probed: true,
-                app: true,
-                system: true,
-                memory_scope: g.memory_supported().then_some("app"),
+                app: ok,
+                system: ok,
+                memory_scope: (ok && g.memory_supported()).then_some("app"),
                 name: g.name.clone(),
             };
         }
@@ -358,38 +373,41 @@ impl Sampler {
         }
     }
 
-    fn read_gpu(&mut self, pids: &HashSet<u32>, rediscovered: bool) -> GpuReading {
+    /// 프로세스 묶음이 바뀌었을 때 — macOS 는 GPU 사용자 클라이언트를 다시 찾는다(Windows PDH 는 표본마다 PID 로 거른다).
+    fn rescan_gpu(&mut self, pids: &HashSet<u32>) {
         #[cfg(target_os = "macos")]
         if let Some(g) = self.gpu.as_mut() {
-            if rediscovered {
-                g.rescan(pids);
-            }
+            g.rescan(pids);
+        }
+        let _ = pids;
+    }
+
+    fn read_gpu(&mut self, pids: &HashSet<u32>) -> GpuReading {
+        #[cfg(target_os = "macos")]
+        if let Some(g) = self.gpu.as_mut() {
+            let _ = pids;
             return g.sample();
         }
         #[cfg(windows)]
         if let Some(g) = self.gpu.as_mut() {
-            let _ = rediscovered;
             return g.sample(pids);
         }
-        let _ = (pids, rediscovered);
+        let _ = pids;
         GpuReading::default()
     }
 
     fn sample(&mut self) -> LiveUsage {
         let (reading, rediscovered) = self.procs.refresh();
         let pids: HashSet<u32> = reading.pids.iter().copied().collect();
-        // GPU — 느린 PC 에서는 몇 표본에 한 번. 건너뛴 표본은 지난 값을 쓴다(묶음을 다시 찾은 표본은 꼭 읽는다).
-        if rediscovered || self.tick.is_multiple_of(self.gpu_stride) {
+        if rediscovered {
+            self.rescan_gpu(&pids);
+        }
+        // GPU — 느린 PC 에서는 몇 표본에 한 번(건너뛴 표본은 지난 값). 간격은 읽기 시간만으로 정한다
+        // (재탐색 시간이 섞이면 5초마다 간격이 뛰어 GPU 값이 몇 표본씩 굳었다).
+        if self.tick.is_multiple_of(self.gpu_stride) {
             let t = Instant::now();
-            self.last_gpu = self.read_gpu(&pids, rediscovered);
-            let took = t.elapsed();
-            self.gpu_stride = if took > GPU_SLOW * 3 {
-                5
-            } else if took > GPU_SLOW {
-                2
-            } else {
-                1
-            };
+            self.last_gpu = self.read_gpu(&pids);
+            self.gpu_stride = gpu_stride(t.elapsed(), self.interval);
         }
         self.tick = self.tick.wrapping_add(1);
         let rx = cview_core::utils::traffic::received_bytes();
@@ -428,7 +446,7 @@ pub fn export_json(status: &UsageStatus, samples: &[Sample]) -> String {
         "units": {
             "t": "unix ms",
             "cpu": "percent of one core, summed over app processes (0..cores*100)",
-            "mem": "bytes",
+            "mem": "bytes (macOS: physical footprint, Windows: private bytes)",
             "gpu": "percent (this app)",
             "gpuSys": "percent (whole GPU)",
             "gpuMem": "bytes (scope: gpu.memoryScope)",
@@ -466,6 +484,40 @@ mod tests {
             },
             groups: vec![],
         }
+    }
+
+    #[test]
+    fn gpu_stride_keeps_cost_under_budget() {
+        let s = Duration::from_secs(1);
+        assert_eq!(gpu_stride(Duration::from_micros(300), s), 1);
+        assert_eq!(gpu_stride(Duration::from_millis(10), s), 1);
+        assert_eq!(gpu_stride(Duration::from_millis(25), s), 3);
+        assert_eq!(gpu_stride(Duration::from_millis(100), s), 10);
+        assert_eq!(
+            gpu_stride(Duration::from_millis(100), Duration::from_secs(5)),
+            2
+        );
+        assert_eq!(gpu_stride(Duration::from_secs(30), s), GPU_STRIDE_MAX);
+        assert_eq!(gpu_stride(Duration::from_millis(5), Duration::ZERO), 1);
+    }
+
+    #[test]
+    fn interval_change_does_not_sample_early() {
+        // 간격을 바꿔도 직전 표본에서 새 간격이 지나기 전에는 재지 않는다.
+        let m = UsageMonitor::new(cfg(true, 1000, 60));
+        m.set_live(true);
+        let (tx, rx) = std::sync::mpsc::channel();
+        m.start(move |_| {
+            let _ = tx.send(Instant::now());
+        });
+        let first = rx.recv_timeout(Duration::from_secs(5)).expect("첫 표본");
+        m.configure(cfg(true, 2000, 120));
+        let next = rx.recv_timeout(Duration::from_secs(5)).expect("다음 표본");
+        assert!(
+            next.duration_since(first) >= Duration::from_millis(1_900),
+            "{:?}",
+            next.duration_since(first)
+        );
     }
 
     #[test]

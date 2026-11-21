@@ -178,6 +178,8 @@ pub struct GpuProbe {
     last_at: Option<Instant>,
     /// 앱 GPU 시간을 읽을 수 있는가(클라이언트에 AppUsage 가 있었나). 처음 훑기 전엔 `None`.
     app_supported: Option<bool>,
+    /// 마지막 표본에서 전체 GPU 사용률을 읽었나 — 지원 여부를 묻느라 IOKit 을 다시 부르지 않게.
+    system_ok: bool,
     pub name: Option<String>,
 }
 
@@ -218,13 +220,14 @@ impl GpuProbe {
             last_ns: HashMap::new(),
             last_at: None,
             app_supported: None,
+            system_ok: false,
             name,
         })
     }
 
     /// 전체 GPU 사용률·사용 메모리를 읽을 수 있는가.
     pub fn system_supported(&self) -> bool {
-        self.system().0.is_some()
+        self.system_ok
     }
 
     /// 앱 GPU 를 읽을 수 있는가(처음 훑기 전엔 `None`).
@@ -309,6 +312,7 @@ impl GpuProbe {
 
     pub fn sample(&mut self) -> GpuReading {
         let (sys, mem) = self.system();
+        self.system_ok = sys.is_some();
         let now = Instant::now();
         let mut delta = 0u64;
         let mut seen = 0usize;

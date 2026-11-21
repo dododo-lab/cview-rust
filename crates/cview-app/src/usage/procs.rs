@@ -4,7 +4,7 @@
 //! - macOS: WebKit 도우미는 launchd 의 자식이라 부모로 찾을 수 없다. 활성 상태 보기처럼 '책임 프로세스'
 //!   (`responsibility_get_pid_responsible_for_pid`)가 이 앱인 프로세스를 모은다. 함수가 없으면(비공개 API) 예전
 //!   디버그 로그 방식(이름에 WebKit · 앱보다 늦게 시작)으로 물러난다. 메모리는 물리 사용량(`ri_phys_footprint`).
-//! - Windows: WebView2 는 앱의 자식(브라우저) → 그 자식(렌더러·GPU…)이라 부모 사슬로 찾는다. 메모리는 작업 집합.
+//! - Windows: WebView2 는 앱의 자식(브라우저) → 그 자식(렌더러·GPU…)이라 부모 사슬로 찾는다(PID 재사용을 걸러 고리마다 시작 시각을 본다). 메모리는 전용 바이트.
 //! - 표본마다 찾아 둔 몇 개만 다시 읽고, 전체 목록은 [`REDISCOVER`] 마다 한 번 훑는다
 //!   (전체 목록을 매번 읽으면 그것만으로 CPU 를 눈에 띄게 썼다 — perf_log 표본과 같은 이유).
 
@@ -161,7 +161,7 @@ impl ProcessSet {
                 continue;
             };
             let cpu = p.cpu_usage().max(0.0);
-            let mem = footprint(pid.as_u32()).unwrap_or_else(|| p.memory());
+            let mem = footprint(pid.as_u32()).unwrap_or_else(|| private_bytes(p));
             rows.push((*kind, cpu, mem));
             alive.push(pid.as_u32());
         }
@@ -236,27 +236,64 @@ impl ProcessSet {
 #[cfg(not(target_os = "macos"))]
 fn descendants(sys: &mut System, me: Pid) -> Vec<Pid> {
     sys.refresh_processes_specifics(ProcessesToUpdate::All, true, ProcessRefreshKind::nothing());
-    let parents: HashMap<Pid, Pid> = sys
+    let info: HashMap<u32, (Option<u32>, u64)> = sys
         .processes()
         .iter()
-        .filter_map(|(pid, p)| p.parent().map(|pp| (*pid, pp)))
+        .map(|(pid, p)| {
+            (
+                pid.as_u32(),
+                (p.parent().map(|pp| pp.as_u32()), p.start_time()),
+            )
+        })
         .collect();
+    descendants_of(&info, me.as_u32())
+        .into_iter()
+        .map(Pid::from_u32)
+        .collect()
+}
+
+/// PID → (부모 PID, 시작 시각 초) 표에서 `me` 의 자손(자기 포함). 순수 함수.
+///
+/// 부모 PID 만 따라가면 Windows 의 빠른 PID 재사용에 속는다 — 이미 끝난 부모(예: explorer 의 부모 userinit)의 PID 를
+/// 앱이 받으면 explorer 아래 프로세스가 모두 앱 묶음이 됐다. 그래서 고리마다 자식이 부모보다 늦게(같은 초 포함) 시작했을
+/// 때만 잇고, 시작 시각을 모르는(0) 프로세스는 넣지 않는다.
+#[cfg_attr(target_os = "macos", allow(dead_code))]
+pub fn descendants_of(info: &HashMap<u32, (Option<u32>, u64)>, me: u32) -> Vec<u32> {
+    let linked = |child: u32| -> Option<u32> {
+        let &(parent, start) = info.get(&child)?;
+        let parent = parent?;
+        let &(_, parent_start) = info.get(&parent)?;
+        (start != 0 && parent_start != 0 && start >= parent_start).then_some(parent)
+    };
     let mut out = vec![me];
-    for &pid in parents.keys() {
+    for &pid in info.keys() {
+        if pid == me {
+            continue;
+        }
         let mut cur = pid;
-        // PID 재사용으로 고리가 생겨도 끝나게 깊이를 묶는다.
+        // 고리가 생겨도 끝나게 깊이를 묶는다.
         for _ in 0..16 {
-            match parents.get(&cur) {
-                Some(&pp) if pp == me => {
+            match linked(cur) {
+                Some(pp) if pp == me => {
                     out.push(pid);
                     break;
                 }
-                Some(&pp) if pp != cur => cur = pp,
+                Some(pp) if pp != cur => cur = pp,
                 _ => break,
             }
         }
     }
     out
+}
+
+/// macOS 밖 메모리 — Windows 는 전용 바이트(PrivateUsage, 작업 관리자 '커밋 크기'). 작업 집합을 더하면 WebView2
+/// 프로세스들이 함께 매핑한 공유 페이지(DLL 등)가 프로세스 수만큼 겹쳐 들어갔다.
+fn private_bytes(p: &sysinfo::Process) -> u64 {
+    if cfg!(windows) {
+        p.virtual_memory()
+    } else {
+        p.memory()
+    }
 }
 
 /// macOS 물리 사용량(활성 상태 보기 '메모리'). 실패하면 `None`(호출한 쪽이 RSS 로).
@@ -425,6 +462,23 @@ mod tests {
             ProcKind::Other
         );
         assert_eq!(classify("ffmpeg", "", false), ProcKind::Other);
+    }
+
+    #[test]
+    fn descendants_ignore_reused_parent_pids() {
+        let mut info: HashMap<u32, (Option<u32>, u64)> = HashMap::new();
+        info.insert(100, (Some(1), 1_000)); // 앱
+        info.insert(200, (Some(100), 1_005)); // WebView2 브라우저
+        info.insert(201, (Some(200), 1_006)); // 렌더러(손자)
+        info.insert(202, (Some(200), 1_005)); // 같은 초에 시작한 GPU
+                                              // explorer: 부모 PID 100 은 예전에 끝난 userinit 의 것 — 앱보다 먼저 시작했으니 자식이 아니다.
+        info.insert(300, (Some(100), 900));
+        info.insert(301, (Some(300), 950)); // explorer 가 띄운 앱
+        info.insert(400, (Some(100), 0)); // 시작 시각을 모름
+        info.insert(500, (Some(999), 1_100)); // 부모가 목록에 없음
+        let mut got = descendants_of(&info, 100);
+        got.sort_unstable();
+        assert_eq!(got, vec![100, 200, 201, 202]);
     }
 
     #[test]

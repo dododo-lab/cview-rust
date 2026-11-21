@@ -96,8 +96,13 @@ mod probe {
         /// PDH_FMT_COUNTERVALUE_ITEM_W 배열 + 이름 문자열을 받을 버퍼(8바이트 정렬).
         buf: Vec<u64>,
         primed: bool,
+        /// 연달아 실패한 수집 횟수 — 넘으면 '지원 안 됨'으로 알린다(카운터 서비스 꺼짐 등).
+        failures: u32,
         pub name: Option<String>,
     }
+
+    /// 이만큼 연달아 실패하면 지원 안 됨으로 본다.
+    const FAILURES_UNSUPPORTED: u32 = 3;
 
     impl Drop for GpuProbe {
         fn drop(&mut self) {
@@ -133,12 +138,18 @@ mod probe {
                 shared,
                 buf: Vec::new(),
                 primed: false,
+                failures: 0,
                 name: None,
             };
             // 비율 카운터의 첫 수집 — 다음 표본부터 값이 나온다.
             // SAFETY: 열린 질의.
             probe.primed = unsafe { PdhCollectQueryData(probe.query) } == 0;
             Some(probe)
+        }
+
+        /// 최근 수집이 잘 되고 있나.
+        pub fn healthy(&self) -> bool {
+            self.failures < FAILURES_UNSUPPORTED
         }
 
         pub fn memory_supported(&self) -> bool {
@@ -202,13 +213,26 @@ mod probe {
             let ok = unsafe { PdhCollectQueryData(self.query) } == 0;
             if !ok || !self.primed {
                 self.primed = ok;
+                if !ok {
+                    self.failures = self.failures.saturating_add(1);
+                }
                 return GpuReading::default();
             }
             let engines = self.read(self.engine);
+            if engines.is_empty() {
+                // 읽지 못했다 — 0% 로 보이지 않게 값 없음으로.
+                self.failures = self.failures.saturating_add(1);
+                return GpuReading::default();
+            }
+            self.failures = 0;
             let (app, system) = engine_usage(engines.iter().map(|(n, v)| (n.as_str(), *v)), pids);
+            // 메모리 — 읽은 줄이 있는 카운터만 더한다(못 읽으면 0 MB 가 아니라 값 없음).
             let mut memory = None;
             for c in [self.dedicated, self.shared].into_iter().flatten() {
                 let rows = self.read(c);
+                if rows.is_empty() {
+                    continue;
+                }
                 let sum = process_memory(rows.iter().map(|(n, v)| (n.as_str(), *v)), pids);
                 memory = Some(memory.unwrap_or(0) + sum);
             }

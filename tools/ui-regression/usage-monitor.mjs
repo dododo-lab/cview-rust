@@ -6,6 +6,8 @@
 // U04 팝오버(키보드) — Enter 로 열면 고른 칸(CPU)에 초점, ←/→/Home/End 로 지표를 바꾸면 그래프 색·요약이 따라감, Esc 로 닫고 칩으로.
 // U05 GPU 지원 — 못 읽으면 '지원 안 됨'(aria-disabled, 화살표가 건너뜀), 전체만 읽으면 전체 GPU 값과 안내.
 // U06 실시간 받기 — 칩이 보이면 usage_watch(true). 창이 숨으면 usage_watch(false), 다시 보이면 true 와 그동안 기록 채우기(since).
+// U06b 다시 보일 때 채우기 응답보다 실시간 표본이 먼저 와도 숨은 동안의 기록을 잃지 않는다.
+// U06c usage_watch 가 실패하면 5초 뒤 다시 보낸다. 아무도 보지 않아도 시작 때 false 를 한 번 보내 Rust 쪽 상태를 맞춘다.
 // U07 설정 › 성능 — '연동'과 '고급' 사이 탭, 상태 알약·통계·그래프, 지표·기간 라디오(화살표 키), 표로 보기(1분 평균).
 // U07b 표로 보기는 분 묶음이 바뀔 때만 다시 그린다(기록 기간이 짧아 맨 앞 표본이 초마다 잘려도).
 // U08 내보내기·지우기 — CSV·JSON 은 usage_export(format) 후 경로 알림, 지우기는 두 번 눌러야(armConfirm) 한 번만 지운다.
@@ -81,7 +83,7 @@ function usageMock([opts]) {
     enabled: opts.enabled ?? true, inHeader: opts.inHeader ?? true, intervalMs: 1000, historyMinutes: opts.historyMinutes ?? 15,
     gpu: opts.gpu || { probed: true, app: true, system: true, memoryScope: 'system', name: 'Apple M1 Max' },
   };
-  const u = window.__usage = { cfg, calls: [], samples, groups, watching: false, i: samples.length };
+  const u = window.__usage = { cfg, calls: [], samples, groups, watching: false, i: samples.length, failWatch: opts.failWatch || 0, historyDelay: 0 };
   const status = () => ({ enabled: cfg.enabled, intervalMs: cfg.intervalMs, historyMinutes: cfg.historyMinutes, cores, platform: 'macos', gpu: cfg.gpu,
     samples: samples.length, capacity: 902, latest: samples.length ? { sample: samples[samples.length - 1], groups } : null });
   u.push = (cpu, { emit = true } = {}) => {
@@ -95,8 +97,16 @@ function usageMock([opts]) {
   window.__TAURI__.core.invoke = async (c, a = {}) => {
     if (c.startsWith('usage_') || c === 'reveal_path' || (c === 'settings_update' && a.domain === 'appearance')) u.calls.push([c, JSON.parse(JSON.stringify(a))]);
     if (c === 'usage_status') return status();
-    if (c === 'usage_watch') { u.watching = Boolean(a.on); return status(); }
-    if (c === 'usage_history') return { intervalMs: cfg.intervalMs, samples: a.since == null ? samples.slice() : samples.filter((s) => s.t > a.since) };
+    if (c === 'usage_watch') {
+      if (u.failWatch > 0) { u.failWatch -= 1; throw new Error('usage_watch 실패(모의)'); }
+      u.watching = Boolean(a.on); return status();
+    }
+    if (c === 'usage_history') {
+      const out = { intervalMs: cfg.intervalMs, samples: a.since == null ? samples.slice() : samples.filter((s) => s.t > a.since) };
+      // historyDelay: 응답을 늦춰 그 사이 실시간 표본이 먼저 오게(채우기 경합 U06b)
+      if (u.historyDelay) { const d = u.historyDelay; u.historyDelay = 0; await new Promise((r) => setTimeout(r, d)); }
+      return out;
+    }
     if (c === 'usage_clear') { samples.length = 0; return null; }
     if (c === 'usage_export') return `/Users/someone/Downloads/CView/CView-사용률-20261121-153005.${a.format}`;
     if (c === 'reveal_path') return null;
@@ -128,7 +138,7 @@ async function open({ width = 1280, height = 800, theme = 'dark', motion = false
   await page.goto(`${base}${query}`);
   await page.waitForSelector('[data-page]', { state: 'attached' });
   await page.waitForFunction(() => { const s = document.getElementById('splash'); return !s || !s.isConnected || getComputedStyle(s).display === 'none' || getComputedStyle(s).opacity === '0'; }, null, { timeout: 8000 }).catch(() => {});
-  if (!opts.none && !query) await page.waitForSelector('.usage-chip:not([hidden])');
+  if (!opts.none && !query && opts.inHeader !== false) await page.waitForSelector('.usage-chip:not([hidden])');
   await page.waitForTimeout(150);
   return { ctx, page, errors };
 }
@@ -292,6 +302,42 @@ await check('U06 실시간 받기·숨김', async () => {
   assert.equal(hist.at(-1).since, last, '숨은 동안 기록을 since 로 채움');
   assert.equal(await page.textContent('.usage-chip .uchip-v'), '50%', '채운 뒤 최신 값');
   await ctx.close();
+});
+
+await check('U06b 채우기와 실시간 표본이 겹쳐도 기록을 잃지 않음', async () => {
+  const { ctx, page } = await open();
+  await openUsageTab(page);
+  const p = '[data-usage-panel]';
+  await page.click(`${p} [data-up-range="60000"]`);
+  await page.evaluate(() => { window.__vis = 'hidden'; document.dispatchEvent(new Event('visibilitychange')); });
+  await page.waitForTimeout(80);
+  // 숨은 동안 CPU 99% 표본 3개(이벤트 없음) — 다시 보일 때 채우기로만 들어온다.
+  await page.evaluate(() => { for (let i = 0; i < 3; i += 1) window.__usage.push(990); window.__usage.historyDelay = 400; });
+  await page.evaluate(() => { window.__vis = 'visible'; document.dispatchEvent(new Event('visibilitychange')); });
+  await page.waitForTimeout(80);
+  // 채우기 응답 전에 실시간 표본이 먼저 온다(예전엔 이 표본이 마지막이 되어 채운 표본을 모두 버렸다).
+  await page.evaluate(() => window.__usage.push(10));
+  await page.waitForTimeout(700);
+  assert.equal(await page.textContent(`${p} [data-st="max"]`), '99%');
+  assert.equal(await page.textContent(`${p} [data-st="now"]`), '1.0%');
+  await ctx.close();
+});
+
+await check('U06c 실시간 받기 실패 재시도·다시 불러올 때 맞추기', async () => {
+  // 머리줄 표시가 꺼져 아무도 보지 않아도 시작 때 false 를 한 번 보내 Rust 쪽(창 새로고침 전 상태)을 맞춘다.
+  let o = await open({ inHeader: false });
+  await o.page.waitForTimeout(300);
+  assert.deepEqual((await calls(o.page, 'usage_watch')).map((a) => a.on), [false]);
+  await o.ctx.close();
+  // 첫 usage_watch(true) 가 실패하면 5초 뒤 다시 보낸다.
+  o = await open({ failWatch: 1 });
+  await o.page.waitForTimeout(5600);
+  const on = (await calls(o.page, 'usage_watch')).map((a) => a.on);
+  assert.deepEqual(on, [true, true], JSON.stringify(on));
+  await o.page.evaluate(() => window.__usage.push(333));
+  await o.page.waitForTimeout(80);
+  assert.equal(await o.page.textContent('.usage-chip .uchip-v'), '33%', '재시도 뒤 실시간 표본');
+  await o.ctx.close();
 });
 
 await check('U07 설정 성능 탭', async () => {

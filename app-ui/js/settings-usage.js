@@ -60,7 +60,7 @@ function noteText() {
   else if (!g.app) parts.push('앱별 GPU 값을 읽을 수 없어 GPU 그래프는 전체 GPU 사용률입니다.');
   if (g.memoryScope === 'system') parts.push('GPU 메모리는 시스템 전체 사용량입니다(Apple 실리콘은 메모리를 CPU와 함께 씁니다).');
   if (g.memoryScope === 'app') parts.push('GPU 메모리는 앱 프로세스의 전용 + 공유 메모리입니다.');
-  parts.push(`CPU는 전체 코어(${cores()}개) 대비, 네트워크는 앱이 직접 받은 양(영상·채팅·API·이미지)입니다.`);
+  parts.push(`CPU는 전체 코어(${cores()}개) 대비, 메모리는 ${st.platform === 'windows' ? '전용 바이트(작업 관리자 커밋 크기)' : '물리 사용량(활성 상태 보기 기준)'}, 네트워크는 앱이 직접 받은 양(영상·채팅·API·이미지)입니다.`);
   return parts.join(' ');
 }
 
