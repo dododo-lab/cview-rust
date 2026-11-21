@@ -855,16 +855,16 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
 .mo-num { display: inline-block; font-variant-numeric: tabular-nums; }
 .channel-id p { font-variant-numeric: tabular-nums; }
 
-/* ── LIVE 맥동 — 점에서 고리가 퍼지고, 배지는 테두리 빛이 번진다(2.4초에 한 번) ── */
+/* ── LIVE 맥동 — 진입 시 2회만 맥동하고 멈춘다(무한 애니메이션은 시청 내내 60/120Hz WindowServer 합성을 깨운다) ── */
 .mwi-pill-live i::after {
   content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--live); pointer-events: none;
-  animation: mo-live-ping 2.4s var(--ease-out) infinite;
+  animation: mo-live-ping 2.4s var(--ease-out) 2;
 }
 .channel-live-line .badge-live { position: relative; inset: auto; } /* 고리 기준 — 기본 .badge-live 의 top·left(썸네일 모서리용)는 걷는다 */
 :is(.mwi-live-tag, .channel-avatar .strip-live, .channel-live-line .badge-live)::after {
   content: ""; position: absolute; inset: -2px; border-radius: inherit; pointer-events: none;
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--live) 60%, transparent); opacity: 0;
-  animation: mo-live-halo 2.4s var(--ease-out) .6s infinite;
+  animation: mo-live-halo 2.4s var(--ease-out) .6s 2;
 }
 :is(:root.mo-hidden, .mo-off) :is(.mwi-pill-live i, .mwi-live-tag, .channel-avatar .strip-live, .channel-live-line .badge-live)::after { animation-play-state: paused; }
 

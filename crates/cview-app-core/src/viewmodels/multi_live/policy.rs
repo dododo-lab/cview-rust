@@ -34,7 +34,10 @@ pub const MAX_SESSIONS: usize = 4;
 pub const DECODE_BUDGET_K: usize = 4;
 pub const ZAP_REQUEST_MAX_AGE_SECS: f64 = 15.0;
 pub const ZAP_REQUEST_CAP: usize = 8;
-pub const WATCH_KEEP_ALIVE_WARM_COUNT: usize = 2;
+/// 단독 시청(`stage_session_id.is_some()`) 중 화면에 보이지 않는 백그라운드 상시 디코드 세션 수.
+/// 실사용 디버그 로그 기준 2개 상시 디코드는 단독 1080p 대비 CPU +17%p(GPU·WebContent 각 2배),
+/// RSS +400~800MB 를 유발하므로 0으로 두어 스테이지·PiP·소리 켜진 세션·2초 핸드오프 직전 세션만 디코드한다.
+pub const WATCH_KEEP_ALIVE_WARM_COUNT: usize = 0;
 
 pub fn effective_decode_budget(
     session_count: usize,

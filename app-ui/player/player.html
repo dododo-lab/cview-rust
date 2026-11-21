@@ -1372,6 +1372,7 @@ function loadSource(url, profile, preserveRecoveryBudget, preferSourceQuality, l
     //   carry-over 를 해제한다. 안 하면 재사용된 엔진(특히 .hidden 백그라운드 pane)의
     //   stall/네트워크 자가복구가 영구 비활성화된다.
     _suspended = false;
+    _qualitySyncPendingOnResume = false;
     // Swift transport intent를 source load와 함께 원자적으로 넘긴다. play()의 MainActor hop
     // 전에 pause가 들어온 경우에도 새 소스는 준비하되 첫 fragment가 사용자의 pause를
     // 뒤집어 자동 재생하지 않는다. 인자를 생략하는 내부 STAGE-4 reload는 기존 의도를 보존.
@@ -1740,9 +1741,19 @@ function loadSource(url, profile, preserveRecoveryBudget, preferSourceQuality, l
             }
         });
     }
+    // [좀비 로더 방지] 정지(_suspended) 상태에서 어떤 경로로든 세그먼트 로드가 재개되면 즉시 차단한다.
+    hls.on(Hls.Events.FRAG_LOADING, function() {
+        if (sourceEpoch !== _loaderEpoch || !_suspended) return;
+        if (hasParsedLevels()) { try { hls.stopLoad(); } catch (e) {} }
+    });
     // 첫 fragment buffer 도착 시 play.
     hls.on(Hls.Events.LEVEL_UPDATED, function(event, data) {
         if (sourceEpoch !== _loaderEpoch) return;
+        // [좀비 로더 방지] 정지(_suspended) 중 hls.js 내부 레벨 갱신이 살아나면 즉시 stopLoad 로 다시 멈춘다.
+        if (_suspended) {
+            if (hasParsedLevels()) { try { hls.stopLoad(); } catch (e) {} }
+            return;
+        }
         // [끊김 원인 계측 2026-09-12 / 2차] 위 상태 블록의 주석 참조.
         const det = data && data.details;
         if (!det) return;
@@ -2754,6 +2765,7 @@ function adaptiveCapCeilingIndex(levels) {
 
 function applyAdaptiveLevelCap() {
     if (!hls) return;
+    if (_suspended) { _qualitySyncPendingOnResume = true; return; }
     const levels = hls.levels || [];
     const hasBitrateCap = _adaptiveLevelCap.maxKbps > 0;
     const capHeight = effectiveCapHeight();
@@ -2797,6 +2809,12 @@ function setAdaptiveCaps(maxHeight, maxKbps) {
     // 중간 요청마다 currentLevel이 전체 버퍼를 비워 디코더/합성 작업이 중복된다.
     _adaptiveLevelCap.maxHeight = nextHeight;
     _adaptiveLevelCap.maxKbps = nextKbps;
+    // [좀비 로더 방지] 정지 중에는 정책 값만 기록하고 resumeLoading 시 1회 반영한다.
+    //   hls.currentLevel / nextLevel / nextLoadLevel 대입은 stopLoad() 로 멈춘 로더를 다시 켠다.
+    if (_suspended) {
+        _qualitySyncPendingOnResume = true;
+        return;
+    }
     applyAdaptiveLevelCap();
     // [FORCED-CAP 2026-09-04] 수동 고정 중이면 고정 목표도 새 캡으로 다시 고른다.
     //   `autoLevelCapping` 은 ABR 이 꺼진 세션에서 무시되므로 위 호출만으로는 아무 일도
@@ -2826,6 +2844,7 @@ function requestPreferredSourceLevel() {
     // 수동 currentLevel 고정이 가장 강한 정책이다. prefer가 nextLoadLevel을 다시 쓰면
     // 멀티라이브 1080p/8M 고정과 다음 fragment 선택이 서로 싸운다.
     if (!hls || _lockTopLevel || _forcedHeight > 0) return;
+    if (_suspended) { _qualitySyncPendingOnResume = true; return; }
     const levels = hls.levels || [];
     if (!levels.length) return;
     const cap = hls.autoLevelCapping;
@@ -2866,6 +2885,7 @@ function resetManualLockRestoreBudget() {
 }
 function restoreManualLevelLock() {
     if (!hls) return;
+    if (_suspended) { _qualitySyncPendingOnResume = true; return; }
     const levels = hls.levels || [];
     if (!levels.length) return;
 
@@ -2904,6 +2924,7 @@ function restoreManualLevelLock() {
 
 function requestManualLevel(target) {
     if (!hls || target < 0 || hls.manualLevel === target) return;
+    if (_suspended) { _qualitySyncPendingOnResume = true; return; }
     const buffered = bufferedRangeContaining(video.currentTime, 0);
     // currentLevel은 현재 재생 fragment라 전환이 끝나기 전에는 이전 값이다.
     // 요청 상태(manualLevel)로 중복을 걸러 다운로드 취소/전체 버퍼 플러시를 반복하지 않는다.
@@ -2920,6 +2941,7 @@ function requestManualLevel(target) {
 
 function applyTopLevelLock(smooth) {
     if (!hls) return;
+    if (_suspended) { _qualitySyncPendingOnResume = true; return; }
     const levels = hls.levels || [];
     if (!levels.length) return;
     // hls.js levels 는 bitrate 오름차순 정렬 — 마지막이 최고 화질.
@@ -2945,6 +2967,7 @@ function setLockTopLevel(on) {
     // 사용자가 고정을 다시 걸면 새 시도다 — 이전 포기 상태를 끌고 가지 않는다.
     resetManualLockRestoreBudget();
     if (!hls) return;
+    if (_suspended) { _qualitySyncPendingOnResume = true; return; }
     if (_lockTopLevel) {
         resetDecoderPressure(true);
         applyAdaptiveLevelCap();
@@ -3476,6 +3499,7 @@ function selectForcedQualityLevel(levels, forceHeight, targetBitrateKbps) {
 
 function applyForcedHeight() {
     if (!hls || _forcedHeight <= 0) return;
+    if (_suspended) { _qualitySyncPendingOnResume = true; return; }
     const forceHeight = _forcedHeight;
     const levels = hls.levels || [];
     if (!levels.length) return;
@@ -3520,6 +3544,7 @@ function setForcedHeight(forceHeight, targetBitrateKbps) {
         Number.isFinite(normalizedBitrate) && normalizedBitrate > 0
         ? normalizedBitrate : 0;
     if (!hls) return;
+    if (_suspended) { _qualitySyncPendingOnResume = true; return; }
     if (_forcedHeight > 0) {
         resetDecoderPressure(true);
         applyAdaptiveLevelCap();
@@ -3561,6 +3586,19 @@ function getLevels() {
 //   • back-buffer 유지 — 복귀 시 즉시 재생 가능.
 //   메모리 절약: 멀티 라이브 4세션 시 비선택 3개의 메모리/네트워크 거의 0.
 let _suspended = false;
+let _qualitySyncPendingOnResume = false;
+function syncPendingQualityPolicy() {
+    if (!_qualitySyncPendingOnResume || !hls || _suspended) return;
+    _qualitySyncPendingOnResume = false;
+    if (!hasParsedLevels()) return;
+    applyAdaptiveLevelCap();
+    if (_forcedHeight > 0) applyForcedHeight();
+    else if (_lockTopLevel) applyTopLevelLock(true);
+    else {
+        if (hls.manualLevel >= 0) hls.currentLevel = -1;
+        if (_preferSourceQuality) requestPreferredSourceLevel();
+    }
+}
 function suspendLoading() {
     if (!hls || _suspended) return;
     releaseFallbackCatchup('suspend');
@@ -3640,6 +3678,7 @@ function suspendLoading() {
 function resumeLoading() {
     if (!hls || !_suspended) return;
     _suspended = false;
+    const shouldSyncQuality = _qualitySyncPendingOnResume;
     const resumeGeneration = ++_resumeGeneration;
     const resumeHls = hls;
     const shouldResumePlayback = _wantsPlayingBeforeSuspend;
@@ -3672,6 +3711,8 @@ function resumeLoading() {
             //     Swift 의 1회 재발행을 켠다). 헬퍼는 예외를 삼킨다.
             hls.loadSource(_currentSourceURL);
         } else {
+            // 정지 중 보류된 화질/캡 변경을 재개 시점에 1회 반영한다.
+            if (shouldSyncQuality) syncPendingQualityPolicy();
             // network / already-reset MSE / generic recovered MSE 모두 ErrorController의 stopLoad 뒤다.
             hls.startLoad(resumePosition);
         }
@@ -5279,7 +5320,7 @@ function webLlOnLevelUpdated(det) {
         webOnVisibilityChange();
         // 아직 첫 프레임 전이면 그 자리(끝 − 목표)에서 로드를 다시 시작한다 — 웹 자리에서 시작했다가 LL 을 끄면
         //   다음 세그먼트가 완성될 때까지 한 번 끊긴다.
-        if (!_webLl.startAdjusted && !_hasEverPlayed && hls && Number.isFinite(det.edge)) {
+        if (!_suspended && !_webLl.startAdjusted && !_hasEverPlayed && hls && Number.isFinite(det.edge)) {
             _webLl.startAdjusted = true;
             const pos = det.edge - (hls.targetLatency || 0);
             if (pos > 0) { try { hls.startLoad(pos); } catch (e) {} }

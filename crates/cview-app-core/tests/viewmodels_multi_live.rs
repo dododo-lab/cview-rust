@@ -1056,15 +1056,14 @@ fn watch_stage_limits_decode_to_keep_alive_set() {
     }
     st.select_session(p[0].session.id(), false);
     st.set_stage_session(Some(p[0].session.id()));
-    // MRU: p0(최신) > p4 > p3 > p2 > p1. 유지 = p4, p3 (2개).
+    // 단독 시청 중 상시 백그라운드 웜 디코드(WATCH_KEEP_ALIVE_WARM_COUNT=0)는 두지 않는다
+    // (전환 직후 핸드오프 previous_stage_session_id · PiP · 소리 켜진 세션만 유지).
     let keep = st.watch_keep_alive_session_ids();
-    assert_eq!(
-        keep,
-        [p[4].session.id(), p[3].session.id()].into_iter().collect()
-    );
+    assert!(keep.is_empty());
     assert_eq!(st.watch_warm_candidate_id(), Some(p[4].session.id()));
     assert!(!st.watch_mode_allows_decode(p[1].session.id()));
-    assert!(st.watch_mode_allows_decode(p[3].session.id()));
+    assert!(!st.watch_mode_allows_decode(p[3].session.id()));
+    assert!(st.watch_mode_allows_decode(p[0].session.id()));
     // 스테이지 밖 패인은 화면에서 내린다.
     assert_eq!(p[1].engine.st().surface_visible, Some(false));
     assert_eq!(p[0].engine.st().surface_visible, Some(true));
@@ -2311,8 +2310,8 @@ async fn watch_stage_round_trip_restores_every_pane() {
             );
             assert_eq!(p[0].engine.st().surface_visible, Some(true));
             assert!(!p[0].engine.st().paused);
-            // 무대 밖 MRU 하위 패인은 로딩을 멈춘다(유지 2개).
-            assert_eq!(suspended(&p).iter().filter(|s| **s).count(), 1);
+            // 무대 밖 비가시 패인은 모두 로딩을 멈춘다(WATCH_KEEP_ALIVE_WARM_COUNT=0).
+            assert_eq!(suspended(&p).iter().filter(|s| **s).count(), 3);
         }
         tokio::time::sleep(Duration::from_secs(6)).await;
         exit_watch_stage(&mut m.lock());

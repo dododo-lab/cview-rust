@@ -248,6 +248,10 @@ impl ManagerState {
                 keep.insert(previous);
             }
         }
+        let remaining = WATCH_KEEP_ALIVE_WARM_COUNT.saturating_sub(keep.len());
+        if remaining == 0 {
+            return keep;
+        }
         let mut ranked: Vec<&Arc<MultiLiveSession>> = self
             .sessions
             .iter()
@@ -256,10 +260,7 @@ impl ManagerState {
             })
             .collect();
         ranked.sort_by_key(|s| std::cmp::Reverse(self.mru.tick(s.id())));
-        for s in ranked {
-            if keep.len() >= WATCH_KEEP_ALIVE_WARM_COUNT {
-                break;
-            }
+        for s in ranked.into_iter().take(remaining) {
             keep.insert(s.id());
         }
         keep

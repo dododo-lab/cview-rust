@@ -31,8 +31,8 @@ const MODES = [
   { id: 'focus', label: '포커스 — 선택 패인을 크게' },
 ];
 const TITLES = { off: '채팅', merged: '멀티채팅', grid: '채팅 그리드', focus: '채팅 포커스' };
-const MAX_LINES = 600;
-const MAX_CELL_LINES = 300;
+const MAX_LINES = 350;
+const MAX_CELL_LINES = 150;
 // 칸·통합 목록을 올려 둔 채 이만큼 손대지 않으면 다시 바닥을 따라간다(작은 칸에는 '새 메시지' 버튼이 없다).
 const RESUME_FOLLOW_MS = 8000;
 // 끊김·실패를 알린 칸은 이만큼 기다렸다가(엔진이 스스로 다시 붙으면 취소) 다시 연결한다.
@@ -95,6 +95,7 @@ export class MultiLiveMergedChat {
     this.panelList.after(this.list, this.grid);
     this.pending = []; // [conn, messages, recent] — 프레임마다 한 번 붙인다
     this.pendingCount = 0;
+    this.mergedBacklog = []; // 그리드·포커스 보기 중 통합 목록 DOM 대신 보관하는 경량 링버퍼
     this.title = chatEl.querySelector('.chat-header strong');
 
     const header = chatEl.querySelector('.chat-header');
@@ -205,6 +206,31 @@ export class MultiLiveMergedChat {
     this.panelList.hidden = this.on;
     this.list.hidden = this.mode !== 'merged';
     this.grid.hidden = this.mode !== 'grid' && this.mode !== 'focus';
+    // 보이지 않는 보기의 DOM 은 비워 노드 누적을 막고, 보이는 보기로 돌아올 때 경량 버퍼에서 1회 채운다.
+    if (this.mode === 'merged') {
+      for (const c of this.conns.values()) {
+        if (c.list && c.list.childElementCount > 1) c.list.innerHTML = '<div class="empty">새 메시지를 기다리는 중…</div>';
+      }
+      if (this.mergedBacklog.length) {
+        const items = this.mergedBacklog;
+        this.mergedBacklog = [];
+        appendTo(this.list, mergedItemsHtml(items, this.list.lastElementChild), MAX_LINES);
+        this.lines?.afterAppend();
+      }
+    } else if (this.mode === 'grid' || this.mode === 'focus') {
+      if (this.list.childElementCount > 1) this.list.innerHTML = '<div class="empty">모든 패인의 새 메시지를 기다리는 중…</div>';
+      for (const c of this.conns.values()) {
+        if (c.backlog && c.backlog.length) {
+          const cellItems = c.backlog;
+          c.backlog = [];
+          appendTo(c.list, mergedItemsHtml(cellItems, c.list.lastElementChild), MAX_CELL_LINES);
+        }
+      }
+      this.cellLines?.afterAppend();
+    } else {
+      this.mergedBacklog = [];
+      if (this.list.childElementCount > 1) this.list.innerHTML = '<div class="empty">모든 패인의 새 메시지를 기다리는 중…</div>';
+    }
     if (this.title) this.title.textContent = TITLES[this.mode];
   }
 
@@ -326,6 +352,13 @@ export class MultiLiveMergedChat {
     // 관리자 삭제 — 통합 줄과 칸 줄 모두(예전엔 받지 않아 지워진 메시지가 남았다). 아직 붙이지 않은 것도.
     if (ev.type === 'blinded') {
       blindMergedLines([this.list, c.list], c.key, ev.messageId, ev.blindText);
+      const maskItem = (it) => {
+        if (it.src === c.key && it.m && it.m.id === ev.messageId) {
+          it.m = { ...it.m, isBlinded: true, content: ev.blindText || BLIND_TEXT, emojis: {} };
+        }
+      };
+      for (const it of this.mergedBacklog) maskItem(it);
+      if (c.backlog) for (const it of c.backlog) maskItem(it);
       for (const [pc, msgs] of this.pending) {
         if (pc !== c) continue;
         const i = msgs.findIndex((m) => m.id === ev.messageId);
@@ -364,10 +397,21 @@ export class MultiLiveMergedChat {
       events.push([c, msgs, recent]);
     }
     if (!items.length) return;
-    appendTo(this.list, mergedItemsHtml(items, this.list.lastElementChild), MAX_LINES);
-    for (const [c, cellItems] of cells) appendTo(c.list, mergedItemsHtml(cellItems, c.list.lastElementChild), MAX_CELL_LINES);
-    this.lines.afterAppend();
-    this.cellLines.afterAppend();
+    // 현재 보이는 보기만 DOM 에 붙이고, 보이지 않는 보기는 경량 버퍼에만 보관한다(DOM 노드·강제 레이아웃 절반 절감).
+    if (this.mode === 'merged') {
+      appendTo(this.list, mergedItemsHtml(items, this.list.lastElementChild), MAX_LINES);
+      this.lines.afterAppend();
+      for (const [c, cellItems] of cells) {
+        if (!c.backlog) c.backlog = [];
+        c.backlog.push(...cellItems);
+        if (c.backlog.length > MAX_CELL_LINES) c.backlog.splice(0, c.backlog.length - MAX_CELL_LINES);
+      }
+    } else if (this.mode === 'grid' || this.mode === 'focus') {
+      for (const [c, cellItems] of cells) appendTo(c.list, mergedItemsHtml(cellItems, c.list.lastElementChild), MAX_CELL_LINES);
+      this.cellLines.afterAppend();
+      this.mergedBacklog.push(...items);
+      if (this.mergedBacklog.length > MAX_LINES) this.mergedBacklog.splice(0, this.mergedBacklog.length - MAX_LINES);
+    }
     // 후원 목록 — 줄을 붙인 뒤에 넣어야 목록이 '채팅에 있는 줄'로 그린다. 채팅 설정(차단·후원 숨김)을 줄과 같이 따른다.
     const donations = panelOf(this.chatEl)?.donations;
     if (donations && donations.external === 'ml') {
@@ -381,7 +425,7 @@ export class MultiLiveMergedChat {
   system(c, text) {
     if (this.pending.length) this.flush(); // 앞서 온 메시지 뒤에
     const line = `<div class="chat-line system">${esc(text)}</div>`;
-    appendTo(this.list, line, MAX_LINES);
-    if (c.list) appendTo(c.list, line, MAX_CELL_LINES);
+    if (this.mode === 'merged') appendTo(this.list, line, MAX_LINES);
+    else if ((this.mode === 'grid' || this.mode === 'focus') && c.list) appendTo(c.list, line, MAX_CELL_LINES);
   }
 }

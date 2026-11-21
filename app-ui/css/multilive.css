@@ -211,7 +211,7 @@
 .ml-addrow-thumb .ml-addrow-ph-bg { position: absolute; inset: -20%; width: 140%; height: 140%; filter: blur(14px) saturate(1.2); opacity: 0.55; }
 .ml-addrow-thumb img.ml-addrow-ph { position: absolute; left: 50%; top: 50%; width: 30px; height: 30px; border-radius: 50%; translate: -50% -50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.18), 0 4px 10px rgba(0, 0, 0, 0.3); }
 .ml-addrow-open:hover:not(:disabled) .ml-addrow-thumb.no-thumb img { transform: none; }
-.ml-addrow-thumb > span { position: absolute; display: inline-flex; align-items: center; gap: 3px; height: 16px; padding: 0 5px; border-radius: var(--radius-xxs); font-size: var(--fs-micro); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; color: #fff; background: rgba(0, 0, 0, 0.66); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.ml-addrow-thumb > span { position: absolute; display: inline-flex; align-items: center; gap: 3px; height: 16px; padding: 0 5px; border-radius: var(--radius-xxs); font-size: var(--fs-micro); font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; color: #fff; background: rgba(0, 0, 0, 0.76); }
 .ml-addrow-viewers { left: 4px; bottom: 4px; }
 .ml-addrow-viewers .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--live-badge, #e5262b); }
 .ml-addrow-adult { left: 4px; top: 4px; background: var(--live-badge, #e5262b) !important; }
@@ -443,12 +443,12 @@
 /* 후원 알림은 채팅을 보여 주는 패인 위에 — 패인 위·아래 바(z 3)가 나오면 그쪽 클릭이 먼저다. */
 .ml-pane > .stream-alerts { z-index: 2; }
 .ml-pane-top, .ml-pane-bar { position: absolute; left: 0; right: 0; z-index: 3; display: flex; align-items: center; color: var(--text-on-media, #fff);
-  opacity: 0; pointer-events: none; transition: opacity 0.22s ease, transform 0.22s ease; }
+  opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 0.22s ease, transform 0.22s ease, visibility 0s linear 0.22s; }
 .ml-pane-top { top: 0; transform: translateY(-4px); align-items: flex-start; gap: 8px; padding: 10px 10px 34px;
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0.55) 45%, rgba(0, 0, 0, 0.2) 75%, transparent); }
 .ml-pane-bar { bottom: 0; transform: translateY(4px); gap: 2px; padding: 32px 8px 6px;
   background: linear-gradient(to top, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0.55) 45%, rgba(0, 0, 0, 0.2) 75%, transparent); }
-.ml-pane.ctl-visible .ml-pane-top, .ml-pane.ctl-visible .ml-pane-bar, .ml-pane.paused .ml-pane-top, .ml-pane.paused .ml-pane-bar { opacity: 1; transform: none; }
+.ml-pane.ctl-visible .ml-pane-top, .ml-pane.ctl-visible .ml-pane-bar, .ml-pane.paused .ml-pane-top, .ml-pane.paused .ml-pane-bar { opacity: 1; visibility: visible; transform: none; transition: opacity 0.22s ease, transform 0.22s ease, visibility 0s linear 0s; }
 .ml-pane:not(.ctl-visible):not(.paused) :is(.ml-pane-top, .ml-pane-bar) * { pointer-events: none !important; }
 .ml-pane-top .ml-pane-text, .ml-pane-top .grow, .ml-pane-bar .grow { pointer-events: none; }
 /* 막대가 보일 때 조작 요소는 마우스를 받는다. 막대 자체는 영상 클릭(패인 선택)을 막지 않게 none 인데, 그 none 이 상속돼
@@ -1093,8 +1093,8 @@
 .mwi-tabbar {
   position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 0; margin: var(--sp-lg) -2px var(--mwi-gap); padding: 8px 2px;
   border-bottom: 1px solid transparent; transition: border-color var(--dur-2) var(--ease-out), box-shadow var(--dur-2) var(--ease-out);
-  background: color-mix(in srgb, var(--deck, var(--background)) 82%, transparent);
-  backdrop-filter: saturate(160%) blur(16px); -webkit-backdrop-filter: saturate(160%) blur(16px);
+  /* 라이브 영상과 맞닿아 상시 떠 있는 탭바 — backdrop-filter blur 는 GPU·WindowServer 합성 패스를 상시 유발하므로 불투명 배경을 쓴다. */
+  background: var(--deck, var(--background));
 }
 .mwi-tabbar.stuck { border-bottom-color: var(--border-subtle); box-shadow: 0 8px 18px -14px rgba(0, 0, 0, .5); }
 /* 붙은 막대 왼쪽의 작은 채널 표시 — 카드가 지나간 뒤에만 펼쳐진다 */
