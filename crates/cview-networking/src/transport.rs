@@ -226,6 +226,7 @@ impl HttpTransport for ReqwestTransport {
             })
             .collect();
         let body = response.bytes().await.map_err(map_reqwest_error)?.to_vec();
+        cview_core::utils::traffic::add_received(body.len());
         Ok(HttpResponse {
             status,
             headers,

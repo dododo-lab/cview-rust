@@ -661,6 +661,7 @@ impl LocalStreamProxy {
             match resp.chunk().await {
                 Ok(Some(chunk)) => {
                     trace.received(chunk.len());
+                    cview_core::utils::traffic::add_received(chunk.len());
                     if chunk.len() > max - data.len() {
                         failure = true;
                         break;
@@ -760,6 +761,7 @@ impl MediaStream {
             match upstream.chunk().await {
                 Ok(Some(chunk)) => {
                     self.trace.received(chunk.len());
+                    cview_core::utils::traffic::add_received(chunk.len());
                     if let Some(t) = self.tee.as_mut() {
                         t.append(&chunk);
                     }

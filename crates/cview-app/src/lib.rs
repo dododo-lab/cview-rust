@@ -23,6 +23,7 @@ pub mod system;
 pub mod tray;
 pub mod ui_watchdog;
 pub mod updater;
+pub mod usage;
 pub mod webview_store;
 pub mod window_prefs;
 pub mod windows;
@@ -302,6 +303,17 @@ pub fn run() {
             app.manage(services);
             app.manage(shell);
             app.manage(system::PendingDeepLinks::default());
+            // 앱 사용률(설정 › 성능) — 꺼져 있으면 표본 스레드는 잠들어 있다. 화면이 보고 있을 때만 메인 창에 보낸다.
+            {
+                let monitor = usage::UsageMonitor::new(usage::UsageConfig::from_appearance(
+                    &app.state::<AppServices>().settings.appearance(),
+                ));
+                let h = handle.clone();
+                monitor.start(move |live| {
+                    let _ = h.emit_to(MAIN_WINDOW, usage::SAMPLE_EVENT, live);
+                });
+                app.manage(monitor);
+            }
             spawn_multi_live_state_task(handle.clone());
             {
                 use tauri_plugin_deep_link::DeepLinkExt;
@@ -391,6 +403,11 @@ pub fn run() {
             commands::settings::settings_import,
             commands::settings::settings_reset,
             commands::settings::network_preset,
+            commands::usage::usage_status,
+            commands::usage::usage_history,
+            commands::usage::usage_watch,
+            commands::usage::usage_clear,
+            commands::usage::usage_export,
             commands::multi_live::multilive_set_audio_suspended,
             commands::media::vod_play,
             commands::preview::preview_source,

@@ -18,7 +18,7 @@ const { chromium } = require('playwright');
 const AXE = fs.readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 
 const ROOT = path.resolve('app-ui');
-const CSS = ['app.css', 'multilive.css', 'motion.css', 'controls.css'].map((f) => [f, fs.readFileSync(path.join(ROOT, 'css', f), 'utf8')]);
+const CSS = ['app.css', 'multilive.css', 'motion.css', 'controls.css', 'usage.css'].map((f) => [f, fs.readFileSync(path.join(ROOT, 'css', f), 'utf8')]);
 const results = [];
 async function check(id, fn) {
   try { await fn(); results.push({ id, ok: true }); } catch (e) { results.push({ id, ok: false, error: e.message }); }

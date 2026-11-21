@@ -1314,7 +1314,7 @@ export class MultiLivePage {
     // 지금 보는 칩이 늘 창 안에 오게 맞춘다(새로 연 채널이 숨은 쪽에 있으면 추가가 안 된 것처럼 보인다).
     const chips = [...picker.querySelectorAll('.ml-watch-chip')];
     const at = chips.findIndex((c) => c.classList.contains('active'));
-    this.chipWindow = chipWindowFor(this.header.clientWidth);
+    this.chipWindow = this.chipWindowNow();
     if (at >= 0 && (at < this.chipStart || at >= this.chipStart + this.chipWindow)) this.chipStart = at < this.chipStart ? at : at - this.chipWindow + 1;
     this.applyChipWindow();
     this.applyChipStates(list);
@@ -1473,9 +1473,18 @@ export class MultiLivePage {
   }
 
   /** 머리줄 폭이 바뀌면 보이는 칩 수를 다시 정한다(바뀔 때만 다시 나눈다). */
+  /**
+   * 지금 머리줄에 둘 칩 수 — 툴바의 앱 사용률 칩(usage-chip.js)이 차지한 폭만큼 좁은 머리줄로 본다(안 빼면 칩 줄이 넘쳐
+   * "+N" 이 밀려났다). 칩 줄을 다시 그릴 때(renderWatchPicker)와 머리줄 폭이 바뀔 때(syncChipWindowSize) 같은 값을 쓴다.
+   */
+  chipWindowNow() {
+    const usage = this.header.querySelector(':scope > .ml-toolbar > .usage-chip:not([hidden])');
+    return chipWindowFor(this.header.clientWidth - (usage ? usage.offsetWidth + 8 : 0));
+  }
+
   syncChipWindowSize() {
     if (this.watchPicker.hidden) return;
-    const n = chipWindowFor(this.header.clientWidth);
+    const n = this.chipWindowNow();
     if (n === this.chipWindow) return;
     this.chipWindow = n;
     const tabs = [...this.watchPicker.querySelectorAll('.ml-watch-tab')];

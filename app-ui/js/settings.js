@@ -1,4 +1,4 @@
-// 설정 — 원본 SettingsView / SettingsWorkspace: 그룹 탭(개요·시청·채팅·멀티·일반·연동·고급·정보) + 설정 검색 (SET-01).
+// 설정 — 원본 SettingsView / SettingsWorkspace: 그룹 탭(개요·시청·채팅·멀티·일반·연동·성능·고급·정보) + 설정 검색 (SET-01).
 // 항목은 스키마로 정의하고 Rust 설정 도메인(settings_update)에 바로 저장한다.
 // SET-02~06 플레이어·지연·되감기·스크린샷·비디오, SET-07 채팅, SET-08 일반, SET-09 외관,
 // SET-10 성능, SET-11 네트워크(프리셋), SET-13 채널 알림, SET-15 동기화, SET-16 도메인, SET-17 백업·복원·초기화,
@@ -18,6 +18,8 @@ import { thumbPreviewEnabled, setThumbPreviewEnabled } from './hover-preview.js'
 import { SHARPNESS_LEVELS, SHARPNESS_HELP, ENLARGED_ONLY_LABEL, ENLARGED_ONLY_HELP, sharpnessState, setSharpness } from './sharpness.js';
 import { checkForUpdate, lastUpdateResult, updateSummary, downloadTarget, openDownload, currentAppInfo, canInstall, installUpdate, progressHtml, renderProgress } from './update-check.js';
 import { aboutHtml, fillAbout, onAboutClick } from './settings-about.js';
+import { usagePanelHtml, mountUsagePanel } from './settings-usage.js';
+import { clearUsage, exportUsage } from './usage-monitor.js';
 
 const opt = (pairs) => pairs.map(([value, label]) => ({ value, label }));
 
@@ -119,6 +121,15 @@ export const SCHEMA = [
     { d: 'sync', k: 'watchHistorySyncEnabled', label: '시청 기록 동기화', type: 'toggle' },
     { d: 'sync', k: 'endpoint', label: '동기화 서버', type: 'text' },
   ]],
+  // 성능 — 앱 사용률 측정·기록(그래프 패널은 settings-usage.js, 값은 외관 도메인 usage*). 머리줄 칩은 usage-chip.js.
+  ['usage', '측정 · 기록', [
+    { d: 'appearance', k: 'usageMonitor', label: '사용률 측정', help: '앱과 웹 화면·GPU·네트워크 도우미 프로세스의 CPU·GPU·메모리·네트워크 수신을 재어 기록합니다. 끄면 측정을 멈춰 CPU를 쓰지 않습니다', keywords: '성능 사용률 모니터 cpu gpu 메모리 램 네트워크 자원', type: 'toggle' },
+    { d: 'appearance', k: 'usageInHeader', label: '머리줄에 표시', help: '화면 위 머리줄에 실시간 사용률 칩을 보입니다 — 누르면 자세히 봅니다(측정이 켜져 있을 때)', keywords: '상단 메뉴 칩 사용률', type: 'toggle' },
+    { d: 'appearance', k: 'usageIntervalMs', label: '측정 간격', help: '짧을수록 그래프가 촘촘하고, 길수록 측정 부담이 줄어듭니다', type: 'select', options: opt([[1000, '1초'], [2000, '2초'], [5000, '5초'], [10000, '10초']]) },
+    { d: 'appearance', k: 'usageHistoryMinutes', label: '기록 기간', help: '이만큼 지난 기록은 지웁니다. 기록은 메모리에만 있고 앱을 끄면 사라집니다', type: 'select', options: opt([[5, '5분'], [15, '15분'], [30, '30분'], [60, '1시간'], [120, '2시간']]) },
+    { type: 'action', action: 'usage-export-csv', label: '기록 내보내기', help: '다운로드 › CView 폴더에 저장합니다 — CSV는 표 계산 앱에서, JSON은 기기 정보·단위와 함께', keywords: '사용률 csv json 저장', button: 'CSV로 내보내기', button2: ['usage-export-json', 'JSON'] },
+    { type: 'action', action: 'usage-clear', label: '기록 지우기', help: '지금까지 모은 사용률 기록을 지웁니다(측정은 계속됩니다)', keywords: '사용률 초기화', button: '기록 지우기' },
+  ]],
   ['advanced', '네트워크', [
     { d: 'network', k: 'requestRateLimit', label: '초당 요청 한도', type: 'range', min: 1, max: 30, step: 1 },
     { d: 'network', k: 'maxConcurrentAPIRequests', label: '동시 API 요청', type: 'range', min: 1, max: 12, step: 1 },
@@ -145,7 +156,7 @@ export const SCHEMA = [
 
 const GROUPS = [
   ['overview', '개요'], ['watch', '시청'], ['chat', '채팅'], ['multi', '멀티라이브'],
-  ['general', '일반'], ['link', '연동'], ['advanced', '고급'], ['about', '정보'],
+  ['general', '일반'], ['link', '연동'], ['usage', '성능'], ['advanced', '고급'], ['about', '정보'],
 ];
 // 정보 › 업데이트 묶음의 토글 — 예전엔 일반 탭에 있었다(update-notify.js 가 읽는 general.autoCheckUpdates 그대로).
 // keywords — 예전 이름('업데이트 자동 확인')으로 찾아도 나오게.
@@ -198,8 +209,12 @@ function itemHtml(item, values) {
   const search = esc(`${item.label} ${item.help || ''} ${item.keywords || ''} ${item.k || ''}`.toLowerCase());
   const wrap = (inner) => `<label class="setting${item.adv ? ' adv' : ''}" data-search="${search}">${label}${inner}</label>`;
   switch (item.type) {
-    case 'action':
-      return `<div class="setting" data-search="${search}">${label}<button class="btn" data-setting-action="${esc(item.action)}">${esc(item.button)}</button></div>`;
+    case 'action': {
+      // button2: [동작, 이름] — 같은 줄의 두 번째 단추(예: CSV · JSON 내보내기).
+      const second = item.button2 ? `<button class="btn" data-setting-action="${esc(item.button2[0])}">${esc(item.button2[1])}</button>` : '';
+      const buttons = `<button class="btn" data-setting-action="${esc(item.action)}">${esc(item.button)}</button>${second}`;
+      return `<div class="setting" data-search="${search}">${label}${second ? `<span class="shortcut-edit">${buttons}</span>` : buttons}</div>`;
+    }
     case 'toggle':
       return wrap(`<span class="toggle"><input type="checkbox" ${attrs} ${v ? 'checked' : ''}${off}><span></span></span>`);
     case 'select':
@@ -226,6 +241,14 @@ export class SettingsPage {
     this.showAdvanced = false;
     this.body.addEventListener('change', (e) => this.onChange(e.target));
     window.addEventListener('cview:sharpness', () => this.syncSharpnessControls());
+    // 머리줄 사용률 팝오버의 '기록·내보내기' — 성능 탭으로 연다(검색은 닫는다).
+    window.addEventListener('cview:settings-group', (e) => {
+      const g = e.detail && e.detail.group;
+      if (!GROUPS.some(([id]) => id === g)) return;
+      this.group = g;
+      this.query = '';
+      if (this.settings && !this.root.hidden) this.render();
+    });
     this.body.addEventListener('input', (e) => {
       if (e.target.matches('.settings-search')) this.onSearch(e.target);
       if (e.target.type === 'range') {
@@ -286,12 +309,16 @@ export class SettingsPage {
     </div>`;
     // 정보 탭은 한 단 — 머리말을 가운데 두고 카드를 그 아래로 쌓는다(검색 중엔 다른 탭 결과와 같이 두 단으로 흐른다).
     const about = this.group === 'about' && !this.query;
-    this.body.innerHTML = `${tabs}<div class="settings-groups${about ? ' about-tab' : ''}">${this.groupHtml()}</div><div class="empty settings-search-empty" role="status" hidden></div>`;
+    // 성능 탭도 한 단 — 넓은 그래프 패널 아래에 측정 설정.
+    const usageTab = this.group === 'usage' && !this.query;
+    this.body.innerHTML = `${tabs}<div class="settings-groups${about ? ' about-tab' : ''}${usageTab ? ' usage-tab' : ''}">${this.groupHtml()}</div><div class="empty settings-search-empty" role="status" hidden></div>`;
     bindTabKeys(this.body.querySelector('.settings-tabs'));
     this.applySearch();
     this.refreshOAuth();
     if (this.body.querySelector('.update-row')) this.showUpdate();
     if (this.body.querySelector('[data-g="about"]')) fillAbout(this.body);
+    const usagePanel = this.body.querySelector('[data-usage-panel]');
+    if (usagePanel) mountUsagePanel(usagePanel);
     if (this.body.querySelector('[data-setting-action="clear-image-cache"]')) api.imageCacheStatus().then((st) => this.showImageCache(st)).catch(() => {});
   }
 
@@ -380,6 +407,8 @@ export class SettingsPage {
     if (want('overview')) sections.push(this.overviewHtml());
     for (const [g, title, items] of SCHEMA) {
       if (!want(g)) continue;
+      // 성능 탭 맨 위 — 실시간 그래프 패널(검색 중엔 설정 줄만).
+      if (g === 'usage' && !this.query) sections.push(usagePanelHtml());
       const adv = items.some((i) => i.adv);
       sections.push(`<section class="settings-group" data-g="${g}"><h2>${esc(title)}${adv ? `<button class="link-btn adv-toggle" data-adv>${this.showAdvanced ? '고급 숨기기' : '고급 보기'}</button>` : ''}</h2>
         ${items.map((i) => itemHtml(i, this.settings)).join('')}</section>`);
@@ -867,6 +896,21 @@ export class SettingsPage {
     }
     if (settingAction && settingAction.dataset.settingAction === 'open-logs') {
       api.perfLogStatus().then((s) => api.revealPath(s.file && s.enabled ? s.file : s.dir)).catch((er) => toast(`로그 폴더를 열 수 없습니다 — 디버그 로그를 한 번 켜 주세요 (${er.message || er})`));
+      return;
+    }
+    if (settingAction && /^usage-export-(csv|json)$/.test(settingAction.dataset.settingAction)) {
+      const format = settingAction.dataset.settingAction.slice('usage-export-'.length);
+      if (settingAction.getAttribute('aria-disabled') === 'true') return;
+      settingAction.setAttribute('aria-disabled', 'true');
+      try {
+        const path = await exportUsage(format);
+        toast(`내보냈습니다 — ${path}`, 4000, { label: IS_WINDOWS ? '탐색기에서 보기' : 'Finder에서 보기', run: () => api.revealPath(path) });
+      } catch (er) { toast(er.message || String(er)); } finally { settingAction.removeAttribute('aria-disabled'); }
+      return;
+    }
+    if (settingAction && settingAction.dataset.settingAction === 'usage-clear') {
+      if (!armConfirm(settingAction, { armedLabel: '한 번 더 누르면 지웁니다', what: '사용률 기록' })) return;
+      try { await clearUsage(); toast('사용률 기록을 지웠습니다', 1500); } catch (er) { toast(er.message || String(er)); }
       return;
     }
     if (e.target.closest('[data-open-shortcuts]')) { window.dispatchEvent(new CustomEvent('cview:menu', { detail: 'shortcuts' })); return; }

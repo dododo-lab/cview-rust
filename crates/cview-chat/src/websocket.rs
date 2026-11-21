@@ -792,9 +792,11 @@ async fn receive_loop(
                 }
                 match message {
                     Message::Text(text) => {
+                        cview_core::utils::traffic::add_received(text.len());
                         let _ = inner.msg_tx.send(WebSocketMessage::Text(text));
                     }
                     Message::Binary(data) => {
+                        cview_core::utils::traffic::add_received(data.len());
                         let _ = inner.msg_tx.send(WebSocketMessage::Data(data));
                     }
                     Message::Close(frame) => {

@@ -525,6 +525,9 @@ impl LocalStreamProxy {
                     .and_then(|v| v.to_str().ok())
                     .map(str::to_string);
                 let body = resp.bytes().await.ok().map(|b| b.to_vec());
+                if let Some(b) = &body {
+                    cview_core::utils::traffic::add_received(b.len());
+                }
                 (
                     body,
                     UpstreamFetchResponse {

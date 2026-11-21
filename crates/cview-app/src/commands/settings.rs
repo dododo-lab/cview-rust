@@ -202,6 +202,12 @@ pub fn apply_ui_zoom_all(app: &tauri::AppHandle, scale: f64) {
 fn appearance_changed(app: &tauri::AppHandle, services: &AppServices) {
     let appearance = services.settings.appearance();
     apply_ui_zoom_all(app, appearance.ui_scale);
+    // 사용률 측정 켜기·간격·기간(설정 › 성능) — 같은 값이면 표본 스레드는 그대로다.
+    if let Some(monitor) =
+        tauri::Manager::try_state::<std::sync::Arc<crate::usage::UsageMonitor>>(app)
+    {
+        monitor.configure(crate::usage::UsageConfig::from_appearance(&appearance));
+    }
     let _ = tauri::Emitter::emit(
         app,
         super::events::APPEARANCE_CHANGED,

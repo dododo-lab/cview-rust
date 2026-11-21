@@ -30,6 +30,7 @@ const READ_ONLY = new Set([
   'channel_clips', 'channel_posts', 'search', 'search_more_clips', 'search_videos', 'following_channels_all',
   'following_vods', 'insights_report', 'multilive_state', 'multilive_stage_size', 'multilive_set_window_occluded',
   'image_cache_status', 'live_connector_status', 'player_record_status', 'preset_list', 'release_notes', 'vod_detail',
+  'usage_status', 'usage_history', 'usage_watch',
 ]);
 const inflight = new Map();
 
@@ -102,6 +103,8 @@ export const Events = Object.freeze({
   appearanceChanged: 'settings://appearance',
   downloadUpdate: 'download://update',
   deepLink: 'deeplink://open',
+  /** 앱 사용률 표본(usage-monitor.js) — 화면이 usage_watch(true) 로 보고 있을 때만 메인 창에 온다. */
+  usageSample: 'usage://sample',
 });
 
 export const api = {
@@ -228,6 +231,12 @@ export const api = {
   deeplinkTakePending: () => invoke('deeplink_take_pending'),
   multiLiveRetry: (sessionId = null) => invoke('multilive_retry', { sessionId }),
   settingsExport: () => invoke('settings_export'),
+  // 앱 사용률(설정 › 성능·머리줄 칩) — usage-monitor.js
+  usageStatus: () => invoke('usage_status'),
+  usageHistory: (since = null) => invoke('usage_history', { since }),
+  usageWatch: (on) => invoke('usage_watch', { on }),
+  usageClear: () => invoke('usage_clear'),
+  usageExport: (format) => invoke('usage_export', { format }),
   settingsImport: (json) => invoke('settings_import', { json }),
   settingsReset: (domain) => invoke('settings_reset', { domain }),
   networkPreset: (preset) => invoke('network_preset', { preset }),
