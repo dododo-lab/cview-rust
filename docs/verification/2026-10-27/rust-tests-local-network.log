@@ -1,0 +1,18 @@
+   Compiling cview-core v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-core)
+   Compiling cview-app v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app)
+   Compiling cview-persistence v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-persistence)
+   Compiling cview-networking v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-networking)
+   Compiling cview-chat v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-chat)
+   Compiling cview-auth v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-auth)
+   Compiling cview-player v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-player)
+   Compiling cview-app-core v0.1.36 (/Users/dong/Downloads/cview-rust-main/crates/cview-app-core)
+error: failed to write query cache to `/Volumes/data/project/Rust/CView/target/debug/incremental/cview_app_core-39nu8s0npq0yl/s-hnl52ztoru-1q49qgf-working/query-cache.bin`: No space left on device (os error 28)
+
+error: could not compile `cview-app-core` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not write output to /Volumes/data/project/Rust/CView/target/debug/deps/cview_app_core-11a179858f542c73.e43fqoysbij3jmxajitf2ewoa.05y8tga.rcgu.o: No space left on device
+
+error: could not compile `cview-app-core` (lib test) due to 1 previous error
+error: failed to create file encoder: No space left on device (os error 28)
+
+error: could not compile `cview-app` (lib) due to 1 previous error

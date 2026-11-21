@@ -1,0 +1,26 @@
+{
+  "signature": {
+    "exit_code": 0,
+    "output": "/Applications/CView.app: valid on disk\n/Applications/CView.app: satisfies its Designated Requirement\n"
+  },
+  "gatekeeper": {
+    "exit_code": 0,
+    "output": "/Applications/CView.app: accepted\nsource=Notarized Developer ID\n"
+  },
+  "dmg_staple": {
+    "exit_code": 0,
+    "output": "Processing: /Users/dong/Downloads/cview-rust-main/dist/CView_0.1.36_arm64.dmg\nThe validate action worked!\n"
+  },
+  "installed": {
+    "CFBundleIdentifier": "app.cview.rust",
+    "CFBundleShortVersionString": "0.1.36",
+    "CFBundleVersion": "36",
+    "sha256": "83356fa7006e548d78c14a685c386da30a5a2d191d02cc9945f80b38e5e98b05"
+  },
+  "receipt_fields": [
+    "verified_at",
+    "server_verified",
+    "client_download_verified",
+    "manifest"
+  ]
+}

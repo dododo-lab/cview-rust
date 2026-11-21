@@ -1,0 +1,138 @@
+{
+  "docs/verification/2026-10-27/artifact-check.json": {
+    "bytes": 795,
+    "sha256": "fa9c384ec33c1925085847b4c88fb8b9106ff8c6e0243dbdbac9c349c527d625"
+  },
+  "docs/verification/2026-10-27/artifact-hashes.json": {
+    "bytes": 250,
+    "sha256": "d0e05ca38cc7ea24d9aed73860218cb64def23e77e36ce6c76b392225e4a3c71"
+  },
+  "docs/verification/2026-10-27/baseline-commit.txt": {
+    "bytes": 41,
+    "sha256": "21eb3e6f161c3be5c7c885f0ef9c3f43a895a7d740d995bfe3d59da8a6daf385"
+  },
+  "docs/verification/2026-10-27/build-qa-app.log": {
+    "bytes": 2845,
+    "sha256": "9676fd377cb647528c3b36c4cc4f94019932b656ba438155a5301ade528749f4"
+  },
+  "docs/verification/2026-10-27/cargo-audit.json": {
+    "bytes": 10899,
+    "sha256": "e12e854a678f884b5800407d82fd8ef786658d13e3db4011bd6f79d7d23ac216"
+  },
+  "docs/verification/2026-10-27/cargo-audit.log": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "docs/verification/2026-10-27/clippy-macos-isolated.log": {
+    "bytes": 8825,
+    "sha256": "f95c1ee1fb7b4df407481a7d4e482dccb39f03fccdbade4af670669e3fc4b11a"
+  },
+  "docs/verification/2026-10-27/clippy-macos.log": {
+    "bytes": 177,
+    "sha256": "7e86835f8b7af4685de9eb7a5ea7a6be1ffdd29682d479468c091fbacb8a7c21"
+  },
+  "docs/verification/2026-10-27/clippy-windows.log": {
+    "bytes": 8899,
+    "sha256": "272b0befb76d4d3df463763c2fac6ad17b7467bdb3a21778179ab2faf9976dab"
+  },
+  "docs/verification/2026-10-27/dependency-paths-linux.log": {
+    "bytes": 2850,
+    "sha256": "4fdb488155109352d9e38cd0bf8bf5d073cc92385524e27081b24fccb52edab8"
+  },
+  "docs/verification/2026-10-27/dependency-paths-macos.log": {
+    "bytes": 176,
+    "sha256": "4dc8e4fe7f86c681d8b81d94c4e76a3dda13457f37def5513d5850195a7778f6"
+  },
+  "docs/verification/2026-10-27/dependency-warning-paths.json": {
+    "bytes": 14015,
+    "sha256": "258ebb4d940fc71440ea15cfd8c4ad55dcd43cb3334c08fce8ee5a7b06a5186c"
+  },
+  "docs/verification/2026-10-27/final-source-check.json": {
+    "bytes": 182,
+    "sha256": "f34e70b87d1bd4800b0314a30405baed609bc9415becf01497f02e9b90afb232"
+  },
+  "docs/verification/2026-10-27/format.log": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "docs/verification/2026-10-27/frontend-behavior-initial-harness.log": {
+    "bytes": 1934,
+    "sha256": "f4ee69aa57c8d3ef7c7052585c3b3c6a86af77eb60f8b5db9121012ee36ddf2b"
+  },
+  "docs/verification/2026-10-27/frontend-behavior.log": {
+    "bytes": 1010,
+    "sha256": "a9458290aea4fd70e8db5b0c5172bef4a6d6eed92d94f1e8019d95658d9ee4ad"
+  },
+  "docs/verification/2026-10-27/frontend-behavior.mjs": {
+    "bytes": 7950,
+    "sha256": "f908e758c9745885e231497e87d31ade2a05687335ba2db9767a5eaeb54f2149"
+  },
+  "docs/verification/2026-10-27/frontend-module-links.log": {
+    "bytes": 211,
+    "sha256": "bb5aa3c7582b43aaeb3f352e3c08aa3d4beada1e075d755032cc808c9788c42a"
+  },
+  "docs/verification/2026-10-27/frontend-static.json": {
+    "bytes": 4342,
+    "sha256": "fe2583ebfd447941ede0b244d30172aac596731626f88bce9c6d0ecbe47e54b2"
+  },
+  "docs/verification/2026-10-27/live-update-tests.log": {
+    "bytes": 211,
+    "sha256": "566459e2687e4336213565c6a212936fdf6414422d8ee24f7cf8e8d0a680240a"
+  },
+  "docs/verification/2026-10-27/metadata.json": {
+    "bytes": 46324,
+    "sha256": "cba0fd1dbc2533c7299644b9bf27592d35968051509472fdd2fe4e8c8eacece5"
+  },
+  "docs/verification/2026-10-27/qa-app-identity.json": {
+    "bytes": 453,
+    "sha256": "4aab57a51f1668b9895edbe2cc319dc9c0a7153f210020dadc98fbbb1d7d9c75"
+  },
+  "docs/verification/2026-10-27/qa-final-multilive.png": {
+    "bytes": 618061,
+    "sha256": "b125482a4e70cc527470a6b0a79f327824291e5562586d6281a58563b06a5e02"
+  },
+  "docs/verification/2026-10-27/qa-runtime-metrics.jsonl": {
+    "bytes": 57037,
+    "sha256": "75c5934dff560b037eeb510c3ddd4ac9f8b4e8cc2f771466f0f978ca63b315ed"
+  },
+  "docs/verification/2026-10-27/qa-runtime-summary.json": {
+    "bytes": 1445,
+    "sha256": "0f88e3362ecde3dcc25e5371aaf8e8db4598bfd21c2a5aade4a4138372c5bc4a"
+  },
+  "docs/verification/2026-10-27/release-automation-tests.log": {
+    "bytes": 1577,
+    "sha256": "77537c62a8e01b33502ed262b213efb84b722ad0c8561eed56c4f1ab007e0028"
+  },
+  "docs/verification/2026-10-27/release-shell-syntax.log": {
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "docs/verification/2026-10-27/rust-tests-isolated.log": {
+    "bytes": 140205,
+    "sha256": "bfa8b9c570fd95158a68829355b17bf8e59a8685f25f6c82aba84dbb6501d83a"
+  },
+  "docs/verification/2026-10-27/rust-tests-local-network.log": {
+    "bytes": 1503,
+    "sha256": "1fb825970ddff46fee3d0115a90a8cc2d9286304c52edf4bce0feeacab8aa250"
+  },
+  "docs/verification/2026-10-27/rust-tests.log": {
+    "bytes": 138,
+    "sha256": "880d0e9be3488bf498b94a0ca7a20a63ba0a8761215e38d7c1a6cbb16430f7f1"
+  },
+  "docs/verification/2026-10-27/source-inventory.json": {
+    "bytes": 60683,
+    "sha256": "f0dbb4442e864b15b90bc59a3565fc26e19298960d2d033e1465b808c1dd9429"
+  },
+  "docs/verification/2026-10-27/test-summary.json": {
+    "bytes": 8858,
+    "sha256": "f9fbeef0685d1b9b34fe4d8d4fc2ee7a9a2c48f264408b0ebad7f6564e9967c1"
+  },
+  "docs/verification/2026-10-27/tooling-syntax.json": {
+    "bytes": 1977,
+    "sha256": "0f41ddf894b108eaaa94b53e4d5b7f8c60bc7806c31dc04ef56119817e8ef2ec"
+  },
+  "docs/PROJECT_VERIFICATION_2026-10-27.md": {
+    "bytes": 17048,
+    "sha256": "d8b57708e545e6f835a36e7d86b736d1173c6eb3e67d7ecdcc610fba3c80adef"
+  }
+}

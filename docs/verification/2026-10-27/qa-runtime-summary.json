@@ -1,0 +1,56 @@
+{
+  "source_commit": "114a89686d8341e98545321fd19533cfa0e0606f",
+  "begin_utc": "2026-10-27T01:07:19.182Z",
+  "end_utc": "2026-10-27T01:09:39.239Z",
+  "samples": 15,
+  "duration_seconds": 140.057,
+  "channels": [
+    {
+      "channel": "김나성",
+      "tag": "a9ab39",
+      "first_frames": 10559,
+      "last_frames": 14731,
+      "frame_delta": 4172,
+      "final_height": 360,
+      "final_dropped_counter": 0,
+      "all_samples_playing": true,
+      "maximum_stalls": 0
+    },
+    {
+      "channel": "하쿠텐 후와",
+      "tag": "7792c6",
+      "first_frames": 8530,
+      "last_frames": 12790,
+      "frame_delta": 4260,
+      "final_height": 360,
+      "final_dropped_counter": 8,
+      "all_samples_playing": true,
+      "maximum_stalls": 0
+    },
+    {
+      "channel": "아인 슈페너",
+      "tag": "736ded",
+      "first_frames": 85,
+      "last_frames": 8435,
+      "frame_delta": 8350,
+      "final_height": 1080,
+      "final_dropped_counter": 1,
+      "all_samples_playing": true,
+      "maximum_stalls": 1
+    },
+    {
+      "channel": "아카캉 Akang",
+      "tag": "5b16dd",
+      "first_frames": 14319,
+      "last_frames": 18483,
+      "frame_delta": 4164,
+      "final_height": 360,
+      "final_dropped_counter": 2,
+      "all_samples_playing": true,
+      "maximum_stalls": 0
+    }
+  ],
+  "qa_process_running": false,
+  "all_interval_samples_count": 15,
+  "all_players_frames_increased_at_every_sample": true
+}

@@ -1,0 +1,15 @@
+PASS new messages keep a following list at the bottom
+PASS user scroll preserves the reading position before the resume deadline
+PASS idle multichat resumes following after eight seconds
+PASS holding the scrollbar suppresses automatic resumption
+PASS background geometry drift resynchronizes when the page becomes visible
+PASS disabled ordinary-chat autoscroll is respected during focus resync
+PASS a disconnected pane reconnects only once after the grace period
+PASS messages arriving before retry cancel redundant reconnection
+PASS late messages from a previous chat channel are discarded
+PASS dropping a pane cancels retry and disconnects its session
+PASS reconnection skips replayed history and accepts subsequent live messages
+PASS auxiliary windows do not acquire main-window multichat sessions
+{"passed":12,"failed":0,"total":12}
+(node:26791) ExperimentalWarning: VM Modules is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)

@@ -1,0 +1,7 @@
+
+running 2 tests
+test system::tests::live_update_feed ... ok
+test updater::mac::e2e::updater_e2e_real_feed ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 94 filtered out; finished in 8.17s
+
