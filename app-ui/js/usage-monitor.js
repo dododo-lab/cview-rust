@@ -31,7 +31,10 @@ export function initUsage() {
       const [settings, history] = await Promise.all([api.settingsGet(), api.usageHistory(null)]);
       store.status = status;
       store.appearance = (settings && settings.appearance) || {};
-      store.samples = (history && history.samples) || [];
+      const all = (history && history.samples) || [];
+      // 기록 기간으로 자른 채 시작한다 — 첫 표본에서 한꺼번에 잘리며 그래프·표가 튀지 않게.
+      const last = all[all.length - 1];
+      store.samples = last ? all.filter((s) => s.t >= last.t - keepMs()) : all;
       store.latest = status.latest || null;
     } catch {
       return false;

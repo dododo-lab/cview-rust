@@ -7,6 +7,7 @@
 // U05 GPU 지원 — 못 읽으면 '지원 안 됨'(aria-disabled, 화살표가 건너뜀), 전체만 읽으면 전체 GPU 값과 안내.
 // U06 실시간 받기 — 칩이 보이면 usage_watch(true). 창이 숨으면 usage_watch(false), 다시 보이면 true 와 그동안 기록 채우기(since).
 // U07 설정 › 성능 — '연동'과 '고급' 사이 탭, 상태 알약·통계·그래프, 지표·기간 라디오(화살표 키), 표로 보기(1분 평균).
+// U07b 표로 보기는 분 묶음이 바뀔 때만 다시 그린다(기록 기간이 짧아 맨 앞 표본이 초마다 잘려도).
 // U08 내보내기·지우기 — CSV·JSON 은 usage_export(format) 후 경로 알림, 지우기는 두 번 눌러야(armConfirm) 한 번만 지운다.
 // U09 설정 바꾸기 — '머리줄에 표시' 끄면 칩이 숨고, '사용률 측정'을 끄면 패널이 '측정 꺼짐'. 설정을 떠나면 실시간 받기를 그만둔다.
 // U10 팝오버 '기록·내보내기' — 설정 › 성능 탭으로 간다.
@@ -77,7 +78,7 @@ function usageMock([opts]) {
   const samples = Array.from({ length: opts.count ?? 240 }, (_, i) => mk(now - ((opts.count ?? 240) - i) * 1000, i));
   const groups = [{ kind: 'app', cpu: 12, mem: 180e6, count: 1 }, { kind: 'web', cpu: 42, mem: 640e6, count: 2 }, { kind: 'gpu', cpu: 20, mem: 260e6, count: 1 }, { kind: 'network', cpu: 3, mem: 40e6, count: 1 }];
   const cfg = {
-    enabled: opts.enabled ?? true, inHeader: opts.inHeader ?? true, intervalMs: 1000, historyMinutes: 15,
+    enabled: opts.enabled ?? true, inHeader: opts.inHeader ?? true, intervalMs: 1000, historyMinutes: opts.historyMinutes ?? 15,
     gpu: opts.gpu || { probed: true, app: true, system: true, memoryScope: 'system', name: 'Apple M1 Max' },
   };
   const u = window.__usage = { cfg, calls: [], samples, groups, watching: false, i: samples.length };
@@ -326,8 +327,45 @@ await check('U07 설정 성능 탭', async () => {
   const rows = await page.$$eval(`${p} .usage-table tbody tr`, (r) => r.length);
   assert.ok(rows >= 4 && rows <= 6, `1분 평균 줄 ${rows}`);
   assert.equal(await page.$eval(`${p} .usage-table thead`, (t) => t.textContent.replace(/\s+/g, '')), '시각CPUGPU메모리네트워크');
+  // 같은 분 안의 새 표본·오래된 표본 잘림으로는 표를 다시 그리지 않는다(분이 바뀔 때만).
+  const kept = await page.evaluate((sel) => {
+    const row = document.querySelector(`${sel} .usage-table tbody tr`);
+    const a = window.__usage.samples;
+    const minute = (t) => Math.floor(t / 60000);
+    const crosses = minute(a[a.length - 1].t + 1000) !== minute(a[a.length - 1].t) || minute(a[1].t) !== minute(a[0].t);
+    window.__usage.push(50);
+    return new Promise((r) => setTimeout(() => r({ crosses, same: document.querySelector(`${sel} .usage-table tbody tr`) === row }), 60));
+  }, p);
+  if (!kept.crosses) assert.ok(kept.same, '표를 초마다 다시 그림');
   await shot(page, 'settings');
   assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('U07b 표는 분이 바뀔 때만', async () => {
+  // 기록 기간 2분 — 표본이 들어올 때마다 맨 앞 표본이 잘린다(예전엔 맨 앞 시각을 키로 써서 표를 초마다 다시 그렸다).
+  const { ctx, page } = await open({ historyMinutes: 2 });
+  await openUsageTab(page);
+  const p = '[data-usage-panel]';
+  await page.click(`${p} .usage-table summary`);
+  const r = await page.evaluate(async (sel) => {
+    const minute = (t) => Math.floor(t / 60000);
+    let rebuilt = 0; let crossings = 0;
+    // 화면 기록(2분 창)의 맨 앞·맨 뒤 분 — 모의 쪽 목록은 잘리지 않으므로 같은 창으로 잘라 본다.
+    const span = () => { const a = window.__usage.samples; const last = a[a.length - 1].t; return [minute(a.find((x) => x.t >= last - 120000).t), minute(last)]; };
+    for (let i = 0; i < 5; i += 1) {
+      const row = document.querySelector(`${sel} .usage-table tbody tr`);
+      const before = span();
+      window.__usage.push(50);
+      await new Promise((ok) => setTimeout(ok, 30));
+      const after = span();
+      if (after[0] !== before[0] || after[1] !== before[1]) { crossings += 1; continue; }
+      if (document.querySelector(`${sel} .usage-table tbody tr`) !== row) rebuilt += 1;
+    }
+    return { rebuilt, crossings };
+  }, p);
+  assert.equal(r.rebuilt, 0, JSON.stringify(r));
+  assert.ok(r.crossings < 5, '분 경계만 지났다');
   await ctx.close();
 });
 

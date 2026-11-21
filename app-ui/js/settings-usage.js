@@ -121,8 +121,9 @@ export async function mountUsagePanel(panel) {
     renderGroups(groups, usage.latest && usage.latest.groups);
     panel.querySelector('[data-up-note]').textContent = noteText();
     if (table.open) {
-      const last = usage.samples[usage.samples.length - 1];
-      const k = `${usage.samples.length ? Math.floor(last.t / 60000) : 0}:${usage.samples.length && usage.samples[0].t}`;
+      // 분이 바뀔 때만 다시 그린다(맨 앞·맨 뒤 분 묶음) — 표는 초마다 바뀌지 않는다.
+      const a = usage.samples;
+      const k = a.length ? `${Math.floor(a[0].t / 60000)}:${Math.floor(a[a.length - 1].t / 60000)}` : 'empty';
       if (k !== tableKey) { tableKey = k; table.querySelector('tbody').innerHTML = minuteRows(usage.samples) || '<tr><td colspan="5">기록이 없습니다</td></tr>'; }
     }
   };
