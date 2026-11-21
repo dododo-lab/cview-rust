@@ -602,6 +602,16 @@ pub struct AppearanceSettings {
     #[serde(rename = "maxMemoryMB")]
     pub max_memory_mb: i64,
     pub debug_mode: bool,
+    /// 앱 사용률 측정·기록(설정 › 성능) — 끄면 표본을 멈추고 머리줄 칩도 숨긴다.
+    pub usage_monitor: bool,
+    /// 화면 머리줄에 사용률 칩을 보인다(측정이 켜져 있을 때).
+    pub usage_in_header: bool,
+    /// 사용률 표본 간격(ms) — [`usage_limits`] 범위로 맞춘다.
+    #[serde(deserialize_with = "de_usage_interval")]
+    pub usage_interval_ms: u32,
+    /// 사용률 기록을 남기는 기간(분) — [`usage_limits`] 범위로 맞춘다.
+    #[serde(deserialize_with = "de_usage_history")]
+    pub usage_history_minutes: u32,
 }
 
 impl Default for AppearanceSettings {
@@ -617,8 +627,47 @@ impl Default for AppearanceSettings {
             ui_scale: ui_scale::DEFAULT,
             max_memory_mb: 512,
             debug_mode: false,
+            usage_monitor: true,
+            usage_in_header: true,
+            usage_interval_ms: usage_limits::INTERVAL_DEFAULT_MS,
+            usage_history_minutes: usage_limits::HISTORY_DEFAULT_MIN,
         }
     }
+}
+
+/// 앱 사용률 측정 간격·기록 기간의 범위.
+pub mod usage_limits {
+    pub const INTERVAL_MIN_MS: u32 = 1_000;
+    pub const INTERVAL_DEFAULT_MS: u32 = 1_000;
+    pub const INTERVAL_MAX_MS: u32 = 10_000;
+    pub const HISTORY_MIN_MIN: u32 = 1;
+    pub const HISTORY_DEFAULT_MIN: u32 = 15;
+    pub const HISTORY_MAX_MIN: u32 = 120;
+
+    pub fn interval_ms(v: i64) -> u32 {
+        v.clamp(i64::from(INTERVAL_MIN_MS), i64::from(INTERVAL_MAX_MS)) as u32
+    }
+
+    pub fn history_minutes(v: i64) -> u32 {
+        v.clamp(i64::from(HISTORY_MIN_MIN), i64::from(HISTORY_MAX_MIN)) as u32
+    }
+}
+
+/// 숫자면 범위로 맞추고, 숫자가 아니면(문자·null) 기본값 — 설정 파일 하나가 틀려도 외관 전체를 잃지 않게.
+fn de_usage_interval<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
+    Ok(serde_json::Value::deserialize(d)?
+        .as_f64()
+        .filter(|v| v.is_finite())
+        .map(|v| usage_limits::interval_ms(v.round() as i64))
+        .unwrap_or(usage_limits::INTERVAL_DEFAULT_MS))
+}
+
+fn de_usage_history<'de, D: Deserializer<'de>>(d: D) -> Result<u32, D::Error> {
+    Ok(serde_json::Value::deserialize(d)?
+        .as_f64()
+        .filter(|v| v.is_finite())
+        .map(|v| usage_limits::history_minutes(v.round() as i64))
+        .unwrap_or(usage_limits::HISTORY_DEFAULT_MIN))
 }
 
 fn de_sidebar_width<'de, D: Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
@@ -1285,5 +1334,35 @@ mod tests {
             serde_json::to_string(&ScreenshotFormat::Png).unwrap(),
             "\"png\""
         );
+    }
+
+    #[test]
+    fn usage_monitor_defaults_and_clamps() {
+        // 예전 설정 파일(키 없음)은 기본값 — 측정·머리줄 표시 켜짐, 1초, 15분.
+        let old: AppearanceSettings = serde_json::from_str(r#"{"debugMode":true}"#).unwrap();
+        assert!(old.usage_monitor && old.usage_in_header);
+        assert_eq!(old.usage_interval_ms, 1_000);
+        assert_eq!(old.usage_history_minutes, 15);
+        // 범위 밖은 맞추고, 숫자가 아니면 기본값(나머지 외관 값은 지킨다).
+        let odd: AppearanceSettings = serde_json::from_str(
+            r#"{"usageIntervalMs":50,"usageHistoryMinutes":9999,"compactMode":true}"#,
+        )
+        .unwrap();
+        assert_eq!(odd.usage_interval_ms, usage_limits::INTERVAL_MIN_MS);
+        assert_eq!(odd.usage_history_minutes, usage_limits::HISTORY_MAX_MIN);
+        assert!(odd.compact_mode);
+        let junk: AppearanceSettings =
+            serde_json::from_str(r#"{"usageIntervalMs":"fast","usageHistoryMinutes":null}"#)
+                .unwrap();
+        assert_eq!(junk.usage_interval_ms, usage_limits::INTERVAL_DEFAULT_MS);
+        assert_eq!(
+            junk.usage_history_minutes,
+            usage_limits::HISTORY_DEFAULT_MIN
+        );
+        let v = serde_json::to_value(AppearanceSettings::default()).unwrap();
+        assert_eq!(v["usageMonitor"], true);
+        assert_eq!(v["usageInHeader"], true);
+        assert_eq!(v["usageIntervalMs"], 1_000);
+        assert_eq!(v["usageHistoryMinutes"], 15);
     }
 }

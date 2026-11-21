@@ -1475,7 +1475,9 @@ export class MultiLivePage {
   /** 머리줄 폭이 바뀌면 보이는 칩 수를 다시 정한다(바뀔 때만 다시 나눈다). */
   syncChipWindowSize() {
     if (this.watchPicker.hidden) return;
-    const n = chipWindowFor(this.header.clientWidth);
+    // 머리줄 툴바의 앱 사용률 칩(usage-chip.js)이 차지한 폭만큼 좁은 머리줄로 본다 — 안 빼면 칩 줄이 넘쳐 "+N" 이 밀려났다.
+    const usage = this.header.querySelector(':scope > .ml-toolbar > .usage-chip:not([hidden])');
+    const n = chipWindowFor(this.header.clientWidth - (usage ? usage.offsetWidth + 8 : 0));
     if (n === this.chipWindow) return;
     this.chipWindow = n;
     const tabs = [...this.watchPicker.querySelectorAll('.ml-watch-tab')];

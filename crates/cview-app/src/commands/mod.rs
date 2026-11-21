@@ -19,6 +19,7 @@ pub mod player;
 pub mod preview;
 pub mod recording;
 pub mod settings;
+pub mod usage;
 
 use serde::Serialize;
 

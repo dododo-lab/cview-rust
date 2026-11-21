@@ -40,6 +40,7 @@ import { installBackgroundSaver, setMenuHidden } from './background-saver.js';
 import { installPerfCollector } from './perf-collector.js';
 import { showMenu, refreshChatAuth, reconnectFailedChats } from './chat.js';
 import { installUiHealth } from './ui-health.js';
+import { installUsageChip } from './usage-chip.js';
 import { kbd, IS_WINDOWS } from './platform.js';
 import { installWindowControls } from './window-controls.js';
 import { withRefreshVeil, cancelRefreshVeil } from './refresh-veil.js';
@@ -851,6 +852,8 @@ async function main() {
   decoratePageHeader(document.querySelector('.viewer-header'), liveIcon, { compact: true });
   installBackgroundSaver();
   installPerfCollector();
+  // 머리줄 앱 사용률 칩(설정 › 성능) — 메인 창만. 명령이 없으면 그리지 않는다.
+  if (!AUX) installUsageChip();
 
   for (const p of Object.values(pages)) {
     const body = p.root.querySelector('.page-body');

@@ -30,6 +30,7 @@ pub mod stable_hash;
 pub mod system_load;
 pub mod thumbnail_tier;
 pub mod time;
+pub mod traffic;
 pub mod watch_duration;
 
 pub use auto_refresh_gate::{AutoRefreshGate, AutoRefreshHolder};
