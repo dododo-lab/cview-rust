@@ -305,7 +305,8 @@ print(max(subs, key=lambda s: s["createdDate"])["id"] if subs else "")' "$(basen
   wait "$win_pid" || win_rc=$?
   echo "   Mac 쪽이 Windows 빌드를 기다린 시간: $(( (SECONDS - win_wait_from) / 60 ))분 $(( (SECONDS - win_wait_from) % 60 ))초"
   win_pid=""
-  cat "$win_log"
+  # 비대화형·논블로킹 파이프에서 수백 KB 로그를 cat 으로 한 번에 쏟으면 EAGAIN 으로 실패할 수 있어 끝부분만 출력한다.
+  tail -n 80 "$win_log" || true
   (( win_rc == 0 )) || { echo "✗ Windows 설치 파일을 만들지 못했습니다(종료 코드 $win_rc) — 로그: $win_log"; exit 1; }
   notes_out="dist/CView_${version}_notes.txt"
   python3 - "$version" "$build" "$notes_out" "${CVIEW_RELEASE_NOTES_FILE:-}" "$no_notarize" <<'PY'
