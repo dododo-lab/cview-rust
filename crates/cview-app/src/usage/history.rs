@@ -9,6 +9,9 @@ use serde::Serialize;
 /// 기록이 아무리 길어도 이보다 많이 두지 않는다(2시간 × 1초 = 7,200 + 여유). 표본 하나는 50바이트 남짓이다.
 pub const HARD_CAP: usize = 7_300;
 
+/// 설정이 허용하는 가장 짧은 표본 간격 — 칸 수 상한은 이 간격으로 센다.
+const MIN_INTERVAL: Duration = Duration::from_secs(1);
+
 /// 표본 하나 — 앱과 도우미 프로세스를 합친 값.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -50,10 +53,13 @@ impl History {
         h
     }
 
-    /// 기간·간격을 바꾼다. 줄어들면 오래된 것부터 버린다.
+    /// 기간·간격을 바꾼다. 기간이 줄면 그보다 오래된 표본을 버린다.
+    ///
+    /// 칸 수 상한은 몰려 들어오는 표본을 막는 안전장치일 뿐이다 — 간격(최소 1초) 기준으로 잡아, 간격을 늘려도
+    /// 기간 안의 예전 표본이 지워지지 않게 한다(1초·15분에서 5초로 바꾸면 901개 중 719개가 사라지던 것).
     pub fn set_window(&mut self, keep: Duration, interval: Duration) {
         self.keep_ms = keep.as_millis().min(i64::MAX as u128) as i64;
-        let every = interval.as_millis().max(1);
+        let every = interval.min(MIN_INTERVAL).as_millis().max(1);
         self.cap = ((keep.as_millis() / every) as usize + 2).min(HARD_CAP);
         if let Some(last) = self.samples.back().map(|s| s.t) {
             self.trim(last);
@@ -203,6 +209,21 @@ mod tests {
         h.set_window(Duration::from_secs(5), Duration::from_secs(1));
         assert_eq!(h.since(None).first().map(|x| x.t), Some(54_000));
         assert!(h.len() <= 7);
+    }
+
+    #[test]
+    fn longer_interval_keeps_samples_inside_window() {
+        let mut h = History::new(Duration::from_secs(15 * 60), Duration::from_secs(1));
+        for i in 0..900 {
+            h.push(s(i * 1000, 0.0));
+        }
+        assert_eq!(h.len(), 900);
+        h.set_window(Duration::from_secs(15 * 60), Duration::from_secs(10));
+        assert_eq!(h.len(), 900, "간격을 늘려도 기간 안의 표본은 그대로");
+        assert_eq!(h.since(None).first().map(|x| x.t), Some(0));
+        // 새 간격의 표본이 이어 들어와도 시간으로만 잘린다.
+        h.push(s(909_000, 0.0));
+        assert_eq!(h.since(None).first().map(|x| x.t), Some(9_000));
     }
 
     #[test]

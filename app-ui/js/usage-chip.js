@@ -35,7 +35,7 @@ export async function installUsageChip() {
   chip.setAttribute('aria-expanded', 'false');
   // 꺾은선은 캔버스 — SVG path 의 d 를 바꾸면 표본마다 레이아웃이 한 번 더 돌았다(글자 갱신과 따로). 캔버스는 칠하기만 한다.
   chip.innerHTML = `<canvas class="uchip-spark" width="${SPARK_W}" height="${SPARK_H}" aria-hidden="true"></canvas>
-    ${ICON_WARN}<span class="uchip-cpu"><span class="uchip-k">CPU</span><span class="uchip-v">—</span></span><span class="uchip-mem"></span>`;
+    <span class="uchip-cpu">${ICON_WARN}<span class="uchip-k">CPU</span><span class="uchip-v">—</span></span><span class="uchip-mem"></span>`;
   // 키보드로 열면(click detail 0) 고른 칸에, 마우스로 열면 대화 상자 자체에 초점 — 마우스 사용자에게 초점 고리를 띄우지 않는다.
   chip.addEventListener('click', (e) => (pop && !pop.hidden ? closePop() : openPop({ keyboard: e.detail === 0 })));
   subscribeUsage((kind) => {

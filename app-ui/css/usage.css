@@ -28,13 +28,16 @@
 .usage-chip[aria-expanded="true"] { color: var(--text-primary); border-color: color-mix(in srgb, var(--u-cpu) 55%, var(--glass-edge)); }
 .usage-chip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 .uchip-spark { flex: none; display: block; width: 44px; height: 18px; color: var(--u-cpu); }
-.uchip-cpu { display: inline-flex; align-items: baseline; gap: 4px; }
+.uchip-cpu { position: relative; display: inline-flex; align-items: baseline; gap: 4px; }
 .uchip-k { font-size: var(--fs-micro); font-weight: 700; letter-spacing: .3px; color: var(--text-tertiary); }
-.uchip-v { color: var(--text-primary); min-width: 3.2ch; text-align: end; }
+/* 칩 폭은 값과 상태에 따라 바뀌지 않는다 — "9.8%"→"15%"→"100%"·경고 아이콘 유무로 폭이 바뀌면 옆 채널 칩 줄이 좌우로 흔들렸다.
+   값 칸은 "100%"(고정 폭 숫자)가 들어가는 너비로 잡고, 경고 아이콘은 'CPU' 글자 자리에 겹친다(높을 때 글자 대신 아이콘). */
+.uchip-v { display: inline-block; min-width: 4.6ch; color: var(--text-primary); text-align: end; }
 .uchip-mem { color: var(--text-secondary); padding-inline-start: 7px; border-inline-start: 1px solid var(--border); }
 .uchip-mem:empty { display: none; }
-.uchip-warn { display: none; width: 13px; height: 13px; flex: none; color: var(--warning); }
-.usage-chip[data-level="high"] .uchip-warn { display: block; }
+.uchip-warn { position: absolute; inset-inline-start: 0; top: 50%; translate: 0 -50%; width: 13px; height: 13px; color: var(--warning); visibility: hidden; }
+.usage-chip[data-level="high"] .uchip-warn { visibility: visible; }
+.usage-chip[data-level="high"] .uchip-k { visibility: hidden; }
 .usage-chip[data-level="high"] .uchip-spark { color: var(--warning); }
 /* 라이브 머리줄(빽빽한 툴바)·시청 화면은 작게 — 꺾은선과 CPU 만. 메모리는 팝오버에서. */
 .usage-chip.compact { height: 30px; padding: 0 10px 0 8px; gap: 6px; }
@@ -46,7 +49,13 @@
 /* 홈 — 칩이 들어오면 검색 칸이 먼저 줄어든다(입력 칸의 고유 최소 폭 탓에 큰 인사말이 대신 줄바꿈되던 것). */
 .home-header:has(> .usage-chip:not([hidden])) .home-search { min-width: 140px; }
 .home-header:has(> .usage-chip:not([hidden])) .home-search input { min-width: 0; }
-@media (max-width: 860px) { .usage-chip .uchip-spark { display: none; } .usage-chip .uchip-k { display: none; } }
+/* 아주 좁으면 'CPU' 글자를 빼고, 경고 아이콘 자리는 늘 잡아 둔다(보이지 않아도 폭은 같다). */
+@media (max-width: 860px) {
+  .usage-chip .uchip-spark { display: none; }
+  .usage-chip .uchip-k { display: none; }
+  .usage-chip .uchip-cpu { align-items: center; }
+  .usage-chip .uchip-warn { position: static; translate: none; flex: none; }
+}
 
 /* ── 자세히 팝오버 ── 칩 아래에 떠 있는 비모달 대화 상자(문서 끝에 붙고 position: fixed — 위치는 usage-chip.js). */
 .usage-pop {

@@ -20,8 +20,9 @@
 // U15 배치 — 1000×660·1280×800·1600×900: 성능 탭 가로 넘침 없음, 팝오버 창 안, 칩이 머리줄 이웃과 겹치지 않음, 홈 인사말 한 줄(1280↑).
 // U16 모션 줄이기 — 실시간 점 깜박임·칩 전환이 멈춘다.
 // U17 칩 갱신 비용(Chromium) — 표본당 스크립트 3ms 미만, 레이아웃은 표본당 한 번 안팎.
-// U18 라이브 단독 보기 머리줄(채널 칩 6개, 1280·1100·1000) — 칩은 툴바 맨 앞 작은 칩, 채널 칩·전환·⋯·채널 추가와 겹치지 않고 칩 줄 오른쪽,
-//      칩 줄 창 크기는 사용률 칩 폭을 빼고 정해 "+N" 이 칩 줄 안에 다 보인다.
+// U18 라이브 단독 보기 머리줄(채널 칩 6개, 1280·1160·1100·1000) — 칩은 툴바 맨 앞 작은 칩, 채널 칩·전환·⋯·채널 추가와 겹치지 않고 칩 줄 오른쪽,
+//      칩 줄 창 크기는 사용률 칩 폭을 빼고 정해 "+N" 이 칩 줄 안에 다 보인다. 채널을 바꿔 칩 줄을 다시 그린 직후에도 같다(1160·1000).
+// U19 칩 폭이 CPU 값("9.8%"·"15%"·"100%")·경고 아이콘에 따라 바뀌지 않아 옆 채널 칩 줄·단추가 흔들리지 않는다(단독 보기 1160, 팔로잉 1280·800).
 // 저장소 루트에서: node tools/ui-regression/usage-monitor.mjs   (Playwright·axe-core 가 필요하다.
 //   CVIEW_UI_BROWSER=webkit 이면 WebKit, CVIEW_UI_SHOTS=<폴더> 면 장면 PNG, CVIEW_ONLY=U07 이면 그 검사만.)
 import fs from 'node:fs';
@@ -191,19 +192,19 @@ await check('U02 칩 값·이름', async () => {
     const px = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data;
     let inked = 0;
     for (let i = 3; i < px.length; i += 4) if (px[i] > 40) inked += 1;
-    return { cpu: c.querySelector('.uchip-v').textContent, label: c.getAttribute('aria-label'), inked, live: c.querySelectorAll('[aria-live]').length + (c.closest('[aria-live]') ? 1 : 0), level: c.dataset.level, warn: getComputedStyle(c.querySelector('.uchip-warn')).display };
+    return { cpu: c.querySelector('.uchip-v').textContent, label: c.getAttribute('aria-label'), inked, live: c.querySelectorAll('[aria-live]').length + (c.closest('[aria-live]') ? 1 : 0), level: c.dataset.level, warn: getComputedStyle(c.querySelector('.uchip-warn')).visibility };
   });
   assert.equal(v.cpu, '12%'); // 123.4 / 10코어
   assert.match(v.label, /^앱 사용률 — CPU 12%, 메모리 \d+ MB, GPU [\d.]+%\. 자세히 보기$/);
   assert.ok(v.inked > 40, `꺾은선을 그림(${v.inked}px)`);
   assert.equal(v.live, 0, '초마다 읽지 않는다');
   assert.equal(v.level, 'ok');
-  assert.equal(v.warn, 'none');
+  assert.equal(v.warn, 'hidden');
   await page.evaluate(() => window.__usage.push(900));
   await page.waitForTimeout(80);
-  const high = await page.evaluate(() => { const c = document.querySelector('.usage-chip'); return { level: c.dataset.level, warn: getComputedStyle(c.querySelector('.uchip-warn')).display, label: c.getAttribute('aria-label') }; });
+  const high = await page.evaluate(() => { const c = document.querySelector('.usage-chip'); return { level: c.dataset.level, warn: getComputedStyle(c.querySelector('.uchip-warn')).visibility, label: c.getAttribute('aria-label') }; });
   assert.equal(high.level, 'high');
-  assert.notEqual(high.warn, 'none', '경고 아이콘');
+  assert.equal(high.warn, 'visible', '경고 아이콘');
   assert.match(high.label, /CPU 90%.*\(CPU 높음\)/);
   // 초점이 있는 동안은 이름을 바꾸지 않는다(낭독기가 초마다 다시 읽지 않게).
   await page.focus('.usage-chip');
@@ -575,7 +576,7 @@ await check('U16 모션 줄이기', async () => {
   await o.ctx.close();
 });
 
-for (const width of [1280, 1100, 1000]) {
+for (const width of [1280, 1160, 1100, 1000]) {
   await check(`U18 라이브 단독 보기 머리줄 ${width}`, async () => {
     const { ctx, page, errors } = await open({ width, height: 760, channels: 6 });
     await go(page, 'multilive');
@@ -583,7 +584,7 @@ for (const width of [1280, 1100, 1000]) {
     await page.evaluate(() => window.dispatchEvent(new CustomEvent('cview:ml-watch', { detail: { sessionId: 's0' } })));
     await page.waitForSelector('.page-multilive.as-watch .ml-watch-picker:not([hidden])');
     await page.waitForTimeout(400);
-    const m = await page.evaluate(() => {
+    const measure = () => page.evaluate(() => {
       const c = document.querySelector('.usage-chip');
       const r = c.getBoundingClientRect();
       const picker = document.querySelector('.ml-watch-picker').getBoundingClientRect();
@@ -595,15 +596,64 @@ for (const width of [1280, 1100, 1000]) {
       const more = document.querySelector('.ml-watch-more.end:not([hidden])');
       const mr = more && more.getBoundingClientRect();
       return { parent: c.parentElement.className, compact: c.classList.contains('compact'), hits, inHeader: r.left >= header.left && r.right <= header.right + 0.5, afterPicker: r.left >= picker.right - 0.5,
-        visibleChips: document.querySelectorAll('.ml-watch-picker .ml-watch-chip').length, more: Boolean(more), moreInside: !mr || (mr.left >= picker.left - 0.5 && mr.right <= picker.right + 0.5) };
+        visibleChips: document.querySelectorAll('.ml-watch-picker .ml-watch-tab:not([hidden])').length, more: Boolean(more), moreInside: !mr || (mr.left >= picker.left - 0.5 && mr.right <= picker.right + 0.5) };
     });
+    const m = await measure();
     if (SHOTS) await page.screenshot({ path: path.join(SHOTS, `usage-watch-${width}-${ENGINE}.png`), clip: { x: 0, y: 0, width, height: 70 } });
     assert.match(m.parent, /ml-toolbar/); assert.ok(m.compact);
     assert.deepEqual(m.hits, []);
     assert.ok(m.inHeader && m.afterPicker, JSON.stringify(m));
     assert.ok(m.visibleChips >= 2);
     assert.ok(m.more && m.moreInside, `"+N" 이 칩 줄 안에 보임 ${JSON.stringify(m)}`);
+    // 채널을 바꿔 칩 줄을 통째로 다시 그려도 창 크기는 그대로(예전엔 사용률 칩 폭을 빼지 않아 칩이 하나 늘며 넘쳤다).
+    // 다시 그린 직후(ResizeObserver 가 고치기 전)의 칩 수를 MutationObserver 로 잡는다 — 예전 코드는 이 순간 하나 더 많았다.
+    const justAfter = await page.evaluate(() => new Promise((done) => {
+      const picker = document.querySelector('.ml-watch-picker');
+      const mo = new MutationObserver(() => { mo.disconnect(); done(picker.querySelectorAll('.ml-watch-tab:not([hidden])').length); });
+      mo.observe(picker, { childList: true });
+      setTimeout(() => { mo.disconnect(); done(-1); }, 3000);
+      [...picker.querySelectorAll('.ml-watch-tab:not([hidden]) .ml-watch-chip:not(.active)')][0].click();
+    }));
+    await page.waitForTimeout(400);
+    const m2 = await measure();
+    assert.equal(justAfter, m.visibleChips, `다시 그린 직후 칩 수 ${justAfter} (처음 ${m.visibleChips})`);
+    assert.equal(m2.visibleChips, m.visibleChips, `채널을 바꾼 뒤 칩 수 ${JSON.stringify(m2)}`);
+    assert.ok(m2.more && m2.moreInside, `채널을 바꾼 뒤 "+N" ${JSON.stringify(m2)}`);
+    assert.deepEqual(m2.hits, []);
     assert.deepEqual(errors, []);
+    await ctx.close();
+  });
+}
+
+for (const [label, width, route] of [['라이브 단독 보기 1160', 1160, 'watch'], ['팔로잉 1280', 1280, 'following'], ['팔로잉 800', 800, 'following']]) {
+  await check(`U19 칩 폭이 값·경고에 따라 바뀌지 않음 ${label}`, async () => {
+    const { ctx, page } = await open({ width, height: 760, channels: route === 'watch' ? 6 : 0 });
+    if (route === 'watch') {
+      await go(page, 'multilive');
+      await page.waitForTimeout(300);
+      await page.evaluate(() => window.dispatchEvent(new CustomEvent('cview:ml-watch', { detail: { sessionId: 's0' } })));
+      await page.waitForSelector('.page-multilive.as-watch .ml-watch-picker:not([hidden])');
+    } else {
+      await go(page, route);
+    }
+    await page.waitForTimeout(400);
+    // "—"(표본 전)·9.8%·15%·100%·92%(경고) — 칩 폭과 옆 요소(채널 칩 줄·이웃 단추) 자리가 같아야 한다.
+    const rows = [];
+    for (const cpu of [98, 150, 1000, 920, 5]) {
+      await page.evaluate((v) => window.__usage.push(v), cpu);
+      await page.waitForTimeout(60);
+      rows.push(await page.evaluate(() => {
+        const c = document.querySelector('.usage-chip');
+        const picker = document.querySelector('.ml-watch-picker:not([hidden])');
+        const firstChip = picker && picker.querySelector('.ml-watch-tab:not([hidden])');
+        return { v: c.querySelector('.uchip-v').textContent, level: c.dataset.level, w: Math.round(c.getBoundingClientRect().width * 10) / 10,
+          left: Math.round(c.getBoundingClientRect().left * 10) / 10, chips: firstChip ? Math.round(firstChip.getBoundingClientRect().left * 10) / 10 : null };
+      }));
+    }
+    assert.deepEqual(rows.map((r) => r.v), ['9.8%', '15%', '100%', '92%', '0.5%']);
+    assert.equal(rows[3].level, 'high');
+    const one = (k) => new Set(rows.map((r) => r[k])).size === 1;
+    assert.ok(one('w') && one('left') && one('chips'), JSON.stringify(rows));
     await ctx.close();
   });
 }
