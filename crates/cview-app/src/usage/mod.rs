@@ -321,8 +321,12 @@ pub fn gpu_stride(took: Duration, interval: Duration) -> u32 {
 
 impl Sampler {
     fn new() -> Self {
+        Self::for_pid(std::process::id())
+    }
+
+    fn for_pid(pid: u32) -> Self {
         Self {
-            procs: ProcessSet::new(),
+            procs: ProcessSet::for_pid(pid),
             #[cfg(target_os = "macos")]
             gpu: gpu_macos::GpuProbe::new(),
             #[cfg(windows)]
@@ -432,6 +436,28 @@ impl Sampler {
     }
 }
 
+/// 밖에서 재는 표본기 — 실행 중인 CView(`pid`)와 도우미를 앱 안의 측정과 같은 방법으로 잰다(성능 측정 도구용).
+/// 첫 [`Probe::sample`] 은 기준만 잡으므로 버린다.
+pub struct Probe(Sampler);
+
+impl Probe {
+    pub fn new(pid: u32, interval: Duration) -> Self {
+        let mut s = Sampler::for_pid(pid);
+        s.interval = interval;
+        s.reset();
+        let _ = s.sample();
+        Self(s)
+    }
+
+    pub fn sample(&mut self) -> LiveUsage {
+        self.0.sample()
+    }
+
+    pub fn gpu_support(&self) -> GpuSupport {
+        self.0.support()
+    }
+}
+
 /// 내보내기 JSON — 장치·단위 설명과 표본 전체.
 pub fn export_json(status: &UsageStatus, samples: &[Sample]) -> String {
     let v = serde_json::json!({
@@ -484,6 +510,21 @@ mod tests {
             },
             groups: vec![],
         }
+    }
+
+    #[test]
+    fn probe_measures_another_pid_like_the_app() {
+        // 측정 도구(examples/usage_probe.rs)가 쓰는 길 — 여기서는 자기 PID 로 확인한다.
+        let mut p = Probe::new(std::process::id(), Duration::from_millis(200));
+        std::thread::sleep(Duration::from_millis(200));
+        let live = p.sample();
+        assert!(live.sample.procs >= 1);
+        assert!(live.sample.mem > 0);
+        assert_eq!(
+            live.groups.first().map(|g| g.kind),
+            Some(procs::ProcKind::App)
+        );
+        assert!(p.gpu_support().probed);
     }
 
     #[test]

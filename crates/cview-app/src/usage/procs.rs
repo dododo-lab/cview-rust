@@ -121,7 +121,12 @@ impl Default for ProcessSet {
 
 impl ProcessSet {
     pub fn new() -> Self {
-        let me = Pid::from_u32(std::process::id());
+        Self::for_pid(std::process::id())
+    }
+
+    /// 다른 CView 프로세스(`pid`)와 그 도우미 묶음 — 측정 도구(examples/usage_probe.rs)가 실행 중인 앱을 밖에서 잰다.
+    pub fn for_pid(pid: u32) -> Self {
+        let me = Pid::from_u32(pid);
         Self {
             sys: System::new(),
             me,
