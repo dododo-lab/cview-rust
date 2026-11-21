@@ -187,7 +187,10 @@ function setMultiLiveParked(on) {
 // 창 가림 — 메인 창이 가려지면(최소화·다른 창 뒤·다른 Space, `document.hidden`) 선택·PiP·들리는 패인 밖의
 // 멀티라이브 패인 디코드를 멈추고, 다시 보이면 바로 되돌린다(원본 창 가림 디코드 정지). 보이지 않는 패인을
 // 계속 디코드하면 WebKit 웹 콘텐츠 프로세스 메모리가 가려진 시간만큼 쌓였다(5패인 27시간 190MB → 1.1~1.4GB).
-// 잠깐 다른 창으로 넘어갔다 오는 정도로는 멈추지 않게 조금 기다린다. 보조 창에는 멀티라이브가 없다.
+// 창은 보여도 멀티라이브 화면을 떠나 다른 메뉴(홈·팔로잉·설정…)를 보는 동안도 같다 — 예전엔 보이지 않는 패인을 그대로
+// 디코드해, 4패인을 뒤에 둔 채 홈을 보면 멀티라이브 화면을 볼 때와 거의 같은 CPU 를 썼다(사용률 측정 32.5 → 14.8,
+// 코어 하나 = 100, tools/usage-bench). 소리는 이어진다 — 선택·들리는 패인은 계속 재생한다(화질 상한만, setOffscreen).
+// 잠깐 다른 창·메뉴로 넘어갔다 오는 정도로는 멈추지 않게 조금 기다린다. 보조 창에는 멀티라이브가 없다.
 const OCCLUDE_DELAY_MS = 5000;
 // null — 아직 보낸 적 없음. 페이지를 다시 불러오면(웹 콘텐츠 복구 등) 매니저에 남은 가림 상태를 첫 값으로 덮는다.
 let windowOccluded = null;
@@ -195,12 +198,35 @@ let occludeTimer = 0;
 function sendWindowOccluded(on) {
   if (on === windowOccluded) return;
   windowOccluded = on;
+  // 계속 재생하는 패인(선택·들리는)은 보이지 않는 동안 화질 상한 — 나머지는 아래 명령으로 Rust 가 멈춘다.
+  if (pages.multilive) pages.multilive.setOffscreen(on);
   api.multiLiveSetWindowOccluded(on).catch(() => { windowOccluded = null; });
 }
+/**
+ * 멈출 멀티라이브 패인이 화면 밖에 있나 — 패인이 있고, 창이 가려졌거나 멀티라이브(단독 보기 무대 포함) 화면이 숨었다.
+ * 패인이 없으면 보낼 까닭이 없다(빈 멀티라이브로 메뉴를 옮길 때마다 명령이 나가지 않게).
+ */
+function multiLiveOffscreen() {
+  const ml = pages.multilive;
+  if (!ml || !(ml.state.sessions || []).length) return false;
+  return document.hidden || ml.root.hidden;
+}
+/**
+ * 화면 밖이 되면 OCCLUDE_DELAY_MS 뒤에 가림을, 화면에 돌아오면 바로 풀기를 보낸다. 화면 밖인 동안 다시 불려도
+ * (다른 메뉴로 옮기기·창 숨김 토글·멀티라이브 상태 알림) 기다리던 타이머를 새로 걸지 않는다 — 처음 떠난 때부터 잰다.
+ */
 function syncWindowOcclusion() {
-  clearTimeout(occludeTimer);
-  if (document.hidden) occludeTimer = setTimeout(() => { if (document.hidden) sendWindowOccluded(true); }, OCCLUDE_DELAY_MS);
-  else sendWindowOccluded(false);
+  if (!multiLiveOffscreen()) {
+    clearTimeout(occludeTimer);
+    occludeTimer = 0;
+    sendWindowOccluded(false);
+    return;
+  }
+  if (windowOccluded === true || occludeTimer) return;
+  occludeTimer = setTimeout(() => {
+    occludeTimer = 0;
+    if (multiLiveOffscreen()) sendWindowOccluded(true);
+  }, OCCLUDE_DELAY_MS);
 }
 if (!AUX) {
   document.addEventListener('visibilitychange', syncWindowOcclusion);
@@ -348,6 +374,7 @@ async function navigate(route, params = {}, { push = true } = {}) {
   // 멀티라이브 화면 자체인가 — 라이브 단독 보기(showWatch)도 같은 화면을 쓰므로 그때는 멀티라이브 안내를 띄우지 않는다.
   if (pages.multilive) pages.multilive.onMultiRoute = route === 'multilive';
   refreshSegmentGliders(); // 숨어 있는 동안 고른 칸이 바뀐 세그먼트(전환 버튼 등)의 판을 제자리로
+  syncWindowOcclusion(); // 멀티라이브 화면을 떠나면(잠시 뒤) 보이지 않는 패인 디코드를 멈추고, 돌아오면 바로 되돌린다
   if (showViewer) {
     setMenuHidden(viewer.player.iframe, false);
     viewer.reveal();
@@ -822,7 +849,7 @@ async function main() {
     onLogin: login,
     onLogout: logout,
   });
-  pages.multilive = new MultiLivePage(content, { isLoggedIn, onAddChannel: addToMultiLive, onOpenChannel: watchFromDrawer });
+  pages.multilive = new MultiLivePage(content, { isLoggedIn, onAddChannel: addToMultiLive, onOpenChannel: watchFromDrawer, onSessionsChanged: () => syncWindowOcclusion() });
   pages.live = new LivePage(content, { isLoggedIn, modeSwitch: !AUX });
   pages.categories = new CategoriesPage(content);
   pages.multichat = new MultiChatPage(content, { isLoggedIn, onPlay: openChannel });

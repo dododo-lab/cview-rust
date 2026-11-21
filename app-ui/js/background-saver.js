@@ -6,6 +6,10 @@ const BACKGROUND_HEIGHT = 360;
 
 // 메뉴를 옮겨 화면에서 빠진 플레이어(예: 멀티라이브를 보는 동안의 라이브 시청 화면) — 창이 다시 보여도 상한을 유지한다.
 const menuHidden = new WeakSet();
+// 멀티라이브 화면을 떠나(또는 창이 가려져) 보이지 않는 패인 — 소리 때문에 계속 재생하는 패인(선택·들리는)도 화면에는
+// 없으니 낮은 높이 상한을 건다. 나머지 패인은 Rust 가 디코드를 멈춘다(app.js sendWindowOccluded). 창이 다시 보여도
+// 멀티라이브 화면이 아니면 상한을 유지한다 — 시청 집계(setWatchSurfaceHidden)는 건드리지 않는다.
+const offscreen = new WeakSet();
 
 /** PiP 로 떠 있는 영상 — 메인 창에서 빠져도 사용자는 보고 있으니 상한을 걸지 않는다. */
 function inPip(iframe) {
@@ -31,6 +35,14 @@ export function setMenuHidden(iframe, on) {
   try { iframe.contentWindow?.setWatchSurfaceHidden?.(on); } catch { /* 준비 전 */ }
 }
 
+/** 멀티라이브 패인을 화면 밖으로(`on`) / 다시 화면으로 — 상한만 걸고 푼다(PiP 로 띄운 패인은 걸지 않는다). */
+export function setPaneOffscreen(iframe, on) {
+  if (!iframe) return;
+  if (on) offscreen.add(iframe); else offscreen.delete(iframe);
+  const cap = on && !inPip(iframe) ? BACKGROUND_HEIGHT : 0;
+  try { iframe.contentWindow?.setBackgroundSaver?.(cap); } catch { /* 준비 전 */ }
+}
+
 /**
  * 상한을 걸고 풀 플레이어. 걸 때(height > 0)는 PiP 영상을 빼고, 풀 때는 PiP 영상도 넣는다 —
  * 상한이 걸린 뒤 PiP 로 띄운 영상은 예전엔 풀 때도 빠져 360p 에 묶여 있었다.
@@ -38,7 +50,7 @@ export function setMenuHidden(iframe, on) {
 function players(release = false) {
   const out = [];
   for (const f of document.querySelectorAll('iframe')) {
-    if (menuHidden.has(f) || (!release && inPip(f))) continue;
+    if (menuHidden.has(f) || offscreen.has(f) || (!release && inPip(f))) continue;
     try {
       const w = f.contentWindow;
       if (w && typeof w.setBackgroundSaver === 'function') out.push(w);
