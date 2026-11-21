@@ -31,6 +31,7 @@ import { decoratePageHeader } from './page-header.js';
 import { verifiedBadge } from './verified-badge.js';
 import { visibleSessions, viewLimit, headerAddMode, syncHeaderAddButton, openViewPicker } from './ml-view-picker.js';
 import { liveHandlers, pickNowPlayingSession, multiLiveNowPlayingInfo } from './now-playing.js';
+import { setPaneOffscreen } from './background-saver.js';
 
 export { multiLiveIcon };
 
@@ -126,8 +127,10 @@ export class MultiLivePage {
    *   onAddChannel — 채널 추가 사이드바의 + (카드 + 와 같은 길: 선택·포커스 메인·시청 화면 넘겨받기),
    *   onOpenChannel — 사이드바 줄(썸네일·이름)을 누르면 라이브 단독 보기로.
    */
-  constructor(content, { isLoggedIn, onAddChannel = null, onOpenChannel = null }) {
+  constructor(content, { isLoggedIn, onAddChannel = null, onOpenChannel = null, onSessionsChanged = null }) {
     this.isLoggedIn = isLoggedIn;
+    // 패인 수가 바뀌면(첫 패인·모두 닫힘) — app.js 가 화면 밖 가림을 다시 맞춘다. 새 상태를 반영한 뒤에 부른다.
+    this.onSessionsChanged = onSessionsChanged;
     this.onAddChannel = onAddChannel; // 단독 보기 상단 바 ⋯ '멀티라이브에 추가'(ml-watch.js)도 같은 길
     this.root = document.createElement('section');
     this.root.className = 'page page-multilive';
@@ -521,6 +524,15 @@ export class MultiLivePage {
     pane.bridge.run('try { video.muted = _adHold || _pendingMuted; } catch (e) {}');
   }
 
+  /**
+   * 멀티라이브 패인이 화면 밖인가(창 가림·다른 메뉴) — app.js 가 Rust 에 가림을 알릴 때 같이 부른다.
+   * 계속 재생하는 패인(선택·들리는)은 소리만 필요하니 화질 상한을 걸고, 돌아오면 푼다(background-saver.js).
+   */
+  setOffscreen(on) {
+    this.offscreen = Boolean(on);
+    for (const p of this.panes.values()) setPaneOffscreen(p.bridge && p.bridge.iframe, this.offscreen);
+  }
+
   ensurePane(slot) {
     let pane = this.panes.get(slot);
     if (pane) return pane;
@@ -553,6 +565,8 @@ export class MultiLivePage {
       <span class="ml-pane-tag" aria-hidden="true"></span>${paneControlsHtml()}`;
     this.stage.append(el);
     const iframe = el.querySelector('iframe');
+    // 화면 밖에 있는 동안 새로 생긴 패인(다른 메뉴에서 '멀티라이브에 추가')도 페이지가 뜨면 상한을 건다.
+    iframe.addEventListener('load', () => { if (this.offscreen) setPaneOffscreen(iframe, true); });
     const bridge = new PlayerBridge(iframe, {
       commandEvent: null,
       forward: (message) => api.multiLivePlayerMessage(slot, message),
@@ -592,8 +606,10 @@ export class MultiLivePage {
     const before = visible && (releasing || (this.motionSig != null && sig !== this.motionSig)) ? snapshotPanes(this.panes) : null;
     this.motionSig = sig;
     if (releasing) { releaseDragged(this.dragRelease); this.dragRelease = null; }
+    const hadSessions = (this.state.sessions || []).length;
     this.state = state;
     const sessions = state.sessions || [];
+    if (this.onSessionsChanged && hadSessions !== sessions.length) this.onSessionsChanged();
     // 라이브 단독 보기에 멀티라이브 상한보다 많이 담아 온 채 멀티라이브로 오면 고른 채널만 패인으로 보인다(ml-view-picker.js).
     const view = visibleSessions(state);
     const shownIds = new Set(view.map((x) => x.id));
