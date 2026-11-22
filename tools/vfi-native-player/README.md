@@ -23,7 +23,8 @@ tools/vfi-native-player/build.sh                     # → <target>/vfi-native-p
 vfi-player --help
 vfi-player --file 영상.mp4 --seconds 60               # 창 없이 측정
 vfi-player --chzzk popular --sink window              # 치지직 인기 공개 방송을 창에 띄워 보기(i: 보간 켜고 끄기, q: 끝)
-tools/vfi-native-player/run.sh /tmp/vfi-runs          # 시나리오 전체(약 35분, long 절 제외)
+tools/vfi-native-player/run.sh /tmp/vfi-runs          # 시나리오 전체(약 36분, long 절 제외)
+python3 -I tools/vfi-native-player/summarize.py /tmp/vfi-runs   # 결과를 마크다운 표로
 ```
 
 - 출력 방식(`--sink`)

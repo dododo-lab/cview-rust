@@ -182,6 +182,7 @@ static BOOL parseOptions(int argc, const char **argv) {
 @interface VFFrame : NSObject {
 @public
     CVPixelBufferRef pb;
+    CVPixelBufferRef vtCopy;   // 복사 방식일 때 도착 즉시 만든 VT 입력용 사본(다음 짝의 앞 프레임으로도 쓴다)
     CMTime pts;
     double acqMs, lookMs;   // 받은 시각, 받을 때 표시까지 남은 시간(아이템 시간)
     int w, h;
@@ -189,7 +190,7 @@ static BOOL parseOptions(int argc, const char **argv) {
 }
 @end
 @implementation VFFrame
-- (void)dealloc { if (pb) CVPixelBufferRelease(pb); }
+- (void)dealloc { if (pb) CVPixelBufferRelease(pb); if (vtCopy) CVPixelBufferRelease(vtCopy); }
 @end
 
 @class VFSession;
@@ -566,7 +567,7 @@ typedef struct {
     int lastShown;             // 토글 계산: -1 미정, 0 원본만, 1 보간 표시
     CMTime lastEmitPTS;
     Counters c;
-    DArr procMs, procAtMs, compMs, guardMs, lookMs, slackMs, submitLeadMs, probeMs;   // procAtMs: 완료 시각
+    DArr procMs, procAtMs, compMs, guardMs, lookMs, slackMs, submitLeadMs, probeMs, copyMs;   // procAtMs: 완료 시각, copyMs: VT 입력 복사
     NSMutableArray *events;    // 세대 변경·세션 시작 등
     NSMutableDictionary *sessionLog;
     double cutSadMaxNormal, cutHistMaxNormal;
@@ -759,6 +760,20 @@ static void requestSession(int W, int H) {
     P.session = s;
 }
 
+// 복사 방식이면 도착한 프레임을 바로 VT 입력 속성의 버퍼로 옮긴다. 제출 때 두 프레임을 복사하면 그 시간이 VT 처리와
+// 직렬로 이어져 짝 하나에 입력 간격보다 오래 걸렸다(치지직 720p60: 제출 여유 p50 58ms, bipbop 127ms).
+static void prepareVtCopy(VFFrame *f) {
+    VFSession *s = P.session;
+    if (!gOpt.interp || !s || s->state != 1 || !s->srcPool || !s->xfer || f->vtCopy || s->W != f->w || s->H != f->h) return;
+    if (!s->copyMode && gOpt.vtInput == 0 && P.frameHasExtended) { s->copyMode = YES; logEvent(@"vt_copy_mode", @{ @"size": [NSString stringWithFormat:@"%dx%d", s->W, s->H], @"why": @"extended_pixels" }); }
+    if (!s->copyMode) return;
+    double t0 = nowMs();
+    CVPixelBufferRef cp = NULL;
+    if (CVPixelBufferPoolCreatePixelBuffer(NULL, s->srcPool, &cp) == kCVReturnSuccess && cp && VTPixelTransferSessionTransferImage(s->xfer, f->pb, cp) == noErr) f->vtCopy = cp;
+    else if (cp) CVPixelBufferRelease(cp);
+    dpush(&P.copyMs, nowMs() - t0);
+}
+
 static void onFrame(VFFrame *f) {
     P.c.frames++;
     dpush(&P.lookMs, f->lookMs);
@@ -811,6 +826,7 @@ static void onFrame(VFFrame *f) {
     P.lastRecv = f;
     [P.fifo addObject:f];
     pipeAdvance();
+    prepareVtCopy(f);   // VT 가 앞 짝을 처리하는 동안 겹쳐서 한다
 }
 
 static void emitOrig(VFFrame *f) {
@@ -962,8 +978,10 @@ static BOOL pipeStep(void) {
     CVPixelBufferRef inA = P.prev->pb, inB = cur->pb, cpA = NULL, cpB = NULL;
     if (gOpt.vtInput == 0 && P.frameHasExtended && !s->copyMode && s->srcPool && s->xfer) { s->copyMode = YES; logEvent(@"vt_copy_mode", @{ @"size": [NSString stringWithFormat:@"%dx%d", s->W, s->H], @"why": @"extended_pixels" }); }
     if (s->copyMode) {
-        CVPixelBufferPoolCreatePixelBuffer(NULL, s->srcPool, &cpA); CVPixelBufferPoolCreatePixelBuffer(NULL, s->srcPool, &cpB);
-        if (!cpA || !cpB || VTPixelTransferSessionTransferImage(s->xfer, P.prev->pb, cpA) != noErr || VTPixelTransferSessionTransferImage(s->xfer, cur->pb, cpB) != noErr) {
+        // 도착 때 만든 사본을 쓰고, 없을 때만 지금 복사한다
+        if (P.prev->vtCopy) cpA = CVPixelBufferRetain(P.prev->vtCopy); else { CVPixelBufferPoolCreatePixelBuffer(NULL, s->srcPool, &cpA); if (cpA && VTPixelTransferSessionTransferImage(s->xfer, P.prev->pb, cpA) != noErr) { CVPixelBufferRelease(cpA); cpA = NULL; } }
+        if (cur->vtCopy) cpB = CVPixelBufferRetain(cur->vtCopy); else { CVPixelBufferPoolCreatePixelBuffer(NULL, s->srcPool, &cpB); if (cpB && VTPixelTransferSessionTransferImage(s->xfer, cur->pb, cpB) != noErr) { CVPixelBufferRelease(cpB); cpB = NULL; } }
+        if (!cpA || !cpB) {
             if (cpA) CVPixelBufferRelease(cpA); if (cpB) CVPixelBufferRelease(cpB); CVPixelBufferRelease(dst);
             countSkip(probe ? &P.c.bypass : &P.c.poolExhausted, counted); emitOrig(cur); return YES;
         }
@@ -1258,7 +1276,7 @@ static int probeSizes(void) {
 static double instrumentMB(void) {   // 측정 기록(표본 배열·이벤트)이 쓰는 메모리. C8 메모리 증가에서 뺀다.
     __block double bytes = 0;
     dispatch_sync(gPipe, ^{
-        DArr *arrs[] = { &P.procMs, &P.procAtMs, &P.compMs, &P.guardMs, &P.lookMs, &P.slackMs, &P.submitLeadMs, &P.probeMs };
+        DArr *arrs[] = { &P.procMs, &P.procAtMs, &P.compMs, &P.guardMs, &P.lookMs, &P.slackMs, &P.submitLeadMs, &P.probeMs, &P.copyMs };
         for (unsigned i = 0; i < sizeof arrs / sizeof arrs[0]; i++) bytes += arrs[i]->n * sizeof(double);
         bytes += P.events.count * 400.0;
     });
@@ -1734,7 +1752,7 @@ int main(int argc, const char **argv) {
                               @"sink_enqueued": @(gSink->enqueued), @"sink_enqueue_failed": @(gSink->enqueueFailed), @"sink_resyncs": @(gSink->resyncs) };
             m[@"accounting_ok"] = @(outcomes == c.eligible);
             m[@"breaker"] = @{ @"trips": @(P.br.trips), @"probes": @(P.br.probes), @"extensions": @(P.br.extensions), @"probe_ms": distribution(&P.probeMs) };
-            m[@"ms"] = @{ @"proc": distribution(&P.procMs), @"composite": distribution(&P.compMs), @"guard": distribution(&P.guardMs), @"lookahead": distribution(&P.lookMs), @"slack_at_ready": distribution(&P.slackMs), @"submit_lead": distribution(&P.submitLeadMs) };
+            m[@"ms"] = @{ @"vt_input_copy": distribution(&P.copyMs), @"proc": distribution(&P.procMs), @"composite": distribution(&P.compMs), @"guard": distribution(&P.guardMs), @"lookahead": distribution(&P.lookMs), @"slack_at_ready": distribution(&P.slackMs), @"submit_lead": distribution(&P.submitLeadMs) };
             m[@"cut_max_normal"] = @{ @"sad": @(P.cutSadMaxNormal), @"hist": @(P.cutHistMaxNormal) };
             m[@"sessions"] = [P.sessionLog copy];
             m[@"latency_s"] = @{ @"median": @(latMedian), @"first_min_median": @(latFirst), @"last_min_median": @(latLast), @"n": @(lats.count), @"reset_by_reconnect": @(reconnects > 0) };
