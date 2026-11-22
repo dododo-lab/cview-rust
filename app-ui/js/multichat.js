@@ -270,6 +270,12 @@ export class MultiChatPage {
       const now = Date.now();
       // 분당 속도는 지금 온 줄만(입장 때 받은 지난 기록 제외)
       for (let i = 0; i < fresh.length; i++) entry.rate.push(now);
+      // 개요 칩(보일 때만 5초마다)이 1분 넘은 것을 걸렀다 — 다른 화면·숨은 창에서는 끝없이 쌓였다. 여기서도 5초마다 거른다.
+      if (now - (entry.ratePrunedAt || 0) > 5000) {
+        entry.ratePrunedAt = now;
+        const cut = entry.rate.findIndex((t) => now - t < 60000);
+        if (cut !== 0) entry.rate.splice(0, cut < 0 ? entry.rate.length : cut);
+      }
       if (this.search.value.trim()) this.filterTail(panel.list, msgs.length);
     });
     panel.inputHooks.push(() => this.updateMergedInput());

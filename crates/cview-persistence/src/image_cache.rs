@@ -11,6 +11,7 @@
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 
 use rusqlite::{params, Connection, OptionalExtension};
@@ -101,11 +102,19 @@ pub type CacheResult<T> = std::result::Result<T, ImageCacheError>;
 pub const DEFAULT_CAP_BYTES: u64 = 256 * 1024 * 1024;
 /// 한 장의 상한 — 이보다 크면 담지 않는다(잘못된 응답이 캐시를 다 밀어내지 않게).
 pub const MAX_ENTRY_BYTES: usize = 8 * 1024 * 1024;
+/// 마지막 사용 시각을 다시 쓰는 최소 간격 — 화면마다 같은 썸네일을 읽을 때 매번 커밋하지 않는다.
+/// 오래 안 쓴 순서(LRU)는 이 정도 단위로만 정확하면 된다.
+pub const ACCESS_TOUCH_INTERVAL_MS: i64 = 60_000;
+
+/// 임시 파일 이름 일련번호 — 같은 프로세스에서 같은 주소를 동시에 넣어도 파일이 겹치지 않게.
+static TMP_SEQ: AtomicU64 = AtomicU64::new(0);
 
 pub struct ImageCache {
     dir: PathBuf,
     db: Mutex<Connection>,
     cap_bytes: u64,
+    /// 색인에 기록된 크기 합 — 넣을 때마다 표 전체를 더하지 않게 메모리에 둔다(`db` 잠금 안에서만 바꾼다).
+    total_bytes: AtomicU64,
 }
 
 impl ImageCache {
@@ -124,10 +133,14 @@ impl ImageCache {
                 Self::open_db(&path)?
             }
         };
+        let total: i64 = db.query_row("SELECT COALESCE(SUM(size), 0) FROM images", [], |r| {
+            r.get(0)
+        })?;
         Ok(Self {
             dir: dir.to_path_buf(),
             db: Mutex::new(db),
             cap_bytes: cap_bytes.max(1),
+            total_bytes: AtomicU64::new(total.max(0) as u64),
         })
     }
 
@@ -166,13 +179,14 @@ impl ImageCache {
         self.dir.join("blobs").join(&key[..2]).join(key)
     }
 
-    /// 캐시된 이미지(오래됐어도 돌려준다). 마지막 사용 시각을 갱신한다. 파일이 없어졌으면 색인도 지운다.
+    /// 캐시된 이미지(오래됐어도 돌려준다). 마지막 사용 시각은 [`ACCESS_TOUCH_INTERVAL_MS`] 넘게 지났을 때만
+    /// 갱신한다. 파일이 없어졌으면 색인도 지운다.
     pub fn get(&self, url: &str, now_ms: i64) -> CacheResult<Option<CachedImage>> {
         let key = Self::key(url);
         let row = {
             let db = self.lock();
             db.query_row(
-                "SELECT kind, content_type, etag, last_modified, fetched_at FROM images WHERE key = ?1",
+                "SELECT kind, content_type, etag, last_modified, fetched_at, last_access, size FROM images WHERE key = ?1",
                 params![key],
                 |r| {
                     Ok((
@@ -181,26 +195,33 @@ impl ImageCache {
                         r.get::<_, Option<String>>(2)?,
                         r.get::<_, Option<String>>(3)?,
                         r.get::<_, i64>(4)?,
+                        r.get::<_, i64>(5)?,
+                        r.get::<_, i64>(6)?,
                     ))
                 },
             )
             .optional()?
         };
-        let Some((kind, content_type, etag, last_modified, fetched_at)) = row else {
+        let Some((kind, content_type, etag, last_modified, fetched_at, last_access, size)) = row
+        else {
             return Ok(None);
         };
         let bytes = match fs::read(self.blob_path(&key)) {
             Ok(b) => b,
             Err(_) => {
-                self.lock()
-                    .execute("DELETE FROM images WHERE key = ?1", params![key])?;
+                let db = self.lock();
+                if db.execute("DELETE FROM images WHERE key = ?1", params![key])? > 0 {
+                    self.sub_total(size);
+                }
                 return Ok(None);
             }
         };
-        self.lock().execute(
-            "UPDATE images SET last_access = ?2 WHERE key = ?1",
-            params![key, now_ms],
-        )?;
+        if now_ms.saturating_sub(last_access) >= ACCESS_TOUCH_INTERVAL_MS {
+            self.lock().execute(
+                "UPDATE images SET last_access = ?2 WHERE key = ?1",
+                params![key, now_ms],
+            )?;
+        }
         Ok(Some(CachedImage {
             bytes,
             content_type,
@@ -229,13 +250,25 @@ impl ImageCache {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
-        let tmp = path.with_extension(format!("tmp{}", std::process::id()));
+        let seq = TMP_SEQ.fetch_add(1, Ordering::Relaxed);
+        let tmp = path.with_extension(format!("tmp{}-{seq}", std::process::id()));
         {
             let mut f = fs::File::create(&tmp)?;
             f.write_all(bytes)?;
         }
-        fs::rename(&tmp, &path)?;
-        self.lock().execute(
+        if let Err(e) = fs::rename(&tmp, &path) {
+            let _ = fs::remove_file(&tmp);
+            return Err(e.into());
+        }
+        let db = self.lock();
+        let old: Option<i64> = db
+            .query_row(
+                "SELECT size FROM images WHERE key = ?1",
+                params![key],
+                |r| r.get(0),
+            )
+            .optional()?;
+        db.execute(
             "INSERT INTO images (key, url, kind, content_type, etag, last_modified, size, fetched_at, last_access)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)
              ON CONFLICT(key) DO UPDATE SET kind = ?3, content_type = ?4, etag = ?5, last_modified = ?6,
@@ -251,7 +284,10 @@ impl ImageCache {
                 now_ms
             ],
         )?;
-        self.evict_to_cap()?;
+        self.sub_total(old.unwrap_or(0));
+        self.total_bytes
+            .fetch_add(bytes.len() as u64, Ordering::Relaxed);
+        self.evict_to_cap(db)?;
         Ok(())
     }
 
@@ -279,15 +315,26 @@ impl ImageCache {
 
     /// 전부 지운다(설정의 "썸네일 캐시 비우기").
     pub fn clear(&self) -> CacheResult<()> {
-        self.lock().execute("DELETE FROM images", [])?;
+        let db = self.lock();
+        db.execute("DELETE FROM images", [])?;
+        self.total_bytes.store(0, Ordering::Relaxed);
+        drop(db);
         let blobs = self.dir.join("blobs");
         let _ = fs::remove_dir_all(&blobs);
         fs::create_dir_all(&blobs)?;
         Ok(())
     }
 
-    fn evict_to_cap(&self) -> CacheResult<()> {
-        let total = self.stats()?.bytes;
+    /// 합계를 줄인다. 호출자는 `db` 잠금을 쥐고 있어야 한다(합계는 그 잠금 안에서만 바뀐다).
+    fn sub_total(&self, size: i64) {
+        let t = self.total_bytes.load(Ordering::Relaxed);
+        self.total_bytes
+            .store(t.saturating_sub(size.max(0) as u64), Ordering::Relaxed);
+    }
+
+    /// 상한을 넘었으면 오래 안 쓴 것부터 상한의 90% 까지 지운다. 색인 삭제는 한 트랜잭션으로 묶는다.
+    fn evict_to_cap(&self, mut db: std::sync::MutexGuard<'_, Connection>) -> CacheResult<()> {
+        let total = self.total_bytes.load(Ordering::Relaxed);
         if total <= self.cap_bytes {
             return Ok(());
         }
@@ -295,7 +342,6 @@ impl ImageCache {
         let target = self.cap_bytes / 10 * 9;
         let mut excess = total.saturating_sub(target) as i64;
         let victims: Vec<(String, i64)> = {
-            let db = self.lock();
             let mut stmt = db.prepare("SELECT key, size FROM images ORDER BY last_access ASC")?;
             let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, i64>(1)?)))?;
             let mut out = Vec::new();
@@ -309,10 +355,20 @@ impl ImageCache {
             }
             out
         };
+        let tx = db.transaction()?;
+        {
+            let mut del = tx.prepare("DELETE FROM images WHERE key = ?1")?;
+            for (key, _) in &victims {
+                del.execute(params![key])?;
+            }
+        }
+        tx.commit()?;
+        for (_, size) in &victims {
+            self.sub_total(*size);
+        }
+        drop(db);
         for (key, _) in &victims {
             let _ = fs::remove_file(self.blob_path(key));
-            self.lock()
-                .execute("DELETE FROM images WHERE key = ?1", params![key])?;
         }
         Ok(())
     }
@@ -380,20 +436,77 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let c = ImageCache::open(dir.path(), 1_000).unwrap();
         let blob = vec![7u8; 300];
-        c.put("u1", ImageKind::Static, &meta(), &blob, 1).unwrap();
-        c.put("u2", ImageKind::Static, &meta(), &blob, 2).unwrap();
-        c.put("u3", ImageKind::Static, &meta(), &blob, 3).unwrap();
+        let t = |n: i64| n * ACCESS_TOUCH_INTERVAL_MS;
+        c.put("u1", ImageKind::Static, &meta(), &blob, t(1))
+            .unwrap();
+        c.put("u2", ImageKind::Static, &meta(), &blob, t(2))
+            .unwrap();
+        c.put("u3", ImageKind::Static, &meta(), &blob, t(3))
+            .unwrap();
         // u1 을 최근에 썼다 → 넘치면 u2 가 먼저 나간다.
-        assert!(c.get("u1", 4).unwrap().is_some());
-        c.put("u4", ImageKind::Static, &meta(), &blob, 5).unwrap();
+        assert!(c.get("u1", t(4)).unwrap().is_some());
+        c.put("u4", ImageKind::Static, &meta(), &blob, t(5))
+            .unwrap();
         let s = c.stats().unwrap();
         assert!(s.bytes <= 1_000, "상한 안: {}", s.bytes);
+        assert_eq!(
+            c.total_bytes.load(Ordering::Relaxed),
+            s.bytes,
+            "메모리 합계 = 색인 합계"
+        );
         assert!(
-            c.get("u2", 6).unwrap().is_none(),
+            c.get("u2", t(6)).unwrap().is_none(),
             "가장 오래 안 쓴 것이 나간다"
         );
-        assert!(c.get("u1", 6).unwrap().is_some());
-        assert!(c.get("u4", 6).unwrap().is_some());
+        assert!(c.get("u1", t(6)).unwrap().is_some());
+        assert!(c.get("u4", t(6)).unwrap().is_some());
+    }
+
+    #[test]
+    fn repeated_hits_within_interval_do_not_write() {
+        let dir = tempfile::tempdir().unwrap();
+        let c = ImageCache::open(dir.path(), 10_000).unwrap();
+        c.put("u", ImageKind::Static, &meta(), b"abc", 1_000)
+            .unwrap();
+        let before = c.lock().total_changes();
+        for i in 0..50 {
+            assert!(c.get("u", 1_000 + i * 100).unwrap().is_some());
+        }
+        assert_eq!(
+            c.lock().total_changes(),
+            before,
+            "간격 안의 적중은 커밋하지 않는다"
+        );
+        assert!(c
+            .get("u", 1_000 + ACCESS_TOUCH_INTERVAL_MS)
+            .unwrap()
+            .is_some());
+        assert_eq!(
+            c.lock().total_changes(),
+            before + 1,
+            "간격이 지나면 한 번 갱신"
+        );
+    }
+
+    #[test]
+    fn running_total_follows_overwrite_missing_blob_clear_and_reopen() {
+        let dir = tempfile::tempdir().unwrap();
+        let c = ImageCache::open(dir.path(), 10_000).unwrap();
+        let total = |c: &ImageCache| c.total_bytes.load(Ordering::Relaxed);
+        c.put("a", ImageKind::Static, &meta(), &[1; 100], 1)
+            .unwrap();
+        c.put("b", ImageKind::Static, &meta(), &[1; 50], 1).unwrap();
+        c.put("a", ImageKind::Static, &meta(), &[1; 30], 2).unwrap(); // 덮어쓰기
+        assert_eq!(total(&c), 80);
+        assert_eq!(c.stats().unwrap().bytes, 80);
+        drop(c);
+        let c = ImageCache::open(dir.path(), 10_000).unwrap();
+        assert_eq!(total(&c), 80, "다시 열면 색인에서 다시 센다");
+        fs::remove_file(c.blob_path(&ImageCache::key("b"))).unwrap();
+        assert!(c.get("b", 3).unwrap().is_none());
+        assert_eq!(total(&c), 30);
+        c.clear().unwrap();
+        assert_eq!(total(&c), 0);
     }
 
     #[test]

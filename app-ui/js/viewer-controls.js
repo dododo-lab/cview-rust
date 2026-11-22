@@ -243,6 +243,9 @@ export class ViewerControls {
     const top = stage.querySelector('.stage-top');
     const menuOpen = () => !this.qualityMenu.hidden || Boolean(this.root.querySelector('.player-panel:not([hidden]), .vt-menu:not([hidden])'));
     const hide = () => {
+      // 시청 화면이 숨어 있으면(시작 직후·다른 메뉴) 막대를 숨기고 멈춘다 — 예전엔 정지 상태(영상 없음 포함)면
+      // 2.5초마다 다시 깨워 앱이 끝날 때까지 돌았다. 다시 보이면 마우스 움직임·초점·정지 표시(renderStatus)가 깨운다.
+      if (stage.closest('[hidden]')) { stage.classList.remove('ctl-visible'); stage.classList.add('idle'); return; }
       // 키보드 초점이 막대 안에 있으면 숨기지 않는다(마우스 클릭으로 생긴 초점은 :focus-visible 이 아니라 숨는다).
       const keyFocus = stage.querySelector(':is(button, input, select):focus-visible');
       if (stage.classList.contains('paused') || menuOpen() || bar.matches(':hover') || top?.matches(':hover') || keyFocus || this.volumeReveal.isOpen()) { this.wake(); return; }

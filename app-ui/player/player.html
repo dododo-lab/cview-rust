@@ -1097,7 +1097,9 @@ function refreshWatchActivity() {
     reportWatchActivity();
 }
 document.addEventListener('visibilitychange', refreshWatchActivity);
-setInterval(refreshWatchActivity, WATCH_POLL_MS);
+// 아직 재생한 적 없는(또는 비운 — 닫혀 풀로 간 패인·정지) 플레이어는 알릴 것이 없다 — 2초마다 부모 문서
+// 레이아웃(`frameElement.getClientRects`)을 묻지 않는다. 재생이 시작되면 `playing` 이 곧바로 다시 본다.
+setInterval(function() { if (_watchHasPlayed) refreshWatchActivity(); }, WATCH_POLL_MS);
 /** 부모: 메뉴 이동으로 이 플레이어가 화면에서 빠졌다/돌아왔다 — 부모가 화면을 다 바꾼 뒤 다시 본다. */
 window.setWatchSurfaceHidden = function() {
     setTimeout(refreshWatchActivity, 0);
@@ -5486,6 +5488,34 @@ function _clearUpscaledFrame() {
     if (!up) return;
     up.clear(up);
     _deactivateUpscaler();
+    _releaseUpscalerMemory(up);
+}
+
+// [VRAM 2026-11-23] 영상을 비우면(정지·채널 바꿈·멀티라이브 패인 닫기 → `emptied`) 출력·영상 크기 텍스처와
+//   캔버스 백킹을 1×1 로 줄인다 — 선명도를 한 번 켠 패인이 닫혀 풀로 간 뒤에도 수십~백여 MB 를 쥐고 있었다.
+//   컨텍스트·셰이더는 남겨 다시 켤 때 컴파일하지 않는다. 다음 그리기가 크기를 보고 다시 할당한다.
+function _releaseUpscalerMemory(up) {
+    try {
+        if (up.backend === 'webgl') {
+            const gl = up.gl;
+            for (const tex of [up.source, up.scaled].concat(up.work)) {
+                gl.bindTexture(gl.TEXTURE_2D, tex);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+            }
+            gl.bindTexture(gl.TEXTURE_2D, null);
+            up.fboW = up.fboH = 0;
+            up.workW = up.workH = 0;
+            up.sourceMip = null; // 다음 업로드에서 필터를 다시 맞춘다
+        } else if (up.tex) {
+            for (let i = 0; i < up.tex.length; i++) {
+                if (up.tex[i]) up.tex[i].destroy();
+                up.tex[i] = null;
+            }
+            up.texW = up.texH = 0;
+        }
+        up.canvas.width = 1;
+        up.canvas.height = 1;
+    } catch (e) { /* 컨텍스트를 잃었으면 이미 풀렸다 */ }
 }
 
 // 자동 밝기·색 보정(auto)과 [예전 방식] 업스케일(upscale). 앱은 { auto } 만 보낸다 — 업스케일은 선명도(setSharpness)가 맡는다.

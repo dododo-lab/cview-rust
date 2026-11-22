@@ -62,6 +62,9 @@ pub trait SecretStore: Send + Sync {
     /// 없는 키 삭제는 성공이다.
     fn delete(&self, key: &str) -> Result<(), StoreError>;
     fn delete_all(&self) -> Result<(), StoreError>;
+    /// 기억해 둔 읽기 실패를 잊고 다음 읽기에서 실제 저장소를 다시 묻게 한다.
+    /// 실패를 캐시하지 않는 저장소는 할 일이 없다.
+    fn forget_read_failure(&self) {}
 }
 
 // MARK: - Memory
@@ -422,6 +425,14 @@ impl SecretStore for VaultSecretStore {
         *self.cache.lock().unwrap_or_else(|e| e.into_inner()) = Some(Ok(HashMap::new()));
         Ok(())
     }
+
+    /// 읽은 값(`Some(Ok)`)은 그대로 두고, 실패(`Some(Err)`)만 지운다.
+    fn forget_read_failure(&self) {
+        let mut guard = self.cache.lock().unwrap_or_else(|e| e.into_inner());
+        if matches!(*guard, Some(Err(_))) {
+            *guard = None;
+        }
+    }
 }
 
 // MARK: - File
@@ -659,6 +670,14 @@ impl KeychainService {
         cfg!(any(target_os = "macos", windows))
     }
 
+    /// 시작 복원 재시도용 — 시스템 저장소가 기억한 읽기 실패를 잊는다(값은 지우지 않는다).
+    ///
+    /// 금고는 거부 뒤 같은 질문을 되풀이하지 않으려고 실패를 실행 내내 기억한다. 재부팅 직후처럼
+    /// 키체인이 아직 준비되지 않은 일시 실패를 다시 읽으려면 호출자가 이 메서드로 명시해야 한다.
+    pub fn forget_read_failure(&self) {
+        self.keychain_backend.forget_read_failure();
+    }
+
     pub fn uses_system_keychain(&self) -> bool {
         self.use_system_keychain
     }
@@ -855,6 +874,53 @@ mod tests {
         assert!(v.load("a").is_err());
         assert!(v.save("a", b"x").is_err());
         assert!(v.load("b").is_err());
+    }
+
+    #[test]
+    fn vault_retries_only_when_read_failure_is_forgotten() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        // 첫 읽기만 실패하는 항목 — 재부팅 직후 아직 준비되지 않은 키체인.
+        #[derive(Default)]
+        struct NotReadyOnce(AtomicUsize);
+        impl SingleItem for NotReadyOnce {
+            fn get(&self) -> Result<Option<Vec<u8>>, StoreError> {
+                if self.0.fetch_add(1, Ordering::SeqCst) == 0 {
+                    return Err(StoreError::Backend("not ready".into()));
+                }
+                Ok(Some(br#"{"a":"eA=="}"#.to_vec()))
+            }
+            fn set(&self, _: &[u8]) -> Result<(), StoreError> {
+                Ok(())
+            }
+            fn remove(&self) -> Result<(), StoreError> {
+                Ok(())
+            }
+        }
+        let item = Arc::new(NotReadyOnce::default());
+        struct Shared(Arc<NotReadyOnce>);
+        impl SingleItem for Shared {
+            fn get(&self) -> Result<Option<Vec<u8>>, StoreError> {
+                self.0.get()
+            }
+            fn set(&self, d: &[u8]) -> Result<(), StoreError> {
+                self.0.set(d)
+            }
+            fn remove(&self) -> Result<(), StoreError> {
+                self.0.remove()
+            }
+        }
+        let v = VaultSecretStore::new(Box::new(Shared(item.clone())));
+        assert!(v.load("a").is_err());
+        assert!(
+            v.load("a").is_err(),
+            "실패는 기억한다 — 같은 질문을 되풀이하지 않음"
+        );
+        assert_eq!(item.0.load(Ordering::SeqCst), 1);
+        v.forget_read_failure();
+        assert_eq!(v.load("a").unwrap().as_deref(), Some(&b"x"[..]));
+        v.forget_read_failure(); // 읽은 값은 잊지 않는다
+        assert_eq!(v.load("a").unwrap().as_deref(), Some(&b"x"[..]));
+        assert_eq!(item.0.load(Ordering::SeqCst), 2);
     }
 
     #[test]
