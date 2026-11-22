@@ -75,13 +75,21 @@ export function chatFollower(list, enabled) {
  * resumeMs — 따라가기가 꺼져 있어도 사용자가 그만큼 손대지 않았으면 다시 바닥을 따라간다. '새 메시지' 버튼이 없는
  * 작은 칸(멀티라이브 그리드·포커스)은 살짝 올린 뒤 그대로 두면 멈춘 칸처럼 보였다.
  */
-export function followAppend(list, insert, { resumeMs = 0 } = {}) {
+export function followAppend(list, insert, { resumeMs = 0, snaps = null } = {}) {
   const f = chatFollower(list);
   if (!f.stuck && resumeMs > 0 && pressed !== f && performance.now() - f.touchedAt > resumeMs) f.stuck = true;
   const follow = f.stuck;
   insert();
-  if (follow) f.snap();
+  // snaps — 여러 목록에 차례로 붙일 때(멀티라이브 채팅 그리드) 바닥 맞추기를 모았다가 붙이기가 다 끝난 뒤 한 번에
+  // 한다(snapAll). 목록마다 붙이고(쓰기) 곧바로 scrollHeight 를 읽으면 칸 수만큼 강제 레이아웃이 일어났다.
+  if (follow) { if (snaps) snaps.push(f); else f.snap(); }
   return follow;
+}
+
+/** followAppend(…, { snaps }) 로 모아 둔 목록을 바닥으로 — 읽기·쓰기가 섞이지 않게 붙이기를 모두 끝낸 뒤에 부른다. */
+export function snapAll(snaps) {
+  for (const f of snaps) f.snap();
+  snaps.length = 0;
 }
 
 /**

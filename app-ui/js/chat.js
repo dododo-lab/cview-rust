@@ -343,6 +343,8 @@ export class ChatPanel {
     });
     this.cleanups.push(() => closeUserPop(this));
     const onDocKey = (e) => {
+      // ⌘ 조합만 본다 — 아래 offsetParent 는 레이아웃을 강제해, 앱 어디서든 글자를 칠 때마다 패널 수만큼 레이아웃을 당겼다.
+      if (!e.metaKey) return;
       if (!this.active || !this.root.offsetParent) return;
       // 보이는 패널이 여럿이면(멀티채팅 격자) 한 패널만 받는다 — 초점이 든 패널, 없으면 첫 패널.
       // 패널마다 받으면 ⌘J 가 공유 설정을 N 번 뒤집어(짝수면 그대로) 알림만 N 개 떴다.

@@ -19,7 +19,7 @@ import { mentionInto } from './chat-composer.js';
 import { panelOf } from './chat.js';
 import { applyChatSkin } from './chat-extras.js';
 import { onChatPrefs, passesFilters } from './chat-prefs.js';
-import { chatFollower, followAppend, trimFront, scheduleChatFlush, flushStarted } from './chat-follow.js';
+import { chatFollower, followAppend, snapAll, trimFront, scheduleChatFlush, flushStarted } from './chat-follow.js';
 import { bindMenuKeys, focusFirstMenuItem } from './ml-pane-controls.js';
 import { verifiedBadge } from './verified-badge.js';
 
@@ -75,14 +75,14 @@ function refill(list, items, max, empty) {
 }
 
 /** 칸에 붙이고 넘치면 앞에서 지운다 — 바닥에 있었으면 계속 바닥을 따라간다. */
-function appendTo(list, html, max) {
+function appendTo(list, html, max, snaps = null) {
   if (!html) return;
   followAppend(list, () => {
     const empty = list.querySelector(':scope > .empty');
     if (empty) empty.remove();
     list.insertAdjacentHTML('beforeend', html);
     trimFront(list, max);
-  }, { resumeMs: RESUME_FOLLOW_MS });
+  }, { resumeMs: RESUME_FOLLOW_MS, snaps });
 }
 
 export class MultiLiveMergedChat {
@@ -416,7 +416,10 @@ export class MultiLiveMergedChat {
       appendTo(this.list, mergedItemsHtml(items, this.list.lastElementChild), MAX_LINES);
       this.lines.afterAppend();
     } else if (this.mode === 'grid' || this.mode === 'focus') {
-      for (const [c, cellItems] of cells) appendTo(c.list, mergedItemsHtml(cellItems, c.list.lastElementChild), MAX_CELL_LINES);
+      // 칸마다 붙이기(쓰기)를 먼저 다 하고 바닥 맞추기(읽기)는 뒤에 한 번에 — 칸 수만큼 강제 레이아웃이 일어나지 않게.
+      const snaps = [];
+      for (const [c, cellItems] of cells) appendTo(c.list, mergedItemsHtml(cellItems, c.list.lastElementChild), MAX_CELL_LINES, snaps);
+      snapAll(snaps);
       this.cellLines.afterAppend();
     }
     // 후원 목록 — 줄을 붙인 뒤에 넣어야 목록이 '채팅에 있는 줄'로 그린다. 채팅 설정(차단·후원 숨김)을 줄과 같이 따른다.
