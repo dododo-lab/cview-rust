@@ -1,0 +1,535 @@
+{
+  "accounting_ok" : 1,
+  "counted_s" : 297.99999999982276,
+  "counts" : {
+    "abandoned" : 208,
+    "avplayer_error_log" : 0,
+    "breaker_trips" : 34,
+    "bumps" : 2,
+    "bypass" : 13687,
+    "coalesced_bumps" : 1,
+    "composite_late" : 65,
+    "counted_errors" : 0,
+    "cuts" : 8,
+    "eligible" : 17880,
+    "emitted_mid" : 3717,
+    "emitted_orig" : 18008,
+    "errors" : 0,
+    "fps_changes" : 0,
+    "frames" : 18008,
+    "gaps" : 0,
+    "generations" : 2,
+    "interp_off" : 0,
+    "late" : 262,
+    "late_completed" : 208,
+    "late_start" : 312,
+    "on_time" : 3619,
+    "order_violation" : 0,
+    "orig_late" : 4,
+    "output_flushes" : 1,
+    "pairs" : 18007,
+    "pending_at_end" : 0,
+    "pool_exhausted" : 0,
+    "reconnects" : 0,
+    "runtime_off" : 0,
+    "session_wait" : 0,
+    "sink_enqueue_failed" : 0,
+    "sink_enqueued" : 21725,
+    "sink_resyncs" : 3,
+    "size_changes" : 0,
+    "soft_bumps" : 1,
+    "stale_counted" : 0,
+    "stale_dropped" : 0,
+    "stalled_pairs" : 0,
+    "stalls" : 0,
+    "static_skipped" : 0,
+    "time_jumps" : 1,
+    "toggles" : 221,
+    "unsupported" : 0,
+    "vt_restarts" : 0,
+    "warm_pairs" : 119
+  },
+  "criteria" : {
+    "accounting_ok" : 1,
+    "C2_late_le_1pct" : 0,
+    "C2_on_time_ge_95pct" : 0,
+    "C2_toggles_le_60_per_min" : 1,
+    "safety_no_stale_or_reordered_output" : 1
+  },
+  "cut_max_normal" : {
+    "hist" : 0.53354166666666658,
+    "sad" : 0.12598171179428339
+  },
+  "environment" : {
+    "chip" : "Apple M1 Max",
+    "model" : "MacBookPro18,2",
+    "os" : "Version 27.3 (Build 26C5047e)",
+    "thermal_end" : 0
+  },
+  "events" : [
+    {
+      "gen" : 1,
+      "hard" : true,
+      "kind" : "generation",
+      "t_ms" : 308285983,
+      "why" : "time_jumped"
+    },
+    {
+      "gen" : 1,
+      "kind" : "generation_coalesced",
+      "t_ms" : 308285989,
+      "why" : "output_flushed"
+    },
+    {
+      "bpr0" : 1280,
+      "bpr1" : 1280,
+      "ext" : "0,0,0,16",
+      "fmt" : "420v",
+      "h0" : 720,
+      "iosurface" : 1,
+      "kind" : "frame_format",
+      "matrix" : "ITU_R_709_2",
+      "size" : "1280x720",
+      "t_ms" : 308285998
+    },
+    {
+      "gen" : 2,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 308285998,
+      "why" : "size 1280x720"
+    },
+    {
+      "kind" : "session_request",
+      "size" : "1280x720",
+      "t_ms" : 308285998
+    },
+    {
+      "kind" : "fps",
+      "t_ms" : 308286007,
+      "T_ms" : 16.666666666665719
+    },
+    {
+      "kind" : "session_ready",
+      "ok" : 1,
+      "size" : "1280x720",
+      "start_ms" : 33.824041664600372,
+      "t_ms" : 308286068,
+      "warm3_ms" : 30.202000021934509
+    },
+    {
+      "kind" : "vt_copy_mode",
+      "size" : "1280x720",
+      "t_ms" : 308286084,
+      "why" : "extended_pixels"
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 12.784666657447815,
+      "t_ms" : 308288895
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 13.191416680812836,
+      "t_ms" : 308292262
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 16.387875020503998,
+      "t_ms" : 308294962
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 20.055291712284088,
+      "t_ms" : 308300502
+    },
+    {
+      "hist" : 0.36767361111111102,
+      "kind" : "cut",
+      "sad" : 0.11311455269979236,
+      "t_ms" : 308307519
+    },
+    {
+      "hist" : 0.60309027777777768,
+      "kind" : "cut",
+      "sad" : 0.16124068254803781,
+      "t_ms" : 308315850
+    },
+    {
+      "hist" : 0.39149305555555558,
+      "kind" : "cut",
+      "sad" : 0.11577429062319607,
+      "t_ms" : 308319750
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 13.951333343982697,
+      "t_ms" : 308321139
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 18.988250017166138,
+      "t_ms" : 308334687
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 12.688250005245209,
+      "t_ms" : 308339007
+    },
+    {
+      "abandoned" : false,
+      "kind" : "breaker_trip",
+      "late" : false,
+      "ms" : 13.21637499332428,
+      "t_ms" : 308343384
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 16.166416704654694,
+      "t_ms" : 308348120
+    },
+    {
+      "hist" : 0.4942361111111111,
+      "kind" : "cut",
+      "sad" : 0.1305476465134644,
+      "t_ms" : 308355120
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 12.990333259105682,
+      "t_ms" : 308357924
+    },
+    {
+      "hist" : 0.44694444444444442,
+      "kind" : "cut",
+      "sad" : 0.13944648427235404,
+      "t_ms" : 308362218
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 15.420791745185852,
+      "t_ms" : 308366662
+    },
+    {
+      "abandoned" : false,
+      "kind" : "breaker_trip",
+      "late" : false,
+      "ms" : 11.258708357810974,
+      "t_ms" : 308375364
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 14.691083312034607,
+      "t_ms" : 308384273
+    },
+    {
+      "hist" : 0.73600694444444459,
+      "kind" : "cut",
+      "sad" : 0.13756799376234899,
+      "t_ms" : 308388155
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 18.487333357334137,
+      "t_ms" : 308395474
+    },
+    {
+      "hist" : 0.39444444444444443,
+      "kind" : "cut",
+      "sad" : 0.15414609120497258,
+      "t_ms" : 308404488
+    },
+    {
+      "hist" : 0.30881944444444442,
+      "kind" : "cut",
+      "sad" : 0.14242107888971797,
+      "t_ms" : 308404511
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 12.541291654109955,
+      "t_ms" : 308406040
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 17.650458335876465,
+      "t_ms" : 308416644
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 18.104875028133392,
+      "t_ms" : 308425898
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 16.837374985218048,
+      "t_ms" : 308435765
+    },
+    {
+      "abandoned" : false,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 13.779166638851166,
+      "t_ms" : 308444586
+    },
+    {
+      "abandoned" : false,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 12.812416613101959,
+      "t_ms" : 308453686
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 15.770416617393494,
+      "t_ms" : 308464463
+    },
+    {
+      "abandoned" : false,
+      "kind" : "breaker_trip",
+      "late" : false,
+      "ms" : 10.837624967098236,
+      "t_ms" : 308473190
+    },
+    {
+      "abandoned" : false,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 14.788208365440369,
+      "t_ms" : 308482138
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 14.976416647434235,
+      "t_ms" : 308491028
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 14.450458347797394,
+      "t_ms" : 308499746
+    },
+    {
+      "abandoned" : false,
+      "kind" : "breaker_trip",
+      "late" : false,
+      "ms" : 8.4897500276565552,
+      "t_ms" : 308508500
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 13.261208295822144,
+      "t_ms" : 308517627
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 13.433833301067352,
+      "t_ms" : 308527939
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 19.64558333158493,
+      "t_ms" : 308537033
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 14.287916660308838,
+      "t_ms" : 308546795
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 23.418291687965393,
+      "t_ms" : 308555628
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 15.738374948501587,
+      "t_ms" : 308564843
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 14.446458339691162,
+      "t_ms" : 308574439
+    },
+    {
+      "abandoned" : false,
+      "kind" : "breaker_trip",
+      "late" : false,
+      "ms" : 9.2466250061988831,
+      "t_ms" : 308585046
+    }
+  ],
+  "events_total" : 50,
+  "latency_s" : {
+    "first_min_median" : 3.5788736343383789,
+    "last_min_median" : 3.5802464485168457,
+    "median" : 3.579560399055481,
+    "n" : 296,
+    "reset_by_reconnect" : 0
+  },
+  "live" : true,
+  "memory_mb" : {
+    "at_60s" : 56.37591552734375,
+    "end" : 57.657188415527344,
+    "growth_after_60s" : 1.2812728881835938,
+    "growth_after_60s_excluding_instrument" : 0.99480438232421875,
+    "instrument_growth" : 0.286468505859375
+  },
+  "ms" : {
+    "composite" : {
+      "max" : 26.939916670322418,
+      "mean" : 0.78808515170211835,
+      "min" : 0.1065833568572998,
+      "n" : 3782,
+      "p50" : 0.55229169130325317,
+      "p95" : 2.0981770545244212,
+      "p99" : 5.1753370600938879
+    },
+    "guard" : {
+      "max" : 42.354416608810425,
+      "mean" : 2.0591692047758117,
+      "min" : 0.27333331108093262,
+      "n" : 18007,
+      "p50" : 1.5183749794960022,
+      "p95" : 5.5810791552066812,
+      "p99" : 9.3073141145706142
+    },
+    "lookahead" : {
+      "max" : 149.98955499999056,
+      "mean" : 147.55443978425544,
+      "min" : -0.27777777777870938,
+      "n" : 18008,
+      "p50" : 148.73918066666647,
+      "p95" : 149.43747166666304,
+      "p99" : 149.45030466665798
+    },
+    "proc" : {
+      "max" : 249.09850001335144,
+      "mean" : 11.478510996617171,
+      "min" : 5.9179583191871643,
+      "n" : 3990,
+      "p50" : 9.7295208275318146,
+      "p95" : 15.457733318209645,
+      "p99" : 44.823964542746559
+    },
+    "slack_at_ready" : {
+      "max" : 125.87526339292526,
+      "mean" : 63.963282659878374,
+      "min" : -5.7880290150642395,
+      "n" : 3782,
+      "p50" : 59.262284457683563,
+      "p95" : 123.00153512954711,
+      "p99" : 123.78592478454114
+    },
+    "submit_lead" : {
+      "max" : 132.65476328134537,
+      "mean" : 71.761426440949421,
+      "min" : -5.1057792901992798,
+      "n" : 3990,
+      "p50" : 66.999492853879929,
+      "p95" : 131.77668237984179,
+      "p99" : 132.47564220786094
+    }
+  },
+  "options" : {
+    "breaker" : "v3",
+    "cut" : true,
+    "cut_hist" : 0.29999999999999999,
+    "cut_sad" : 0.10000000000000001,
+    "forward_buffer_s" : 0,
+    "inject_delay" : "0:0",
+    "interp" : true,
+    "latency" : "avplayer",
+    "lead_ms" : 5,
+    "live_offset_s" : 3.5,
+    "lookahead_ms" : 150,
+    "max_ahead" : 6,
+    "max_height" : 720,
+    "rate_toggle_s" : 0,
+    "seconds" : 300,
+    "seek_every_s" : 0,
+    "sink" : "renderer",
+    "static" : true,
+    "static_ms" : 120,
+    "static_tau" : 3,
+    "switch" : ""
+  },
+  "ratios" : {
+    "error_of_attempted" : 0,
+    "late_of_attempted" : 0.067508374130378773,
+    "on_time" : 0.2024049217002237,
+    "toggles_per_counted_min" : 44.49664429532848
+  },
+  "renderer_metrics" : {
+    "accumulated_delay_s" : 0,
+    "corrupted" : 0,
+    "dropped" : 0,
+    "optimized_compositing" : 0,
+    "total_frames" : 21725
+  },
+  "sessions" : {
+    "1280x720" : {
+      "ok" : 1,
+      "size" : "1280x720",
+      "start_ms" : 33.824041664600372,
+      "warm3_ms" : 30.202000021934509
+    }
+  },
+  "source" : "치지직 인기 방송 1위(성인 아님)",
+  "tool" : "vfi-player",
+  "truncated" : 0,
+  "truncated_why" : "",
+  "version" : 2,
+  "wall_s" : 300.01905729162695
+}

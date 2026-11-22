@@ -1,0 +1,203 @@
+{
+  "counts" : {
+    "abandoned" : 0,
+    "breaker_trips" : 0,
+    "bumps" : 3,
+    "bypass" : 0,
+    "composite_late" : 0,
+    "cuts" : 0,
+    "eligible" : 1680,
+    "emitted_mid" : 1796,
+    "emitted_orig" : 1809,
+    "errors" : 0,
+    "fps_changes" : 0,
+    "frames" : 1809,
+    "gaps" : 0,
+    "generations" : 3,
+    "interp_off" : 0,
+    "late" : 0,
+    "late_completed" : 0,
+    "late_start" : 0,
+    "on_time" : 1680,
+    "order_violation" : 0,
+    "orig_late" : 0,
+    "output_flushes" : 1,
+    "pairs" : 1808,
+    "pool_exhausted" : 0,
+    "reconnects" : 0,
+    "session_wait" : 12,
+    "sink_enqueue_failed" : 0,
+    "sink_enqueued" : 3605,
+    "sink_resyncs" : 0,
+    "size_changes" : 0,
+    "stale_dropped" : 0,
+    "stalled_pairs" : 0,
+    "stalls" : 0,
+    "static_skipped" : 0,
+    "time_jumps" : 1,
+    "toggles" : 0,
+    "unsupported" : 0,
+    "vt_restarts" : 0,
+    "warm_pairs" : 128
+  },
+  "criteria" : {
+    "C2_late_le_1pct" : 1,
+    "C2_on_time_ge_95pct" : 1,
+    "C2_toggles_le_60_per_min" : 1,
+    "safety_no_stale_or_reordered_output" : 1
+  },
+  "cut_max_normal" : {
+    "hist" : 0,
+    "sad" : 0
+  },
+  "environment" : {
+    "chip" : "Apple M1 Max",
+    "model" : "MacBookPro18,2",
+    "os" : "Version 27.3 (Build 26C5047e)",
+    "thermal_end" : 0
+  },
+  "events" : [
+    {
+      "gen" : 1,
+      "kind" : "generation",
+      "t_ms" : 305767045,
+      "why" : "time_jumped"
+    },
+    {
+      "gen" : 2,
+      "kind" : "generation",
+      "t_ms" : 305767125,
+      "why" : "output_flushed"
+    },
+    {
+      "gen" : 3,
+      "kind" : "generation",
+      "t_ms" : 305767127,
+      "why" : "size 1280x720"
+    },
+    {
+      "kind" : "session_request",
+      "size" : "1280x720",
+      "t_ms" : 305767127
+    },
+    {
+      "kind" : "fps",
+      "t_ms" : 305767127,
+      "T_ms" : 16.666666666666668
+    },
+    {
+      "kind" : "session_ready",
+      "ok" : 1,
+      "size" : "1280x720",
+      "start_ms" : 26.762708306312561,
+      "t_ms" : 305767201,
+      "warm3_ms" : 42.119166672229767
+    }
+  ],
+  "latency_s" : {
+    "first_min_median" : null,
+    "last_min_median" : null,
+    "median" : null,
+    "n" : 0
+  },
+  "live" : false,
+  "memory_mb" : {
+    "at_60s" : null,
+    "end" : 30.907096862792969,
+    "growth_after_60s" : null
+  },
+  "ms" : {
+    "composite" : {
+      "max" : 7.4437500238418579,
+      "mean" : 0.32214738939679277,
+      "min" : 0.061333358287811279,
+      "n" : 1796,
+      "p50" : 0.22552081942558289,
+      "p95" : 0.71309375762939453,
+      "p99" : 2.2310104012489247
+    },
+    "guard" : {
+      "max" : 0.058750033378601074,
+      "mean" : 0.00019616429257181893,
+      "min" : 0,
+      "n" : 1808,
+      "p50" : 0.00016665458679199219,
+      "p95" : 0.00029170513153076172,
+      "p99" : 0.00049996376037597656
+    },
+    "lookahead" : {
+      "max" : 150,
+      "mean" : 148.70644143228299,
+      "min" : 0,
+      "n" : 1809,
+      "p50" : 149.1173753333328,
+      "p95" : 149.78841700000018,
+      "p99" : 149.79170228000066
+    },
+    "proc" : {
+      "max" : 28.434333324432373,
+      "mean" : 11.92231403088782,
+      "min" : 6.4125416874885559,
+      "n" : 1796,
+      "p50" : 11.175333321094513,
+      "p95" : 17.919364601373672,
+      "p99" : 20.97611670196056
+    },
+    "slack_at_ready" : {
+      "max" : 129.57279163599014,
+      "mean" : 122.22147696785512,
+      "min" : 89.139125347137451,
+      "n" : 1796,
+      "p50" : 123.20747938752174,
+      "p95" : 127.38560415804386,
+      "p99" : 128.37974233329297
+    },
+    "submit_lead" : {
+      "max" : 136.40450000762939,
+      "mean" : 134.54225629597968,
+      "min" : 105.77691698074341,
+      "n" : 1796,
+      "p50" : 135.04760468006134,
+      "p95" : 136.29198981821537,
+      "p99" : 136.36942110359669
+    }
+  },
+  "options" : {
+    "breaker" : "v3",
+    "cut" : false,
+    "cut_hist" : 0.29999999999999999,
+    "cut_sad" : 0.10000000000000001,
+    "interp" : true,
+    "latency" : "web",
+    "lead_ms" : 5,
+    "live_offset_s" : 3,
+    "lookahead_ms" : 150,
+    "max_ahead" : 6,
+    "max_height" : 720,
+    "rate_toggle_s" : 0,
+    "seconds" : 30,
+    "seek_every_s" : 0,
+    "sink" : "null",
+    "static" : false,
+    "static_ms" : 120,
+    "static_tau" : 3,
+    "switch" : ""
+  },
+  "ratios" : {
+    "late_of_attempted" : 0,
+    "on_time" : 1,
+    "toggles_per_min" : 0
+  },
+  "sessions" : {
+    "1280x720" : {
+      "ok" : 1,
+      "size" : "1280x720",
+      "start_ms" : 26.762708306312561,
+      "warm3_ms" : 42.119166672229767
+    }
+  },
+  "source" : "파일 fixture-720p60.mp4",
+  "tool" : "vfi-player",
+  "version" : 1,
+  "wall_s" : 30.014236666679384
+}
