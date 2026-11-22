@@ -1,0 +1,45 @@
+
+## 실시간 모사(절대 시간표, 비동기 1건) + 마감 서킷브레이커
+# realtime 1280x720 60→120fps, 30s, budget B=16.7ms, breaker=off
+pairs=1800 attempted=1529 on_time=1018 late=511 busy_skip=271 bypass=0 trips=0
+coverage(제때 보간된 쌍)=56.6%  wasted(늦어 버린 요청)=33.4%  toggles_per_min=1037.6
+proc_ms p50=9.82 p95=15.95 p99=17.19 max=19.59  arrival_jitter_p95=7.63ms
+submit_call_ms p50=0.02 p95=0.15 max=4.34  arrival_jitter_p50=4.48ms
+cpu_pct_of_one_core=3%
+
+# realtime 1280x720 60→120fps, 30s, budget B=16.7ms, breaker=on
+pairs=1800 attempted=969 on_time=689 late=280 busy_skip=107 bypass=724 trips=4
+coverage(제때 보간된 쌍)=38.3%  wasted(늦어 버린 요청)=28.9%  toggles_per_min=679.8
+proc_ms p50=9.52 p95=15.73 p99=16.64 max=18.81  arrival_jitter_p95=7.33ms
+submit_call_ms p50=0.02 p95=0.19 max=1.27  arrival_jitter_p50=4.88ms
+cpu_pct_of_one_core=2%
+
+# realtime 1920x1080 30→60fps, 20s, budget B=33.3ms, breaker=off
+pairs=600 attempted=167 on_time=0 late=167 busy_skip=433 bypass=0 trips=0
+coverage(제때 보간된 쌍)=0.0%  wasted(늦어 버린 요청)=100.0%  toggles_per_min=0.0
+proc_ms p50=100.87 p95=116.84 p99=120.86 max=141.83  arrival_jitter_p95=10.04ms
+submit_call_ms p50=0.01 p95=0.03 max=0.05  arrival_jitter_p50=8.16ms
+cpu_pct_of_one_core=59%
+
+# realtime 1920x1080 30→60fps, 20s, budget B=33.3ms, breaker=on
+pairs=600 attempted=5 on_time=0 late=5 busy_skip=52 bypass=543 trips=5
+coverage(제때 보간된 쌍)=0.0%  wasted(늦어 버린 요청)=100.0%  toggles_per_min=0.0
+proc_ms p50=175.96 p95=1136.61 p99=1136.61 max=1136.61  arrival_jitter_p95=10.04ms
+submit_call_ms p50=0.05 p95=0.08 max=0.08  arrival_jitter_p50=8.53ms
+cpu_pct_of_one_core=2%
+
+### 720p 60→120, 다른 프로세스가 1080p 보간으로 ANE 를 계속 점유하는 동안
+# realtime 1280x720 60→120fps, 30s, budget B=16.7ms, breaker=off
+pairs=1800 attempted=1773 on_time=1518 late=255 busy_skip=27 bypass=0 trips=0
+coverage(제때 보간된 쌍)=84.3%  wasted(늦어 버린 요청)=14.4%  toggles_per_min=963.6
+proc_ms p50=8.19 p95=13.52 p99=14.72 max=19.20  arrival_jitter_p95=7.19ms
+submit_call_ms p50=0.01 p95=0.03 max=0.08  arrival_jitter_p50=5.55ms
+cpu_pct_of_one_core=2%
+
+# realtime 1280x720 60→120fps, 30s, budget B=16.7ms, breaker=on
+pairs=1800 attempted=1735 on_time=1450 late=285 busy_skip=65 bypass=0 trips=0
+coverage(제때 보간된 쌍)=80.6%  wasted(늦어 버린 요청)=16.4%  toggles_per_min=975.5
+proc_ms p50=8.26 p95=13.73 p99=15.45 max=19.91  arrival_jitter_p95=7.39ms
+submit_call_ms p50=0.01 p95=0.04 max=0.33  arrival_jitter_p50=5.52ms
+cpu_pct_of_one_core=2%
+

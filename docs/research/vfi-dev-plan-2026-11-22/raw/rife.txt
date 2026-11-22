@@ -1,0 +1,110 @@
+
+## RIFE 4.25 / 4.25.lite IFNet 복제본(무작위 가중치) — MPSGraph GPU 시간
+# device=Apple M1 Max metal4=1 variant=4.25 scale=1.00 ladder=16/8/4/2/1 c=192/128/96/64/32 dtype=f16 warp32=0 fast=off
+# input=1280x720 padded=1280x768 params=5.66M conv_GMAC=21.8 warps=18
+compile_ms=1095
+wall_ms mean=38.31 p50=37.38 p95=41.38 p99=45.27 max=45.27  (encode+GPU+대기, 50회)
+effective_TFLOPS(합성곱 기준)=1.17  nonfinite_samples=0  opt=1
+
+# device=Apple M1 Max metal4=1 variant=4.25 scale=1.00 ladder=16/8/4/2/1 c=192/128/96/64/32 dtype=f16 warp32=0 fast=off
+# input=1920x1080 padded=1920x1088 params=5.66M conv_GMAC=46.4 warps=18
+compile_ms=2030
+wall_ms mean=80.46 p50=79.00 p95=87.98 p99=91.26 max=91.26  (encode+GPU+대기, 50회)
+effective_TFLOPS(합성곱 기준)=1.18  nonfinite_samples=0  opt=1
+
+# device=Apple M1 Max metal4=1 variant=4.25 scale=1.00 ladder=16/8/4/2/1 c=192/128/96/64/32 dtype=f16 warp32=0 fast=phase
+# input=1280x720 padded=1280x768 params=5.66M conv_GMAC=21.8 warps=10
+compile_ms=2839
+wall_ms mean=22.79 p50=22.19 p95=25.16 p99=26.71 max=26.71  (encode+GPU+대기, 50회)
+effective_TFLOPS(합성곱 기준)=1.97  nonfinite_samples=0  opt=1
+
+# device=Apple M1 Max metal4=1 variant=4.25 scale=1.00 ladder=16/8/4/2/1 c=192/128/96/64/32 dtype=f16 warp32=0 fast=phase
+# input=1920x1080 padded=1920x1088 params=5.66M conv_GMAC=46.4 warps=10
+compile_ms=5627
+wall_ms mean=43.49 p50=43.45 p95=44.57 p99=44.83 max=44.83  (encode+GPU+대기, 50회)
+effective_TFLOPS(합성곱 기준)=2.14  nonfinite_samples=0  opt=1
+
+# device=Apple M1 Max metal4=1 variant=4.25 scale=1.00 ladder=16/8/4/2/1 c=192/128/96/64/32 dtype=f16 warp32=0 fast=3x3
+# input=1280x720 padded=1280x768 params=6.19M conv_GMAC=26.1 warps=10
+compile_ms=2715
+wall_ms mean=19.56 p50=19.44 p95=20.36 p99=22.18 max=22.18  (encode+GPU+대기, 50회)
+effective_TFLOPS(합성곱 기준)=2.68  nonfinite_samples=0  opt=1
+
+# device=Apple M1 Max metal4=1 variant=4.25 scale=1.00 ladder=16/8/4/2/1 c=192/128/96/64/32 dtype=f16 warp32=0 fast=3x3
+# input=1920x1080 padded=1920x1088 params=6.19M conv_GMAC=55.5 warps=10
+compile_ms=5515
+wall_ms mean=40.48 p50=39.97 p95=43.76 p99=44.04 max=44.04  (encode+GPU+대기, 50회)
+effective_TFLOPS(합성곱 기준)=2.77  nonfinite_samples=0  opt=1
+
+# device=Apple M1 Max metal4=1 variant=lite scale=1.00 ladder=32/16/8/4/1 c=192/128/96/64/24 dtype=f16 warp32=0 fast=3x3
+# input=1920x1080 padded=1920x1152 params=6.14M conv_GMAC=29.4 warps=10
+compile_ms=3654
+wall_ms mean=34.12 p50=34.12 p95=36.03 p99=37.43 max=37.43  (encode+GPU+대기, 50회)
+effective_TFLOPS(합성곱 기준)=1.72  nonfinite_samples=0  opt=1
+
+# device=Apple M1 Max metal4=1 variant=4.25 scale=0.50 ladder=32/16/8/4/2 c=192/128/96/64/32 dtype=f16 warp32=0 fast=3x3
+# input=1920x1080 padded=1920x1152 params=6.19M conv_GMAC=20.8 warps=10
+compile_ms=6155
+wall_ms mean=24.27 p50=24.41 p95=25.73 p99=26.63 max=26.63  (encode+GPU+대기, 50회)
+effective_TFLOPS(합성곱 기준)=1.70  nonfinite_samples=0  opt=1
+
+# device=Apple M1 Max metal4=1 variant=lite scale=0.50 ladder=64/32/16/8/2 c=192/128/96/64/24 dtype=f16 warp32=0 fast=3x3
+# input=1920x1080 padded=2048x1280 params=6.14M conv_GMAC=15.9 warps=10
+compile_ms=5703
+wall_ms mean=26.91 p50=26.61 p95=31.04 p99=31.64 max=31.64  (encode+GPU+대기, 50회)
+effective_TFLOPS(합성곱 기준)=1.20  nonfinite_samples=0  opt=1
+
+# device=Apple M1 Max metal4=1 variant=4.25 scale=1.00 ladder=16/8/4/2/1 c=192/128/96/64/32 dtype=f16 warp32=1 fast=3x3
+# input=1920x1080 padded=1920x1088 params=6.19M conv_GMAC=55.5 warps=10
+compile_ms=5540
+wall_ms mean=43.54 p50=43.25 p95=45.22 p99=45.95 max=45.95  (encode+GPU+대기, 50회)
+effective_TFLOPS(합성곱 기준)=2.56  nonfinite_samples=0  opt=1
+
+# device=Apple M1 Max metal4=1 variant=4.25 scale=1.00 ladder=16/8/4/2/1 c=192/128/96/64/32 dtype=f32 warp32=0 fast=3x3
+# input=1920x1080 padded=1920x1088 params=6.19M conv_GMAC=55.5 warps=10
+compile_ms=129
+wall_ms mean=43.53 p50=42.99 p95=45.57 p99=47.84 max=47.84  (encode+GPU+대기, 50회)
+effective_TFLOPS(합성곱 기준)=2.58  nonfinite_samples=0  opt=1
+
+
+## MPSGraph 연산별 1080p 미세 측정
+# Apple M1 Max dtype=f16, 1회 p50(동기 실행, 빈 그래프 포함)
+  빈 그래프(작은 덧셈)         0.833 ms
+[Head — 영상 1장]
+  conv 3→16 s2 @1920x1088            1.047 ms  (0.23 GMAC, 0.43 TFLOPS)
+  conv 16→16 @960x544                1.470 ms  (1.20 GMAC, 1.64 TFLOPS)
+  deconv 16→4 @960x544→full        2.640 ms  (0.53 GMAC, 0.41 TFLOPS)
+[블록 4(scale 1, c=32) 내부]
+  conv0a 28→16 s2 @1920x1088         3.201 ms  (2.11 GMAC, 1.32 TFLOPS)
+  conv0b 16→32 s2 @960x544           0.843 ms  (0.60 GMAC, 1.43 TFLOPS)
+  ResConv 32→32 @480x272             0.563 ms  (1.20 GMAC, 4.28 TFLOPS)
+  deconv 32→52 @480x272              8.433 ms  (3.48 GMAC, 0.82 TFLOPS)
+[블록 3(scale 2, c=64) 내부]
+  ResConv 64→64 @240x136             0.544 ms  (1.20 GMAC, 4.42 TFLOPS)
+[블록 0(scale 16, c=192) 내부]
+  ResConv 192→192 @30x17             0.346 ms  (0.17 GMAC, 0.98 TFLOPS)
+[전체 해상도 보조 연산]
+  concat 3+3+4+4+1+1+8 → 24ch        4.462 ms
+  resize 28ch full → 1/2             1.104 ms
+  resize 13ch 1/2 → full             1.352 ms
+  depthToSpace 52ch→13ch ×2         0.444 ms
+  slice 13ch → 4ch                  70.198 ms
+  grid_sample 3ch (흐름 2ch)         0.564 ms
+  grid_sample 4ch (흐름 2ch)         0.576 ms
+
+
+## Metal 4 MPP tensor_ops::convolution2d vs MPSGraph (값 정합 확인 포함)
+# Apple M1 Max, Metal4 family=1, MPP tensor_ops::convolution2d (f16) vs MPSGraph conv
+    cpu -0.5107 mpp 0.0209 mps -0.5107
+    cpu -0.1095 mpp 0.1027 mps -0.1094
+    cpu -0.0136 mpp -0.0228 mps -0.0136
+    CPU 대비 최대차: MPP 1.5960, MPSGraph 0.0002 (672 표본)
+    첫 타일만 최대차 1.6353
+    32x16    16→16  tile 16x16x8 sg4: MPP GPU  0.049 ms (0.05 TFLOPS) | MPSGraph 벽시계  0.295 ms | 최대차 1.8115 | 컴파일 2 ms
+
+# Apple M1 Max, Metal4 family=1, MPP tensor_ops::convolution2d (f16) vs MPSGraph conv
+   480x272   32→32  tile 32x16x8 sg4: MPP GPU  0.936 ms (2.57 TFLOPS) | MPSGraph 벽시계  0.844 ms | 최대차 2.4023 | 컴파일 2 ms
+   480x272   32→32  tile 32x32x8 sg4: MPP GPU  0.601 ms (4.01 TFLOPS) | MPSGraph 벽시계  0.569 ms | 최대차 2.4023 | 컴파일 232 ms
+   240x136   64→64  tile 64x16x8 sg4: MPP GPU  0.779 ms (3.09 TFLOPS) | MPSGraph 벽시계  0.557 ms | 최대차 2.4961 | 컴파일 188 ms
+   960x544   16→16  tile 16x32x8 sg4: MPP GPU  0.637 ms (3.78 TFLOPS) | MPSGraph 벽시계  0.742 ms | 최대차 2.5049 | 컴파일 186 ms
+

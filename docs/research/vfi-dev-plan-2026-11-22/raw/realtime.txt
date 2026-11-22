@@ -1,0 +1,59 @@
+
+## 실시간 모사(절대 시간표, 비동기 1건) + 마감 서킷브레이커
+# 측정 스레드 실시간 정책: 적용
+# realtime 1280x720 60→120fps, 30s, budget B=16.7ms, breaker=off
+pairs=1800 attempted=1791 on_time=1782 late=9 busy_skip=9 bypass=0 trips=0
+coverage(제때 보간된 쌍)=99.0%  wasted(늦어 버린 요청)=0.5%  toggles_per_min=36.0
+proc_ms p50=9.61 p95=11.84 p99=15.37 max=24.35  arrival_jitter_p95=0.03ms
+submit_call_ms p50=0.02 p95=0.03 max=0.06  arrival_jitter_p50=0.02ms
+cpu_pct_of_one_core=4%
+
+# 측정 스레드 실시간 정책: 적용
+# realtime 1280x720 60→120fps, 30s, budget B=16.7ms, breaker=v1
+pairs=1800 attempted=1731 on_time=1720 late=11 busy_skip=11 bypass=58 trips=1
+coverage(제때 보간된 쌍)=95.6%  wasted(늦어 버린 요청)=0.6%  toggles_per_min=36.0
+proc_ms p50=9.52 p95=11.41 p99=15.62 max=25.13  arrival_jitter_p95=0.03ms
+submit_call_ms p50=0.02 p95=0.03 max=0.07  arrival_jitter_p50=0.02ms
+cpu_pct_of_one_core=4%
+
+# 측정 스레드 실시간 정책: 적용
+# realtime 1280x720 60→120fps, 30s, budget B=16.7ms, breaker=on(v2)
+pairs=1800 attempted=1799 on_time=1798 late=1 busy_skip=1 bypass=0 trips=0
+coverage(제때 보간된 쌍)=99.9%  wasted(늦어 버린 요청)=0.1%  toggles_per_min=4.0
+proc_ms p50=9.46 p95=11.32 p99=13.45 max=17.13  arrival_jitter_p95=0.03ms
+submit_call_ms p50=0.02 p95=0.03 max=0.07  arrival_jitter_p50=0.02ms
+cpu_pct_of_one_core=4%
+
+# 측정 스레드 실시간 정책: 적용
+# realtime 1920x1080 30→60fps, 20s, budget B=33.3ms, breaker=off
+pairs=600 attempted=193 on_time=0 late=193 busy_skip=407 bypass=0 trips=0
+coverage(제때 보간된 쌍)=0.0%  wasted(늦어 버린 요청)=100.0%  toggles_per_min=0.0
+proc_ms p50=93.78 p95=111.51 p99=119.01 max=142.88  arrival_jitter_p95=0.02ms
+submit_call_ms p50=0.01 p95=0.01 max=0.04  arrival_jitter_p50=0.01ms
+cpu_pct_of_one_core=68%
+
+# 측정 스레드 실시간 정책: 적용
+# realtime 1920x1080 30→60fps, 20s, budget B=33.3ms, breaker=on(v2)
+pairs=600 attempted=13 on_time=0 late=13 busy_skip=42 bypass=545 trips=5
+coverage(제때 보간된 쌍)=0.0%  wasted(늦어 버린 요청)=100.0%  toggles_per_min=0.0
+proc_ms p50=116.92 p95=166.54 p99=189.84 max=189.84  arrival_jitter_p95=0.04ms
+submit_call_ms p50=0.01 p95=0.05 max=0.14  arrival_jitter_p50=0.02ms
+cpu_pct_of_one_core=5%
+
+### 720p 60→120, 다른 프로세스가 1080p 보간으로 ANE 를 계속 점유하는 동안
+# 측정 스레드 실시간 정책: 적용
+# realtime 1280x720 60→120fps, 30s, budget B=16.7ms, breaker=off
+pairs=1800 attempted=1800 on_time=1800 late=0 busy_skip=0 bypass=0 trips=0
+coverage(제때 보간된 쌍)=100.0%  wasted(늦어 버린 요청)=0.0%  toggles_per_min=0.0
+proc_ms p50=8.11 p95=13.03 p99=14.60 max=16.02  arrival_jitter_p95=0.02ms
+submit_call_ms p50=0.01 p95=0.01 max=0.04  arrival_jitter_p50=0.01ms
+cpu_pct_of_one_core=2%
+
+# 측정 스레드 실시간 정책: 적용
+# realtime 1280x720 60→120fps, 30s, budget B=16.7ms, breaker=on(v2)
+pairs=1800 attempted=1799 on_time=1798 late=1 busy_skip=1 bypass=0 trips=0
+coverage(제때 보간된 쌍)=99.9%  wasted(늦어 버린 요청)=0.1%  toggles_per_min=2.0
+proc_ms p50=8.05 p95=13.17 p99=14.55 max=18.95  arrival_jitter_p95=0.02ms
+submit_call_ms p50=0.01 p95=0.02 max=0.04  arrival_jitter_p50=0.01ms
+cpu_pct_of_one_core=2%
+

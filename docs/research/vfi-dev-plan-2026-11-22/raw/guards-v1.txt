@@ -1,0 +1,162 @@
+
+## 보호 장치: 합성 장면(장면 전환 포함), VT 저지연 보간 + cut/static/conf
+# proc=1280x720 inflight=0
+# source=synth algo=lowlat size=1280x720 in=30fps out=60fps interp=1
+# lowlat 최대 한 변 1920, 최대 화소 2073600
+startSession_ms=53.7
+# guard cut_sad=0.10 cut_hist=0.30 static_tau=3 static_k=4 static_erode=0 conf_abs=6.0 conf_rel=0.45
+frames_in=90 calls=89 proc_ms mean=13.64 p50=14.66 p95=15.75 max=18.08
+bgra_to_src_xfer_ms p50=2.05
+cpu_blend_ms p50=0.27
+wall_s=3.1 cpu_s=3.0 cpu_pct_of_one_core=96%
+PSNR_dB(휘도, 정답 대비, 89장 평균)  영역: 보간 / 그대로두기 / 단순섞기
+  전체  24.44 /  20.85 /  23.32
+  채팅  17.88 /  17.41 /  20.11
+  자막  20.00 /  29.98 /  32.35
+  빠른공  32.67 /  21.17 /  23.57
+  타이머  14.68 /  19.88 /  20.38
+  전체 최저(보간) 18.00
+GUARD PSNR_dB(89장 평균)  영역: +cut / +static / +conf / +전부
+  전체  24.56 /  25.24 /  24.87 /  25.24
+  채팅  17.80 /  18.07 /  17.64 /  17.64
+  자막  20.35 /  23.04 /  24.84 /  27.50
+  빠른공  32.82 /  32.67 /  32.00 /  32.09
+  타이머  14.80 /  16.94 /  16.89 /  18.70
+guard_cut: TP=5 FP=0 FN=0 TN=84  (문턱 SAD≥0.10 그리고 hist≥0.30)  정상쌍 최대 SAD 0.089 hist 0.117 / 전환쌍 최소 SAD 0.118 hist 0.831
+guard_cut_pairs(5쌍, 전체 PSNR): 그대로 21.03 / 섞기 19.52 / 보간 18.86 / 보간+전부 21.03 / 보간+static·conf 19.63
+guard_conf: 되돌린 타일 평균 18.7%
+guard_cpu_ms(10코어 병렬, 1080p 기준 아님 — 이 해상도): 휘도+축소·히스토그램 0.97 / 정지 마스크 0.47 / conf 탐색 1.13 (입력 1장당 평균)
+
+# proc=1280x720 inflight=0
+# source=synth algo=lowlat size=1280x720 in=30fps out=60fps interp=1
+# lowlat 최대 한 변 1920, 최대 화소 2073600
+startSession_ms=27.3
+# guard cut_sad=0.10 cut_hist=0.30 static_tau=3 static_k=4 static_erode=0 conf_abs=6.0 conf_rel=0.45
+frames_in=90 calls=89 proc_ms mean=12.31 p50=14.53 p95=15.73 max=15.88
+bgra_to_src_xfer_ms p50=2.07
+cpu_blend_ms p50=0.28
+wall_s=3.0 cpu_s=2.9 cpu_pct_of_one_core=99%
+PSNR_dB(휘도, 정답 대비, 89장 평균)  영역: 보간 / 그대로두기 / 단순섞기
+  전체  26.12 /  21.41 /  23.99
+  채팅  18.94 /  17.14 /  19.87
+  자막  23.92 /  30.77 /  33.30
+  빠른공  34.72 /  22.24 /  24.77
+  타이머  15.01 /  19.78 /  20.26
+  전체 최저(보간) 24.90
+GUARD PSNR_dB(89장 평균)  영역: +cut / +static / +conf / +전부
+  전체  26.12 /  26.73 /  25.21 /  25.45
+  채팅  18.94 /  19.08 /  17.38 /  17.38
+  자막  23.92 /  26.43 /  27.25 /  29.15
+  빠른공  34.72 /  34.69 /  34.25 /  34.22
+  타이머  15.01 /  17.23 /  16.59 /  18.62
+guard_cut: TP=0 FP=0 FN=0 TN=89  (문턱 SAD≥0.10 그리고 hist≥0.30)  정상쌍 최대 SAD 0.057 hist 0.118 / 전환쌍 최소 SAD nan hist nan
+guard_conf: 되돌린 타일 평균 15.8%
+guard_cpu_ms(10코어 병렬, 1080p 기준 아님 — 이 해상도): 휘도+축소·히스토그램 0.97 / 정지 마스크 0.46 / conf 탐색 1.12 (입력 1장당 평균)
+
+# proc=1280x720 inflight=0
+# source=synth algo=lowlat size=1280x720 in=60fps out=120fps interp=1
+# lowlat 최대 한 변 1920, 최대 화소 2073600
+startSession_ms=25.8
+# guard cut_sad=0.10 cut_hist=0.30 static_tau=3 static_k=4 static_erode=0 conf_abs=6.0 conf_rel=0.45
+frames_in=120 calls=119 proc_ms mean=9.96 p50=7.87 p95=15.41 max=15.69
+bgra_to_src_xfer_ms p50=2.05
+cpu_blend_ms p50=0.28
+wall_s=3.7 cpu_s=3.9 cpu_pct_of_one_core=107%
+PSNR_dB(휘도, 정답 대비, 119장 평균)  영역: 보간 / 그대로두기 / 단순섞기
+  전체  27.58 /  23.40 /  25.82
+  채팅  20.01 /  20.46 /  23.35
+  자막  26.46 /  32.05 /  34.36
+  빠른공  37.20 /  23.55 /  25.91
+  타이머  18.61 /  21.07 /  21.39
+  전체 최저(보간) 18.91
+GUARD PSNR_dB(119장 평균)  영역: +cut / +static / +conf / +전부
+  전체  27.68 /  27.85 /  27.90 /  27.98
+  채팅  20.02 /  20.35 /  20.51 /  20.60
+  자막  26.67 /  28.93 /  27.96 /  30.30
+  빠른공  37.33 /  35.40 /  35.88 /  34.32
+  타이머  18.65 /  19.49 /  20.04 /  20.89
+guard_cut: TP=3 FP=0 FN=0 TN=116  (문턱 SAD≥0.10 그리고 hist≥0.30)  정상쌍 최대 SAD 0.047 hist 0.073 / 전환쌍 최소 SAD 0.118 hist 0.836
+guard_cut_pairs(3쌍, 전체 PSNR): 그대로 23.56 / 섞기 20.48 / 보간 19.34 / 보간+전부 23.56 / 보간+static·conf 21.11
+guard_conf: 되돌린 타일 평균 12.9%
+guard_cpu_ms(10코어 병렬, 1080p 기준 아님 — 이 해상도): 휘도+축소·히스토그램 0.97 / 정지 마스크 0.42 / conf 탐색 1.02 (입력 1장당 평균)
+
+# proc=1920x1080 inflight=0
+# source=synth algo=lowlat size=1920x1080 in=30fps out=60fps interp=1
+# lowlat 최대 한 변 1920, 최대 화소 2073600
+startSession_ms=98.4
+# guard cut_sad=0.10 cut_hist=0.30 static_tau=3 static_k=4 static_erode=0 conf_abs=6.0 conf_rel=0.45
+frames_in=90 calls=89 proc_ms mean=93.99 p50=93.18 p95=96.89 max=136.34
+bgra_to_src_xfer_ms p50=2.78
+cpu_blend_ms p50=0.87
+wall_s=12.0 cpu_s=12.3 cpu_pct_of_one_core=103%
+PSNR_dB(휘도, 정답 대비, 89장 평균)  영역: 보간 / 그대로두기 / 단순섞기
+  전체  27.89 /  20.59 /  23.23
+  채팅  23.09 /  16.89 /  20.36
+  자막  27.77 /  29.96 /  32.26
+  빠른공  32.77 /  21.01 /  23.36
+  타이머  15.83 /  19.77 /  20.37
+  전체 최저(보간) 17.08
+GUARD PSNR_dB(89장 평균)  영역: +cut / +static / +conf / +전부
+  전체  28.01 /  28.62 /  24.77 /  24.99
+  채팅  22.84 /  23.37 /  17.24 /  17.24
+  자막  28.06 /  30.03 /  29.90 /  31.32
+  빠른공  32.95 /  32.76 /  32.64 /  32.71
+  타이머  15.98 /  17.23 /  17.46 /  18.64
+guard_cut: TP=5 FP=0 FN=0 TN=84  (문턱 SAD≥0.10 그리고 hist≥0.30)  정상쌍 최대 SAD 0.089 hist 0.100 / 전환쌍 최소 SAD 0.118 hist 0.827
+guard_cut_pairs(5쌍, 전체 PSNR): 그대로 20.70 / 섞기 19.46 / 보간 18.57 / 보간+전부 20.70 / 보간+static·conf 19.60
+guard_conf: 되돌린 타일 평균 16.5%
+guard_cpu_ms(10코어 병렬, 1080p 기준 아님 — 이 해상도): 휘도+축소·히스토그램 2.21 / 정지 마스크 0.79 / conf 탐색 1.90 (입력 1장당 평균)
+
+# proc=1920x1080 inflight=0
+# source=synth algo=lowlat size=1920x1080 in=30fps out=60fps interp=1
+# lowlat 최대 한 변 1920, 최대 화소 2073600
+startSession_ms=96.2
+# guard cut_sad=0.10 cut_hist=0.30 static_tau=3 static_k=4 static_erode=0 conf_abs=6.0 conf_rel=0.45
+frames_in=90 calls=89 proc_ms mean=94.97 p50=93.02 p95=115.45 max=136.34
+bgra_to_src_xfer_ms p50=2.81
+cpu_blend_ms p50=0.89
+wall_s=12.0 cpu_s=12.2 cpu_pct_of_one_core=102%
+PSNR_dB(휘도, 정답 대비, 89장 평균)  영역: 보간 / 그대로두기 / 단순섞기
+  전체  29.78 /  21.10 /  23.90
+  채팅  23.16 /  16.61 /  20.13
+  자막  28.35 /  30.70 /  33.14
+  빠른공  36.31 /  22.05 /  24.52
+  타이머  18.88 /  19.67 /  20.25
+  전체 최저(보간) 27.47
+GUARD PSNR_dB(89장 평균)  영역: +cut / +static / +conf / +전부
+  전체  29.78 /  30.13 /  25.24 /  25.28
+  채팅  23.16 /  23.45 /  16.93 /  16.93
+  자막  28.35 /  30.61 /  30.00 /  31.60
+  빠른공  36.31 /  36.26 /  36.29 /  36.24
+  타이머  18.88 /  19.22 /  19.49 /  19.75
+guard_cut: TP=0 FP=0 FN=0 TN=89  (문턱 SAD≥0.10 그리고 hist≥0.30)  정상쌍 최대 SAD 0.057 hist 0.103 / 전환쌍 최소 SAD nan hist nan
+guard_conf: 되돌린 타일 평균 13.5%
+guard_cpu_ms(10코어 병렬, 1080p 기준 아님 — 이 해상도): 휘도+축소·히스토그램 2.22 / 정지 마스크 0.78 / conf 탐색 1.80 (입력 1장당 평균)
+
+# proc=1920x1080 inflight=0
+# source=synth algo=lowlat size=1920x1080 in=60fps out=120fps interp=1
+# lowlat 최대 한 변 1920, 최대 화소 2073600
+startSession_ms=96.8
+# guard cut_sad=0.10 cut_hist=0.30 static_tau=3 static_k=4 static_erode=0 conf_abs=6.0 conf_rel=0.45
+frames_in=120 calls=119 proc_ms mean=94.34 p50=93.83 p95=98.24 max=134.09
+bgra_to_src_xfer_ms p50=2.78
+cpu_blend_ms p50=0.87
+wall_s=16.0 cpu_s=16.3 cpu_pct_of_one_core=102%
+PSNR_dB(휘도, 정답 대비, 119장 평균)  영역: 보간 / 그대로두기 / 단순섞기
+  전체  28.32 /  24.28 /  25.43
+  채팅  20.75 /  31.29 /  22.82
+  자막  28.75 /  31.88 /  34.10
+  빠른공  39.59 /  23.29 /  25.57
+  타이머  18.92 /  20.95 /  21.31
+  전체 최저(보간) 18.89
+GUARD PSNR_dB(119장 평균)  영역: +cut / +static / +conf / +전부
+  전체  28.46 /  28.51 /  32.63 /  32.38
+  채팅  21.05 /  21.11 /  29.27 /  29.52
+  자막  28.92 /  31.62 /  29.74 /  32.30
+  빠른공  39.72 /  36.50 /  38.44 /  35.70
+  타이머  19.01 /  19.57 /  19.96 /  20.60
+guard_cut: TP=3 FP=0 FN=0 TN=116  (문턱 SAD≥0.10 그리고 hist≥0.30)  정상쌍 최대 SAD 0.047 hist 0.057 / 전환쌍 최소 SAD 0.118 hist 0.835
+guard_cut_pairs(3쌍, 전체 PSNR): 그대로 24.68 / 섞기 20.36 / 보간 19.12 / 보간+전부 24.68 / 보간+static·conf 22.11
+guard_conf: 되돌린 타일 평균 12.1%
+guard_cpu_ms(10코어 병렬, 1080p 기준 아님 — 이 해상도): 휘도+축소·히스토그램 2.21 / 정지 마스크 0.76 / conf 탐색 1.52 (입력 1장당 평균)
+
