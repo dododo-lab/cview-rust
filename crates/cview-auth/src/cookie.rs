@@ -252,6 +252,11 @@ impl CookieManager {
         self.restore_cookies_from_keychain_detailed() == CookieRestore::Restored
     }
 
+    /// 앞선 키체인 읽기 실패를 잊어, 다음 복원이 실제 키체인을 다시 읽게 한다.
+    pub fn forget_keychain_read_failure(&self) {
+        self.keychain.forget_read_failure();
+    }
+
     /// 키체인 쿠키 복원 — 읽기 실패(잠긴 키체인 등)와 "저장된 쿠키 없음"을 구분한다.
     /// 읽기 실패는 아무것도 지우지 않으며, 호출자가 잠시 뒤 다시 시도할 수 있다.
     pub fn restore_cookies_from_keychain_detailed(&self) -> CookieRestore {

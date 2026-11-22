@@ -260,6 +260,8 @@ impl AuthManager {
         for attempt in 0..KEYCHAIN_RESTORE_ATTEMPTS {
             if attempt > 0 {
                 tokio::time::sleep(KEYCHAIN_RESTORE_RETRY_DELAY).await;
+                // 금고는 읽기 실패를 실행 내내 기억한다 — 잊지 않으면 재시도가 키체인을 다시 읽지 않는다.
+                cm.forget_keychain_read_failure();
             }
             if !self.is_current(generation) {
                 return;
