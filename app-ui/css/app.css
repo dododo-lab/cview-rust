@@ -1611,6 +1611,9 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .quality-item:hover { background: var(--hover); }
 .quality-item.active { color: var(--primary-text); font-weight: 700; }
 .quality-item .hd { font-size: var(--fs-nano); font-weight: 800; padding: 1px 4px; border-radius: var(--radius-xxs); background: var(--primary-dim); color: var(--primary-text); }
+.quality-item .q-name { display: inline-flex; align-items: center; gap: 6px; }
+/* 화질 항목의 코덱(HEVC) — HD 표시보다 한 단계 낮게(채움 없이 테두리만, 글자색을 따른다). 시청 화면·멀티라이브 패인 메뉴 공용. */
+.codec-tag { font-size: var(--fs-nano); font-weight: 700; line-height: 1.4; padding: 0 4px; border-radius: var(--radius-xxs); border: 1px solid currentColor; opacity: 0.72; letter-spacing: 0.02em; }
 .quality-empty { padding: 8px 10px; font-size: var(--fs-footnote); color: var(--text-tertiary); }
 .player-osd {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 4; pointer-events: none;

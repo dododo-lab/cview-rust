@@ -1,0 +1,76 @@
+diff --git a/src/config.ts b/src/config.ts
+index 20531e7..043378b 100644
+--- a/src/config.ts
++++ b/src/config.ts
+@@ -66,6 +66,11 @@ export type ABRControllerConfig = {
+   abrBandWidthFactor: number;
+   abrBandWidthUpFactor: number;
+   abrMaxWithRealBitrate: boolean;
++  /**
++   * CView 수정(0006): 자동 화질(ABR)이 오디오 코덱이 같은 레벨 사이에서는 영상 코덱 계열(avc1 ↔ hvc1 등)을 넘어 오르내릴 수 있게
++   * 한다. 끄면(기본) 업스트림과 같다 — 처음 고른 코덱 묶음 안에서만 고른다.
++   */
++  abrSwitchVideoCodec?: boolean;
+   abrSwitchInterval: number;
+   maxStarvationDelay: number;
+   maxLoadingDelay: number;
+@@ -546,6 +551,7 @@ export const hlsDefaultConfig: HlsConfig = {
+   abrBandWidthFactor: 0.95, // used by abr-controller
+   abrBandWidthUpFactor: 0.7, // used by abr-controller
+   abrMaxWithRealBitrate: false, // used by abr-controller
++  abrSwitchVideoCodec: false, // CView 수정(0006): used by abr-controller
+   abrSwitchInterval: 0, // used by level-controller
+   maxStarvationDelay: 4, // used by abr-controller
+   maxLoadingDelay: 4, // used by abr-controller
+diff --git a/src/controller/abr-controller.ts b/src/controller/abr-controller.ts
+index 3ef5392..654f210 100644
+--- a/src/controller/abr-controller.ts
++++ b/src/controller/abr-controller.ts
+@@ -1,9 +1,11 @@
++// CView 수정(0006): 오디오가 같으면 영상 코덱 계열을 넘는 자동 화질 전환을 허용할 수 있게 한다(abrSwitchVideoCodec).
+ import { ErrorDetails } from '../errors';
+ import { Events } from '../events';
+ import { type Fragment, fragmentsAreEqual } from '../loader/fragment';
+ import { PlaylistLevelType } from '../types/loader';
+ import { isPenaltyExpired } from '../utils/error-helper';
+ import EwmaBandWidthEstimator from '../utils/ewma-bandwidth-estimator';
++import { isCodecType } from '../utils/codecs';
+ import { Logger } from '../utils/logger';
+ import {
+   getMediaDecodingInfoPromise,
+@@ -929,7 +931,13 @@ class AbrController extends Logger implements AbrComponentAPI {
+       // skip candidates which change codec-family or video-range,
+       // and which decrease or increase frame-rate for up and down-switch respectfully
+       if (
+-        (currentCodecSet && levelInfo.codecSet !== currentCodecSet) ||
++        (currentCodecSet &&
++          levelInfo.codecSet !== currentCodecSet &&
++          // CView 수정(0006)
++          !(
++            config.abrSwitchVideoCodec &&
++            isVideoCodecFamilySwitch(currentCodecSet, levelInfo.codecSet)
++          )) ||
+         (currentVideoRange && levelInfo.videoRange !== currentVideoRange) ||
+         (upSwitch && currentFrameRate > levelInfo.frameRate) ||
+         (!upSwitch &&
+@@ -1056,3 +1064,20 @@ class AbrController extends Logger implements AbrComponentAPI {
+ }
+ 
+ export default AbrController;
++
++/**
++ * CView 수정(0006): 두 코덱 묶음(`avc1,mp4a` 와 `hvc1,mp4a` 같은 레벨의 codecSet)이 영상 코덱만 다른가.
++ * 둘 다 영상 코덱이 있고, 영상이 아닌 코덱(오디오 등)은 순서까지 같아야 한다.
++ */
++export function isVideoCodecFamilySwitch(a: string, b: string): boolean {
++  const split = (set: string) => {
++    const codecs = set.split(',');
++    return {
++      video: codecs.filter((c) => isCodecType(c, 'video')),
++      rest: codecs.filter((c) => !isCodecType(c, 'video')).join(','),
++    };
++  };
++  const x = split(a);
++  const y = split(b);
++  return x.video.length > 0 && y.video.length > 0 && x.rest === y.rest;
++}

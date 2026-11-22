@@ -726,6 +726,8 @@ pub enum JsCommand {
     },
     SetLockTopLevel(bool),
     SetPreferSourceQuality(bool),
+    /// HEVC(H.265) 변형 허용(`setHevcEnabled`) — 다음 매니페스트부터, 끄면 이미 실린 HEVC 레벨도 바로 뺀다.
+    SetHevcEnabled(bool),
     SetBufferCaps {
         max_len: f64,
         max_max_len: f64,
@@ -798,6 +800,7 @@ impl JsCommand {
             } => format!("setForcedHeight({height}, {target_bitrate_kbps})"),
             SetLockTopLevel(e) => format!("setLockTopLevel({e})"),
             SetPreferSourceQuality(e) => format!("setPreferSourceQuality({e})"),
+            SetHevcEnabled(e) => format!("setHevcEnabled({e})"),
             SetBufferCaps {
                 max_len,
                 max_max_len,

@@ -40,6 +40,8 @@ pub trait LivePlayerEngine: CoordinatedEngine {
         false
     }
     fn set_forced_quality(&self, _target: Option<HlsJsForcedQualityTarget>) {}
+    /// HEVC(H.265) 변형 허용 — 끄면 페이지가 매니페스트에서 HEVC 레벨을 빼고 H.264 만 쓴다.
+    fn set_hevc_enabled(&self, _enabled: bool) {}
     /// gap-crossing 하드 리싱크.
     fn force_live_resync(&self) {}
     fn seek_to_live_edge(&self) {}

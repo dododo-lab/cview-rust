@@ -26,6 +26,7 @@ const SETTINGS: &[(&str, &[&str])] = &[
             "continuePlaybackInBackground",
             "streamProxyMode",
             "hardwareDecoding",
+            "hevcEnabled",
             "lowLatencyMode",
             "latencyPreset",
             "bufferDuration",

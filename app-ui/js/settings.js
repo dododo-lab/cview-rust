@@ -33,6 +33,7 @@ export const SCHEMA = [
     { d: 'player', k: 'autoPlay', label: '자동 재생', help: '시청 화면을 열면 바로 재생합니다', type: 'toggle' },
     { d: 'player', k: 'startMuted', label: '음소거로 시작', help: '방송을 열 때 소리를 끈 상태로 시작합니다', type: 'toggle' },
     { d: 'player', k: 'forceHighestQuality', label: '항상 최고 화질', help: '1080p60 을 우선 유지합니다', type: 'toggle' },
+    { d: 'player', k: 'hevcEnabled', label: 'HEVC(H.265) 화질', help: '하드웨어로 디코딩할 수 있으면 1080p 를 HEVC 로 받습니다. 끄면 H.264 만 씁니다', keywords: 'h265 h.265 hevc h264 h.264 코덱 화질', type: 'toggle' },
     { d: 'player', k: 'volumeLevel', label: '기본 볼륨', type: 'range', min: 0, max: 1, step: 0.05, pct: true },
     { d: 'player', k: 'continuePlaybackInBackground', label: '백그라운드 재생', help: '끄면 창이 가려지거나 앱이 뒤로 가면 일시정지합니다', type: 'toggle' },
     { d: 'player', k: 'streamProxyMode', label: '스트림 프록시', help: '로컬 프록시는 CDN 응답을 보정하고 암호화 방송 키를 인증합니다', type: 'select', options: opt([['localProxy', '로컬 프록시 (권장)'], ['none', '직접 재생']]) },

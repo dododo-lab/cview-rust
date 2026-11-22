@@ -106,6 +106,9 @@ pub struct PlayerSettings {
     pub sharpness_enlarged_only: bool,
     /// 하드웨어 디코딩 — **현재 어떤 엔진도 읽지 않는다.** 저장 호환을 위해 필드만 유지.
     pub hardware_decoding: bool,
+    /// 1080p 를 HEVC(H.265)로 받는다 — 치지직이 같은 화질을 HEVC 와 H.264 로 함께 내는 방송에서, 플레이어가 하드웨어 HEVC
+    /// 디코딩을 확인한 웹뷰에서만 HEVC 를 쓰고 아니면 H.264 로 둔다. 끄면 언제나 H.264 만 쓴다. 저장본에 키가 없으면 켬.
+    pub hevc_enabled: bool,
     /// 화면 비율 (`None` = 기본, "16:9" 등)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub aspect_ratio: Option<String>,
@@ -179,6 +182,7 @@ impl Default for PlayerSettings {
             sharpness_level: None,
             sharpness_enlarged_only: false,
             hardware_decoding: true,
+            hevc_enabled: true,
             aspect_ratio: None,
             latency_preset: LatencyPreset::MatchWeb.raw_value().into(),
             latency_target: v.target,
@@ -1059,6 +1063,19 @@ mod tests {
         assert!(!off.auto_check_updates);
         assert_eq!(
             serde_json::to_value(GeneralSettings::default()).unwrap()["autoCheckUpdates"],
+            serde_json::json!(true)
+        );
+    }
+
+    #[test]
+    fn hevc_defaults_on_for_older_saved_settings() {
+        // 이 항목이 생기기 전에 저장된 플레이어 설정도 HEVC 를 허용한다(실제 사용은 플레이어가 하드웨어 디코딩을 확인해 정한다).
+        let p: PlayerSettings = serde_json::from_str(r#"{"forceHighestQuality":true}"#).unwrap();
+        assert!(p.hevc_enabled);
+        let off: PlayerSettings = serde_json::from_str(r#"{"hevcEnabled":false}"#).unwrap();
+        assert!(!off.hevc_enabled);
+        assert_eq!(
+            serde_json::to_value(PlayerSettings::default()).unwrap()["hevcEnabled"],
             serde_json::json!(true)
         );
     }

@@ -12,7 +12,7 @@
 //   설정(player-tools.js)이라 시청 화면과 같은 값을 쓰고, 무대에 오를 때·새 재생마다 다시 걸고 내려오면 되돌린다.
 //   그리드 패인은 작고 여러 개라 화질·지연·선명도·채널별 색 보정만 둔다.
 import { esc, toast, hideWithExit } from './dom.js';
-import { qualityOptions, liveBadgeState, togglePipFor, installVolumeReveal, toggleFullscreenOn } from './viewer-controls.js';
+import { qualityOptions, codecTagHtml, qualityBadgeLabel, liveBadgeState, togglePipFor, installVolumeReveal, toggleFullscreenOn } from './viewer-controls.js';
 import { ADJUST_RANGES, applyPicture, pictureFor, resetAdjust, setPicture } from './picture.js';
 import {
   SHARPNESS_LEVELS, SHARPNESS_HELP, ENLARGED_ONLY_LABEL, ENLARGED_ONLY_HELP,
@@ -127,6 +127,7 @@ export class PaneControls {
     this.levels = [];
     this.manualIndex = -1;
     this.latency = 0;
+    this.codec = '';
     this.gain = 1;
     this.audible = false;
     this.stage = false; // 라이브 단독 보기의 무대 패인인가(multilive.render 가 정한다)
@@ -227,11 +228,13 @@ export class PaneControls {
   onMessage(type, data) {
     if (type === 'levels') {
       this.levels = qualityOptions(data.levels);
+      if (typeof data.videoCodec === 'string') this.codec = data.videoCodec;
       // manual — 고른 화질(-1 자동). current 는 지금 재생 중인 화질이라 자동에서도 0 이상이다.
       this.manualIndex = typeof data.manual === 'number' ? data.manual : (typeof data.current === 'number' ? data.current : this.manualIndex);
       if (!this.gearMenu.hidden) this.renderGear();
     } else if (type === 'metrics') {
       if (typeof data.latency === 'number') this.latency = data.latency;
+      if (typeof data.videoCodec === 'string') this.codec = data.videoCodec;
     } else if (type === 'playbackState') {
       this.el.classList.toggle('buffering', data.state === 'stalled');
     } else if (type === 'sharpness') {
@@ -261,6 +264,7 @@ export class PaneControls {
     this.lastGain = undefined;
     this.manualIndex = -1;
     this.latency = 0;
+    this.codec = '';
     this.levels = [];
     this.audible = false;
     this.rate = 1; // 새 채널의 플레이어는 1배속으로 시작한다(loadSource)
@@ -321,16 +325,22 @@ export class PaneControls {
     const height = (chosen && chosen.height) || (v && v.videoHeight) || 0;
     const lat = Number.isFinite(this.latency) && this.latency > 0 ? Math.round(this.latency * 10) / 10 : 0;
     const auto = this.manualIndex < 0;
-    const key = `${height}|${lat}|${auto}`;
+    const codec = this.currentCodec(chosen);
+    const key = `${height}|${lat}|${auto}|${codec}`;
     if (b.dataset.key === key) return;
     b.dataset.key = key;
     b.hidden = !height && !lat;
     b.querySelector('.ml-q-res').textContent = height ? `${height}p` : '';
     b.querySelector('.ml-q-lat').textContent = lat ? `${lat.toFixed(1)}초` : '';
     b.classList.toggle('behind', liveBadgeState(lat).behind);
-    const label = `화질 ${height ? `${height}p` : '확인 중'}${auto ? ' (자동)' : ''} · 지연 ${lat ? `${lat.toFixed(1)}초` : '확인 중'}`;
+    const label = qualityBadgeLabel({ height, codec, auto, latency: lat });
     b.title = `${label} — 눌러서 화질·지연 메뉴`;
     b.setAttribute('aria-label', `${label}, 화질·지연 메뉴`);
+  }
+
+  /** 지금 코덱(HEVC·H.264) — 직접 고른 직후엔 아직 앞 레벨이라 고른 항목의 코덱. 모르면 ''. */
+  currentCodec(chosen) {
+    return (chosen && chosen.codec) || this.codec || '';
   }
 
   // ── 동작 ─────────────────────────────────
@@ -415,9 +425,11 @@ export class PaneControls {
     const chosen = this.manualIndex >= 0 ? this.levels.find((l) => l.index === this.manualIndex) : null;
     const height = (chosen && chosen.height) || (v && v.videoHeight);
     const lat = Number.isFinite(this.latency) && this.latency > 0 ? `${this.latency.toFixed(1)}초` : '—';
+    // 머리에 지금 코덱까지(1080p · HEVC / 1080p · H.264) — 같은 1080p 라도 무엇으로 받는지 보인다.
+    const codec = this.currentCodec(chosen);
     this.gearMenu.innerHTML = `
-      <div class="ml-menu-head">화질${height ? ` <span>${height}p</span>` : ''}</div>
-      ${items.map((o) => `<button class="ml-menu-item ml-level${o.index === this.manualIndex ? ' active' : ''}" role="menuitemradio" data-mp="level" data-level="${o.index}"><span>${esc(o.label)}</span></button>`).join('')}
+      <div class="ml-menu-head">화질${height ? ` <span>${height}p${codec ? ` · ${esc(codec)}` : ''}</span>` : ''}</div>
+      ${items.map((o) => `<button class="ml-menu-item ml-level${o.index === this.manualIndex ? ' active' : ''}" role="menuitemradio" data-mp="level" data-level="${o.index}"><span>${esc(o.label)}</span>${codecTagHtml(o.codec)}</button>`).join('')}
       <div class="ml-menu-sep"></div>
       <div class="ml-menu-head">지연 <span>${lat}</span></div>
       <button class="ml-menu-item" data-mp="live"><span>라이브로 이동 (따라잡기)</span></button>

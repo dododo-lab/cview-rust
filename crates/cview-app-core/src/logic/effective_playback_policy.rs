@@ -14,6 +14,8 @@ pub struct EffectivePlaybackPolicy {
     pub quality_policy: QualityPolicyMode,
     /// 0.5~10초로 정규화한 버퍼.
     pub buffer_duration_seconds: f64,
+    /// HEVC(H.265) 변형을 써도 되는가 — 실제 사용은 플레이어 페이지가 하드웨어 디코딩을 확인한 뒤 정한다.
+    pub hevc_enabled: bool,
 }
 
 impl EffectivePlaybackPolicy {
@@ -35,6 +37,7 @@ impl EffectivePlaybackPolicy {
             preferred_quality,
             quality_policy,
             buffer_duration_seconds: settings.buffer_duration.clamp(0.5, 10.0),
+            hevc_enabled: settings.hevc_enabled,
         }
     }
 
@@ -58,6 +61,16 @@ mod tests {
             policy.quality_policy,
             QualityPolicyMode::PreferSourceAllowRescue
         );
+    }
+
+    #[test]
+    fn hevc_setting_passes_through() {
+        assert!(EffectivePlaybackPolicy::new(&PlayerSettings::default()).hevc_enabled);
+        let off = PlayerSettings {
+            hevc_enabled: false,
+            ..Default::default()
+        };
+        assert!(!EffectivePlaybackPolicy::new(&off).hevc_enabled);
     }
 
     #[test]

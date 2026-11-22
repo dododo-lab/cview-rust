@@ -242,7 +242,14 @@ pub fn log_player_page_message(source: &str, message: &Value) {
     let kind = message.get("type").and_then(Value::as_str).unwrap_or("");
     if matches!(
         kind,
-        "fatalError" | "error" | "playbackState" | "levels" | "forcedHeight" | "playStarted"
+        "fatalError"
+            | "error"
+            | "playbackState"
+            | "levels"
+            | "forcedHeight"
+            | "playStarted"
+            | "codecDiagnostics"
+            | "hevc"
     ) {
         crate::perf_log::emit(
             "player.event",

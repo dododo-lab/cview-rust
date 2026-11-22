@@ -1,11 +1,11 @@
 {
-  "version": "1.7.4-cview.3",
+  "version": "1.7.4-cview.4",
   "file": "app-ui/player/hls.min.js",
-  "sha256": "5677add0e4c95dd39ea1c30da627232e4fc986375a01bf51cdabf123c3f680c4",
+  "sha256": "ba834ba5a9595872d99369d76cbe11178fa36c71715a4945abd97df731306527",
   "source": "https://github.com/video-dev/hls.js/releases/tag/v1.7.4",
   "upstreamTag": "v1.7.4",
   "upstreamTarballSHA256": "ef4407762f3c971ec4edc097e8d2b8255e786fe3be7fcad01023647b54468b43",
-  "forkRevision": 3,
+  "forkRevision": 4,
   "configType": "fullMin",
   "features": {
     "USE_SUBTITLES": false,
@@ -22,8 +22,9 @@
     "0002-live-reload-reference.patch",
     "0003-blocking-reload-policy.patch",
     "0004-live-sync-stall-decay.patch",
-    "0005-load-unbuffered-tail-parts.patch"
+    "0005-load-unbuffered-tail-parts.patch",
+    "0006-abr-switch-video-codec.patch"
   ],
-  "patchesSHA256": "a4461abd99a3897b422784ea381239e3e708d90e4825e3695ba96deaeabcb776",
+  "patchesSHA256": "e1998803ce92f931670a85a77590cd3a01256b3eda4e0d48f37e0046c343c3b1",
   "build": "bash scripts/build-hlsjs-fork.sh"
 }
