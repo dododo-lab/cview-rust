@@ -111,6 +111,7 @@ export class MediaPage {
     video.addEventListener('error', () => {
       if (seq === this.seq) toast('영상을 불러오지 못했습니다');
     });
+    this.savedAt = null;
     this.saveTimer = setInterval(() => this.saveProgress(), SAVE_EVERY_MS);
     video.addEventListener('pause', () => this.saveProgress());
   }
@@ -162,6 +163,9 @@ export class MediaPage {
     const v = this.video;
     const info = this.info;
     if (!v || !info || this.kind !== 'vod' || !Number.isFinite(v.currentTime) || v.currentTime < 1) return;
+    // 위치가 그대로면(일시정지한 채 두기) 다시 쓰지 않는다 — 10초마다(시간당 360번) 같은 값을 DB 에 커밋했다.
+    if (this.savedAt != null && Math.abs(v.currentTime - this.savedAt) < 0.5) return;
+    this.savedAt = v.currentTime;
     api.vodProgressSave(info.videoNo, v.currentTime, v.duration || info.duration, info.title, info.channelName, info.thumbnailUrl || null)
       .catch(() => {});
   }
