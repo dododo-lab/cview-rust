@@ -10,6 +10,7 @@
 // TB07 axe(WCAG 2.1 A·AA + best-practice) — 위 막대와 열린 ⋯ 메뉴에 위반이 없다.
 // TB08 로그아웃 — 팔로우 단추·항목이 숨고 나머지는 그대로.
 // TB09 멀티라이브 그리드 패인 — 위 막대·⋯ 메뉴가 예전 그대로(단독 보기 전용 묶음·항목·묶음 이름이 없다).
+// TB09k 그리드 패인 키보드 — 막대가 숨어 있어도 Tab 이 막대 단추에 닿고, 닿으면 막대가 깨어난다.
 // TB10 예전 시청 화면(#viewer) — 같은 짜임(채널·보기 묶음, ⋯ 메뉴 항목·단축키), 폭 단계, 배지, Esc, axe.
 // TB11 라이브 머리줄(채널 칩 줄) — 좁음·보통·넓음 × 화면 크기 80~200%(웹뷰 확대 = CSS 폭이 줄어듦): [전환] │ [칩] [채널 추가] 가
 //      붙어 있고, 머리줄이 넘치지 않으며, 보이는 칩 수가 머리줄 폭을 따르고(chipWindowFor), 모든 채널이 칩 또는 "+N" 메뉴로 닿는다.
@@ -423,11 +424,51 @@ await check('TB09 multilive grid panes keep their old top bar and menu', async (
   await page.waitForTimeout(400);
   const sel = '.ml-pane[data-slot="0"]';
   await page.$eval(sel, (p) => p.classList.add('ctl-visible'));
+  // 단추는 숨은 막대에서도 visibility:visible 이다(키보드 Tab 용) — 막대 자체가 보이는지를 본다. 모션 줄이기의 전역 0.01ms 전환 탓에
+  // 클래스를 붙인 직후엔 아직 hidden 이고 한두 프레임 뒤 보인다. 끝내 보이지 않으면 시간 초과로 실패한다.
+  await page.waitForFunction((s) => getComputedStyle(document.querySelector(`${s} .ml-pane-top`)).visibility === 'visible', sel, { timeout: 3000 });
   const top = await visibleSels(page, sel, ['.ml-wt-group', '.ml-q-badge', '.ml-pane-top button[data-ml="select"]', '.ml-pane-top button[data-ml="info"]', '.ml-pane-top button[data-ml="retry"]', '.ml-drag']);
   assert.deepEqual(top, ['.ml-pane-top button[data-ml="select"]', '.ml-pane-top button[data-ml="info"]', '.ml-pane-top button[data-ml="retry"]', '.ml-drag'], '그리드 위 막대');
   await toggleMore(page, sel);
   const items = await page.$$eval(`${sel} .ml-more-pane > *`, (els) => els.filter((e) => e.getClientRects().length).map((e) => e.textContent.trim()));
   assert.deepEqual(items, ['라이브로 크게 보기', '이 패인 채팅 보기', '채널 정보', '다시 연결'], '그리드 ⋯ 메뉴는 예전 그대로');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// TB09k 숨은 그리드 패인 막대에도 키보드 Tab 이 닿고, 닿으면 막대가 깨어난다.
+// (v0.2.9~0.2.12: 숨은 막대의 visibility:hidden 이 단추를 Tab 순서에서 빼서, 마우스를 올리지 않으면 키보드로는 막대·⋯ 메뉴에 닿지 못했다.)
+await check('TB09k keyboard Tab reaches a hidden grid pane bar and wakes it', async () => {
+  const { ctx, page, errors } = await open({ width: 1280 });
+  await go(page, 'multilive');
+  await page.waitForSelector('.ml-pane[data-slot="0"]');
+  await page.mouse.move(4, 700);
+  await page.waitForTimeout(600);
+  const sel = '.ml-pane[data-slot="0"]';
+  assert.equal(await page.$eval(sel, (p) => p.classList.contains('ctl-visible')), false, '처음엔 막대가 숨어 있다');
+  // 문서 순서로 패인 바로 앞의 초점 요소에서 시작한다.
+  const start = await page.$eval(sel, (pane) => {
+    const prev = [...document.querySelectorAll('button, [tabindex], a[href], input, select, iframe')].filter((e) => (e.compareDocumentPosition(pane) & Node.DOCUMENT_POSITION_FOLLOWING) && !pane.contains(e)
+      && e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden' && !e.disabled && e.tabIndex >= 0 && !e.closest('[hidden],[inert]')).pop();
+    prev?.focus();
+    return Boolean(prev) && document.activeElement === prev;
+  });
+  assert.ok(start, '시작 초점');
+  const seq = [];
+  let hit = null;
+  for (let i = 0; i < 6 && !hit; i++) {
+    await page.keyboard.press('Tab');
+    const st = await page.$eval(sel, (pane) => {
+      const a = document.activeElement;
+      const inBar = pane.contains(a) && Boolean(a.closest('.ml-pane-top, .ml-pane-bar'));
+      return { inBar, id: `${a?.tagName.toLowerCase()}${a?.dataset?.ml ? `[ml=${a.dataset.ml}]` : a?.dataset?.mp ? `[mp=${a.dataset.mp}]` : ''}`, awake: pane.classList.contains('ctl-visible') };
+    });
+    seq.push(st.id);
+    if (st.inBar) hit = st;
+  }
+  assert.ok(hit, `Tab 이 slot0 막대 단추에 닿는다 (순서 ${JSON.stringify(seq)})`);
+  assert.ok(hit.awake, '단추에 닿으면 막대가 깨어난다');
+  await page.waitForFunction((s) => getComputedStyle(document.querySelector(`${s} .ml-pane-top`)).visibility === 'visible', sel, { timeout: 3000 });
   assert.deepEqual(errors, []);
   await ctx.close();
 });

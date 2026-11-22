@@ -327,23 +327,31 @@ await check('MC06 multilive merged chat: shared renderer, bubble toggle in view 
     window.__emit('chat://session-event', { session: 'mlx:s1', event: { type: 'messages', messages: [mk('c', 2)] } });
     const sync = mc.list.querySelectorAll('.merged-line').length;
     await new Promise((res) => requestAnimationFrame(() => setTimeout(res, 0)));
-    const lines = [...mc.list.querySelectorAll('.merged-line')];
+    let lines = [...mc.list.querySelectorAll('.merged-line')];
+    // 통합 보기에서는 칸 목록 DOM 을 그리지 않는다(보이는 보기만 DOM) — 그리드로 바꿔 칸 줄을 보고, 통합으로 돌아와 지난 줄이 남는지 본다
+    const hiddenCells = mc.conns.get('s1').list.querySelectorAll('.merged-line').length;
+    mc.setMode('grid');
     const cell = mc.conns.get('s1').list.querySelector('.merged-line');
+    const cellTag = cell ? Boolean(cell.querySelector('.mc-tag')) : 'no-cell';
+    const cellUid = cell?.dataset.uid;
+    mc.setMode('merged');
+    const back = [...mc.list.querySelectorAll('.merged-line')].map((l) => l.dataset.id);
     const out = {
-      sync,
+      sync, hiddenCells, back,
       n: lines.length,
       msg: lines.every((l) => l.classList.contains('msg')),
       tags: lines.map((l) => l.querySelector('.mc-tag')?.textContent),
       src: lines.map((l) => l.dataset.src),
       cont: lines.map((l) => l.classList.contains('cont')),
-      cellTag: Boolean(cell.querySelector('.mc-tag')), cellUid: cell.dataset.uid,
+      cellTag, cellUid,
       compact: mc.list.classList.contains('mc-compact'),
       item: mc.menu.querySelector('[data-mc-bubble]')?.getAttribute('role'),
       checked: mc.menu.querySelector('[data-mc-bubble]')?.getAttribute('aria-checked'),
     };
     mc.menu.querySelector('[data-mc-bubble]').click();
     out.after = { compact: mc.list.classList.contains('mc-compact'), cells: mc.grid.classList.contains('mc-compact'), checked: mc.menu.querySelector('[data-mc-bubble]').getAttribute('aria-checked') };
-    // 다른 패인(s1) 줄의 멘션 — 그 패인을 고르고 입력에 넣는다
+    // 다른 패인(s1) 줄의 멘션 — 그 패인을 고르고 입력에 넣는다(보기를 바꾸며 다시 그렸으므로 줄을 새로 찾는다)
+    lines = [...mc.list.querySelectorAll('.merged-line')];
     lines[2].dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 50, clientY: 50 }));
     document.querySelector('.ctx-menu [data-ctx="mention"]').click();
     out.mention = { selected, value: el.querySelector('.chat-input input').value };
@@ -355,6 +363,8 @@ await check('MC06 multilive merged chat: shared renderer, bubble toggle in view 
   assert.deepEqual(r.tags, ['첫째', '첫째', '둘째']);
   assert.deepEqual(r.src, ['mlx:s0', 'mlx:s0', 'mlx:s1']);
   assert.deepEqual(r.cont, [false, true, false]);
+  assert.equal(r.hiddenCells, 0, '통합 보기인데 칸 목록 DOM 을 그렸다');
+  assert.deepEqual(r.back, ['a', 'b', 'c'], `통합→그리드→통합에서 지난 줄이 사라졌다 ${r.back}`);
   assert.equal(r.cellTag, false, '칸 줄에 태그가 있다');
   assert.equal(r.cellUid, 'mluser2x');
   assert.equal(r.compact, true);
