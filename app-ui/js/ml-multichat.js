@@ -63,6 +63,17 @@ function loadMode() {
   return 'off';
 }
 
+const MERGED_EMPTY = '<div class="empty">모든 패인의 새 메시지를 기다리는 중…</div>';
+const CELL_EMPTY = '<div class="empty">새 메시지를 기다리는 중…</div>';
+
+/** 보기가 바뀌어 다시 보이는 목록을 버퍼로 새로 그린다(앞 줄과 잇지 않는다). 버퍼가 비면 안내를 둔다. */
+function refill(list, items, max, empty) {
+  if (!list) return;
+  if (!items.length) { if (list.childElementCount > 1 || !list.querySelector(':scope > .empty')) list.innerHTML = empty; return; }
+  list.innerHTML = '';
+  appendTo(list, mergedItemsHtml(items.slice(-max), null), max);
+}
+
 /** 칸에 붙이고 넘치면 앞에서 지운다 — 바닥에 있었으면 계속 바닥을 따라간다. */
 function appendTo(list, html, max) {
   if (!html) return;
@@ -95,7 +106,9 @@ export class MultiLiveMergedChat {
     this.panelList.after(this.list, this.grid);
     this.pending = []; // [conn, messages, recent] — 프레임마다 한 번 붙인다
     this.pendingCount = 0;
-    this.mergedBacklog = []; // 그리드·포커스 보기 중 통합 목록 DOM 대신 보관하는 경량 링버퍼
+    // 통합 목록의 경량 링버퍼(칸마다는 c.backlog) — 보기와 관계없이 늘 채우고, 보이는 보기가 바뀌면 이것으로 다시 그린다.
+    this.mergedBacklog = [];
+    this.shownView = undefined; // 지금 DOM 에 그려 둔 보기 묶음: 'merged' | 'cells' | null(끔)
     this.title = chatEl.querySelector('.chat-header strong');
 
     const header = chatEl.querySelector('.chat-header');
@@ -206,30 +219,23 @@ export class MultiLiveMergedChat {
     this.panelList.hidden = this.on;
     this.list.hidden = this.mode !== 'merged';
     this.grid.hidden = this.mode !== 'grid' && this.mode !== 'focus';
-    // 보이지 않는 보기의 DOM 은 비워 노드 누적을 막고, 보이는 보기로 돌아올 때 경량 버퍼에서 1회 채운다.
-    if (this.mode === 'merged') {
-      for (const c of this.conns.values()) {
-        if (c.list && c.list.childElementCount > 1) c.list.innerHTML = '<div class="empty">새 메시지를 기다리는 중…</div>';
-      }
-      if (this.mergedBacklog.length) {
-        const items = this.mergedBacklog;
-        this.mergedBacklog = [];
-        appendTo(this.list, mergedItemsHtml(items, this.list.lastElementChild), MAX_LINES);
+    // 보이지 않는 보기의 DOM 은 비워 노드 누적을 막는다. 두 보기의 경량 버퍼(mergedBacklog·c.backlog)는 flush 가
+    // 늘 채우므로, 보이는 보기가 바뀔 때만 그 버퍼로 목록을 새로 그린다(지난 메시지가 남는다 — 그리드↔포커스는 그대로).
+    const shown = this.mode === 'merged' ? 'merged' : (this.mode === 'grid' || this.mode === 'focus') ? 'cells' : null;
+    if (shown !== this.shownView) {
+      this.shownView = shown;
+      if (shown !== 'merged' && this.list.childElementCount > 1) this.list.innerHTML = MERGED_EMPTY;
+      for (const c of this.conns.values()) if (shown !== 'cells' && c.list && c.list.childElementCount > 1) c.list.innerHTML = CELL_EMPTY;
+      if (shown === 'merged') {
+        refill(this.list, this.mergedBacklog, MAX_LINES, MERGED_EMPTY);
         this.lines?.afterAppend();
+      } else if (shown === 'cells') {
+        for (const c of this.conns.values()) refill(c.list, c.backlog || [], MAX_CELL_LINES, CELL_EMPTY);
+        this.cellLines?.afterAppend();
+      } else {
+        this.mergedBacklog = [];
+        for (const c of this.conns.values()) c.backlog = [];
       }
-    } else if (this.mode === 'grid' || this.mode === 'focus') {
-      if (this.list.childElementCount > 1) this.list.innerHTML = '<div class="empty">모든 패인의 새 메시지를 기다리는 중…</div>';
-      for (const c of this.conns.values()) {
-        if (c.backlog && c.backlog.length) {
-          const cellItems = c.backlog;
-          c.backlog = [];
-          appendTo(c.list, mergedItemsHtml(cellItems, c.list.lastElementChild), MAX_CELL_LINES);
-        }
-      }
-      this.cellLines?.afterAppend();
-    } else {
-      this.mergedBacklog = [];
-      if (this.list.childElementCount > 1) this.list.innerHTML = '<div class="empty">모든 패인의 새 메시지를 기다리는 중…</div>';
     }
     if (this.title) this.title.textContent = TITLES[this.mode];
   }
@@ -397,20 +403,21 @@ export class MultiLiveMergedChat {
       events.push([c, msgs, recent]);
     }
     if (!items.length) return;
-    // 현재 보이는 보기만 DOM 에 붙이고, 보이지 않는 보기는 경량 버퍼에만 보관한다(DOM 노드·강제 레이아웃 절반 절감).
+    // 두 보기의 경량 버퍼는 늘 채우고(보기를 바꾸면 이것으로 다시 그린다), DOM 에는 지금 보이는 보기만 붙인다
+    // (DOM 노드·강제 레이아웃 절반 절감). 예전엔 보이는 보기의 줄을 버퍼에 남기지 않아 통합→그리드→통합이면 지난 줄이 사라졌다.
+    this.mergedBacklog.push(...items);
+    if (this.mergedBacklog.length > MAX_LINES) this.mergedBacklog.splice(0, this.mergedBacklog.length - MAX_LINES);
+    for (const [c, cellItems] of cells) {
+      if (!c.backlog) c.backlog = [];
+      c.backlog.push(...cellItems);
+      if (c.backlog.length > MAX_CELL_LINES) c.backlog.splice(0, c.backlog.length - MAX_CELL_LINES);
+    }
     if (this.mode === 'merged') {
       appendTo(this.list, mergedItemsHtml(items, this.list.lastElementChild), MAX_LINES);
       this.lines.afterAppend();
-      for (const [c, cellItems] of cells) {
-        if (!c.backlog) c.backlog = [];
-        c.backlog.push(...cellItems);
-        if (c.backlog.length > MAX_CELL_LINES) c.backlog.splice(0, c.backlog.length - MAX_CELL_LINES);
-      }
     } else if (this.mode === 'grid' || this.mode === 'focus') {
       for (const [c, cellItems] of cells) appendTo(c.list, mergedItemsHtml(cellItems, c.list.lastElementChild), MAX_CELL_LINES);
       this.cellLines.afterAppend();
-      this.mergedBacklog.push(...items);
-      if (this.mergedBacklog.length > MAX_LINES) this.mergedBacklog.splice(0, this.mergedBacklog.length - MAX_LINES);
     }
     // 후원 목록 — 줄을 붙인 뒤에 넣어야 목록이 '채팅에 있는 줄'로 그린다. 채팅 설정(차단·후원 숨김)을 줄과 같이 따른다.
     const donations = panelOf(this.chatEl)?.donations;
