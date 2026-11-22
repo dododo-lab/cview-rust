@@ -256,6 +256,8 @@ impl ChzzkApiClient {
                 endpoint.path(),
                 attempt + 1
             );
+            // 다시 보내지 않고 끝낼 오류(오프라인) — 아래 공통 처리가 백오프로 또 보내지 않게.
+            let mut terminal = false;
             let error: ApiError = 'attempt: {
                 let response = match self.send(request.clone(), Some(context)).await {
                     Ok(r) => r,
@@ -271,7 +273,8 @@ impl ChzzkApiClient {
                         break 'attempt ApiError::NetworkError("Request timed out".into());
                     }
                     Err(TransportError::NotConnected) => {
-                        break 'attempt ApiError::NetworkError("No internet connection".into())
+                        terminal = true;
+                        break 'attempt ApiError::NetworkError("No internet connection".into());
                     }
                     Err(TransportError::Other(m)) => break 'attempt ApiError::NetworkError(m),
                 };
@@ -385,7 +388,9 @@ impl ChzzkApiClient {
                 // 429 는 전용 예산을 다 쓴 뒤라 여기서 끝낸다(normal 예산으로 또 때리지 않는다).
                 ApiError::RateLimited { .. } => return Err(error),
                 _ => {
-                    if attempt >= attempt_limit - 1 {
+                    // POST 는 시간 초과·5xx 에도 다시 보내지 않는다(위 retry_safe) — 예전엔 그 오류가 여기까지 와서
+                    // 백오프로 최대 3번 다시 보냈다(팔로우가 두 번 적용될 수 있다). 오프라인도 곧바로 끝낸다.
+                    if !retry_safe || terminal || attempt >= attempt_limit - 1 {
                         return Err(error);
                     }
                     attempt += 1;

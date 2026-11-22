@@ -187,14 +187,25 @@ pub(crate) async fn send_upstream(
     if let (false, Some(r)) = (playlist_path, byte_range) {
         insert(&mut headers, "Range", r);
     }
-    apply_key_authentication(
-        url,
-        &Method::GET,
+    // 키 URL 일 때만 로그인 쿠키를 읽는다 — 아니면 apply_key_authentication 이 곧바로 돌아오는데도 인자로 쿠키 저장소를
+    // 잠그고 전체를 복제했다(재생목록·세그먼트 요청마다).
+    if is_key_url(url) {
+        apply_key_authentication(
+            url,
+            &Method::GET,
+            &mut headers,
+            &proxy.current_cookies(),
+            chrono::Utc::now(),
+        );
+    }
+    // 재생목록은 gzip 을 받는다 — LL-HLS 미디어 재생목록은 0.5~1초마다 다시 받는데 CDN 이 gzip 으로 약 1/4 로 줄여 준다
+    // (2026-11-23 실측 3,438 → 845바이트; 마스터·API 는 압축하지 않음). 푸는 것은 complete_playlist 가 한다.
+    // 미디어(Byte-Range 패스스루)는 identity 그대로 — 본문을 손대지 않고 길이·범위를 그대로 넘긴다.
+    insert(
         &mut headers,
-        &proxy.current_cookies(),
-        chrono::Utc::now(),
+        "Accept-Encoding",
+        if playlist_path { "gzip" } else { "identity" },
     );
-    insert(&mut headers, "Accept-Encoding", "identity");
 
     let mut current = url.clone();
     let mut redirects = 0;
@@ -649,11 +660,15 @@ impl LocalStreamProxy {
         self.inner.telemetry.record_segment_ok();
         trace.response(resp.status().as_u16(), kind, false);
         let max = crate::policy::media_response_policy::MAXIMUM_PLAYLIST_BYTES;
-        let encoded = resp
+        let encoding = resp
             .headers()
             .get(http::header::CONTENT_ENCODING)
             .and_then(|v| v.to_str().ok())
-            .is_some_and(|e| !e.eq_ignore_ascii_case("identity"));
+            .map(str::trim)
+            .filter(|e| !e.eq_ignore_ascii_case("identity"));
+        let gzipped = encoding.is_some_and(|e| e.eq_ignore_ascii_case("gzip"));
+        // gzip 밖의 압축은 풀 수 없다(요청도 gzip 만 한다).
+        let encoded = encoding.is_some() && !gzipped;
         let mut failure = resp.content_length().is_some_and(|l| l as usize > max) || encoded;
         let mut data = Vec::new();
         let mut error = None;
@@ -688,6 +703,12 @@ impl LocalStreamProxy {
             }
             tracing::warn!("Proxy(stream) upstream error: {e} [{}]", mask(target));
         }
+        if gzipped && error.is_none() && !failure {
+            match gunzip_capped(&data, max) {
+                Some(plain) => data = plain,
+                None => failure = true,
+            }
+        }
         let body = if error.is_none() && !failure {
             self.rewritten_playlist(&data, target, Some(response_url))
         } else {
@@ -709,6 +730,17 @@ impl LocalStreamProxy {
         trace.finish("success");
         Attempt::done(data_response(200, "application/vnd.apple.mpegurl", body))
     }
+}
+
+/// gzip 재생목록을 푼다 — 푼 크기도 재생목록 상한(`max`)을 넘으면(압축 폭탄 포함) 또는 깨졌으면 `None`.
+fn gunzip_capped(data: &[u8], max: usize) -> Option<Vec<u8>> {
+    use std::io::Read;
+    let mut plain = Vec::with_capacity(data.len().saturating_mul(4).min(max));
+    flate2::read::GzDecoder::new(data)
+        .take(max as u64 + 1)
+        .read_to_end(&mut plain)
+        .ok()?;
+    (plain.len() <= max).then_some(plain)
 }
 
 enum Attempt {

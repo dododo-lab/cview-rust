@@ -386,6 +386,33 @@ async fn server_errors_retry_and_client_errors_do_not() {
     assert_eq!(c.channel_info("c").await, Err(ApiError::EmptyContent));
 }
 
+/// POST(팔로우)는 시간 초과·연결 끊김·5xx 에 다시 보내지 않고, 오프라인은 GET 도 곧바로 끝낸다.
+#[tokio::test(start_paused = true)]
+async fn post_and_offline_failures_are_not_retried() {
+    let follow = ChzzkEndpoint::Follow {
+        channel_id: "c".into(),
+    };
+    let failures: [fn() -> Result<HttpResponse, TransportError>; 3] = [
+        || Err(TransportError::TimedOut("t".into())),
+        || Err(TransportError::ConnectionLost("l".into())),
+        || status(503),
+    ];
+    for fail in failures {
+        let t = MockTransport::new(Duration::ZERO, move |_, _| fail());
+        let c = client(t.clone(), Some(MockAuth::with_cookies()));
+        assert!(c.request::<Value>(&follow).await.is_err());
+        assert_eq!(t.sends(), 1, "POST 를 다시 보냈다");
+    }
+
+    let t = MockTransport::new(Duration::ZERO, |_, _| Err(TransportError::NotConnected));
+    let c = client(t.clone(), None);
+    assert_eq!(
+        c.channel_info("c").await,
+        Err(ApiError::NetworkError("No internet connection".into()))
+    );
+    assert_eq!(t.sends(), 1, "오프라인인데 다시 보냈다");
+}
+
 #[test]
 fn stale_fallback_error_table() {
     assert!(ChzzkApiClient::allows_stale_on_error(

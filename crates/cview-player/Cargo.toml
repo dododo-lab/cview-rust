@@ -26,6 +26,8 @@ percent-encoding = "2.3"
 uuid.workspace = true
 aes = "0.8.4"
 cbc = { version = "0.1.2", features = ["alloc"] }
+# 재생목록 gzip 풀기(proxy/server.rs gunzip_capped) — 이미 다른 의존성이 쓰는 판이라 새 크레이트가 늘지 않는다.
+flate2 = "1.1"
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
