@@ -368,7 +368,7 @@ static void breakerSetFps(Breaker *b, double fps) {
     breakerClearWindow(b);
 }
 static BOOL breakerFeed(Breaker *b, double ms, BOOL late, double B) {
-    if (!b->v2 && b->warm > 0) { b->warm--; return NO; }
+    if (!b->v2 && b->warm > 0) { b->warm--; return NO; }   // 재시도 직후 10건은 창에 넣지 않는다
     b->ring[b->idx] = ms; b->lateRing[b->idx] = late; b->idx = (b->idx + 1) % b->win; if (b->n < b->win) b->n++;
     double mean = 0; int lates = 0; for (int i = 0; i < b->n; i++) { mean += b->ring[i]; lates += b->lateRing[i]; } mean /= MAX(b->n, 1);
     BOOL warming = b->warm > 0; if (warming) b->warm--;
@@ -382,24 +382,31 @@ static BOOL breakerFeed(Breaker *b, double ms, BOOL late, double B) {
 static void breakerTrip(Breaker *b, double nowMsV) {
     b->probeN = 0; b->probeIdx = 0; b->nextProbeMs = nowMsV;
     b->openUntilMs = nowMsV + b->cooldown * 1000.0;
-    b->cooldown = MIN(b->cooldown * 2, 8.0); b->n = 0; b->idx = 0; b->trips++; b->okSinceMs = 0;
-    memset(b->lateRing, 0, sizeof b->lateRing); b->warm = 2;
+    b->cooldown = MIN(b->cooldown * 2, b->v2 ? 8.0 : 30.0); b->n = 0; b->idx = 0; b->trips++; b->okSinceMs = 0;   // v3: 1·2·4·8·16·30초(다시 시도할 때마다 켜졌다 꺼지는 전환을 줄인다)
+    memset(b->lateRing, 0, sizeof b->lateRing); b->warm = b->v2 ? 2 : 10;
 }
 
 static void breakerProbeDone(Breaker *b, double ms, double nowMsV) {
     b->probeRing[b->probeIdx] = ms; b->probeIdx = (b->probeIdx + 1) % 16; if (b->probeN < 16) b->probeN++;
     b->nextProbeMs = nowMsV + MAX(100.0, 4.0 * ms);   // ANE 사용률 20% 이하
 }
-// 열려 있으면 YES. 열린 기간이 지나도 시험 요청이 건강하지 않으면(최근 10건 평균 > B 또는 최대 > 2·B) 1초씩 늘린다.
-// 시험 요청은 드문드문(사용률 20% 이하) 보내므로 ANE 가 클럭을 낮춘 상태의 시간이다(720p 약 15ms, 연속 처리 땐 9ms).
-// 그래서 0.6·B 같은 연속 처리 기준으로 보면 영영 닫히지 않는다. 1080p(약 100ms)는 이 기준으로도 계속 열려 있다.
+// 열려 있으면 YES. v3 반쯤 열림:
+// - 열린 동안 시험 요청(결과는 버림, ANE 사용률 20% 이하)으로 ANE 를 깨워 둔다. 오래 쉬면 다시 켠 직후 13~23ms 로 느려져
+//   대기열이 밀리고 곧 다시 열리는 악순환이 생겼다(치지직 5분에 34번).
+// - 시험 요청은 드문드문이라 ANE 가 클럭을 낮춘 상태의 시간이다(720p 약 15~18ms, 연속 처리 땐 9ms). 그래서 시험 결과로는
+//   '아예 못 따라감'(최근 시험 중앙값 > 2·B, 1080p 는 약 100ms)만 판정해 열린 기간을 1초씩 늘리고,
+//   그 밖에는 기간이 끝나면 닫고 실제 보간으로 시도한다. 닫은 직후 10건은 창에 넣지 않는다(ANE 가 다시 빨라질 시간).
 static BOOL breakerIsOpen(Breaker *b, double nowMsV, double B) {
     if (b->openUntilMs <= 0) return NO;
     if (nowMsV < b->openUntilMs) return YES;
     if (!b->v2) {
-        int n = MIN(b->probeN, 10); double sum = 0, mx = 0;
-        for (int i = 0; i < n; i++) { double v = b->probeRing[(b->probeIdx - 1 - i + 16) % 16]; sum += v; mx = MAX(mx, v); }
-        if (n < 5 || sum / n > B || mx > 2 * B) { b->openUntilMs = nowMsV + 1000; b->extensions++; return YES; }
+        int n = MIN(b->probeN, 9);
+        if (n >= 3) {
+            double t[9]; for (int i = 0; i < n; i++) t[i] = b->probeRing[(b->probeIdx - 1 - i + 16) % 16];
+            qsort(t, n, sizeof(double), cmpd);
+            if (t[n / 2] > 2 * B) { b->openUntilMs = nowMsV + 1000; b->extensions++; return YES; }
+        }
+        b->warm = 10;
     }
     b->openUntilMs = 0;
     return NO;
@@ -559,7 +566,7 @@ typedef struct {
     int lastShown;             // 토글 계산: -1 미정, 0 원본만, 1 보간 표시
     CMTime lastEmitPTS;
     Counters c;
-    DArr procMs, compMs, guardMs, lookMs, slackMs, submitLeadMs, probeMs;
+    DArr procMs, procAtMs, compMs, guardMs, lookMs, slackMs, submitLeadMs, probeMs;   // procAtMs: 완료 시각
     NSMutableArray *events;    // 세대 변경·세션 시작 등
     NSMutableDictionary *sessionLog;
     double cutSadMaxNormal, cutHistMaxNormal;
@@ -702,7 +709,7 @@ static void resolveInflightAsStale(void) {
 //       출력·받기는 건드리지 않는다.
 static void bumpGeneration(NSString *why, BOOL hard) {
     double now = nowMs();
-    if (hard && P.lastHardBumpGen == P.gen && now - P.lastHardBumpMs < 150) {
+    if (hard && P.lastHardBumpGen == P.gen && now - P.lastHardBumpMs < 150 && ![why isEqual:@"backward_pts"]) {   // 프레임이 직접 보여 준 역행은 합치지 않는다
         P.c.coalescedBumps++;
         logEvent(@"generation_coalesced", @{ @"gen": @(P.gen), @"why": why });
         return;
@@ -811,9 +818,18 @@ static void emitOrig(VFFrame *f) {
     P.prev = f;
 }
 
-// 제출 판단에 쓰는 예상 처리 시간: 최근 60건의 p75. p10 을 쓰면 느린 요청 뒤 쌓인 짝을 마감 직전에 넣어
-// 11ms 만에 끝나도 늦음이 되고, 그 늦음이 브레이커를 다시 여는 악순환이 생겼다.
-static double recentMinProc(void) { return P.procMs.n ? dpct(&P.procMs, MAX(0, P.procMs.n - 60), 0.75) : 10.0; }
+// 제출 판단에 쓰는 예상 처리 시간: 최근 3초 안에 끝난 요청(최대 60건)의 p75.
+// - p10 을 쓰면 느린 요청 뒤 쌓인 짝을 마감 직전에 넣어 11ms 만에 끝나도 늦음이 되고, 그 늦음이 브레이커를 다시 열었다.
+// - 개수로만 자르면 느린 표본이 몰린 뒤 값이 높게 굳는다: 그 값으로는 아무 짝도 넣지 못하고, 넣지 않으니 표본도
+//   갱신되지 않는다(치지직 e5: '시작 못함' 10,716건). 그래서 시간으로 자르고, 최근 표본이 5건 미만이면 0.5·T 로 다시 시도한다.
+static double recentMinProc(double now, double T) {
+    double tmp[60]; int n = 0;
+    for (long i = P.procMs.n - 1; i >= 0 && n < 60; i--) { if (P.procAtMs.v[i] < now - 3000) break; tmp[n++] = P.procMs.v[i]; }
+    if (n < 5) return 0.5 * T;
+    qsort(tmp, n, sizeof(double), cmpd);
+    double pos = 0.75 * (n - 1); int i0 = (int)floor(pos); double f = pos - i0;
+    return i0 + 1 < n ? tmp[i0] * (1 - f) + tmp[i0 + 1] * f : tmp[i0];
+}
 
 // 집계 대상 짝의 '보간하지 못함' 결과를 센다.
 static void countSkip(long *counter, BOOL counted) { if (counted) { (*counter)++; markShown(0); } }
@@ -851,10 +867,10 @@ static void breakerAfter(VFPair *pr, double ms, BOOL late, double fin) {
 static void onComplete(VFPair *pr, NSError *e, double done) {
     double ms = done - pr->submitMs;
     if (P.inflight == pr) P.inflight = nil;
-    dpush(&P.procMs, ms);
     if (e) handleVtError(pr, e); else P.consecutiveErrors = 0;
-    if (pr->probe) { if (!e) breakerProbeDone(&P.br, ms, nowMs()); dpush(&P.probeMs, ms); pipeAdvance(); return; }
+    if (pr->probe) { if (!e) breakerProbeDone(&P.br, ms, nowMs()); dpush(&P.probeMs, ms); pipeAdvance(); return; }   // 시험 요청은 procMs 에 넣지 않는다
     if (pr->gen != P.gen) { P.c.staleDropped++; pipeAdvance(); return; }
+    if (!e) { dpush(&P.procMs, ms); dpush(&P.procAtMs, done); }   // 처리 시간 분포·제출 판단: 성공한 실제 요청만
     if (pr->abandoned) {   // 마감을 넘겨 원본을 이미 내보냈다
         P.c.lateCompleted++;
         breakerAfter(pr, ms, YES, nowMs());
@@ -906,7 +922,8 @@ static BOOL pipeStep(void) {
     CMTime mid = CMTimeAdd(P.prev->pts, CMTimeMultiplyByRatio(CMTimeSubtract(cur->pts, P.prev->pts), 1, 2));
     double deadline = hostMsOfItemTime(mid) - gOpt.leadMs;
     BOOL stalled = !isfinite(deadline);
-    double now = nowMs(), minProc = recentMinProc();
+    double T0 = P.T > 0 ? P.T : 16.67;
+    double now = nowMs(), minProc = recentMinProc(now, T0);
     BOOL vtBusy = P.inflight != nil;   // 포기됐거나 이전 세대 요청을 VT 가 아직 처리 중
     BOOL canStartInTime = stalled || now + minProc <= deadline;
     if (vtBusy && canStartInTime) return NO;   // VT 가 비면 이 짝을 처리할 수 있다
@@ -1241,7 +1258,7 @@ static int probeSizes(void) {
 static double instrumentMB(void) {   // 측정 기록(표본 배열·이벤트)이 쓰는 메모리. C8 메모리 증가에서 뺀다.
     __block double bytes = 0;
     dispatch_sync(gPipe, ^{
-        DArr *arrs[] = { &P.procMs, &P.compMs, &P.guardMs, &P.lookMs, &P.slackMs, &P.submitLeadMs };
+        DArr *arrs[] = { &P.procMs, &P.procAtMs, &P.compMs, &P.guardMs, &P.lookMs, &P.slackMs, &P.submitLeadMs, &P.probeMs };
         for (unsigned i = 0; i < sizeof arrs / sizeof arrs[0]; i++) bytes += arrs[i]->n * sizeof(double);
         bytes += P.events.count * 400.0;
     });
@@ -1347,9 +1364,9 @@ static NSArray *kCsvCols(void) {
                 if (self.errorLogEntries <= 30) printf("  · AVPlayer 오류 기록: %ld %s %s (%s)\n", (long)x.errorStatusCode, (x.errorDomain ?: @"").UTF8String, (x.errorComment ?: @"").UTF8String, host.UTF8String);
                 dispatch_async(gPipe, ^{ logEvent(@"error_log", info); });
             }
-            self.lastErrorLogCount = ev.count;
+            self.lastErrorLogCount = MAX(self.lastErrorLogCount, ev.count);
         };
-        if (@available(macOS 27.0, *)) [it fetchErrorLogWithCompletionHandler:^(AVPlayerItemErrorLog *log) { dispatch_async(dispatch_get_main_queue(), ^{ handle(log); }); }];
+        if (@available(macOS 27.0, *)) [it fetchErrorLogWithCompletionHandler:^(AVPlayerItemErrorLog *log) { dispatch_async(dispatch_get_main_queue(), ^{ if (it == self.item) handle(log); }); }];
         else {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
