@@ -13,7 +13,8 @@ mkdir -p $OUT
 clang -O2 -fobjc-arc -Wno-deprecated-declarations -mmacosx-version-min=26.0 \
   -framework Foundation -framework AVFoundation -framework VideoToolbox -framework CoreVideo \
   -framework CoreMedia -framework CoreText -framework CoreGraphics -framework ImageIO \
-  -framework UniformTypeIdentifiers $HERE/bench.m -o $OUT/bench
+  -framework UniformTypeIdentifiers -framework Metal -framework MetalPerformanceShaders -framework MetalPerformanceShadersGraph \
+  $HERE/bench.m -o $OUT/bench
 swiftc -O $HERE/run-webgpu.swift -o $OUT/run-webgpu
 
 q() { $OUT/bench "$@" 2>/dev/null | /usr/bin/grep -v '^# 지원'; echo; }

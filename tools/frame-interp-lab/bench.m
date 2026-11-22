@@ -9,12 +9,14 @@
 //   lowlat : VTLowLatencyFrameInterpolation (macOS 26+, 이전 프레임+현재 프레임 → 중간)
 //   frc    : VTFrameRateConversion (macOS 15.4+, 품질 우선순위 normal)
 //   frcq   : VTFrameRateConversion (품질 우선순위 quality)
+//   rife   : Practical-RIFE 4.25 / 4.25.lite (MPSGraph, Metal GPU). --rife-weights <rife-export.py 출력 폴더>
 //
 // 빌드·실행은 같은 폴더의 run.sh 를 본다.
 
 #import <Foundation/Foundation.h>
 #import <AVFoundation/AVFoundation.h>
 #import <VideoToolbox/VideoToolbox.h>
+#import "rife-graph.h"   // --algo rife: RIFE 4.25 / lite 를 MPSGraph 로(가중치는 rife-export.py 출력)
 #import <CoreVideo/CoreVideo.h>
 #import <CoreText/CoreText.h>
 #import <ImageIO/ImageIO.h>
@@ -449,6 +451,31 @@ static void guardApply(Guard *g, CVPixelBufferRef interp, CVPixelBufferRef prev,
     CVPixelBufferUnlockBaseAddress(prev, kCVPixelBufferLock_ReadOnly); CVPixelBufferUnlockBaseAddress(interp, kCVPixelBufferLock_ReadOnly);
 }
 
+// RIFE 입출력: BGRA ↔ RGB float(0~1), 행 우선 W×H×3. bgr=YES 면 채널 순서를 B,G,R 로.
+static void bgraToRGB(CVPixelBufferRef pb, float *rgb, BOOL bgr) {
+    CVPixelBufferLockBaseAddress(pb, kCVPixelBufferLock_ReadOnly);
+    int W = (int)CVPixelBufferGetWidth(pb), H = (int)CVPixelBufferGetHeight(pb); size_t rb = CVPixelBufferGetBytesPerRow(pb);
+    const uint8_t *p = CVPixelBufferGetBaseAddress(pb);
+    dispatch_apply(H, DISPATCH_APPLY_AUTO, ^(size_t y) {
+        const uint8_t *q = p + y * rb; float *o = rgb + y * W * 3;
+        for (int x = 0; x < W; x++) { o[3 * x] = q[4 * x + (bgr ? 0 : 2)] / 255.f; o[3 * x + 1] = q[4 * x + 1] / 255.f; o[3 * x + 2] = q[4 * x + (bgr ? 2 : 0)] / 255.f; }
+    });
+    CVPixelBufferUnlockBaseAddress(pb, kCVPixelBufferLock_ReadOnly);
+}
+static void rgbToBGRA(const float *rgb, CVPixelBufferRef pb, BOOL bgr) {
+    CVPixelBufferLockBaseAddress(pb, 0);
+    int W = (int)CVPixelBufferGetWidth(pb), H = (int)CVPixelBufferGetHeight(pb); size_t rb = CVPixelBufferGetBytesPerRow(pb);
+    uint8_t *p = CVPixelBufferGetBaseAddress(pb);
+    dispatch_apply(H, DISPATCH_APPLY_AUTO, ^(size_t y) {
+        uint8_t *q = p + y * rb; const float *o = rgb + y * W * 3;
+        for (int x = 0; x < W; x++) {
+            int r = (int)lroundf(fminf(fmaxf(o[3 * x], 0), 1) * 255), g = (int)lroundf(fminf(fmaxf(o[3 * x + 1], 0), 1) * 255), b = (int)lroundf(fminf(fmaxf(o[3 * x + 2], 0), 1) * 255);
+            q[4 * x] = (uint8_t)(bgr ? r : b); q[4 * x + 1] = (uint8_t)g; q[4 * x + 2] = (uint8_t)(bgr ? b : r); q[4 * x + 3] = 255;
+        }
+    });
+    CVPixelBufferUnlockBaseAddress(pb, 0);
+}
+
 static void copyBGRA(CVPixelBufferRef src, CVPixelBufferRef dst) {
     CVPixelBufferLockBaseAddress(src, kCVPixelBufferLock_ReadOnly); CVPixelBufferLockBaseAddress(dst, 0);
     size_t rs = CVPixelBufferGetBytesPerRow(src), rd = CVPixelBufferGetBytesPerRow(dst); int H = (int)CVPixelBufferGetHeight(src), W = (int)CVPixelBufferGetWidth(src);
@@ -604,6 +631,7 @@ int main(int argc, const char **argv) {
         int W = 1920, H = 1080, frames = 120, inFps = 30, interp = 1, maxWidth = 0, PW = 0, PH = 0, inflight = 0;
         double loopSec = 0, rtSec = 0, budgetMs = 0; int cuts = 0, breakerMode = 0; BOOL guards = NO;
         NSMutableDictionary *gopt = [NSMutableDictionary new];   // 가드 문턱 덮어쓰기
+        NSString *rifeWeights = nil; int rifeLite = 0, rifeFast = 2; double rifeScale = 1.0; BOOL rifeF16 = NO, rifeBGR = NO;
         for (int i = 1; i < argc; i++) {
             NSString *k = @(argv[i]); NSString *v = i + 1 < argc ? @(argv[i + 1]) : @"";
             if ([k isEqual:@"--source"]) { source = v; i++; }
@@ -622,6 +650,12 @@ int main(int argc, const char **argv) {
             else if ([k isEqual:@"--rt"]) { rtSec = v.doubleValue; i++; }        // 실시간 모사(절대 시간표, 비동기 1건) 초
             else if ([k isEqual:@"--breaker"]) { breakerMode = [v isEqual:@"on"] ? 1 : [v isEqual:@"v1"] ? 2 : 0; i++; }
             else if ([k isEqual:@"--budget-ms"]) { budgetMs = v.doubleValue; i++; }
+            else if ([k isEqual:@"--rife-weights"]) { rifeWeights = v; i++; }
+            else if ([k isEqual:@"--rife-variant"]) { rifeLite = [v isEqual:@"lite"]; i++; }
+            else if ([k isEqual:@"--rife-scale"]) { rifeScale = v.doubleValue; i++; }
+            else if ([k isEqual:@"--rife-fast"]) { rifeFast = [v isEqual:@"off"] ? 0 : [v isEqual:@"phase"] ? 1 : 2; i++; }
+            else if ([k isEqual:@"--rife-dtype"]) { rifeF16 = [v isEqual:@"f16"]; i++; }
+            else if ([k isEqual:@"--rife-bgr"]) { rifeBGR = YES; }
             else if ([k hasPrefix:@"--g-"]) { gopt[[k substringFromIndex:4]] = @(v.doubleValue); i++; }  // --g-cut-sad --g-cut-hist --g-static-k --g-static-tau --g-static-erode --g-conf-abs --g-conf-rel
         }
         if (rtSec > 0) return runRealtime(W, H, inFps, rtSec, breakerMode, budgetMs);
@@ -668,6 +702,19 @@ int main(int argc, const char **argv) {
             startMs = nowMs() - t0;
             printf("startSession_ms=%.1f\n", startMs);
         }
+        // RIFE(GPU) 준비
+        RifeEngine *rife = NULL; float *rgbPrev = NULL, *rgbCur = NULL, *rgbOut = NULL;
+        if ([algo isEqual:@"rife"]) {
+            if (interp != 1) { printf("rife: --interp 1(0.5 지점)만 지원\n"); return 3; }
+            RifeWeights *rw = rifeLoadWeights(rifeWeights);
+            if (!rw) { printf("rife: --rife-weights <폴더> 가 필요하다\n"); return 3; }
+            RifeCfg rc = rifeDefaultCfg(); rc.lite = rifeLite; rc.scale = rifeScale; rc.fast = rifeFast; rc.dt = rifeF16 ? MPSDataTypeFloat16 : MPSDataTypeFloat32;
+            rife = rifeEngineNew(MTLCreateSystemDefaultDevice(), W, H, rc, rw);
+            printf("# rife %s scale=%.2f fast=%s dtype=%s padded=%dx%d compile_ms=%.0f%s\n", rifeLite ? "4.25.lite" : "4.25", rifeScale,
+                   rifeFast == 2 ? "3x3" : rifeFast == 1 ? "phase" : "off", rifeF16 ? "f16" : "f32", rife->PW, rife->PH, rife->compileMs, rifeBGR ? " 입력 BGR" : "");
+            rgbPrev = malloc((size_t)W * H * 12); rgbCur = malloc((size_t)W * H * 12); rgbOut = malloc((size_t)W * H * 12);
+        }
+        BOOL hasOut = proc || rife;
         VTPixelTransferSessionRef toSrc = NULL, toBGRA = NULL;
         VTPixelTransferSessionCreate(NULL, &toSrc); VTPixelTransferSessionCreate(NULL, &toBGRA);
 
@@ -739,6 +786,7 @@ int main(int argc, const char **argv) {
                 }
             }
             if (G) guardPush(G, curBGRA, prevBGRA == NULL);
+            if (rife) bgraToRGB(curBGRA, rgbCur, rifeBGR);
             CVPixelBufferRef curSrc = curBGRA;
             if (proc) {
                 curSrc = makeFromAttrs(srcAttrs, PW, PH, kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange);
@@ -778,6 +826,10 @@ int main(int argc, const char **argv) {
                     if (![proc processWithParameters:params error:&err]) { printf("process 실패: %s\n", err.description.UTF8String); return 5; }
                     procMs[nProc++ % (nIn * stride)] = nowMs() - tp;
                     }
+                } else if (rife) {   // 변환 시간은 빼고 GPU 실행(인코딩+완료 대기)만 잰다
+                    rifeSetInput(rife, 0, rgbPrev); rifeSetInput(rife, 1, rgbCur);
+                    procMs[nProc++ % (nIn * stride)] = rifeRun(rife);
+                    rifeGetOutput(rife, rgbOut); rgbToBGRA(rgbOut, outBGRA, rifeBGR);
                 }
                 // 품질: 첫 반복(loop 아님)일 때만
                 if (!looping && gtMid[0] && inflight == 0) {
@@ -786,14 +838,14 @@ int main(int argc, const char **argv) {
                         double tb = nowMs(); blendBGRA(prevBGRA, curBGRA, blendBuf, p); blendMs[nBlend++] = nowMs() - tb;
                         if (proc) VTPixelTransferSessionTransferImage(toBGRA, outBuf[j], outBGRA);
                         for (int r = 0; r < nReg; r++) {
-                            double pi = proc ? psnrY(outBGRA, gtMid[j], regs[r]) : NAN;
+                            double pi = hasOut ? psnrY(outBGRA, gtMid[j], regs[r]) : NAN;
                             sumI[r] += pi;
                             sumH[r] += psnrY(p < 0.5 ? prevBGRA : (p > 0.5 ? curBGRA : prevBGRA), gtMid[j], regs[r]);
                             sumB[r] += psnrY(blendBuf, gtMid[j], regs[r]);
                             if (r == 0 && pi < minI) minI = pi;
                         }
                         nQ++;
-                        if (G && proc && j == 0) {
+                        if (G && hasOut && j == 0) {
                             double sad, hd; BOOL isCut = guardIsCut(G, &sad, &hd);
                             BOOL truth = cuts > 0 && gtIndex % (cuts * stride) == 0;
                             if (truth) { if (isCut) tp++; else fn++; minSadC = MIN(minSadC, sad); minHistC = MIN(minHistC, hd); }
@@ -826,7 +878,7 @@ int main(int argc, const char **argv) {
                             writePNG(gtMid[j], [dump stringByAppendingPathComponent:[tag stringByAppendingString:@"_truth.png"]]);
                             writePNG(blendBuf, [dump stringByAppendingPathComponent:[tag stringByAppendingString:@"_blend.png"]]);
                             writePNG(prevBGRA, [dump stringByAppendingPathComponent:[tag stringByAppendingString:@"_prev.png"]]);
-                            if (proc) writePNG(outBGRA, [dump stringByAppendingPathComponent:[tag stringByAppendingString:@"_interp.png"]]);
+                            if (hasOut) writePNG(outBGRA, [dump stringByAppendingPathComponent:[tag stringByAppendingString:@"_interp.png"]]);
                         }
                     }
                 }
@@ -834,6 +886,7 @@ int main(int argc, const char **argv) {
             if (prevBGRA) CVPixelBufferRelease(prevBGRA);
             if (prevSrc) CVPixelBufferRelease(prevSrc);
             prevBGRA = curBGRA; prevSrc = curSrc;
+            if (rife) { float *t = rgbPrev; rgbPrev = rgbCur; rgbCur = t; }
             loopIters++;
             if (looping) {
                 double spent = nowMs() - tickStart;
@@ -857,7 +910,7 @@ int main(int argc, const char **argv) {
         if (nQ) {
             printf("PSNR_dB(휘도, 정답 대비, %d장 평균)  영역: 보간 / 그대로두기 / 단순섞기\n", nQ);
             for (int r = 0; r < nReg; r++) printf("  %-6s %6.2f / %6.2f / %6.2f\n", regName[r], sumI[r] / nQ, sumH[r] / nQ, sumB[r] / nQ);
-            if (proc) printf("  전체 최저(보간) %.2f\n", minI);
+            if (hasOut) printf("  전체 최저(보간) %.2f\n", minI);
         }
         if (G && nG) {
             printf("GUARD PSNR_dB(%d장 평균)  영역: %s / %s / %s / %s / %s\n", nG, gName[0], gName[1], gName[2], gName[3], gName[4]);

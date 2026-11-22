@@ -11,8 +11,10 @@
 | `run-webgpu.swift` | 위 페이지를 앱과 같은 WKWebView로 띄워 결과(JSON)를 출력 |
 | `run.sh` | 전체 빌드·측정(2026-11-13 보고서) |
 | `run-plan.sh` | 개발 계획 1단계 실측: 보호 장치·서킷브레이커·RIFE GPU 시간(창을 띄우지 않음) |
-| `rife-mpsgraph.m` | RIFE 4.25 / 4.25.lite IFNet 구조를 MPSGraph 로 옮긴 시간 측정용 복제본(무작위 가중치, 화질 측정 아님) |
+| `rife-mpsgraph.m` | RIFE 4.25 / 4.25.lite 를 MPSGraph 로 돌려 시간을 잰다(`--weights` 없으면 무작위 가중치). `--check --weights` 는 CPU 기준 구현과 출력 차이 |
 | `mps-ops-micro.m` | 위 복제본의 1080p 연산별 시간(합성곱·전치 합성곱·concat·slice·grid_sample) |
+| `rife-graph.h` | RIFE 그래프 구성(원래 구성·빠른 구성, 무작위 또는 학습 가중치)과 PyTorch 연산 의미를 따른 CPU 기준 구현 |
+| `rife-export.py` | Practical-RIFE `flownet.pkl` → 원시 float32(`weights.bin`, `index.json`). torch 불필요, 허용 목록 언피클러 |
 | `mpp-conv-micro.m` | Metal 4 MetalPerformancePrimitives `convolution2d` 를 셰이더에서 돌려 MPSGraph 와 비교(OS 런타임 컴파일) |
 
 ## 실행
@@ -27,7 +29,8 @@ tools/frame-interp-lab/run.sh /tmp/bipbop.mp4  # 실제 영상도 함께
 `bench` 옵션:
 
 - `--source synth|<파일>`: 합성 장면(기본) 또는 영상 파일. 파일은 원래 프레임률의 절반을 입력으로 쓰고 빠진 프레임을 정답으로 비교한다.
-- `--algo lowlat|frc|frcq|none`
+- `--algo lowlat|frc|frcq|rife|none`. `rife` 는 `--rife-weights <rife-export.py 출력 폴더>`(저장소 밖), `--rife-variant 4.25|lite`,
+  `--rife-scale 1|0.5`, `--rife-fast 3x3|phase|off`, `--rife-dtype f32|f16`(FP16 은 정합 시험에서 오차가 커서 비권장), `--rife-bgr`
 - `--size WxH`(합성), `--max-width N`(파일 축소), `--proc-size WxH`(줄여서 보간한 뒤 다시 키움)
 - `--in-fps N`, `--interp N`(입력 사이에 넣을 장 수)
 - `--loop 초`: 입력 속도에 맞춰 반복하며 마감 초과 비율과 CPU를 잰다. ANE·GPU 사용률은 이때 바깥에서 본다.
