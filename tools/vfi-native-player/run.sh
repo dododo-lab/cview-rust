@@ -7,7 +7,7 @@ set -uo pipefail
 HERE=${0:A:h}
 OUT=${1:?결과 폴더를 지정하세요}
 shift
-SECTIONS=(${@:-sizes file bipbop mux-ll discont chzzk chzzk1080})
+SECTIONS=("$@"); (( ${#SECTIONS} )) || SECTIONS=(sizes file bipbop mux-ll discont chzzk chzzk1080)
 BIN=$(zsh $HERE/build.sh) || exit 1
 mkdir -p $OUT
 FIX=$OUT/fixture-720p60.mp4
