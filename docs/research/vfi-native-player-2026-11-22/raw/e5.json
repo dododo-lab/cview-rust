@@ -1,0 +1,270 @@
+{
+  "accounting_ok" : 1,
+  "breaker" : {
+    "extensions" : 8,
+    "probe_ms" : {
+      "max" : 299.88537502288818,
+      "mean" : 49.820098947733641,
+      "min" : 14.067041635513306,
+      "n" : 32,
+      "p50" : 17.868187487125397,
+      "p95" : 209.69505203366273,
+      "p99" : 285.54154583454135
+    },
+    "probes" : 32,
+    "trips" : 1
+  },
+  "counted_s" : 273.78333333321251,
+  "counts" : {
+    "abandoned" : 15,
+    "avplayer_error_log" : 0,
+    "breaker_trips" : 1,
+    "bumps" : 2,
+    "bypass" : 529,
+    "coalesced_bumps" : 1,
+    "composite_late" : 0,
+    "counted_errors" : 0,
+    "cuts" : 0,
+    "eligible" : 16427,
+    "emitted_mid" : 5282,
+    "emitted_orig" : 16554,
+    "errors" : 0,
+    "fps_changes" : 0,
+    "frames" : 16554,
+    "gaps" : 0,
+    "generations" : 2,
+    "interp_off" : 0,
+    "late" : 15,
+    "late_completed" : 15,
+    "late_start" : 10716,
+    "on_time" : 5167,
+    "order_violation" : 0,
+    "orig_late" : 0,
+    "output_flushes" : 1,
+    "pairs" : 16553,
+    "pending_at_end" : 0,
+    "pool_exhausted" : 0,
+    "reconnects" : 0,
+    "runtime_off" : 0,
+    "session_wait" : 0,
+    "sink_enqueue_failed" : 0,
+    "sink_enqueued" : 21836,
+    "sink_resyncs" : 6,
+    "size_changes" : 0,
+    "soft_bumps" : 1,
+    "stale_counted" : 0,
+    "stale_dropped" : 0,
+    "stalled_pairs" : 0,
+    "stalls" : 0,
+    "static_skipped" : 0,
+    "time_jumps" : 1,
+    "toggles" : 3,
+    "unsupported" : 0,
+    "vt_restarts" : 0,
+    "warm_pairs" : 126
+  },
+  "criteria" : {
+    "accounting_ok" : 1,
+    "C2_late_le_1pct" : 1,
+    "C2_on_time_ge_95pct" : 0,
+    "C2_toggles_le_60_per_min" : 1,
+    "safety_no_stale_or_reordered_output" : 1
+  },
+  "cut_max_normal" : {
+    "hist" : 0.47416666666666651,
+    "sad" : 0.065998856560174929
+  },
+  "environment" : {
+    "chip" : "Apple M1 Max",
+    "model" : "MacBookPro18,2",
+    "os" : "Version 27.3 (Build 26C5047e)",
+    "thermal_end" : 0
+  },
+  "events" : [
+    {
+      "gen" : 1,
+      "hard" : true,
+      "kind" : "generation",
+      "t_ms" : 308843522,
+      "why" : "time_jumped"
+    },
+    {
+      "gen" : 1,
+      "kind" : "generation_coalesced",
+      "t_ms" : 308843527,
+      "why" : "output_flushed"
+    },
+    {
+      "bpr0" : 1280,
+      "bpr1" : 1280,
+      "ext" : "0,0,0,16",
+      "fmt" : "420v",
+      "h0" : 720,
+      "iosurface" : 1,
+      "kind" : "frame_format",
+      "matrix" : "ITU_R_709_2",
+      "size" : "1280x720",
+      "t_ms" : 308843535
+    },
+    {
+      "gen" : 2,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 308843535,
+      "why" : "size 1280x720"
+    },
+    {
+      "kind" : "session_request",
+      "size" : "1280x720",
+      "t_ms" : 308843535
+    },
+    {
+      "kind" : "fps",
+      "t_ms" : 308843541,
+      "T_ms" : 16.666666666665719
+    },
+    {
+      "kind" : "vt_copy_mode",
+      "size" : "1280x720",
+      "t_ms" : 308843623,
+      "why" : "extended_pixels"
+    },
+    {
+      "kind" : "session_ready",
+      "ok" : 1,
+      "size" : "1280x720",
+      "start_ms" : 51.63587498664856,
+      "t_ms" : 308843629,
+      "warm3_ms" : 31.664333283901215
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 81.130874931812286,
+      "t_ms" : 308931721
+    }
+  ],
+  "events_total" : 9,
+  "latency_s" : {
+    "first_min_median" : 3.1553294658660889,
+    "last_min_median" : 3.4419568777084351,
+    "median" : 3.4413790702819824,
+    "n" : 272,
+    "reset_by_reconnect" : 0
+  },
+  "live" : true,
+  "memory_mb" : {
+    "at_60s" : 66.750938415527344,
+    "end" : 55.985313415527344,
+    "growth_after_60s" : -10.765625,
+    "growth_after_60s_excluding_instrument" : -11.015495300292969,
+    "instrument_growth" : 0.24987030029296875
+  },
+  "ms" : {
+    "composite" : {
+      "max" : 13.106625020503998,
+      "mean" : 0.44589502047020935,
+      "min" : 0.10358333587646484,
+      "n" : 5282,
+      "p50" : 0.19754168391227722,
+      "p95" : 1.3520354628562925,
+      "p99" : 3.4339387553930267
+    },
+    "guard" : {
+      "max" : 39.843041658401489,
+      "mean" : 1.1083954723984757,
+      "min" : 0.29795831441879272,
+      "n" : 16553,
+      "p50" : 0.50579166412353516,
+      "p95" : 3.83837502002716,
+      "p99" : 5.7243250107765187
+    },
+    "lookahead" : {
+      "max" : 149.99669466666887,
+      "mean" : 148.86279905554255,
+      "min" : -13.055555555556708,
+      "n" : 16554,
+      "p50" : 148.74996550000219,
+      "p95" : 149.97806966666403,
+      "p99" : 149.98765166666317
+    },
+    "proc" : {
+      "max" : 299.88537502288818,
+      "mean" : 10.204470420827738,
+      "min" : 6.4988750219345093,
+      "n" : 5329,
+      "p50" : 9.1480416655540466,
+      "p95" : 12.71059166193008,
+      "p99" : 17.131576659679414
+    },
+    "slack_at_ready" : {
+      "max" : 125.98977696895599,
+      "mean" : 118.69480450565912,
+      "min" : 18.470485389232635,
+      "n" : 5282,
+      "p50" : 120.91646483540535,
+      "p95" : 124.18698354661464,
+      "p99" : 124.60257793784142
+    },
+    "submit_lead" : {
+      "max" : 133.42277735471725,
+      "mean" : 128.54798351527836,
+      "min" : 18.057193040847778,
+      "n" : 5297,
+      "p50" : 130.76469397544861,
+      "p95" : 133.02891881465911,
+      "p99" : 133.14974238157274
+    }
+  },
+  "options" : {
+    "breaker" : "v3",
+    "cut" : true,
+    "cut_hist" : 0.29999999999999999,
+    "cut_sad" : 0.10000000000000001,
+    "forward_buffer_s" : 0,
+    "inject_delay" : "0:0",
+    "interp" : true,
+    "latency" : "avplayer",
+    "lead_ms" : 5,
+    "live_offset_s" : 3.5,
+    "lookahead_ms" : 150,
+    "max_ahead" : 6,
+    "max_height" : 720,
+    "rate_toggle_s" : 0,
+    "seconds" : 300,
+    "seek_every_s" : 0,
+    "sink" : "renderer",
+    "static" : true,
+    "static_ms" : 120,
+    "static_tau" : 3,
+    "switch" : ""
+  },
+  "ratios" : {
+    "error_of_attempted" : 0,
+    "late_of_attempted" : 0.0028946352759552296,
+    "on_time" : 0.31454313021245511,
+    "toggles_per_counted_min" : 0.65745419127075944
+  },
+  "renderer_metrics" : {
+    "accumulated_delay_s" : 0,
+    "corrupted" : 0,
+    "dropped" : 0,
+    "optimized_compositing" : 0,
+    "total_frames" : 21836
+  },
+  "sessions" : {
+    "1280x720" : {
+      "ok" : 1,
+      "size" : "1280x720",
+      "start_ms" : 51.63587498664856,
+      "warm3_ms" : 31.664333283901215
+    }
+  },
+  "source" : "치지직 인기 방송 1위(성인 아님)",
+  "tool" : "vfi-player",
+  "truncated" : 1,
+  "truncated_why" : "사용자 중단",
+  "version" : 2,
+  "wall_s" : 276.06828241670132
+}

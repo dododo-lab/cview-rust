@@ -1,0 +1,359 @@
+{
+  "accounting_ok" : 1,
+  "breaker" : {
+    "extensions" : 12,
+    "probe_ms" : {
+      "max" : 312.00433337688446,
+      "mean" : 73.17904471624189,
+      "min" : 10.770666718482971,
+      "n" : 41,
+      "p50" : 19.511416673660278,
+      "p95" : 257.96716666221619,
+      "p99" : 304.56196670532228
+    },
+    "probes" : 41,
+    "trips" : 3
+  },
+  "counted_s" : 177.84566666661871,
+  "counts" : {
+    "abandoned" : 17,
+    "avplayer_error_log" : 0,
+    "breaker_trips" : 3,
+    "bumps" : 2,
+    "bypass" : 865,
+    "coalesced_bumps" : 3,
+    "composite_late" : 0,
+    "counted_errors" : 0,
+    "cuts" : 9,
+    "eligible" : 10672,
+    "emitted_mid" : 9570,
+    "emitted_orig" : 10806,
+    "errors" : 0,
+    "fps_changes" : 0,
+    "frames" : 10806,
+    "gaps" : 0,
+    "generations" : 2,
+    "interp_off" : 0,
+    "late" : 17,
+    "late_completed" : 17,
+    "late_start" : 334,
+    "on_time" : 9456,
+    "order_violation" : 0,
+    "orig_late" : 1,
+    "output_flushes" : 2,
+    "pairs" : 10805,
+    "pending_at_end" : 0,
+    "pool_exhausted" : 0,
+    "reconnects" : 0,
+    "runtime_off" : 0,
+    "session_wait" : 0,
+    "sink_enqueue_failed" : 0,
+    "sink_enqueued" : 20376,
+    "sink_resyncs" : 4,
+    "size_changes" : 0,
+    "soft_bumps" : 1,
+    "stale_counted" : 0,
+    "stale_dropped" : 0,
+    "stalled_pairs" : 0,
+    "stalls" : 0,
+    "static_skipped" : 0,
+    "time_jumps" : 2,
+    "toggles" : 14,
+    "unsupported" : 0,
+    "vt_restarts" : 0,
+    "warm_pairs" : 124
+  },
+  "criteria" : {
+    "accounting_ok" : 1,
+    "C2_late_le_1pct" : 1,
+    "C2_on_time_ge_95pct" : 0,
+    "C2_toggles_le_60_per_min" : 1,
+    "safety_no_stale_or_reordered_output" : 1
+  },
+  "cut_max_normal" : {
+    "hist" : 1.8109722222222222,
+    "sad" : 0.098535784673197332
+  },
+  "environment" : {
+    "chip" : "Apple M1 Max",
+    "model" : "MacBookPro18,2",
+    "os" : "Version 27.3 (Build 26C5047e)",
+    "thermal_end" : 0
+  },
+  "events" : [
+    {
+      "gen" : 1,
+      "hard" : true,
+      "kind" : "generation",
+      "t_ms" : 313616619,
+      "why" : "time_jumped"
+    },
+    {
+      "gen" : 1,
+      "kind" : "generation_coalesced",
+      "t_ms" : 313616653,
+      "why" : "output_flushed"
+    },
+    {
+      "gen" : 1,
+      "kind" : "generation_coalesced",
+      "t_ms" : 313616677,
+      "why" : "time_jumped"
+    },
+    {
+      "gen" : 1,
+      "kind" : "generation_coalesced",
+      "t_ms" : 313616719,
+      "why" : "output_flushed"
+    },
+    {
+      "bpr0" : 1280,
+      "bpr1" : 1280,
+      "ext" : "0,0,0,16",
+      "fmt" : "420v",
+      "h0" : 720,
+      "iosurface" : 1,
+      "kind" : "frame_format",
+      "matrix" : "ITU_R_709_2",
+      "size" : "1280x720",
+      "t_ms" : 313616728
+    },
+    {
+      "gen" : 2,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 313616728,
+      "why" : "size 1280x720"
+    },
+    {
+      "kind" : "session_request",
+      "size" : "1280x720",
+      "t_ms" : 313616728
+    },
+    {
+      "kind" : "fps",
+      "t_ms" : 313616736,
+      "T_ms" : 16.666666666665719
+    },
+    {
+      "kind" : "session_ready",
+      "ok" : 1,
+      "size" : "1280x720",
+      "start_ms" : 56.69154167175293,
+      "t_ms" : 313616820,
+      "warm3_ms" : 29.394833385944366
+    },
+    {
+      "kind" : "vt_copy_mode",
+      "size" : "1280x720",
+      "t_ms" : 313616828,
+      "why" : "extended_pixels"
+    },
+    {
+      "hist" : 1.7056249999999997,
+      "kind" : "cut",
+      "sad" : 0.12952660113767861,
+      "t_ms" : 313623902
+    },
+    {
+      "hist" : 1.7873958333333337,
+      "kind" : "cut",
+      "sad" : 0.23732476853856854,
+      "t_ms" : 313623975
+    },
+    {
+      "hist" : 1.8100347222222219,
+      "kind" : "cut",
+      "sad" : 0.3011012538715645,
+      "t_ms" : 313651172
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 79.059958338737488,
+      "t_ms" : 313659374
+    },
+    {
+      "hist" : 1.7920486111111111,
+      "kind" : "cut",
+      "sad" : 0.19766177238332419,
+      "t_ms" : 313684270
+    },
+    {
+      "hist" : 1.801076388888889,
+      "kind" : "cut",
+      "sad" : 0.29536132797566372,
+      "t_ms" : 313684328
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 85.552749931812286,
+      "t_ms" : 313687891
+    },
+    {
+      "hist" : 1.7242361111111109,
+      "kind" : "cut",
+      "sad" : 0.11382797938935897,
+      "t_ms" : 313703630
+    },
+    {
+      "hist" : 1.7327083333333337,
+      "kind" : "cut",
+      "sad" : 0.10792106821126668,
+      "t_ms" : 313703645
+    },
+    {
+      "hist" : 1.785451388888889,
+      "kind" : "cut",
+      "sad" : 0.23676324777613539,
+      "t_ms" : 313703699
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 52.352583348751068,
+      "t_ms" : 313718950
+    },
+    {
+      "hist" : 1.8288194444444446,
+      "kind" : "cut",
+      "sad" : 0.18482826067081984,
+      "t_ms" : 313748920
+    }
+  ],
+  "events_total" : 22,
+  "latency_s" : {
+    "first_min_median" : 3.1912256479263306,
+    "last_min_median" : 3.1918740272521973,
+    "median" : 3.1915514469146729,
+    "n" : 176,
+    "reset_by_reconnect" : 0
+  },
+  "live" : true,
+  "memory_mb" : {
+    "at_60s" : 70.34466552734375,
+    "end" : 73.61029052734375,
+    "growth_after_60s" : 3.265625,
+    "growth_after_60s_excluding_instrument" : 2.8546524047851562,
+    "instrument_growth" : 0.41097259521484375
+  },
+  "ms" : {
+    "composite" : {
+      "max" : 21.015041708946228,
+      "mean" : 0.81905675336734129,
+      "min" : 0.099916696548461914,
+      "n" : 9570,
+      "p50" : 0.53424999117851257,
+      "p95" : 2.6220625251531562,
+      "p99" : 6.2748733294009842
+    },
+    "guard" : {
+      "max" : 62.134916663169861,
+      "mean" : 1.6926944124097352,
+      "min" : 0.29733335971832275,
+      "n" : 10805,
+      "p50" : 1.1673333644866943,
+      "p95" : 5.160350036621093,
+      "p99" : 9.2693700194358097
+    },
+    "lookahead" : {
+      "max" : 149.9993333333407,
+      "mean" : 148.37040554312432,
+      "min" : -5.7666666666662536,
+      "n" : 10806,
+      "p50" : 148.85070816666257,
+      "p95" : 149.534749333327,
+      "p99" : 149.54645418333286
+    },
+    "proc" : {
+      "max" : 183.58504170179367,
+      "mean" : 10.512476961132979,
+      "min" : 5.4689165949821472,
+      "n" : 9587,
+      "p50" : 9.5892499685287476,
+      "p95" : 15.688408327102662,
+      "p99" : 22.092437542676898
+    },
+    "slack_at_ready" : {
+      "max" : 130.60591673851013,
+      "mean" : 115.28657535554747,
+      "min" : 7.0587916374206543,
+      "n" : 9569,
+      "p50" : 116.36866539716721,
+      "p95" : 124.53539113998414,
+      "p99" : 126.21951066732406
+    },
+    "submit_lead" : {
+      "max" : 134.2727906703949,
+      "mean" : 126.95575846735548,
+      "min" : 14.694832682609558,
+      "n" : 9587,
+      "p50" : 128.9501656293869,
+      "p95" : 132.98337091207506,
+      "p99" : 133.77202327489852
+    },
+    "vt_input_copy" : {
+      "max" : 28.966958343982697,
+      "mean" : 2.9002513166322039,
+      "min" : 1.1060416698455811,
+      "n" : 10795,
+      "p50" : 2.2519583702087402,
+      "p95" : 6.7218166649341526,
+      "p99" : 11.667271639108616
+    }
+  },
+  "options" : {
+    "breaker" : "v3",
+    "cut" : true,
+    "cut_hist" : 0.29999999999999999,
+    "cut_sad" : 0.10000000000000001,
+    "forward_buffer_s" : 0,
+    "inject_delay" : "0:0",
+    "interp" : true,
+    "latency" : "avplayer",
+    "lead_ms" : 5,
+    "live_offset_s" : 3.5,
+    "lookahead_ms" : 150,
+    "max_ahead" : 6,
+    "max_height" : 720,
+    "rate_toggle_s" : 0,
+    "seconds" : 180,
+    "seek_every_s" : 0,
+    "sink" : "renderer",
+    "static" : true,
+    "static_ms" : 120,
+    "static_tau" : 3,
+    "switch" : ""
+  },
+  "ratios" : {
+    "error_of_attempted" : 0,
+    "late_of_attempted" : 0.0017945740525704633,
+    "on_time" : 0.8860569715142429,
+    "toggles_per_counted_min" : 4.7231963294029828
+  },
+  "renderer_metrics" : {
+    "accumulated_delay_s" : 0,
+    "corrupted" : 0,
+    "dropped" : 0,
+    "optimized_compositing" : 0,
+    "total_frames" : 20376
+  },
+  "sessions" : {
+    "1280x720" : {
+      "ok" : 1,
+      "size" : "1280x720",
+      "start_ms" : 56.69154167175293,
+      "warm3_ms" : 29.394833385944366
+    }
+  },
+  "source" : "치지직 인기 방송 1위(성인 아님)",
+  "tool" : "vfi-player",
+  "truncated" : 0,
+  "truncated_why" : "",
+  "version" : 2,
+  "wall_s" : 180.01130304163695
+}

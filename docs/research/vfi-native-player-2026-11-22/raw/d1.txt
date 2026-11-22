@@ -1,0 +1,88 @@
+vfi-player: 치지직 인기 방송 1위(성인 아님) | 출력 renderer | 보간 켬 | 보호 장면전환 정지화소 | 브레이커 v3 | 화질 상한 720p | 소리 끔
+  · AVPlayer 오류 기록: -12640 CoreMediaErrorDomain Cannot get that close to live ()
+  · error_log {     comment = "Cannot get that close to live";     domain = CoreMediaErrorDomain;     host = "";     kind = "error_log";     status = "-12640";     "t_ms" = 307541267; }
+  · generation {     gen = 1;     hard = 1;     kind = generation;     "t_ms" = 307542100;     why = "time_jumped"; }
+  · generation_coalesced {     gen = 1;     kind = "generation_coalesced";     "t_ms" = 307542109;     why = "output_flushed"; }
+  · 프레임 받기 스레드 실시간 정책: 적용
+  · 재생 시작(라이브, 시작 대기 1047ms)
+  · frame_format {     bpr0 = 1280;     bpr1 = 1280;     ext = "0,0,0,16";     fmt = 420v;     h0 = 720;     iosurface = 1;     kind = "frame_format";     matrix = "ITU_R_709_2";     size = 1280x720;     "t_ms" = 307542118; }
+  · generation {     gen = 2;     hard = 0;     kind = generation;     "t_ms" = 307542118;     why = "size 1280x720"; }
+  · session_request {     kind = "session_request";     size = 1280x720;     "t_ms" = 307542118; }
+  · fps {     "T_ms" = "16.66666666666572";     kind = fps;     "t_ms" = 307542124; }
+  · session_ready {     kind = "session_ready";     ok = 1;     size = 1280x720;     "start_ms" = "56.31745833158493";     "t_ms" = 307542210;     "warm3_ms" = "30.76933336257935"; }
+  · VT 세션 1280x720: 준비됨(시작 56ms, 준비 처리 3회 31ms)
+[   1s] 1280x720 60fps 세대2 | 보간 제때   0.0% 늦음 0 장면전환 0 브레이커 우회 0(열림 0) | 처리 p50 13.0 p95 15.1ms | 앞당김 최소 -17ms | 지연 3.43s 속도 1.00 버퍼 4.0s | CPU nan% 메모리 53MB
+[   6s] 1280x720 60fps 세대2 | 보간 제때  99.6% 늦음 0 장면전환 0 브레이커 우회 0(열림 0) | 처리 p50 12.9 p95 17.2ms | 앞당김 최소 149ms | 지연 3.43s 속도 1.00 버퍼 4.0s | CPU 33% 메모리 52MB
+  · breaker_trip {     abandoned = 1;     kind = "breaker_trip";     late = 1;     ms = "21.1286249756813";     "t_ms" = 307550714; }
+  · rate {     kind = rate;     rate = "1.03";     "t_ms" = 307552125; }
+[  12s] 1280x720 60fps 세대2 | 보간 제때  80.4% 늦음 3 장면전환 0 브레이커 우회 67(열림 1) | 처리 p50 13.2 p95 19.3ms | 앞당김 최소 123ms | 지연 3.39s 속도 1.03 버퍼 4.0s | CPU 20% 메모리 56MB
+  · breaker_trip {     abandoned = 1;     kind = "breaker_trip";     late = 1;     ms = "20.79474991559982";     "t_ms" = 307555913; }
+  · not_playing {     fwd = 0;     kind = "not_playing";     reason = "";     "t_ms" = 307556125; }
+[  17s] 1280x720 60fps 세대2 | 보간 제때  84.2% 늦음 3 장면전환 0 브레이커 우회 17(열림 2) | 처리 p50 12.8 p95 23.2ms | 앞당김 최소 128ms | 지연 6.41s 속도 0.00 버퍼 0.0s (멈춤) | CPU 4% 메모리 56MB
+  · 재연결 1 (not_playing)
+  · generation {     gen = 3;     hard = 1;     kind = generation;     "t_ms" = 307565118;     why = "reconnect not_playing"; }
+[  23s] 1280x720 60fps 세대3 | 보간 제때   0.0% 늦음 0 장면전환 0 브레이커 우회 0(열림 2) | 처리 p50 nan p95 nanms | 앞당김 최소 128ms | 지연 12.38s 속도 0.00 버퍼 0.0s (멈춤) | CPU 4% 메모리 59MB
+  · AVPlayer 오류 기록: -12640 CoreMediaErrorDomain Cannot get that close to live ()
+  · error_log {     comment = "Cannot get that close to live";     domain = CoreMediaErrorDomain;     host = "";     kind = "error_log";     status = "-12640";     "t_ms" = 307565268; }
+  · generation {     gen = 4;     hard = 1;     kind = generation;     "t_ms" = 307566099;     why = "time_jumped"; }
+  · generation_coalesced {     gen = 4;     kind = "generation_coalesced";     "t_ms" = 307566109;     why = "output_flushed"; }
+  · not_playing {     fwd = "3.963101388888887";     kind = "not_playing";     reason = "";     "t_ms" = 307566134; }
+  · not_playing {     fwd = 0;     kind = "not_playing";     reason = "";     "t_ms" = 307569116; }
+[  28s] 1280x720 60fps 세대4 | 보간 제때  21.3% 늦음 9 장면전환 0 브레이커 우회 0(열림 2) | 처리 p50 15.6 p95 224.1ms | 앞당김 최소 -1ms | 지연 4.40s 속도 0.00 버퍼 0.0s (멈춤) | CPU 8% 메모리 42MB
+[  34s] 1280x720 60fps 세대4 | 보간 제때   0.0% 늦음 0 장면전환 0 브레이커 우회 0(열림 2) | 처리 p50 nan p95 nanms | 앞당김 최소 -1ms | 지연 10.39s 속도 0.00 버퍼 0.0s (멈춤) | CPU 4% 메모리 44MB
+  · 재연결 2 (not_playing)
+  · generation {     gen = 5;     hard = 1;     kind = generation;     "t_ms" = 307577123;     why = "reconnect not_playing"; }
+  · AVPlayer 오류 기록: -12640 CoreMediaErrorDomain Cannot get that close to live ()
+  · error_log {     comment = "Cannot get that close to live";     domain = CoreMediaErrorDomain;     host = "";     kind = "error_log";     status = "-12640";     "t_ms" = 307577241; }
+  · not_playing {     fwd = "3.959979166666667";     kind = "not_playing";     reason = "";     "t_ms" = 307578124; }
+[  39s] 1280x720 60fps 세대5 | 보간 제때  94.7% 늦음 2 장면전환 0 브레이커 우회 0(열림 2) | 처리 p50 12.7 p95 16.4ms | 앞당김 최소 -11ms | 지연 4.31s 속도 1.03 버퍼 3.9s | CPU 28% 메모리 52MB
+[  44s] 1280x720 60fps 세대5 | 보간 제때  99.7% 늦음 0 장면전환 0 브레이커 우회 0(열림 2) | 처리 p50 12.7 p95 17.2ms | 앞당김 최소 148ms | 지연 4.16s 속도 1.03 버퍼 3.8s | CPU 29% 메모리 55MB
+[  50s] 1280x720 60fps 세대5 | 보간 제때 100.0% 늦음 0 장면전환 0 브레이커 우회 0(열림 2) | 처리 p50 13.0 p95 17.0ms | 앞당김 최소 148ms | 지연 3.98s 속도 1.03 버퍼 3.6s | CPU 27% 메모리 57MB
+  · breaker_trip {     abandoned = 1;     kind = "breaker_trip";     late = 1;     ms = "18.81775003671646";     "t_ms" = 307596096; }
+[  55s] 1280x720 60fps 세대5 | 보간 제때  76.1% 늦음 3 장면전환 0 브레이커 우회 70(열림 3) | 처리 p50 13.2 p95 19.5ms | 앞당김 최소 122ms | 지연 3.83s 속도 1.03 버퍼 3.4s | CPU 14% 메모리 45MB
+[  61s] 1280x720 60fps 세대5 | 보간 제때 100.0% 늦음 0 장면전환 0 브레이커 우회 0(열림 3) | 처리 p50 13.0 p95 17.1ms | 앞당김 최소 148ms | 지연 3.65s 속도 1.03 버퍼 3.2s | CPU 26% 메모리 61MB
+[  67s] 1280x720 60fps 세대5 | 보간 제때 100.0% 늦음 0 장면전환 0 브레이커 우회 0(열림 3) | 처리 p50 12.7 p95 17.2ms | 앞당김 최소 148ms | 지연 3.47s 속도 1.03 버퍼 3.1s | CPU 29% 메모리 62MB
+  · not_playing {     fwd = 0;     kind = "not_playing";     reason = "";     "t_ms" = 307613131; }
+[  73s] 1280x720 60fps 세대5 | 보간 제때 100.4% 늦음 0 장면전환 0 브레이커 우회 0(열림 3) | 처리 p50 12.8 p95 17.2ms | 앞당김 최소 148ms | 지연 5.39s 속도 0.00 버퍼 0.0s (멈춤) | CPU 4% 메모리 61MB
+[  78s] 1280x720 60fps 세대5 | 보간 제때   0.0% 늦음 0 장면전환 0 브레이커 우회 0(열림 3) | 처리 p50 nan p95 nanms | 앞당김 최소 148ms | 지연 10.39s 속도 0.00 버퍼 0.0s (멈춤) | CPU 2% 메모리 61MB
+  · 재연결 3 (not_playing)
+  · generation {     gen = 6;     hard = 1;     kind = generation;     "t_ms" = 307622125;     why = "reconnect not_playing"; }
+  · AVPlayer 오류 기록: -12640 CoreMediaErrorDomain Cannot get that close to live ()
+  · error_log {     comment = "Cannot get that close to live";     domain = CoreMediaErrorDomain;     host = "";     kind = "error_log";     status = "-12640";     "t_ms" = 307622199; }
+  · generation {     gen = 7;     hard = 1;     kind = generation;     "t_ms" = 307623287;     why = "time_jumped"; }
+  · generation_coalesced {     gen = 7;     kind = "generation_coalesced";     "t_ms" = 307623296;     why = "output_flushed"; }
+[  84s] 1280x720 60fps 세대7 | 보간 제때   0.0% 늦음 0 장면전환 0 브레이커 우회 0(열림 3) | 처리 p50 16.3 p95 36.7ms | 앞당김 최소 -0ms | 지연 6.39s 속도 0.00 버퍼 6.0s | CPU 4% 메모리 49MB
+[  90s] 1280x720 60fps 세대7 | 보간 제때   0.0% 늦음 0 장면전환 0 브레이커 우회 0(열림 3) | 처리 p50 nan p95 nanms | 앞당김 최소 -0ms | 지연 12.39s 속도 0.00 버퍼 12.0s | CPU 4% 메모리 52MB
+[  96s] 1280x720 60fps 세대7 | 보간 제때   0.0% 늦음 0 장면전환 0 브레이커 우회 0(열림 3) | 처리 p50 nan p95 nanms | 앞당김 최소 -0ms | 지연 18.38s 속도 0.00 버퍼 18.0s | CPU 4% 메모리 54MB
+[ 101s] 1280x720 60fps 세대7 | 보간 제때   0.0% 늦음 0 장면전환 0 브레이커 우회 0(열림 3) | 처리 p50 nan p95 nanms | 앞당김 최소 -0ms | 지연 23.39s 속도 0.00 버퍼 23.0s | CPU 2% 메모리 56MB
+[ 106s] 1280x720 60fps 세대7 | 보간 제때   0.0% 늦음 0 장면전환 0 브레이커 우회 0(열림 3) | 처리 p50 nan p95 nanms | 앞당김 최소 -0ms | 지연 28.39s 속도 0.00 버퍼 29.0s | CPU 4% 메모리 58MB
+[ 112s] 1280x720 60fps 세대7 | 보간 제때   0.0% 늦음 0 장면전환 0 브레이커 우회 0(열림 3) | 처리 p50 nan p95 nanms | 앞당김 최소 -0ms | 지연 34.38s 속도 0.00 버퍼 0.0s | CPU 3% 메모리 60MB
+  · rate {     kind = rate;     rate = 1;     "t_ms" = 307655130; }
+[ 118s] 1280x720 60fps 세대7 | 보간 제때  99.7% 늦음 0 장면전환 0 브레이커 우회 0(열림 3) | 처리 p50 12.6 p95 16.8ms | 앞당김 최소 100ms | 지연 35.45s 속도 1.00 버퍼 0.0s | CPU 18% 메모리 66MB
+  · breaker_trip {     abandoned = 0;     kind = "breaker_trip";     late = 0;     ms = "16.20750004053116";     "t_ms" = 307663270; }
+  · breaker_trip {     abandoned = 1;     kind = "breaker_trip";     late = 1;     ms = "15.80529171228409";     "t_ms" = 307664946; }
+[ 124s] 1280x720 60fps 세대7 | 보간 제때  58.1% 늦음 5 장면전환 0 브레이커 우회 146(열림 5) | 처리 p50 13.2 p95 20.6ms | 앞당김 최소 125ms | 지연 35.45s 속도 1.00 버퍼 0.0s | CPU 22% 메모리 60MB
+  · breaker_trip {     abandoned = 0;     kind = "breaker_trip";     late = 0;     ms = "15.79962503910065";     "t_ms" = 307667634; }
+[ 129s] 1280x720 60fps 세대7 | 보간 제때  10.0% 늦음 2 장면전환 0 브레이커 우회 266(열림 6) | 처리 p50 16.5 p95 22.7ms | 앞당김 최소 124ms | 지연 35.45s 속도 1.00 버퍼 0.0s | CPU 25% 메모리 61MB
+  · breaker_trip {     abandoned = 1;     kind = "breaker_trip";     late = 1;     ms = "13.16212493181229";     "t_ms" = 307673511; }
+[ 135s] 1280x720 60fps 세대7 | 보간 제때  28.3% 늦음 3 장면전환 0 브레이커 우회 255(열림 7) | 처리 p50 14.7 p95 20.7ms | 앞당김 최소 125ms | 지연 35.45s 속도 1.00 버퍼 0.0s | CPU 19% 메모리 61MB
+[ 141s] 1280x720 60fps 세대7 | 보간 제때  25.6% 늦음 0 장면전환 0 브레이커 우회 263(열림 7) | 처리 p50 14.1 p95 19.2ms | 앞당김 최소 148ms | 지연 35.45s 속도 1.00 버퍼 0.0s | CPU 34% 메모리 64MB
+  · breaker_trip {     abandoned = 1;     kind = "breaker_trip";     late = 1;     ms = "16.95020830631256";     "t_ms" = 307688116; }
+[ 146s] 1280x720 60fps 세대7 | 보간 제때  96.4% 늦음 3 장면전환 0 브레이커 우회 8(열림 8) | 처리 p50 13.7 p95 18.4ms | 앞당김 최소 124ms | 지연 35.45s 속도 1.00 버퍼 0.0s | CPU 33% 메모리 63MB
+[ 152s] 1280x720 60fps 세대7 | 보간 제때   0.0% 늦음 0 장면전환 0 브레이커 우회 360(열림 8) | 처리 p50 nan p95 nanms | 앞당김 최소 148ms | 지연 35.45s 속도 1.00 버퍼 0.0s | CPU 25% 메모리 64MB
+  · breaker_trip {     abandoned = 1;     kind = "breaker_trip";     late = 1;     ms = "25.11820840835571";     "t_ms" = 307696889; }
+[ 158s] 1280x720 60fps 세대7 | 보간 제때   5.6% 늦음 12 장면전환 0 브레이커 우회 321(열림 9) | 처리 p50 18.5 p95 28.3ms | 앞당김 최소 123ms | 지연 35.45s 속도 1.00 버퍼 0.0s | CPU 23% 메모리 57MB
+[ 164s] 1280x720 60fps 세대7 | 보간 제때  19.0% 늦음 0 장면전환 0 브레이커 우회 285(열림 9) | 처리 p50 14.5 p95 19.2ms | 앞당김 최소 143ms | 지연 35.45s 속도 1.00 버퍼 0.0s | CPU 34% 메모리 62MB
+  · breaker_trip {     abandoned = 1;     kind = "breaker_trip";     late = 1;     ms = "14.4668333530426";     "t_ms" = 307706444; }
+[ 170s] 1280x720 60fps 세대7 | 보간 제때   4.4% 늦음 3 장면전환 0 브레이커 우회 348(열림 10) | 처리 p50 14.5 p95 20.6ms | 앞당김 최소 148ms | 지연 35.45s 속도 1.00 버퍼 0.0s | CPU 19% 메모리 62MB
+  · breaker_trip {     abandoned = 1;     kind = "breaker_trip";     late = 1;     ms = "15.4495000243187";     "t_ms" = 307715668; }
+[ 175s] 1280x720 60fps 세대7 | 보간 제때  20.6% 늦음 3 장면전환 0 브레이커 우회 235(열림 11) | 처리 p50 14.1 p95 25.3ms | 앞당김 최소 124ms | 지연 35.45s 속도 1.00 버퍼 0.0s | CPU 17% 메모리 61MB
+[ 180s] 1280x720 60fps 세대7 | 보간 제때   0.0% 늦음 0 장면전환 0 브레이커 우회 300(열림 11) | 처리 p50 nan p95 nanms | 앞당김 최소 148ms | 지연 35.45s 속도 1.00 버퍼 0.0s | CPU 25% 메모리 61MB
+
+요약: 180초(집계 115초), 프레임 7172, 보간 대상 짝 6906, 제때 3856(55.8%), 늦음 51, 시작 못함 58, 브레이커 우회 2941(열림 11), 오류 0, 장면전환 0, 세대 7, 순서 위반 0, 버린 이전 결과 0
+처리 시간 p50 13.14 p95 19.05 p99 26.03ms | 앞당김 p50 149 최소 -17ms | 지연 중앙값 15.38s | 메모리 증가 0.6MB(측정 기록 제외)
+  ✗ C2_late_le_1pct
+  ✗ C2_on_time_ge_95pct
+  ✓ C2_toggles_le_60_per_min
+  ✓ accounting_ok
+  ✓ safety_no_stale_or_reordered_output

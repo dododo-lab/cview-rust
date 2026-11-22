@@ -1,0 +1,514 @@
+{
+  "accounting_ok" : 1,
+  "breaker" : {
+    "extensions" : 7,
+    "probe_ms" : {
+      "max" : 230.13358336687088,
+      "mean" : 30.370396364636782,
+      "min" : 2.2836250066757202,
+      "n" : 119,
+      "p50" : 14.977583289146423,
+      "p95" : 140.76939170360555,
+      "p99" : 193.99572247505179
+    },
+    "probes" : 119,
+    "trips" : 9
+  },
+  "counted_s" : 104.63333333333539,
+  "counts" : {
+    "abandoned" : 34,
+    "avplayer_error_log" : 0,
+    "breaker_trips" : 9,
+    "bumps" : 10,
+    "bypass" : 1163,
+    "coalesced_bumps" : 3,
+    "composite_late" : 3,
+    "counted_errors" : 0,
+    "cuts" : 0,
+    "eligible" : 5262,
+    "emitted_mid" : 4480,
+    "emitted_orig" : 5972,
+    "errors" : 0,
+    "fps_changes" : 2,
+    "frames" : 5974,
+    "gaps" : 9,
+    "generations" : 10,
+    "interp_off" : 0,
+    "late" : 29,
+    "late_completed" : 34,
+    "late_start" : 229,
+    "on_time" : 3839,
+    "order_violation" : 0,
+    "orig_late" : 1,
+    "output_flushes" : 3,
+    "pairs" : 5963,
+    "pending_at_end" : 0,
+    "pool_exhausted" : 0,
+    "reconnects" : 0,
+    "runtime_off" : 0,
+    "session_wait" : 0,
+    "sink_enqueue_failed" : 0,
+    "sink_enqueued" : 10452,
+    "sink_resyncs" : 22,
+    "size_changes" : 3,
+    "soft_bumps" : 6,
+    "stale_counted" : 2,
+    "stale_dropped" : 4,
+    "stalled_pairs" : 5,
+    "stalls" : 0,
+    "static_skipped" : 0,
+    "time_jumps" : 4,
+    "toggles" : 35,
+    "unsupported" : 0,
+    "vt_restarts" : 0,
+    "warm_pairs" : 687
+  },
+  "criteria" : {
+    "accounting_ok" : 1,
+    "C2_late_le_1pct" : 1,
+    "C2_on_time_ge_95pct" : 0,
+    "C2_toggles_le_60_per_min" : 1,
+    "safety_no_stale_or_reordered_output" : 1
+  },
+  "cut_max_normal" : {
+    "hist" : 1.8666087962962965,
+    "sad" : 0.051716634397413218
+  },
+  "environment" : {
+    "chip" : "Apple M1 Max",
+    "model" : "MacBookPro18,2",
+    "os" : "Version 27.3 (Build 26C5047e)",
+    "thermal_end" : 0
+  },
+  "events" : [
+    {
+      "bpr0" : 960,
+      "bpr1" : 960,
+      "ext" : "0,0,0,4",
+      "fmt" : "420v",
+      "h0" : 540,
+      "iosurface" : 1,
+      "kind" : "frame_format",
+      "matrix" : "ITU_R_709_2",
+      "size" : "960x540",
+      "t_ms" : 313820853
+    },
+    {
+      "gen" : 1,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 313820853,
+      "why" : "size 960x540"
+    },
+    {
+      "kind" : "session_request",
+      "size" : "960x540",
+      "t_ms" : 313820853
+    },
+    {
+      "kind" : "fps",
+      "t_ms" : 313820864,
+      "T_ms" : 16.666666666666668
+    },
+    {
+      "kind" : "session_ready",
+      "ok" : 1,
+      "size" : "960x540",
+      "start_ms" : 86.708708345890045,
+      "t_ms" : 313820983,
+      "warm3_ms" : 36.540499985218048
+    },
+    {
+      "kind" : "vt_copy_mode",
+      "size" : "960x540",
+      "t_ms" : 313820990,
+      "why" : "extended_pixels"
+    },
+    {
+      "bpr0" : 1280,
+      "bpr1" : 1280,
+      "ext" : "0,0,0,0",
+      "fmt" : "420v",
+      "h0" : 720,
+      "iosurface" : 1,
+      "kind" : "frame_format",
+      "matrix" : "ITU_R_709_2",
+      "size" : "1280x720",
+      "t_ms" : 313822257
+    },
+    {
+      "gen" : 2,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 313822257,
+      "why" : "size 1280x720"
+    },
+    {
+      "kind" : "session_request",
+      "size" : "1280x720",
+      "t_ms" : 313822257
+    },
+    {
+      "kind" : "session_ready",
+      "ok" : 1,
+      "size" : "1280x720",
+      "start_ms" : 25.773874998092651,
+      "t_ms" : 313822317,
+      "warm3_ms" : 31.842958271503448
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 45.708166658878326,
+      "t_ms" : 313833121
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 83.247458279132843,
+      "t_ms" : 313838715
+    },
+    {
+      "kind" : "seek",
+      "t_ms" : 313850864,
+      "to" : 19.774564611999999
+    },
+    {
+      "gen" : 3,
+      "hard" : true,
+      "kind" : "generation",
+      "t_ms" : 313850952,
+      "why" : "time_jumped"
+    },
+    {
+      "gen" : 3,
+      "kind" : "generation_coalesced",
+      "t_ms" : 313850981,
+      "why" : "output_flushed"
+    },
+    {
+      "kind" : "switch",
+      "max_height" : 432,
+      "t_ms" : 313860866
+    },
+    {
+      "bpr0" : 768,
+      "bpr1" : 768,
+      "ext" : "0,0,0,0",
+      "fmt" : "420v",
+      "h0" : 432,
+      "iosurface" : 1,
+      "kind" : "frame_format",
+      "matrix" : "ITU_R_709_2",
+      "size" : "768x432",
+      "t_ms" : 313862223
+    },
+    {
+      "gen" : 4,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 313862224,
+      "why" : "size 768x432"
+    },
+    {
+      "kind" : "session_request",
+      "size" : "768x432",
+      "t_ms" : 313862224
+    },
+    {
+      "kind" : "session_ready",
+      "ok" : 1,
+      "size" : "768x432",
+      "start_ms" : 58.478624999523163,
+      "t_ms" : 313862324,
+      "warm3_ms" : 39.185583293437958
+    },
+    {
+      "kind" : "fps",
+      "t_ms" : 313862590,
+      "T_ms" : 33.333333333331439,
+      "was_ms" : 16.666666666666668
+    },
+    {
+      "gen" : 5,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 313862593,
+      "why" : "fps → 30.00"
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 79.331208288669586,
+      "t_ms" : 313865360
+    },
+    {
+      "abandoned" : false,
+      "kind" : "breaker_trip",
+      "late" : false,
+      "ms" : 3.4315416812896729,
+      "t_ms" : 313873682
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 32.020124971866608,
+      "t_ms" : 313879183
+    },
+    {
+      "kind" : "seek",
+      "t_ms" : 313881870,
+      "to" : 65.515819399999998
+    },
+    {
+      "gen" : 6,
+      "hard" : true,
+      "kind" : "generation",
+      "t_ms" : 313882013,
+      "why" : "time_jumped"
+    },
+    {
+      "gen" : 6,
+      "kind" : "generation_coalesced",
+      "t_ms" : 313882016,
+      "why" : "time_jumped"
+    },
+    {
+      "gen" : 7,
+      "hard" : true,
+      "kind" : "generation",
+      "t_ms" : 313882798,
+      "why" : "output_flushed"
+    },
+    {
+      "kind" : "switch",
+      "max_height" : 720,
+      "t_ms" : 313900862
+    },
+    {
+      "bpr0" : 1280,
+      "bpr1" : 1280,
+      "ext" : "0,0,0,0",
+      "fmt" : "420v",
+      "h0" : 720,
+      "iosurface" : 1,
+      "kind" : "frame_format",
+      "matrix" : "ITU_R_709_2",
+      "size" : "1280x720",
+      "t_ms" : 313901405
+    },
+    {
+      "gen" : 8,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 313901405,
+      "why" : "size 1280x720"
+    },
+    {
+      "kind" : "fps",
+      "t_ms" : 313901573,
+      "T_ms" : 16.666666666665719,
+      "was_ms" : 33.333333333331439
+    },
+    {
+      "gen" : 9,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 313901574,
+      "why" : "fps → 60.00"
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 41.200458347797394,
+      "t_ms" : 313907343
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 49.053875029087067,
+      "t_ms" : 313909713
+    },
+    {
+      "kind" : "seek",
+      "t_ms" : 313912861,
+      "to" : 85.439877277999997
+    },
+    {
+      "gen" : 10,
+      "hard" : true,
+      "kind" : "generation",
+      "t_ms" : 313913060,
+      "why" : "time_jumped"
+    },
+    {
+      "gen" : 10,
+      "kind" : "generation_coalesced",
+      "t_ms" : 313913084,
+      "why" : "output_flushed"
+    },
+    {
+      "abandoned" : false,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 44.099999964237213,
+      "t_ms" : 313929678
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 51.568875014781952,
+      "t_ms" : 313935741
+    }
+  ],
+  "events_total" : 41,
+  "latency_s" : {
+    "first_min_median" : null,
+    "last_min_median" : null,
+    "median" : null,
+    "n" : 0,
+    "reset_by_reconnect" : 0
+  },
+  "live" : false,
+  "memory_mb" : {
+    "at_60s" : 93.92279052734375,
+    "end" : 102.90721130371094,
+    "growth_after_60s" : 8.9844207763671875,
+    "growth_after_60s_excluding_instrument" : 8.8376846313476562,
+    "instrument_growth" : 0.14673614501953125
+  },
+  "ms" : {
+    "composite" : {
+      "max" : 35.90325003862381,
+      "mean" : 0.53142216820922139,
+      "min" : 0.09741663932800293,
+      "n" : 4483,
+      "p50" : 0.24274998903274536,
+      "p95" : 1.6387749969959249,
+      "p99" : 4.773286693096205
+    },
+    "guard" : {
+      "max" : 30.189916670322418,
+      "mean" : 0.82377889512127422,
+      "min" : 0.1572917103767395,
+      "n" : 5954,
+      "p50" : 0.39558333158493042,
+      "p95" : 2.9088083297014222,
+      "p99" : 6.8714033639431129
+    },
+    "lookahead" : {
+      "max" : 150,
+      "mean" : 148.07596040586949,
+      "min" : -15.818999999993366,
+      "n" : 5974,
+      "p50" : 148.78424483333319,
+      "p95" : 149.89538833333427,
+      "p99" : 149.9141745633334
+    },
+    "proc" : {
+      "max" : 218.25995832681656,
+      "mean" : 13.082699617123957,
+      "min" : 2.0947083234786987,
+      "n" : 4517,
+      "p50" : 8.5665833353996277,
+      "p95" : 44.511333394050595,
+      "p99" : 62.789328341484072
+    },
+    "slack_at_ready" : {
+      "max" : 179.72239136695862,
+      "mean" : 109.02099050603437,
+      "min" : -2.0391523838043213,
+      "n" : 4474,
+      "p50" : 116.10128396749496,
+      "p95" : 126.98618631064892,
+      "p99" : 128.39236327469345
+    },
+    "submit_lead" : {
+      "max" : 195.91347432136536,
+      "mean" : 121.52172271236249,
+      "min" : 8.0603326559066772,
+      "n" : 4512,
+      "p50" : 126.93530678749084,
+      "p95" : 135.6536093980074,
+      "p99" : 136.11411622345446
+    },
+    "vt_input_copy" : {
+      "max" : 6.7822917103767395,
+      "mean" : 1.7835268652752827,
+      "min" : 0.78862500190734863,
+      "n" : 76,
+      "p50" : 1.5384374558925629,
+      "p95" : 3.9874479025602341,
+      "p99" : 5.5842604339122772
+    }
+  },
+  "options" : {
+    "breaker" : "v3",
+    "cut" : true,
+    "cut_hist" : 0.29999999999999999,
+    "cut_sad" : 0.10000000000000001,
+    "forward_buffer_s" : 6,
+    "inject_delay" : "0:0",
+    "interp" : true,
+    "latency" : "avplayer",
+    "lead_ms" : 5,
+    "live_offset_s" : 3.5,
+    "lookahead_ms" : 150,
+    "max_ahead" : 6,
+    "max_height" : 720,
+    "rate_toggle_s" : 0,
+    "seconds" : 120,
+    "seek_every_s" : 30,
+    "sink" : "renderer",
+    "static" : true,
+    "static_ms" : 120,
+    "static_tau" : 3,
+    "switch" : "40:432,80:720"
+  },
+  "ratios" : {
+    "error_of_attempted" : 0,
+    "late_of_attempted" : 0.0074974146845915197,
+    "on_time" : 0.7295705055112125,
+    "toggles_per_counted_min" : 20.070086014653956
+  },
+  "renderer_metrics" : {
+    "accumulated_delay_s" : 0,
+    "corrupted" : 0,
+    "dropped" : 0,
+    "optimized_compositing" : 0,
+    "total_frames" : 10452
+  },
+  "sessions" : {
+    "768x432" : {
+      "ok" : 1,
+      "size" : "768x432",
+      "start_ms" : 58.478624999523163,
+      "warm3_ms" : 39.185583293437958
+    },
+    "960x540" : {
+      "ok" : 1,
+      "size" : "960x540",
+      "start_ms" : 86.708708345890045,
+      "warm3_ms" : 36.540499985218048
+    },
+    "1280x720" : {
+      "ok" : 1,
+      "size" : "1280x720",
+      "start_ms" : 25.773874998092651,
+      "warm3_ms" : 31.842958271503448
+    }
+  },
+  "source" : "URL devstreaming-cdn.apple.com\/…\/master.m3u8",
+  "tool" : "vfi-player",
+  "truncated" : 0,
+  "truncated_why" : "",
+  "version" : 2,
+  "wall_s" : 120.01632487493754
+}
