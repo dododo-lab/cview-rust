@@ -118,15 +118,19 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(Duration::from_secs(8)).await;
+        let mut shown = None;
         loop {
-            refresh(&handle).await;
+            refresh(&handle, &mut shown).await;
             tokio::time::sleep(Duration::from_secs(60)).await;
         }
     });
     Ok(())
 }
 
-async fn refresh(app: &AppHandle) {
+/// 마지막으로 그린 메뉴 — (로그인, 방송 중 목록). 같으면 메뉴·제목·Dock 배지를 다시 만들지 않는다.
+type Shown = Option<(bool, Vec<(String, String)>)>;
+
+async fn refresh(app: &AppHandle, shown: &mut Shown) {
     let services = app.state::<AppServices>();
     let general = services.settings.general();
     let Some(tray) = app.tray_by_id(TRAY_ID) else {
@@ -159,6 +163,13 @@ async fn refresh(app: &AppHandle) {
                 .collect();
         }
     }
+    // 1분마다 바뀐 것이 없어도 OS 메뉴(최대 16항목)·제목·Dock 배지를 새로 만들었다 — 바뀌었을 때만.
+    if shown
+        .as_ref()
+        .is_some_and(|(l, v)| *l == logged_in && *v == lives)
+    {
+        return;
+    }
     if let Ok(menu) = build_menu(app, &lives, logged_in) {
         let _ = tray.set_menu(Some(menu));
     }
@@ -171,6 +182,7 @@ async fn refresh(app: &AppHandle) {
     if let Some(w) = app.get_webview_window(crate::MAIN_WINDOW) {
         let _ = w.set_badge_count(if count > 0 { Some(count as i64) } else { None });
     }
+    *shown = Some((logged_in, lives));
 }
 
 #[cfg(test)]

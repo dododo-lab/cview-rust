@@ -8,6 +8,7 @@ import {
   fmtPct, fmtBytes, fmtRate, cpuLevel, sparkPath, niceMax, stats, GROUP_LABELS, UsageChart,
 } from './usage-monitor.js';
 import { esc } from './dom.js';
+import { resolvedTheme } from './theme.js';
 
 const SPARK_N = 40;
 const SPARK_W = 44;
@@ -116,14 +117,19 @@ function cpuNow() {
   return s ? s.cpu / cores() : null;
 }
 
+/** 같으면 쓰지 않는다 — 초마다 같은 글자·속성을 다시 넣으면 문서 관찰자를 깨우고 바로 뒤 색 읽기가 스타일 계산을 당긴다. */
+function setText(el, text) {
+  if (el && el.textContent !== text) el.textContent = text;
+}
+
 function renderChip() {
   if (!chip || chip.hidden) return;
   const s = usage.latest && usage.latest.sample;
   const cpu = cpuNow();
   const level = cpuLevel(cpu);
-  chip.dataset.level = level;
-  chip.querySelector('.uchip-v').textContent = fmtPct(cpu);
-  chip.querySelector('.uchip-mem').textContent = s ? fmtBytes(s.mem) : '';
+  if (chip.dataset.level !== level) chip.dataset.level = level;
+  setText(chip.querySelector('.uchip-v'), fmtPct(cpu));
+  setText(chip.querySelector('.uchip-mem'), s ? fmtBytes(s.mem) : '');
   const vals = usage.samples.slice(-SPARK_N).map((x) => x.cpu / cores());
   while (vals.length < SPARK_N) vals.unshift(null);
   const top = niceMax('pct', Math.max(0, ...vals.filter((v) => v != null)));
@@ -134,8 +140,18 @@ function renderChip() {
   const warn = level === 'high' ? ' (CPU 높음)' : '';
   const label = `앱 사용률 — ${parts.join(', ')}${warn}. 자세히 보기`;
   // 이름은 초마다 바꾸지 않는다 — 초점이 칩에 있으면 화면 낭독기가 바뀐 이름을 다시 읽는다. 열 때 값은 팝오버가 보여 준다.
-  if (document.activeElement !== chip || !chip.getAttribute('aria-label')) chip.setAttribute('aria-label', label);
-  chip.title = `${parts.join(' · ')}${warn}`;
+  if ((document.activeElement !== chip || !chip.getAttribute('aria-label')) && chip.getAttribute('aria-label') !== label) chip.setAttribute('aria-label', label);
+  const title = `${parts.join(' · ')}${warn}`;
+  if (chip.title !== title) chip.title = title;
+}
+
+// 꺾은선 색 — CSS 색(--u-cpu·경고)은 단계·테마로만 바뀐다. 초마다 getComputedStyle 로 읽으면 방금 바꾼 글자 때문에
+// 스타일 계산을 강제했다. 단계·테마가 같으면 지난 값을 쓴다.
+let sparkColor = { key: '', value: '' };
+function sparkColorOf(canvas) {
+  const key = `${chip?.dataset.level || ''}|${resolvedTheme()}`;
+  if (sparkColor.key !== key || !sparkColor.value) sparkColor = { key, value: getComputedStyle(canvas).color };
+  return sparkColor.value;
 }
 
 /** 칩 꺾은선 — 선(1.6px)과 그 아래 옅은 면. 색은 캔버스의 CSS color(지표·경고 색). 화면 배율에 맞춰 선명하게. */
@@ -147,7 +163,7 @@ function drawSpark(canvas, d) {
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, SPARK_W, SPARK_H);
   if (!d || typeof Path2D !== 'function') return;
-  const color = getComputedStyle(canvas).color;
+  const color = sparkColorOf(canvas);
   const first = d.match(/^M([\d.]+)/);
   if (first) {
     g.globalAlpha = 0.14;
