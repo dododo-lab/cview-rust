@@ -12,13 +12,17 @@ use crate::protocol::ChzzkChatCommand;
 use cview_core::models::chat::EmojiMap;
 
 /// 현재 OS 의 `osVer` 문자열. macOS 에서는 Swift 와 같은 `macOS/<major>.<minor>.<patch>`.
+/// macOS 는 실행 중 바뀌지 않으므로 한 번만 읽는다 — 채팅 엔진(연결·멀티채팅 패인)마다 plist 를 디스크에서 읽었다.
 pub fn default_os_version() -> String {
     #[cfg(target_os = "macos")]
     {
-        if let Some(v) = macos_product_version() {
-            return format!("macOS/{v}");
-        }
-        "macOS/0.0.0".to_string()
+        static VERSION: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+        VERSION
+            .get_or_init(|| match macos_product_version() {
+                Some(v) => format!("macOS/{v}"),
+                None => "macOS/0.0.0".to_string(),
+            })
+            .clone()
     }
     #[cfg(not(target_os = "macos"))]
     {
