@@ -1492,6 +1492,9 @@ function loadSource(url, profile, preserveRecoveryBudget, preferSourceQuality, l
         abrEwmaDefaultEstimateMax: _preferSourceQuality ? 20000000 : 8000000,
         abrBandWidthFactor: 0.95,
         abrBandWidthUpFactor: _preferSourceQuality ? 0.9 : 0.7,
+        // [HEVC 2026-11-22] 포크 0006 — 오디오가 같으면 영상 코덱 계열(HEVC ↔ H.264)을 넘어 오르내린다. HEVC 를 뺀(못 쓰는)
+        //   세션은 사다리가 H.264 하나라 아무 차이가 없다. 자세한 정책은 `applyHevcPolicyToLevels` 위 주석.
+        abrSwitchVideoCodec: true,
 
         // ─── 네트워크 ─────────────────────────────────────
         // hls.js 1.7 정식 load-policy API. deprecated manifest/level 키의 기존 의미를
@@ -1614,7 +1617,8 @@ function loadSource(url, profile, preserveRecoveryBudget, preferSourceQuality, l
             levels: _codecDiagLevels,
             levelCount: _codecDiagLevelCount,
             currentLevel: current,
-            audioTracks: audioTrackCount
+            audioTracks: audioTrackCount,
+            hevc: hevcSummary()
         });
     }
 
@@ -1638,6 +1642,8 @@ function loadSource(url, profile, preserveRecoveryBudget, preferSourceQuality, l
         // 해상도/비트레이트 제약은 같은 autoLevelCapping 값을 사용한다. 각각을
         // 독립적으로 대입하면 나중 호출이 앞선 제약을 덮어쓰므로, 레벨 정보가
         // 준비된 이 시점에 두 조건의 교집합으로 한 번만 계산한다.
+        // [HEVC 2026-11-22] 화질 정책이 레벨을 고르기 **전에** HEVC 를 남길지 정한다(못 쓰면 여기서 뺀다).
+        applyHevcPolicyToLevels();
         applyAdaptiveLevelCap();
         // [LOCK-RESTORE 2026-09-08] 새 매니페스트 = 새 레벨 ladder → 포기 판정도 무효다.
         //   여기서 예산을 되돌려야 STAGE-4 리로드·채널 스왑 뒤 고정이 다시 지켜진다.
@@ -1897,6 +1903,9 @@ function loadSource(url, profile, preserveRecoveryBudget, preferSourceQuality, l
 
     hls.on(Hls.Events.ERROR, function(event, data) {
         if (sourceEpoch !== _loaderEpoch) return;
+        // [HEVC 2026-11-22] HEVC 를 받다 코덱·디코드 오류가 나면 이 페이지에서는 HEVC 를 빼고 H.264 쌍둥이로 간다.
+        //   아래 복구(recoverMediaError·startLoad)는 그대로 — 이제 H.264 레벨에서 이어 간다.
+        if (isHevcCodecFailure(data)) noteHevcPlaybackFailure(data.details, data.frag && data.frag.level);
         let recoverable = false;
         let recoveryAction = null;
         // hls.js 1.7.1 ErrorController가 이 이벤트에서 이미 recoverMediaError를 실행했는지는
@@ -2862,6 +2871,218 @@ function setPreferSourceQuality(on) {
     if (_preferSourceQuality) requestPreferredSourceLevel();
 }
 
+// ─── [HEVC 2026-11-22] 치지직 HEVC(H.265) 변형 ─────────────────
+// 치지직은 일부 방송의 1080p60 을 같은 대역폭(8.19Mbps)의 HEVC(`hvc1.1.2.L123.90`)와 H.264(`avc1.64002A`)로 함께 내고
+// (마스터 첫 줄이 HEVC), 그 아래 화질은 H.264 뿐이다. hls.js 는 `MediaSource.isTypeSupported` 만으로 레벨을 거르고 같은 높이·
+// 프레임에서 hvc1 을 avc1 **뒤(위)** 로 정렬한다. 그래서 손대지 않으면 '최고 레벨'(최고 화질 고정·원본 우선)이 판별만 통과한
+// HEVC 를 고른다 — 소프트웨어로만 푸는 기기에서도. 반대로 화질 메뉴는 높이로 묶으면서 먼저 나온 H.264 를 골랐다.
+//
+// 정책(치지직 웹도 1080p 를 한 항목으로 두고 디코딩 가능하면 HEVC 트랙을 먼저 쓴다):
+//  · 페이지가 처음 뜰 때 한 번 1080p60 HEVC 를 잰다 — MSE 판별 + MediaCapabilities(supported·smooth·powerEfficient).
+//    웹은 `decodingInfo(...).supported` 만 보지만, 앱은 소프트웨어 디코딩을 피하려고 powerEfficient(하드웨어)까지 본다.
+//  · 쓸 수 있으면 HEVC 레벨을 남긴다. '최고 레벨'·원본 우선·1080p 고정(selectForcedQualityLevel)이 HEVC 를 고르고,
+//    H.264 쌍둥이는 대체용으로 남긴다. 자동 화질은 hls.js 포크 0006(`abrSwitchVideoCodec`)으로 HEVC 1080p ↔ H.264 720p 를
+//    오르내린다(업스트림은 HEVC 묶음에 아래 후보가 없어 144p 로 떨어지고, H.264 에서는 HEVC 로 못 올라간다).
+//  · 못 쓰면(설정 끔·판별 실패·소프트웨어 디코딩·이 페이지에서 HEVC 디코드 오류) MANIFEST_PARSED 맨 앞에서 HEVC 레벨을 뺀다
+//    — 지금까지와 같은 H.264 사다리다. 판별이 아직 안 끝났으면 `isTypeSupported` 만 믿고 시작했다가, 결과가 '못 씀'이면 그때 뺀다.
+//  · 재생 중 HEVC 디코드 오류(video error 3·4, 코덱 관련 hls.js 오류)가 나면 이 페이지에서는 HEVC 를 끄고 H.264 쌍둥이로 간다.
+//  ⚠ HEVC 레벨만 있는 매니페스트는 빼지 않는다(재생할 것이 없어진다).
+const HEVC_PROBE_CONFIG = {
+    contentType: 'video/mp4; codecs="hvc1.1.2.L123.90"',
+    width: 1920, height: 1080, bitrate: 8192000, framerate: 59.94
+};
+let _hevcEnabled = true;                   // 설정 — setHevcEnabled
+let _hevcProbe = { state: 'pending' };     // pending | done | error
+let _hevcRuntimeFailure = '';              // 이 페이지에서 HEVC 디코드가 실패한 이유(페이지 수명 동안 HEVC 를 쓰지 않는다)
+let _hevcSession = { available: 0, used: false, reason: 'none' };  // 지금 매니페스트 — 진단·화면 표시용
+
+function isHevcCodec(codec) {
+    const c = String(codec || '').slice(0, 4).toLowerCase();
+    return c === 'hvc1' || c === 'hev1' || c === 'dvh1' || c === 'dvhe';
+}
+
+/** 화면에 보일 코덱 이름 — HEVC · H.264 · AV1 · VP9, 모르면 ''. */
+function videoCodecLabel(codec) {
+    const c = String(codec || '').slice(0, 4).toLowerCase();
+    if (isHevcCodec(c)) return 'HEVC';
+    if (c === 'avc1' || c === 'avc3') return 'H.264';
+    if (c === 'av01') return 'AV1';
+    if (c === 'vp09' || c === 'vp9') return 'VP9';
+    return '';
+}
+
+/**
+ * HEVC 를 써도 되는가 — 순수 판정(검사 tools/ui-regression/hevc.mjs 가 표로 확인한다).
+ * @returns {{allow: boolean, reason: string}} reason: off · decode-error · pending · probe-error · mse-unsupported ·
+ *   decoder-unsupported · software-decoder · not-smooth · hardware · capabilities-unknown
+ */
+function hevcPolicyDecision(enabled, probe, runtimeFailure) {
+    if (!enabled) return { allow: false, reason: 'off' };
+    if (runtimeFailure) return { allow: false, reason: 'decode-error' };
+    if (!probe || probe.state === 'pending') return { allow: true, reason: 'pending' };
+    if (probe.state !== 'done') return { allow: false, reason: 'probe-error' };
+    if (!probe.typeSupported) return { allow: false, reason: 'mse-unsupported' };
+    if (probe.supported === false) return { allow: false, reason: 'decoder-unsupported' };
+    if (probe.powerEfficient === false) return { allow: false, reason: 'software-decoder' };
+    if (probe.smooth === false) return { allow: false, reason: 'not-smooth' };
+    // MediaCapabilities 가 없는 웹뷰는 MSE 판별만 믿는다(치지직 웹도 판별이 되면 쓴다).
+    return { allow: true, reason: probe.powerEfficient === true ? 'hardware' : 'capabilities-unknown' };
+}
+
+function currentHevcDecision() {
+    return hevcPolicyDecision(_hevcEnabled, _hevcProbe, _hevcRuntimeFailure);
+}
+
+/** 페이지가 뜰 때 한 번. 결과가 늦으면 이미 실린 매니페스트에 그때 적용한다(onHevcProbeSettled). */
+function probeHevcSupport() {
+    const MS = window.MediaSource;
+    let typeSupported = false;
+    try { typeSupported = !!(MS && MS.isTypeSupported && MS.isTypeSupported(HEVC_PROBE_CONFIG.contentType)); } catch (e) {}
+    const caps = navigator.mediaCapabilities;
+    if (!typeSupported) {
+        _hevcProbe = { state: 'done', typeSupported: false, supported: false, smooth: false, powerEfficient: false };
+        onHevcProbeSettled();
+        return;
+    }
+    if (!caps || typeof caps.decodingInfo !== 'function') {
+        _hevcProbe = { state: 'done', typeSupported: true, supported: true, smooth: null, powerEfficient: null };
+        onHevcProbeSettled();
+        return;
+    }
+    const startedAt = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    let pending;
+    try {
+        pending = caps.decodingInfo({
+            type: 'media-source',
+            video: {
+                contentType: HEVC_PROBE_CONFIG.contentType,
+                width: HEVC_PROBE_CONFIG.width, height: HEVC_PROBE_CONFIG.height,
+                bitrate: HEVC_PROBE_CONFIG.bitrate, framerate: HEVC_PROBE_CONFIG.framerate
+            }
+        });
+    } catch (e) {
+        pending = Promise.reject(e);
+    }
+    Promise.resolve(pending).then(function(r) {
+        const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        _hevcProbe = {
+            state: 'done', typeSupported: true,
+            supported: !!(r && r.supported), smooth: !!(r && r.smooth), powerEfficient: !!(r && r.powerEfficient),
+            ms: Math.round(now - startedAt)
+        };
+    }, function(e) {
+        _hevcProbe = { state: 'error', typeSupported: true, error: String((e && e.name) || e).slice(0, 80) };
+    }).then(onHevcProbeSettled);
+}
+
+function onHevcProbeSettled() {
+    const d = currentHevcDecision();
+    if (!d.allow) dropHevcLevels(d.reason);
+    else if (_hevcSession.used && _hevcSession.reason === 'pending') _hevcSession.reason = d.reason;
+}
+
+/** 판별·진단 한 줄 — `codecDiagnostics`·`getLevels` 에 싣는다(숫자·낱말만). */
+function hevcSummary() {
+    const p = _hevcProbe || {};
+    return {
+        enabled: _hevcEnabled,
+        reason: _hevcSession.reason,
+        available: _hevcSession.available,
+        used: _hevcSession.used,
+        probe: p.state === 'done'
+            ? `mse=${p.typeSupported ? 1 : 0} supported=${p.supported ? 1 : 0} smooth=${p.smooth == null ? '?' : (p.smooth ? 1 : 0)} power=${p.powerEfficient == null ? '?' : (p.powerEfficient ? 1 : 0)}`
+            : String(p.state || '?'),
+        runtimeFailure: _hevcRuntimeFailure || ''
+    };
+}
+
+/** HEVC 레벨을 뺀다 — H.264(등) 레벨이 하나도 없으면 빼지 않는다. 뺀 개수. */
+function removeHevcLevels() {
+    if (!hls || !hls.levels) return 0;
+    if (!hls.levels.some(function(l) { return !isHevcCodec(l.videoCodec); })) return 0;
+    let removed = 0;
+    for (let i = hls.levels.length - 1; i >= 0; i--) {
+        if (isHevcCodec(hls.levels[i].videoCodec)) {
+            hls.removeLevel(i);
+            removed += 1;
+        }
+    }
+    return removed;
+}
+
+/** MANIFEST_PARSED 맨 앞 — 화질 정책이 레벨을 고르기 전에 HEVC 를 남길지 정한다. */
+function applyHevcPolicyToLevels() {
+    const levels = (hls && hls.levels) || [];
+    const available = levels.filter(function(l) { return isHevcCodec(l.videoCodec); }).length;
+    const d = currentHevcDecision();
+    _hevcSession = { available: available, used: available > 0 && d.allow, reason: available > 0 ? d.reason : 'none' };
+    if (available > 0 && !d.allow && removeHevcLevels() === 0) {
+        // HEVC 레벨만 있는 매니페스트 — 빼지 않고 그대로 쓴다.
+        _hevcSession.used = true;
+    }
+}
+
+/**
+ * 이미 실린 매니페스트에서 HEVC 를 뺀다(판별이 늦게 '못 씀'·설정 끔·디코드 오류). 지운 레벨이 고정·다음 레벨이었을 수 있어
+ * 화질 정책을 다시 건다 — 정지 중이면 각 함수가 재개 때로 미룬다.
+ */
+function dropHevcLevels(reason) {
+    if (!hls || !hasParsedLevels()) return false;
+    if (!hls.levels.some(function(l) { return isHevcCodec(l.videoCodec); })) return false;
+    if (removeHevcLevels() === 0) return false;
+    _hevcSession.used = false;
+    _hevcSession.reason = reason;
+    resetManualLockRestoreBudget();
+    applyAdaptiveLevelCap();
+    if (_forcedHeight > 0) applyForcedHeight();
+    else if (_lockTopLevel) applyTopLevelLock(true);
+    else if (_preferSourceQuality) requestPreferredSourceLevel();
+    else if (!_suspended && hls.loadLevel === -1) hls.nextLoadLevel = Math.max(0, adaptiveCapCeilingIndex(hls.levels));
+    postToSwift('hevc', hevcSummary());
+    getLevels();
+    return true;
+}
+
+/** 지금 받는(또는 오류가 난 조각의) 레벨이 HEVC 인가. */
+function hevcLevelActive(fragLevel) {
+    if (!hls || !hls.levels) return false;
+    const idx = Number.isInteger(fragLevel) && fragLevel >= 0
+        ? fragLevel
+        : (hls.currentLevel >= 0 ? hls.currentLevel : hls.loadLevel);
+    const level = hls.levels[idx];
+    return !!(level && isHevcCodec(level.videoCodec));
+}
+
+/** HEVC 를 재생하다 디코드가 실패했다 — 이 페이지에서는 HEVC 를 쓰지 않는다. 처음 한 번만 true. */
+function noteHevcPlaybackFailure(reason, fragLevel) {
+    if (_hevcRuntimeFailure || !hevcLevelActive(fragLevel)) return false;
+    _hevcRuntimeFailure = String(reason || 'decode').slice(0, 64);
+    dropHevcLevels('decode-error');
+    return true;
+}
+
+/** hls.js 오류 중 HEVC 디코드 실패로 볼 것 — 코덱·조각 해석·붙이기 오류(버퍼 가득·상태 오류 제외)와 video 디코드 오류. */
+function isHevcCodecFailure(data) {
+    if (!data || data.type !== Hls.ErrorTypes.MEDIA_ERROR) return false;
+    const d = data.details;
+    const E = Hls.ErrorDetails;
+    if (d === E.BUFFER_ADD_CODEC_ERROR || d === E.BUFFER_INCOMPATIBLE_CODECS_ERROR || d === E.FRAG_PARSING_ERROR) return true;
+    if (d === E.BUFFER_APPEND_ERROR) {
+        const name = data.error && data.error.name;
+        if (name !== 'InvalidStateError' && name !== 'QuotaExceededError') return true;
+    }
+    const code = video.error && video.error.code;
+    return code === 3 || code === 4;
+}
+
+function setHevcEnabled(on) {
+    const next = on !== false;
+    if (next === _hevcEnabled) return;
+    _hevcEnabled = next;
+    // 끄면 바로 뺀다. 켜면 다음 매니페스트(채널 전환·다시 연결)부터 — 이미 뺀 레벨은 되살릴 수 없다.
+    if (!_hevcEnabled) dropHevcLevels('off');
+}
+
 // [LOCK-RESTORE 2026-09-08] 오류로 풀린 수동 고정을 되건다. 호출부는 LEVEL_SWITCHED 하나.
 //
 // 세 가지가 설계의 핵심이다:
@@ -3475,6 +3696,13 @@ function selectForcedQualityLevel(levels, forceHeight, targetBitrateKbps) {
             const current60 = currentFPS >= 59 && currentFPS <= 61;
             if (candidate60 !== current60) return candidate60;
         }
+        // [HEVC 2026-11-22] 같은 높이·같은 프레임 계열이면 남아 있는 HEVC 를 고른다 — 남아 있다는 것은 이 웹뷰가 하드웨어로
+        //   풀 수 있다는 뜻이다(못 쓰면 MANIFEST_PARSED 에서 뺐다). 비트레이트 근접보다 먼저 본다: HEVC 가 같은 화질을 더 적은
+        //   데이터로 낸다.
+        if (Math.abs(candidateFPS - currentFPS) < 1) {
+            const candidateHevc = isHevcCodec(candidate.videoCodec);
+            if (candidateHevc !== isHevcCodec(current.videoCodec)) return candidateHevc;
+        }
         if (targetBps > 0) {
             const candidateDistance = Math.abs(candidateBitrate - targetBps);
             const currentDistance = Math.abs(currentBitrate - targetBps);
@@ -3567,11 +3795,16 @@ function getLevels() {
     const levels = (hls.levels || []).map(function(l, i) {
         return {
             index: i, width: l.width, height: l.height, bitrate: l.bitrate,
-            name: l.name || (l.height + 'p')
+            name: l.name || (l.height + 'p'),
+            // [HEVC 2026-11-22] 화면이 같은 높이의 HEVC·H.264 중 하나를 고르고 HEVC 표시를 단다.
+            codec: videoCodecLabel(l.videoCodec)
         };
     });
+    const playing = (hls.levels || [])[hls.currentLevel >= 0 ? hls.currentLevel : hls.loadLevel];
     postToSwift('levels', {
         levels: levels,
+        videoCodec: playing ? videoCodecLabel(playing.videoCodec) : '',
+        hevc: hevcSummary(),
         current: hls.currentLevel,
         // 사용자가 고른 화질(-1 = 자동). current 는 지금 재생 중인 조각의 화질이라 자동에서도 0 이상이고,
         // 직접 고른 직후엔 아직 앞 화질이다 — 화면의 화질 단추·메뉴는 이 값을 본다.
@@ -6539,6 +6772,8 @@ function collectMetrics() {
         sharpnessPath: _levelMode ? _plan.path : 'legacy',
         bandwidthEstimateBps: bandwidthEstimateBps,
         currentLevelBitrateBps: currentLevelBitrateBps,
+        // [HEVC 2026-11-22] 지금 받는 레벨의 영상 코덱(HEVC·H.264) — 화질 메뉴 머리·배지 설명이 보인다.
+        videoCodec: activeLevel ? videoCodecLabel(activeLevel.videoCodec) : '',
         latency: latency,
         playbackRate: video.playbackRate,
         bufferHealth: bufferHealth,
@@ -6827,6 +7062,15 @@ video.addEventListener('playing', function() {
         _stallResetTimer = null;
     }, STALL_RESET_MS);
 });
+
+// [HEVC 2026-11-22] 미디어 요소 디코드 오류(3 DECODE · 4 SRC_NOT_SUPPORTED) — hls.js 는 이 이벤트를 듣지 않는다.
+//   HEVC 를 재생 중이었으면 이 페이지에서 HEVC 를 끄고 H.264 로 간다(복구 자체는 이어지는 hls.js 오류 처리가 맡는다).
+video.addEventListener('error', function() {
+    const code = video.error && video.error.code;
+    if (code === 3 || code === 4) noteHevcPlaybackFailure('mediaError' + code);
+});
+// [HEVC 2026-11-22] 페이지가 뜰 때 한 번 — 첫 매니페스트보다 늦으면 결과가 나온 뒤 적용한다.
+probeHevcSupport();
 
 // ─── Swift에서 호출 가능한 API 알림 ─────────────────────
 postToSwift('ready', {

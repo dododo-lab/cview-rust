@@ -32,6 +32,7 @@ pub fn apply_quality_intent(
         policy.preferred_quality.map_or(0, |q| q.max_height_cap())
     });
     engine.set_force_highest_quality(policy.force_highest_quality());
+    engine.set_hevc_enabled(policy.hevc_enabled);
     let target = is_multi_live.then_some(multi_live_target);
     engine.set_forced_quality(target);
     target

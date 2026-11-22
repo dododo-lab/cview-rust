@@ -7,6 +7,7 @@ import { esc, fitPopover, hideWithExit } from './dom.js';
 import { kbd } from './platform.js';
 import { currentBindings, bindingLabel, onShortcuts } from './shortcuts.js';
 import { bindMenuKeys, focusFirstMenuItem } from './ml-pane-controls.js';
+import { qualityBadgeLabel } from './viewer-controls.js';
 import { CHANNEL_ICON, CHANNEL_SOCIAL_EVENT, loadChannelSocial, setFollow, setFavorite, copyLiveLink, openOnChzzk } from './channel-actions.js';
 
 const ICON = {
@@ -129,9 +130,9 @@ export class ViewerTopBar {
   }
 
   /** 화질·지연 — 플레이어 지표가 올 때마다(viewer-controls renderStatus). 바뀔 때만 쓴다. */
-  syncBadge({ height = 0, latency = 0, auto = true } = {}) {
+  syncBadge({ height = 0, latency = 0, auto = true, codec = '' } = {}) {
     const lat = Number.isFinite(latency) && latency > 0 ? Math.round(latency * 10) / 10 : 0;
-    const k = `${height}|${lat}|${auto}`;
+    const k = `${height}|${lat}|${auto}|${codec}`;
     this.attachBadge();
     if (this.badge.dataset.key === k) return;
     this.badge.dataset.key = k;
@@ -139,7 +140,7 @@ export class ViewerTopBar {
     this.badge.querySelector('.vt-q-res').textContent = height ? `${height}p` : '';
     this.badge.querySelector('.vt-q-lat').textContent = lat ? `${lat.toFixed(1)}초` : '';
     this.badge.classList.toggle('behind', lat > 8);
-    const label = `화질 ${height ? `${height}p` : '확인 중'}${auto ? ' (자동)' : ''} · 지연 ${lat ? `${lat.toFixed(1)}초` : '확인 중'}`;
+    const label = qualityBadgeLabel({ height, codec, auto, latency: lat });
     this.badge.title = `${label} — 눌러서 화질 메뉴`;
     this.badge.setAttribute('aria-label', `${label}, 화질 메뉴`);
   }

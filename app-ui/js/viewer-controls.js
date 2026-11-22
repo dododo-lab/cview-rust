@@ -16,17 +16,34 @@ const ICON = {
   chatFull: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M15 20h5v-5"/><path d="M14 9h4M14 12h4"/></svg>',
 };
 
-/** 화질 목록 → 메뉴 항목(높이 내림차순, 같은 높이는 높은 비트레이트 하나). 순수 함수. */
+/**
+ * 화질 목록 → 메뉴 항목(높이 내림차순, 같은 높이는 하나). 순수 함수.
+ * 같은 높이면 HEVC → 높은 비트레이트 → 먼저 나온 것. 치지직 1080p 는 같은 대역폭의 HEVC·H.264 가 함께 오는데, 플레이어는
+ * 이 웹뷰가 HEVC 를 하드웨어로 풀 수 있을 때만 HEVC 레벨을 남기므로(player.html `applyHevcPolicyToLevels`) 남아 있으면 그쪽이 맞다.
+ */
 export function qualityOptions(levels) {
   const best = new Map();
+  const hevc = (l) => l.codec === 'HEVC';
   for (const l of levels || []) {
     if (!l || !l.height) continue;
     const prev = best.get(l.height);
-    if (!prev || (l.bitrate || 0) > (prev.bitrate || 0)) best.set(l.height, l);
+    const better = !prev || (hevc(l) !== hevc(prev) ? hevc(l) : (l.bitrate || 0) > (prev.bitrate || 0));
+    if (better) best.set(l.height, l);
   }
   return [...best.values()]
     .sort((a, b) => b.height - a.height)
-    .map((l) => ({ index: l.index, label: `${l.height}p`, height: l.height }));
+    .map((l) => ({ index: l.index, label: `${l.height}p`, height: l.height, codec: l.codec || '' }));
+}
+
+/** 화질 항목의 코덱 표시 — 기본(H.264)이 아닌 HEVC 만 단다. */
+export function codecTagHtml(codec) {
+  return codec === 'HEVC' ? '<span class="codec-tag" title="H.265(HEVC)">HEVC</span>' : '';
+}
+
+/** 화질 배지 설명 — '화질 1080p HEVC (자동) · 지연 3.5초'. 코덱을 모르면 빼고, 높이를 모르면 '확인 중'. */
+export function qualityBadgeLabel({ height = 0, codec = '', auto = true, latency = 0 } = {}) {
+  const res = height ? `${height}p${codec ? ` ${codec}` : ''}` : '확인 중';
+  return `화질 ${res}${auto ? ' (자동)' : ''} · 지연 ${latency ? `${latency.toFixed(1)}초` : '확인 중'}`;
 }
 
 /**
@@ -95,6 +112,7 @@ export class ViewerControls {
     this.manualIndex = -1;
     this.currentHeight = 0;
     this.latency = 0;
+    this.codec = '';
 
     // 왼쪽: 재생/일시정지 · 라이브
     const mute = root.querySelector('#mute');
@@ -303,12 +321,14 @@ export class ViewerControls {
   onMessage(type, data) {
     if (type === 'levels') {
       this.levels = qualityOptions(data.levels);
+      if (typeof data.videoCodec === 'string') this.codec = data.videoCodec;
       // manual — 고른 화질(-1 자동). 예전 판 플레이어(current 만 보냄)는 current 로.
       this.manualIndex = typeof data.manual === 'number' ? data.manual : (typeof data.current === 'number' ? data.current : -1);
       this.renderQualityMenu();
     } else if (type === 'metrics') {
       if (typeof data.latency === 'number') this.latency = data.latency;
       if (data.currentLevelHeight) this.currentHeight = data.currentLevelHeight;
+      if (typeof data.videoCodec === 'string') this.codec = data.videoCodec;
       this.renderStatus();
     } else if (type === 'playStarted' || type === 'playbackState') {
       this.renderStatus();
@@ -341,7 +361,9 @@ export class ViewerControls {
     const chosen = auto ? null : this.levels.find((l) => l.index === this.manualIndex);
     const height = (chosen && chosen.height) || (v && v.videoHeight) || this.currentHeight;
     this.qualityButton.textContent = height ? `${auto ? '자동 · ' : ''}${height}p` : '자동';
-    this.viewer.topbar?.syncBadge({ height, latency: this.latency, auto });
+    // 코덱은 지금 받는 레벨 것 — 직접 고른 직후엔 아직 앞 레벨이라 고른 항목의 코덱을 쓴다.
+    const codec = (chosen && chosen.codec) || this.codec || '';
+    this.viewer.topbar?.syncBadge({ height, latency: this.latency, auto, codec });
   }
 
   togglePlay() {
@@ -394,7 +416,7 @@ export class ViewerControls {
     const focused = this.qualityMenu.contains(document.activeElement) ? document.activeElement.dataset.level : null;
     this.qualityMenu.innerHTML = items.map((o) => `
       <button class="quality-item${o.index === this.manualIndex ? ' active' : ''}" role="menuitemradio" aria-checked="${o.index === this.manualIndex}" tabindex="-1" data-level="${o.index}">
-        ${esc(o.label)}${o.height >= 1080 ? '<span class="hd">HD</span>' : ''}
+        <span class="q-name">${esc(o.label)}${codecTagHtml(o.codec)}</span>${o.height >= 1080 ? '<span class="hd">HD</span>' : ''}
       </button>`).join('') || '<div class="quality-empty">화질 정보를 불러오는 중…</div>';
     if (focused != null) this.qualityMenu.querySelector(`[data-level="${CSS.escape(focused)}"]`)?.focus();
   }

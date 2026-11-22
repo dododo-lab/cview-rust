@@ -365,6 +365,10 @@ fn parses_envelopes_of_every_type() {
 fn command_scripts() {
     assert_eq!(JsCommand::SetRate(1.0).script(), "setRate(1.0)");
     assert_eq!(
+        JsCommand::SetHevcEnabled(false).script(),
+        "setHevcEnabled(false)"
+    );
+    assert_eq!(
         JsCommand::SeekToLatency(f64::NAN).script(),
         "seekToLatency(0)"
     );

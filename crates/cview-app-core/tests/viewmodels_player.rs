@@ -44,6 +44,7 @@ struct EngineState {
     recording_failure: Option<String>,
     fail_play: bool,
     play_calls: usize,
+    hevc: Vec<bool>,
 }
 
 struct FakeEngine {
@@ -169,6 +170,9 @@ impl LivePlayerEngine for FakeEngine {
     fn apply_video_adjust(&self, adjust: VideoAdjust) {
         self.st().adjust.push(adjust);
     }
+    fn set_hevc_enabled(&self, enabled: bool) {
+        self.st().hevc.push(enabled);
+    }
     fn recording_failure_reason(&self) -> Option<String> {
         self.st().recording_failure.clone()
     }
@@ -186,6 +190,23 @@ fn latency(current: f64) -> StreamEvent {
         target: 3.5,
         ewma: current,
     })
+}
+
+// MARK: - HEVC 설정
+
+#[test]
+fn hevc_setting_reaches_engine_with_quality_intent() {
+    let engine = FakeEngine::new(true);
+    let vm = vm_with(&engine);
+    vm.apply_settings(&PlayerSettings::default(), false);
+    vm.apply_settings(
+        &PlayerSettings {
+            hevc_enabled: false,
+            ..Default::default()
+        },
+        false,
+    );
+    assert_eq!(engine.st().hevc, vec![true, false]);
 }
 
 // MARK: - 오버레이

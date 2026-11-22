@@ -137,6 +137,8 @@ struct EngineConfig {
     profile: HlsJsStreamingProfile,
     prefer_source_quality: bool,
     force_highest_quality: bool,
+    /// HEVC(H.265) 변형 허용 — 페이지 기본값(켬)과 같으면 따로 보내지 않는다.
+    hevc_enabled: bool,
     match_web_v2: Option<HlsJsMatchWebV2Config>,
     live_latency_correction: bool,
     sharp_pixel: bool,
@@ -196,6 +198,7 @@ impl WebViewHlsEngine {
                 profile,
                 prefer_source_quality,
                 force_highest_quality: false,
+                hevc_enabled: true,
                 match_web_v2: None,
                 live_latency_correction: true,
                 sharp_pixel: false,
@@ -349,6 +352,10 @@ impl PlayerEngineProtocol for WebViewHlsEngine {
                 max_resolution: caps.effective_height(),
                 max_bitrate: caps.managed_bitrate_kbps,
             });
+        }
+        // HEVC 를 끈 설정은 페이지가 다시 열렸어도(기본 켬) 첫 매니페스트 전에 있어야 한다.
+        if !config.hevc_enabled {
+            self.send(JsCommand::SetHevcEnabled(false));
         }
         self.send(JsCommand::LoadSource {
             url: url.to_string(),
@@ -564,6 +571,16 @@ impl LivePlayerEngine for WebViewHlsEngine {
         self.cfg().force_highest_quality
     }
 
+    fn set_hevc_enabled(&self, enabled: bool) {
+        let changed = {
+            let mut c = self.cfg();
+            std::mem::replace(&mut c.hevc_enabled, enabled) != enabled
+        };
+        if changed {
+            self.send(JsCommand::SetHevcEnabled(enabled));
+        }
+    }
+
     fn set_forced_quality(&self, target: Option<HlsJsForcedQualityTarget>) {
         let t = target.unwrap_or(HlsJsForcedQualityTarget::new(0, 0));
         self.send(JsCommand::SetForcedHeight {
@@ -653,6 +670,30 @@ mod tests {
         assert!(sent.iter().any(|s| s
             == r#"loadSource("http://127.0.0.1:1/b.m3u8", "webParity", false, true, true, true)"#));
         assert_eq!(e.effective_live_target_latency_seconds(), 2.0);
+    }
+
+    #[tokio::test]
+    async fn hevc_off_is_sent_before_every_load_source() {
+        let (e, sent) = engine();
+        // 기본(켬)은 페이지 기본값과 같아 보내지 않는다.
+        e.set_hevc_enabled(true);
+        assert!(sent.lock().unwrap().is_empty());
+        e.set_hevc_enabled(false);
+        e.set_hevc_enabled(false);
+        assert_eq!(*sent.lock().unwrap(), vec!["setHevcEnabled(false)"]);
+        sent.lock().unwrap().clear();
+        e.play(&Url::parse("http://127.0.0.1:1/h.m3u8").unwrap())
+            .await
+            .unwrap();
+        {
+            let sent = sent.lock().unwrap();
+            let off = sent.iter().position(|s| s == "setHevcEnabled(false)");
+            let load = sent.iter().position(|s| s.starts_with("loadSource("));
+            assert!(off.is_some() && off < load, "{sent:?}");
+        }
+        sent.lock().unwrap().clear();
+        e.set_hevc_enabled(true);
+        assert_eq!(*sent.lock().unwrap(), vec!["setHevcEnabled(true)"]);
     }
 
     #[tokio::test]

@@ -6,6 +6,7 @@
 // TB04 위 막대 동작이 기존 명령을 부른다 — 팔로우(channel_follow)·즐겨찾기(favorite_set)·링크 복사(클립보드)·
 //      치지직에서 열기(open_external)·멀티라이브에 추가(멀티라이브 보기로)·채팅 표시 방식(설정 저장).
 // TB05 화질·지연 배지 — 지표가 오면 높이·지연이 보이고, 8초 넘게 늦으면 경고 표시, 누르면 ⚙ 화질 메뉴(Esc 면 배지로 초점).
+// TB05b 코덱 — 같은 1080p 의 HEVC·H.264 는 HEVC 하나로(HEVC 표시), 배지 설명·⚙ 머리에 지금 코덱(HEVC/H.264).
 // TB06 ⋯ 메뉴 키보드 — Enter 로 열면 첫 항목, ↓/End 이동, Esc 로 닫고 ⋯ 로 초점. 단축키 표시(바꾼 키 반영, Windows 표기).
 // TB07 axe(WCAG 2.1 A·AA + best-practice) — 위 막대와 열린 ⋯ 메뉴에 위반이 없다.
 // TB08 로그아웃 — 팔로우 단추·항목이 숨고 나머지는 그대로.
@@ -357,6 +358,47 @@ await check('TB05 quality/latency badge shows values, warns when behind, opens t
   await page.keyboard.press('Escape');
   await page.waitForTimeout(150);
   assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('ml-q-badge')), true, 'Esc 면 배지로 초점');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('TB05b codec — HEVC 1080p shows once with a HEVC tag; badge and ⚙ head name the playing codec', async () => {
+  const { ctx, page, errors } = await openWatch({ width: 1600 });
+  // 플레이어가 HEVC 를 남긴 경우(이 웹뷰가 하드웨어로 푼다) — 같은 1080p 의 H.264·HEVC 두 레벨, 지금 HEVC 를 받는 중
+  await page.evaluate((sel) => {
+    const f = document.querySelector(`${sel} iframe`);
+    const lv = (index, height, bitrate, codec) => ({ index, width: Math.round((height * 16) / 9), height, bitrate, name: `${height}p`, codec });
+    const data = { levels: [lv(0, 480, 1692000, 'H.264'), lv(1, 720, 3192000, 'H.264'), lv(2, 1080, 8192000, 'H.264'), lv(3, 1080, 8192000, 'HEVC')], videoCodec: 'HEVC', current: 3, manual: -1, capped: -1 };
+    // ⚙ 메뉴를 열면 화면이 getLevels 를 다시 부른다 — 같은 목록을 돌려준다
+    f.contentWindow.getLevels = () => window.__cviewPlayerBridge({ type: 'levels', data }, f.contentWindow);
+    f.contentWindow.getLevels();
+    window.__cviewPlayerBridge({ type: 'metrics', data: { latency: 2.14, currentLevelHeight: 1080, videoCodec: 'HEVC' } }, f.contentWindow);
+  }, PANE);
+  await page.waitForTimeout(900);
+  const label = await page.$eval(`${PANE} .ml-q-badge`, (x) => ({ text: x.textContent, aria: x.getAttribute('aria-label'), title: x.title }));
+  assert.equal(label.text, '1080p2.1초', '배지 글자는 그대로(코덱은 설명에만)');
+  assert.match(label.aria, /화질 1080p HEVC \(자동\) · 지연 2\.1초/);
+  assert.match(label.title, /화질 1080p HEVC \(자동\)/);
+  await wakeWatch(page);
+  await page.focus(`${PANE} .ml-q-badge`);
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(250);
+  const menu = await page.$eval(PANE, (p) => ({
+    head: p.querySelector('.ml-gear-menu .ml-menu-head span')?.textContent,
+    items: [...p.querySelectorAll('.ml-gear-menu [data-mp="level"]')].map((b) => `${b.dataset.level}:${b.querySelector('span')?.textContent}:${b.querySelector('.codec-tag')?.textContent || ''}`),
+  }));
+  assert.equal(menu.head, '1080p · HEVC');
+  assert.deepEqual(menu.items, ['-1:자동:', '3:1080p:HEVC', '1:720p:', '0:480p:'], '1080p 는 하나(HEVC), HEVC 표시는 그 항목에만');
+  // H.264 로 바뀌면(설정 끔·대체) 머리도 바뀐다
+  await page.evaluate((sel) => {
+    const f = document.querySelector(`${sel} iframe`);
+    window.__cviewPlayerBridge({ type: 'metrics', data: { latency: 2.14, currentLevelHeight: 1080, videoCodec: 'H.264' } }, f.contentWindow);
+    window.__cviewPlayerBridge({ type: 'levels', data: { levels: [{ index: 0, height: 720, bitrate: 3192000, codec: 'H.264' }, { index: 1, height: 1080, bitrate: 8192000, codec: 'H.264' }], videoCodec: 'H.264', current: 1, manual: -1, capped: -1 } }, f.contentWindow);
+  }, PANE);
+  await page.waitForTimeout(250);
+  const after = await page.$eval(PANE, (p) => ({ head: p.querySelector('.ml-gear-menu .ml-menu-head span')?.textContent, tags: p.querySelectorAll('.ml-gear-menu .codec-tag').length }));
+  assert.deepEqual(after, { head: '1080p · H.264', tags: 0 });
+  await page.keyboard.press('Escape');
   assert.deepEqual(errors, []);
   await ctx.close();
 });
