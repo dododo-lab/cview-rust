@@ -1,0 +1,351 @@
+{
+  "accounting_ok" : 1,
+  "breaker" : {
+    "extensions" : 0,
+    "probe_ms" : {
+      "max" : 226.9909999370575,
+      "mean" : 50.226089281695231,
+      "min" : 15.084666669368744,
+      "n" : 7,
+      "p50" : 17.528333365917206,
+      "p95" : 170.07419995069492,
+      "p99" : 215.60763993978492
+    },
+    "probes" : 7,
+    "trips" : 1
+  },
+  "counted_s" : 117.4583333333136,
+  "counts" : {
+    "abandoned" : 10,
+    "avplayer_error_log" : 0,
+    "breaker_trips" : 1,
+    "bumps" : 3,
+    "bypass" : 24,
+    "coalesced_bumps" : 2,
+    "composite_late" : 0,
+    "counted_errors" : 0,
+    "cuts" : 13,
+    "eligible" : 2819,
+    "emitted_mid" : 2737,
+    "emitted_orig" : 2886,
+    "errors" : 0,
+    "fps_changes" : 0,
+    "frames" : 2886,
+    "gaps" : 2,
+    "generations" : 3,
+    "interp_off" : 0,
+    "late" : 10,
+    "late_completed" : 10,
+    "late_start" : 94,
+    "on_time" : 2691,
+    "order_violation" : 0,
+    "orig_late" : 0,
+    "output_flushes" : 2,
+    "pairs" : 2884,
+    "pending_at_end" : 0,
+    "pool_exhausted" : 0,
+    "reconnects" : 0,
+    "runtime_off" : 0,
+    "session_wait" : 0,
+    "sink_enqueue_failed" : 0,
+    "sink_enqueued" : 5623,
+    "sink_resyncs" : 0,
+    "size_changes" : 0,
+    "soft_bumps" : 1,
+    "stale_counted" : 0,
+    "stale_dropped" : 0,
+    "stalled_pairs" : 0,
+    "stalls" : 0,
+    "static_skipped" : 0,
+    "time_jumps" : 2,
+    "toggles" : 10,
+    "unsupported" : 0,
+    "vt_restarts" : 0,
+    "warm_pairs" : 50
+  },
+  "criteria" : {
+    "accounting_ok" : 1,
+    "C2_late_le_1pct" : 1,
+    "C2_on_time_ge_95pct" : 1,
+    "C2_toggles_le_60_per_min" : 1,
+    "safety_no_stale_or_reordered_output" : 1
+  },
+  "cut_max_normal" : {
+    "hist" : 1.7771527777777776,
+    "sad" : 0.096570385238003861
+  },
+  "environment" : {
+    "chip" : "Apple M1 Max",
+    "model" : "MacBookPro18,2",
+    "os" : "Version 27.3 (Build 26C5047e)",
+    "thermal_end" : 0
+  },
+  "events" : [
+    {
+      "gen" : 1,
+      "hard" : true,
+      "kind" : "generation",
+      "t_ms" : 313942569,
+      "why" : "time_jumped"
+    },
+    {
+      "gen" : 1,
+      "kind" : "generation_coalesced",
+      "t_ms" : 313942573,
+      "why" : "output_flushed"
+    },
+    {
+      "bpr0" : 1280,
+      "bpr1" : 1280,
+      "ext" : "0,0,0,0",
+      "fmt" : "420v",
+      "h0" : 720,
+      "iosurface" : 1,
+      "kind" : "frame_format",
+      "matrix" : "ITU_R_709_2",
+      "size" : "1280x720",
+      "t_ms" : 313942578
+    },
+    {
+      "gen" : 2,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 313942578,
+      "why" : "size 1280x720"
+    },
+    {
+      "kind" : "session_request",
+      "size" : "1280x720",
+      "t_ms" : 313942578
+    },
+    {
+      "kind" : "fps",
+      "t_ms" : 313942579,
+      "T_ms" : 41.666666666664298
+    },
+    {
+      "gen" : 3,
+      "hard" : true,
+      "kind" : "generation",
+      "t_ms" : 313942589,
+      "why" : "time_jumped"
+    },
+    {
+      "gen" : 3,
+      "kind" : "generation_coalesced",
+      "t_ms" : 313942597,
+      "why" : "output_flushed"
+    },
+    {
+      "kind" : "session_ready",
+      "ok" : 1,
+      "size" : "1280x720",
+      "start_ms" : 42.435583412647247,
+      "t_ms" : 313942655,
+      "warm3_ms" : 29.939083337783813
+    },
+    {
+      "hist" : 0.73409722222222229,
+      "kind" : "cut",
+      "sad" : 0.19992288000443403,
+      "t_ms" : 313945976
+    },
+    {
+      "hist" : 1.673402777777778,
+      "kind" : "cut",
+      "sad" : 0.30780953950611856,
+      "t_ms" : 313947476
+    },
+    {
+      "hist" : 1.2653124999999998,
+      "kind" : "cut",
+      "sad" : 0.16604308815823141,
+      "t_ms" : 313949646
+    },
+    {
+      "hist" : 0.95125000000000004,
+      "kind" : "cut",
+      "sad" : 0.19001101532013587,
+      "t_ms" : 313952101
+    },
+    {
+      "hist" : 0.49166666666666659,
+      "kind" : "cut",
+      "sad" : 0.14996337172185215,
+      "t_ms" : 313954434
+    },
+    {
+      "hist" : 0.79194444444444445,
+      "kind" : "cut",
+      "sad" : 0.24676535651850548,
+      "t_ms" : 313954476
+    },
+    {
+      "hist" : 0.37229166666666663,
+      "kind" : "cut",
+      "sad" : 0.12164831063013627,
+      "t_ms" : 313955604
+    },
+    {
+      "hist" : 0.43475694444444452,
+      "kind" : "cut",
+      "sad" : 0.1382783722688746,
+      "t_ms" : 313955642
+    },
+    {
+      "hist" : 0.56593750000000009,
+      "kind" : "cut",
+      "sad" : 0.18524626164634433,
+      "t_ms" : 313955690
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 91.165166735649109,
+      "t_ms" : 314020220
+    },
+    {
+      "hist" : 0.61465277777777783,
+      "kind" : "cut",
+      "sad" : 0.10995926942213688,
+      "t_ms" : 314045724
+    },
+    {
+      "hist" : 1.2937499999999997,
+      "kind" : "cut",
+      "sad" : 0.14500328628488357,
+      "t_ms" : 314045772
+    },
+    {
+      "hist" : 1.9865972222222217,
+      "kind" : "cut",
+      "sad" : 0.79775605949701045,
+      "t_ms" : 314046726
+    },
+    {
+      "hist" : 1.9865277777777779,
+      "kind" : "cut",
+      "sad" : 0.77820895406415524,
+      "t_ms" : 314062225
+    }
+  ],
+  "events_total" : 23,
+  "latency_s" : {
+    "first_min_median" : 5.808476448059082,
+    "last_min_median" : 5.8087846040725708,
+    "median" : 5.8086292743682861,
+    "n" : 116,
+    "reset_by_reconnect" : 0
+  },
+  "live" : true,
+  "memory_mb" : {
+    "at_60s" : 40.500823974609375,
+    "end" : 42.766471862792969,
+    "growth_after_60s" : 2.2656478881835938,
+    "growth_after_60s_excluding_instrument" : 2.19158935546875,
+    "instrument_growth" : 0.07405853271484375
+  },
+  "ms" : {
+    "composite" : {
+      "max" : 28.795208394527435,
+      "mean" : 1.3430252097625996,
+      "min" : 0.16108328104019165,
+      "n" : 2737,
+      "p50" : 0.88212502002716064,
+      "p95" : 3.9362083077430654,
+      "p99" : 9.0242066192626798
+    },
+    "guard" : {
+      "max" : 29.455374956130981,
+      "mean" : 2.1756622275695627,
+      "min" : 0.28074997663497925,
+      "n" : 2882,
+      "p50" : 1.4731250107288361,
+      "p95" : 6.1476479351520537,
+      "p99" : 11.497855856418626
+    },
+    "lookahead" : {
+      "max" : 149.9993333333336,
+      "mean" : 148.69859281520002,
+      "min" : -17.399999999998528,
+      "n" : 2886,
+      "p50" : 148.99747883332992,
+      "p95" : 149.98785358333322,
+      "p99" : 149.99746448333013
+    },
+    "proc" : {
+      "max" : 163.64325004816055,
+      "mean" : 16.520977627115766,
+      "min" : 8.0981250405311584,
+      "n" : 2747,
+      "p50" : 15.276875019073486,
+      "p95" : 20.567508316040026,
+      "p99" : 32.289189200401296
+    },
+    "slack_at_ready" : {
+      "max" : 114.89845764636993,
+      "mean" : 102.16776797553244,
+      "min" : 12.575582385063171,
+      "n" : 2737,
+      "p50" : 103.27799957990646,
+      "p95" : 107.71732503175735,
+      "p99" : 108.82327491998672
+    },
+    "submit_lead" : {
+      "max" : 123.72804170846939,
+      "mean" : 119.43330294523058,
+      "min" : 16.399331986904144,
+      "n" : 2747,
+      "p50" : 120.66616600751877,
+      "p95" : 122.94558344483376,
+      "p99" : 123.41413734555245
+    },
+    "vt_input_copy" : {
+      "n" : 0
+    }
+  },
+  "options" : {
+    "breaker" : "v3",
+    "cut" : true,
+    "cut_hist" : 0.29999999999999999,
+    "cut_sad" : 0.10000000000000001,
+    "forward_buffer_s" : 0,
+    "inject_delay" : "0:0",
+    "interp" : true,
+    "latency" : "avplayer",
+    "lead_ms" : 5,
+    "live_offset_s" : 3.5,
+    "lookahead_ms" : 150,
+    "max_ahead" : 6,
+    "max_height" : 720,
+    "rate_toggle_s" : 0,
+    "seconds" : 120,
+    "seek_every_s" : 0,
+    "sink" : "null",
+    "static" : true,
+    "static_ms" : 120,
+    "static_tau" : 3,
+    "switch" : ""
+  },
+  "ratios" : {
+    "error_of_attempted" : 0,
+    "late_of_attempted" : 0.0037023324694557573,
+    "on_time" : 0.95459382759843914,
+    "toggles_per_counted_min" : 5.1081943951764526
+  },
+  "sessions" : {
+    "1280x720" : {
+      "ok" : 1,
+      "size" : "1280x720",
+      "start_ms" : 42.435583412647247,
+      "warm3_ms" : 29.939083337783813
+    }
+  },
+  "source" : "URL stream.mux.com\/…\/v69RSHhFelSm4701snP22dYz2jICy4E4FUyk02rW4gxRM.m3u8",
+  "tool" : "vfi-player",
+  "truncated" : 0,
+  "truncated_why" : "",
+  "version" : 2,
+  "wall_s" : 120.01890445834398
+}

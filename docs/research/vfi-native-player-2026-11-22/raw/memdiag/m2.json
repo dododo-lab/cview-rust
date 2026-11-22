@@ -1,0 +1,371 @@
+{
+  "accounting_ok" : 1,
+  "breaker" : {
+    "extensions" : 0,
+    "probe_ms" : {
+      "n" : 0
+    },
+    "probes" : 0,
+    "trips" : 0
+  },
+  "counted_s" : 604.71666666577585,
+  "counts" : {
+    "abandoned" : 0,
+    "avplayer_error_log" : 0,
+    "breaker_trips" : 0,
+    "bumps" : 12,
+    "bypass" : 0,
+    "coalesced_bumps" : 1,
+    "composite_late" : 0,
+    "counted_errors" : 0,
+    "cuts" : 0,
+    "eligible" : 36237,
+    "emitted_mid" : 0,
+    "emitted_orig" : 36865,
+    "errors" : 0,
+    "fps_changes" : 4,
+    "frames" : 36865,
+    "gaps" : 26,
+    "generations" : 12,
+    "interp_off" : 36237,
+    "late" : 0,
+    "late_completed" : 0,
+    "late_start" : 0,
+    "on_time" : 0,
+    "order_violation" : 0,
+    "orig_late" : 136,
+    "output_flushes" : 1,
+    "pairs" : 36854,
+    "pending_at_end" : 0,
+    "pool_exhausted" : 0,
+    "reconnects" : 0,
+    "runtime_off" : 0,
+    "session_wait" : 0,
+    "sink_enqueue_failed" : 0,
+    "sink_enqueued" : 36865,
+    "sink_resyncs" : 29,
+    "size_changes" : 6,
+    "soft_bumps" : 11,
+    "stale_counted" : 0,
+    "stale_dropped" : 0,
+    "stalled_pairs" : 0,
+    "stalls" : 0,
+    "static_skipped" : 0,
+    "time_jumps" : 1,
+    "toggles" : 0,
+    "unsupported" : 0,
+    "vt_restarts" : 0,
+    "warm_pairs" : 591
+  },
+  "criteria" : {
+    "accounting_ok" : 1,
+    "C8_latency_not_growing" : 1,
+    "C8_memory_growth_le_50mb" : 1,
+    "safety_no_stale_or_reordered_output" : 1
+  },
+  "cut_max_normal" : {
+    "hist" : 0,
+    "sad" : 0
+  },
+  "environment" : {
+    "chip" : "Apple M1 Max",
+    "model" : "MacBookPro18,2",
+    "os" : "Version 27.3 (Build 26C5047e)",
+    "thermal_end" : 0
+  },
+  "events" : [
+    {
+      "gen" : 1,
+      "hard" : true,
+      "kind" : "generation",
+      "t_ms" : 319314307,
+      "why" : "time_jumped"
+    },
+    {
+      "gen" : 1,
+      "kind" : "generation_coalesced",
+      "t_ms" : 319314312,
+      "why" : "output_flushed"
+    },
+    {
+      "bpr0" : 1280,
+      "bpr1" : 1280,
+      "ext" : "0,0,0,16",
+      "fmt" : "420v",
+      "h0" : 720,
+      "iosurface" : 1,
+      "kind" : "frame_format",
+      "matrix" : "ITU_R_709_2",
+      "size" : "1280x720",
+      "t_ms" : 319314321
+    },
+    {
+      "gen" : 2,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 319314321,
+      "why" : "size 1280x720"
+    },
+    {
+      "kind" : "fps",
+      "t_ms" : 319314324,
+      "T_ms" : 16.666666666665719
+    },
+    {
+      "bpr0" : 256,
+      "bpr1" : 256,
+      "ext" : "0,0,0,16",
+      "fmt" : "420v",
+      "h0" : 144,
+      "iosurface" : 1,
+      "kind" : "frame_format",
+      "matrix" : "ITU_R_709_2",
+      "size" : "256x144",
+      "t_ms" : 319435634
+    },
+    {
+      "gen" : 3,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 319435637,
+      "why" : "size 256x144"
+    },
+    {
+      "kind" : "fps",
+      "t_ms" : 319436074,
+      "T_ms" : 33.333333333331439,
+      "was_ms" : 16.666666666665719
+    },
+    {
+      "gen" : 4,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 319436074,
+      "why" : "fps → 30.00"
+    },
+    {
+      "bpr0" : 640,
+      "bpr1" : 640,
+      "ext" : "0,0,0,24",
+      "fmt" : "420v",
+      "h0" : 360,
+      "iosurface" : 1,
+      "kind" : "frame_format",
+      "matrix" : "ITU_R_709_2",
+      "size" : "640x360",
+      "t_ms" : 319438944
+    },
+    {
+      "gen" : 5,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 319438949,
+      "why" : "size 640x360"
+    },
+    {
+      "bpr0" : 896,
+      "bpr1" : 896,
+      "ext" : "0,12,0,0",
+      "fmt" : "420v",
+      "h0" : 480,
+      "iosurface" : 1,
+      "kind" : "frame_format",
+      "matrix" : "ITU_R_709_2",
+      "size" : "852x480",
+      "t_ms" : 319440005
+    },
+    {
+      "gen" : 6,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 319440005,
+      "why" : "size 852x480"
+    },
+    {
+      "bpr0" : 1280,
+      "bpr1" : 1280,
+      "ext" : "0,0,0,16",
+      "fmt" : "420v",
+      "h0" : 720,
+      "iosurface" : 1,
+      "kind" : "frame_format",
+      "matrix" : "ITU_R_709_2",
+      "size" : "1280x720",
+      "t_ms" : 319442053
+    },
+    {
+      "gen" : 7,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 319442055,
+      "why" : "size 1280x720"
+    },
+    {
+      "kind" : "fps",
+      "t_ms" : 319442218,
+      "T_ms" : 16.666666666651508,
+      "was_ms" : 33.333333333331439
+    },
+    {
+      "gen" : 8,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 319442222,
+      "why" : "fps → 60.00"
+    },
+    {
+      "bpr0" : 896,
+      "bpr1" : 896,
+      "ext" : "0,12,0,0",
+      "fmt" : "420v",
+      "h0" : 480,
+      "iosurface" : 1,
+      "kind" : "frame_format",
+      "matrix" : "ITU_R_709_2",
+      "size" : "852x480",
+      "t_ms" : 319918067
+    },
+    {
+      "gen" : 9,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 319918067,
+      "why" : "size 852x480"
+    },
+    {
+      "kind" : "fps",
+      "t_ms" : 319918435,
+      "T_ms" : 33.333333333303017,
+      "was_ms" : 16.666666666651508
+    },
+    {
+      "gen" : 10,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 319918436,
+      "why" : "fps → 30.00"
+    },
+    {
+      "bpr0" : 1280,
+      "bpr1" : 1280,
+      "ext" : "0,0,0,16",
+      "fmt" : "420v",
+      "h0" : 720,
+      "iosurface" : 1,
+      "kind" : "frame_format",
+      "matrix" : "ITU_R_709_2",
+      "size" : "1280x720",
+      "t_ms" : 319921051
+    },
+    {
+      "gen" : 11,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 319921051,
+      "why" : "size 1280x720"
+    },
+    {
+      "kind" : "fps",
+      "t_ms" : 319921219,
+      "T_ms" : 16.666666666651508,
+      "was_ms" : 33.333333333303017
+    },
+    {
+      "gen" : 12,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 319921221,
+      "why" : "fps → 60.00"
+    }
+  ],
+  "events_total" : 25,
+  "latency_s" : {
+    "first_min_median" : 3.0936000347137451,
+    "last_min_median" : 3.296764612197876,
+    "median" : 3.2953689098358154,
+    "n" : 616,
+    "reset_by_reconnect" : 0
+  },
+  "live" : true,
+  "memory_mb" : {
+    "at_60s" : 38.563346862792969,
+    "end" : 49.407142639160156,
+    "growth_after_60s" : 10.843795776367188,
+    "growth_after_60s_excluding_instrument" : 10.582427978515625,
+    "instrument_growth" : 0.2613677978515625
+  },
+  "ms" : {
+    "composite" : {
+      "n" : 0
+    },
+    "guard" : {
+      "n" : 0
+    },
+    "lookahead" : {
+      "max" : 149.99961066665435,
+      "mean" : 145.86867088438356,
+      "min" : -1683.3930556666701,
+      "n" : 36865,
+      "p50" : 148.91070233335313,
+      "p95" : 149.97661833336906,
+      "p99" : 149.99481866666997
+    },
+    "proc" : {
+      "n" : 0
+    },
+    "slack_at_ready" : {
+      "n" : 0
+    },
+    "submit_lead" : {
+      "n" : 0
+    },
+    "vt_input_copy" : {
+      "n" : 0
+    }
+  },
+  "options" : {
+    "breaker" : "v3",
+    "cut" : false,
+    "cut_hist" : 0.29999999999999999,
+    "cut_sad" : 0.10000000000000001,
+    "forward_buffer_s" : 0,
+    "inject_delay" : "0:0",
+    "interp" : false,
+    "latency" : "avplayer",
+    "lead_ms" : 5,
+    "live_offset_s" : 3.5,
+    "lookahead_ms" : 150,
+    "max_ahead" : 6,
+    "max_height" : 720,
+    "rate_toggle_s" : 0,
+    "seconds" : 620,
+    "seek_every_s" : 0,
+    "sink" : "renderer",
+    "static" : false,
+    "static_ms" : 120,
+    "static_tau" : 3,
+    "switch" : ""
+  },
+  "ratios" : {
+    "error_of_attempted" : null,
+    "late_of_attempted" : null,
+    "on_time" : 0,
+    "toggles_per_counted_min" : 0
+  },
+  "renderer_metrics" : {
+    "accumulated_delay_s" : 0,
+    "corrupted" : 0,
+    "dropped" : 0,
+    "optimized_compositing" : 0,
+    "total_frames" : 36865
+  },
+  "sessions" : {
+
+  },
+  "source" : "치지직 인기 방송 1위(성인 아님)",
+  "tool" : "vfi-player",
+  "truncated" : 0,
+  "truncated_why" : "",
+  "version" : 2,
+  "wall_s" : 620.01868691670893
+}

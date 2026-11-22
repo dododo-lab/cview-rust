@@ -1,0 +1,457 @@
+{
+  "accounting_ok" : 1,
+  "breaker" : {
+    "extensions" : 0,
+    "probe_ms" : {
+      "max" : 204.05712503194809,
+      "mean" : 36.943104181970867,
+      "min" : 10.264041662216187,
+      "n" : 14,
+      "p50" : 16.474437534809113,
+      "p95" : 112.70292918384069,
+      "p99" : 185.78628586232654
+    },
+    "probes" : 14,
+    "trips" : 2
+  },
+  "counted_s" : 116.79166666664707,
+  "counts" : {
+    "abandoned" : 13,
+    "avplayer_error_log" : 0,
+    "breaker_trips" : 2,
+    "bumps" : 3,
+    "bypass" : 73,
+    "coalesced_bumps" : 2,
+    "composite_late" : 0,
+    "counted_errors" : 0,
+    "cuts" : 30,
+    "eligible" : 2803,
+    "emitted_mid" : 2602,
+    "emitted_orig" : 2886,
+    "errors" : 0,
+    "fps_changes" : 0,
+    "frames" : 2886,
+    "gaps" : 2,
+    "generations" : 3,
+    "interp_off" : 0,
+    "late" : 13,
+    "late_completed" : 13,
+    "late_start" : 160,
+    "on_time" : 2557,
+    "order_violation" : 0,
+    "orig_late" : 0,
+    "output_flushes" : 2,
+    "pairs" : 2884,
+    "pending_at_end" : 0,
+    "pool_exhausted" : 0,
+    "reconnects" : 0,
+    "runtime_off" : 0,
+    "session_wait" : 0,
+    "sink_enqueue_failed" : 0,
+    "sink_enqueued" : 5488,
+    "sink_resyncs" : 0,
+    "size_changes" : 0,
+    "soft_bumps" : 1,
+    "stale_counted" : 0,
+    "stale_dropped" : 0,
+    "stalled_pairs" : 0,
+    "stalls" : 0,
+    "static_skipped" : 0,
+    "time_jumps" : 2,
+    "toggles" : 18,
+    "unsupported" : 0,
+    "vt_restarts" : 0,
+    "warm_pairs" : 49
+  },
+  "criteria" : {
+    "accounting_ok" : 1,
+    "C2_late_le_1pct" : 1,
+    "C2_on_time_ge_95pct" : 0,
+    "C2_toggles_le_60_per_min" : 1,
+    "safety_no_stale_or_reordered_output" : 1
+  },
+  "cut_max_normal" : {
+    "hist" : 1.1604513888888892,
+    "sad" : 0.20646946682130068
+  },
+  "environment" : {
+    "chip" : "Apple M1 Max",
+    "model" : "MacBookPro18,2",
+    "os" : "Version 27.3 (Build 26C5047e)",
+    "thermal_end" : 0
+  },
+  "events" : [
+    {
+      "gen" : 1,
+      "hard" : true,
+      "kind" : "generation",
+      "t_ms" : 312530742,
+      "why" : "time_jumped"
+    },
+    {
+      "gen" : 1,
+      "kind" : "generation_coalesced",
+      "t_ms" : 312530750,
+      "why" : "output_flushed"
+    },
+    {
+      "bpr0" : 1280,
+      "bpr1" : 1280,
+      "ext" : "0,0,0,0",
+      "fmt" : "420v",
+      "h0" : 720,
+      "iosurface" : 1,
+      "kind" : "frame_format",
+      "matrix" : "ITU_R_709_2",
+      "size" : "1280x720",
+      "t_ms" : 312530754
+    },
+    {
+      "gen" : 2,
+      "hard" : false,
+      "kind" : "generation",
+      "t_ms" : 312530754,
+      "why" : "size 1280x720"
+    },
+    {
+      "kind" : "session_request",
+      "size" : "1280x720",
+      "t_ms" : 312530755
+    },
+    {
+      "kind" : "fps",
+      "t_ms" : 312530756,
+      "T_ms" : 41.666666666664298
+    },
+    {
+      "gen" : 3,
+      "hard" : true,
+      "kind" : "generation",
+      "t_ms" : 312530768,
+      "why" : "time_jumped"
+    },
+    {
+      "gen" : 3,
+      "kind" : "generation_coalesced",
+      "t_ms" : 312530782,
+      "why" : "output_flushed"
+    },
+    {
+      "kind" : "session_ready",
+      "ok" : 1,
+      "size" : "1280x720",
+      "start_ms" : 29.842124998569489,
+      "t_ms" : 312530820,
+      "warm3_ms" : 31.597000002861023
+    },
+    {
+      "hist" : 0.50781250000000011,
+      "kind" : "cut",
+      "sad" : 0.23150167007786515,
+      "t_ms" : 312531710
+    },
+    {
+      "hist" : 0.58524305555555545,
+      "kind" : "cut",
+      "sad" : 0.18662256475107861,
+      "t_ms" : 312534213
+    },
+    {
+      "hist" : 0.7044097222222222,
+      "kind" : "cut",
+      "sad" : 0.1929936964917027,
+      "t_ms" : 312537544
+    },
+    {
+      "hist" : 0.3332986111111112,
+      "kind" : "cut",
+      "sad" : 0.15816207647258679,
+      "t_ms" : 312539217
+    },
+    {
+      "hist" : 0.50861111111111101,
+      "kind" : "cut",
+      "sad" : 0.18187251827296089,
+      "t_ms" : 312543378
+    },
+    {
+      "hist" : 0.63767361111111098,
+      "kind" : "cut",
+      "sad" : 0.16954603037738072,
+      "t_ms" : 312549003
+    },
+    {
+      "hist" : 0.30253472222222227,
+      "kind" : "cut",
+      "sad" : 0.10178987639012679,
+      "t_ms" : 312549297
+    },
+    {
+      "hist" : 0.69555555555555537,
+      "kind" : "cut",
+      "sad" : 0.17819798705624598,
+      "t_ms" : 312550969
+    },
+    {
+      "hist" : 0.31364583333333329,
+      "kind" : "cut",
+      "sad" : 0.2176519040902975,
+      "t_ms" : 312552753
+    },
+    {
+      "hist" : 0.59868055555555555,
+      "kind" : "cut",
+      "sad" : 0.23624218499738406,
+      "t_ms" : 312554419
+    },
+    {
+      "hist" : 0.85784722222222221,
+      "kind" : "cut",
+      "sad" : 0.24415405695864317,
+      "t_ms" : 312557755
+    },
+    {
+      "hist" : 1.0421875000000003,
+      "kind" : "cut",
+      "sad" : 0.32864150411422993,
+      "t_ms" : 312565254
+    },
+    {
+      "hist" : 0.74746527777777794,
+      "kind" : "cut",
+      "sad" : 0.23079275817717862,
+      "t_ms" : 312568586
+    },
+    {
+      "hist" : 0.65246527777777752,
+      "kind" : "cut",
+      "sad" : 0.22823344134849402,
+      "t_ms" : 312570167
+    },
+    {
+      "hist" : 0.53996527777777792,
+      "kind" : "cut",
+      "sad" : 0.34958954695003486,
+      "t_ms" : 312578252
+    },
+    {
+      "hist" : 0.54277777777777747,
+      "kind" : "cut",
+      "sad" : 0.11791030205542745,
+      "t_ms" : 312581335
+    },
+    {
+      "hist" : 0.41399305555555554,
+      "kind" : "cut",
+      "sad" : 0.14246467927507325,
+      "t_ms" : 312581377
+    },
+    {
+      "hist" : 0.61756944444444439,
+      "kind" : "cut",
+      "sad" : 0.19532109633055647,
+      "t_ms" : 312585544
+    },
+    {
+      "hist" : 0.80826388888888889,
+      "kind" : "cut",
+      "sad" : 0.24670185760669977,
+      "t_ms" : 312595214
+    },
+    {
+      "hist" : 0.74041666666666672,
+      "kind" : "cut",
+      "sad" : 0.17968590989027147,
+      "t_ms" : 312596752
+    },
+    {
+      "hist" : 0.52614583333333331,
+      "kind" : "cut",
+      "sad" : 0.12964944595345224,
+      "t_ms" : 312604419
+    },
+    {
+      "hist" : 0.40684027777777798,
+      "kind" : "cut",
+      "sad" : 0.10809386221282102,
+      "t_ms" : 312604503
+    },
+    {
+      "hist" : 0.84590277777777789,
+      "kind" : "cut",
+      "sad" : 0.32088856019225775,
+      "t_ms" : 312607376
+    },
+    {
+      "hist" : 0.75559027777777743,
+      "kind" : "cut",
+      "sad" : 0.24851619400457359,
+      "t_ms" : 312609918
+    },
+    {
+      "hist" : 0.41704861111111119,
+      "kind" : "cut",
+      "sad" : 0.15511938334485284,
+      "t_ms" : 312610010
+    },
+    {
+      "hist" : 0.42222222222222239,
+      "kind" : "cut",
+      "sad" : 0.11813978154236585,
+      "t_ms" : 312610045
+    },
+    {
+      "hist" : 1.4202777777777778,
+      "kind" : "cut",
+      "sad" : 0.39450405053388576,
+      "t_ms" : 312610170
+    },
+    {
+      "hist" : 0.84118055555555538,
+      "kind" : "cut",
+      "sad" : 0.3096319806309567,
+      "t_ms" : 312612797
+    },
+    {
+      "abandoned" : true,
+      "kind" : "breaker_trip",
+      "late" : true,
+      "ms" : 43.778416693210602,
+      "t_ms" : 312627634
+    },
+    {
+      "abandoned" : false,
+      "kind" : "breaker_trip",
+      "late" : false,
+      "ms" : 9.3306666612625122,
+      "t_ms" : 312636143
+    },
+    {
+      "hist" : 1.259340277777778,
+      "kind" : "cut",
+      "sad" : 0.34588947021493727,
+      "t_ms" : 312645753
+    },
+    {
+      "hist" : 1.2643402777777779,
+      "kind" : "cut",
+      "sad" : 0.34592074442143533,
+      "t_ms" : 312648417
+    }
+  ],
+  "events_total" : 41,
+  "latency_s" : {
+    "first_min_median" : 5.9925390481948853,
+    "last_min_median" : 5.9928473234176636,
+    "median" : 5.9926893711090088,
+    "n" : 116,
+    "reset_by_reconnect" : 0
+  },
+  "live" : true,
+  "memory_mb" : {
+    "at_60s" : 41.266471862792969,
+    "end" : 43.313346862792969,
+    "growth_after_60s" : 2.046875,
+    "growth_after_60s_excluding_instrument" : 1.9740447998046875,
+    "instrument_growth" : 0.0728302001953125
+  },
+  "ms" : {
+    "composite" : {
+      "max" : 26.028708338737488,
+      "mean" : 1.2556085066782521,
+      "min" : 0.16158336400985718,
+      "n" : 2602,
+      "p50" : 0.85449996590614319,
+      "p95" : 3.6811208248138398,
+      "p99" : 7.9424520760774593
+    },
+    "guard" : {
+      "max" : 128.00379168987274,
+      "mean" : 2.3055666646222783,
+      "min" : 0.26008331775665283,
+      "n" : 2882,
+      "p50" : 1.4892917275428772,
+      "p95" : 6.6673583269119243,
+      "p99" : 13.791998322010052
+    },
+    "lookahead" : {
+      "max" : 149.84475099999983,
+      "mean" : 148.69417691533886,
+      "min" : -33.899999999999153,
+      "n" : 2886,
+      "p50" : 148.83837549999868,
+      "p95" : 149.81885499999947,
+      "p99" : 149.82786435000276
+    },
+    "proc" : {
+      "max" : 310.2666249871254,
+      "mean" : 16.71316674678777,
+      "min" : 6.221791684627533,
+      "n" : 2615,
+      "p50" : 15.368416666984558,
+      "p95" : 20.403479170799244,
+      "p99" : 30.40319589018824
+    },
+    "slack_at_ready" : {
+      "max" : 114.9854993224144,
+      "mean" : 101.95964334745308,
+      "min" : 1.6397497057914734,
+      "n" : 2601,
+      "p50" : 103.23912590742111,
+      "p95" : 107.80504202842712,
+      "p99" : 109.12179237604141
+    },
+    "submit_lead" : {
+      "max" : 123.64708399772644,
+      "mean" : 119.09989236053043,
+      "min" : -5.4202506542205811,
+      "n" : 2615,
+      "p50" : 120.65141701698303,
+      "p95" : 123.095658659935,
+      "p99" : 123.54956592321396
+    }
+  },
+  "options" : {
+    "breaker" : "v3",
+    "cut" : true,
+    "cut_hist" : 0.29999999999999999,
+    "cut_sad" : 0.10000000000000001,
+    "forward_buffer_s" : 0,
+    "inject_delay" : "0:0",
+    "interp" : true,
+    "latency" : "avplayer",
+    "lead_ms" : 5,
+    "live_offset_s" : 3.5,
+    "lookahead_ms" : 150,
+    "max_ahead" : 6,
+    "max_height" : 720,
+    "rate_toggle_s" : 0,
+    "seconds" : 120,
+    "seek_every_s" : 0,
+    "sink" : "null",
+    "static" : true,
+    "static_ms" : 120,
+    "static_tau" : 3,
+    "switch" : ""
+  },
+  "ratios" : {
+    "error_of_attempted" : 0,
+    "late_of_attempted" : 0.0050583657587548641,
+    "on_time" : 0.91223688904744915,
+    "toggles_per_counted_min" : 9.2472351052459327
+  },
+  "sessions" : {
+    "1280x720" : {
+      "ok" : 1,
+      "size" : "1280x720",
+      "start_ms" : 29.842124998569489,
+      "warm3_ms" : 31.597000002861023
+    }
+  },
+  "source" : "URL stream.mux.com\/…\/v69RSHhFelSm4701snP22dYz2jICy4E4FUyk02rW4gxRM.m3u8",
+  "tool" : "vfi-player",
+  "truncated" : 0,
+  "truncated_why" : "",
+  "version" : 2,
+  "wall_s" : 120.00769904166459
+}
