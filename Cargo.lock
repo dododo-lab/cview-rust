@@ -936,6 +936,7 @@ dependencies = [
  "chrono",
  "cview-core",
  "cview-networking",
+ "flate2",
  "futures-util",
  "http",
  "http-body-util",

@@ -120,6 +120,25 @@ async fn unchanged_domains_skip_mirror_rewrite() {
     assert_eq!(persisted.volume_level, 0.52);
 }
 
+/// 종료 플러시 — 이번 실행에 바꾼 설정이 없으면 DB·복구 파일을 쓰지 않고, 바꿨으면 바로 확정한다.
+#[tokio::test]
+async fn flush_without_changes_writes_nothing() {
+    let f = fixture();
+    f.store.load().await;
+    let history = f.data.history_transaction_count();
+    f.store.flush_pending_save().await;
+    assert!(
+        !f.url.exists(),
+        "바꾼 것이 없는데 종료하며 복구 파일을 썼다"
+    );
+    assert_eq!(f.data.history_transaction_count(), history);
+    f.store.update_player(|p| p.volume_level = 0.44);
+    f.store.flush_pending_save().await;
+    assert_eq!(mirror_player(&f.url).unwrap().volume_level, 0.44);
+    let persisted: PlayerSettings = f.data.load_setting("player").unwrap().unwrap();
+    assert_eq!(persisted.volume_level, 0.44);
+}
+
 #[tokio::test]
 async fn unchanged_save_keeps_setting_rows() {
     let f = fixture();

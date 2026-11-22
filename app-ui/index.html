@@ -225,7 +225,8 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
               </button>
             </div>
-            <iframe id="player-frame" src="player/player.html" title="플레이어" allow="autoplay; fullscreen"></iframe>
+            <!-- src 는 처음 열 때 넣는다(viewer.js ensurePlayerPage) — 부팅·보조 창마다 플레이어 문서(~800KB)를 띄우지 않게 -->
+            <iframe id="player-frame" data-src="player/player.html" title="플레이어" allow="autoplay; fullscreen"></iframe>
             <div class="player-overlay" role="status" aria-live="polite" hidden><div class="spinner"></div><span></span></div>
           </div>
           <div class="player-controls">

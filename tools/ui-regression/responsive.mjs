@@ -16,6 +16,8 @@ async function check(id, fn) {
   try { await fn(); results.push({ id, ok: true }); } catch (e) { results.push({ id, ok: false, error: e.message }); }
 }
 const box = (page, sel) => page.$eval(sel, (n) => { const r = n.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height }; });
+// 화면을 바꾼 직후에는 ResizeObserver 알림(채팅 자동 접기·탭 가장자리)이 다음 프레임에 온다 — 그 전에 읽지 않게.
+const frames = (page) => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r()))));
 const visible = (page, sel) => page.$eval(sel, (n) => Boolean(n.offsetParent) && getComputedStyle(n).display !== 'none').catch(() => false);
 
 // ── 순수 함수 ──
@@ -89,6 +91,7 @@ const ROUTES = [['home', {}], ['following', {}], ['popular', {}], ['categories',
   await check('R10 narrow multilive: chat folds by itself and opens over the stage', async () => {
     await go(page, 'multilive');
     await page.waitForSelector('[data-page="multilive"] .ml-body');
+    await frames(page);
     const chat = '[data-page="multilive"] .ml-chat';
     const reopen = '[data-page="multilive"] .chat-reopen';
     assert.equal(await visible(page, chat), false, '좁으면 채팅이 접힌다');
@@ -122,6 +125,7 @@ const ROUTES = [['home', {}], ['following', {}], ['popular', {}], ['categories',
     await go(page, 'library');
     const sel = '[data-page="library"] .lib-tabs';
     await page.waitForSelector(sel);
+    await frames(page);
     assert.equal(await page.$eval(sel, (n) => n.dataset.edge), 'end');
     await page.focus(`${sel} [aria-selected="true"]`);
     await page.keyboard.press('End');

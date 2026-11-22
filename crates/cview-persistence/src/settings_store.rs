@@ -678,14 +678,19 @@ impl SettingsStore {
     }
 
     /// 디바운스 대기 중인 저장을 즉시 확정한다 — 종료 직전 플러시용.
+    ///
+    /// 이번 실행에 예약된 저장이 없으면(설정을 바꾸지 않았으면) 아무것도 쓰지 않는다. 예전엔 종료마다 모든 도메인을
+    /// 다시 인코딩해 DB 에 쓰고 복구 파일까지 `F_FULLFSYNC` 로 다시 썼다. 예약이 이미 돌아 저장 중일 수 있으니
+    /// 예약이 한 번이라도 있었으면 저장한다(저장은 순서가 지켜지고 같은 내용이면 복구 파일을 다시 쓰지 않는다).
     pub async fn flush_pending_save(&self) {
         let (ok, pending) = {
             let mut state = self.state();
             (state.is_loaded && state.can_persist, state.debounce.take())
         };
-        if let Some(task) = pending {
-            task.abort();
-        }
+        let Some(task) = pending else {
+            return;
+        };
+        task.abort();
         if ok {
             self.save().await;
         }

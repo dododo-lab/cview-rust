@@ -8,6 +8,11 @@ const FADE_SCOPE = '.thumb, .queue-thumb, .hero-media, .ml-addrow-thumb, .bookma
 
 // 썸네일 자리 밖의 그림(채팅 이모티콘·배지·아바타)은 건드리지 않는다 — 채팅 줄마다 class 를 바꿔
 // 스타일을 다시 계산하고 다른 관찰자(세그먼트 판)까지 깨웠다.
+// 채팅 목록(.chat-list — 채팅·멀티채팅·멀티라이브 채팅 칸·통합 목록) 바로 아래에 붙고 지는 줄 — 썸네일도 세그먼트도 없다.
+// 붐비는 채팅에서 묶음마다 수십 줄이 붙고 상한을 넘으면 수십 줄이 한꺼번에 지는데, 두 관찰자가 그 줄마다 조상을 훑고
+// (closest) 자손을 검색(querySelectorAll)했다. 줄 안에서 바뀌는 그림(아바타 src)은 아래 mark 의 closest 가 걸러 낸다.
+const isChatList = (node) => node.nodeType === 1 && node.classList.contains('chat-list');
+
 function mark(img) {
   if (img.complete && img.closest(FADE_SCOPE)) img.classList.add('is-loaded');
 }
@@ -32,7 +37,7 @@ export function installImageFade(root = document) {
         // src 를 바꿔 끼운 그림 — 새 그림을 받는 동안만 다시 숨긴다(캐시에 있으면 그대로).
         const img = r.target;
         if (img.closest(FADE_SCOPE)) img.classList.toggle('is-loaded', img.complete);
-      } else {
+      } else if (!isChatList(r.target)) {
         for (const n of r.addedNodes) scan(n);
       }
     }
@@ -179,7 +184,7 @@ export function installSegmentGlider() {
   new MutationObserver((records) => {
     handoff.clear();
     for (const r of records) {
-      if (r.type === 'childList' && r.removedNodes.length) {
+      if (r.type === 'childList' && r.removedNodes.length && !isChatList(r.target)) {
         const page = r.target.closest?.('[data-page]')?.dataset.page || '';
         for (const n of r.removedNodes) remember(n, page);
       }
@@ -192,7 +197,7 @@ export function installSegmentGlider() {
           // (시작할 때 홈 보기 탭의 syncTabs 가 고른 칸 class 를 바꿔 perf P01 에 걸렸다).
           if (!tracked.has(box)) track(box); else if (seen.has(box)) place(box);
         }
-      } else {
+      } else if (!isChatList(r.target)) {
         const box = r.target.classList?.contains('segmented') ? r.target : null;
         // 판을 넣은 것(place 의 prepend)은 건너뛴다 — 다시 놓으면 instant 로 넘겨받은 미끄러짐이 끊긴다
         if (box && [...r.addedNodes, ...r.removedNodes].some((n) => !n.classList?.contains('seg-glider'))) track(box);

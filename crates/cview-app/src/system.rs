@@ -154,13 +154,26 @@ pub fn spawn_live_notifications(app: AppHandle) {
             services
                 .following
                 .set_scheduled_cadence(polling.then_some(interval));
+            // 첫 바퀴(기준 잡기)는 알림을 내지 않는다 — 시작할 때 미리 받은 팔로잉(prefetch, 20초 전)이 주기 안이면
+            // 그것으로 기준만 잡는다. 예전엔 시작 20초 뒤 전체 목록·상세를 한 번 더 받았다.
+            let reused = if polling && baseline.is_none() {
+                services.following.fresh_result(interval)
+            } else {
+                None
+            };
+            let polled = match reused {
+                Some(r) => Some(r),
+                None if polling => {
+                    services
+                        .following
+                        .poll(FollowingPollReason::Scheduled)
+                        .await
+                }
+                None => None,
+            };
             if !polling {
                 baseline = None;
-            } else if let Some(result) = services
-                .following
-                .poll(FollowingPollReason::Scheduled)
-                .await
-            {
+            } else if let Some(result) = polled {
                 let items: Vec<_> = result.channels.iter().map(to_live_channel_item).collect();
                 let prev = baseline.clone().unwrap_or_default();
                 let diff = BackgroundUpdateDiff::new(&items, &prev);

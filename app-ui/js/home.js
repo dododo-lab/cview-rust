@@ -17,7 +17,8 @@ import { syncTabs, bindTabKeys } from './a11y.js';
 const HERO_SIZE = 5;
 // 자동 넘김 — 대기열 진행 막대(CSS `queue-progress`, 7초)가 끝나면 다음 장으로. 호버 중엔 CSS 가 멈춘다.
 // 모션 줄이기(시스템·설정 "절약")면 넘기지 않는다 — 절약은 애니메이션 시간을 0 으로 만들어 끝 이벤트가 곧바로 온다.
-const POPULAR_SIZE = 48;
+// 50 — 사이드바·인사이트·추가 서랍·검색 첫 화면과 같은 크기라야 api.js 가 같은 요청으로 합친다(48 이면 따로 갔다).
+const POPULAR_SIZE = 50;
 const POPULAR_GRID = 36;
 const GRID_STEP = 12; // 발견 격자는 12개씩 펼친다 — 첫 화면이 끝없이 길어지지 않게
 const CHIP_LIMIT = 8;

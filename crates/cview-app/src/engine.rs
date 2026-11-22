@@ -307,6 +307,11 @@ impl WebViewHlsEngine {
     pub fn snapshot(&self) -> EngineSnapshot {
         self.snap().clone()
     }
+
+    /// 스냅샷 일부만 읽는다 — 값 하나를 위해 전송 표본(최대 128건)까지 통째로 복제하지 않게.
+    pub fn read_snapshot<T>(&self, f: impl FnOnce(&EngineSnapshot) -> T) -> T {
+        f(&self.snap())
+    }
 }
 
 #[async_trait]

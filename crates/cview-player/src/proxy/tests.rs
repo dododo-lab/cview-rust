@@ -512,6 +512,70 @@ async fn rejects_unusable_playlists_without_serving_partial_success() {
     proxy.stop();
 }
 
+fn gzip(data: &[u8]) -> Vec<u8> {
+    use std::io::Write;
+    let mut e = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    e.write_all(data).unwrap();
+    e.finish().unwrap()
+}
+
+/// 재생목록 경로(.m3u8)만 gzip 을 청하고 푼 뒤 고쳐 쓴다 — 미디어는 identity, 깨졌거나 풀면 상한을 넘는 것은 502.
+#[tokio::test]
+async fn playlists_accept_gzip_and_media_stays_identity() {
+    let handler: Handler = Arc::new(|s: &Seen| {
+        let wants_gzip = s
+            .accept_encoding
+            .as_deref()
+            .is_some_and(|e| e.contains("gzip"));
+        let gz = |body: Vec<u8>| {
+            let mut r = MockResponse::ok("application/vnd.apple.mpegurl", gzip(&body));
+            r.headers.push(("Content-Encoding".into(), "gzip".into()));
+            r
+        };
+        match s.path.as_str() {
+            "/live.m3u8" if wants_gzip => gz(PLAYLIST.as_bytes().to_vec()),
+            "/live.m3u8" => MockResponse::ok("application/vnd.apple.mpegurl", PLAYLIST.as_bytes()),
+            "/bomb.m3u8" => gz(vec![b'#'; mrp_max() + 1]),
+            "/broken.m3u8" => {
+                let mut r = MockResponse::ok("application/vnd.apple.mpegurl", b"not gzip".to_vec());
+                r.headers.push(("Content-Encoding".into(), "gzip".into()));
+                r
+            }
+            "/brotli.m3u8" => {
+                let mut r = MockResponse::ok("application/vnd.apple.mpegurl", PLAYLIST.as_bytes());
+                r.headers.push(("Content-Encoding".into(), "br".into()));
+                r
+            }
+            _ => MockResponse::ok("video/mp4", MEDIA.to_vec()),
+        }
+    });
+    let mock = spawn_mock(handler).await;
+    let proxy = proxy_for(&mock);
+    let port = proxy.start(HOST).await.unwrap();
+    let resp = get(port, "/live.m3u8").await;
+    assert_eq!(resp.status(), 200);
+    assert!(header(&resp, "content-encoding").is_none());
+    let text = resp.text().await.unwrap();
+    assert!(
+        text.contains(&format!("http://127.0.0.1:{port}/seg.m4s")),
+        "{text}"
+    );
+    let media = get(port, "/seg.m4s").await;
+    assert_eq!(media.bytes().await.unwrap().as_ref(), MEDIA);
+    for path in ["/bomb.m3u8", "/broken.m3u8", "/brotli.m3u8"] {
+        assert_eq!(get(port, path).await.status(), 502, "{path}");
+    }
+    let seen = mock.seen();
+    let enc = |path: &str| {
+        seen.iter()
+            .find(|s| s.path == path)
+            .and_then(|s| s.accept_encoding.clone())
+    };
+    assert_eq!(enc("/live.m3u8").as_deref(), Some("gzip"));
+    assert_eq!(enc("/seg.m4s").as_deref(), Some("identity"));
+    proxy.stop();
+}
+
 #[tokio::test]
 async fn repeated_playlist_requests_always_reach_upstream() {
     let mock = spawn_mock(correction_handler()).await;

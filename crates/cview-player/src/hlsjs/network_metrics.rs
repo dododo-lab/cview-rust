@@ -88,10 +88,11 @@ fn number(row: &Map<String, Value>, key: &str, fallback: f64) -> f64 {
     }
 }
 
-fn rows(data: &Map<String, Value>, key: &str) -> Vec<Map<String, Value>> {
+/// 배열의 객체 행 — 빌려서 읽는다(2초 metrics 마다 전송 표본 최대 128행을 통째로 복제하지 않게).
+fn rows<'a>(data: &'a Map<String, Value>, key: &str) -> Vec<&'a Map<String, Value>> {
     data.get(key)
         .and_then(Value::as_array)
-        .map(|a| a.iter().filter_map(|v| v.as_object().cloned()).collect())
+        .map(|a| a.iter().filter_map(Value::as_object).collect())
         .unwrap_or_default()
 }
 
@@ -129,17 +130,17 @@ impl HlsJsNetworkMetrics {
                     if kind.chars().count() > 32 {
                         return None;
                     }
-                    let count = |k: &str| number(&row, k, 0.0).clamp(0.0, i32::MAX as f64) as i64;
+                    let count = |k: &str| number(row, k, 0.0).clamp(0.0, i32::MAX as f64) as i64;
                     Some(HlsJsRequestMetrics {
                         kind: kind.to_string(),
                         success: count("success"),
                         error: count("error"),
                         timeout: count("timeout"),
                         abort: count("abort"),
-                        ttfb_p90: number(&row, "ttfbP90", 0.0).max(0.0),
-                        total_p90: number(&row, "totalP90", 0.0).max(0.0),
-                        first_byte_budget_ms: number(&row, "firstByteBudgetMs", 0.0).max(0.0),
-                        total_budget_ms: number(&row, "totalBudgetMs", 0.0).max(0.0),
+                        ttfb_p90: number(row, "ttfbP90", 0.0).max(0.0),
+                        total_p90: number(row, "totalP90", 0.0).max(0.0),
+                        first_byte_budget_ms: number(row, "firstByteBudgetMs", 0.0).max(0.0),
+                        total_budget_ms: number(row, "totalBudgetMs", 0.0).max(0.0),
                     })
                 })
                 .collect()
@@ -152,9 +153,9 @@ impl HlsJsNetworkMetrics {
                 .take(128)
                 .filter_map(|row| {
                     let id = row.get("id")?.as_str()?.to_string();
-                    let start_age = number(&row, "requestAge", -1.0);
-                    let first_age = number(&row, "firstByteAge", -1.0);
-                    let end_age = number(&row, "endAge", -1.0);
+                    let start_age = number(row, "requestAge", -1.0);
+                    let first_age = number(row, "firstByteAge", -1.0);
+                    let end_age = number(row, "endAge", -1.0);
                     if !(start_age >= first_age
                         && first_age >= end_age
                         && end_age >= 0.0
@@ -165,11 +166,11 @@ impl HlsJsNetworkMetrics {
                     }
                     let sample = StreamTransferSample {
                         id,
-                        bytes: number(&row, "bytes", 0.0),
+                        bytes: number(row, "bytes", 0.0),
                         request_start: sampled_at - start_age,
                         first_byte: sampled_at - first_age,
                         end: sampled_at - end_age,
-                        media_duration: number(&row, "mediaDuration", 0.0).max(0.0),
+                        media_duration: number(row, "mediaDuration", 0.0).max(0.0),
                         is_part: row.get("isPart").and_then(Value::as_bool).unwrap_or(false),
                     };
                     sample.is_usable(sampled_at, 30.0).then_some(sample)

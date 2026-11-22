@@ -202,6 +202,16 @@ export class Viewer {
     } catch { /* 팔로워 없이도 헤더는 충분하다 */ }
   }
 
+  /**
+   * 플레이어 문서는 처음 열 때 띄운다 — 시청 화면은 라이브 칸이 가득 찼을 때·보조 플레이어 창에서만 쓰는데, 예전엔
+   * 부팅(채팅·통계 보조 창 포함)마다 player.html·hls.js(~800KB)를 숨은 iframe 에서 파싱·실행했다.
+   * 문서를 바꿔도 contentWindow 는 같은 객체라 브리지 연결은 그대로고, 그 전에 온 명령은 ready 까지 줄 선다.
+   */
+  ensurePlayerPage() {
+    const frame = this.player.iframe;
+    if (frame.dataset.src && !frame.getAttribute('src')) frame.src = frame.dataset.src;
+  }
+
   async open(channelId, settings) {
     const token = ++this.startToken;
     if (channelId !== this.channelId) this.cancelAd();
@@ -209,6 +219,7 @@ export class Viewer {
     // 성능 수집기가 player.net(채널 앞 6자)과 맞춘다
     const frame = document.getElementById('player-frame');
     if (frame) frame.dataset.perfChannel = channelId; // data-channel-id 는 카드 열기 속성이라 쓰지 않는다
+    this.ensurePlayerPage();
     if (settings) this.lastSettings = settings;
     this.root.hidden = false;
     this.renderHeader(null);

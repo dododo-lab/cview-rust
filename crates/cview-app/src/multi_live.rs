@@ -142,20 +142,21 @@ impl MultiLiveHlsEngine for PaneEngine {
     fn is_playback_desired(&self) -> bool {
         self.playback_desired.load(Ordering::SeqCst)
     }
+    // 대역폭 틱마다 패인당 다섯 번 불린다 — 스냅샷 전체(전송 표본 최대 128건)를 매번 복제하지 않고 필요한 값만.
     fn buffer_ahead_seconds(&self) -> f64 {
-        self.engine.snapshot().buffer_ahead_seconds
+        self.engine.read_snapshot(|s| s.buffer_ahead_seconds)
     }
     fn current_bitrate(&self) -> f64 {
-        self.engine.snapshot().bitrate
+        self.engine.read_snapshot(|s| s.bitrate)
     }
     fn rate(&self) -> f64 {
-        f64::from(self.engine.snapshot().rate)
+        self.engine.read_snapshot(|s| f64::from(s.rate))
     }
     fn transfers(&self) -> Vec<StreamTransferSample> {
-        self.engine.snapshot().transfers
+        self.engine.read_snapshot(|s| s.transfers.clone())
     }
     fn measured_segment_duration(&self) -> f64 {
-        self.engine.snapshot().segment_duration
+        self.engine.read_snapshot(|s| s.segment_duration)
     }
     fn force_highest_quality(&self) -> bool {
         use cview_app_core::viewmodels::player::engine::LivePlayerEngine;

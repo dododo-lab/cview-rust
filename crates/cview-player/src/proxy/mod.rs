@@ -12,7 +12,8 @@
 //! 이탈 시 응답 본문 drop)와 reqwest 상류를 쓴다. 그래서 `+RequestFraming`·`+ClientWatch` 는 hyper 가
 //! 대신한다. 차이점:
 //! - 길이를 모르는 응답은 연결 종료 구분 대신 chunked 로 보낸다(잘림이 오류로 드러나는 점은 같다).
-//! - reqwest 빌드에 압축 해제 기능이 없어 재생목록도 `Accept-Encoding: identity` 로 요청한다.
+//! - reqwest 빌드에 압축 해제 기능이 없어 재생목록은 `Accept-Encoding: gzip` 으로 받아 직접 푼다(`gunzip_capped`).
+//!   미디어는 `identity` 그대로다(본문·길이·범위를 손대지 않고 넘긴다).
 
 pub mod byte_range;
 pub mod routing;

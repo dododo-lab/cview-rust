@@ -79,7 +79,7 @@ function recordRequestResult(epoch, id, kind, context, policy, stats, outcome, r
     row.firstByteBudgetMs = Number.isFinite(policy.maxTimeToFirstByteMs) ? policy.maxTimeToFirstByteMs : 0;
     row.totalBudgetMs = Number.isFinite(policy.maxLoadTimeMs) ? policy.maxLoadTimeMs : 0;
     const loading = stats && stats.loading;
-    try { postPlaybackDiagnostic('diagnostic', Object.assign({}, requestFields || playlistRequestFields(context), {
+    if (DIAGNOSTICS_FORWARDED) try { postPlaybackDiagnostic('diagnostic', Object.assign({}, requestFields || playlistRequestFields(context), {
         event: 'hls_request_finished', severity: outcome === 'error' || outcome === 'timeout' ? 'warning' : 'debug',
         sourceEpoch: epoch, requestID: id, requestKind: kind, outcome: outcome,
         httpStatus: diagnosticNumber(response && response.code) ?? diagnosticNumber(networkDetails && networkDetails.status),
@@ -905,6 +905,9 @@ function postToSwift(type, data) {
 
 // Observational diagnostics only: never serialize Hls.ErrorData, request headers, media bytes,
 // or arbitrary rejected objects. Native logging masks credentials again before either output.
+// 'diagnostic'·'diagnosticBatch' 는 앱 브리지(app-ui/js/player.js FORWARDED)가 넘기지 않고 버린다 — HLS 요청마다
+// 18필드 객체를 만들어 묶었다가 버리지 않게 만들지 않는다. 진단을 다시 넘기게 되면 true 로.
+const DIAGNOSTICS_FORWARDED = false;
 function diagnosticNumber(value) {
     return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
@@ -951,6 +954,7 @@ function playbackDiagnosticFields() {
     };
 }
 function runtimeDiagnostic(event, severity, fields) {
+    if (!DIAGNOSTICS_FORWARDED) return;
     try {
         postPlaybackDiagnostic('diagnostic', Object.assign(playbackDiagnosticFields(), fields || {}, { event, severity }));
     } catch (_) { /* Diagnostic failures must not interfere with playback or recurse. */ }
