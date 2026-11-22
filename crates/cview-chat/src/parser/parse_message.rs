@@ -7,8 +7,8 @@ use serde_json::{Map, Value};
 
 use super::{body_str, ChatMessageParser};
 use crate::json::{
-    any_int, fnv1a, map_to_foundation_json, ns_bool, ns_int, ns_object, ns_object_array, ns_str,
-    to_foundation_json,
+    any_int, ns_bool, ns_int, ns_object, ns_object_array, ns_str, write_foundation_json,
+    write_foundation_object, Fnv1a, JsonSink,
 };
 use crate::protocol::ChatProtocolMessage;
 use cview_core::models::chat::{
@@ -388,10 +388,21 @@ pub(crate) fn stable_message_id(
         }
     }
 
-    let type_part = msg_type_code.map_or_else(|| "0".into(), |c| c.to_string());
-    let fingerprint = extras_fingerprint(dict.get("extras"), normalized_extras);
-    let payload = format!("{uid}|{msg_time}|{type_part}|{msg}|{fingerprint}");
-    let hex = format!("{:x}", fnv1a(&payload));
+    // `"{uid}|{msg_time}|{type}|{msg}|{extras 지문}"` 의 FNV-1a — 문자열을 만들지 않고 바로 해시한다(값은 같다).
+    let mut h = Fnv1a::default();
+    h.push_str(uid);
+    h.push('|');
+    h.push_str(&msg_time.to_string());
+    h.push('|');
+    match msg_type_code {
+        Some(c) => h.push_str(&c.to_string()),
+        None => h.push('0'),
+    }
+    h.push('|');
+    h.push_str(msg);
+    h.push('|');
+    write_extras_fingerprint(&mut h, dict.get("extras"), normalized_extras);
+    let hex = format!("{:x}", h.finish());
     if uid.is_empty() {
         format!("anon_{msg_time}_{hex}")
     } else {
@@ -399,20 +410,24 @@ pub(crate) fn stable_message_id(
     }
 }
 
-/// 중첩 사전 순서 / JSON 공백 / 문자열 대 객체 표현 차이를 지운 extras 정체성.
-fn extras_fingerprint(value: Option<&Value>, normalized: Option<&Dict>) -> String {
+/// 중첩 사전 순서 / JSON 공백 / 문자열 대 객체 표현 차이를 지운 extras 정체성을 `out` 에 쓴다.
+fn write_extras_fingerprint(
+    out: &mut impl JsonSink,
+    value: Option<&Value>,
+    normalized: Option<&Dict>,
+) {
     let Some(value) = value else {
-        return String::new();
+        return;
     };
     if let Some(obj) = normalized {
-        return map_to_foundation_json(obj);
+        return write_foundation_object(out, obj);
     }
     match value {
         Value::String(text) => match serde_json::from_str::<Value>(text) {
-            Ok(v @ Value::Object(_)) => to_foundation_json(&v),
-            _ => text.clone(),
+            Ok(v @ Value::Object(_)) => write_foundation_json(out, &v),
+            _ => out.push_str(text),
         },
-        Value::Object(_) => to_foundation_json(value),
-        _ => String::new(),
+        Value::Object(_) => write_foundation_json(out, value),
+        _ => {}
     }
 }

@@ -17,6 +17,62 @@ use std::cmp::Ordering;
 
 use serde_json::{Map, Value};
 
+/// JSON 글자를 받는 곳 — 문자열에 모으거나([`String`]) 모으지 않고 바로 해시한다([`Fnv1a`]).
+pub trait JsonSink {
+    fn push(&mut self, c: char);
+    fn push_str(&mut self, s: &str);
+}
+
+impl JsonSink for String {
+    fn push(&mut self, c: char) {
+        String::push(self, c);
+    }
+    fn push_str(&mut self, s: &str) {
+        String::push_str(self, s);
+    }
+}
+
+/// 스트리밍 FNV-1a 64 — 같은 바이트를 넣으면 [`fnv1a`] 와 같은 값.
+#[derive(Debug, Clone, Copy)]
+pub struct Fnv1a(u64);
+
+impl Default for Fnv1a {
+    fn default() -> Self {
+        Self(0xcbf2_9ce4_8422_2325)
+    }
+}
+
+impl Fnv1a {
+    pub fn finish(self) -> u64 {
+        self.0
+    }
+    fn bytes(&mut self, bytes: &[u8]) {
+        for b in bytes {
+            self.0 ^= u64::from(*b);
+            self.0 = self.0.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    }
+}
+
+impl JsonSink for Fnv1a {
+    fn push(&mut self, c: char) {
+        self.bytes(c.encode_utf8(&mut [0; 4]).as_bytes());
+    }
+    fn push_str(&mut self, s: &str) {
+        self.bytes(s.as_bytes());
+    }
+}
+
+/// [`to_foundation_json`] 과 같은 글자를 `out` 에 쓴다.
+pub fn write_foundation_json(out: &mut impl JsonSink, value: &Value) {
+    write_value(out, value);
+}
+
+/// [`map_to_foundation_json`] 과 같은 글자를 `out` 에 쓴다.
+pub fn write_foundation_object(out: &mut impl JsonSink, map: &Map<String, Value>) {
+    write_object(out, map);
+}
+
 /// `JSONSerialization.data(withJSONObject:options:[.sortedKeys])` 와 같은 문자열.
 pub fn to_foundation_json(value: &Value) -> String {
     let mut out = String::new();
@@ -31,7 +87,7 @@ pub fn map_to_foundation_json(map: &Map<String, Value>) -> String {
     out
 }
 
-fn write_value(out: &mut String, value: &Value) {
+fn write_value(out: &mut impl JsonSink, value: &Value) {
     match value {
         Value::Null => out.push_str("null"),
         Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
@@ -51,7 +107,7 @@ fn write_value(out: &mut String, value: &Value) {
     }
 }
 
-fn write_object(out: &mut String, map: &Map<String, Value>) {
+fn write_object(out: &mut impl JsonSink, map: &Map<String, Value>) {
     let mut keys: Vec<&String> = map.keys().collect();
     keys.sort_by(|a, b| foundation_key_cmp(a, b));
     out.push('{');
@@ -66,7 +122,7 @@ fn write_object(out: &mut String, map: &Map<String, Value>) {
     out.push('}');
 }
 
-fn write_number(out: &mut String, n: &serde_json::Number) {
+fn write_number(out: &mut impl JsonSink, n: &serde_json::Number) {
     if let Some(i) = n.as_i64() {
         out.push_str(&i.to_string());
     } else if let Some(u) = n.as_u64() {
@@ -80,7 +136,7 @@ fn write_number(out: &mut String, n: &serde_json::Number) {
     }
 }
 
-fn write_string(out: &mut String, s: &str) {
+fn write_string(out: &mut impl JsonSink, s: &str) {
     out.push('"');
     for c in s.chars() {
         match c {
@@ -109,46 +165,49 @@ pub fn foundation_key_cmp(a: &str, b: &str) -> Ordering {
     a.cmp(b)
 }
 
+/// 대소문자 무시 + 숫자 런은 값으로 비교. 할당하지 않는다(키 비교마다 글자 배열·글자당 문자열을 만들던 것을 없앰).
+/// 숫자는 ASCII 숫자만 런으로 보므로 바이트 위치로 잘라도 글자 경계가 맞다.
 fn numeric_case_insensitive_cmp(a: &str, b: &str) -> Ordering {
-    let a: Vec<char> = a.chars().collect();
-    let b: Vec<char> = b.chars().collect();
+    fn trim_zeros(d: &[u8]) -> &[u8] {
+        let n = d.iter().take_while(|&&c| c == b'0').count();
+        &d[n..]
+    }
+    let (ab, bb) = (a.as_bytes(), b.as_bytes());
     let (mut i, mut j) = (0, 0);
-    while i < a.len() && j < b.len() {
-        if a[i].is_ascii_digit() && b[j].is_ascii_digit() {
+    while i < ab.len() && j < bb.len() {
+        if ab[i].is_ascii_digit() && bb[j].is_ascii_digit() {
             let si = i;
-            while i < a.len() && a[i].is_ascii_digit() {
+            while i < ab.len() && ab[i].is_ascii_digit() {
                 i += 1;
             }
             let sj = j;
-            while j < b.len() && b[j].is_ascii_digit() {
+            while j < bb.len() && bb[j].is_ascii_digit() {
                 j += 1;
             }
-            let na: String = a[si..i]
-                .iter()
-                .collect::<String>()
-                .trim_start_matches('0')
-                .to_string();
-            let nb: String = b[sj..j]
-                .iter()
-                .collect::<String>()
-                .trim_start_matches('0')
-                .to_string();
-            let ord = na.len().cmp(&nb.len()).then_with(|| na.cmp(&nb));
+            let (na, nb) = (trim_zeros(&ab[si..i]), trim_zeros(&bb[sj..j]));
+            let ord = na.len().cmp(&nb.len()).then_with(|| na.cmp(nb));
             if ord != Ordering::Equal {
                 return ord;
             }
             continue;
         }
-        let ca: String = a[i].to_lowercase().collect();
-        let cb: String = b[j].to_lowercase().collect();
-        let ord = ca.cmp(&cb);
+        let (Some(ca), Some(cb)) = (a[i..].chars().next(), b[j..].chars().next()) else {
+            break;
+        };
+        // 소문자로 바꾼 글자열끼리 비교 — 글자(코드 포인트) 순서는 UTF-8 바이트 순서와 같다.
+        let ord = if ca.is_ascii() && cb.is_ascii() {
+            ca.to_ascii_lowercase().cmp(&cb.to_ascii_lowercase())
+        } else {
+            ca.to_lowercase().cmp(cb.to_lowercase())
+        };
         if ord != Ordering::Equal {
             return ord;
         }
-        i += 1;
-        j += 1;
+        i += ca.len_utf8();
+        j += cb.len_utf8();
     }
-    (a.len() - i).cmp(&(b.len() - j))
+    // 루프가 끝나면 적어도 한쪽은 다 읽었다 — 남은 쪽이 뒤.
+    (ab.len() - i).cmp(&(bb.len() - j))
 }
 
 // MARK: - NSNumber 브리징 규칙의 값 꺼내기
@@ -265,6 +324,111 @@ mod tests {
         assert_eq!(any_int(Some(&json!(7))), Some(7));
         assert!(ns_object_array(Some(&json!([{}, 1]))).is_none());
         assert_eq!(ns_object_array(Some(&json!([{}, {}]))).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn streaming_fnv_matches_string_fnv() {
+        let v = json!({"b": [1, 2.0, "x/y"], "A10": {"z": null, "a2": true}, "a9": "한글\n"});
+        let text = to_foundation_json(&v);
+        let mut h = Fnv1a::default();
+        write_foundation_json(&mut h, &v);
+        assert_eq!(h.finish(), fnv1a(&text));
+    }
+
+    /// 바꾸기 전 구현(글자 배열·글자당 String) — 새 구현과 순서가 같은지 대조한다.
+    fn reference_cmp(a: &str, b: &str) -> Ordering {
+        let a: Vec<char> = a.chars().collect();
+        let b: Vec<char> = b.chars().collect();
+        let (mut i, mut j) = (0, 0);
+        while i < a.len() && j < b.len() {
+            if a[i].is_ascii_digit() && b[j].is_ascii_digit() {
+                let si = i;
+                while i < a.len() && a[i].is_ascii_digit() {
+                    i += 1;
+                }
+                let sj = j;
+                while j < b.len() && b[j].is_ascii_digit() {
+                    j += 1;
+                }
+                let na: String = a[si..i]
+                    .iter()
+                    .collect::<String>()
+                    .trim_start_matches('0')
+                    .to_string();
+                let nb: String = b[sj..j]
+                    .iter()
+                    .collect::<String>()
+                    .trim_start_matches('0')
+                    .to_string();
+                let ord = na.len().cmp(&nb.len()).then_with(|| na.cmp(&nb));
+                if ord != Ordering::Equal {
+                    return ord;
+                }
+                continue;
+            }
+            let ca: String = a[i].to_lowercase().collect();
+            let cb: String = b[j].to_lowercase().collect();
+            let ord = ca.cmp(&cb);
+            if ord != Ordering::Equal {
+                return ord;
+            }
+            i += 1;
+            j += 1;
+        }
+        (a.len() - i).cmp(&(b.len() - j))
+    }
+
+    #[test]
+    fn zero_alloc_cmp_matches_reference() {
+        let words = [
+            "",
+            "a",
+            "A",
+            "b",
+            "a1",
+            "a01",
+            "a001b",
+            "a10",
+            "a2",
+            "a2b",
+            "A2B",
+            "z",
+            "Z9",
+            "Ǆ",
+            "ǆ",
+            "İx",
+            "ix",
+            "é",
+            "E",
+            "ß",
+            "ss",
+            "가",
+            "가1",
+            "가01",
+            "1",
+            "01",
+            "007",
+            "7",
+            "10a",
+            "chatType",
+            "chattype",
+            "osType",
+            "emojis",
+            "extraToken",
+            "x1y2",
+            "x1y10",
+            "Ω",
+            "ω",
+        ];
+        for a in words {
+            for b in words {
+                assert_eq!(
+                    numeric_case_insensitive_cmp(a, b),
+                    reference_cmp(a, b),
+                    "{a:?} vs {b:?}"
+                );
+            }
+        }
     }
 
     #[test]
