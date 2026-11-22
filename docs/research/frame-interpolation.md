@@ -3,6 +3,7 @@
 - 작성: 2026-11-13, 기준 커밋 `b6dbc52`(v0.1.89)
 - 측정 기기: MacBook Pro M1 Max(CPU 10코어, GPU 32코어, Neural Engine 16코어), 메모리 64GB, macOS 27.3(26C5035r), Xcode 27.2
 - 도구: [`tools/frame-interp-lab`](../../tools/frame-interp-lab/README.md). 앱 코드와 앱 빌드는 바꾸지 않았다.
+- 후속: [개발 계획·1단계 실측](vfi-dev-plan.md)(2026-11-22) — 보호 장치·마감 서킷브레이커·RIFE GPU 시간·Metal 4 확인.
 
 ## 1. 결론
 
