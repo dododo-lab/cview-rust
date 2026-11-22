@@ -552,6 +552,8 @@ export class SearchPage {
 
   show(params = {}) {
     this.input.focus();
+    // 숨은 채로 그리려던 첫 화면(인기 카테고리·채널) — 처음 보일 때 채운다.
+    if (this.discoveryPending) { this.discoveryPending = false; this.renderDiscovery(); }
     if (params && params.query) { this.input.value = params.query; return this.run(params.query); }
     // ⌘R — 경로에 검색어가 없어도 마지막 검색을 다시 한다.
     if (params && params.refresh && this.lastQuery) return this.retry();
@@ -578,6 +580,9 @@ export class SearchPage {
   async renderDiscovery() {
     const box = this.body.querySelector('.discovery');
     if (!box) return;
+    // 숨은 검색 화면(부팅 때 만들어 둔다)은 인기 라이브를 받지 않는다 — 홈과 크기가 달라 부팅마다 따로 한 번 더 불렀고
+    // 아무도 보지 않는 썸네일까지 그렸다. 처음 보일 때(show) 그린다.
+    if (this.root.hidden) { this.discoveryPending = true; return; }
     const d = await this.loadDiscovery();
     if (!this.body.contains(box)) return;
     box.innerHTML = `

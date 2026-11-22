@@ -10,6 +10,8 @@ import { verifiedBadge } from './verified-badge.js';
 
 const COLLAPSE_KEY = 'cview.insights.collapsed';
 const REFRESH_MS = 60000;
+// 좁은 창(1240px 이하)에서는 CSS(app.css)가 패널을 숨긴다 — 그때는 불러오지 않고, 넓어지면 그때 채운다.
+const WIDE = window.matchMedia('(min-width: 1241px)');
 const CACHE_MS = 45000;
 export const INSIGHT_ROUTES = new Set(['home', 'following', 'popular', 'categories', 'search', 'multichat', 'library', 'stats', 'settings']);
 
@@ -282,6 +284,9 @@ export class InsightPanel {
     this.collapsed = collapsed;
     this.apply();
     setInterval(() => { if (this.visible && !this.collapsed && !document.hidden) this.load(); }, REFRESH_MS);
+    WIDE.addEventListener?.('change', () => {
+      if (WIDE.matches && this.stale && this.visible && !this.collapsed) this.load();
+    });
   }
 
   get visible() {
@@ -323,6 +328,9 @@ export class InsightPanel {
   async load() {
     const provider = PROVIDERS[this.route];
     if (!provider) return;
+    // 숨은 패널 — 부팅 API 세 가지와 60초 새로고침을 쓰지 않는다. 스켈레톤을 두었다가 넓어지면 채운다.
+    if (!WIDE.matches) { this.stale = true; return; }
+    this.stale = false;
     const seq = ++this.seq;
     try {
       const html = await provider({ isLoggedIn: this.isLoggedIn });

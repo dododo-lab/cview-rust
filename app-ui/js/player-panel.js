@@ -62,7 +62,8 @@ export class PlayerPanel {
       this.applySharpness();
       this.syncSharpness();
     });
-    loadEqPresets().then(({ freqs, presets }) => { this.freqs = freqs; this.presets = presets; });
+    // macOS 웹뷰는 이퀄라이저를 쓸 수 없다(EQ_SUPPORTED) — 프리셋 목록을 받지 않는다.
+    if (EQ_SUPPORTED) loadEqPresets().then(({ freqs, presets }) => { this.freqs = freqs; this.presets = presets; });
   }
 
   async loadSettings() {
