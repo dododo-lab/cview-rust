@@ -911,7 +911,10 @@ mod tests {
         }
         let v = VaultSecretStore::new(Box::new(Shared(item.clone())));
         assert!(v.load("a").is_err());
-        assert!(v.load("a").is_err(), "실패는 기억한다 — 같은 질문을 되풀이하지 않음");
+        assert!(
+            v.load("a").is_err(),
+            "실패는 기억한다 — 같은 질문을 되풀이하지 않음"
+        );
         assert_eq!(item.0.load(Ordering::SeqCst), 1);
         v.forget_read_failure();
         assert_eq!(v.load("a").unwrap().as_deref(), Some(&b"x"[..]));

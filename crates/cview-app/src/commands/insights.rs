@@ -77,7 +77,16 @@ pub async fn insights_overview(services: State<'_, AppServices>) -> CmdResult<In
             "데이터 저장소를 열지 못해 통계를 볼 수 없습니다".into(),
         ));
     };
-    let now = chrono::Utc::now();
+    // 집계·정렬은 SQLite 잠금과 디스크를 잡는다 — 비동기 작업자가 아니라 블로킹 풀에서 돌린다.
+    store
+        .off_main_uncancellable(|store| overview(store, chrono::Utc::now()))
+        .await
+}
+
+fn overview(
+    store: &cview_persistence::DataStore,
+    now: chrono::DateTime<chrono::Utc>,
+) -> CmdResult<InsightsDto> {
     let a = store
         .aggregate_insights(now)
         .map_err(|e| CommandError(e.to_string()))?;
@@ -143,7 +152,8 @@ pub async fn insights_report(
     let period = ReportPeriod::parse(&period)
         .ok_or_else(|| CommandError(format!("알 수 없는 통계 기간: {period}")))?;
     store
-        .watch_report(period, chrono::Utc::now())
+        .off_main_uncancellable(move |store| store.watch_report(period, chrono::Utc::now()))
+        .await
         .map_err(|e| CommandError(e.to_string()))
 }
 

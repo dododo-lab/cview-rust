@@ -654,17 +654,25 @@ fn image_cache_dto(images: Option<&crate::image_service::ImageService>) -> Image
     }
 }
 
+/// 동기 `#[tauri::command]` 는 메인(UI) 스레드에서 돈다 — 색인 합산·수천 개 파일 삭제는 블로킹 풀로 보낸다.
 #[tauri::command]
-pub fn image_cache_status(app: tauri::AppHandle) -> ImageCacheStatusDto {
-    image_cache_dto(image_service(&app).as_deref())
+pub async fn image_cache_status(app: tauri::AppHandle) -> ImageCacheStatusDto {
+    let images = image_service(&app);
+    tauri::async_runtime::spawn_blocking(move || image_cache_dto(images.as_deref()))
+        .await
+        .unwrap_or_else(|_| image_cache_dto(None))
 }
 
 /// "썸네일 캐시 비우기".
 #[tauri::command]
-pub fn image_cache_clear(app: tauri::AppHandle) -> ImageCacheStatusDto {
+pub async fn image_cache_clear(app: tauri::AppHandle) -> ImageCacheStatusDto {
     let images = image_service(&app);
-    if let Some(i) = &images {
-        i.clear();
-    }
-    image_cache_dto(images.as_deref())
+    tauri::async_runtime::spawn_blocking(move || {
+        if let Some(i) = &images {
+            i.clear();
+        }
+        image_cache_dto(images.as_deref())
+    })
+    .await
+    .unwrap_or_else(|_| image_cache_dto(None))
 }
