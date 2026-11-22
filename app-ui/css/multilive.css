@@ -450,6 +450,10 @@
   background: linear-gradient(to top, rgba(0, 0, 0, 0.82), rgba(0, 0, 0, 0.55) 45%, rgba(0, 0, 0, 0.2) 75%, transparent); }
 .ml-pane.ctl-visible .ml-pane-top, .ml-pane.ctl-visible .ml-pane-bar, .ml-pane.paused .ml-pane-top, .ml-pane.paused .ml-pane-bar { opacity: 1; visibility: visible; transform: none; transition: opacity 0.22s ease, transform 0.22s ease, visibility 0s linear 0s; }
 .ml-pane:not(.ctl-visible):not(.paused) :is(.ml-pane-top, .ml-pane-bar) * { pointer-events: none !important; }
+/* 키보드 — 숨은 막대(visibility:hidden)의 단추는 Tab 이 건너뛰어, focusin → wake() 로 막대를 깨울 길이 없었다(v0.2.9 의 ca983a2 부터).
+   조작 요소만 늘 visibility:visible 로 둔다. 숨은 막대는 opacity 0·pointer-events none 이라 단추가 보이지도 눌리지도 않고, 막대 바탕(그라데이션)은 계속 hidden 이다.
+   Tab 이 단추에 닿으면 막대가 나타난다. ctl-visible 이 붙는 순간에도 상속된 hidden 으로 돌아가지 않아 초점이 풀리지 않는다. */
+.ml-pane :is(.ml-pane-top, .ml-pane-bar) :is(button, input, select) { visibility: visible; }
 .ml-pane-top .ml-pane-text, .ml-pane-top .grow, .ml-pane-bar .grow { pointer-events: none; }
 /* 막대가 보일 때 조작 요소는 마우스를 받는다. 막대 자체는 영상 클릭(패인 선택)을 막지 않게 none 인데, 그 none 이 상속돼
    단추(.ml-pane-btn)만 빼고 볼륨 슬라이더·LIVE 알약·아바타가 마우스를 받지 못했다 — 소리 아이콘에 올려 펼쳐도
