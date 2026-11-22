@@ -93,6 +93,12 @@ export function pickTintHue(used, rand = Math.random) {
 
 /** 지우는 중(되돌리기 시간)인 프리셋 id — 그사이 프리셋 시트를 다시 열어도 다시 나타나지 않게 뺀다. */
 const deletingPresets = new Set();
+// 패인 지표 칩에 마지막으로 넣은 HTML — 같으면 다시 쓰지 않는다(renderPaneStats).
+const paneStatsHtml = new WeakMap();
+/** 글자가 같으면 쓰지 않는다 — textContent 대입은 같은 글자여도 글 노드를 갈아 끼워 문서 관찰자를 깨운다(1초 상태마다). */
+function setText(el, text) {
+  if (el && el.textContent !== text) el.textContent = text;
+}
 /** 휠 한 칸에 모을 delta(px). */
 const CHIP_WHEEL_STEP = 40;
 /**
@@ -617,11 +623,11 @@ export class MultiLivePage {
     const total = sessions.length;
     const limit = viewLimit(state);
     const full = !state.canAdd;
-    this.count.textContent = `${n} / ${state.maxSessions}`;
+    setText(this.count, `${n} / ${state.maxSessions}`);
     this.count.classList.toggle('full', full && n > 0);
     this.count.title = limit.limited ? `라이브에 담은 ${total}개 중 ${n}개 재생 중 — 최대 ${state.maxSessions}개` : full ? `가득 찼어요 — 최대 ${state.maxSessions}개` : `${state.maxSessions}개 중 ${n}개 재생 중`;
     syncHeaderAddButton(this.headAdd, state, { addInner: ADD_INNER, drawerOpen: this.addBar.isOpen });
-    this.empty.querySelector('.ml-empty-text').textContent = `채널을 추가하면 최대 ${state.maxSessions}개까지 나란히 재생합니다. 패인을 누르면 소리와 채팅이 그 방송으로 바뀝니다.`;
+    setText(this.empty.querySelector('.ml-empty-text'), `채널을 추가하면 최대 ${state.maxSessions}개까지 나란히 재생합니다. 패인을 누르면 소리와 채팅이 그 방송으로 바뀝니다.`);
     for (const b of this.root.querySelectorAll('[data-layout]')) {
       b.classList.toggle('active', b.dataset.layout === state.layout);
     }
@@ -646,11 +652,16 @@ export class MultiLivePage {
     ma.classList.toggle('active', Boolean(state.multiAudio));
     ma.setAttribute('aria-checked', String(Boolean(state.multiAudio)));
     // 지난 구성 기억(MUL-15) — 세션이 있으면 저장, 비면 다시 열기 버튼
-    const savedIds = this.savedSessionIds();
-    if (total > 0) this.saveSessionIds(sessions.map((x) => x.channelId));
+    // 1초마다 오는 상태라 같은 구성이면 localStorage 를 다시 쓰지 않고, 다시 열기 단추를 보일 때만 읽는다.
     const restore = this.root.querySelector('[data-ml="restore"]');
-    restore.hidden = total > 0 || !savedIds.length;
-    restore.textContent = `지난 구성 다시 열기 (${savedIds.length}개)`;
+    if (total > 0) {
+      this.saveSessionIds(sessions.map((x) => x.channelId));
+      restore.hidden = true;
+    } else {
+      const savedIds = this.savedSessionIds();
+      restore.hidden = !savedIds.length;
+      setText(restore, `지난 구성 다시 열기 (${savedIds.length}개)`);
+    }
     if (this.single != null && !view.some((x) => x.slot === this.single)) this.single = null;
     // 라이브 메뉴 단독 보기(원본 시청 모드) — 같은 세션을 무대에 올려 다시 연결하지 않는다.
     const watched = state.watchId ? sessions.find((x) => x.id === state.watchId) : null;
@@ -665,7 +676,9 @@ export class MultiLivePage {
 
     const focus = state.layout === 'focus' && n > 1;
     const stack = this.stackApplies(state, single);
-    this.stage.className = `ml-stage ml-n${n <= 4 ? n : (n <= 9 ? 'many' : 'lots')} ${focus ? `ml-focus dir-${state.focusDirection}` : ''} ${state.layout === 'custom' && n > 1 && n <= 4 ? 'ml-custom' : ''} ${single != null ? 'ml-single' : ''} ${stack ? 'ml-stack' : ''}`;
+    // 같은 값이면 대입하지 않는다 — 대입만으로도 class 변화로 잡혀 문서 전체 class 관찰자(motion·a11y)가 초마다 깼다.
+    const stageClass = `ml-stage ml-n${n <= 4 ? n : (n <= 9 ? 'many' : 'lots')} ${focus ? `ml-focus dir-${state.focusDirection}` : ''} ${state.layout === 'custom' && n > 1 && n <= 4 ? 'ml-custom' : ''} ${single != null ? 'ml-single' : ''} ${stack ? 'ml-stack' : ''}`;
+    if (this.stage.className !== stageClass) this.stage.className = stageClass;
     this.empty.hidden = total > 0;
     this.focusControls.hidden = state.layout !== 'focus';
     for (const b of this.root.querySelectorAll('[data-direction]')) {
@@ -798,13 +811,13 @@ export class MultiLivePage {
     // 소리 배지(.audible)는 PaneControls.sync 가 '들림 && 볼륨>0' 으로 단다.
     pane.controls.sync(s.isAudible);
     const name = s.channelName || s.channelId;
-    el.querySelector('.ml-pane-name').textContent = name;
+    setText(el.querySelector('.ml-pane-name'), name);
     const badgeHtml = verifiedBadge(s.verifiedBadge);
     if (pane.badgeHtml !== badgeHtml) {
       pane.badgeHtml = badgeHtml;
       el.querySelector('.ml-pane-vb').innerHTML = badgeHtml;
     }
-    el.querySelector('.ml-pane-title').textContent = s.liveTitle || '';
+    setText(el.querySelector('.ml-pane-title'), s.liveTitle || '');
     this.renderPaneStats(el, s);
     const avatar = safeUrl(s.profileImageUrl);
     const avatarHtml = avatar ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '';
@@ -823,7 +836,7 @@ export class MultiLivePage {
     const close = el.querySelector('.ml-pane-close');
     const closeLabel = this.watchSlot != null && s.slot === this.watchSlot ? `${name} — 멀티라이브에서 빼고 닫기` : `${name} 패인 닫기`;
     if (close.getAttribute('aria-label') !== closeLabel) { close.setAttribute('aria-label', closeLabel); close.title = closeLabel; }
-    el.querySelector('.ml-pane-cap').textContent = s.maxHeightCap > 0 ? `≤${s.maxHeightCap}p` : '';
+    setText(el.querySelector('.ml-pane-cap'), s.maxHeightCap > 0 ? `≤${s.maxHeightCap}p` : '');
     const kind = s.state && s.state.kind;
     const text = kind === 'error' ? (s.state.message || '재생 오류') : (STATE_TEXT[kind] ?? '');
     const overlay = el.querySelector('.ml-pane-state');
@@ -831,7 +844,7 @@ export class MultiLivePage {
     overlay.classList.toggle('error', kind === 'error');
     overlay.classList.toggle('ended', kind === 'offline');
     overlay.querySelector('.spinner').hidden = kind !== 'loading';
-    overlay.querySelector('.ml-state-text').textContent = text;
+    setText(overlay.querySelector('.ml-state-text'), text);
     // 오류·방송 종료 — 막대를 찾지 않아도 바로 다시 연결(⋯ 의 다시 연결과 같다)
     overlay.querySelector('.ml-state-retry').hidden = kind !== 'error' && kind !== 'offline';
   }
@@ -840,17 +853,17 @@ export class MultiLivePage {
   renderPaneStats(el, s) {
     const stats = el.querySelector('.ml-pane-stats');
     const kind = s.state && s.state.kind;
-    if (kind === 'offline') {
-      stats.innerHTML = '<span class="stat off">오프라인</span>';
-      return;
-    }
-    const uptime = uptimeText(s.openDate);
-    stats.innerHTML = [
+    const uptime = kind === 'offline' ? '' : uptimeText(s.openDate);
+    const html = kind === 'offline' ? '<span class="stat off">오프라인</span>' : [
       '<span class="stat live">LIVE</span>',
       s.viewerCountText ? `<span class="stat" title="현재 시청자">${STAT_ICON.viewers}${esc(s.viewerCountText)}명</span>` : '',
       uptime ? `<span class="stat stat-uptime" title="방송 경과 시간">${STAT_ICON.uptime}${esc(uptime)}</span>` : '',
       s.accumulateCount > 0 ? `<span class="stat stat-acc" title="누적 시청자">누적 ${esc(s.accumulateCountText)}명</span>` : '',
     ].filter(Boolean).join('');
+    // 1초마다 같은 칩(아이콘 SVG 포함)을 통째로 다시 만들지 않는다 — 시청자 수·경과 시간이 바뀔 때만.
+    if (paneStatsHtml.get(stats) === html) return;
+    paneStatsHtml.set(stats, html);
+    stats.innerHTML = html;
   }
 
   /** 포커스 레이아웃 — 방향·비율에 맞춰 grid 템플릿과 패인 위치, 구분선 위치를 정한다. */
@@ -1083,7 +1096,9 @@ export class MultiLivePage {
   }
 
   saveSessionIds(ids) {
-    try { localStorage.setItem('cview.ml.lastSessions', JSON.stringify(ids)); } catch { /* 무시 */ }
+    const json = JSON.stringify(ids);
+    if (json === this.savedSessionsJson) return;
+    try { localStorage.setItem('cview.ml.lastSessions', json); this.savedSessionsJson = json; } catch { /* 무시 */ }
   }
 
   async restoreSessions(ids) {

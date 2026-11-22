@@ -16,7 +16,7 @@ use serde_json::Value;
 use tauri::State;
 
 use super::{CmdResult, CommandError};
-use crate::multi_live::{MultiLiveShell, PaneStateDto};
+use crate::multi_live::{MultiLiveShell, MultiLiveStateDto, PaneStateDto};
 use crate::state::AppServices;
 
 /// 프런트가 다루는 설정 도메인.
@@ -270,12 +270,20 @@ static LAST_UNSTABLE: std::sync::Mutex<Option<std::time::Instant>> = std::sync::
 
 /// 자동 프리셋이 켜져 있으면 멀티라이브 상황으로 프리셋을 골라 넣는다. 바꿨으면 `true`.
 pub fn apply_auto_network(services: &AppServices, shell: &MultiLiveShell) -> bool {
+    if !services.settings.network().auto_preset {
+        return false;
+    }
+    apply_auto_network_for(services, &shell.state_dto())
+}
+
+/// [`apply_auto_network`] — 이미 만든 멀티라이브 상태로. 상태 감시 루프가 보낼 상태를 한 번만 만들게(예전엔 초마다
+/// 두 번 — 패인마다 문자열 수십 개·여러 겹 잠금).
+pub fn apply_auto_network_for(services: &AppServices, state: &MultiLiveStateDto) -> bool {
     let s = &services.settings;
     let current = s.network();
     if !current.auto_preset {
         return false;
     }
-    let state = shell.state_dto();
     let live = |p: &&crate::multi_live::MultiLivePaneDto| {
         !p.decode_suspended && matches!(p.state, PaneStateDto::Playing | PaneStateDto::Loading)
     };
