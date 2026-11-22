@@ -12,7 +12,8 @@
   (공유 target 을 쓰면 다른 세션의 바이너리를 잴 수 있다).
 - 측정은 기준·지금을 번갈아 `--rounds` 번 돌려 각 지표의 중앙값을 비교한다(열·부하 흐름이 한쪽에만 쏠리지 않게).
 - 지금 쪽이 `--threshold`(기본 1.15 = 15%) 넘게 느리고 차이가 `--floor-ms`(기본 0.05ms) 보다 크면 실패(종료 코드 1).
-- 기준 커밋에 없는 측정 예제는 지금 쪽 값만 적고 비교하지 않는다.
+- 기준 커밋에 없는 측정 예제는 지금 쪽 예제 파일을 기준 트리에 넣어 빌드해 본다(공개 API 가 같으면 비교된다).
+  빌드가 안 되면 지금 쪽 값만 적고 비교하지 않는다.
 
 외부 네트워크·서버 설정은 쓰지 않는다. 실앱 CPU·GPU·RSS(perf/tools/suite2.sh)와 화면 검사(tools/ui-regression)는
 여기서 돌리지 않는다 — PR 체크리스트(.github/pull_request_template.md)를 따른다.
@@ -105,6 +106,8 @@ def markdown(verdicts: list[Verdict], base_ref: str, rounds: int, threshold: flo
     lines = [
         f"성능 게이트 — 기준 `{base_ref}` 대비, 번갈아 {rounds}회 중앙값, 회귀 기준 ×{threshold:.2f}",
         "",
+        "작을수록 빠름. 기준에 없던 측정 예제는 지금 쪽 파일을 기준 트리에 넣어 잰다.",
+        "",
         "| 지표 | 기준 | 지금 | 비율 | 판정 |",
         "|---|---:|---:|---:|---|",
     ]
@@ -119,7 +122,13 @@ def markdown(verdicts: list[Verdict], base_ref: str, rounds: int, threshold: flo
 # ── 실행 ─────────────────────────────────────────
 
 
-def run(cmd: list[str], cwd: Path, env: dict[str, str] | None = None, capture: bool = False) -> str:
+def run(
+    cmd: list[str],
+    cwd: Path,
+    env: dict[str, str] | None = None,
+    capture: bool = False,
+    check: bool = True,
+) -> str:
     shown = " ".join(cmd)
     print(f"$ ({cwd.name}) {shown}", file=sys.stderr, flush=True)
     result = subprocess.run(
@@ -130,22 +139,35 @@ def run(cmd: list[str], cwd: Path, env: dict[str, str] | None = None, capture: b
         stdout=subprocess.PIPE if capture else None,
     )
     if result.returncode != 0:
+        if not check:
+            return "\0failed"
         raise SystemExit(f"실패({result.returncode}): {shown}")
     return result.stdout or ""
 
 
+def example_path(tree: Path, probe: Probe) -> Path:
+    return tree / "crates" / probe.package / "examples" / f"{probe.example}.rs"
+
+
 def has_example(tree: Path, probe: Probe) -> bool:
-    crate = tree / "crates" / probe.package / "examples" / f"{probe.example}.rs"
-    return crate.is_file()
+    return example_path(tree, probe).is_file()
 
 
-def build(tree: Path, target: Path, probes: list[Probe]) -> None:
+def build(tree: Path, target: Path, probes: list[Probe], borrowed: frozenset[Probe] = frozenset()) -> list[Probe]:
+    """빌드된 측정 예제 목록. `borrowed`(지금 쪽에서 빌려 넣은 예제)는 빌드가 안 되면 빼고, 나머지는 실패면 중단."""
+    built = []
     for p in probes:
-        run(
+        out = run(
             ["cargo", "build", "--release", "-q", "-p", p.package, "--example", p.example],
             tree,
             {"CARGO_TARGET_DIR": str(target)},
+            check=p not in borrowed,
         )
+        if out == "\0failed":
+            print(f"기준 쪽에서 {p.example} 를 빌드하지 못해 비교에서 뺍니다", file=sys.stderr)
+            continue
+        built.append(p)
+    return built
 
 
 def measure(target: Path, probe: Probe) -> dict[str, float]:
@@ -188,8 +210,10 @@ def main(argv: list[str] | None = None) -> int:
     run(["git", "worktree", "add", "--detach", str(base_tree), base_sha], ROOT)
     try:
         head_probes = [p for p in PROBES if has_example(ROOT, p)]
-        base_probes = [p for p in head_probes if has_example(base_tree, p)]
-        build(base_tree, work / "target-base", base_probes)
+        borrowed = frozenset(p for p in head_probes if not has_example(base_tree, p))
+        for p in borrowed:
+            shutil.copyfile(example_path(ROOT, p), example_path(base_tree, p))
+        base_probes = build(base_tree, work / "target-base", head_probes, borrowed)
         build(ROOT, work / "target-head", head_probes)
 
         base_vals: dict[str, list[float]] = {}
