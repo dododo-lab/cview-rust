@@ -325,13 +325,11 @@ impl ImageCache {
         Ok(())
     }
 
+    /// 합계를 줄인다. 호출자는 `db` 잠금을 쥐고 있어야 한다(합계는 그 잠금 안에서만 바뀐다).
     fn sub_total(&self, size: i64) {
-        let size = size.max(0) as u64;
-        let _ = self
-            .total_bytes
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |t| {
-                Some(t.saturating_sub(size))
-            });
+        let t = self.total_bytes.load(Ordering::Relaxed);
+        self.total_bytes
+            .store(t.saturating_sub(size.max(0) as u64), Ordering::Relaxed);
     }
 
     /// 상한을 넘었으면 오래 안 쓴 것부터 상한의 90% 까지 지운다. 색인 삭제는 한 트랜잭션으로 묶는다.
@@ -365,10 +363,12 @@ impl ImageCache {
             }
         }
         tx.commit()?;
-        drop(db);
-        for (key, size) in &victims {
-            let _ = fs::remove_file(self.blob_path(key));
+        for (_, size) in &victims {
             self.sub_total(*size);
+        }
+        drop(db);
+        for (key, _) in &victims {
+            let _ = fs::remove_file(self.blob_path(key));
         }
         Ok(())
     }
