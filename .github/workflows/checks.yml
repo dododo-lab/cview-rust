@@ -1,0 +1,53 @@
+# PR 회귀 차단 게이트 — 비밀값 없이 GitHub 호스트(Ubuntu)에서 돌 수 있는 검사만.
+# 최적화 감사(2026-11-23) 8.2 정량 검증 프로토콜 중:
+#   - 정적 검사: rustfmt, app-ui JS 문법(node --check), 성능 게이트 스크립트 자체 테스트
+#   - 핵심 크레이트 테스트: Tauri·WebKit 이 필요 없는 cview-core·chat·persistence·networking
+#   - 마이크로벤치 스모크: 측정 예제가 빌드·실행되는지(값 비교는 같은 기계에서 scripts/perf-gate.py 로)
+# clippy·전체 테스트(Tauri 앱 포함)·화면 검사(tools/ui-regression)·실앱 측정은 Mac/VM 에서 PR 체크리스트대로 한다.
+# 이 저장소는 액션을 커밋 SHA 로 고정해야 실행된다(sha_pinning_required) — 태그(@v4)만 쓰면 startup_failure.
+name: checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: rustfmt
+        run: |
+          rustup component add rustfmt
+          cargo fmt --all -- --check
+      - name: app-ui JS 문법
+        run: |
+          for f in app-ui/js/*.js; do node --check "$f"; done
+      - name: 성능 게이트 스크립트 테스트
+        run: python3 -B -m unittest discover -s tools/perf-gate/tests -v
+
+  core-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: 핵심 크레이트 테스트
+        run: cargo test -p cview-core -p cview-chat -p cview-persistence -p cview-networking
+      - name: 측정 예제 스모크(값은 기록만)
+        run: |
+          cargo run --release -p cview-chat --example parse_probe
+          cargo run --release -p cview-persistence --example image_cache_probe -- 500
+          cargo run --release -p cview-persistence --example perf_probe -- "$RUNNER_TEMP/store.sqlite" 2000

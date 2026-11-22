@@ -54,3 +54,17 @@ python3 -B -m unittest discover -s tools/build-server/tests -v
 zsh -n scripts/release-macos.sh
 zsh -n scripts/release-with-prs.sh
 ```
+
+## 성능 회귀 게이트
+
+최적화·핫패스(채팅 파서·저장소·이미지 캐시·프록시·플레이어·1Hz 렌더)를 건드린 PR 은 전후를 같은 기계에서 잰다.
+
+```sh
+python3 scripts/perf-gate.py --markdown perf-gate.md          # 기준 origin/main, 번갈아 3회 중앙값
+python3 -B -m unittest discover -s tools/perf-gate/tests -v   # 게이트 스크립트 자체
+```
+
+- ×1.15 넘게 느려지고 0.05ms 넘게 차이 나면 종료 코드 1. 결과 표는 PR 본문 "성능" 칸에 붙인다(`.github/pull_request_template.md`).
+- 기준 커밋은 임시 worktree·별도 `CARGO_TARGET_DIR` 로 빌드한다. 측정 중에는 배포·VM 검사 같은 무거운 작업을 같이 돌리지 않는다.
+- GitHub `checks` 워크플로(rustfmt·JS 문법·핵심 크레이트 테스트·측정 예제 스모크)는 값 비교를 하지 않는다 — 호스트 기계가 매번 달라서다.
+- 화면 검사는 `perf`·`chat-memory`·`ml-offscreen`·`usage-monitor`·`startup-modules` 를 Chromium·WebKit 둘 다, main 에서도 같은 실패인지 비교한다.
