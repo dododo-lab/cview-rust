@@ -1097,7 +1097,9 @@ function refreshWatchActivity() {
     reportWatchActivity();
 }
 document.addEventListener('visibilitychange', refreshWatchActivity);
-setInterval(refreshWatchActivity, WATCH_POLL_MS);
+// 아직 재생한 적 없는(또는 비운 — 닫혀 풀로 간 패인·정지) 플레이어는 알릴 것이 없다 — 2초마다 부모 문서
+// 레이아웃(`frameElement.getClientRects`)을 묻지 않는다. 재생이 시작되면 `playing` 이 곧바로 다시 본다.
+setInterval(function() { if (_watchHasPlayed) refreshWatchActivity(); }, WATCH_POLL_MS);
 /** 부모: 메뉴 이동으로 이 플레이어가 화면에서 빠졌다/돌아왔다 — 부모가 화면을 다 바꾼 뒤 다시 본다. */
 window.setWatchSurfaceHidden = function() {
     setTimeout(refreshWatchActivity, 0);
