@@ -259,7 +259,7 @@ export class StatsPage {
     this.root.dataset.page = 'stats';
     this.root.hidden = true;
     this.root.innerHTML = `
-      ${embedded ? `<header class="home-report-heading"><div><p class="home-kicker">MY VIEWING</p><h2>나의 시청 리포트</h2><p>오래 머문 채널부터 즐겨 보는 시간까지, 나의 시청 취향을 만나보세요.</p></div><span class="home-local-note">이 기기에만 저장되는 기록</span></header>` : `<header class="page-header" data-tauri-drag-region><h1 class="page-title">통계</h1><span class="page-subtitle">이 기기에서 본 방송 기록으로 계산합니다 · 기록은 이 기기에만 저장됩니다</span></header>`}
+      ${embedded ? `<header class="home-report-heading"><div><p class="home-kicker">MY VIEWING</p><h2>나의 시청 리포트</h2><p>오래 머문 채널부터 즐겨 보는 시간까지, 나의 시청 취향을 만나보세요.</p></div><span class="home-local-note">이 기기에만 저장되는 기록</span></header>` : `<header class="page-header" data-tauri-drag-region><h1 class="page-title">시청 리포트</h1><span class="page-subtitle">이 기기에서 본 방송 기록으로 계산합니다 · 기록은 이 기기에만 저장됩니다</span></header>`}
       <div class="stats-toolbar">
         <div class="segmented page-tabs lib-tabs" role="tablist" aria-label="통계">${TABS.map(([id, label]) => `<button class="seg" data-tab="${id}" role="tab">${label}</button>`).join('')}</div>
         <div class="segmented stats-period" role="group" aria-label="기간">${this.periods.map(([id, label]) => `<button class="seg" data-period="${id}" aria-pressed="false">${label}</button>`).join('')}</div>
@@ -352,7 +352,7 @@ export class StatsPage {
       this.body.innerHTML = emptyState('아직 시청 기록이 없습니다', '라이브를 보면 시청 시간이 여기에 쌓입니다 · 기록은 이 기기에만 저장됩니다');
       return;
     }
-    this.body.innerHTML = emptyState(`${this.periodName()}에는 시청 기록이 없습니다`, `처음 기록: ${new Date(r.firstWatchedAt).toLocaleDateString()}`,
+    this.body.innerHTML = emptyState(`${this.periodName()}에는 시청 기록이 없습니다`, `처음 기록: ${new Date(r.firstWatchedAt).toLocaleDateString('ko-KR')}`,
       '<button class="btn" data-period="all">전체 기간 보기</button>');
   }
 
@@ -628,7 +628,7 @@ export class StatsPage {
             : `<button class="btn" data-stats="cleanup" data-kind="${k}">정리</button>`}</div>`).join('')}</div>
           <h3 class="sub-h">백업</h3>
           <div class="cleanup-row"><span><strong>지금 백업</strong><small>최근 2개만 남깁니다 · 복원은 앱을 끈 뒤 백업 폴더의 파일로 바꿉니다</small></span><button class="btn primary" data-stats="backup">백업</button></div>
-          ${h.backups.map((b) => `<div class="cleanup-row"><span><strong>${esc(new Date(b.createdAt).toLocaleString())}</strong><small>${esc(b.reason)} · ${esc(bytesText(b.bytes))}</small></span></div>`).join('')}
+          ${h.backups.map((b) => `<div class="cleanup-row"><span><strong>${esc(new Date(b.createdAt).toLocaleString('ko-KR'))}</strong><small>${esc(b.reason)} · ${esc(bytesText(b.bytes))}</small></span></div>`).join('')}
           <button class="link-btn" data-stats="reveal" data-path="${esc(h.backupDir)}">백업 폴더 열기</button>
         </section>
       </div>

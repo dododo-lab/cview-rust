@@ -3,8 +3,8 @@
 // PLY-07 색 보정(밝기·대비·채도·색조·감마)·선명도(예전 선명한 화면 + 업스케일, sharpness.js)·자동 밝기·색 보정, PLY-08 화면 비율 강제,
 // PLY-10 녹화 시작·중지(MediaRecorder 조각 → Rust 파일). 값은 플레이어 설정에 저장하고 새 재생마다 다시 건다.
 import { api } from './api.js';
-import { esc, toast, hideWithExit } from './dom.js';
-import { kbd } from './platform.js';
+import { esc, toast, hideWithExit, keepFocus } from './dom.js';
+import { kbd, REVEAL_LABEL } from './platform.js';
 import {
   SHARPNESS_LEVELS, SHARPNESS_HELP, ENLARGED_ONLY_LABEL, ENLARGED_ONLY_HELP,
   sharpnessState, sharpnessReady, sharpnessArgs, setSharpness, sharpnessNote,
@@ -130,10 +130,18 @@ export class PlayerPanel {
 
   toggle() {
     if (!this.el.hidden) { hideWithExit(this.el); return; }
+    // 화질 메뉴·⋯ 메뉴와 한 번에 하나만 — 단추들이 stopPropagation 이라 바깥 누르기로는 서로 닫히지 않아 셋이 겹쳐 열렸다.
+    this.viewer.controls?.closeQualityMenu();
+    this.viewer.topbar?.closeMenu();
     this.loadSettings().then(() => { this.render(); this.el.hidden = false; });
   }
 
+  /** 다시 그려도 누른 탭·칸에 초점을 남긴다 — 통째로 innerHTML 을 바꿔 초점이 body 로 떨어졌다(감사 UX-H15). */
   render() {
+    keepFocus(this.el, () => this.paint());
+  }
+
+  paint() {
     const p = this.settings || {};
     const tabs = [['play', '재생'], ['video', '화면'], ['eq', '이퀄라이저'], ['tools', '도구']];
     let body = '';
@@ -286,7 +294,7 @@ export class PlayerPanel {
         clearInterval(this.recTimer);
         if (st.path && st.bytes > 0) {
           const mb = (st.bytes / 1048576).toFixed(1);
-          toast(`녹화를 저장했습니다 (${mb}MB) — ${st.path}`, 6000, { label: 'Finder에서 보기', run: () => api.revealPath(st.path) });
+          toast(`녹화를 저장했습니다 (${mb}MB) — ${st.path}`, 6000, { label: REVEAL_LABEL, run: () => api.revealPath(st.path) });
         } else {
           toast('녹화된 내용이 없습니다');
         }

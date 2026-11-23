@@ -671,6 +671,7 @@ function escapeTaken(e) {
 function activeChat() {
   if (viewer.isOpen) return viewer.chat;
   if (current === 'multilive' || activeWatch()) return pages.multilive.chat;
+  if (current === 'chat' && pages.chat) return pages.chat.chat; // 채팅만 보기·채팅 창 — ⇧⌘K 지우기·다시 연결
   return null;
 }
 
@@ -853,7 +854,9 @@ async function main() {
   pages.live = new LivePage(content, { isLoggedIn, modeSwitch: !AUX });
   pages.categories = new CategoriesPage(content);
   pages.multichat = new MultiChatPage(content, { isLoggedIn, onPlay: openChannel });
-  pages.chat = new ChatOnlyPage(content, { isLoggedIn, onBack: goBack, onPlay: openChannel, session: AUX === 'chat' ? `win-${Date.now()}` : null, standalone: AUX === 'chat' });
+  // 채팅 창(?w=chat, 420px)에서 '▶ 영상 보기'는 플레이어 창을 연다 — 같은 창에 시청 화면을 열면 영상이 80px 로 눌리고 채팅이 겹쳤다.
+  const chatOnlyPlay = AUX === 'chat' ? (id) => api.windowOpen('player', { channelId: id }).catch((er) => toast(er.message)) : openChannel;
+  pages.chat = new ChatOnlyPage(content, { isLoggedIn, onBack: goBack, onPlay: chatOnlyPlay, session: AUX === 'chat' ? `win-${Date.now()}` : null, standalone: AUX === 'chat' });
   pages.library = new LibraryPage(content, { isLoggedIn, onOpenChannel: openChannelPage });
   pages.stats = new StatsPage(AUX === 'stats' ? content : pages.home.panels, { onOpenChannel: openChannelPage, embedded: AUX !== 'stats' });
   if (AUX !== 'stats') pages.home.attachReport(pages.stats);
@@ -862,7 +865,8 @@ async function main() {
   // 위 막대 ⋯ 의 '멀티라이브에 추가'·'새 창으로 분리'(보조 창 안에서는 없다) — viewer-topbar.js
   viewer = new Viewer(document.getElementById('viewer'), {
     isLoggedIn, onClose: onViewerClosed,
-    onAddMulti: (id) => addToMultiLive(id),
+    // 보조 창(플레이어 창 등)엔 사이드바가 없어 멀티라이브로 가면 돌아올 길이 없다 — 주석대로 보조 창에선 뺀다(감사 UX-H15).
+    onAddMulti: AUX ? null : (id) => addToMultiLive(id),
     onPopout: AUX ? null : () => MENU_ACTIONS['window-player'](),
   });
   if (!AUX) insights = new InsightPanel(content, { isLoggedIn });

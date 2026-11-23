@@ -118,7 +118,7 @@ export async function installUpdate(onProgress) {
 
 /** 시트·설정에 넣는 진행 막대. */
 export function progressHtml() {
-  return '<div class="update-progress"><div class="update-progress-bar"><i></i></div><p class="update-progress-text muted small"></p></div>';
+  return '<div class="update-progress"><div class="update-progress-bar" role="progressbar" aria-label="업데이트 진행" aria-valuemin="0" aria-valuemax="100"><i></i></div><p class="update-progress-text muted small"></p></div>';
 }
 
 export function renderProgress(root, { text, ratio }) {
@@ -127,6 +127,9 @@ export function renderProgress(root, { text, ratio }) {
   if (bar) {
     bar.classList.toggle('indeterminate', ratio == null);
     bar.querySelector('i').style.transform = `scaleX(${ratio == null ? 1 : ratio})`;
+    // 화면 읽기 프로그램용 진행률 — 모르면(받기 전·설치 중) 값을 빼 '진행 중'으로만 알린다.
+    if (ratio == null) bar.removeAttribute('aria-valuenow');
+    else bar.setAttribute('aria-valuenow', String(Math.round(ratio * 100)));
   }
   if (label) label.textContent = text;
 }

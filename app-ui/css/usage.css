@@ -2,15 +2,17 @@
    색은 토큰만. 지표 색(--u-*)은 그래프 선·면·칸의 작은 표식에만 쓰고 글자는 글자 토큰으로 쓴다(색만으로 구별하지 않는다 — 칸마다 이름).
    지표 색은 범주 팔레트 1~4번(파랑·주황·청록·노랑)을 배경면에 맞춰 고른 값이다 — 다크(#26282d·#1a1b1f)에서 모두 3:1 이상,
    라이트에서 청록·노랑은 3:1 아래라 이름 글자·표로 보기를 함께 둔다(색각 이상 ΔE·밝기 대역 검사 통과). */
+/* 주황·청록·노랑은 어두운 바탕에 밝은 값, 밝은 바탕에 짙은 값(2026-11-23 감사 UX-H01 — 예전엔 밝기가 거꾸로였다).
+   다크 #26282d 위 4.6·5.2·6.8:1, 라이트 흰 바탕 3.9·4.1·3.9:1(#f1f2f5 위 3.5·3.6·3.5:1). */
 :root {
   --u-cpu: #3987e5;
-  --u-gpu: #d95926;
-  --u-mem: #199e70;
-  --u-net: #c98500;
+  --u-gpu: #eb6834;
+  --u-mem: #1baf7a;
+  --u-net: #eda100;
 }
-:root[data-theme="light"] { --u-cpu: #2a78d6; --u-gpu: #eb6834; --u-mem: #1baf7a; --u-net: #eda100; }
+:root[data-theme="light"] { --u-cpu: #2a78d6; --u-gpu: #d95926; --u-mem: #178f65; --u-net: #b07400; }
 @media (prefers-color-scheme: light) {
-  :root[data-theme="system"] { --u-cpu: #2a78d6; --u-gpu: #eb6834; --u-mem: #1baf7a; --u-net: #eda100; }
+  :root[data-theme="system"] { --u-cpu: #2a78d6; --u-gpu: #d95926; --u-mem: #178f65; --u-net: #b07400; }
 }
 
 /* ── 머리줄 칩 ── 유리 알약(둥근 아이콘 단추와 같은 재질). 숫자는 초마다 바뀌어 고정 폭 숫자. */
@@ -70,13 +72,14 @@
 .usage-pop:focus { outline: none; }
 .usage-pop:not([hidden]) { animation: mo-pop-down var(--dur-2, .18s) var(--ease-out) both; }
 .usage-pop[data-side="top"]:not([hidden]) { animation-name: mo-pop-up; }
-.up-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
+/* .up-head·.up-sub·.up-live 는 채팅 사용자 말풍선(app.css .user-pop)도 쓰는 이름 — 팝오버 안으로 한정한다. */
+.usage-pop .up-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
 .up-titles { flex: 1; min-width: 0; }
-.up-head h2 { font-size: var(--fs-callout); font-weight: 700; letter-spacing: -.2px; }
-.up-sub { margin-top: 2px; font-size: var(--fs-footnote); color: var(--text-tertiary); }
-.up-live { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: var(--radius-pill); font-size: var(--fs-micro); font-weight: 700; color: var(--text-secondary); background: var(--surface-elevated); }
-.up-live[hidden] { display: none; }
-.up-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 0 0 var(--primary-ring); animation: up-pulse 2s var(--ease-out) infinite; }
+.usage-pop .up-head h2 { font-size: var(--fs-callout); font-weight: 700; letter-spacing: -.2px; }
+.usage-pop .up-sub { margin-top: 2px; font-size: var(--fs-footnote); color: var(--text-tertiary); }
+.usage-pop .up-live { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: var(--radius-pill); font-size: var(--fs-micro); font-weight: 700; color: var(--text-secondary); background: var(--surface-elevated); }
+.usage-pop .up-live[hidden] { display: none; }
+.usage-pop .up-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 0 0 var(--primary-ring); animation: up-pulse 2s var(--ease-out) infinite; }
 @keyframes up-pulse { 0% { box-shadow: 0 0 0 0 var(--primary-ring); } 70%, 100% { box-shadow: 0 0 0 6px transparent; } }
 
 .up-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
@@ -176,11 +179,16 @@
 
 /* ── 모션 줄이기 ── 깜박이는 점·칩 눌림·칸 떠오름·막대 길이 움직임을 멈춘다(끝 상태 그대로). */
 @media (prefers-reduced-motion: reduce) {
-  .up-live i { animation: none; }
+  .usage-pop .up-live i { animation: none; }
   .usage-chip, .up-tile, .ug-bar i { transition: none; }
   .usage-chip:active { scale: none; }
   .up-tile:hover:not([aria-disabled="true"]) { translate: none; }
 }
-:root[data-motion="reduced"] .up-live i { animation: none; }
+:root[data-motion="reduced"] .usage-pop .up-live i { animation: none; }
 :root[data-motion="reduced"] :is(.usage-chip, .up-tile, .ug-bar i) { transition: none; }
 :root[data-motion="reduced"] .up-tile:hover { translate: none; }
+/* 고대비(Windows forced-colors) — 엔진이 box-shadow 를 지워 초점 고리(--focus-ring)가 사라진다 → 시스템 강조색 테두리 */
+@media (forced-colors: active) {
+  :is(.usage-chip, .up-tile, .usage-table summary):focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+  :is(.uc-plot, .usage-table-scroll):focus-visible { outline: 2px solid Highlight; outline-offset: -2px; }
+}

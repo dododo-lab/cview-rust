@@ -41,6 +41,7 @@
 
   /* 상태 */
   --live: #ff3b30;
+  --live-text: #ff3b30;          /* 작은 빨강 글자(방송 중·읽음 구분선 등) — 라이트에선 더 짙게(흰 바탕 4.5:1 이상) */
   --live-badge: #e5262b;        /* 흰 글자를 얹는 LIVE 배지 바탕 — 흰 글자 대비 4.5:1 이상(--live 는 점·글자·링용) */
   --donation: #ffcc33;
   --donation-bg: rgba(255, 204, 51, 0.1);
@@ -157,6 +158,7 @@
   --border: #d9dce3;
   --border-subtle: #e8eaef;
   --live: #f03a2e;
+  --live-text: #c9241b;         /* 흰 바탕 5.6:1 · #f1f2f5 5.0:1 (--live 는 3.9:1 로 작은 글자에 모자람) */
   --live-badge: #e5262b;
   --donation: #8f6100;
   --donation-bg: rgba(255, 190, 30, 0.14);
@@ -207,6 +209,7 @@
     --border: #d9dce3;
     --border-subtle: #e8eaef;
     --live: #f03a2e;
+    --live-text: #c9241b;
     --live-badge: #e5262b;
     --donation: #8f6100;
     --donation-bg: rgba(255, 190, 30, 0.14);
@@ -260,7 +263,7 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
 :where(input[type="range"]) { accent-color: var(--primary); }
 :where(input[type="checkbox"], input[type="radio"]) { accent-color: var(--primary); }
 img { display: block; }
-a { color: var(--primary); }
+a { color: var(--primary-text); } /* --primary(#00d38a)는 라이트 흰 바탕 2.0:1 — 글자는 글자용 브랜드색 */
 
 .app { display: flex; height: 100vh; }
 
@@ -374,6 +377,10 @@ a { color: var(--primary); }
 .side-live-avatar .avatar { width: 100%; height: 100%; border: 2px solid var(--sidebar); }
 .side-live-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
 .side-live-name { font-size: var(--fs-caption); font-weight: 600; color: var(--text-primary); }
+/* 이름만 말줄임하고 인증 배지·★ 는 늘 보이게 — 한 덩어리로 줄이면 긴 이름이 배지까지 잘랐다(sidebar.js) */
+.side-live-name.split { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.side-live-name.split > .side-live-nm { min-width: 0; }
+.side-live-name.split > :not(.side-live-nm) { flex: none; }
 .side-live-cat { font-size: var(--fs-tiny); color: var(--text-tertiary); }
 .side-live-viewers { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-tiny); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 /* 메뉴별 목록 — 오프라인 채널(보관함 최근 본 채널)은 회색 테두리, 카테고리 줄은 둥근 사각 아바타, 즐겨찾기는 별 */
@@ -504,7 +511,7 @@ a { color: var(--primary); }
 /* 전환 중 — 배치가 바뀌는 칸은 잠깐 숨겼다 나타나고, 줄임표(…)가 깜박이지 않게 그냥 자른다 */
 .sidebar.sb-anim :is(.nav-badge, .side-more, .side-widget, .side-quick-btn, .account, .side-empty),
 .sidebar.sb-anim.collapsed .nav-item.playing::after { animation: sb-reveal calc(var(--sb-dur) + 0.1s) ease-out both; }
-.sidebar.sb-anim :is(.nav-label, .side-live-name, .side-live-cat, .account-name) { text-overflow: clip; }
+.sidebar.sb-anim :is(.nav-label, .side-live-name, .side-live-nm, .side-live-cat, .account-name) { text-overflow: clip; }
 .sidebar.sb-anim .side-quick { overflow: hidden; }
 @keyframes sb-reveal { 0%, 35% { opacity: 0; } 100% { opacity: 1; } }
 /* 영상 시청 중 전환(sidebar.js slideOver) — 레이아웃 전환 없이 transform·opacity 만(합성) 쓴다.
@@ -632,9 +639,11 @@ a { color: var(--primary); }
 .badge-uptime { left: auto; right: 8px; font-weight: 500; color: rgba(255, 255, 255, 0.85); }
 .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--live); flex: none; display: inline-block; }
 .badge-adult {
-  position: absolute; top: 8px; right: 8px; background: rgba(0, 0, 0, 0.72); color: var(--warning);
+  position: absolute; top: 8px; right: 8px; background: rgba(0, 0, 0, 0.72); color: #ffb020; /* 늘 어두운 썸네일 위 — 라이트 --warning(#9a5c00)은 3:1 아래 */
   font-size: var(--fs-micro); font-weight: 700; padding: 2px 6px; border-radius: var(--radius-xxs);
 }
+/* 라이브 카드는 같은 자리(오른쪽 위)에 호버하면 '+ 멀티라이브' 단추가 뜬다 — 19 배지는 그 왼쪽으로 비켜 둔다(cards.js) */
+.badge-adult.beside-add { right: 42px; }
 .card-body { display: flex; gap: var(--sp-sm); padding: var(--sp-sm) 2px 0; }
 .avatar {
   width: 34px; height: 34px; border-radius: 50%; flex: none; object-fit: cover;
@@ -663,7 +672,7 @@ a { color: var(--primary); }
 .vbadge.sm { width: 0.95em !important; height: 0.95em !important; vertical-align: -0.12em; }
 .vbadge.lg { width: 0.8em !important; height: 0.8em !important; margin-left: 0.3em; vertical-align: -0.04em; }
 .vbadge[hidden] { display: none; }
-.live-dot { color: var(--live); font-weight: 700; font-size: var(--fs-micro); margin-left: 6px; }
+.live-dot { color: var(--live-text); font-weight: 700; font-size: var(--fs-micro); margin-left: 6px; }
 
 /* ── 상태 ─────────────────────────────────── */
 .empty {
@@ -742,9 +751,13 @@ select.select {
 /* 영상 위 투명 클릭 차단층(viewer-controls.js) — 초점이 iframe 으로 넘어가 단축키가 죽지 않게(H-4). z-index 없이 DOM 순서로 오버레이 밑 */
 .player-hit { position: absolute; inset: 0; }
 .player-overlay {
-  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: var(--sp-sm); color: var(--text-secondary); pointer-events: none; background: rgba(0, 0, 0, 0.35);
+  position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  /* 무대는 두 테마 모두 검정 — 테마 글자색(라이트 --text-secondary #4d525b)은 검정 위 2.6:1 이라 영상용 흰 글자.
+     z 4 — 오류의 '다시 시도'가 재생 단추·버퍼링 표시 밑에 깔리지 않게(위·아래 막대 z 5 보다는 아래) */
+  gap: var(--sp-sm); color: rgba(255, 255, 255, 0.88); pointer-events: none; background: rgba(0, 0, 0, 0.35);
 }
+/* 안내막이 떠 있으면 무대 가운데 재생 단추·버퍼링 고리는 감춘다(안내막의 고리·글자와 겹쳐 두 겹으로 보였다). viewer.js showOverlay */
+.player-stage.has-overlay :is(.stage-buffer, .stage-center-play) { display: none !important; }
 .player-overlay[hidden] { display: none; }
 /* 오류 — #viewer 무대는 두 테마 모두 검정(아래 '#viewer .player-stage')이라 테마별 --error 가 아니라 영상용 빨강을 쓴다.
    라이트 --error(#c4291f)는 검정과 3.7:1 이다. */
@@ -940,6 +953,7 @@ select.select {
 .home-banner-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .home-banner-text strong { font-size: var(--fs-subhead); }
 .home-banner-text span { color: var(--text-secondary); font-size: var(--fs-caption); }
+.home-banner > .btn { flex: none; white-space: nowrap; } /* 로그인 단추 글자가 두 줄로 쪼개지지 않게 */
 
 /* 방송 중인 팔로잉 — 우선순위 타일 격자 + 미리보기 카드(live-following.js).
    타일 = 아바타(라이브 고리 — 사이드바 .side-live-avatar 와 같은 초록·청록) + 이름·인증·즐겨찾기 + 방송 제목 + 시청자·카테고리·경과.
@@ -1208,12 +1222,13 @@ select.select {
 .recent-item.is-live .avatar { box-shadow: 0 0 0 2px var(--deck), 0 0 0 4px var(--live); }
 .recent-text { min-width: 0; display: flex; flex-direction: column; font-size: var(--fs-caption); }
 .recent-meta { font-size: var(--fs-micro); color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
-.recent-meta b { color: var(--live); font-weight: 800; }
+.recent-meta b { color: var(--live-text); font-weight: 800; }
 
 /* 가로 선반 */
 .shelf {
   display: grid; grid-auto-flow: column; grid-auto-columns: minmax(260px, calc((100% - 3 * var(--sp-lg)) / 4));
-  gap: var(--sp-lg); overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px 2px 8px; scrollbar-width: none;
+  /* 좌우·위 6px — 카드 초점 테두리(2px + 띄움 3px)가 가로 스크롤 경계에 반쯤 잘렸다. 음수 여백으로 자리는 그대로 */
+  gap: var(--sp-lg); overflow-x: auto; scroll-snap-type: x mandatory; padding: 6px 6px 8px; margin: -2px -6px 0; scrollbar-width: none;
 }
 .shelf::-webkit-scrollbar { display: none; }
 .shelf > .card { scroll-snap-align: start; }
@@ -1243,7 +1258,7 @@ select.select {
 .chip:hover { background: var(--surface-elevated); color: var(--text-primary); }
 .chip.active { background: var(--text-primary); color: var(--background); border-color: transparent; font-weight: 600; }
 /* 홈 칩은 한 줄 가로 스크롤 + 개수 */
-.home-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 2px; margin: -2px -2px var(--sp-lg); }
+.home-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 5px; margin: -5px -5px var(--sp-lg); } /* 초점 테두리가 잘리지 않게 */
 .home-chips::-webkit-scrollbar { display: none; }
 .home-chips .chip { flex: none; display: inline-flex; align-items: center; gap: 6px; }
 .home-chips .chip-count { margin: 0; }
@@ -1364,6 +1379,8 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .segmented.page-tabs { display: flex; width: fit-content; max-width: 100%; min-width: 0; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
 .segmented.page-tabs::-webkit-scrollbar { display: none; }
 .segmented.page-tabs .seg { flex: none; white-space: nowrap; }
+/* 스크롤되는 탭 줄·대기열 안은 초점 테두리를 안쪽에 — 바깥으로 나가면 overflow 경계에 잘렸다(감사 UX-H05) */
+.segmented.page-tabs .seg:focus-visible, .hero-queue :focus-visible { outline-offset: -2px; }
 /* 넘친 쪽 끝을 흐리게 — 더 있다는 표시(a11y.watchEdges 가 data-edge 를 단다) */
 .segmented.page-tabs[data-edge="end"] { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
 .segmented.page-tabs[data-edge="start"] { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px); mask-image: linear-gradient(90deg, transparent, #000 36px); }
@@ -1645,7 +1662,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .channel-avatar .strip-live { top: auto; bottom: -6px; left: 50%; transform: translateX(-50%); border-color: var(--surface-base); }
 .channel-id h1 { font-size: var(--fs-title); font-weight: 800; letter-spacing: -0.5px; display: flex; align-items: center; gap: 6px; }
 .channel-id p { color: var(--text-secondary); font-size: var(--fs-caption); margin-top: 4px; }
-.channel-id p b { color: var(--live); }
+.channel-id p b { color: var(--live-text); }
 .channel-actions { display: flex; align-items: center; gap: var(--sp-sm); flex-wrap: wrap; }
 .channel-actions .fav.on { color: var(--donation); }
 .channel-actions .icon-btn.round svg { width: 17px; height: 17px; }
@@ -1775,6 +1792,11 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .media-stage.vertical { aspect-ratio: 9 / 16; max-height: calc(100vh - 200px); max-width: 100%; height: calc(100vh - 200px); }
 .media-stage video { width: 100%; height: 100%; display: block; background: #000; }
 .media-stage .empty { height: 100%; color: #ccc; }
+.media-error { /* 영상 위 — 두 테마 모두 어두운 막이라 단추 글자·면도 영상용 값 */
+  --text-primary: #fff; --text-secondary: rgba(255, 255, 255, 0.78); --surface-elevated: rgba(255, 255, 255, 0.12); --border: rgba(255, 255, 255, 0.22); --hover: rgba(255, 255, 255, 0.16);
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  padding: 16px; text-align: center; background: rgba(0, 0, 0, 0.72); color: rgba(255, 255, 255, 0.88); font-size: var(--fs-body); }
+.media-error .error-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-sm); }
 .media-stage .empty > strong { color: #fff; } /* 검은 무대 위 — 라이트 테마에서도 밝게 */
 .media-bar { display: flex; align-items: center; gap: var(--sp-sm); flex-wrap: wrap; margin-top: var(--sp-md); }
 .media-title { font-size: var(--fs-headline); font-weight: 800; letter-spacing: -0.3px; line-height: 1.3; }
@@ -1915,7 +1937,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .chat-line.mention { background: var(--primary-dim); border-radius: var(--radius-xs); box-shadow: inset 3px 0 0 var(--primary); padding-left: 8px; }
 .chat-line.highlighted { background: rgba(91, 163, 255, 0.12); border-radius: var(--radius-xs); padding-left: 8px; box-shadow: inset 3px 0 0 var(--accent-blue); }
 .chat-line[data-uid]:hover { background: var(--hover); border-radius: var(--radius-xs); }
-.read-divider { display: flex; align-items: center; gap: 8px; margin: 8px 0; color: var(--live); font-size: var(--fs-micro); font-weight: 700; }
+.read-divider { display: flex; align-items: center; gap: 8px; margin: 8px 0; color: var(--live-text); font-size: var(--fs-micro); font-weight: 700; }
 .read-divider::before, .read-divider::after { content: ""; flex: 1; height: 1px; background: currentColor; opacity: 0.5; }
 .chat-hbtn { width: 28px; height: 28px; position: relative; color: var(--text-tertiary); }
 .chat-hbtn svg { width: 16px; height: 16px; }
@@ -1995,7 +2017,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .mention-count[hidden] { display: none; }
 .chat-header .chat-collapse { margin-left: 0; }
 .chat-notice { display: flex; align-items: flex-start; gap: 6px; }
-.chat-notice .notice-body { flex: 1; min-width: 0; }
+.chat-notice .notice-body { flex: 1; min-width: 0; max-height: 7.5em; overflow-y: auto; overscroll-behavior: contain; } /* 긴 공지가 채팅 칸을 다 먹지 않게 */
 .notice-x { width: 22px; height: 22px; flex: none; font-size: var(--fs-tiny); color: var(--text-tertiary); }
 .chat-pin {
   display: flex; align-items: flex-start; gap: 6px; margin: 0 var(--sp-sm) var(--sp-sm); padding: 6px 8px; border-radius: var(--radius-ms);
@@ -2024,7 +2046,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
   border-radius: var(--radius-ml); box-shadow: var(--shadow-lg);
 }
 .emoji-picker[hidden], .chat-autocomplete[hidden], .chat-tray[hidden] { display: none; }
-.emoji-picker { left: 8px; right: 8px; bottom: calc(100% + 6px); max-height: 340px; display: flex; flex-direction: column; padding: 8px; gap: 6px; }
+.emoji-picker { left: 8px; right: 8px; bottom: calc(100% + 6px); max-width: 380px; max-height: min(340px, calc(100vh - 140px)); display: flex; flex-direction: column; padding: 8px; gap: 6px; }
 .emoji-search { height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--surface-base); padding: 0 10px; outline: none; }
 .emoji-tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; flex: none; }
 .emoji-tabs[hidden] { display: none; }
@@ -2069,6 +2091,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
   position: fixed; z-index: var(--z-popover); width: 264px; padding: 6px; border-radius: var(--radius-lg); --tail: 24px;
   background: var(--surface-popover); border: 1px solid var(--border-subtle); box-shadow: var(--shadow-lg);
   display: flex; flex-direction: column; gap: 2px; outline: none;
+  max-height: calc(100vh - 16px); overflow-y: auto; /* 짧은 창에서 아래가 잘렸다 */
 }
 .user-pop[hidden] { display: none; }
 .user-pop::after {
@@ -2079,7 +2102,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .user-pop[data-side="top"]::after { bottom: -7px; rotate: 45deg; }
 /* 닉네임이 연 자리를 떠나면(채팅이 흘러감) 꼬리를 감춘다 — 말풍선은 그 자리에 남는다 */
 .user-pop.detached::after { opacity: 0; transition: opacity var(--dur-2, .18s) ease; }
-.up-head { display: flex; align-items: center; gap: 10px; padding: 8px 8px 4px; }
+.user-pop .up-head { display: flex; align-items: center; gap: 10px; padding: 8px 8px 4px; }
 .up-avatar { width: 42px; height: 42px; flex: none; border-radius: 50%; object-fit: cover; background: var(--surface-overlay); }
 .up-avatar-text { display: grid; place-items: center; font-weight: 700; color: var(--text-secondary); }
 .up-who { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
@@ -2097,8 +2120,9 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .up-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 2px 8px 8px; color: var(--text-tertiary); font-size: var(--fs-footnote); min-height: 22px; }
 .up-facts i { font-style: normal; opacity: .6; }
 .up-facts.loading { color: var(--text-tertiary); }
-.up-live { color: var(--live); font-weight: 700; }
-.up-sub { color: var(--subscription); font-weight: 600; }
+/* .up-* 는 사용률 팝오버(usage.css .usage-pop)도 쓰는 이름 — 서로 덮지 않게 팝오버마다 한정한다. */
+.user-pop .up-live { color: var(--live-text); font-weight: 700; }
+.user-pop .up-sub { color: var(--subscription); font-weight: 600; }
 .up-main { display: flex; gap: 6px; padding: 0 6px 6px; }
 .up-main:empty { display: none; }
 .up-btn {
@@ -2149,7 +2173,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .setting.column { flex-direction: column; align-items: stretch; }
 .range-field { display: inline-flex; align-items: center; gap: 8px; }
 .range-field input { width: 160px; accent-color: var(--primary); }
-.range-field output { min-width: 22px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.range-field output { min-width: 5.5ch; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 .word-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .word-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 10px; border-radius: var(--radius-pill); background: var(--surface-elevated); border: 1px solid var(--border-subtle); font-size: var(--fs-footnote); }
 .word-chip button { border: 0; background: transparent; color: var(--text-tertiary); font-size: var(--fs-micro); padding: 2px 6px; border-radius: var(--radius-pill); }
@@ -2206,7 +2230,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .shelf-nav[hidden] { display: none; }
 .search-section:hover .shelf-nav { opacity: 1; }
 /* 선반 — 오른쪽에 더 있을 때만 끝을 흐린다(fitShelves). 카드가 들릴 때 고리가 잘리지 않게 위아래 여백. */
-.search-preview { margin: -4px -2px -8px; }
+.search-preview { margin: -6px -6px -8px; }
 .search-preview.has-more { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent); }
 .search-preview.channel-shelf { grid-auto-columns: minmax(230px, calc((100% - 3 * var(--sp-lg)) / 4)); }
 .search-preview.clip-preview { grid-auto-columns: minmax(150px, calc((100% - 7 * var(--sp-lg)) / 8)); }
@@ -2243,7 +2267,10 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
   border: 1px solid var(--border-subtle); background: var(--surface-base); padding: 0;
   transition: transform 0.18s var(--ease-out), box-shadow 0.18s var(--ease-out);
 }
-.category-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+/* 호버는 카드+고정 별 묶음(.category-item) 기준 — 별에 마우스를 올리면 카드 호버가 풀려 카드가 내려앉았다(감사 UX-M04) */
+.category-item:hover > .category-card { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.category-pin { transition: translate .15s var(--ease-out); }
+.category-item:hover > .category-pin { translate: 0 -2px; }
 .category-art { position: relative; aspect-ratio: 16 / 8; background: var(--surface-elevated); overflow: hidden; }
 .category-art img { width: 100%; height: 100%; object-fit: cover; filter: saturate(1.1); }
 .category-info { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px 12px; }
@@ -2274,7 +2301,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .palette-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-ms); cursor: pointer; }
 .palette-item.active { background: var(--primary-dim); }
 .palette-item .avatar { width: 26px; height: 26px; }
-.palette-label { font-weight: 600; font-size: var(--fs-caption); white-space: nowrap; }
+.palette-label { font-weight: 600; font-size: var(--fs-caption); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; } /* 긴 채널 이름이 줄 밖으로 넘쳤다 */
 .palette-hint { flex: 1; text-align: right; color: var(--text-tertiary); font-size: var(--fs-footnote); }
 
 /* ══ 셸 (SYS-02·09·12·13·14) ═══════════════════════════════════ */
@@ -2301,9 +2328,9 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .about { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 8px 0; }
 .brand-mark.big { width: 64px; height: 64px; border-radius: var(--radius-lg); display: grid; place-items: center; font-size: var(--fs-title); color: var(--on-primary); background: var(--brand-gradient); box-shadow: 0 10px 30px var(--primary-glow); }
 .small { font-size: var(--fs-footnote); }
-.update-sheet { display: flex; flex-direction: column; gap: var(--sp-sm); min-width: 340px; max-width: 480px; }
+.update-sheet { display: flex; flex-direction: column; gap: var(--sp-sm); min-width: min(340px, 100%); max-width: 480px; }
 .update-summary { font-weight: 700; }
-.update-summary.is-new { color: var(--primary); }
+.update-summary.is-new { color: var(--primary-text); }
 .update-facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: var(--fs-caption); }
 .update-facts dt { color: var(--text-tertiary); }
 .update-facts dd { margin: 0; font-variant-numeric: tabular-nums; word-break: break-all; }
@@ -2731,6 +2758,9 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .mc-merged-input .select { flex: none; max-width: 160px; }
 .merged-line { box-shadow: inset 3px 0 0 var(--mc-color); padding-left: 8px !important; }
 .mc-tag { font-size: var(--fs-micro); font-weight: 800; color: var(--mc-color); margin-right: 6px; }
+/* 라이트 — 채널 8색은 어두운 바탕용이라 흰 바탕에서 1.6~2.8:1 이었다. 검정과 섞어 4.9:1 이상(감사 UX-H21) */
+:root[data-theme="light"] .mc-tag { color: color-mix(in srgb, var(--mc-color) 55%, #000); }
+@media (prefers-color-scheme: light) { :root[data-theme="system"] .mc-tag { color: color-mix(in srgb, var(--mc-color) 55%, #000); } }
 /* 통합 줄 — 단일 채팅과 같은 줄(chat.js lineHtml)에 출처 태그(.mc-tag)를 붙인다.
    촘촘(.mc-compact, 기본 — 설정 chat.mergedChatStyle)은 말풍선·아바타 없이 한 줄에 [태그·배지·닉네임] 글 시간.
    여러 채널이 섞여 같은 사람 묶음이 거의 생기지 않고, 말풍선은 메시지마다 이름 줄과 말풍선 줄·아바타 자리를 써서
@@ -2780,7 +2810,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .stats-card { padding: 16px 18px; border-radius: var(--radius-lg); background: var(--surface-elevated); border: 1px solid var(--border-subtle); min-width: 0; }
 .stats-card :is(h2, h3) { margin: 0 0 12px; font-size: var(--fs-subhead); }
 .stats-card .sub-h { margin-top: 18px; }
-.stats-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--sp-md); }
+.stats-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: var(--sp-md); } /* 좁은 창·확대에서 가로로 넘쳤다 */
 .rank-no { color: var(--text-tertiary); font-variant-numeric: tabular-nums; text-align: right; }
 .rank-track { height: 8px; border-radius: var(--radius-xxs); background: var(--hover); overflow: hidden; }
 .rank-fill { display: block; height: 100%; border-radius: var(--radius-xxs); background: var(--brand-gradient, var(--primary)); }
@@ -2949,7 +2979,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .history-list { display: flex; flex-direction: column; gap: 6px; }
 .history-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: var(--radius-md); background: var(--surface-elevated); border: 1px solid var(--border-subtle); text-align: left; color: inherit; cursor: pointer; }
 .history-row:hover { background: var(--hover); }
-.live-dot-text { color: var(--live); font-size: var(--fs-micro); font-weight: 600; }
+.live-dot-text { color: var(--live-text); font-size: var(--fs-micro); font-weight: 600; }
 .data-table { width: 100%; border-collapse: collapse; font-size: var(--fs-footnote); }
 .data-table td { padding: 6px 2px; border-bottom: 1px solid var(--border-subtle); }
 .data-table td.num { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
@@ -2974,6 +3004,9 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 
 /* ── 다운로드 (VOD-06·07) ───────────────── */
 .dl-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: var(--fs-footnote); }
+/* 긴 저장 경로는 한 줄 말줄임, 단추는 줄바꿈 없이(좁은 창에서 세로로 쪼개졌다) */
+.dl-head > .muted { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dl-head > .btn { flex: none; white-space: nowrap; }
 .dl-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
 .dl-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius-md); background: var(--surface-elevated); border: 1px solid var(--border-subtle); }
 .dl-row.missing { opacity: 0.6; }
@@ -2989,7 +3022,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 /* ── 팔로잉 인사이트·검색 디스커버리·사이드바 빠른 동작 (NAV-05·07·13) ───────── */
 .insight-rail { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 14px; margin-bottom: 12px; border-radius: var(--radius-lg); background: var(--surface-elevated); border: 1px solid var(--border-subtle); }
 .insight { display: flex; flex-direction: column; gap: 2px; padding: 0 12px; border-right: 1px solid var(--border-subtle); }
-.insight:last-of-type { border-right: 0; }
+.insight:last-of-type, .insight:not(:has(~ .insight)) { border-right: 0; } /* 뒤에 .grow(div)가 붙으면 last-of-type 이 그쪽을 집어 마지막 지표 오른쪽 선이 남았다 */
 .insight span { font-size: var(--fs-micro); color: var(--text-tertiary); }
 .insight strong { font-size: var(--fs-subhead); }
 .discover-rail { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
@@ -2997,7 +3030,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .discover-item:hover { background: var(--hover); }
 .discover-item .avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: var(--hover); }
 .discover-item span { max-width: 100%; font-size: var(--fs-footnote); font-weight: 600; }
-.discover-item small { font-size: var(--fs-micro); color: var(--live); }
+.discover-item small { font-size: var(--fs-micro); color: var(--live-text); }
 .discovery { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
 .side-extras { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 4px; }
 .side-quick { flex: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; height: 50px; transition: height var(--sb-dur) var(--sb-ease); }
@@ -3112,7 +3145,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .picker-row:hover { background: var(--hover); }
 .picker-row .avatar { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; background: var(--hover); flex: none; }
 .picker-row span { flex: 1; min-width: 0; font-size: var(--fs-footnote); }
-.picker-row small { color: var(--live); font-size: var(--fs-micro); }
+.picker-row small { color: var(--live-text); font-size: var(--fs-micro); }
 
 /* ── 투명도 (SYS-22) — 원본 TransparencyPolicy·LiquidGlass: 선명하게=유리 질감, 불투명=단색 ───────── */
 :root[data-transparency="full"] .sidebar { background: color-mix(in srgb, var(--sidebar) 72%, transparent); backdrop-filter: blur(28px) saturate(1.6); -webkit-backdrop-filter: blur(28px) saturate(1.6); }
@@ -3356,6 +3389,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .ip-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .ip-bars li { display: flex; flex-direction: column; gap: 4px; }
 .ip-bars li[data-ip-category], .ip-bars li[data-ip-channel] { cursor: pointer; }
+.ip-bar-btn { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 0; border: 0; border-radius: var(--radius-xs); background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.ip-bar-btn:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 2px; }
 .ip-bars li[data-ip-category]:hover .ip-bar-name { color: var(--primary-text); }
 .ip-bar-row { display: flex; align-items: baseline; gap: 8px; font-size: var(--fs-footnote); }
 .ip-bar-name { flex: 1; min-width: 0; color: var(--text-secondary); }
@@ -3392,6 +3427,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 @media (max-width: 1240px) {
   .insight-panel, .ip-reopen { display: none !important; }
   .content.with-insights > .page { right: 0; }
+  .content.with-insights > .refresh-veil { right: 0; } /* 패널을 숨겼으니 새로고침 덮개도 가운데로(150px 치우쳤다) */
 }
 
 /* ══ 치지직 플레이어식 영상 오버레이 — 시청 화면 ══
@@ -3439,7 +3475,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .stage-center-play:hover { transform: scale(1.06); background: rgba(0, 0, 0, 0.6); }
 .player-stage.paused .stage-center-play { display: grid; }
 /* 오버레이 위로 뜨는 고급 패널·알림 OSD 는 막대보다 위 */
-.player-stage .player-panel { z-index: 7; bottom: 64px; }
+.player-stage .player-panel { z-index: 7; bottom: 64px; max-height: calc(100% - 76px); } /* 아래 64 + 위 12 — 100%-24 그대로면 위가 40px 잘려 탭 줄이 무대 밖으로 나갔다 */
+/* 알림 OSD(일시정지·볼륨)는 가운데 재생 단추(z 4)보다 위 */
+.player-stage .player-osd { z-index: 6; }
+/* 후원 알림은 위쪽 정보 막대(z 5)보다 위 — 막대가 보일 때 알림을 끌면 막대의 채널 제목을 눌러 채널 화면으로 가 버렸다 */
+#viewer .player-stage > .stream-alerts { z-index: 6; }
 
 /* 시청 화면 머리 — 다른 메뉴와 같은 페이지 제목("라이브"). 채널 정보·바로 전환·창 동작은 영상 위 위쪽 오버레이로. */
 .viewer-header.page-header { position: static; flex: none; margin: 0; }
@@ -3542,6 +3582,14 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
   .vt-menu .vt-narrow:not([hidden]) { display: flex; }
   .vt-q-badge { display: none; }
 }
+/* 아래 막대 — 단추 12개가 한 줄이라 무대 폭 약 450px 아래(플레이어 창 360px·채팅과 함께 보기)에서 오른쪽 단추가 잘렸다.
+   ⋯ 메뉴(.vt-menu)에도 있는 스크린샷·북마크·다시 연결·영상+채팅 전체 화면부터 감춘다(감사 UX-C05). 멈춤·배속 중에는 LIVE 단추도 보여 단추가 다 드는 폭은 약 520px. */
+@container vstage (max-width: 520px) {
+  .chzzk-bar :is(#ctl-shot, #ctl-bookmark, #reload, #ctl-fullscreen-chat) { display: none; }
+}
+@container vstage (max-width: 400px) {
+  .chzzk-bar .player-status { display: none; }
+}
 .stage-top .rail-item[hidden], .stage-top .rail-more[hidden] { display: none; }
 .stage-top .rail-more { flex: none; height: 32px; min-width: 32px; padding: 0 8px; border-radius: var(--radius-lg); border: 1px solid rgba(255, 255, 255, 0.28);
   background: rgba(0, 0, 0, 0.3); color: #fff; font-size: var(--fs-footnote); font-weight: 700; cursor: pointer; }
@@ -3563,9 +3611,16 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 :root[data-platform="windows"] .titlebar-strip { height: 0; margin-top: 0; }
 /* !important — 화면마다 머리줄 여백을 다시 정한다(라이브·멀티라이브·시청 화면). 창 단추 자리는 어느 머리줄이든 비워야 한다. */
 :root[data-platform="windows"]:not([data-window]) .page-header { padding-right: calc(var(--sp-md) + var(--wc-w)) !important; }
+/* 홈 머리줄(검색·새로고침·사용률 칩)은 .page-header 가 아니다 — 같은 만큼 비킨다(.page 좌우 여백 --sp-xxl 은 이미 있다) */
+:root[data-platform="windows"]:not([data-window]) .home-header { padding-right: calc(var(--wc-w) - var(--sp-xxl) + var(--sp-md)); }
+/* 시청 화면 채팅은 창 오른쪽 위 끝까지 올라간다 — 창 단추 띠만큼 내려 머리줄 도구·접기 단추가 단추 밑에 깔리지 않게 */
+:root[data-platform="windows"]:not([data-window], .is-fullscreen) #viewer > .chat { padding-top: var(--wc-h); }
+/* 오프라인 띠(노랑) 위에 투명 창 단추가 겹치면 단추가 1.1~1.5:1 로 안 보였다 — 띠를 단추 띠 아래로 */
+:root[data-platform="windows"]:not([data-window]) .offline-banner { top: var(--wc-h); }
 /* 인사이트 패널이 펼쳐져 있으면 화면이 창 오른쪽 끝에 닿지 않는다 — 단추는 패널 위에 놓이니 머리줄은 비킬 필요 없다(좁은 창에선 패널을 숨긴다) */
 @media (min-width: 1241px) {
   :root[data-platform="windows"]:not([data-window]) .content.with-insights > .page > .page-header { padding-right: var(--sp-xxl) !important; }
+  :root[data-platform="windows"]:not([data-window]) .content.with-insights > .page > .home-header { padding-right: 0; }
 }
 :root[data-platform="windows"]:not([data-window]) .insight-panel { padding-top: var(--wc-h); }
 :root[data-platform="windows"]:not([data-window]) .ip-toggle { top: calc(var(--wc-h) + 14px); }
@@ -3640,7 +3695,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
   font-size: var(--fs-caption);
 }
 .ad-top { top: 0; background: linear-gradient(rgba(0, 0, 0, 0.55), transparent); }
-.ad-bottom { bottom: 0; background: linear-gradient(transparent, rgba(0, 0, 0, 0.6)); }
+.ad-bottom { bottom: 0; flex-wrap: wrap; row-gap: 6px; background: linear-gradient(transparent, rgba(0, 0, 0, 0.6)); } /* 좁은 패인에서 단추가 잘리지 않게 줄을 바꾼다 */
 .ad-badge {
   padding: 2px 7px;
   border-radius: var(--radius-xxs);

@@ -7,6 +7,8 @@ import { esc, toast } from './dom.js';
 import { chatPrefs, onChatPrefs, updateChatPrefs } from './chat-prefs.js';
 import { formatCheese, donationKindLabel, donorName } from './donations.js';
 import { DonationList } from './donation-list.js';
+import { lineCopyText } from './chat-actions.js';
+import { REVEAL_LABEL } from './platform.js';
 
 // 채팅 디자인은 카카오톡형 말풍선 하나(2026-10-23 통합). 라운지·치지직·하이브리드·iMessage·이전 스타일은 없앴고
 // 좋던 점(닉네임 해시색·호버 줄·아바타 색·"나를 언급"·둥근 입력창)은 이 말풍선에 넣었다. 저장된 designStyle 은 쓰지 않는다.
@@ -143,14 +145,15 @@ export function installChatExtras(panel) {
     const lines = [...panel.list.querySelectorAll('.chat-line')].map((l) => {
       const time = l.querySelector('.chat-time')?.textContent || '';
       const nick = l.dataset.nick || '';
-      const amount = l.querySelector('.amount')?.textContent || '';
-      const text = l.querySelector('.text')?.textContent || l.textContent;
+      const amount = l.querySelector('.ev-value')?.textContent || '';
+      // lineCopyText — 이모티콘은 :이름: 으로, 후원 본문(.ev-body)도 읽는다. 본문이 없는 줄(시스템 안내)만 줄 전체 글자.
+      const text = lineCopyText(l) || (amount ? '' : l.textContent.trim());
       return `${time ? `[${time}] ` : ''}${nick ? `${nick}: ` : ''}${amount ? `(${amount}) ` : ''}${text}`.trim();
     });
     if (!lines.length) { toast('내보낼 채팅이 없습니다'); return; }
     try {
       const path = await api.saveFile('chat', `채팅_${panel.channelId || 'cview'}_${stamp()}.txt`, null, lines.join('\n'));
-      toast(`채팅 ${lines.length}줄을 저장했습니다`, 5000, { label: 'Finder에서 보기', run: () => api.revealPath(path) });
+      toast(`채팅 ${lines.length}줄을 저장했습니다`, 5000, { label: REVEAL_LABEL, run: () => api.revealPath(path) });
     } catch (e) { toast(e.message); }
   };
 

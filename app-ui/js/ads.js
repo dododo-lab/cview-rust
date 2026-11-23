@@ -4,6 +4,7 @@
 // 광고를 받지 못하거나 재생에 실패하면 조용히 넘어가 본 재생을 막지 않는다.
 import { api } from './api.js';
 import { esc } from './dom.js';
+import { trapFocus } from './a11y.js';
 
 const PLAN_TIMEOUT_MS = 5000;
 const MAX_WRAPPERS = 5;
@@ -14,6 +15,20 @@ const MEDIA_TYPES = ['video/mp4', 'video/webm'];
 const STALL_MS = 12000;
 
 let audioHooks = { hold() {}, release() {} };
+
+// 광고 소리 — 예전엔 늘 소리 켜고 100% 로 틀어 작게 듣던 사람에게 광고만 크게 났다(감사 UX-C04).
+// 시청 화면 볼륨(#volume)을 따르고, 광고에서 고른 소리 끄기는 이 기기에 기억한다.
+const AD_MUTED_KEY = 'cview.adMuted';
+function adMutedPref() {
+  try { return localStorage.getItem(AD_MUTED_KEY) === '1'; } catch { return false; }
+}
+function setAdMutedPref(on) {
+  try { localStorage.setItem(AD_MUTED_KEY, on ? '1' : '0'); } catch { /* 저장 못 해도 이번 광고에는 걸린다 */ }
+}
+function adVolume() {
+  const v = Number(document.querySelector('#volume')?.value);
+  return Number.isFinite(v) && v > 0 ? Math.min(1, v / 100) : 1;
+}
 
 /** 광고 동안 보던 방송 소리를 끄고 되살리는 훅(app.js 가 소리 주인 규칙으로 건다). */
 export function setAdAudioHooks(hooks) {
@@ -144,11 +159,12 @@ class AdOverlay {
         </div>
         <div class="ad-bottom">
           <button class="ad-btn ad-more" hidden>자세히 보기</button>
-          <button class="ad-btn ad-unmute" hidden>소리 켜기</button>
+          <button class="ad-btn ad-unmute" aria-pressed="false">소리 끄기</button>
           <button class="ad-btn ad-resume" hidden>광고 계속 보기</button>
           <a class="ad-cheat" href="${esc(cheatKeyUrl)}">치트키로 광고 없이 보기</a>
           <span class="grow"></span>
           <button class="ad-btn ad-skip" disabled>광고 건너뛰기</button>
+          ${host ? '' : '<button class="ad-btn ad-close" title="광고를 닫고 돌아가기 (Esc)">닫기</button>'}
         </div>
       </div>`;
     this.video = this.root.querySelector('video');
@@ -166,6 +182,22 @@ class AdOverlay {
     });
     (host || document.body).append(this.root);
     requestAnimationFrame(() => this.root.classList.add('shown'));
+    // 창 전체 광고(다시보기)는 모달 — 초점을 가두고 Esc·닫기로 그만두고 돌아갈 수 있게(예전엔 끝날 때까지 갇혔다).
+    this.onCancel = null;
+    this.release = null;
+    if (!host) {
+      this.root.tabIndex = -1;
+      this.root.setAttribute('aria-modal', 'true');
+      this.release = trapFocus(this.root);
+      this.root.focus({ preventScroll: true });
+      this.root.querySelector('.ad-close').addEventListener('click', () => this.onCancel?.());
+      this.root.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        e.preventDefault();
+        e.stopPropagation();
+        this.onCancel?.();
+      });
+    }
   }
 
   setCount(index, total) {
@@ -174,6 +206,7 @@ class AdOverlay {
   }
 
   remove() {
+    if (this.release) this.release();
     this.video.pause();
     this.video.removeAttribute('src');
     this.video.load();
@@ -245,10 +278,14 @@ function playOne(ui, candidate, vast, session) {
     ui.skip.disabled = true;
     ui.skip.hidden = skipAt === null;
     ui.more.hidden = !vast.clickThrough;
-    ui.unmute.hidden = true;
     ui.resume.hidden = true;
-    video.muted = false;
-    video.volume = 1;
+    video.volume = adVolume();
+    video.muted = adMutedPref();
+    const syncSound = () => {
+      ui.unmute.textContent = video.muted ? '소리 켜기' : '소리 끄기';
+      ui.unmute.setAttribute('aria-pressed', String(video.muted));
+    };
+    syncSound();
     video.src = vast.media;
     track(gfp.ackImpressions);
     track(gfp.attached);
@@ -292,6 +329,7 @@ function playOne(ui, candidate, vast, session) {
       }
     };
     video.onvolumechange = () => {
+      syncSound();
       if (video.muted) { fire('mute'); fired.delete('unmute'); track(gfp.mute); } else { fire('unmute'); fired.delete('mute'); }
     };
     video.onended = () => {
@@ -316,12 +354,11 @@ function playOne(ui, candidate, vast, session) {
     };
     ui.resume.onclick = resumeAd;
     video.onclick = resumeAd;
-    ui.unmute.onclick = () => { video.muted = false; ui.unmute.hidden = true; };
+    ui.unmute.onclick = () => { video.muted = !video.muted; setAdMutedPref(video.muted); };
 
     video.play().catch(() => {
-      // 자동 재생이 소리 때문에 막혔으면 소리 없이 틀고 켜기 단추를 보인다.
+      // 자동 재생이 소리 때문에 막혔으면 소리 없이 튼다(단추가 '소리 켜기'로 바뀐다).
       video.muted = true;
-      ui.unmute.hidden = false;
       video.play().catch(() => fail(400));
     });
   });
@@ -378,6 +415,7 @@ export async function playPreroll(kind, id, { host = null, player = null, target
     if (!slots.length) return true;
     if (host && !host.isConnected) return false;
     ui = new AdOverlay(plan.cheatKeyUrl, host);
+    ui.onCancel = () => handle.cancel();
     holdAudio(host ? target : null);
     held = true;
     if (host) {

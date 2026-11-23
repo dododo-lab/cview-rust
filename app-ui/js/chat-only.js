@@ -21,7 +21,7 @@ export class ChatOnlyPage {
         <button class="back-btn" data-co="back">‹ 뒤로</button>
         <span class="chatonly-avatar"></span>
         <div class="chatonly-title"><h1 class="page-title ellipsis">채팅</h1><span class="page-subtitle ellipsis"></span></div>
-        <div class="grow"></div>
+        <div class="grow" data-tauri-drag-region></div>
         ${standalone ? '<button class="btn" data-co="pick">채널 바꾸기</button>' : `<button class="btn ghost" data-co="window" title="${kbd('이 채팅을 새 창으로 (⇧⌘C)')}">새 창</button>`}
         <button class="btn primary" data-co="play">▶ 영상 보기</button>
       </header>
@@ -39,13 +39,30 @@ export class ChatOnlyPage {
       const a = e.target.closest('[data-co]');
       if (!a) return;
       if (a.dataset.co === 'back') this.onBack();
-      if (a.dataset.co === 'pick') this.showPicker();
+      if (a.dataset.co === 'pick') this.togglePicker(a);
       if (a.dataset.co === 'window' && this.channelId) api.windowOpen('chat', { channelId: this.channelId }).catch((er) => toast(er.message));
       if (a.dataset.co === 'pick-channel') this.show({ channelId: a.dataset.channelId });
       if (a.dataset.co === 'play' && this.channelId) this.onPlay(this.channelId);
     });
     new MutationObserver(() => { if (this.root.hidden && this.chat.active) this.chat.disconnect(); })
       .observe(this.root, { attributes: true, attributeFilter: ['hidden'] });
+  }
+
+  /** '채널 바꾸기' — 다시 누르거나 Esc 면 닫는다(예전엔 채널을 골라야만 닫혔다, 감사 UX-M09). */
+  togglePicker(opener) {
+    const box = this.root.querySelector('.chat-picker');
+    if (!box.hidden && this.channelId) { box.hidden = true; return; }
+    if (!this.pickerKeys) {
+      this.pickerKeys = true;
+      box.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' || !this.channelId) return;
+        e.preventDefault();
+        e.stopPropagation();
+        box.hidden = true;
+        opener?.focus({ preventScroll: true });
+      });
+    }
+    this.showPicker();
   }
 
   /** 채널 피커 (CHT-23) — 방송 중인 팔로잉(없으면 인기)에서 고른다. */

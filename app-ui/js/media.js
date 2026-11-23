@@ -108,8 +108,9 @@ export class MediaPage {
       video.addEventListener('loadedmetadata', () => { video.currentTime = info.resumeAt; }, { once: true });
       toast(`${formatDuration(info.resumeAt)}부터 이어서 재생합니다`, 2200);
     }
+    // 실패하면 2.6초 토스트만 뜨고 검은 화면이 남았다(감사 UX-C06) — 무대 안에 다시 시도·치지직에서 열기를 둔다.
     video.addEventListener('error', () => {
-      if (seq === this.seq) toast('영상을 불러오지 못했습니다');
+      if (seq === this.seq) this.showStageError(video);
     });
     this.savedAt = null;
     this.saveTimer = setInterval(() => this.saveProgress(), SAVE_EVERY_MS);
@@ -170,6 +171,17 @@ export class MediaPage {
       .catch(() => {});
   }
 
+  /** 다시보기 재생 실패 안내 — 영상 위에 문구와 '다시 시도'·'치지직에서 열기'(onClick 의 retry·external). */
+  showStageError(video) {
+    const stage = video.closest('.media-stage');
+    if (!stage || stage.querySelector('.media-error')) return;
+    stage.insertAdjacentHTML('beforeend', `
+      <div class="media-error" role="alert">
+        <p>영상을 불러오지 못했습니다</p>
+        <div class="error-actions"><button class="btn" data-media="retry">다시 시도</button><button class="btn ghost" data-media="external">치지직에서 열기</button></div>
+      </div>`);
+  }
+
   leave() {
     cancelPreroll();
     clearInterval(this.saveTimer);
@@ -195,6 +207,12 @@ export class MediaPage {
     if (!a) return;
     switch (a.dataset.media) {
       case 'back': this.onBack(); break;
+      case 'retry': {
+        const v = this.video;
+        a.closest('.media-error')?.remove();
+        if (v && this.info && this.info.streamUrl) { v.src = this.info.streamUrl; v.load(); v.play().catch(() => {}); }
+        break;
+      }
       case 'channel': this.onOpenChannel(a.dataset.channelId); break;
       case 'external': {
         const url = this.kind === 'vod'

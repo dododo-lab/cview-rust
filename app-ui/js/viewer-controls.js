@@ -358,7 +358,8 @@ export class ViewerControls {
     this.liveButton.textContent = badge.text;
     this.liveButton.classList.toggle('behind', badge.behind || paused);
     // 라이브 끝이면 숨긴다 — "LIVE" 는 위쪽 방송 정보 칩이 이미 보여 준다. 늦어지면 "-N초"(누르면 따라잡기)로 나타난다.
-    this.liveButton.classList.toggle('at-edge', !badge.behind);
+    // 멈췄거나 배속을 바꿨으면 늘 보인다 — 안내("LIVE 를 누르면 1배속")가 가리키는 단추가 사라져 있었다(감사 UX-H13).
+    this.liveButton.classList.toggle('at-edge', !badge.behind && !paused && (!v || v.playbackRate === 1));
     const auto = this.manualIndex < 0;
     // 직접 고른 화질은 고른 높이로 — 바꾼 직후엔 영상이 아직 앞 화질이라 720p 를 골라도 1080p 로 보였다.
     const chosen = auto ? null : this.levels.find((l) => l.index === this.manualIndex);
@@ -392,6 +393,7 @@ export class ViewerControls {
     }
     this.qualityOpener = opener;
     this.viewer.topbar?.closeMenu();
+    if (this.viewer.panel && !this.viewer.panel.el.hidden) hideWithExit(this.viewer.panel.el); // 플레이어 설정 패널과 겹치지 않게
     this.viewer.player.call('getLevels');
     this.renderQualityMenu();
     this.qualityMenu.hidden = false;

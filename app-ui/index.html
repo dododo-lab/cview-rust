@@ -39,7 +39,8 @@
         if (!document.body) { document.addEventListener('DOMContentLoaded', showFailure, { once: true }); return; }
         var splash = document.getElementById('splash');
         if (splash) splash.remove();
-        var light = document.documentElement.dataset.theme === 'light';
+        var theme = document.documentElement.dataset.theme;
+        var light = theme === 'light' || (theme === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
         var box = document.createElement('div');
         box.id = 'boot-error';
         box.setAttribute('role', 'alert');
@@ -124,7 +125,7 @@
     <aside class="sidebar">
       <div class="titlebar-strip" data-tauri-drag-region aria-hidden="true"></div>
       <div class="brand-row" data-tauri-drag-region>
-        <div class="brand"><span class="brand-mark"><img class="app-logo logo-light" src="img/logo-light.png" alt="" draggable="false"><img class="app-logo logo-dark" src="img/logo-dark.png" alt="" draggable="false"><span class="brand-sheen" aria-hidden="true"></span></span><span class="brand-name">CView</span></div>
+        <div class="brand" data-tauri-drag-region><span class="brand-mark"><img class="app-logo logo-light" src="img/logo-light.png" alt="" draggable="false"><img class="app-logo logo-dark" src="img/logo-dark.png" alt="" draggable="false"><span class="brand-sheen" aria-hidden="true"></span></span><span class="brand-name">CView</span></div>
       </div>
       <button class="quick-search" data-tip="검색">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>

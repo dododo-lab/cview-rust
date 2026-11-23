@@ -10,6 +10,7 @@ import { esc, safeUrl, imageSrc, toast, channelTone } from './dom.js';
 import { compactCount } from './cards.js';
 import { vodCard, clipCard, relativeDate } from './channel.js';
 import { verifiedBadge } from './verified-badge.js';
+import { trapFocus } from './a11y.js';
 import { bindLiveMotion, countUpIn, rollTo, tabSwap, watchPulse, unwatchPulse } from './live-motion.js';
 
 const TABS = [['info', '정보'], ['vod', '다시보기'], ['clip', '클립'], ['community', '커뮤니티']];
@@ -418,7 +419,9 @@ export class WatchInfoPanel {
       if (e.key === 'Escape') close();
       else step(e.key === 'ArrowRight' ? 1 : -1);
     };
+    let releaseTrap = null;
     function close() {
+      releaseTrap?.();
       box.classList.add('closing');
       document.removeEventListener('keydown', onKey, true);
       setTimeout(() => box.remove(), 160);
@@ -437,6 +440,7 @@ export class WatchInfoPanel {
     document.addEventListener('keydown', onKey, true);
     document.body.append(box);
     show();
+    releaseTrap = trapFocus(box, { restore: false }); // Tab 이 뒤 화면으로 빠지지 않게(돌려주기는 close 가 한다)
     box.querySelector('[data-lb="close"]').focus();
   }
 

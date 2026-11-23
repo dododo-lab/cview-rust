@@ -7,7 +7,7 @@ import { emptyState, loadingState, compactCount, errorState } from './cards.js';
 import { previewAttr } from './hover-preview.js';
 import { verifiedBadge } from './verified-badge.js';
 import { refreshVeiled } from './refresh-veil.js';
-import { syncTabs, bindTabKeys } from './a11y.js';
+import { syncTabs, bindTabKeys, trapFocus } from './a11y.js';
 import { bindLiveMotion, countUpIn, tabSwap, watchPulse, unwatchPulse } from './live-motion.js';
 import { infoTabHtml, fillOverview } from './channel-info.js';
 
@@ -117,7 +117,8 @@ export class ChannelPage {
       this.render();
     } catch (e) {
       if (seq !== this.seq) return;
-      this.body.innerHTML = errorState('채널 정보를 불러오지 못했습니다', e);
+      // 뒤로 단추는 정상 화면(render)에만 있어 실패하면 막다른 화면이 됐다(감사 UX-M04) — onClick 의 'back' 이 받는다.
+      this.body.innerHTML = errorState('채널 정보를 불러오지 못했습니다', e, '<button class="btn" data-ch="back">뒤로</button>');
     }
   }
 
@@ -153,7 +154,7 @@ export class ChannelPage {
             <button class="icon-btn round" data-ch="external" title="치지직에서 열기">${ICON_EXT}</button>
           </div>
         </div>
-        ${live ? `<div class="channel-live-line"><span class="badge-live">LIVE</span> ${esc(live.liveTitle || '')}${live.categoryName ? ` · <span>${esc(live.categoryName)}</span>` : ''}</div>` : ''}
+        ${live ? `<div class="channel-live-line"><span class="badge-live">LIVE</span><span class="ellipsis">${esc(live.liveTitle || '')}${live.categoryName ? ` · <span>${esc(live.categoryName)}</span>` : ''}</span></div>` : ''}
       </header>
       <div class="segmented page-tabs channel-tabs" role="tablist" aria-label="채널">
         ${[['info', '정보'], ['vod', '다시보기'], ['clip', '클립']].map(([id, label]) => `<button class="seg" data-tab="${id}" role="tab">${label}</button>`).join('')}
@@ -308,12 +309,24 @@ export class ChannelPage {
     const cur = all[id] || { channelId: id, channelName: name, notifyOnLive: true, notifyOnCategoryChange: true, notifyOnTitleChange: true };
     const pop = document.createElement('div');
     pop.className = 'notify-pop';
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-label', `${name} 알림`);
     const row = (k, l) => `<label class="setting"><span class="setting-label">${l}</span><span class="toggle"><input type="checkbox" data-nk="${k}" ${cur[k] ? 'checked' : ''}><span></span></span></label>`;
     pop.innerHTML = `<strong>${esc(name)} 알림</strong>${row('notifyOnLive', '방송 시작')}${row('notifyOnCategoryChange', '카테고리 변경')}${row('notifyOnTitleChange', '제목 변경')}<small class="muted">팔로우한 채널만 · 전체 켜기/끄기는 설정 › 일반</small>`;
     document.body.append(pop);
     const r = anchor.getBoundingClientRect();
-    pop.style.top = `${r.bottom + 8}px`;
+    // 아래 자리가 모자라면(짧은 창) 창 안으로 끌어올린다 — 예전엔 아래가 잘렸다.
+    pop.style.top = `${Math.max(12, Math.min(r.bottom + 8, window.innerHeight - pop.offsetHeight - 12))}px`;
     pop.style.left = `${Math.max(12, Math.min(window.innerWidth - 292, r.right - 280))}px`;
+    // 키보드 — 열면 첫 칸으로, Esc 로 닫고 연 단추로 돌아간다(감사 UX-H10).
+    pop.querySelector('input')?.focus({ preventScroll: true });
+    pop.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      pop.remove();
+      anchor.focus({ preventScroll: true });
+    });
     pop.addEventListener('change', async (e) => {
       const k = e.target.dataset.nk;
       if (!k) return;
@@ -333,15 +346,16 @@ export class ChannelPage {
     const dialog = document.createElement('div');
     dialog.className = 'sheet-scrim';
     dialog.innerHTML = `
-      <form class="sheet" role="dialog" aria-label="채널 메모">
+      <form class="sheet" role="dialog" aria-modal="true" aria-label="채널 메모">
         <h2>${esc(this.detail.channel.channelName)} 메모</h2>
         <textarea maxlength="500" placeholder="이 채널에 대해 기억할 것을 적어 두세요">${esc(this.detail.memo || '')}</textarea>
         <div class="sheet-actions"><button type="button" class="btn ghost" data-sheet="cancel">취소</button><button class="btn primary">저장</button></div>
       </form>`;
     document.body.append(dialog);
     const area = dialog.querySelector('textarea');
+    const release = trapFocus(dialog.querySelector('form')); // 초점을 가두고 닫으면 메모 단추로 돌려준다
     area.focus();
-    const close = () => dismiss(dialog);
+    const close = () => { release(); dismiss(dialog); };
     dialog.addEventListener('click', (e) => { if (e.target === dialog || e.target.closest('[data-sheet="cancel"]')) close(); });
     dialog.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
     dialog.querySelector('form').addEventListener('submit', async (e) => {

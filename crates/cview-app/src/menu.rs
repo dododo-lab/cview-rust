@@ -143,10 +143,9 @@ fn items<R: Runtime>(app: &AppHandle<R>, list: &[Item]) -> tauri::Result<Vec<Men
         .unwrap_or_default();
     list.iter()
         .filter(|(id, _, _)| !id.is_empty())
-        .map(|(id, label, accel)| match user_accelerator(&keyboard, id) {
-            // 사용자 단축키가 있는 항목 — 수식 키가 있을 때만 메뉴에 단다(맨 글자는 입력을 빼앗는다).
-            Some(user) => MenuItem::with_id(app, *id, *label, true, user.as_deref()),
-            None => MenuItem::with_id(app, *id, *label, true, *accel),
+        .map(|(id, label, accel)| {
+            let accel = menu_accelerator(user_accelerator(&keyboard, id), *accel);
+            MenuItem::with_id(app, *id, *label, true, accel.as_deref())
         })
         .collect()
 }
@@ -157,6 +156,7 @@ fn shortcut_action(menu_id: &str) -> Option<ShortcutAction> {
         "screenshot" => Some(ShortcutAction::Screenshot),
         "bookmark" => Some(ShortcutAction::BookmarkStream),
         "fullscreen" => Some(ShortcutAction::ToggleFullscreen),
+        "pip" => Some(ShortcutAction::TogglePiP),
         _ => None,
     }
 }
@@ -165,6 +165,17 @@ fn shortcut_action(menu_id: &str) -> Option<ShortcutAction> {
 fn user_accelerator(keyboard: &KeyboardShortcutSettings, menu_id: &str) -> Option<Option<String>> {
     let action = shortcut_action(menu_id)?;
     Some(accelerator(&keyboard.binding(action)))
+}
+
+/// 메뉴 항목에 달 가속기 — 수식 키가 있는 사용자 단축키가 있으면 그것, 아니면 메뉴 기본값. 순수 함수.
+///
+/// 사용자 단축키가 맨 글자(기본 전체 화면 `F`·PiP `P`)면 메뉴에는 달지 않는다(입력을 빼앗는다). 그때 메뉴 기본값
+/// (⇧⌘F·⌥⌘P)까지 없애면 그 단축키가 통째로 사라졌다(감사 UX-C12) — 맨 글자는 시청 화면이 받고 메뉴는 기본값을 둔다.
+fn menu_accelerator(user: Option<Option<String>>, default: Option<&str>) -> Option<String> {
+    match user {
+        Some(Some(user)) => Some(user),
+        _ => default.map(str::to_owned),
+    }
 }
 
 /// `KeyBinding` → Tauri 가속기 문자열. 수식 키가 없거나 키가 비면 `None`. 순수 함수.
@@ -399,6 +410,30 @@ mod tests {
 #[cfg(test)]
 mod accel_tests {
     use super::*;
+
+    #[test]
+    fn plain_user_binding_keeps_menu_default() {
+        // 기본 전체 화면(맨 글자 F) — 메뉴의 ⇧⌘F 는 남는다.
+        assert_eq!(
+            menu_accelerator(Some(None), Some("CmdOrCtrl+Shift+F")).as_deref(),
+            Some("CmdOrCtrl+Shift+F")
+        );
+        // 수식 키가 있는 사용자 단축키는 기본값을 대신한다.
+        assert_eq!(
+            menu_accelerator(
+                Some(Some("Alt+CmdOrCtrl+F".into())),
+                Some("CmdOrCtrl+Shift+F")
+            )
+            .as_deref(),
+            Some("Alt+CmdOrCtrl+F")
+        );
+        // 사용자 단축키가 없는 항목은 기본값.
+        assert_eq!(
+            menu_accelerator(None, Some("CmdOrCtrl+W")).as_deref(),
+            Some("CmdOrCtrl+W")
+        );
+        assert_eq!(menu_accelerator(None, None), None);
+    }
 
     #[test]
     fn bindings_to_accelerators() {

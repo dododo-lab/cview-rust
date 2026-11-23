@@ -114,6 +114,7 @@ export class WatchTools {
 
     this.osd = document.createElement('div');
     this.osd.className = 'player-osd';
+    this.osd.setAttribute('role', 'status'); // 음소거·볼륨 같은 알림을 화면 읽기 프로그램도 읽게
     this.osd.hidden = true;
     page.stage.append(this.osd);
 

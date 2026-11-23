@@ -205,6 +205,7 @@ export class ViewerTopBar {
   toggleMenu() {
     if (this.isOpen) { this.closeMenu(true); return; }
     this.viewer.controls.closeQualityMenu();
+    if (this.viewer.panel && !this.viewer.panel.el.hidden) hideWithExit(this.viewer.panel.el); // 플레이어 설정 패널과 겹치지 않게
     this.menu.hidden = false;
     this.moreButton.setAttribute('aria-expanded', 'true');
     fitPopover(this.menu, this.stage);

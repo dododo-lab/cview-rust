@@ -13,7 +13,7 @@ import { THEMES, THEME_LABELS, currentTheme, setTheme, syncTheme } from './theme
 import { streamAlertsEnabled, setStreamAlertsEnabled, ALERT_HOME } from './donations.js';
 import { chatPrefs, updateChatPrefs, blockedLabel, loadChatPrefs } from './chat-prefs.js';
 import { BACKGROUNDS, READING_WIDTHS } from './chat-extras.js';
-import { kbd, IS_WINDOWS } from './platform.js';
+import { kbd, IS_WINDOWS, REVEAL_LABEL } from './platform.js';
 import { thumbPreviewEnabled, setThumbPreviewEnabled } from './hover-preview.js';
 import { SHARPNESS_LEVELS, SHARPNESS_HELP, ENLARGED_ONLY_LABEL, ENLARGED_ONLY_HELP, sharpnessState, setSharpness } from './sharpness.js';
 import { checkForUpdate, lastUpdateResult, updateSummary, downloadTarget, openDownload, currentAppInfo, canInstall, installUpdate, progressHtml, renderProgress } from './update-check.js';
@@ -100,7 +100,8 @@ export const SCHEMA = [
     { d: 'general', k: 'autoRefreshInterval', label: '새로고침 주기(초)', type: 'range', min: 30, max: 600, step: 30 },
     { d: 'general', k: 'restoreWindowOnLaunch', label: '창 위치·크기 기억', type: 'toggle' },
     { d: 'general', k: 'alwaysOnTop', label: '항상 위에', type: 'toggle' },
-    { d: 'general', k: 'launchAtLogin', label: '로그인 시 자동 실행', type: 'toggle' },
+    // Windows 는 아직 자동 실행을 걸지 않는다(window_prefs.rs set_launch_at_login 이 macOS 만) — 켜도 아무 일이 없어 숨긴다.
+    ...(IS_WINDOWS ? [] : [{ d: 'general', k: 'launchAtLogin', label: '로그인 시 자동 실행', type: 'toggle' }]),
     { d: 'general', k: 'showInMenuBar', label: '메뉴 막대에 표시', type: 'toggle' },
   ]],
   ['general', '알림', [
@@ -119,7 +120,8 @@ export const SCHEMA = [
   ]],
   ['link', '시청 기록 동기화', [
     { d: 'sync', k: 'explicitlyOptedIn', label: '동기화 동의', help: '다른 기기와 시청 기록을 맞추려면 동의가 필요합니다', type: 'toggle' },
-    { d: 'sync', k: 'watchHistorySyncEnabled', label: '시청 기록 동기화', type: 'toggle' },
+    // 동의 없이 켜면 Rust 가 꺼진 값으로 저장한다(settings_ui.rs) — 동의 전에는 막아 둔다.
+    { d: 'sync', k: 'watchHistorySyncEnabled', label: '시청 기록 동기화', type: 'toggle', disabled: (v) => !(v.sync || {}).explicitlyOptedIn },
     { d: 'sync', k: 'endpoint', label: '동기화 서버', type: 'text' },
   ]],
   // 성능 — 앱 사용률 측정·기록(그래프 패널은 settings-usage.js, 값은 외관 도메인 usage*). 머리줄 칩은 usage-chip.js.
@@ -206,7 +208,8 @@ function itemHtml(item, values) {
   const v = item.local ? LOCAL_GET[item.local]() : (item.get ? item.get(values) : (values[item.d] || {})[item.k]);
   const off = item.disabled && item.disabled(values) ? ' disabled' : '';
   const attrs = item.local ? `data-local="${item.local}"` : `data-domain="${item.d}" data-key="${item.k}"`;
-  const label = `<span class="setting-label">${esc(item.label)}${item.help ? `<small>${esc(item.help)}</small>` : ''}</span>`;
+  // 설명 속 단축키(⌘= 등)도 Windows 표기로(감사 UX-M12)
+  const label = `<span class="setting-label">${esc(item.label)}${item.help ? `<small>${esc(kbd(item.help))}</small>` : ''}</span>`;
   const search = esc(`${item.label} ${item.help || ''} ${item.keywords || ''} ${item.k || ''}`.toLowerCase());
   const wrap = (inner) => `<label class="setting${item.adv ? ' adv' : ''}" data-search="${search}">${label}${inner}</label>`;
   switch (item.type) {
@@ -547,7 +550,7 @@ export class SettingsPage {
     const json = await api.settingsExport();
     const d = new Date();
     const path = await api.saveFile('settings', `CView-설정-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`, null, json);
-    if (!quiet) toast(`내보냈습니다 — ${path}`, 4000, { label: 'Finder에서 보기', run: () => api.revealPath(path) });
+    if (!quiet) toast(`내보냈습니다 — ${path}`, 4000, { label: REVEAL_LABEL, run: () => api.revealPath(path) });
     return path;
   }
 
@@ -619,8 +622,16 @@ export class SettingsPage {
     }
     try {
       this.settings = await api.settingsUpdate(domain, { [key]: value });
-      // 외관은 응답보다 알림이 기준이다 — 미뤄 둔 마지막 알림이 있으면 정착할 때 그 값이 이 응답 값을 이긴다(flushAppearance).
-      toast('설정을 저장했습니다', 1200);
+      // 저장된 값이 고른 값과 다르면(셸이 거절·보정) 화면을 저장된 값에 맞추고 성공이라 하지 않는다 — 예전엔 체크가 켜진 채 '저장했습니다'.
+      const saved = (this.settings[domain] || {})[key];
+      if (target.type === 'checkbox' && typeof saved === 'boolean' && saved !== value) {
+        target.checked = saved;
+        toast('이 설정은 지금 바꿀 수 없습니다', 2200);
+      } else {
+        // 외관은 응답보다 알림이 기준이다 — 미뤄 둔 마지막 알림이 있으면 정착할 때 그 값이 이 응답 값을 이긴다(flushAppearance).
+        toast('설정을 저장했습니다', 1200);
+      }
+      if (domain === 'sync') this.syncDependentToggles();
       window.dispatchEvent(new CustomEvent('cview:settings-changed', { detail: { domain, key, value, settings: this.settings } }));
     } catch (e) {
       toast(e.message);
@@ -632,6 +643,15 @@ export class SettingsPage {
         this.flushAppearance();
       }
     }
+  }
+
+  /** 동기화 동의를 바꾸면 '시청 기록 동기화' 칸의 켜짐·막힘을 저장된 값에 맞춘다(동의를 끄면 셸이 동기화도 끈다). */
+  syncDependentToggles() {
+    const sync = (this.settings && this.settings.sync) || {};
+    const el = this.body.querySelector('[data-domain="sync"][data-key="watchHistorySyncEnabled"]');
+    if (!el) return;
+    el.checked = Boolean(sync.watchHistorySyncEnabled);
+    el.disabled = !sync.explicitlyOptedIn;
   }
 
   /** 이 외관 항목을 사용자가 지금 조작 중인지 — 드래그 중, 이 창의 저장이 진행 중, 또는 초점이 있고 막 바꾼 참. */
@@ -905,7 +925,7 @@ export class SettingsPage {
       settingAction.setAttribute('aria-disabled', 'true');
       try {
         const path = await exportUsage(format);
-        toast(`내보냈습니다 — ${path}`, 4000, { label: IS_WINDOWS ? '탐색기에서 보기' : 'Finder에서 보기', run: () => api.revealPath(path) });
+        toast(`내보냈습니다 — ${path}`, 4000, { label: REVEAL_LABEL, run: () => api.revealPath(path) });
       } catch (er) { toast(er.message || String(er)); } finally { settingAction.removeAttribute('aria-disabled'); }
       return;
     }
@@ -941,7 +961,7 @@ export class SettingsPage {
       }
       try {
         this.settings = await api.settingsReset('all');
-        if (saved) toast(`내보낸 뒤 설정을 초기화했습니다 — ${saved}`, 5000, { label: 'Finder에서 보기', run: () => api.revealPath(saved) });
+        if (saved) toast(`내보낸 뒤 설정을 초기화했습니다 — ${saved}`, 5000, { label: REVEAL_LABEL, run: () => api.revealPath(saved) });
         else toast('설정을 초기화했습니다', 1800);
         this.render();
         this.broadcastAll();

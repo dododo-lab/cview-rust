@@ -16,6 +16,7 @@ import { kbd } from './platform.js';
 import { chatFollower, trimFront, scheduleChatFlush, flushStarted } from './chat-follow.js';
 import { openUserPop, closeUserPop } from './chat-user-pop.js';
 import { installChatActions, lineCopyText } from './chat-actions.js';
+import { trapFocus } from './a11y.js';
 import { ChatComposer } from './chat-composer.js';
 import {
   chatPrefs, onChatPrefs, updateChatPrefs, passesFilters, mentionsMe, getMyNickname,
@@ -853,7 +854,7 @@ export class ChatPanel {
   openLineMenu(line, x, y) {
     const uid = line.dataset.uid;
     const nick = line.dataset.nick;
-    const amount = line.querySelector('.amount')?.textContent || '';
+    const amount = line.querySelector('.ev-value')?.textContent || ''; // 후원 금액(donations.js 의 .ev-value)
     const highlighted = (chatPrefs().highlightedUsers || []).includes(uid);
     const items = [
       ['copy-text', '메시지 복사'],
@@ -893,7 +894,8 @@ export class ChatPanel {
   pin(line) {
     this.detachActions?.();
     const clone = line.cloneNode(true);
-    clone.classList.remove('mention', 'highlighted', 'kb-cur', 'search-match', 'solo-match');
+    // cont·has-next(이어진 메시지)·own(내 메시지)은 머리(아바타·닉네임)를 숨긴다 — 고정 줄은 홀로 있으니 늘 보이게(감사 UX-L03).
+    clone.classList.remove('mention', 'highlighted', 'kb-cur', 'search-match', 'solo-match', 'cont', 'has-next', 'own');
     clone.removeAttribute('id');
     clone.removeAttribute('data-uid');
     clone.removeAttribute('data-id');
@@ -945,11 +947,16 @@ export class ChatPanel {
     const badges = first ? first.querySelectorAll('img.badge') : [];
     const role = first ? first.dataset.role : '';
     const roleLabel = { streamer: '스트리머', manager: '매니저', channelManager: '채널 관리자' }[role] || '시청자';
-    const recent = lines.slice(-10).reverse().map((l) => `<li><time>${esc(l.querySelector('.chat-time')?.textContent || '')}</time> ${l.querySelector('.text')?.innerHTML || ''}</li>`).join('');
+    // 후원 줄은 본문이 .text 가 아니라 .ev-body — 금액(.ev-value)을 앞에 붙인다(없으면 빈 줄이 나왔다).
+    const recent = lines.slice(-10).reverse().map((l) => {
+      const value = l.querySelector('.ev-value')?.textContent || '';
+      const body = l.querySelector('.text, .ev-body')?.innerHTML || '';
+      return `<li><time>${esc(l.querySelector('.chat-time')?.textContent || '')}</time> ${value ? `<b>${esc(value)}</b> ` : ''}${body}</li>`;
+    }).join('');
     const scrim = document.createElement('div');
     scrim.className = 'sheet-scrim';
     scrim.innerHTML = `
-      <div class="sheet profile-sheet" role="dialog" aria-label="${esc(nick)} 프로필" tabindex="-1">
+      <div class="sheet profile-sheet" role="dialog" aria-modal="true" aria-label="${esc(nick)} 프로필" tabindex="-1">
         <div class="profile-head"><h2>${esc(nick)}</h2><span class="role-pill">${roleLabel}</span><div class="grow"></div><span class="profile-badges">${[...badges].map((b) => b.outerHTML).join('')}</span></div>
         <p class="profile-sub">이 화면에서 본 메시지 ${lines.length}개</p>
         <ul class="profile-recent">${recent || '<li class="muted">최근 메시지가 없습니다</li>'}</ul>
@@ -962,8 +969,9 @@ export class ChatPanel {
         </div>
       </div>`;
     document.body.append(scrim);
+    const release = trapFocus(scrim.querySelector('.sheet')); // 초점을 가두고 닫으면 연 자리로 돌려준다(감사 UX-H24)
     scrim.querySelector('.sheet').focus();
-    const close = () => dismiss(scrim);
+    const close = () => { release(); dismiss(scrim); };
     scrim.addEventListener('click', (e) => {
       if (e.target === scrim) { close(); return; }
       const b = e.target.closest('[data-p]');
