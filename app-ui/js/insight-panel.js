@@ -93,7 +93,12 @@ const section = (icon, title, body) => (body ? `<section class="ip-section"><h2>
 function bars(items, fmt = compactCount) {
   if (!items.length) return '';
   const max = Math.max(...items.map((x) => x.value), 1);
-  return `<ol class="ip-bars">${items.map((x) => `<li${x.channelId ? ` data-ip-channel="${esc(x.channelId)}"` : ''}${x.category ? ` data-ip-category="${esc(x.category)}"` : ''}><div class="ip-bar-row"><span class="ip-bar-name ellipsis">${esc(x.name)}</span><span class="ip-bar-val">${esc(fmt(x.value))}</span></div><span class="ip-track"><span class="ip-fill" style="width:${((x.value / max) * 100).toFixed(1)}%"></span></span></li>`).join('')}</ol>`;
+  // 눌러서 채널·카테고리로 가는 막대는 단추로 감싼다 — li 만으론 키보드로 닿지 않았다(감사 UX-H10). 클릭은 onClick 이 closest 로 받는다.
+  return `<ol class="ip-bars">${items.map((x) => {
+    const inner = `<span class="ip-bar-row"><span class="ip-bar-name ellipsis">${esc(x.name)}</span><span class="ip-bar-val">${esc(fmt(x.value))}</span></span><span class="ip-track"><span class="ip-fill" style="width:${((x.value / max) * 100).toFixed(1)}%"></span></span>`;
+    const link = x.channelId || x.category;
+    return `<li${x.channelId ? ` data-ip-channel="${esc(x.channelId)}"` : ''}${x.category ? ` data-ip-category="${esc(x.category)}"` : ''}>${link ? `<button type="button" class="ip-bar-btn">${inner}</button>` : inner}</li>`;
+  }).join('')}</ol>`;
 }
 function liveRows(lives, meta) {
   if (!lives.length) return '';

@@ -25,6 +25,8 @@ export function keyBelongsToTarget(e) {
   if (!t || !t.closest) return false;
   if (t.isContentEditable || t.closest('input, textarea, select')) return true;
   if ((e.key === ' ' || e.key === 'Enter') && t.closest('button, a[href], [role="button"]')) return true;
+  // 단독 보기·포커스 아래 채널 정보 칸 — 화살표는 카드 사이 이동이다(뒤 방송 되감기·볼륨까지 함께 움직였다, 감사 UX-H20).
+  if (e.key && e.key.startsWith('Arrow') && t.closest('.ml-watch-info, .ml-focus-info')) return true;
   // .vt-menu(시청 화면 ⋯)·.ad-overlay(프리롤 광고) 안의 Space·화살표·M 도 뒤의 방송으로 새지 않게.
   return Boolean(t.closest('.sheet-scrim, .palette-scrim, .player-panel, .emoji-picker, .dp-panel, .ctx-menu, .ml-addbar, .ml-more-menu, .ml-pane-menu, .quality-menu, .vt-menu, .ad-overlay'));
 }

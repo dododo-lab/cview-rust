@@ -16,6 +16,7 @@ import { kbd } from './platform.js';
 import { chatFollower, trimFront, scheduleChatFlush, flushStarted } from './chat-follow.js';
 import { openUserPop, closeUserPop } from './chat-user-pop.js';
 import { installChatActions, lineCopyText } from './chat-actions.js';
+import { trapFocus } from './a11y.js';
 import { ChatComposer } from './chat-composer.js';
 import {
   chatPrefs, onChatPrefs, updateChatPrefs, passesFilters, mentionsMe, getMyNickname,
@@ -954,7 +955,7 @@ export class ChatPanel {
     const scrim = document.createElement('div');
     scrim.className = 'sheet-scrim';
     scrim.innerHTML = `
-      <div class="sheet profile-sheet" role="dialog" aria-label="${esc(nick)} 프로필" tabindex="-1">
+      <div class="sheet profile-sheet" role="dialog" aria-modal="true" aria-label="${esc(nick)} 프로필" tabindex="-1">
         <div class="profile-head"><h2>${esc(nick)}</h2><span class="role-pill">${roleLabel}</span><div class="grow"></div><span class="profile-badges">${[...badges].map((b) => b.outerHTML).join('')}</span></div>
         <p class="profile-sub">이 화면에서 본 메시지 ${lines.length}개</p>
         <ul class="profile-recent">${recent || '<li class="muted">최근 메시지가 없습니다</li>'}</ul>
@@ -967,8 +968,9 @@ export class ChatPanel {
         </div>
       </div>`;
     document.body.append(scrim);
+    const release = trapFocus(scrim.querySelector('.sheet')); // 초점을 가두고 닫으면 연 자리로 돌려준다(감사 UX-H24)
     scrim.querySelector('.sheet').focus();
-    const close = () => dismiss(scrim);
+    const close = () => { release(); dismiss(scrim); };
     scrim.addEventListener('click', (e) => {
       if (e.target === scrim) { close(); return; }
       const b = e.target.closest('[data-p]');

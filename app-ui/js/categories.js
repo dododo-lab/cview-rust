@@ -27,7 +27,7 @@ export class CategoriesPage {
       <header class="page-header" data-tauri-drag-region>
         <h1 class="page-title">카테고리</h1>
         <span class="page-subtitle cat-sub">지금 방송 중인 카테고리</span>
-        <div class="grow"></div>
+        <div class="grow" data-tauri-drag-region></div>
         <button class="icon-btn round" data-action="refresh" title="새로고침" aria-label="새로고침">${refreshIcon}</button>
       </header>
       <div class="page-body"></div>`;

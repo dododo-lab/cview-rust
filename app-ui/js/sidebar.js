@@ -46,7 +46,8 @@ export class Sidebar {
       `<button class="icon-btn sidebar-toggle" data-tip="사이드바 접기" aria-label="사이드바 접기">${icons.sidebar}</button>`);
     root.querySelector('.sidebar-toggle').addEventListener('click', () => this.toggle());
     root.querySelector('.quick-search').addEventListener('click', () => this.onNavigate('search'));
-    root.querySelector('.quick-search kbd').textContent = isMac ? '⌘K' : 'Ctrl K';
+    // 누르면 검색 화면(⌘F, menu.rs) — ⌘K 는 커맨드 팔레트라 배지와 동작이 어긋났다(감사 UX-H04).
+    root.querySelector('.quick-search kbd').textContent = isMac ? '⌘F' : 'Ctrl F';
 
     this.nav.addEventListener('click', (e) => {
       const item = e.target.closest('[data-route]');
@@ -294,7 +295,7 @@ export class Sidebar {
         <button class="side-live${it.live ? '' : ' off'}${it.category ? ' cat' : ''}" ${attrs} data-tip="${esc(it.tip || it.name)}">
           <span class="side-live-avatar">${avatar(it.image)}</span>
           <span class="side-live-text">
-            <span class="side-live-name ellipsis">${esc(it.name)}${verifiedBadge(it.badge, 'sm')}${it.favorite ? '<i class="side-fav" aria-label="즐겨찾기">★</i>' : ''}</span>
+            <span class="side-live-name split"><span class="side-live-nm ellipsis">${esc(it.name)}</span>${verifiedBadge(it.badge, 'sm')}${it.favorite ? '<i class="side-fav" aria-label="즐겨찾기">★</i>' : ''}</span>
             <span class="side-live-cat ellipsis">${esc(it.sub || '')}</span>
           </span>
           <span class="side-live-viewers">${it.live && it.dot !== false ? '<i class="dot"></i>' : ''}${esc(it.meta || '')}</span>

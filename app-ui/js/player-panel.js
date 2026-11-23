@@ -3,7 +3,7 @@
 // PLY-07 색 보정(밝기·대비·채도·색조·감마)·선명도(예전 선명한 화면 + 업스케일, sharpness.js)·자동 밝기·색 보정, PLY-08 화면 비율 강제,
 // PLY-10 녹화 시작·중지(MediaRecorder 조각 → Rust 파일). 값은 플레이어 설정에 저장하고 새 재생마다 다시 건다.
 import { api } from './api.js';
-import { esc, toast, hideWithExit } from './dom.js';
+import { esc, toast, hideWithExit, keepFocus } from './dom.js';
 import { kbd } from './platform.js';
 import {
   SHARPNESS_LEVELS, SHARPNESS_HELP, ENLARGED_ONLY_LABEL, ENLARGED_ONLY_HELP,
@@ -136,7 +136,12 @@ export class PlayerPanel {
     this.loadSettings().then(() => { this.render(); this.el.hidden = false; });
   }
 
+  /** 다시 그려도 누른 탭·칸에 초점을 남긴다 — 통째로 innerHTML 을 바꿔 초점이 body 로 떨어졌다(감사 UX-H15). */
   render() {
+    keepFocus(this.el, () => this.paint());
+  }
+
+  paint() {
     const p = this.settings || {};
     const tabs = [['play', '재생'], ['video', '화면'], ['eq', '이퀄라이저'], ['tools', '도구']];
     let body = '';

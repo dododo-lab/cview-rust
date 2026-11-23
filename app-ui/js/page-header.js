@@ -18,6 +18,8 @@ export function decoratePageHeader(header, icon, { compact = false } = {}) {
   chip.innerHTML = icon;
   const text = document.createElement('div');
   text.className = 'ph-text';
+  // Tauri 2 의 끌기 영역은 자식에게 물려주지 않는다 — 제목 묶음도 직접 표시해야 그 자리를 잡고 창을 옮긴다(감사 UX-H03).
+  text.setAttribute('data-tauri-drag-region', '');
   title.before(chip, text);
   text.append(title);
   // 설명은 제목 뒤 형제 중 첫 .page-subtitle (사이에 전환 버튼이 있어도).

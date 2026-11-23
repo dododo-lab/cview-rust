@@ -112,7 +112,8 @@ export class CommandPalette {
         group: '채널', label: c.name, hint: c.sub || '', image: c.image, live: c.live,
         run: () => (c.live ? this.opts.onPlay(c.id) : this.opts.onOpenChannel(c.id)),
       }));
-    const items = [...actions.sort((a, b) => b.score - a.score).slice(0, q ? 8 : 14), ...channels];
+    // 빈 검색에선 동작을 모두 보인다 — 14개로 자르면 데이터 관리·테마·뒤로·사이드바·새로고침·로그인 등 9개가 아예 안 보였다(감사 UX-H09).
+    const items = [...actions.sort((a, b) => b.score - a.score).slice(0, q ? 8 : actions.length), ...channels];
     if (q) items.push({ group: '검색', label: `"${q}" 검색`, hint: '라이브·채널·다시보기', run: () => this.opts.onSearch(q) });
     this.items = items;
     this.index = Math.max(0, prev == null ? 0 : items.findIndex((it) => it.label === prev));

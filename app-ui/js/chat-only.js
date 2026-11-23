@@ -21,7 +21,7 @@ export class ChatOnlyPage {
         <button class="back-btn" data-co="back">‹ 뒤로</button>
         <span class="chatonly-avatar"></span>
         <div class="chatonly-title"><h1 class="page-title ellipsis">채팅</h1><span class="page-subtitle ellipsis"></span></div>
-        <div class="grow"></div>
+        <div class="grow" data-tauri-drag-region></div>
         ${standalone ? '<button class="btn" data-co="pick">채널 바꾸기</button>' : `<button class="btn ghost" data-co="window" title="${kbd('이 채팅을 새 창으로 (⇧⌘C)')}">새 창</button>`}
         <button class="btn primary" data-co="play">▶ 영상 보기</button>
       </header>

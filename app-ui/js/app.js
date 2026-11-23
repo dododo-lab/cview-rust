@@ -865,7 +865,8 @@ async function main() {
   // 위 막대 ⋯ 의 '멀티라이브에 추가'·'새 창으로 분리'(보조 창 안에서는 없다) — viewer-topbar.js
   viewer = new Viewer(document.getElementById('viewer'), {
     isLoggedIn, onClose: onViewerClosed,
-    onAddMulti: (id) => addToMultiLive(id),
+    // 보조 창(플레이어 창 등)엔 사이드바가 없어 멀티라이브로 가면 돌아올 길이 없다 — 주석대로 보조 창에선 뺀다(감사 UX-H15).
+    onAddMulti: AUX ? null : (id) => addToMultiLive(id),
     onPopout: AUX ? null : () => MENU_ACTIONS['window-player'](),
   });
   if (!AUX) insights = new InsightPanel(content, { isLoggedIn });

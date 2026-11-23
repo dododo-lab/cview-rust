@@ -377,6 +377,10 @@ a { color: var(--primary-text); } /* --primary(#00d38a)는 라이트 흰 바탕 
 .side-live-avatar .avatar { width: 100%; height: 100%; border: 2px solid var(--sidebar); }
 .side-live-text { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
 .side-live-name { font-size: var(--fs-caption); font-weight: 600; color: var(--text-primary); }
+/* 이름만 말줄임하고 인증 배지·★ 는 늘 보이게 — 한 덩어리로 줄이면 긴 이름이 배지까지 잘랐다(sidebar.js) */
+.side-live-name.split { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.side-live-name.split > .side-live-nm { min-width: 0; }
+.side-live-name.split > :not(.side-live-nm) { flex: none; }
 .side-live-cat { font-size: var(--fs-tiny); color: var(--text-tertiary); }
 .side-live-viewers { display: inline-flex; align-items: center; gap: 4px; font-size: var(--fs-tiny); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 /* 메뉴별 목록 — 오프라인 채널(보관함 최근 본 채널)은 회색 테두리, 카테고리 줄은 둥근 사각 아바타, 즐겨찾기는 별 */
@@ -507,7 +511,7 @@ a { color: var(--primary-text); } /* --primary(#00d38a)는 라이트 흰 바탕 
 /* 전환 중 — 배치가 바뀌는 칸은 잠깐 숨겼다 나타나고, 줄임표(…)가 깜박이지 않게 그냥 자른다 */
 .sidebar.sb-anim :is(.nav-badge, .side-more, .side-widget, .side-quick-btn, .account, .side-empty),
 .sidebar.sb-anim.collapsed .nav-item.playing::after { animation: sb-reveal calc(var(--sb-dur) + 0.1s) ease-out both; }
-.sidebar.sb-anim :is(.nav-label, .side-live-name, .side-live-cat, .account-name) { text-overflow: clip; }
+.sidebar.sb-anim :is(.nav-label, .side-live-name, .side-live-nm, .side-live-cat, .account-name) { text-overflow: clip; }
 .sidebar.sb-anim .side-quick { overflow: hidden; }
 @keyframes sb-reveal { 0%, 35% { opacity: 0; } 100% { opacity: 1; } }
 /* 영상 시청 중 전환(sidebar.js slideOver) — 레이아웃 전환 없이 transform·opacity 만(합성) 쓴다.
@@ -949,6 +953,7 @@ select.select {
 .home-banner-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .home-banner-text strong { font-size: var(--fs-subhead); }
 .home-banner-text span { color: var(--text-secondary); font-size: var(--fs-caption); }
+.home-banner > .btn { flex: none; white-space: nowrap; } /* 로그인 단추 글자가 두 줄로 쪼개지지 않게 */
 
 /* 방송 중인 팔로잉 — 우선순위 타일 격자 + 미리보기 카드(live-following.js).
    타일 = 아바타(라이브 고리 — 사이드바 .side-live-avatar 와 같은 초록·청록) + 이름·인증·즐겨찾기 + 방송 제목 + 시청자·카테고리·경과.
@@ -1222,7 +1227,8 @@ select.select {
 /* 가로 선반 */
 .shelf {
   display: grid; grid-auto-flow: column; grid-auto-columns: minmax(260px, calc((100% - 3 * var(--sp-lg)) / 4));
-  gap: var(--sp-lg); overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px 2px 8px; scrollbar-width: none;
+  /* 좌우·위 6px — 카드 초점 테두리(2px + 띄움 3px)가 가로 스크롤 경계에 반쯤 잘렸다. 음수 여백으로 자리는 그대로 */
+  gap: var(--sp-lg); overflow-x: auto; scroll-snap-type: x mandatory; padding: 6px 6px 8px; margin: -2px -6px 0; scrollbar-width: none;
 }
 .shelf::-webkit-scrollbar { display: none; }
 .shelf > .card { scroll-snap-align: start; }
@@ -1252,7 +1258,7 @@ select.select {
 .chip:hover { background: var(--surface-elevated); color: var(--text-primary); }
 .chip.active { background: var(--text-primary); color: var(--background); border-color: transparent; font-weight: 600; }
 /* 홈 칩은 한 줄 가로 스크롤 + 개수 */
-.home-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 2px; margin: -2px -2px var(--sp-lg); }
+.home-chips { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 5px; margin: -5px -5px var(--sp-lg); } /* 초점 테두리가 잘리지 않게 */
 .home-chips::-webkit-scrollbar { display: none; }
 .home-chips .chip { flex: none; display: inline-flex; align-items: center; gap: 6px; }
 .home-chips .chip-count { margin: 0; }
@@ -1373,6 +1379,8 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .segmented.page-tabs { display: flex; width: fit-content; max-width: 100%; min-width: 0; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
 .segmented.page-tabs::-webkit-scrollbar { display: none; }
 .segmented.page-tabs .seg { flex: none; white-space: nowrap; }
+/* 스크롤되는 탭 줄·대기열 안은 초점 테두리를 안쪽에 — 바깥으로 나가면 overflow 경계에 잘렸다(감사 UX-H05) */
+.segmented.page-tabs .seg:focus-visible, .hero-queue :focus-visible { outline-offset: -2px; }
 /* 넘친 쪽 끝을 흐리게 — 더 있다는 표시(a11y.watchEdges 가 data-edge 를 단다) */
 .segmented.page-tabs[data-edge="end"] { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
 .segmented.page-tabs[data-edge="start"] { -webkit-mask-image: linear-gradient(90deg, transparent, #000 36px); mask-image: linear-gradient(90deg, transparent, #000 36px); }
@@ -2038,7 +2046,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
   border-radius: var(--radius-ml); box-shadow: var(--shadow-lg);
 }
 .emoji-picker[hidden], .chat-autocomplete[hidden], .chat-tray[hidden] { display: none; }
-.emoji-picker { left: 8px; right: 8px; bottom: calc(100% + 6px); max-height: 340px; display: flex; flex-direction: column; padding: 8px; gap: 6px; }
+.emoji-picker { left: 8px; right: 8px; bottom: calc(100% + 6px); max-width: 380px; max-height: min(340px, calc(100vh - 140px)); display: flex; flex-direction: column; padding: 8px; gap: 6px; }
 .emoji-search { height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--border-subtle); background: var(--surface-base); padding: 0 10px; outline: none; }
 .emoji-tabs { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; flex: none; }
 .emoji-tabs[hidden] { display: none; }
@@ -2083,6 +2091,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
   position: fixed; z-index: var(--z-popover); width: 264px; padding: 6px; border-radius: var(--radius-lg); --tail: 24px;
   background: var(--surface-popover); border: 1px solid var(--border-subtle); box-shadow: var(--shadow-lg);
   display: flex; flex-direction: column; gap: 2px; outline: none;
+  max-height: calc(100vh - 16px); overflow-y: auto; /* 짧은 창에서 아래가 잘렸다 */
 }
 .user-pop[hidden] { display: none; }
 .user-pop::after {
@@ -2221,7 +2230,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .shelf-nav[hidden] { display: none; }
 .search-section:hover .shelf-nav { opacity: 1; }
 /* 선반 — 오른쪽에 더 있을 때만 끝을 흐린다(fitShelves). 카드가 들릴 때 고리가 잘리지 않게 위아래 여백. */
-.search-preview { margin: -4px -2px -8px; }
+.search-preview { margin: -6px -6px -8px; }
 .search-preview.has-more { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 48px), transparent); }
 .search-preview.channel-shelf { grid-auto-columns: minmax(230px, calc((100% - 3 * var(--sp-lg)) / 4)); }
 .search-preview.clip-preview { grid-auto-columns: minmax(150px, calc((100% - 7 * var(--sp-lg)) / 8)); }
@@ -2289,7 +2298,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .palette-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-ms); cursor: pointer; }
 .palette-item.active { background: var(--primary-dim); }
 .palette-item .avatar { width: 26px; height: 26px; }
-.palette-label { font-weight: 600; font-size: var(--fs-caption); white-space: nowrap; }
+.palette-label { font-weight: 600; font-size: var(--fs-caption); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; } /* 긴 채널 이름이 줄 밖으로 넘쳤다 */
 .palette-hint { flex: 1; text-align: right; color: var(--text-tertiary); font-size: var(--fs-footnote); }
 
 /* ══ 셸 (SYS-02·09·12·13·14) ═══════════════════════════════════ */
@@ -2746,6 +2755,9 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .mc-merged-input .select { flex: none; max-width: 160px; }
 .merged-line { box-shadow: inset 3px 0 0 var(--mc-color); padding-left: 8px !important; }
 .mc-tag { font-size: var(--fs-micro); font-weight: 800; color: var(--mc-color); margin-right: 6px; }
+/* 라이트 — 채널 8색은 어두운 바탕용이라 흰 바탕에서 1.6~2.8:1 이었다. 검정과 섞어 4.9:1 이상(감사 UX-H21) */
+:root[data-theme="light"] .mc-tag { color: color-mix(in srgb, var(--mc-color) 55%, #000); }
+@media (prefers-color-scheme: light) { :root[data-theme="system"] .mc-tag { color: color-mix(in srgb, var(--mc-color) 55%, #000); } }
 /* 통합 줄 — 단일 채팅과 같은 줄(chat.js lineHtml)에 출처 태그(.mc-tag)를 붙인다.
    촘촘(.mc-compact, 기본 — 설정 chat.mergedChatStyle)은 말풍선·아바타 없이 한 줄에 [태그·배지·닉네임] 글 시간.
    여러 채널이 섞여 같은 사람 묶음이 거의 생기지 않고, 말풍선은 메시지마다 이름 줄과 말풍선 줄·아바타 자리를 써서
@@ -2989,6 +3001,9 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 
 /* ── 다운로드 (VOD-06·07) ───────────────── */
 .dl-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: var(--fs-footnote); }
+/* 긴 저장 경로는 한 줄 말줄임, 단추는 줄바꿈 없이(좁은 창에서 세로로 쪼개졌다) */
+.dl-head > .muted { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dl-head > .btn { flex: none; white-space: nowrap; }
 .dl-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 18px; }
 .dl-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: var(--radius-md); background: var(--surface-elevated); border: 1px solid var(--border-subtle); }
 .dl-row.missing { opacity: 0.6; }
@@ -3004,7 +3019,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 /* ── 팔로잉 인사이트·검색 디스커버리·사이드바 빠른 동작 (NAV-05·07·13) ───────── */
 .insight-rail { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 12px 14px; margin-bottom: 12px; border-radius: var(--radius-lg); background: var(--surface-elevated); border: 1px solid var(--border-subtle); }
 .insight { display: flex; flex-direction: column; gap: 2px; padding: 0 12px; border-right: 1px solid var(--border-subtle); }
-.insight:last-of-type { border-right: 0; }
+.insight:last-of-type, .insight:not(:has(~ .insight)) { border-right: 0; } /* 뒤에 .grow(div)가 붙으면 last-of-type 이 그쪽을 집어 마지막 지표 오른쪽 선이 남았다 */
 .insight span { font-size: var(--fs-micro); color: var(--text-tertiary); }
 .insight strong { font-size: var(--fs-subhead); }
 .discover-rail { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
@@ -3371,6 +3386,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .ip-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .ip-bars li { display: flex; flex-direction: column; gap: 4px; }
 .ip-bars li[data-ip-category], .ip-bars li[data-ip-channel] { cursor: pointer; }
+.ip-bar-btn { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 0; border: 0; border-radius: var(--radius-xs); background: none; color: inherit; font: inherit; text-align: start; cursor: pointer; }
+.ip-bar-btn:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 2px; }
 .ip-bars li[data-ip-category]:hover .ip-bar-name { color: var(--primary-text); }
 .ip-bar-row { display: flex; align-items: baseline; gap: 8px; font-size: var(--fs-footnote); }
 .ip-bar-name { flex: 1; min-width: 0; color: var(--text-secondary); }
@@ -3407,6 +3424,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 @media (max-width: 1240px) {
   .insight-panel, .ip-reopen { display: none !important; }
   .content.with-insights > .page { right: 0; }
+  .content.with-insights > .refresh-veil { right: 0; } /* 패널을 숨겼으니 새로고침 덮개도 가운데로(150px 치우쳤다) */
 }
 
 /* ══ 치지직 플레이어식 영상 오버레이 — 시청 화면 ══

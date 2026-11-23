@@ -79,7 +79,8 @@ export function passesFilters(m, p = prefs) {
   if (m.userId && (p.blockedUsers || []).includes(m.userId)) return false;
   const isEvent = m.kind === 'donation' || m.kind === 'subscription';
   if (!p.showDonation && isEvent) return false;
-  if (p.showDonationsOnly && !isEvent) return false;
+  // '후원만 보기'는 후원 표시가 켜져 있을 때만 — 둘 다 걸면 모든 메시지가 막혀 채팅이 비었다(감사 UX-H23).
+  if (p.showDonationsOnly && p.showDonation !== false && !isEvent) return false;
   if (p.chatFilterEnabled && (p.blockedWords || []).length) {
     const text = String(m.content || '').toLowerCase();
     if (p.blockedWords.some((w) => w && text.includes(String(w).toLowerCase()))) return false;

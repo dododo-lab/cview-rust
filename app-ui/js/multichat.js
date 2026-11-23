@@ -123,7 +123,7 @@ export class MultiChatPage {
       <header class="page-header mc-header" data-tauri-drag-region>
         <h1 class="page-title">멀티채팅</h1>
         <span class="page-subtitle mc-count"></span>
-        <div class="grow"></div>
+        <div class="grow" data-tauri-drag-region></div>
         <input type="search" class="mc-search" aria-label="메시지 검색" placeholder="${kbd('메시지 검색 (⌥⌘F)')}">
         <div class="segmented"><button class="seg" data-mc-layout="tabs">탭</button><button class="seg" data-mc-layout="grid">그리드</button><button class="seg" data-mc-layout="merged">통합</button></div>
         <div class="segmented mc-style" role="group" aria-label="통합 목록 줄 모양" hidden><button class="seg" data-mc-style="compact" title="한 줄에 채널·닉네임·글 — 한 화면에 많이">촘촘</button><button class="seg" data-mc-style="bubble" title="단일 채팅처럼 프로필 사진과 말풍선">말풍선</button></div>

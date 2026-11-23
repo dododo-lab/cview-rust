@@ -17,6 +17,7 @@ import { PaneControls, paneControlsHtml, PANE_ICON, bindMenuKeys, focusFirstMenu
 import { installChatSplitter } from './splitter.js';
 import { FOCUS_DIRECTIONS, FOCUS_RATIO, focusGrid, focusInfoSplit, ratioFromPointer, clampFocusRatio } from './focus-layout.js';
 import { kbd } from './platform.js';
+import { trapFocus } from './a11y.js';
 import { uptimeText } from './cards.js';
 import { MultiLiveAddDrawer } from './ml-add-drawer.js';
 import { snapshotPanes, playLayoutMotion, playExit, cancelExit, bindPaneDrag, releaseDragged, motionEnabled } from './ml-motion.js';
@@ -1049,6 +1050,8 @@ export class MultiLivePage {
     v.style.left = `calc(${(hr * 100).toFixed(2)}% - 4px)`;
     h.hidden = n < 3;
     h.style.top = `calc(${(vr * 100).toFixed(2)}% - 4px)`;
+    // 3개면 첫 패인이 왼쪽 두 줄을 차지한다 — 가로 분할선은 오른쪽 열에만(첫 패인 영상을 가로지르고 있었다, 감사 UX-H19).
+    h.style.left = n === 3 ? `calc(${(hr * 100).toFixed(2)}% + 4px)` : '';
   }
 
   /**
@@ -1151,14 +1154,15 @@ export class MultiLivePage {
     const ids = (this.state.sessions || []).map((s) => s.channelId);
     const scrim = document.createElement('div');
     scrim.className = 'sheet-scrim';
-    scrim.innerHTML = `<form class="sheet" role="dialog" aria-label="멀티라이브 프리셋">
+    scrim.innerHTML = `<form class="sheet" role="dialog" aria-modal="true" aria-label="멀티라이브 프리셋">
       <h2>멀티라이브 프리셋</h2>
       <div class="preset-list">${presets.map((p) => `<div class="preset-row" data-preset-id="${esc(p.id)}"><strong>${esc(p.name)}</strong><span class="muted">채널 ${p.channels.length}개</span><div class="grow"></div><button type="button" class="btn" data-preset-load>불러오기</button><button type="button" class="icon-btn" data-preset-del title="삭제">✕</button></div>`).join('') || '<p class="muted">저장한 프리셋이 없습니다</p>'}</div>
       ${ids.length ? `<div class="word-form"><input type="text" maxlength="30" placeholder="지금 구성(${ids.length}개 채널) 이름"><button class="btn primary">저장</button></div>` : ''}
       <div class="sheet-actions"><button type="button" class="btn" data-preset-close>닫기</button></div></form>`;
     document.body.append(scrim);
     const opener = document.activeElement;
-    const close = () => { dismiss(scrim); if (opener?.isConnected) opener.focus({ preventScroll: true }); };
+    const releaseTrap = trapFocus(scrim.querySelector('form'), { restore: false });
+    const close = () => { releaseTrap(); dismiss(scrim); if (opener?.isConnected) opener.focus({ preventScroll: true }); };
     (scrim.querySelector('.word-form input') || scrim.querySelector('[data-preset-close]')).focus();
     scrim.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } });
     scrim.addEventListener('click', async (e) => {

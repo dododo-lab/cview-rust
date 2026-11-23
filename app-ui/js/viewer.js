@@ -218,6 +218,7 @@ export class Viewer {
     const token = ++this.startToken;
     if (channelId !== this.channelId) this.cancelAd();
     this.channelId = channelId;
+    this.audioOnly = false;
     // 성능 수집기가 player.net(채널 앞 6자)과 맞춘다
     const frame = document.getElementById('player-frame');
     if (frame) frame.dataset.perfChannel = channelId; // data-channel-id 는 카드 열기 속성이라 쓰지 않는다
@@ -242,7 +243,8 @@ export class Viewer {
       this.syncNowPlaying(started.live);
       this.loadFollowers(channelId, token);
       this.extras.loadRail(channelId);
-      if (started.audioOnly) this.status.textContent = '오디오 전용 방송';
+      this.audioOnly = Boolean(started.audioOnly);
+      if (this.audioOnly) this.status.textContent = '오디오 전용 방송';
       noteConnectorLimit(started.connectorLimitedHeight);
       this.chat.connect(started.live.chatChannelId, started.live.channelId);
     } catch (e) {
@@ -322,8 +324,11 @@ export class Viewer {
       if (data.state === 'stalled') this.showOverlay(PHASE_TEXT.buffering);
       else this.showOverlay('');
     } else if (type === 'metrics' && typeof data.latency === 'number' && data.latency > 0) {
-      const res = data.currentLevelHeight ? `${data.currentLevelHeight}p · ` : '';
-      this.status.textContent = `${res}지연 ${data.latency.toFixed(1)}초`;
+      // 플레이어 metrics 는 videoHeight 를 보낸다(currentLevelHeight 는 예전 이름이라 해상도가 늘 비었다).
+      const h = data.videoHeight || data.currentLevelHeight;
+      const res = h ? `${h}p · ` : '';
+      // 오디오 전용은 2초마다 오는 metrics 가 덮어 사라졌다 — 앞에 붙여 둔다.
+      this.status.textContent = `${this.audioOnly ? '오디오 전용 · ' : res}지연 ${data.latency.toFixed(1)}초`;
     }
   }
 
