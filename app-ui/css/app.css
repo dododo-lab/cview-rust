@@ -3580,8 +3580,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
   .vt-q-badge { display: none; }
 }
 /* 아래 막대 — 단추 12개가 한 줄이라 무대 폭 약 450px 아래(플레이어 창 360px·채팅과 함께 보기)에서 오른쪽 단추가 잘렸다.
-   ⋯ 메뉴(.vt-menu)에도 있는 스크린샷·북마크·다시 연결·영상+채팅 전체 화면부터 감춘다(감사 UX-C05). 단추가 다 드는 폭(약 470px)까지는 그대로. */
-@container vstage (max-width: 470px) {
+   ⋯ 메뉴(.vt-menu)에도 있는 스크린샷·북마크·다시 연결·영상+채팅 전체 화면부터 감춘다(감사 UX-C05). 멈춤·배속 중에는 LIVE 단추도 보여 단추가 다 드는 폭은 약 520px. */
+@container vstage (max-width: 520px) {
   .chzzk-bar :is(#ctl-shot, #ctl-bookmark, #reload, #ctl-fullscreen-chat) { display: none; }
 }
 @container vstage (max-width: 400px) {
