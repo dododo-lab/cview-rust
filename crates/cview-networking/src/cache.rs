@@ -102,17 +102,23 @@ impl CacheState {
         self.evict(&sorted[..to_remove.min(sorted.len())]);
     }
 
-    /// 가장 오래 미접근된 `count` 개 제거.
-    fn evict_oldest(&mut self, count: usize) {
-        let sorted = self.sorted_keys_by_lru();
-        let to_remove = count.min(sorted.len()).max(1).min(sorted.len());
-        self.evict(&sorted[..to_remove]);
-    }
-
+    /// 바이트 합이 `max_bytes` 이하가 될 때까지 오래 안 쓴 것부터 지운다. 한 번 정렬하고 합을 줄여 가며 센다
+    /// (예전엔 한 건 지울 때마다 전체 합산·전체 정렬을 다시 했다). 지우는 순서·개수는 같다.
     fn evict_to_budget(&mut self, max_bytes: usize) {
-        while self.stored_bytes() > max_bytes && !self.storage.is_empty() {
-            self.evict_oldest(1);
+        let mut total = self.stored_bytes();
+        if total <= max_bytes {
+            return;
         }
+        let sorted = self.sorted_keys_by_lru();
+        let mut count = 0;
+        for key in &sorted {
+            if total <= max_bytes {
+                break;
+            }
+            total -= self.storage.get(key).map_or(0, |e| e.bytes);
+            count += 1;
+        }
+        self.evict(&sorted[..count]);
     }
 }
 
@@ -288,9 +294,7 @@ impl ResponseCache {
     pub fn respond_to_memory_pressure(&self) {
         let mut st = self.lock();
         let limit = st.stored_bytes() / 2;
-        while st.stored_bytes() > limit && !st.storage.is_empty() {
-            st.evict_oldest(1);
-        }
+        st.evict_to_budget(limit);
     }
 
     pub fn stats(&self) -> CacheStats {

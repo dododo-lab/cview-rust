@@ -101,6 +101,10 @@ impl FrameSaver {
         let this = self.clone();
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(Self::QUIET).await;
+            // 끄는 동안 새 이동이 왔으면(드래그 중 대부분) 블로킹 풀까지 가지 않는다 — 쓰기는 마지막 이벤트가 한다.
+            if this.lock().generation != generation {
+                return;
+            }
             let _ = tauri::async_runtime::spawn_blocking(move || this.flush_if(generation)).await;
         });
     }

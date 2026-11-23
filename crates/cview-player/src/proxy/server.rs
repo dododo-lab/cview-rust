@@ -62,6 +62,8 @@ pub(crate) async fn accept_loop(
                     tracing::warn!("Proxy: rejecting non-loopback connection from {peer}");
                     continue;
                 }
+                // 재생목록·파트 응답은 작고 지연에 민감하다 — Nagle 로 묶이지 않게(상류 reqwest 는 기본으로 켠다).
+                let _ = stream.set_nodelay(true);
                 let counter = proxy.inner.active_connections.clone();
                 let count = counter.fetch_add(1, Ordering::SeqCst) + 1;
                 let guard = ConnectionGuard(counter);
