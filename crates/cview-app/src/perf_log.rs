@@ -263,6 +263,13 @@ fn sampler_loop() {
     loop {
         std::thread::sleep(SAMPLE_EVERY);
         if !enabled() {
+            // 디버그 로그를 끄면 프로세스 표(60초마다 OS 전체를 읽은 것 — Windows 는 프로세스마다 핸들까지)를 놓는다.
+            // 예전엔 한 번 켰다 끄면 앱이 끝날 때까지 쥐고 있었다. 다시 켜면 처음처럼 찾는다.
+            if tick != 0 {
+                sys = System::new();
+                watched = vec![me];
+                tick = 0;
+            }
             continue;
         }
         // 60초마다(처음 포함) 도우미 PID 를 다시 찾는다 — 웹뷰가 프로세스를 새로 띄울 수 있다.

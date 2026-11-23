@@ -15,6 +15,7 @@
 // O09 패인이 없으면 화면을 옮겨도 보내지 않는다(빈 멀티라이브로 메뉴를 옮길 때마다 명령이 나가지 않게 — perf P02).
 //     다른 메뉴에 있는 동안 패인이 생기면 그때부터 5초 뒤에 보낸다(멀티라이브 화면이 새 상태를 반영한 뒤 다시 맞춘다 —
 //     예전엔 상태 알림 처리 순서에 따라 부하 때 다음 메뉴 이동까지 늦었다). 다른 메뉴 사이를 옮겨도 5초는 처음 떠난 때부터 잰다.
+// O10 '백그라운드 재생 계속'을 끄면 창이 가려질 때 단독 보기 무대 패인도 멈췄다가 돌아오면 이어 본다(예전엔 옛 시청 화면만 멈췄다).
 // 저장소 루트에서: node tools/ui-regression/ml-offscreen.mjs   (CVIEW_UI_BROWSER=webkit 이면 WebKit)
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
@@ -228,6 +229,45 @@ await check('O09 패인이 없으면 보내지 않음', async () => {
   assert.deepEqual(await occ(page), []);
   await page.clock.runFor(1000);
   assert.deepEqual(await occ(page), [true], '처음 화면 밖이 된 때부터 5초');
+  await ctx.close();
+});
+
+await check('O10 백그라운드 재생 끄기 — 창이 가려지면 단독 보기 무대 패인도 멈췄다가 돌아오면 이어 본다(켜 두면 그대로)', async () => {
+  const { ctx, page, errors } = await open();
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('cview:ml-watch', { detail: { sessionId: 's0' } })));
+  await page.waitForSelector('.page-multilive.as-watch');
+  await page.clock.runFor(2000);
+  // 무대 패인 플레이어 — 재생 중인 것처럼 두고, 일시정지·재생 호출을 기록한다.
+  await page.waitForFunction(() => {
+    const f = document.querySelector('.ml-pane[data-slot="0"] iframe');
+    const w = f && f.contentWindow;
+    return w && typeof w.pause === 'function' && typeof w.loadSource === 'function' && w.document.readyState === 'complete';
+  }, null, { timeout: 15000 });
+  await page.clock.runFor(500);
+  const spy = () => page.evaluate(() => {
+    const w = document.querySelector('.ml-pane[data-slot="0"] iframe').contentWindow;
+    if (!w.__calls) {
+      w.__calls = [];
+      for (const name of ['pause', 'play', 'seekToLiveEdge']) { const f = w[name]; w[name] = (...a) => { w.__calls.push(name); try { return f(...a); } catch { return undefined; } }; }
+      Object.defineProperty(w.document.getElementById('video'), 'paused', { configurable: true, get: () => false });
+    }
+    const out = w.__calls.slice(); w.__calls.length = 0; return out;
+  });
+  await spy();
+  // 기본(켜 둠) — 가려져도 멈추지 않는다.
+  await setVisible(page, 'hidden');
+  await page.clock.runFor(200);
+  await setVisible(page, 'visible');
+  await page.clock.runFor(200);
+  assert.deepEqual(await spy(), [], '켜 두면 멈추지 않는다');
+  await page.evaluate(() => window.dispatchEvent(new CustomEvent('cview:settings-changed', { detail: { settings: { player: { continuePlaybackInBackground: false }, appearance: {} } } })));
+  await setVisible(page, 'hidden');
+  await page.clock.runFor(200);
+  assert.deepEqual(await spy(), ['pause'], '가려지면 무대 패인을 멈춘다');
+  await setVisible(page, 'visible');
+  await page.clock.runFor(200);
+  assert.deepEqual(await spy(), ['play', 'seekToLiveEdge'], '돌아오면 이어서(라이브 끝으로)');
+  assert.deepEqual(errors, []);
   await ctx.close();
 });
 

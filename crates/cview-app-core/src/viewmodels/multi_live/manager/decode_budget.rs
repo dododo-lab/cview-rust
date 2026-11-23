@@ -13,6 +13,11 @@ use crate::viewmodels::multi_live::policy::{
 use crate::viewmodels::multi_live::session::MultiLiveSession;
 use crate::viewmodels::support::{cancel_slot, slot_is, TaskSlot};
 
+/// 선택 패인의 뒤 버퍼(초) — player.html 기본 `liveBackBufferLength` 와 같다.
+const LIVE_BACK_BUFFER_SECS: f64 = 6.0;
+/// 비선택 패인의 뒤 버퍼(초).
+const SECONDARY_BACK_BUFFER_SECS: f64 = 2.0;
+
 impl ManagerState {
     fn current_suspension_cause(&self) -> PaneSuspensionCause {
         if self
@@ -38,10 +43,17 @@ impl ManagerState {
         if let Some(hls) = session.player().engine() {
             if decoding {
                 let sel = Some(sid) == self.selected_session_id;
+                // 뒤 버퍼 — 선택 패인은 플레이어 기본(6초) 그대로, 비선택 패인은 되감지 않으니 2초만 둔다
+                // (예전엔 모든 패인이 재생 위치 뒤 6초 분량의 MSE 버퍼를 쥐었다 — 메모리 2026-11-24).
                 hls.set_buffer_caps(
                     if sel { 10.0 } else { 9.0 },
                     if sel { 18.0 } else { 12.0 },
                     (if sel { 25 } else { 8 }) * 1024 * 1024,
+                    if sel {
+                        LIVE_BACK_BUFFER_SECS
+                    } else {
+                        SECONDARY_BACK_BUFFER_SECS
+                    },
                 );
             }
             if self.decode_active.get(&sid) != Some(&decoding) {

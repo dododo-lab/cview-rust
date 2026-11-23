@@ -61,8 +61,22 @@ export async function installPrefsEffects(ctx) {
     if (e.detail && e.detail.settings) apply(e.detail.settings, ctx);
   });
   // 백그라운드 재생 끄기 — 창이 가려지거나 최소화되면 단독 시청을 멈췄다가 돌아오면 이어서 (PLY-19).
+  // 지금 라이브 시청의 기본 경로는 멀티라이브 단독 보기(무대 패인)다 — 예전엔 옛 시청 화면(ctx.viewer)만 멈춰,
+  // 설정을 꺼도 단독 보기는 가려진 창에서 계속 받고 디코드했다. 무대 패인도 같은 규칙으로 멈췄다가 이어 본다.
+  let pausedWatchSlot = null;
   document.addEventListener('visibilitychange', () => {
     const keep = !settings || !settings.player || settings.player.continuePlaybackInBackground !== false;
+    const ml = ctx.multilive;
+    if (document.visibilityState === 'hidden') {
+      const slot = ml && ml.watchSlot;
+      const pane = !keep && slot != null ? ml.panes.get(slot) : null;
+      const video = pane && pane.sessionId ? pane.controls?.video : null;
+      if (video && !video.paused) { pane.bridge.call('pause'); pausedWatchSlot = slot; }
+    } else if (pausedWatchSlot != null) {
+      const pane = ml && ml.panes.get(pausedWatchSlot);
+      pausedWatchSlot = null;
+      if (pane && pane.sessionId) { pane.bridge.call('play'); pane.bridge.call('seekToLiveEdge'); }
+    }
     const v = ctx.viewer;
     if (keep || !v.isPlaying) return;
     if (document.visibilityState === 'hidden') {

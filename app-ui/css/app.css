@@ -1610,8 +1610,9 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .chat-collapse svg { width: 16px; height: 16px; }
 .chat-reopen {
   position: absolute; right: 12px; bottom: 56px; z-index: 7; display: inline-flex; align-items: center; gap: 6px;
-  padding: 7px 12px; border-radius: var(--radius-pill); border: 1px solid var(--border-subtle); background: var(--glass);
-  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); color: var(--text-primary);
+  /* 재생 중인 영상 바로 위에 떠 있어 배경 블러면 영상 프레임마다 다시 흐렸다(60fps) — 불투명 면으로(메모리 2026-11-24) */
+  padding: 7px 12px; border-radius: var(--radius-pill); border: 1px solid var(--border-subtle); background: var(--surface-popover);
+  color: var(--text-primary);
   font-size: var(--fs-caption); font-weight: 600; box-shadow: var(--shadow-md);
 }
 .chat-reopen[hidden] { display: none; }
@@ -3538,6 +3539,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 
 /* 시청 화면 머리 — 다른 메뉴와 같은 페이지 제목("라이브"). 채널 정보·바로 전환·창 동작은 영상 위 위쪽 오버레이로. */
 .viewer-header.page-header { position: static; flex: none; margin: 0; }
+/* [메모리 2026-11-24] 시청 화면 머리줄은 스크롤되지 않아 뒤로 지나가는 내용이 없다 — 공통 .page-header 의 배경 블러가
+   재생 내내 GPU 배경 판(2배율 2~8 MB)과 블러 패스만 잡았다. 같은 유리색만 남긴다. */
+.viewer-header.page-header { backdrop-filter: none; -webkit-backdrop-filter: none; }
 .viewer:fullscreen .viewer-header { display: none; }
 #viewer .player-stage, #viewer .player-stage iframe { background: #000; }
 .player-stage > .stage-top {

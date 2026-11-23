@@ -732,6 +732,8 @@ pub enum JsCommand {
         max_len: f64,
         max_max_len: f64,
         max_size: i64,
+        /// 뒤 버퍼(초, `backBufferLength`). 0 이하면 바꾸지 않는다.
+        back_len: f64,
     },
     SetSharpPixelScaling(bool),
     SetForcedAspectRatio(bool),
@@ -805,10 +807,12 @@ impl JsCommand {
                 max_len,
                 max_max_len,
                 max_size,
+                back_len,
             } => format!(
-                "setBufferCaps({}, {}, {max_size})",
+                "setBufferCaps({}, {}, {max_size}, {})",
                 n(*max_len),
-                n(*max_max_len)
+                n(*max_max_len),
+                n(*back_len)
             ),
             SetSharpPixelScaling(e) => format!("setSharpPixelScaling({e})"),
             SetForcedAspectRatio(e) => format!("setForcedAspectRatio({e})"),

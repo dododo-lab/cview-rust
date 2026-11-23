@@ -226,11 +226,12 @@ impl MultiLiveHlsEngine for PaneEngine {
         self.manager_suspended.store(true, Ordering::SeqCst);
         self.engine.suspend_loading();
     }
-    fn set_buffer_caps(&self, max_len: f64, max_max_len: f64, max_size: i64) {
+    fn set_buffer_caps(&self, max_len: f64, max_max_len: f64, max_size: i64, back_len: f64) {
         self.engine.send(JsCommand::SetBufferCaps {
             max_len,
             max_max_len,
             max_size,
+            back_len,
         });
     }
     /// 페이지가 다음 한 장을 칠하면(또는 3초 뒤) `surfaceFirstFrame` 을 보낸다.

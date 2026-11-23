@@ -45,6 +45,10 @@ pub fn classify(name: &str, cmd: &str, is_app: bool) -> ProcKind {
     if n.contains("webkit.gpu") {
         return ProcKind::Gpu;
     }
+    // VideoToolbox 디코더 서비스 — 하드웨어 디코드 프레임 메모리가 여기 잡힌다(예전엔 '그 밖'에 섞였다).
+    if n.contains("vtdecoderxpcservice") {
+        return ProcKind::Gpu;
+    }
     if n.contains("webkit.networking") {
         return ProcKind::Network;
     }
@@ -429,6 +433,11 @@ mod tests {
             ProcKind::Web
         );
         assert_eq!(classify("com.apple.WebKit.GPU", "", false), ProcKind::Gpu);
+        assert_eq!(
+            classify("VTDecoderXPCService", "", false),
+            ProcKind::Gpu,
+            "VideoToolbox 디코더는 GPU 쪽"
+        );
         assert_eq!(
             classify("com.apple.WebKit.Networking", "", false),
             ProcKind::Network

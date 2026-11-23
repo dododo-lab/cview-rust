@@ -1050,6 +1050,7 @@ async function main() {
   installMenuAndShortcuts();
   installPrefsEffects({
     viewer,
+    multilive: pages.multilive,
     refreshCurrent: () => {
       if (viewer.isOpen || palette.isOpen || liveListHidden()) return;
       if (['home', 'following', 'popular', 'categories', 'live'].includes(current)) pages[current].show(current === 'categories' ? {} : false);

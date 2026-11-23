@@ -240,6 +240,11 @@ impl UsageMonitor {
             // 꺼져 있으면 여기서 잠든다 — 켜질 때까지 CPU 를 쓰지 않는다.
             let interval = {
                 let mut st = lock(&self.state);
+                if !st.config.enabled {
+                    // 끄면 표본기를 놓는다 — 예전엔 꺼진 뒤에도 sysinfo 프로세스 표(Windows 는 OS 전체 프로세스와 그 핸들)·
+                    // PDH 질의·GPU 버퍼·IOKit 포트를 앱이 끝날 때까지 쥐고 있었다. 다시 켜면 새로 만든다.
+                    sampler = None;
+                }
                 while !st.config.enabled {
                     warm = false;
                     st = self.cv.wait(st).unwrap_or_else(|e| e.into_inner());

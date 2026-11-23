@@ -13,6 +13,8 @@
    채널 추가 사이드바(z 30) 밑으로 깔리고 구분선 띠가 메뉴 클릭까지 가로챘다 — 머리줄을 그 위로 올린다.
    접힘 기준은 뷰포트가 아니라 머리줄 폭(사이드바·채팅을 뺀 실제 폭) — 아래 @container ml-header. */
 .page-multilive .ml-header { z-index: 35; container: ml-header / inline-size; }
+/* 이 머리줄도 스크롤하지 않는다(위) — 공통 .page-header 의 배경 블러는 재생 내내 GPU 배경 판만 잡았다(메모리 2026-11-24). */
+.page-multilive .ml-header { backdrop-filter: none; -webkit-backdrop-filter: none; }
 .ml-header .btn svg { width: 14px; height: 14px; vertical-align: -2px; margin-right: 4px; }
 
 .ml-body { flex: 1; min-height: 0; display: flex; gap: 0; margin-top: var(--sp-sm); position: relative; }
