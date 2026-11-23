@@ -13,7 +13,7 @@ import { THEMES, THEME_LABELS, currentTheme, setTheme, syncTheme } from './theme
 import { streamAlertsEnabled, setStreamAlertsEnabled, ALERT_HOME } from './donations.js';
 import { chatPrefs, updateChatPrefs, blockedLabel, loadChatPrefs } from './chat-prefs.js';
 import { BACKGROUNDS, READING_WIDTHS } from './chat-extras.js';
-import { kbd, IS_WINDOWS, REVEAL_LABEL } from './platform.js';
+import { kbd, IS_WINDOWS, REVEAL_LABEL, TRAY_LABEL, userPath, SECRET_STORE_LABEL } from './platform.js';
 import { thumbPreviewEnabled, setThumbPreviewEnabled } from './hover-preview.js';
 import { SHARPNESS_LEVELS, SHARPNESS_HELP, ENLARGED_ONLY_LABEL, ENLARGED_ONLY_HELP, sharpnessState, setSharpness } from './sharpness.js';
 import { checkForUpdate, lastUpdateResult, updateSummary, downloadTarget, openDownload, currentAppInfo, canInstall, installUpdate, progressHtml, renderProgress } from './update-check.js';
@@ -22,6 +22,8 @@ import { usagePanelHtml, mountUsagePanel } from './settings-usage.js';
 import { clearUsage, exportUsage } from './usage-monitor.js';
 
 const opt = (pairs) => pairs.map(([value, label]) => ({ value, label }));
+/** 상위 스위치가 꺼져 있으면 이 항목을 막는다 — disabled: offWhen('general', 'notificationsEnabled') (감사 UX-M10) */
+const offWhen = (d, k) => (v) => !(v[d] || {})[k];
 
 /** 외관 컨트롤을 마지막으로 바꾼 뒤 이만큼은 '조작 중'으로 본다(키를 연달아 누르는 간격보다 넉넉히). */
 const APPEARANCE_SETTLE_MS = 700;
@@ -84,31 +86,31 @@ export const SCHEMA = [
     { d: 'multiLive', k: 'defaultFocusDirection', label: '포커스 메인 위치', type: 'select', options: opt([['left', '왼쪽'], ['right', '오른쪽'], ['top', '위'], ['bottom', '아래']]) },
     { d: 'multiLive', k: 'rememberLastLayout', label: '마지막 레이아웃 기억', type: 'toggle' },
     { d: 'multiLive', k: 'multiAudioEnabled', label: '여러 패인 소리', help: '선택 패인 외에도 보조 볼륨으로 소리를 냅니다', type: 'toggle' },
-    { d: 'multiLive', k: 'secondaryVolume', label: '보조 패인 볼륨', type: 'range', min: 0, max: 1, step: 0.05, pct: true },
+    { d: 'multiLive', k: 'secondaryVolume', label: '보조 패인 볼륨', type: 'range', min: 0, max: 1, step: 0.05, pct: true, disabled: offWhen('multiLive', 'multiAudioEnabled') },
     { d: 'multiLive', k: 'bandwidthCoordinationEnabled', label: '대역폭 분배', help: '선택 패인에 대역폭을 더 줍니다', type: 'toggle' },
-    { d: 'multiLive', k: 'selectedSessionBWWeight', label: '선택 패인 대역폭 가중치', type: 'range', min: 1, max: 3, step: 0.1 },
+    { d: 'multiLive', k: 'selectedSessionBWWeight', label: '선택 패인 대역폭 가중치', type: 'range', min: 1, max: 3, step: 0.1, disabled: offWhen('multiLive', 'bandwidthCoordinationEnabled') },
     { d: 'multiLive', k: 'levelCappingEnabled', label: '패인 크기 화질 제한', type: 'toggle' },
     { d: 'multiLive', k: 'backgroundQualityReduction', label: '보조 패인 화질 낮추기', type: 'toggle' },
     { d: 'multiLive', k: 'autoReconnect', label: '자동 재연결', type: 'toggle' },
-    { d: 'multiLive', k: 'autoReconnectMaxRetries', label: '재연결 최대 횟수', type: 'range', min: 1, max: 30, step: 1 },
+    { d: 'multiLive', k: 'autoReconnectMaxRetries', label: '재연결 최대 횟수', type: 'range', min: 1, max: 30, step: 1, disabled: offWhen('multiLive', 'autoReconnect') },
     { d: 'multiLive', k: 'chatOverlayInGrid', label: '그리드 채팅 오버레이', type: 'toggle' },
     { d: 'multiLive', k: 'chatOverlayOpacity', label: '채팅 오버레이 투명도', type: 'range', min: 0.1, max: 1, step: 0.05, pct: true },
     { d: 'multiLive', k: 'chatOverlayFontSize', label: '채팅 오버레이 글자 크기', type: 'range', min: 9, max: 20, step: 1 },
   ]],
   ['general', '일반', [
     { d: 'general', k: 'autoRefreshEnabled', label: '목록 자동 새로고침', type: 'toggle' },
-    { d: 'general', k: 'autoRefreshInterval', label: '새로고침 주기(초)', type: 'range', min: 30, max: 600, step: 30 },
+    { d: 'general', k: 'autoRefreshInterval', label: '새로고침 주기(초)', type: 'range', min: 30, max: 600, step: 30, disabled: offWhen('general', 'autoRefreshEnabled') },
     { d: 'general', k: 'restoreWindowOnLaunch', label: '창 위치·크기 기억', type: 'toggle' },
     { d: 'general', k: 'alwaysOnTop', label: '항상 위에', type: 'toggle' },
     // Windows 는 아직 자동 실행을 걸지 않는다(window_prefs.rs set_launch_at_login 이 macOS 만) — 켜도 아무 일이 없어 숨긴다.
     ...(IS_WINDOWS ? [] : [{ d: 'general', k: 'launchAtLogin', label: '로그인 시 자동 실행', type: 'toggle' }]),
-    { d: 'general', k: 'showInMenuBar', label: '메뉴 막대에 표시', type: 'toggle' },
+    { d: 'general', k: 'showInMenuBar', label: `${TRAY_LABEL}에 표시`, type: 'toggle' },
   ]],
   ['general', '알림', [
     { d: 'general', k: 'notificationsEnabled', label: '알림 사용', type: 'toggle' },
-    { d: 'general', k: 'notifyOnLiveStart', label: '팔로우 채널 방송 시작', type: 'toggle' },
-    { d: 'general', k: 'notifyOnCategoryChange', label: '카테고리 변경', type: 'toggle' },
-    { d: 'general', k: 'notifyOnTitleChange', label: '방송 제목 변경', type: 'toggle' },
+    { d: 'general', k: 'notifyOnLiveStart', label: '팔로우 채널 방송 시작', type: 'toggle', disabled: offWhen('general', 'notificationsEnabled') },
+    { d: 'general', k: 'notifyOnCategoryChange', label: '카테고리 변경', type: 'toggle', disabled: offWhen('general', 'notificationsEnabled') },
+    { d: 'general', k: 'notifyOnTitleChange', label: '방송 제목 변경', type: 'toggle', disabled: offWhen('general', 'notificationsEnabled') },
   ]],
   ['general', '외관', [
     { d: 'appearance', k: 'uiScale', label: '화면 크기', help: '앱 전체의 글자·단추·카드 크기를 함께 키우거나 줄입니다(⌘= 확대 · ⌘- 축소 · ⌘0 실제 크기). 4K 모니터를 1배율로 쓸 때 키워 보세요', type: 'range', min: 0.8, max: 2, step: 0.05, pct: true },
@@ -222,9 +224,9 @@ function itemHtml(item, values) {
     case 'toggle':
       return wrap(`<span class="toggle"><input type="checkbox" ${attrs} ${v ? 'checked' : ''}${off}><span></span></span>`);
     case 'select':
-      return wrap(`<select class="select" ${attrs}>${item.options.map((o) => `<option value="${esc(o.value)}" ${String(o.value) === String(v) ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select>`);
+      return wrap(`<select class="select" ${attrs}${off}>${item.options.map((o) => `<option value="${esc(o.value)}" ${String(o.value) === String(v) ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select>`);
     case 'range':
-      return wrap(`<span class="range-field"><input type="range" min="${item.min}" max="${item.max}" step="${item.step}" value="${esc(v)}" ${attrs} data-pct="${item.pct ? 1 : ''}"><output>${esc(fmt(item, v))}</output></span>`);
+      return wrap(`<span class="range-field"><input type="range" min="${item.min}" max="${item.max}" step="${item.step}" value="${esc(v)}" ${attrs} data-pct="${item.pct ? 1 : ''}"${off}><output>${esc(fmt(item, v))}</output></span>`);
     case 'number':
       return wrap(`<input class="num-input" type="number" step="${item.step || 1}" value="${esc(v)}" ${attrs}>`);
     default:
@@ -244,6 +246,8 @@ export class SettingsPage {
     this.query = '';
     this.showAdvanced = false;
     this.body.addEventListener('change', (e) => this.onChange(e.target));
+    // 시스템 목소리 목록은 늦게 온다(첫 getVoices 가 빈 배열) — 오면 목소리 칸만 다시 채운다(감사 UX-M10)
+    window.speechSynthesis?.addEventListener?.('voiceschanged', () => this.fillVoices());
     window.addEventListener('cview:sharpness', () => this.syncSharpnessControls());
     // 머리줄 사용률 팝오버의 '기록·내보내기' — 성능 탭으로 연다(검색은 닫는다).
     window.addEventListener('cview:settings-group', (e) => {
@@ -439,7 +443,7 @@ export class SettingsPage {
     return `
       <section class="settings-group" data-g="overview"><h2>계정</h2>${account}</section>
       <section class="settings-group oauth-group" data-g="overview"><h2>치지직 OAuth 연동 <small class="muted">선택</small></h2>
-        <div class="setting" data-search="oauth 치지직 연동 client id secret 개발자"><span class="setting-label">애플리케이션 자격 증명<small class="oauth-status">치지직 개발자 센터에 등록한 앱의 Client ID·Secret — 키체인에 저장합니다</small></span></div>
+        <div class="setting" data-search="oauth 치지직 연동 client id secret 개발자"><span class="setting-label">애플리케이션 자격 증명<small class="oauth-status">치지직 개발자 센터에 등록한 앱의 Client ID·Secret — ${SECRET_STORE_LABEL}에 저장합니다</small></span></div>
         <div class="oauth-form">
           <input type="text" name="clientId" placeholder="Client ID" autocomplete="off" spellcheck="false">
           <input type="password" name="clientSecret" placeholder="Client Secret" autocomplete="off">
@@ -517,12 +521,12 @@ export class SettingsPage {
         ${FIXED.has(id) ? `<kbd class="kbd">${esc(fixed)}</kbd>` : `<span class="shortcut-edit"><kbd class="kbd">${esc(bindingLabel(b[id]))}</kbd><button class="btn" data-bind="${id}">바꾸기</button><button class="link-btn" data-bind-reset="${id}">기본값</button></span>`}
       </div>`).join('');
     return `<section class="settings-group" data-g="general"><h2>키보드 단축키</h2>${rows}
-      <div class="setting" data-search="단축키 키보드 목록"><span class="setting-label">전체 단축키 목록<small>${kbd('메뉴 막대와 ⌘/ 로 볼 수 있습니다 · ⌘ 가 들어간 단축키는 메뉴 막대에도 반영됩니다')}</small></span><button class="btn" data-open-shortcuts>보기</button></div></section>`;
+      <div class="setting" data-search="단축키 키보드 목록"><span class="setting-label">전체 단축키 목록<small>${IS_WINDOWS ? kbd('창 오른쪽 위 메뉴 단추와 ⌘/ 로 볼 수 있습니다 · ⌘(Ctrl)가 들어간 단축키는 메뉴에도 반영됩니다') : kbd('메뉴 막대와 ⌘/ 로 볼 수 있습니다 · ⌘ 가 들어간 단축키는 메뉴 막대에도 반영됩니다')}</small></span><button class="btn" data-open-shortcuts>보기</button></div></section>`;
   }
 
   backupHtml() {
     return `<section class="settings-group" data-g="advanced"><h2>백업 · 초기화</h2>
-      <div class="setting" data-search="설정 내보내기 백업"><span class="setting-label">설정 내보내기<small>모든 설정을 JSON 파일로 ~/Downloads/CView 에 저장합니다</small></span><button class="btn" data-export>내보내기</button></div>
+      <div class="setting" data-search="설정 내보내기 백업"><span class="setting-label">설정 내보내기<small>모든 설정을 JSON 파일로 ${esc(userPath('Downloads', 'CView'))} 에 저장합니다</small></span><button class="btn" data-export>내보내기</button></div>
       <div class="setting column" data-search="설정 가져오기 복원"><span class="setting-label">설정 가져오기<small>내보낸 JSON 내용을 붙여 넣으세요</small></span>
         <form class="word-form import-form" data-import><textarea rows="4" spellcheck="false" autocomplete="off" aria-label="가져올 설정 JSON" placeholder='{"player": …}'></textarea><button class="btn">가져오기</button></form></div>
       <div class="setting" data-search="초기화 기본값"><span class="setting-label">모든 설정 초기화<small>로그인·시청 기록은 그대로 둡니다</small></span><button class="btn danger" data-reset-all aria-haspopup="dialog">초기화…</button></div>
@@ -631,7 +635,7 @@ export class SettingsPage {
         // 외관은 응답보다 알림이 기준이다 — 미뤄 둔 마지막 알림이 있으면 정착할 때 그 값이 이 응답 값을 이긴다(flushAppearance).
         toast('설정을 저장했습니다', 1200);
       }
-      if (domain === 'sync') this.syncDependentToggles();
+      this.syncDependentToggles();
       window.dispatchEvent(new CustomEvent('cview:settings-changed', { detail: { domain, key, value, settings: this.settings } }));
     } catch (e) {
       toast(e.message);
@@ -645,13 +649,26 @@ export class SettingsPage {
     }
   }
 
-  /** 동기화 동의를 바꾸면 '시청 기록 동기화' 칸의 켜짐·막힘을 저장된 값에 맞춘다(동의를 끄면 셸이 동기화도 끈다). */
+  fillVoices() {
+    const sel = this.body.querySelector('select[data-chat-str="ttsVoiceIdentifier"]');
+    if (!sel || !window.speechSynthesis) return;
+    const cur = chatPrefs().ttsVoiceIdentifier || '';
+    sel.innerHTML = `<option value="">기본</option>${speechSynthesis.getVoices().filter((v) => v.lang.startsWith('ko')).map((v) => `<option value="${esc(v.voiceURI)}" ${cur === v.voiceURI ? 'selected' : ''}>${esc(v.name)}</option>`).join('')}`;
+  }
+
+  /** 상위 스위치를 바꾸면 딸린 항목의 막힘을 저장된 값에 맞춘다(스키마의 disabled). 동기화 동의는 켜짐 값도 맞춘다 — 동의를 끄면 셸이 동기화도 끈다. */
   syncDependentToggles() {
-    const sync = (this.settings && this.settings.sync) || {};
+    if (!this.settings) return;
+    for (const [, , items] of SCHEMA) {
+      for (const item of items) {
+        if (!item.disabled || item.local || item.get) continue;
+        const el = this.body.querySelector(`[data-domain="${item.d}"][data-key="${item.k}"]`);
+        if (el) el.disabled = Boolean(item.disabled(this.settings));
+      }
+    }
+    const sync = this.settings.sync || {};
     const el = this.body.querySelector('[data-domain="sync"][data-key="watchHistorySyncEnabled"]');
-    if (!el) return;
-    el.checked = Boolean(sync.watchHistorySyncEnabled);
-    el.disabled = !sync.explicitlyOptedIn;
+    if (el) el.checked = Boolean(sync.watchHistorySyncEnabled);
   }
 
   /** 이 외관 항목을 사용자가 지금 조작 중인지 — 드래그 중, 이 창의 저장이 진행 중, 또는 초점이 있고 막 바꾼 참. */
@@ -952,7 +969,7 @@ export class SettingsPage {
           ['그대로', '로그인, 시청 기록·통계, 즐겨찾기·북마크, 다운로드한 파일은 그대로 둡니다.'],
           ['복구', '초기화한 뒤에는 앱 안에서 되돌릴 수 없습니다. 내보내 둔 설정 파일이 있으면 \'설정 가져오기\'로 되돌릴 수 있습니다.'],
         ],
-        check: { label: '초기화 전에 지금 설정을 내보내기', hint: '~/Downloads/CView 에 JSON 파일로 저장합니다 · 내보내기에 실패하면 초기화하지 않습니다' },
+        check: { label: '초기화 전에 지금 설정을 내보내기', hint: `${userPath('Downloads', 'CView')} 에 JSON 파일로 저장합니다 · 내보내기에 실패하면 초기화하지 않습니다` },
       });
       if (!ok) { if (btn.isConnected) btn.focus(); return; }
       let saved = null;

@@ -10,6 +10,7 @@ import { esc, safeUrl, imageSrc, toast, hideWithExit } from './dom.js';
 import { verifiedBadge } from './verified-badge.js';
 import { compactCount } from './cards.js';
 import { chatPrefs } from './chat-prefs.js';
+import { armConfirm } from './confirm.js';
 
 const ROLE_LABEL = { streamer: '스트리머', manager: '매니저', channelManager: '채널 관리자' };
 // 같은 사람을 다시 누르면 바로 그리도록 잠깐 기억한다(팔로우 상태는 매번 새로 받는다).
@@ -248,7 +249,10 @@ export function openUserPop(panel, anchor, line) {
   };
   pop.addEventListener('click', (e) => {
     const b = e.target.closest('[data-up]');
-    if (b && !b.disabled) act(b.dataset.up);
+    if (!b || b.disabled) return;
+    // 팔로우 끊기는 두 번 눌러 확인 — 다시 팔로우하면 치지직 팔로우 시작일이 새로 매겨진다(docs/UI_CONFIRM_RULES.md, 감사 UX-M11)
+    if (b.dataset.up === 'unfollow' && !armConfirm(b, { armedLabel: '한 번 더 누르면 끊습니다', what: '팔로우' })) return;
+    act(b.dataset.up);
   });
 
   render();

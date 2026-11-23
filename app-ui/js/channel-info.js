@@ -3,6 +3,7 @@
 // (카드 요소는 그대로 두어 등장 모션이 다시 돌지 않게). 순수 HTML 함수라 회귀 검사가 그대로 부른다.
 import { esc, safeUrl, imageSrc } from './dom.js';
 import { compactCount, uptimeText } from './cards.js';
+import { formatDuration } from './channel.js';
 import { VERIFIED_MARKS, badgeKind } from './verified-badge.js';
 
 const CATEGORY_TYPES = { GAME: '게임', SPORTS: '스포츠', ETC: '기타', ENTERTAINMENT: '엔터' };
@@ -217,7 +218,7 @@ export function clipsBody(clips) {
     const uid = c.clipUID || c.clipUid;
     return `
       <article class="card ci-mini clip" tabindex="0" data-clip-uid="${esc(uid)}" title="${esc(c.clipTitle)}">
-        <div class="thumb">${thumb ? `<img src="${esc(imageSrc(thumb, 'clip'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}<span class="badge-duration">조회 ${esc(compactCount(c.readCount || 0))}</span></div>
+        <div class="thumb">${thumb ? `<img src="${esc(imageSrc(thumb, 'clip'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}${c.duration ? `<span class="badge-duration">${esc(formatDuration(c.duration))}</span>` : `<span class="badge-duration">조회 ${esc(compactCount(c.readCount || 0))}</span>`}</div>
         <div class="ci-mini-title">${esc(c.clipTitle || '제목 없음')}</div>
       </article>`;
   }).join('')}</div>`;

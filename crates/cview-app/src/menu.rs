@@ -42,15 +42,17 @@ const VIEW: &[Item] = &[
 ];
 
 /// 이동 — 페이지 이동, 뒤로, 찾아 들어가기(검색·명령 팔레트).
+/// ⌘1~7 은 사이드바 순서 그대로(app.js ROUTES), 사이드바에 없는 멀티라이브는 ⌘8(2026-11-23 감사 UX-H04).
 const GO: &[Item] = &[
     ("nav-home", "홈", Some("CmdOrCtrl+1")),
     ("nav-following", "팔로잉", Some("CmdOrCtrl+2")),
     // 메뉴 제목의 `&` 하나는 니모닉(muda) — `&&` 로 써야 "&" 로 보인다.
     ("nav-popular", "방송&&클립", Some("CmdOrCtrl+3")),
-    ("nav-multilive", "멀티라이브", Some("CmdOrCtrl+4")),
+    ("nav-categories", "카테고리", Some("CmdOrCtrl+4")),
     ("nav-live", "라이브", Some("CmdOrCtrl+5")),
-    ("nav-library", "보관함", Some("CmdOrCtrl+6")),
-    ("nav-categories", "카테고리", Some("CmdOrCtrl+7")),
+    ("nav-multichat", "멀티채팅", Some("CmdOrCtrl+6")),
+    ("nav-library", "보관함", Some("CmdOrCtrl+7")),
+    ("nav-multilive", "멀티라이브", Some("CmdOrCtrl+8")),
     SEP,
     ("back", "뒤로", Some("CmdOrCtrl+[")),
     SEP,

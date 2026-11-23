@@ -9,6 +9,7 @@ import { kbd } from './platform.js';
 import { releaseForPip } from './background-saver.js';
 
 const ICON = {
+  fullscreenExit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>',
   play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5-13-7.5Z"/></svg>',
   pause: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>',
   camera: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
@@ -131,6 +132,15 @@ export class ViewerControls {
     root.querySelector('#fullscreen').insertAdjacentHTML('afterend',
       `<button class="icon-btn" id="ctl-fullscreen-chat" title="${kbd('영상+채팅 전체 화면 (⌃⌘F)')}" aria-label="영상과 채팅 전체 화면">${ICON.chatFull}</button>`);
     root.querySelector('#fullscreen').title = kbd('영상 전체 화면 (⇧⌘F)');
+    // 전체 화면이면 단추 그림·이름을 '끝내기'로 — 예전엔 들어가도 같은 그림이라 상태를 알 수 없었다(감사 UX-M07)
+    const fsButton = root.querySelector('#fullscreen');
+    const fsEnter = fsButton.innerHTML;
+    document.addEventListener('fullscreenchange', () => {
+      const on = document.fullscreenElement === this.stage;
+      fsButton.innerHTML = on ? ICON.fullscreenExit : fsEnter;
+      fsButton.title = kbd(on ? '전체 화면 끝내기 (⇧⌘F · Esc)' : '영상 전체 화면 (⇧⌘F)');
+      fsButton.setAttribute('aria-label', on ? '전체 화면 끝내기' : '영상 전체 화면');
+    });
 
     this.playButton = root.querySelector('#ctl-play');
     this.liveButton = root.querySelector('#ctl-live');

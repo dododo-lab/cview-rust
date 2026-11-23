@@ -938,7 +938,16 @@ export class ChatPanel {
     updateChatPrefs({ blockedUsers: blocked, blockedUserNames: { ...(p.blockedUserNames || {}), [uid]: nick } });
     for (const el of this.list.querySelectorAll(`.chat-line[data-uid="${CSS.escape(uid)}"]`)) el.remove();
     if (this.soloUid === uid) this.setSolo(null);
-    toast(`${nick} 님을 차단했습니다 — 설정 > 채팅에서 풀 수 있어요`, 2500);
+    // 되돌리기 — 지운 지난 줄은 돌아오지 않지만 앞으로 오는 메시지는 다시 보인다(감사 UX-M11)
+    toast(`${nick} 님을 차단했습니다 — 설정 > 채팅에서도 풀 수 있습니다`, 6000, {
+      label: '되돌리기',
+      run: () => {
+        const q = chatPrefs();
+        const names = { ...(q.blockedUserNames || {}) };
+        delete names[uid];
+        updateChatPrefs({ blockedUsers: (q.blockedUsers || []).filter((x) => x !== uid), blockedUserNames: names });
+      },
+    });
   }
 
   showProfile(uid, nick) {

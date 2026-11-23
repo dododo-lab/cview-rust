@@ -314,9 +314,16 @@ export class FollowingPage {
     this.extras = new FollowExtras();
     this.seq = 0;
     root.querySelector('[data-action="refresh"]')?.addEventListener('click', () => withRefreshVeil(root, () => this.show(true)));
+    bindTabKeys(this.body);
     this.body.addEventListener('click', (e) => {
       const t = e.target.closest('[data-ftab]');
-      if (t) { this.tab = t.dataset.ftab; this.show(); return; }
+      if (t) {
+        // 키보드로 바꿨으면 다시 그린 뒤 새 탭에 초점을 돌려준다(통째로 다시 그려 초점이 body 로 떨어졌다).
+        const kb = t === document.activeElement;
+        this.tab = t.dataset.ftab;
+        Promise.resolve(this.show()).then(() => { if (kb) this.body.querySelector('[data-ftab].active')?.focus({ preventScroll: true }); });
+        return;
+      }
       const s = e.target.closest('[data-sort]');
       if (s) { this.sort = s.dataset.sort; this.render(); return; }
       const c = e.target.closest('[data-cat]');
@@ -374,7 +381,9 @@ export class FollowingPage {
   }
 
   render() {
-    const tabs = `<div class="segmented"><button class="seg${this.tab === 'live' ? ' active' : ''}" data-ftab="live">방송 중</button><button class="seg${this.tab === 'all' ? ' active' : ''}" data-ftab="all">전체 채널</button></div>`;
+    // 보기 전환은 탭(tablist) — 정렬·필터 묶음(aria-pressed)과 구별된다(감사 UX-M05). ←/→ 는 생성자의 bindTabKeys.
+    const tab = (id, label) => `<button class="seg${this.tab === id ? ' active' : ''}" data-ftab="${id}" role="tab" aria-selected="${this.tab === id}" tabindex="${this.tab === id ? 0 : -1}">${label}</button>`;
+    const tabs = `<div class="segmented" role="tablist" aria-label="팔로잉 보기">${tab('live', '방송 중')}${tab('all', '전체 채널')}</div>`;
     if (this.tab === 'live') {
       const cats = categoryGroups(this.lives).slice(0, 12);
       const list = arrangeLives(this.lives, { sort: this.sort, category: this.category });

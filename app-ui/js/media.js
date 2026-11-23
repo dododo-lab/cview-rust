@@ -3,7 +3,7 @@
 // 다시보기는 WebView 기본 HLS(<video src=m3u8>)로 재생한다 — CDN CORS 를 피하고 macOS 기본 컨트롤·PiP 를
 // 쓴다. 클립은 원본처럼 치지직 임베드 페이지가 주 경로다(대부분 ABR_HLS 라 인키 재생이 막힌다).
 import { api } from './api.js';
-import { esc, safeUrl, toast, imageSrc } from './dom.js';
+import { esc, safeUrl, toast, imageSrc, keyBelongsToTarget } from './dom.js';
 import { emptyState, loadingState, compactCount, errorState } from './cards.js';
 import { formatDuration, relativeDate, clipCard } from './channel.js';
 import { startDownload } from './downloads.js';
@@ -31,6 +31,7 @@ export class MediaPage {
     this.info = null;
     this.saveTimer = 0;
     this.body.addEventListener('click', (e) => this.onClick(e));
+    document.addEventListener('keydown', (e) => this.onKey(e));
     this.body.addEventListener('change', (e) => this.onChange(e));
     // 화면을 떠나면 멈추고 위치를 저장한다.
     // 진행 중인 열기(vodPlay 응답 대기)도 무효로 — 늦은 응답이 떠난 영상의 지금 재생 중 정보를 다시 넣지 않게.
@@ -106,7 +107,8 @@ export class MediaPage {
     }, vodHandlers(video));
     if (info.resumeAt > 0) {
       video.addEventListener('loadedmetadata', () => { video.currentTime = info.resumeAt; }, { once: true });
-      toast(`${formatDuration(info.resumeAt)}부터 이어서 재생합니다`, 2200);
+      // 처음부터 보고 싶으면 바로 되돌릴 수 있게(감사 UX-M07)
+      toast(`${formatDuration(info.resumeAt)}부터 이어서 재생합니다`, 5000, { label: '처음부터', run: () => { video.currentTime = 0; } });
     }
     // 실패하면 2.6초 토스트만 뜨고 검은 화면이 남았다(감사 UX-C06) — 무대 안에 다시 시도·치지직에서 열기를 둔다.
     video.addEventListener('error', () => {
@@ -169,6 +171,31 @@ export class MediaPage {
     this.savedAt = v.currentTime;
     api.vodProgressSave(info.videoNo, v.currentTime, v.duration || info.duration, info.title, info.channelName, info.thumbnailUrl || null)
       .catch(() => {});
+  }
+
+  /**
+   * 다시보기·클립 키 — Space 재생/멈춤, ←/→ 10초(⇧ 60초), ↑/↓ 볼륨, M 소리, F 전체 화면. 예전엔 영상에 초점이 있을 때만
+   * 기본 컨트롤이 받아 화면 어디서나 쓰던 라이브와 달랐다(감사 UX-M07). 영상 자체에 초점이 있으면 기본 컨트롤에 맡긴다.
+   */
+  onKey(e) {
+    if (this.root.hidden || e.metaKey || e.ctrlKey || e.altKey || keyBelongsToTarget(e)) return;
+    const v = this.video;
+    if (!v || e.target === v || document.querySelector('.ad-overlay')) return;
+    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    if (k === ' ' || k === 'k') { e.preventDefault(); if (v.paused) v.play().catch(() => {}); else v.pause(); }
+    else if (k === 'ArrowLeft' || k === 'ArrowRight') {
+      e.preventDefault();
+      const d = (e.shiftKey ? 60 : 10) * (k === 'ArrowLeft' ? -1 : 1);
+      v.currentTime = Math.max(0, Math.min(v.duration || Infinity, v.currentTime + d));
+    } else if (k === 'ArrowUp' || k === 'ArrowDown') {
+      e.preventDefault();
+      v.volume = Math.max(0, Math.min(1, Math.round((v.volume + (k === 'ArrowUp' ? 0.05 : -0.05)) * 100) / 100));
+      if (v.volume > 0) v.muted = false;
+    } else if (k === 'm') v.muted = !v.muted;
+    else if (k === 'f') {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      else v.requestFullscreen?.().catch(() => {});
+    }
   }
 
   /** 다시보기 재생 실패 안내 — 영상 위에 문구와 '다시 시도'·'치지직에서 열기'(onClick 의 retry·external). */

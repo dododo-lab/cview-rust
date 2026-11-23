@@ -61,7 +61,8 @@ for (const theme of ['dark', 'light']) {
     const chips = '[data-page="following"] .chips button.chip';
     await page.waitForSelector(chips);
     const read = (sel) => page.$$eval(sel, (bs) => bs.map((b) => [b.classList.contains('active'), b.getAttribute('aria-pressed')]));
-    for (const sel of [chips, '[data-page="following"] .segmented button.seg']) {
+    // 보기 전환(방송 중·전체 채널)은 tablist 라 aria-selected — 여기선 정렬 세그먼트만 본다
+    for (const sel of [chips, '[data-page="following"] .segmented:not([role="tablist"]) button.seg']) {
       const st = await read(sel);
       assert.ok(st.length > 1 && st.every(([on, p]) => p === String(on)), `${sel}: ${JSON.stringify(st)}`);
     }

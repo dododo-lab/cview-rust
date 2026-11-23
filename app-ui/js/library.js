@@ -183,12 +183,12 @@ export class LibraryPage {
         }
         case 'later': {
           const list = await this.fetchTab('later');
-          html = list.length ? `<div class="grid">${list.map(continueCard).join('')}</div>` : emptyState('나중에 볼 다시보기가 없습니다', '다시보기 화면의 "나중에 보기"로 담을 수 있어요');
+          html = list.length ? `<div class="grid">${list.map(continueCard).join('')}</div>` : emptyState('나중에 볼 다시보기가 없습니다', '다시보기 화면의 "나중에 보기"로 담을 수 있습니다');
           break;
         }
         case 'favorites': {
           const list = await this.fetchTab('favorites');
-          html = list.length ? `<div class="recent-row">${list.map(channelRowSaved).join('')}</div>` : emptyState('즐겨찾기한 채널이 없습니다', '채널 화면의 ☆ 버튼으로 추가할 수 있어요');
+          html = list.length ? `<div class="recent-row">${list.map(channelRowSaved).join('')}</div>` : emptyState('즐겨찾기한 채널이 없습니다', '채널 화면의 ☆ 버튼으로 추가할 수 있습니다');
           break;
         }
         case 'recent': {
@@ -208,7 +208,7 @@ export class LibraryPage {
         }
         case 'bookmarks': {
           const list = (await this.fetchTab('bookmarks')).filter((b) => !deletingBookmarks.has(b.id));
-          html = list.length ? `<div class="bookmark-list">${list.map(bookmarkRow).join('')}</div>` : emptyState('북마크가 없습니다', '시청 중 북마크 버튼(또는 B 키)으로 지금 장면을 남길 수 있어요');
+          html = list.length ? `<div class="bookmark-list">${list.map(bookmarkRow).join('')}</div>` : emptyState('북마크가 없습니다', '시청 중 북마크 버튼(또는 B 키)으로 지금 장면을 남길 수 있습니다');
           break;
         }
         default: break;

@@ -4,7 +4,8 @@
 // PLY-10 녹화 시작·중지(MediaRecorder 조각 → Rust 파일). 값은 플레이어 설정에 저장하고 새 재생마다 다시 건다.
 import { api } from './api.js';
 import { esc, toast, hideWithExit, keepFocus } from './dom.js';
-import { kbd, REVEAL_LABEL } from './platform.js';
+import { kbd, REVEAL_LABEL, userPath } from './platform.js';
+import { bindTabKeys } from './a11y.js';
 import {
   SHARPNESS_LEVELS, SHARPNESS_HELP, ENLARGED_ONLY_LABEL, ENLARGED_ONLY_HELP,
   sharpnessState, sharpnessReady, sharpnessArgs, setSharpness, sharpnessNote,
@@ -40,6 +41,9 @@ export class PlayerPanel {
     this.recButton = viewer.root.querySelector('#ctl-record');
     this.el = document.createElement('div');
     this.el.className = 'player-panel';
+    this.el.setAttribute('role', 'dialog');
+    this.el.setAttribute('aria-label', '플레이어 설정');
+    bindTabKeys(this.el); // 탭 줄 ←/→/Home/End(다시 그려도 패널 위에서 받는다)
     this.el.hidden = true;
     viewer.root.querySelector('.player-stage').append(this.el);
 
@@ -180,10 +184,10 @@ export class PlayerPanel {
           <button class="btn" data-tool="bookmark">북마크</button>
           <button class="btn" data-tool="alert-pos">후원 알림 위치 조정</button>
         </div>
-        <p class="pp-note">녹화는 ~/Movies/CView, 스크린샷은 설정한 폴더에 저장됩니다.</p>`;
+        <p class="pp-note">녹화는 ${esc(userPath('Movies', 'CView'))}, 스크린샷은 설정한 폴더에 저장됩니다.</p>`;
     }
     this.el.innerHTML = `
-      <div class="pp-head"><div class="segmented">${tabs.map(([id, l]) => `<button class="seg${this.tab === id ? ' active' : ''}" data-pp-tab="${id}">${l}</button>`).join('')}</div></div>
+      <div class="pp-head"><div class="segmented" role="tablist" aria-label="플레이어 설정">${tabs.map(([id, l]) => `<button class="seg${this.tab === id ? ' active' : ''}" data-pp-tab="${id}" role="tab" aria-selected="${this.tab === id}" tabindex="${this.tab === id ? 0 : -1}">${l}</button>`).join('')}</div></div>
       <div class="pp-body">${body}</div>`;
   }
 
@@ -339,6 +343,8 @@ export class PlayerPanel {
 
   setRecUi(on) {
     this.recButton.classList.toggle('recording', on);
+    // 아래 막대가 숨어도 녹화 중인 걸 알 수 있게 무대 왼쪽 위에 늘 작은 표시(app.css .player-stage.recording)
+    this.recButton.closest('.player-stage')?.classList.toggle('recording', on);
     this.recButton.title = kbd(on ? '녹화 중지 (⌥⌘R)' : '녹화 시작 (⌥⌘R)');
     if (!this.el.hidden && this.tab === 'tools') this.render();
   }

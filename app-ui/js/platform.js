@@ -19,3 +19,14 @@ export function kbd(text, windows = IS_WINDOWS) {
 
 /** 파일 위치 열기 단추 이름 — macOS 'Finder에서 보기', Windows '탐색기에서 보기'(감사 UX-M12). */
 export const REVEAL_LABEL = IS_WINDOWS ? '탐색기에서 보기' : 'Finder에서 보기';
+
+/** 상태 아이콘 자리 이름 — macOS '메뉴 막대', Windows '알림 영역'(작업 표시줄 오른쪽, 감사 UX-M12). */
+export const TRAY_LABEL = IS_WINDOWS ? '알림 영역' : '메뉴 막대';
+
+/** 사용자 폴더 아래 경로 표기 — macOS '~/Downloads/CView', Windows '%USERPROFILE%\Downloads\CView'(Rust content.rs default_save_dir 와 같은 곳). */
+export function userPath(...parts) {
+  return IS_WINDOWS ? `%USERPROFILE%\\${parts.join('\\')}` : `~/${parts.join('/')}`;
+}
+
+/** 비밀 값을 두는 곳 — macOS 키체인, Windows 자격 증명 관리자(keyring). */
+export const SECRET_STORE_LABEL = IS_WINDOWS ? 'Windows 자격 증명 관리자' : '키체인';

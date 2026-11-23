@@ -9,7 +9,7 @@ import { installLiveMotion } from './live-motion.js';
 import { installHoverPreview } from './hover-preview.js';
 import { setAdAudioHooks } from './ads.js';
 import { noteConnectorLimit } from './live-connector.js';
-import { bindCardOpen, recentChannels } from './cards.js';
+import { bindCardOpen, recentChannels, fallbackAvatar } from './cards.js';
 import { FollowingPage, PopularPage, SearchPage } from './pages.js';
 import { SettingsPage } from './settings.js';
 import { Viewer } from './viewer.js';
@@ -40,7 +40,8 @@ import { installBackgroundSaver, setMenuHidden } from './background-saver.js';
 import { installPerfCollector } from './perf-collector.js';
 import { showMenu, refreshChatAuth, reconnectFailedChats } from './chat.js';
 import { installUiHealth } from './ui-health.js';
-import { installUsageChip } from './usage-chip.js';
+import { installUsageChip, closeUsagePop } from './usage-chip.js';
+import { closeUserPop } from './chat-user-pop.js';
 import { kbd, IS_WINDOWS } from './platform.js';
 import { installWindowControls } from './window-controls.js';
 import { withRefreshVeil, cancelRefreshVeil } from './refresh-veil.js';
@@ -62,6 +63,9 @@ const ROUTES = [
   { id: 'settings', title: '설정', icon: icons.settings, section: '앱' },
 ];
 
+/** 화면별 메뉴 단축키(menu.rs GO 와 같게) — 팔레트 힌트. */
+const ROUTE_KEYS = { home: '⌘1', following: '⌘2', popular: '⌘3', categories: '⌘4', live: '⌘5', multichat: '⌘6', library: '⌘7', multilive: '⌘8', search: '⌘F', settings: '⌘,' };
+
 /** 보조 창 종류 — player · chat · multichat · stats (없으면 메인 창). */
 const AUX = new URLSearchParams(location.search).get('w');
 
@@ -76,6 +80,7 @@ let insights = null;
 
 function renderNav() {
   sidebar = new Sidebar(document.querySelector('.sidebar'), { routes: ROUTES, onNavigate: (route) => (route === 'live' ? openLiveMenu() : navigate(route)) });
+  closeFloatingOnSheet();
 }
 
 // 사이드바 아래 채널 목록 — 메뉴마다 다른 목록(sidebar-lists.js). 팔로잉은 Rust FollowingStore 가 60초 안의 결과를
@@ -624,7 +629,8 @@ function installPalette() {
     onSearch: (q) => navigate('search', { query: q }),
     actions: () => [
       // 화면 목록(ROUTES)에 이미 '검색'이 있다 — 따로 더하면 팔레트에 두 번 떴다. 검색만 설명을 붙인다.
-      ...ROUTES.map((r) => ({ group: '화면', label: r.title, hint: r.id === 'search' ? '라이브·채널·다시보기' : '이동', run: () => (r.id === 'live' ? openLiveMenu() : navigate(r.id)) })),
+      // 힌트는 그 화면의 실제 단축키(menu.rs GO) — 예전엔 모두 '이동'이었다(감사 UX-H09).
+      ...ROUTES.map((r) => ({ group: '화면', label: r.title, hint: ROUTE_KEYS[r.id] ? kbd(ROUTE_KEYS[r.id]) : '이동', run: () => (r.id === 'live' ? openLiveMenu() : navigate(r.id)) })),
       { group: '보관함', label: '보관함 개요', hint: '한눈에', run: () => navigate('library', { tab: 'overview' }) },
       { group: '방송&클립', label: '인기 방송', hint: '방송&클립', run: () => navigate('popular', { tab: 'live' }) },
       { group: '방송&클립', label: '인기 클립', hint: '방송&클립', run: () => navigate('popular', { tab: 'clips' }) },
@@ -653,6 +659,45 @@ function installPalette() {
 // Esc 는 맨 위의 것 하나만 닫는다 — 메뉴·시트·입력란이 먼저 받고, 아무것도 없을 때만 시청 화면을 닫는다.
 const ESC_POPUPS = ':is(.quality-menu, .vt-menu, .player-panel, .emoji-picker, .chat-tray, .dp-panel, .chat-autocomplete, .ml-pane-menu, .ml-more-menu, .ml-watch-overflow):not([hidden], .exit-ghost)';
 const ESC_LAYERS = '.sheet-scrim:not(.leaving), .palette-scrim:not([hidden], .exit-ghost)';
+/** 시트(.sheet-scrim)가 열리면 떠 있던 팝오버·메뉴를 닫는다 — 팝오버 층(z 120)이 시트(z 80)보다 높아 확인 창 위에 남았다(감사 UX-H06).
+ *  층 순서를 바꾸면 시트 안에서 여는 메뉴가 시트 밑에 깔리므로, 순서는 두고 여는 순간 닫는다. */
+/**
+ * 화면(.page) 폭 단계 클래스 — w-lt670·w-lt770·w-lt870(사이드바 232px 를 뺀 예전 화면 폭 900·1000·1100 기준).
+ * 인사이트 패널이 열려 본문만 좁아질 때도 좁은 배치가 걸리게(app.css). 숨은 화면은 폭이 0 이라 건드리지 않는다.
+ */
+function watchPageWidths(root) {
+  const STEPS = [670, 770, 870];
+  const ro = new ResizeObserver((entries) => {
+    for (const { target, contentRect } of entries) {
+      if (!contentRect.width) continue;
+      const w = target.clientWidth;
+      for (const s of STEPS) target.classList.toggle(`w-lt${s}`, w < s);
+    }
+  });
+  for (const p of root.querySelectorAll(':scope > .page')) ro.observe(p);
+}
+
+function closeFloatingOnSheet() {
+  new MutationObserver((records) => {
+    const opened = records.some((r) => [...r.addedNodes].some((n) => n.nodeType === 1 && n.classList.contains('sheet-scrim')));
+    if (!opened) return;
+    closeUsagePop();
+    closeUserPop();
+    sidebar?.closeAccountMenu?.();
+    for (const m of document.querySelectorAll('body > :is(.ctx-menu, .design-menu)')) m.remove();
+  }).observe(document.body, { childList: true });
+}
+
+/** 시청 화면 밖의 Esc — 떠 있는 패널·메뉴만 닫는다(입력란 초점·화면 이동은 그대로). 예전엔 시청 화면에서만 닫혔다(감사 UX-H24). */
+function closePopupsOnEscape(e) {
+  if (e.defaultPrevented) return;
+  const popups = document.querySelectorAll(ESC_POPUPS);
+  for (const p of popups) p.hidden = true;
+  const layers = document.querySelectorAll('body > :is(.ctx-menu, .design-menu)');
+  for (const m of layers) m.remove();
+  if (popups.length || layers.length) e.preventDefault();
+}
+
 function escapeTaken(e) {
   if (e.defaultPrevented) return true;
   const popups = document.querySelectorAll(ESC_POPUPS);
@@ -694,6 +739,7 @@ const MENU_ACTIONS = {
   'nav-live': () => openLiveMenu(),
   'nav-library': () => navigate('library'),
   'nav-categories': () => navigate('categories'),
+  'nav-multichat': () => navigate('multichat'),
   search: () => navigate('search'),
   palette: () => (palette.isOpen ? palette.close() : palette.open()),
   back: () => goBack(),
@@ -831,6 +877,7 @@ function trackFullscreen() {
 async function main() {
   installUiHealth(); // 멈춤 감시 신호·오류 기록 — 무엇보다 먼저(아래에서 실패해도 신호는 간다)
   installImageFade(); // 첫 화면 그림보다 먼저 — 놓친 load 로 썸네일이 투명하게 남지 않게
+  document.addEventListener('error', fallbackAvatar, true); // 모든 화면의 아바타 — 못 받으면 첫 글자·바탕 원(cards.js)
   installSegmentGlider(); // 모든 세그먼트의 고른 칸 판이 미끄러지게
   installMicroMotion();
   installLiveMotion();
@@ -861,6 +908,7 @@ async function main() {
   pages.stats = new StatsPage(AUX === 'stats' ? content : pages.home.panels, { onOpenChannel: openChannelPage, embedded: AUX !== 'stats' });
   if (AUX !== 'stats') pages.home.attachReport(pages.stats);
   pages.media = new MediaPage(content, { onBack: goBack, onOpenChannel: openChannelPage });
+  watchPageWidths(content);
   pages.channel = new ChannelPage(content, { onBack: goBack, onPlay: openChannel, onAddMulti: addToMultiLive });
   // 위 막대 ⋯ 의 '멀티라이브에 추가'·'새 창으로 분리'(보조 창 안에서는 없다) — viewer-topbar.js
   viewer = new Viewer(document.getElementById('viewer'), {
@@ -912,8 +960,9 @@ async function main() {
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !document.fullscreenElement) {
-      if (viewer.isOpen && !escapeTaken(e)) viewer.close();
-      else if (activeWatch() && !escapeTaken(e)) closeWatch();
+      if (viewer.isOpen) { if (!escapeTaken(e)) viewer.close(); }
+      else if (activeWatch()) { if (!escapeTaken(e)) closeWatch(); }
+      else closePopupsOnEscape(e);
     }
     const typing = e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA');
     if ((e.metaKey && e.key === '[') || (e.altKey && e.key === 'ArrowLeft' && !typing)) {

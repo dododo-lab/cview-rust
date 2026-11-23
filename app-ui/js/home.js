@@ -74,7 +74,7 @@ function loginBanner() {
       <div class="home-banner-art" aria-hidden="true">${icons.following}</div>
       <div class="home-banner-text">
         <strong>로그인하고 팔로우한 채널을 홈에서 바로 만나보세요</strong>
-        <span>방송 중인 팔로잉 채널, 채팅 참여, 맞춤 추천이 열립니다</span>
+        <span>방송 중인 팔로잉 채널, 채팅 참여, 맞춤 추천을 쓸 수 있어요</span>
       </div>
       <button class="btn primary lg" data-action="login">네이버 로그인</button>
     </section>`;
