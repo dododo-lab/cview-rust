@@ -244,14 +244,19 @@ await check('O10 백그라운드 재생 끄기 — 창이 가려지면 단독 �
     return w && typeof w.pause === 'function' && typeof w.loadSource === 'function' && w.document.readyState === 'complete';
   }, null, { timeout: 15000 });
   await page.clock.runFor(500);
+  // 기록은 바깥 창 배열에 — 매번 다시 감싸고(문서가 바뀌어도) 재생 중인 것처럼 둔다.
   const spy = () => page.evaluate(() => {
     const w = document.querySelector('.ml-pane[data-slot="0"] iframe').contentWindow;
-    if (!w.__calls) {
-      w.__calls = [];
-      for (const name of ['pause', 'play', 'seekToLiveEdge']) { const f = w[name]; w[name] = (...a) => { w.__calls.push(name); try { return f(...a); } catch { return undefined; } }; }
-      Object.defineProperty(w.document.getElementById('video'), 'paused', { configurable: true, get: () => false });
+    window.__bgCalls ||= [];
+    for (const name of ['pause', 'play', 'seekToLiveEdge']) {
+      if (w[name] && w[name].__spied) continue;
+      const f = w[name];
+      const g = (...a) => { window.__bgCalls.push(name); try { return f(...a); } catch { return undefined; } };
+      g.__spied = true;
+      w[name] = g;
     }
-    const out = w.__calls.slice(); w.__calls.length = 0; return out;
+    Object.defineProperty(w.document.getElementById('video'), 'paused', { configurable: true, get: () => false });
+    const out = window.__bgCalls.slice(); window.__bgCalls.length = 0; return out;
   });
   await spy();
   // 기본(켜 둠) — 가려져도 멈추지 않는다.
