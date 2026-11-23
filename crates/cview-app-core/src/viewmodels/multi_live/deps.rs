@@ -46,7 +46,8 @@ pub trait MultiLiveHlsEngine: Send + Sync {
     fn resume(&self);
     fn resume_loading(&self);
     fn suspend_loading(&self);
-    fn set_buffer_caps(&self, max_len: f64, max_max_len: f64, max_size: i64);
+    /// 전방 버퍼 상한(초·초·바이트)과 뒤 버퍼(초, 0 이하면 그대로).
+    fn set_buffer_caps(&self, max_len: f64, max_max_len: f64, max_size: i64, back_len: f64);
     fn arm_surface_presented_probe(&self);
     fn reset_retries(&self) {}
 }

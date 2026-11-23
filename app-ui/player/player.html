@@ -3222,8 +3222,8 @@ function setLockTopLevel(on) {
 //     리셋을 지우면 풀에서 재사용된 엔진이 옛 패인의 캡을 물고 시작한다.
 let _bufferCapOverride = null;
 
-function setBufferCaps(maxLen, maxMaxLen, maxSizeBytes) {
-    _bufferCapOverride = { maxLen: maxLen, maxMaxLen: maxMaxLen, maxSize: maxSizeBytes };
+function setBufferCaps(maxLen, maxMaxLen, maxSizeBytes, backLen) {
+    _bufferCapOverride = { maxLen: maxLen, maxMaxLen: maxMaxLen, maxSize: maxSizeBytes, backLen: backLen || 0 };
     applyBufferCapOverride();
 }
 
@@ -3233,6 +3233,8 @@ function applyBufferCapOverride() {
     if (c.maxLen > 0) hls.config.maxBufferLength = c.maxLen;
     if (c.maxMaxLen > 0) hls.config.maxMaxBufferLength = c.maxMaxLen;
     if (c.maxSize > 0) hls.config.maxBufferSize = c.maxSize;
+    // 뒤 버퍼(멀티라이브 비선택 패인 2초) — hls.js 는 다음 조각을 붙일 때 이 값으로 지난 버퍼를 잘라 낸다.
+    if (c.backLen > 0) hls.config.backBufferLength = c.backLen;
 }
 
 // [Stall Recovery v3 / 2026-05-10] 강화 단일 state machine.
@@ -4068,7 +4070,12 @@ function takeScreenshot(format, quality) {
         canvas.height = video.videoHeight;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const width = canvas.width;
+        const height = canvas.height;
         canvas.toBlob(function(blob) {
+            // 영상 크기 캔버스 백킹(4K 면 33 MB)을 GC 를 기다리지 않고 바로 놓는다(메모리 2026-11-24).
+            canvas.width = 0;
+            canvas.height = 0;
             if (!blob) {
                 postToSwift('screenshot', { ok: false, error: 'TOBLOB_FAILED' });
                 return;
@@ -4081,8 +4088,8 @@ function takeScreenshot(format, quality) {
                 postToSwift('screenshot', {
                     ok: true,
                     format: fmt,
-                    width: canvas.width,
-                    height: canvas.height,
+                    width: width,
+                    height: height,
                     base64: base64
                 });
             };

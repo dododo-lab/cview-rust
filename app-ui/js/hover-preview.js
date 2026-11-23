@@ -198,7 +198,9 @@ class HoverPreview {
         const Hls = await loadHls();
         if (seq !== this.seq) return;
         if (!Hls.isSupported()) throw new Error('MSE 없음');
-        const hls = new Hls({ startLevel: 0, capLevelToPlayerSize: true, maxBufferLength: 8, backBufferLength: 0, lowLatencyMode: false });
+        // enableWorker:false — 가장 낮은 화질을 몇 초 보는 미리보기라 변환이 가볍다. 기본(Worker)이면 호버마다 Worker 를
+        // 새로 띄웠다 닫아(Windows WebView2 는 V8 격리 공간 하나, 수십 MB) 메모리가 튀었다(메모리 2026-11-24).
+        const hls = new Hls({ startLevel: 0, capLevelToPlayerSize: true, maxBufferLength: 8, backBufferLength: 0, lowLatencyMode: false, enableWorker: false });
         this.hls = hls;
         hls.on(Hls.Events.ERROR, (_, data) => {
           if (data && data.fatal && seq === this.seq) { this.forget(kind, id); this.stop(); }

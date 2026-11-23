@@ -135,7 +135,7 @@ impl MultiLiveHlsEngine for FakeEngine {
     fn suspend_loading(&self) {
         self.st().loading_suspended = true;
     }
-    fn set_buffer_caps(&self, _a: f64, _b: f64, _c: i64) {}
+    fn set_buffer_caps(&self, _a: f64, _b: f64, _c: i64, _d: f64) {}
     fn arm_surface_presented_probe(&self) {}
 }
 

@@ -404,3 +404,16 @@ fn command_scripts() {
         "setMatchWebV2Targets(2.75, 4.05)"
     );
 }
+
+/// 버퍼 상한 명령은 뒤 버퍼(초)까지 넘긴다 — 멀티라이브 비선택 패인은 2초.
+#[test]
+fn buffer_caps_script_carries_back_buffer() {
+    let s = JsCommand::SetBufferCaps {
+        max_len: 9.0,
+        max_max_len: 12.0,
+        max_size: 8 * 1024 * 1024,
+        back_len: 2.0,
+    }
+    .script();
+    assert_eq!(s, "setBufferCaps(9.0, 12.0, 8388608, 2.0)");
+}
