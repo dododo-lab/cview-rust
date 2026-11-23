@@ -4842,7 +4842,7 @@ function _createUpscaler() {
             // 선명화 단계 텍스처(출력 크기): CAS 결과 · 가로 흐림
             work: [gl.createTexture(), gl.createTexture()],
             workFbo: [gl.createFramebuffer(), gl.createFramebuffer()],
-            workW: 0, workH: 0
+            workW: [0, 0], workH: [0, 0]
         };
         up.loc = {
             catmull: _uniforms(gl, up.catmull, ['t', 'size'], { t: 0 }),
@@ -4879,16 +4879,16 @@ function _createUpscaler() {
     }
 }
 
+// [VRAM 2026-11-24] 작업 텍스처는 쓰는 장만 그 크기로 할당한다 — 예전엔 하나를 부르면 두 장(work[0]·work[1])을 함께
+//   영상 크기로 잡았는데, 비확대 선명화는 work[1] 만, 확대 Lv3 만 둘 다 쓴다(4K 면 한 장이 33 MB).
 function _gpuTarget(up, i, w, h) {
     const gl = up.gl;
-    if (up.workW !== w || up.workH !== h) {
-        for (let j = 0; j < up.work.length; j++) {
-            gl.bindTexture(gl.TEXTURE_2D, up.work[j]);
-            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-            gl.bindFramebuffer(gl.FRAMEBUFFER, up.workFbo[j]);
-            gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, up.work[j], 0);
-        }
-        up.workW = w; up.workH = h;
+    if (up.workW[i] !== w || up.workH[i] !== h) {
+        gl.bindTexture(gl.TEXTURE_2D, up.work[i]);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, up.workFbo[i]);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, up.work[i], 0);
+        up.workW[i] = w; up.workH[i] = h;
     }
     gl.bindFramebuffer(gl.FRAMEBUFFER, up.workFbo[i]);
     gl.viewport(0, 0, w, h);
@@ -5430,6 +5430,11 @@ function _verifyGpuOutput(up) {
     return true;
 }
 
+// [VRAM 2026-11-24] 꺼진 업스케일러(선명도 끔·창 가림·멀티라이브 파킹·'크게 볼 때만' 작아짐)가 텍스처와 캔버스
+//   백킹을 그대로 쥐고 있었다(1440p ~100 MB, 4K ~200 MB). 잠깐 껐다 켜는 경우(창 전환 등)에는 다시 할당하지 않게
+//   UPSCALER_IDLE_RELEASE_MS 동안 그대로 두고, 그 뒤에도 꺼져 있으면 1×1 로 줄인다. 다시 켜면 다음 그리기가 할당한다.
+const UPSCALER_IDLE_RELEASE_MS = 3000;
+
 function _deactivateUpscaler() {
     const up = _upscaler;
     if (!up) return;
@@ -5437,6 +5442,12 @@ function _deactivateUpscaler() {
     if (up.frameId && video.cancelVideoFrameCallback) video.cancelVideoFrameCallback(up.frameId);
     up.frameId = 0;
     if (up.canvas.style.display !== 'none') up.canvas.style.display = 'none';
+    if (!up.releaseTimer && !up.released) {
+        up.releaseTimer = setTimeout(function() {
+            up.releaseTimer = 0;
+            if (_upscaler === up && !up.active) _releaseUpscalerMemory(up);
+        }, UPSCALER_IDLE_RELEASE_MS);
+    }
 }
 
 function _reconcileUpscaler() {
@@ -5474,6 +5485,8 @@ function _reconcileUpscaler() {
         return;
     }
     _upscaler.active = true;
+    if (_upscaler.releaseTimer) { clearTimeout(_upscaler.releaseTimer); _upscaler.releaseTimer = 0; }
+    _upscaler.released = false;
     _upscaler.verify = { drawn: 0, next: GPU_VERIFY_FIRST_FRAME, tries: 0, done: false };
     _applyComposedFilter(); // 영상·캔버스 모두 색 보정만(선명화는 캔버스가)
     _upscaler.canvas.style.display = '';
@@ -5503,7 +5516,8 @@ function _releaseUpscalerMemory(up) {
             }
             gl.bindTexture(gl.TEXTURE_2D, null);
             up.fboW = up.fboH = 0;
-            up.workW = up.workH = 0;
+            up.workW = [0, 0];
+            up.workH = [0, 0];
             up.sourceMip = null; // 다음 업로드에서 필터를 다시 맞춘다
         } else if (up.tex) {
             for (let i = 0; i < up.tex.length; i++) {
@@ -5514,6 +5528,7 @@ function _releaseUpscalerMemory(up) {
         }
         up.canvas.width = 1;
         up.canvas.height = 1;
+        up.released = true;
     } catch (e) { /* 컨텍스트를 잃었으면 이미 풀렸다 */ }
 }
 

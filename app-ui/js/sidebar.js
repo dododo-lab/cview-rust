@@ -415,7 +415,8 @@ export class Sidebar {
     };
     const place = () => this.placeAccountMenu();
     const close = () => this.closeAccountMenu();
-    setTimeout(() => document.addEventListener('mousedown', outside, true), 0);
+    // 같은 틱에 닫히면 늦게 붙는 리스너가 영구히 남았다 — 아직 이 메뉴가 열려 있을 때만 단다.
+    setTimeout(() => { if (this.accountMenu === pop) document.addEventListener('mousedown', outside, true); }, 0);
     window.addEventListener('resize', place);
     window.addEventListener('blur', close);
     this.root.addEventListener('scroll', place, { passive: true });

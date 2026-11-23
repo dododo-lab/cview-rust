@@ -121,6 +121,8 @@ async function refreshSidebarList() {
 }
 async function refreshSidebarFollowing() {
   clearTimeout(followingTimer);
+  // 보조 창(?w=…)은 사이드바를 숨긴다(app.css :root[data-window] .sidebar) — 2분마다 팔로잉 목록을 받아 그릴 곳이 없다.
+  if (AUX) return;
   let failed = false;
   if (!isLoggedIn()) {
     sideData.following = null;

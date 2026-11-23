@@ -94,6 +94,20 @@ pub(crate) struct Inner {
 /// 살아 있는 프록시 목록 — 성능 로그 표본 루프가 10초마다 세그먼트 수신 요약을 꺼내 간다(약한 참조).
 static PERF_REGISTRY: Mutex<Vec<std::sync::Weak<Inner>>> = Mutex::new(Vec::new());
 
+/// 프록시를 성능 목록에 올린다. 죽은 약한 참조는 여기서도 걷어 낸다 — 예전엔 디버그 로그를 켰을 때만(take_perf_windows)
+/// 걷어 내, 로그를 켜지 않은 사용자는 재생·채널 전환마다 죽은 `Weak<Inner>` 가 쌓이고 그 `ArcInner` 블록도 풀리지 않았다.
+fn register_perf(inner: &Arc<Inner>) {
+    let mut registry = lock(&PERF_REGISTRY);
+    registry.retain(|w| w.strong_count() > 0);
+    registry.push(Arc::downgrade(inner));
+}
+
+/// 성능 목록에 올라 있는 프록시 수(죽은 참조 포함) — 테스트용.
+#[cfg(test)]
+pub(crate) fn perf_registry_len() -> usize {
+    lock(&PERF_REGISTRY).len()
+}
+
 /// 살아 있는 프록시마다 지난 창의 세그먼트 수신 요약(이름, 요약). 이 창에 일이 없던 프록시는 빠진다.
 pub fn take_perf_windows() -> Vec<(String, ProxyPerfWindow)> {
     let mut registry = lock(&PERF_REGISTRY);
@@ -164,7 +178,7 @@ impl LocalStreamProxy {
                 perf_tag: Mutex::new(String::new()),
             }),
         };
-        lock(&PERF_REGISTRY).push(Arc::downgrade(&proxy.inner));
+        register_perf(&proxy.inner);
         proxy
     }
 

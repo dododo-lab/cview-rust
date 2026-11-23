@@ -6,6 +6,8 @@
 //     한산할 때 온 메시지는 기다리지 않고 다음 프레임에 바로 붙는다. 붐빌 때(50ms 마다 10개)는 간격을 채우지 않고
 //     한 프레임 분량씩 바로 붙인다 — 100ms 를 다 모으면 20줄 넘게 한꺼번에 붙어 느린 PC 에서 프레임이 끊겼다(perf P04).
 // M03 패널을 버리면(멀티채팅 채널 닫기) 문서·창에 건 리스너와 이벤트 구독이 모두 풀린다 — 여닫기를 되풀이해도 늘지 않는다.
+// M04 채팅 통계 참여자 표(stats.users)는 상한을 지킨다 — 한 번만 말한 사람부터 덜고, 많이 말한 사람·참여자 합계는 그대로.
+// M05 컨텍스트 메뉴를 닫지 않고 거듭 열거나 열자마자 닫아도 문서·창 리스너가 남지 않는다.
 // 저장소 루트에서: NODE_PATH=<Playwright 경로> node tools/ui-regression/chat-memory.mjs
 // CVIEW_UI_BROWSER=webkit 이면 WebKit 으로 검사한다(힙·리스너 수는 Chromium CDP 로만 잰다 — WebKit 은 DOM 기반 검사만).
 import assert from 'node:assert/strict';
@@ -70,11 +72,12 @@ async function open() {
     const { setMyNickname } = await import('/js/chat-prefs.js');
     setMyNickname('검사자');
     let n = 0;
-    // 멘션·이모티콘·후원이 섞인 합성 메시지 — 사용자 3천 명, 닉네임 900개
+    // 멘션·이모티콘·후원이 섞인 합성 메시지 — 사용자 3천 명, 닉네임은 메시지마다 새로(대형 방송처럼 고유 채팅자가 계속 는다 —
+    // 예전엔 900개를 돌려 써서 통계 참여자 표(stats.users)가 끝없이 커지는 것을 잡지 못했다)
     window.__mk = () => {
       const k = ++n;
       const emo = k % 7 === 0 ? { [`e${k}`]: `https://ssl.pstatic.net/static/nng/glive/icon/e${k}.png` } : {};
-      return { id: `syn-${k}`, kind: k % 97 === 0 ? 'donation' : 'chat', userId: `u${k % 3000}`, nickname: `시청자${k % 900}`, content: `${k % 50 === 0 ? '@검사자 ' : ''}합성 메시지 ${k} ㅋㅋㅋ${k % 7 === 0 ? ` {:e${k}:}` : ''}`, emojis: emo, payAmount: k % 97 === 0 ? 1000 : undefined, role: 'common_user', badges: [], time: Date.now() };
+      return { id: `syn-${k}`, kind: k % 97 === 0 ? 'donation' : 'chat', userId: `u${k % 3000}`, nickname: `시청자${k}`, content: `${k % 50 === 0 ? '@검사자 ' : ''}합성 메시지 ${k} ㅋㅋㅋ${k % 7 === 0 ? ` {:e${k}:}` : ''}`, emojis: emo, payAmount: k % 97 === 0 ? 1000 : undefined, role: 'common_user', badges: [], time: Date.now() };
     };
     window.__makePanel = async () => {
       const box = document.createElement('div');
@@ -132,11 +135,48 @@ await check('M01 long busy chat: lines, side state, nodes and listeners stay bou
   // 상한 근처에서 trimFront 가 125%까지 채웠다 지우므로 노드 수는 그 폭만큼 흔들린다.
   assert.ok(s.nodes <= warmDom.nodes * 1.3, `문서 요소 ${warmDom.nodes} → ${s.nodes}`);
   assert.equal(s.listeners, warmDom.listeners, `문서·창 리스너 ${warmDom.listeners} → ${s.listeners}`);
+  // 통계 참여자 — 표는 상한으로 덜어 내도 '참여자' 수는 덜어 낸 사람까지 센다(고유 닉네임 1만 2천 명).
+  const who = await page.evaluate(() => {
+    const p = window.__panel;
+    // 복제해 온 채팅 DOM 에는 원래 패널이 단 단추도 들어 있다 — 이 패널이 단 것(마지막)을 누른다.
+    [...p.root.querySelectorAll('.chat-hbtn[title="채팅 통계"]')].at(-1).click();
+    const cell = [...p.tray.querySelectorAll('.stat-grid > div')].find((d) => d.textContent.includes('참여자'));
+    const n = Number(cell?.querySelector('b')?.textContent);
+    p.tray.hidden = true;
+    return n;
+  });
+  assert.equal(who, 12000, `통계 참여자 ${who}`);
   if (warm.JSHeapUsedSize) {
     const grow = (end.JSHeapUsedSize - warm.JSHeapUsedSize) / 1048576;
     assert.ok(grow < 2, `메시지 1만 개 뒤 JS 힙 +${grow.toFixed(2)}MB`);
     assert.ok(end.JSEventListeners <= warm.JSEventListeners * 1.3 + 20, `JS 리스너 ${warm.JSEventListeners} → ${end.JSEventListeners}`);
   }
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('M04 chat stats participant table is capped (one-time talkers dropped first, top talkers kept, total still counted)', async () => {
+  const { ctx, page, errors } = await open();
+  const r = await page.evaluate(async () => {
+    const { trimStatsUsers } = await import('/js/chat-extras.js');
+    const stats = { users: new Map(), usersDropped: 0 };
+    for (let i = 0; i < 50; i++) stats.users.set(`단골${i}`, 100 + i);
+    for (let i = 0; i < 4100; i++) stats.users.set(`손님${i}`, 1);
+    trimStatsUsers(stats);
+    const afterOnce = { size: stats.users.size, dropped: stats.usersDropped, regulars: [...stats.users.keys()].filter((n) => n.startsWith('단골')).length, newest: stats.users.has('손님4099') };
+    // 모두 여러 번 말한 사람뿐이어도 상한을 지킨다(오래된 순).
+    const all = { users: new Map(), usersDropped: 0 };
+    for (let i = 0; i < 5000; i++) all.users.set(`n${i}`, 2);
+    trimStatsUsers(all);
+    return { afterOnce, allSize: all.users.size, allDropped: all.usersDropped, allNewest: all.users.has('n4999') };
+  });
+  assert.equal(r.afterOnce.size, 3000, JSON.stringify(r));
+  assert.equal(r.afterOnce.size + r.afterOnce.dropped, 4150);
+  assert.equal(r.afterOnce.regulars, 50, '여러 번 말한 사람은 남는다');
+  assert.ok(r.afterOnce.newest, '최근 사람은 남는다');
+  assert.equal(r.allSize, 3000);
+  assert.equal(r.allDropped, 2000);
+  assert.ok(r.allNewest);
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -222,6 +262,33 @@ await check('M03 destroying a panel releases document listeners and event subscr
   // 채팅 모듈이 처음 불릴 때 한 번 거는 전역 리스너(줄 메뉴·따라가기)는 몇 개 생길 수 있다 — 패널마다 늘면 안 된다.
   assert.ok(after.listeners - before.listeners <= 6, `문서·창 리스너 ${before.listeners} → ${after.listeners}(패널 6번 여닫기)`);
   if (m0.JSEventListeners) assert.ok(m1.JSEventListeners - m0.JSEventListeners <= 30, `JS 리스너 ${m0.JSEventListeners} → ${m1.JSEventListeners}`);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('M05 context menus opened back to back leave no document/window listeners behind', async () => {
+  const { ctx, page, errors } = await open();
+  const r = await page.evaluate(async () => {
+    const { showMenu } = await import('/js/chat.js');
+    const before = window.__docListeners();
+    // 우클릭을 거듭하듯 앞 메뉴를 닫지 않고 새 메뉴를 연다 — 예전엔 앞 메뉴의 mousedown·blur 리스너가 남았다.
+    for (let i = 0; i < 20; i++) {
+      showMenu(100, 100, [['a', '하나'], ['b', '둘']], () => {});
+      if (i % 2) await new Promise((r) => setTimeout(r, 0));
+    }
+    await new Promise((r) => setTimeout(r, 20));
+    const open = document.querySelectorAll('.ctx-menu').length;
+    document.querySelector('.ctx-menu .ctx-item')?.click();
+    await new Promise((r) => setTimeout(r, 20));
+    // 열자마자 같은 틱에 닫혀도(늦게 붙는 mousedown) 남지 않는다.
+    showMenu(100, 100, [['a', '하나']], () => {});
+    document.querySelector('.ctx-menu .ctx-item')?.click();
+    await new Promise((r) => setTimeout(r, 20));
+    return { before, after: window.__docListeners(), open, left: document.querySelectorAll('.ctx-menu').length };
+  });
+  assert.equal(r.open, 1, `열린 메뉴 ${r.open}`);
+  assert.equal(r.left, 0);
+  assert.equal(r.after, r.before, `문서·창 리스너 ${r.before} → ${r.after}`);
   assert.deepEqual(errors, []);
   await ctx.close();
 });

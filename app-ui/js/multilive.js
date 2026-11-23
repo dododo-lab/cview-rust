@@ -40,6 +40,12 @@ const ICON_CLOSE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" s
 const ICON_SOUND = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 9h4l5-4v14l-5-4H4V9Z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 // 보조 창(?w=player|chat|…) — 멀티라이브는 메인 창에서만 보여 준다(app.js openChannel).
 const AUX_WINDOW = new URLSearchParams(location.search).has('w');
+// [메모리 2026-11-24] 닫힌 패인 iframe 회수 — 패인을 닫으면 플레이어를 멈추고 숨겨 두었다가(같은 슬롯을 다시 쓰면 바로 재생)
+//   다시 쓰는데, 한 번 9패인을 열었다 닫으면 player.html 문서 9개(JS 힙·hls.js·WebGL 컨텍스트·PaneControls)가 앱을 끌 때까지
+//   남았다. 닫힌 지 PANE_RECLAIM_MS 가 지나도 다시 쓰이지 않은 패인은 WARM_IDLE_PANES 개만 남기고 문서에서 지운다.
+//   그 슬롯을 Rust 가 다시 쓰면 명령은 pending 에 쌓였다가 패인을 새로 만들 때 흘러간다(처음 여는 패인과 같은 길).
+const WARM_IDLE_PANES = 2;
+const PANE_RECLAIM_MS = 30000;
 const ICON_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
 // 머리줄 채널 추가 단추 속 — 가득 차 "채널 고르기"로 바뀌었다가 자리가 나면 이것으로 돌아온다.
 const ADD_INNER = `${ICON_PLUS}<span class="ml-add-label"><span class="ml-add-long">채널 </span>추가</span><span class="ml-add-full" aria-hidden="true" hidden></span>`;
@@ -413,9 +419,10 @@ export class MultiLivePage {
       if (map[e.key]) { e.preventDefault(); this.run(api.multiLiveSetLayout(map[e.key])); }
     });
     this.proposed = new Set();
-    setInterval(() => this.proposeTick(), 120000);
+    // 보조 창은 멀티라이브를 그리지 않는다(render) — 패인 주기 작업도 돌리지 않는다.
+    if (!AUX_WINDOW) setInterval(() => this.proposeTick(), 120000);
     // 패인 재생 상태(일시정지·버퍼링·지연) — 화면이 보일 때만 맞춘다.
-    setInterval(() => {
+    if (!AUX_WINDOW) setInterval(() => {
       if (this.root.hidden || document.hidden) return;
       const now = Date.now();
       for (const p of this.panes.values()) {
@@ -426,7 +433,7 @@ export class MultiLivePage {
       }
     }, 700);
     // 방송 경과 시간은 분 단위라 30초마다 칩만 다시 그린다.
-    setInterval(() => {
+    if (!AUX_WINDOW) setInterval(() => {
       if (this.root.hidden || document.hidden) return;
       for (const p of this.panes.values()) {
         const s = p.sessionId && (this.state.sessions || []).find((x) => x.id === p.sessionId);
@@ -569,6 +576,27 @@ export class MultiLivePage {
     this.pending.get(slot).push(script);
   }
 
+  scheduleReclaim() {
+    clearTimeout(this.reclaimTimer);
+    this.reclaimTimer = setTimeout(() => this.reclaimIdlePanes(), PANE_RECLAIM_MS);
+  }
+
+  /** 닫힌(세션 없음·숨김) 패인 중 WARM_IDLE_PANES 개를 넘는 것을 문서에서 지운다 — 슬롯 번호가 작은 것부터 남긴다. */
+  reclaimIdlePanes() {
+    this.reclaimTimer = 0;
+    const idle = [...this.panes].filter(([slot, p]) => !p.sessionId && !p.exiting && p.el.hidden
+      && !this.pending.has(slot) && slot !== this.watchSlot && slot !== this.single).sort((a, b) => a[0] - b[0]);
+    for (const [slot, pane] of idle.slice(WARM_IDLE_PANES)) {
+      pane.controls?.destroy();
+      pane.bridge.destroy();
+      const iframe = pane.el.querySelector('iframe');
+      try { if (iframe) iframe.src = 'about:blank'; } catch { /* 이미 떨어짐 */ }
+      pane.el.remove();
+      this.panes.delete(slot);
+      this.systemPaused.delete(slot);
+    }
+  }
+
   /** 퇴장 중이던 패인을 되돌린다 — 퇴장이 건 음소거도 페이지의 음소거 의도로 되돌린다. */
   reviveExiting(pane) {
     if (!pane.exiting) return;
@@ -647,6 +675,10 @@ export class MultiLivePage {
     if (!state) return;
     // 늦게 도착한 낡은 상태는 무시한다 — 그대로 그리면 방금 재사용된 슬롯을 '닫힌 패인'으로 보고 멈춘다.
     if (this.state && typeof state.rev === 'number' && typeof this.state.rev === 'number' && state.rev < this.state.rev) return;
+    // [메모리 2026-11-24] 보조 창(?w=chat|player|…)에도 멀티라이브 상태가 모든 창으로 온다(lib.rs MULTILIVE_STATE). 숨은 이 페이지가
+    //   그대로 그리면 패인마다 player.html iframe(+hls.js·PlayerBridge·PaneControls)을 만들고 거짓 ready 까지 Rust 로 보냈다 —
+    //   메인 창에서 멀티라이브를 보며 채팅 창을 열면 그 창에 패인 수만큼 플레이어가 더 떴다. 보조 창은 상태만 기억한다.
+    if (AUX_WINDOW) { this.state = state; return; }
     // 추가하고 선택하는 중(add) — 추가만 된 중간 상태(이벤트)는 그리지 않는다. 선택까지 끝난 응답이 곧 온다.
     if (this.addHold && (state.sessions || []).some((x) => x.channelId === this.addHold && x.id !== state.selectedId)) return;
     // 배치가 바뀌면(추가·제거·순서·레이아웃·메인) 바꾸기 전 자리를 재 둔다 — 끝에서 새 자리로 미끄러진다.
@@ -774,6 +806,7 @@ export class MultiLivePage {
       const release = () => {
         pane.bridge.run('try { stop(); video.removeAttribute("src"); video.load(); } catch (e) {}');
         pane.el.hidden = true;
+        this.scheduleReclaim();
       };
       const rect = before && !pane.el.hidden ? before.get(slot) : null;
       const had = pane.sessionId || !pane.el.hidden;

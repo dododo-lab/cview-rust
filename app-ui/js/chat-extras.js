@@ -90,9 +90,34 @@ function stamp() {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`;
 }
 
+const STATS_USERS_MAX = 4000;
+const STATS_USERS_KEEP = 3000;
+
+/** 채팅 통계 참여자 표를 STATS_USERS_KEEP 명으로 줄인다 — 한 번만 말한 사람(오래된 순)부터, 그래도 많으면 오래된 순. */
+export function trimStatsUsers(stats) {
+  let excess = stats.users.size - STATS_USERS_KEEP;
+  if (excess <= 0) return;
+  for (const [nick, count] of stats.users) {
+    if (excess <= 0) break;
+    if (count > 1) continue;
+    stats.users.delete(nick);
+    stats.usersDropped += 1;
+    excess -= 1;
+  }
+  for (const nick of stats.users.keys()) {
+    if (excess <= 0) break;
+    stats.users.delete(nick);
+    stats.usersDropped += 1;
+    excess -= 1;
+  }
+}
+
 export function installChatExtras(panel) {
   const root = panel.root;
-  const stats = { times: [], users: new Map(), donations: 0, cheese: 0, subs: 0, since: Date.now() };
+  // users — 닉네임 → 메시지 수. 상한이 없어 대형 방송을 몇 시간 보면 고유 채팅자 수만 명이 그대로 쌓였다(멀티채팅이면
+  // 채널마다). STATS_USERS_MAX 를 넘으면 한 번만 말한 사람부터(오래된 순) 덜어 내고, 덜어 낸 수는 usersDropped 로 센다 —
+  // '참여자' 는 둘을 더해 보여 주고, '가장 많이 말한 사람' 은 여러 번 말한 사람이 남으므로 그대로다.
+  const stats = { times: [], users: new Map(), usersDropped: 0, donations: 0, cheese: 0, subs: 0, since: Date.now() };
   const muted = new Map(); // nick → 해제 시각
   const uidByNick = new Map(); // nick → userId (최근 본 순)
 
@@ -132,7 +157,7 @@ export function installChatExtras(panel) {
       <div class="stat-grid">
         <div><b>${minute}</b><span>최근 1분 메시지</span></div>
         <div><b>${Math.round(stats.times.length / mins)}</b><span>분당 평균</span></div>
-        <div><b>${stats.users.size}</b><span>참여자</span></div>
+        <div><b>${stats.users.size + stats.usersDropped}</b><span>참여자</span></div>
         <div><b>${stats.donations}</b><span>후원 · ${esc(formatCheese(stats.cheese) || '0치즈')}</span></div>
         <div><b>${stats.subs}</b><span>구독</span></div>
       </div>
@@ -198,6 +223,7 @@ export function installChatExtras(panel) {
       if ((m.kind === 'donation' || m.kind === 'subscription') && isNew && panel.active && root.offsetParent) speak(m);
     }
     if (stats.times.length > 5000) stats.times.splice(0, stats.times.length - 5000);
+    if (stats.users.size > STATS_USERS_MAX) trimStatsUsers(stats);
     // /block 이 화면에서 밀려난 사람도 찾게 닉네임 → 사용자 ID 를 기억한다(최근 500명).
     for (const m of messages) {
       if (!m.nickname || !m.userId || m.kind === 'system') continue;
@@ -218,7 +244,7 @@ export function installChatExtras(panel) {
   // 연결이 바뀌면 통계·후원 목록 초기화(멀티라이브 멀티채팅이 채우는 동안의 목록은 패인 선택이 바뀌어도 둔다)
   const origConnect = panel.connect.bind(panel);
   panel.connect = async (...args) => {
-    stats.times = []; stats.users.clear(); stats.donations = 0; stats.cheese = 0; stats.subs = 0; stats.since = Date.now();
+    stats.times = []; stats.users.clear(); stats.usersDropped = 0; stats.donations = 0; stats.cheese = 0; stats.subs = 0; stats.since = Date.now();
     if (!donations.external) donations.reset();
     return origConnect(...args);
   };

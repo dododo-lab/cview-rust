@@ -51,6 +51,16 @@ export class PlayerBridge {
     if (commandEvent) listenHere(commandEvent, (payload) => this.exec(payload && payload.script));
   }
 
+  /** 패인을 버릴 때(멀티라이브 여분 iframe 회수) — 창 → 브리지 맵과 구독·대기 명령을 놓는다. */
+  destroy() {
+    for (const [win, bridge] of bridges) if (bridge === this) bridges.delete(win);
+    if (defaultBridge === this) defaultBridge = null;
+    this.listeners.clear();
+    this.queue = [];
+    this.ready = false;
+    this.readyDocument = null;
+  }
+
   adoptLoadedDocument() {
     const win = this.iframe.contentWindow;
     const doc = this.iframe.contentDocument;

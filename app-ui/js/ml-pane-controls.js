@@ -163,7 +163,10 @@ export class PaneControls {
     this.gearMenu.addEventListener('input', (e) => this.onAdjustInput(e));
     this.gearMenu.addEventListener('change', (e) => this.onMenuChange(e));
     this.range.addEventListener('input', () => this.setGain(Number(this.range.value) / 100));
-    this.volumeReveal = installVolumeReveal(this.el.querySelector('.ml-vol'), this.range);
+    // 패인을 버리면(멀티라이브 여분 iframe 회수) 창·문서에 건 리스너를 한꺼번에 뗀다(destroy).
+    this.abort = new AbortController();
+    const { signal } = this.abort;
+    this.volumeReveal = installVolumeReveal(this.el.querySelector('.ml-vol'), this.range, { signal });
     this.syncRangeFill();
     this.bridge.onMessage((type, data) => this.onMessage(type, data));
     // 선명도는 전역 — 어느 화면(다른 패인 ⚙·시청 화면·설정)에서 바꿔도 이 패인에 바로 다시 건다.
@@ -171,7 +174,7 @@ export class PaneControls {
       this.applySharpness();
       if (!this.gearMenu.hidden) this.renderGear();
       this.syncGearTitle();
-    });
+    }, { signal });
     sharpnessReady().then(() => { this.applySharpness(); this.syncGearTitle(); });
     // 플레이어 문서가 새로 뜨면 볼륨 배율을 다시 걸고, 영상 위 휠을 받는다.
     this.bridge.iframe.addEventListener('load', () => { this.patchVolume(); this.hookWheel(); });
@@ -184,7 +187,7 @@ export class PaneControls {
     this.el.addEventListener('mouseleave', () => { clearTimeout(this.idleTimer); this.idleTimer = setTimeout(() => this.hide(), 400); });
     this.el.addEventListener('focusin', wake);
     // 패인 밖을 누르거나 Esc 면 메뉴를 닫는다.
-    document.addEventListener('pointerdown', (e) => { if (this.menuOpen && !this.el.contains(e.target)) this.closeMenus(); });
+    document.addEventListener('pointerdown', (e) => { if (this.menuOpen && !this.el.contains(e.target)) this.closeMenus(); }, { signal });
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape' || !this.menuOpen) return;
       // 메뉴 안에서 Esc 면 연 버튼으로 초점을 돌려준다(메뉴가 숨으며 초점이 body 로 떨어진다)
@@ -192,7 +195,13 @@ export class PaneControls {
       e.preventDefault();
       this.closeMenus();
       back?.focus({ preventScroll: true });
-    });
+    }, { signal });
+  }
+
+  /** 패인을 버릴 때 — 창·문서 리스너와 타이머를 놓는다(패인 요소는 부르는 쪽이 지운다). */
+  destroy() {
+    this.abort.abort();
+    clearTimeout(this.idleTimer);
   }
 
   get video() {

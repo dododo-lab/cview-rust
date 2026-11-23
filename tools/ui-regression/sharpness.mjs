@@ -7,6 +7,7 @@
 //     실제 화소의 경계 세기를 잰다. 무대(확대): 약 = Catmull-Rom 1패스, 중 = CAS 0.55 2패스(예전 업스케일), 강 = CAS + 언샤프 0.5
 //     4패스. 그리드: 언샤프 2패스(세기 0.5·1·1.5), 경계 세기가 끔 < 약 < 중 < 강. 끔은 GPU 캔버스·필터 없음.
 //     GPU 를 쓸 수 없으면 SVG 언샤프(url(#cview-unsharp)) k2 = 세기. '크게 볼 때만'이면 그리드는 원본 그대로.
+//     끄면 3초 뒤 GPU 텍스처·캔버스를 1×1 로 줄이고, 그리드 선명화는 작업 텍스처 한 장(work[1])만 잡는다.
 // S03 전역 동작 — 한 패인 ⚙ 에서 바꾸면 모든 패인에 바로 setSharpness(무대만 upscale:true), 저장(sharpnessLevel·구버전
 //     거울 videoUpscaling), 메뉴는 열린 채. 무대에서 내려오면 upscale:false, 새 재생(playStarted)·새 플레이어 문서에 다시 건다.
 // S04 설정 이전 — 예전 조합(채널별 선명한 화면 켬·끔 수 × 처음 보는 채널 기본값 × 업스케일) 전수표를 순수 함수로,
@@ -478,6 +479,25 @@ await check('S02 per-level processing in the real player (stage: 1/2/4 passes; g
     await page.waitForTimeout(500);
     const es = await probe(page, 0);
     assert.deepEqual([es.plan.path, es.active], ['upscale', true], `크게 볼 때만 무대 ${JSON.stringify(es)}`);
+    // VRAM — 끄면 잠시 뒤(3초) 텍스처·캔버스를 1×1 로 줄이고, 다시 켠 그리드 선명화는 작업 텍스처 한 장(work[1])만 잡는다.
+    const gpuMem = (slot) => page.evaluate((sel) => document.querySelector(`${sel} iframe`).contentWindow.eval(
+      '({ cw: _upscaler.canvas.width, ch: _upscaler.canvas.height, w0: _upscaler.workW[0], w1: _upscaler.workW[1], released: Boolean(_upscaler.released), active: _upscaler.active })'), pane(slot));
+    await openGear(page, 0);
+    await clickItem(page, 0, '[data-mp="sharpness-enlarged"]');
+    await clickItem(page, 0, '[data-mp="sharpness"][data-sharpness="0"]');
+    await closeGear(page, 0);
+    await page.waitForTimeout(500);
+    const soon = await gpuMem(0);
+    assert.ok(soon.cw > 1 && !soon.released, `끈 직후에는 그대로(잠깐 껐다 켜기) ${JSON.stringify(soon)}`);
+    await page.waitForTimeout(3200);
+    const off = await gpuMem(0);
+    assert.deepEqual([off.active, off.released, off.cw, off.ch, off.w0, off.w1], [false, true, 1, 1, 0, 0], `끄고 3초 뒤 ${JSON.stringify(off)}`);
+    await page.evaluate(() => { window.__ml.state.watchId = null; window.__ml.emit(); });
+    await page.waitForTimeout(500);
+    const g1 = await pick(0, 1);
+    const g1m = await gpuMem(0);
+    assert.equal(g1.plan.path, 'sharpen', JSON.stringify(g1.plan));
+    assert.ok(g1m.active && g1m.cw > 1 && g1m.w1 > 0 && g1m.w0 === 0, `그리드 선명화는 work[1] 만 ${JSON.stringify(g1m)}`);
     assert.deepEqual(errors, []);
   } finally { await ctx.close(); }
 });
