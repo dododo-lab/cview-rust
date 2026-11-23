@@ -205,7 +205,8 @@ export function openUserPop(panel, anchor, line) {
   }
   current = { pop, uid, panel, close };
   anchor.classList.add('up-anchor');
-  setTimeout(() => document.addEventListener('mousedown', outside, true), 0);
+  // 같은 틱에 닫히면 늦게 붙는 리스너가 영구히 남았다 — 아직 이 팝업이 열려 있을 때만 단다.
+  setTimeout(() => { if (current?.pop === pop) document.addEventListener('mousedown', outside, true); }, 0);
   document.addEventListener('keydown', onKey, true);
   window.addEventListener('resize', onResize);
   window.addEventListener('blur', close);

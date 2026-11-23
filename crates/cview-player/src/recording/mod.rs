@@ -210,6 +210,9 @@ impl StreamRecordingService {
             s.downloaded.len(),
             s.total_bytes
         );
+        // 처리한 조각 키(10시간이면 수만 개)와 복호화 키는 다음 녹화에 쓰지 않는다 — 다음 시작 때 비우던 것을 지금 놓는다.
+        s.downloaded = HashSet::new();
+        s.key_cache = HashMap::new();
         s.state = RecordingState::Idle;
     }
 

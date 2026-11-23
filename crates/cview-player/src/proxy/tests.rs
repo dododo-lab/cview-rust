@@ -1196,3 +1196,19 @@ async fn foreign_origin_is_refused() {
     assert!(status.starts_with("HTTP/1.1 403"), "{status}");
     proxy.stop();
 }
+
+/// 만들고 버린 프록시의 약한 참조가 성능 목록에 쌓이지 않는다(디버그 로그를 켜지 않아도).
+#[test]
+fn perf_registry_drops_dead_proxies_without_debug_log() {
+    for _ in 0..60 {
+        drop(LocalStreamProxy::new(Arc::new(Vec::new)));
+    }
+    let keep = LocalStreamProxy::new(Arc::new(Vec::new));
+    // 같은 프로세스의 다른 테스트가 살려 둔 프록시가 있을 수 있어 넉넉히 잡는다 — 예전엔 60개 넘게 남았다.
+    assert!(
+        super::perf_registry_len() < 30,
+        "죽은 참조가 남았다: {}",
+        super::perf_registry_len()
+    );
+    drop(keep);
+}

@@ -1049,8 +1049,13 @@ function copy(text) {
   navigator.clipboard.writeText(text).then(() => toast('복사했습니다', 1000), () => toast('복사하지 못했습니다'));
 }
 
+// 지금 열린 컨텍스트 메뉴의 close — 새 메뉴를 열 때 앞 메뉴를 remove() 만 하면 close() 가 isConnected 에서 돌아가
+// document mousedown·window blur 리스너와 메뉴 클로저가 영구히 남았다(우클릭을 거듭할수록 쌓임).
+let activeMenuClose = null;
+
 /** 공용 컨텍스트 메뉴 — [action, label, tone?] 목록, '-' 는 구분선. */
 export function showMenu(x, y, items, onPick) {
+  activeMenuClose?.();
   document.querySelector('.ctx-menu')?.remove();
   const menu = document.createElement('div');
   menu.className = 'ctx-menu';
@@ -1071,13 +1076,16 @@ export function showMenu(x, y, items, onPick) {
   const outside = (e) => { if (!menu.contains(e.target)) close(); };
   const onBlur = () => close();
   function close(restore = false) {
+    if (activeMenuClose === close) activeMenuClose = null;
     if (!menu.isConnected) return;
     menu.remove();
     document.removeEventListener('mousedown', outside, true);
     window.removeEventListener('blur', onBlur);
     if (restore && opener && opener !== document.body && opener.isConnected && typeof opener.focus === 'function') opener.focus({ preventScroll: true });
   }
-  setTimeout(() => document.addEventListener('mousedown', outside, true), 0);
+  activeMenuClose = close;
+  // 같은 틱에 닫혔으면(바로 다른 메뉴가 열림 등) 늦게 붙는 리스너가 남지 않게 아직 열려 있을 때만 단다.
+  setTimeout(() => { if (menu.isConnected) document.addEventListener('mousedown', outside, true); }, 0);
   window.addEventListener('blur', onBlur);
   menu.addEventListener('click', (e) => {
     const item = e.target.closest('[data-ctx]');

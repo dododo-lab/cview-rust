@@ -68,7 +68,7 @@ export function toggleFullscreenOn(target) {
  * 아이콘에서 오른쪽으로 빨리 옮기거나 끌다가 조금만 벗어나도 다시 접혀 잡을 수 없었다(창이 키 창이 아니면
  * :focus-within 도 듣지 않는다). 들어오면 열고(.open), 나가면 잠시 기다렸다 닫고, 끄는 동안은 닫지 않는다.
  */
-export function installVolumeReveal(group, range) {
+export function installVolumeReveal(group, range, { signal } = {}) {
   let timer = 0;
   let dragging = false;
   const open = () => { clearTimeout(timer); group.classList.add('open'); };
@@ -80,8 +80,8 @@ export function installVolumeReveal(group, range) {
   group.addEventListener('pointerleave', () => close());
   range.addEventListener('pointerdown', () => { dragging = true; open(); });
   const end = () => { if (dragging) { dragging = false; close(); } };
-  window.addEventListener('pointerup', end);
-  window.addEventListener('pointercancel', end);
+  window.addEventListener('pointerup', end, { signal });
+  window.addEventListener('pointercancel', end, { signal });
   range.addEventListener('focus', open);
   range.addEventListener('blur', () => close());
   /** 휠·키보드로 바꿀 때 잠깐 펼쳐 값을 보여 준다. */
