@@ -65,6 +65,25 @@ async fn purge_removes_history_and_keeps_data() {
     assert_eq!(again, Some(0));
 }
 
+/// 앱이 주기적으로 부르는 정리 — 변경 이력만 비우고 데이터는 그대로, 메모리 해제(shrink_memory)도 저장소를 깨지 않는다.
+#[tokio::test]
+async fn trim_change_history_and_release_memory_keep_data() {
+    let (_d, s) = file_store();
+    for i in 0..20 {
+        s.save_setting(&format!("t{i}"), &i).unwrap();
+    }
+    assert!(s.history_transaction_count() >= 20);
+    tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+    assert!(s.trim_change_history().await.is_some());
+    assert_eq!(s.history_transaction_count(), 0);
+    s.release_memory();
+    for i in 0..20 {
+        assert_eq!(s.load_setting::<i64>(&format!("t{i}")).unwrap(), Some(i));
+    }
+    s.save_setting("after", &1).unwrap();
+    assert_eq!(s.load_setting::<i64>("after").unwrap(), Some(1));
+}
+
 // MARK: - 사용자 기록 파일
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

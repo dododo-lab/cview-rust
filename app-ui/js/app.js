@@ -1,6 +1,6 @@
 // CView 메인 — 사이드바 라우팅, 인증 상태, 시청 화면 연결.
 import { CHANNEL_SOCIAL_EVENT, channelSocialChanged, resetFollowOverrides } from './channel-actions.js';
-import { api, listen, Events, isTauri } from './api.js';
+import { api, listen, listenHere, Events, isTauri } from './api.js';
 import { toast, icons } from './dom.js';
 import { showShortcuts, showAbout, showUpdateCheck } from './app-sheets.js';
 import { installUpdateNotifier } from './update-notify.js';
@@ -19,6 +19,7 @@ import { buildSidebarList, sidebarListKind, sidebarListNeeds } from './sidebar-l
 import { setTheme, syncTheme, resolvedTheme } from './theme.js';
 import { loadChatPrefs, setMyNickname, chatPrefs, updateChatPrefs } from './chat-prefs.js';
 import { MultiLivePage, multiLiveIcon, bindMultiLiveAddButtons } from './multilive.js';
+import { syncHibernation, hibernateHiddenNow } from './page-hibernate.js';
 import { LivePage, liveIcon } from './live.js';
 import { LIVE_MODES, liveModeSwitch, bindLiveModeSwitch } from './live-mode.js';
 import { decoratePageHeader } from './page-header.js';
@@ -376,6 +377,8 @@ async function navigate(route, params = {}, { push = true } = {}) {
     if (id === 'stats' && page.embedded && route === 'home' && !showViewer) continue;
     page.root.hidden = showViewer || id !== (showWatch ? 'multilive' : route);
   }
+  // 숨은 탐색 페이지는 잠시 뒤 이미지 비트맵을 놓고, 보이게 된 페이지는 그리기 전에 되돌린다(page-hibernate.js).
+  syncHibernation(pages);
   // 멀티라이브 화면 자체인가 — 라이브 단독 보기(showWatch)도 같은 화면을 쓰므로 그때는 멀티라이브 안내를 띄우지 않는다.
   if (pages.multilive) pages.multilive.onMultiRoute = route === 'multilive';
   refreshSegmentGliders(); // 숨어 있는 동안 고른 칸이 바뀐 세그먼트(전환 버튼 등)의 판을 제자리로
@@ -1024,6 +1027,8 @@ async function main() {
       else goBack();
     }
   }, 0));
+  // OS 메모리 압박(memory_pressure.rs) — 숨은 탐색 페이지의 이미지를 바로 놓는다.
+  if (!AUX) listenHere('app://memory-pressure', () => hibernateHiddenNow(pages));
   window.addEventListener('cview:navigate', (e) => e.detail && navigate(e.detail.route, e.detail.params || {}));
   window.addEventListener('cview:multi-queue', (e) => e.detail && queueMulti(e.detail.channelIds || []));
   installSidebarExtras({

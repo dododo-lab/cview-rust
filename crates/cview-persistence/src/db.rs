@@ -233,10 +233,20 @@ pub(crate) fn fetch_in<M: Model>(
     keys: &[Value],
     chunk_size: usize,
 ) -> rusqlite::Result<Vec<M>> {
+    // 청크 길이마다 SQL 이 달라 문장 캐시(prepare_cached, 기본 16칸)에 넣으면 자주 쓰는 문장을 밀어냈다 — 캐시하지 않는다.
     let mut out = Vec::new();
     for chunk in keys.chunks(chunk_size.max(1)) {
-        let suffix = format!("WHERE {column} IN ({})", placeholders(chunk.len()));
-        out.extend(fetch::<M>(conn, &suffix, chunk)?);
+        let sql = format!(
+            "SELECT id,{} FROM {} WHERE {column} IN ({})",
+            M::COLUMNS.join(","),
+            M::TABLE,
+            placeholders(chunk.len())
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(chunk.iter()), M::from_row)?;
+        for row in rows {
+            out.push(row?);
+        }
     }
     Ok(out)
 }

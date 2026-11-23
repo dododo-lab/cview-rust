@@ -396,3 +396,49 @@ async fn unknown_size_step_falls_back_to_the_original_once() {
     s.load(sized, ImageKind::Static).await.unwrap();
     assert_eq!(fake.urls.lock().unwrap().len(), 2);
 }
+
+fn hot_entry(len: usize) -> HotEntry {
+    HotEntry {
+        bytes: Arc::new(vec![0u8; len]),
+        content_type: "image/jpeg".into(),
+        kind: ImageKind::Live,
+        fetched_at: 0,
+        etag: None,
+        last_modified: None,
+    }
+}
+
+/// 메모리 이미지 표는 상한(16 MiB)을 지키고, 2 MiB 를 넘는 한 장은 넣지 않으며(디스크 캐시가 내준다),
+/// 메모리 압박 때 오래 안 쓴 것부터 목표 크기 아래로 줄인다.
+#[test]
+fn hot_cache_caps_total_and_entry_size_and_trims_on_pressure() {
+    let mut hot = Hot::default();
+    let one_mib = 1024 * 1024;
+    for i in 0..40 {
+        hot.put(&format!("u{i}"), hot_entry(one_mib));
+    }
+    assert!(hot.bytes <= HOT_CAP_BYTES, "상한 넘음: {}", hot.bytes);
+    assert_eq!(hot.map.len(), HOT_CAP_BYTES / one_mib);
+    assert!(hot.map.contains_key("u39") && !hot.map.contains_key("u0"));
+
+    hot.put("big", hot_entry(HOT_MAX_ENTRY_BYTES + 1));
+    assert!(
+        !hot.map.contains_key("big"),
+        "큰 원본은 메모리에 두지 않는다"
+    );
+    // 같은 주소가 커져 다시 오면 옛 항목도 뺀다.
+    hot.put("u39", hot_entry(HOT_MAX_ENTRY_BYTES + 1));
+    assert!(!hot.map.contains_key("u39"));
+    assert_eq!(
+        hot.bytes,
+        hot.map.values().map(|e| e.bytes.len()).sum::<usize>()
+    );
+
+    hot.get("u25"); // 최근에 쓴 것은 남는다
+    hot.trim(HOT_TRIM_WARN_BYTES);
+    assert!(hot.bytes <= HOT_TRIM_WARN_BYTES);
+    assert!(hot.map.contains_key("u25"));
+    assert_eq!(hot.order.len(), hot.map.len());
+    hot.trim(0);
+    assert_eq!((hot.bytes, hot.map.len(), hot.order.len()), (0, 0, 0));
+}

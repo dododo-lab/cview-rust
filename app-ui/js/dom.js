@@ -236,6 +236,8 @@ function retier(url, tier) {
 }
 
 function sizedForBox(url, kind) {
+  // 작은 썸네일(통계 최근 시청 64px 등) — 라이브 썸네일 가장 작은 단계. 예전엔 원본('static', 1080p)을 받아 디코드했다.
+  if (kind === 'thumb') return retier(url, LIVE_TIERS[0]);
   if (kind === 'live') {
     return retier(url, pickTier((cardWidth() * 9) / 16 * pixelScale(), LIVE_TIERS));
   }
@@ -278,7 +280,9 @@ export function imageSrc(value, kind = 'static') {
   let host = '';
   try { host = new URL(sized).host; } catch { return sized; }
   if (!IMAGE_HOSTS.test(host)) return sized;
-  return `${CVIMG_BASE}${encodeURIComponent(`${kind}/${sized}`)}`;
+  // 'thumb' 은 크기만 고르는 화면 쪽 종류 — 캐시(Rust ImageKind)는 정적 이미지로 둔다.
+  const cacheKind = kind === 'thumb' ? 'static' : kind;
+  return `${CVIMG_BASE}${encodeURIComponent(`${cacheKind}/${sized}`)}`;
 }
 
 /**

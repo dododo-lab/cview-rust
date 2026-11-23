@@ -39,6 +39,23 @@ impl DataStore {
             .await;
     }
 
+    /// 지금까지의 변경 이력(메모리에만 있는 커밋 시각 목록, 최대 10만 개)을 정리하고 빈 페이지를 돌려준다.
+    /// 사용자 데이터는 지우지 않는다 — 앱이 주기적으로 부른다(`run_retention_maintenance` 의 보존 정리는 따로).
+    pub async fn trim_change_history(&self) -> Option<usize> {
+        let windows = self
+            .purge_change_history(now(), StoreMaintenancePolicy::HISTORY_DELETE_WINDOW)
+            .await;
+        self.history().shrink_to_fit();
+        windows
+    }
+
+    /// 메모리 압박 때 — SQLite 페이지 캐시·문장 캐시를 놓는다.
+    pub fn release_memory(&self) {
+        let conn = self.lock();
+        conn.flush_prepared_statement_cache();
+        let _ = conn.execute_batch("PRAGMA shrink_memory;");
+    }
+
     /// 변경 이력을 `cutoff` 이전까지 창 단위로 지운다. 지운 창 수(실패 시 `None`).
     /// 창이 0 이하·NaN 이면 기본 창, 하한 60초.
     pub async fn purge_change_history(&self, cutoff: Date, window: TimeInterval) -> Option<usize> {

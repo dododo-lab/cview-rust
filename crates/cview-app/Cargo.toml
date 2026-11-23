@@ -58,7 +58,8 @@ libc = "0.2"
 [target.'cfg(target_os = "windows")'.dependencies]
 winreg = "0.56"
 # 앱 GPU 사용률(설정 › 성능) — 성능 카운터(PDH). 이미 의존성 트리에 있는 버전이다.
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Performance"] }
+# 메모리 부족 알림(Win32_System_Memory — memory_pressure.rs).
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Memory", "Win32_System_Performance"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }

@@ -19,8 +19,13 @@ use futures_util::future::{BoxFuture, FutureExt, Shared};
 use tokio::sync::Semaphore;
 use url::Url;
 
-/// 메모리에 둘 최근 이미지 바이트 상한.
-const HOT_CAP_BYTES: usize = 48 * 1024 * 1024;
+/// 메모리에 둘 최근 이미지 바이트 상한. 예전 48 MiB 는 늘 차 있었다 — 아바타·정적 이미지는 웹뷰 HTTP 캐시(24시간)와
+/// 디스크 캐시가 함께 들고 있어 겹쳤다. 여기서 밀려나도 디스크 캐시가 곧바로 내준다.
+pub(crate) const HOT_CAP_BYTES: usize = 16 * 1024 * 1024;
+/// 메모리에 둘 이미지 하나의 상한 — 큰 원본(커뮤니티·배너 원본 수 MB)은 디스크 캐시에서만 내준다.
+pub(crate) const HOT_MAX_ENTRY_BYTES: usize = 2 * 1024 * 1024;
+/// 메모리 경고 때 줄일 크기(심각하면 0).
+pub const HOT_TRIM_WARN_BYTES: usize = 4 * 1024 * 1024;
 /// 동시에 받는 수 — 이미지 CDN 은 HTTP/1.1 이라 연결 수가 곧 병렬도다(6 이면 첫 실행이 웹뷰 직접 받기보다 느렸다).
 const MAX_CONCURRENT_FETCHES: usize = 16;
 const FETCH_TIMEOUT: Duration = Duration::from_secs(15);
@@ -103,10 +108,16 @@ impl Hot {
                 self.order.remove(pos);
             }
         }
+        if entry.bytes.len() > HOT_MAX_ENTRY_BYTES {
+            return;
+        }
         self.bytes += entry.bytes.len();
         self.map.insert(url.to_string(), entry);
         self.order.push_back(url.to_string());
-        while self.bytes > HOT_CAP_BYTES {
+        self.evict_to(HOT_CAP_BYTES);
+    }
+    fn evict_to(&mut self, target: usize) {
+        while self.bytes > target {
             let Some(oldest) = self.order.pop_front() else {
                 break;
             };
@@ -114,6 +125,12 @@ impl Hot {
                 self.bytes -= e.bytes.len();
             }
         }
+    }
+    /// 오래 안 쓴 것부터 `target` 바이트 아래로 줄이고 표 자리도 돌려준다.
+    fn trim(&mut self, target: usize) {
+        self.evict_to(target);
+        self.map.shrink_to_fit();
+        self.order.shrink_to_fit();
     }
     fn clear(&mut self) {
         *self = Hot::default();
@@ -458,6 +475,23 @@ impl ImageService {
                 bytes: 0,
                 cap_bytes: 0,
             })
+    }
+
+    /// 메모리 압박 때 — 메모리에 둔 이미지를 `target` 바이트 아래로 줄인다(디스크 캐시는 그대로).
+    pub fn trim_hot(&self, target: usize) {
+        self.hot().trim(target);
+    }
+
+    /// 메모리 압박 때 — 디스크 캐시 색인 DB 의 페이지 캐시도 놓는다.
+    pub fn release_cache_memory(&self) {
+        if let Some(cache) = &self.cache {
+            cache.release_memory();
+        }
+    }
+
+    /// 메모리에 둔 이미지 바이트(테스트·진단용).
+    pub fn hot_bytes(&self) -> usize {
+        self.hot().bytes
     }
 
     pub fn clear(&self) {

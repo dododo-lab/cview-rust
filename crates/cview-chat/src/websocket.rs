@@ -468,7 +468,7 @@ impl WebSocketService {
         let result: ChatResult<WsStream> = tokio::select! {
             r = tokio::time::timeout(
                 open_timeout,
-                tokio_tungstenite::connect_async_with_config(request, Some(ws_config), false),
+                tokio_tungstenite::connect_async_tls_with_config(request, Some(ws_config), false, tls_connector()),
             ) => match r {
                 Ok(Ok((stream, _response))) => Ok(stream),
                 Ok(Err(e)) => Err(ChatError::ConnectionFailed(e.to_string())),
@@ -865,6 +865,56 @@ async fn ping_loop(weak: Weak<Inner>, interval: f64, attempt: WebSocketPingAttem
                 inner.handle_disconnection(error, attempt.connection);
                 return;
             }
+        }
+    }
+}
+
+/// 채팅 WebSocket TLS 설정 — 프로세스에 하나. 커넥터를 넘기지 않으면 tokio-tungstenite 가 연결(재연결)마다 OS 인증서
+/// 저장소(키체인·CryptoAPI)를 다시 읽고 루트 저장소를 새로 만들었다(멀티채팅 8채널이면 8번, 끊길 때마다 또).
+/// 인증서를 하나도 읽지 못하면 None — 라이브러리 기본 경로(예전과 같은 동작)로 둔다.
+fn tls_connector() -> Option<tokio_tungstenite::Connector> {
+    use std::sync::{Arc, OnceLock};
+    static CONFIG: OnceLock<Option<Arc<rustls::ClientConfig>>> = OnceLock::new();
+    CONFIG
+        .get_or_init(|| {
+            let loaded = rustls_native_certs::load_native_certs();
+            if !loaded.errors.is_empty() {
+                tracing::warn!("OS 루트 인증서 일부를 읽지 못했습니다: {:?}", loaded.errors);
+            }
+            let mut roots = rustls::RootCertStore::empty();
+            let (added, _ignored) = roots.add_parsable_certificates(loaded.certs);
+            if added == 0 {
+                return None;
+            }
+            // 암호 공급자는 ring 으로 정한다 — 앱이 reqwest(rustls-tls)로 이미 쓰는 것. 기본 공급자에 맡기면
+            // 기능 조합에 따라(이 크레이트만 빌드할 때) 정하지 못해 패닉한다.
+            let config = rustls::ClientConfig::builder_with_provider(Arc::new(
+                rustls::crypto::ring::default_provider(),
+            ))
+            .with_safe_default_protocol_versions()
+            .ok()?
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+            Some(Arc::new(config))
+        })
+        .clone()
+        .map(tokio_tungstenite::Connector::Rustls)
+}
+
+#[cfg(test)]
+mod tls_tests {
+    /// TLS 설정은 한 번만 만들어 모든 연결이 같은 것을 쓴다(연결마다 OS 인증서를 다시 읽지 않는다).
+    #[test]
+    fn tls_config_is_built_once_and_shared() {
+        let a = super::tls_connector();
+        let b = super::tls_connector();
+        match (a, b) {
+            (
+                Some(tokio_tungstenite::Connector::Rustls(a)),
+                Some(tokio_tungstenite::Connector::Rustls(b)),
+            ) => assert!(std::sync::Arc::ptr_eq(&a, &b)),
+            (None, None) => {} // OS 인증서가 없는 환경 — 라이브러리 기본 경로
+            _ => panic!("두 번 부른 결과가 다르다"),
         }
     }
 }

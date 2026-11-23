@@ -83,7 +83,7 @@ export function openUserPop(panel, anchor, line) {
     const img = safeUrl((prof && prof.profileImageUrl) || (ch && ch.channelImageUrl) || '');
     const initial = esc(Array.from(name)[0] || '•');
     const avatar = img
-      ? `<img class="up-avatar" src="${esc(imageSrc(img, 'static'))}" alt="" referrerpolicy="no-referrer" decoding="async">`
+      ? `<img class="up-avatar" src="${esc(imageSrc(img, 'avatar'))}" alt="" referrerpolicy="no-referrer" decoding="async">`
       : `<span class="up-avatar up-avatar-text" aria-hidden="true">${initial}</span>`;
     const mark = verifiedBadge(prof ? prof.verifiedBadge : ch, 'sm');
     const titleText = (prof && prof.titleName) || ROLE_LABEL[role] || '';
