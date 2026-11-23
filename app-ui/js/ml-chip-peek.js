@@ -84,11 +84,13 @@ export class ChipPeek {
     const avatar = safeUrl(s.profileImageUrl);
     const name = s.channelName || s.channelId;
     const title = s.liveTitle || '';
+    // 끝난 방송은 LIVE 대신 '방송 종료' — 예전엔 상태와 관계없이 LIVE 였다(감사 UX-M08)
+    const ended = Boolean(s.state && s.state.kind === 'offline');
     const viewers = s.viewerCountText ? `<span class="ml-peek-viewers">${VIEWERS_ICON}${esc(s.viewerCountText)}명</span>` : '';
     this.el.innerHTML = `
       <div class="ml-peek-thumb">
         ${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" referrerpolicy="no-referrer">` : `<div class="ml-peek-blank">${avatar ? `<img src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : ''}</div>`}
-        <div class="ml-peek-badges"><span class="ml-peek-live">LIVE</span>${viewers}</div>
+        <div class="ml-peek-badges">${ended ? '<span class="ml-peek-live ended">방송 종료</span>' : `<span class="ml-peek-live">LIVE</span>${viewers}`}</div>
       </div>
       <div class="ml-peek-body">
         <div class="ml-peek-title">${esc(title || name)}</div>

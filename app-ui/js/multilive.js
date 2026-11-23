@@ -127,6 +127,39 @@ function paneIntendsPlay(pane, video) {
   return !video.paused;
 }
 
+/**
+ * 분할선 키보드 — role=separator·초점·화살표(±2%, ⇧ ±10%)·Home/End(최소·최대)·Enter(가운데). 끌기만 되던 분할선(감사 UX-H19).
+ * get/set 은 0~1 비율. sign() 이 -1 이면(메인이 오른쪽·아래) 화살표 방향을 뒤집는다.
+ */
+function bindSeparatorKeys(el, { label, get, set, min = 0.2, max = 0.85, sign = () => 1 }) {
+  el.tabIndex = 0;
+  el.setAttribute('role', 'separator');
+  el.setAttribute('aria-label', `${label} — 화살표로 조절`);
+  el.setAttribute('aria-valuemin', String(Math.round(min * 100)));
+  el.setAttribute('aria-valuemax', String(Math.round(max * 100)));
+  const sync = () => {
+    el.setAttribute('aria-orientation', el.classList.contains('horizontal') ? 'horizontal' : 'vertical');
+    el.setAttribute('aria-valuenow', String(Math.round((get() || 0.5) * 100)));
+  };
+  el.addEventListener('focus', sync);
+  el.addEventListener('keydown', (e) => {
+    const horiz = el.classList.contains('horizontal');
+    const step = (e.shiftKey ? 0.1 : 0.02) * sign();
+    let next = null;
+    const cur = get() || 0.5;
+    if ((!horiz && e.key === 'ArrowLeft') || (horiz && e.key === 'ArrowUp')) next = cur - step;
+    else if ((!horiz && e.key === 'ArrowRight') || (horiz && e.key === 'ArrowDown')) next = cur + step;
+    else if (e.key === 'Home') next = min;
+    else if (e.key === 'End') next = max;
+    else if (e.key === 'Enter') next = 0.5;
+    if (next == null) return;
+    e.preventDefault();
+    e.stopPropagation();
+    set(Math.min(max, Math.max(min, next)));
+    sync();
+  });
+}
+
 export class MultiLivePage {
   /**
    * @param {{ isLoggedIn: () => boolean, onAddChannel?: (channelId: string, opts?: { quiet?: boolean }) => Promise<void>,
@@ -338,6 +371,18 @@ export class MultiLivePage {
     this.divider.title = '끌어서 메인 크기 조절';
     this.divider.hidden = true;
     this.stage.append(this.divider);
+    // 키보드 — 분할선에 초점을 두고 화살표로 메인 크기를 바꾼다(도구 막대의 비율 슬라이더와 같은 값, 감사 UX-H19)
+    bindSeparatorKeys(this.divider, {
+      label: '메인 크기',
+      get: () => Number(this.ratioInput.value) / 100,
+      set: (r) => {
+        this.ratioInput.value = String(Math.round(r * 100));
+        this.ratioInput.dispatchEvent(new Event('input'));
+        this.ratioInput.dispatchEvent(new Event('change'));
+      },
+      // 메인이 오른쪽·아래면 화살표 방향이 거꾸로다
+      sign: () => (this.state && (this.state.focusDirection === 'right' || this.state.focusDirection === 'bottom') ? -1 : 1),
+    });
     this.localRatio = null; // 드래그 중 미리보기 비율
     this.bindFocusControls();
     installChatSplitter({ container: this.root.querySelector('.ml-body'), chat: this.root.querySelector('.ml-chat'), key: 'multilive' });
@@ -828,7 +873,9 @@ export class MultiLivePage {
       el.querySelector('.ml-pane-avatar').innerHTML = avatarHtml;
     }
     // 컨트롤이 숨었을 때 왼쪽 아래 이름표(여러 패인일 때만 CSS 가 보인다)
-    const tagHtml = `${avatarHtml || '<i></i>'}<span class="ellipsis">${esc(name)}</span>`;
+    // 패인 상태(오디오 전용·화면 밖 절전·화질 상한) — 막대가 숨어 있어도 보이게 이름표 끝에 작은 칩(감사 UX-H17)
+    const states = [s.isAudioOnly ? '오디오' : '', s.decodeSuspended ? '절전' : '', s.maxHeightCap > 0 ? `≤${s.maxHeightCap}p` : ''].filter(Boolean);
+    const tagHtml = `${avatarHtml || '<i></i>'}<span class="ellipsis">${esc(name)}</span>${states.map((t) => `<b class="ml-tag-state">${esc(t)}</b>`).join('')}`;
     if (pane.tagHtml !== tagHtml) {
       pane.tagHtml = tagHtml;
       el.querySelector('.ml-pane-tag').innerHTML = tagHtml;
@@ -837,7 +884,7 @@ export class MultiLivePage {
     const close = el.querySelector('.ml-pane-close');
     const closeLabel = this.watchSlot != null && s.slot === this.watchSlot ? `${name} — 멀티라이브에서 빼고 닫기` : `${name} 패인 닫기`;
     if (close.getAttribute('aria-label') !== closeLabel) { close.setAttribute('aria-label', closeLabel); close.title = closeLabel; }
-    setText(el.querySelector('.ml-pane-cap'), s.maxHeightCap > 0 ? `≤${s.maxHeightCap}p` : '');
+    setText(el.querySelector('.ml-pane-cap'), states.join(' · '));
     const kind = s.state && s.state.kind;
     const text = kind === 'error' ? (s.state.message || '재생 오류') : (STATE_TEXT[kind] ?? '');
     const overlay = el.querySelector('.ml-pane-state');
@@ -1004,6 +1051,19 @@ export class MultiLivePage {
     const v = mk('vertical');
     const h = mk('horizontal');
     for (const [d, axis] of [[v, 'h'], [h, 'v']]) {
+      bindSeparatorKeys(d, {
+        label: axis === 'h' ? '왼쪽 열 너비' : '위 줄 높이',
+        get: () => (axis === 'h' ? this.state.horizontalRatio : this.state.verticalRatio) ?? 0.5,
+        set: (r) => {
+          const g = { h: this.state.horizontalRatio ?? 0.5, v: this.state.verticalRatio ?? 0.5, [axis]: r };
+          this.localGrid = g;
+          this.applyCustomGrid(true, visibleSessions(this.state).length);
+          this.localGrid = null;
+          this.run(api.multiLiveSetRatios(g.h, g.v));
+        },
+        min: 0.2,
+        max: 0.8,
+      });
       d.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         d.setPointerCapture(e.pointerId);

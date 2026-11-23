@@ -2777,8 +2777,11 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .mc-dot.ok { background: var(--primary); }
 .mc-dot.bad { background: var(--error); }
 .mc-rate { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
-.mc-chip-x { color: var(--text-tertiary); padding: 0 2px; }
-.mc-chip-x:hover { color: var(--error); }
+.mc-chip-group { position: relative; display: inline-flex; flex: none; }
+.mc-chip-group > .mc-chip { padding-right: 26px; }
+.mc-chip-x { position: absolute; right: 4px; top: 50%; translate: 0 -50%; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: none; color: var(--text-tertiary); display: grid; place-items: center; font-size: var(--fs-micro); }
+.mc-chip-x:hover { color: var(--error); background: var(--hover); }
+.mc-chip-x:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 0; }
 .mc-body { flex: 1; min-height: 0; position: relative; display: flex; }
 .mc-empty { flex: 1; padding: var(--sp-xl); } /* 모양은 .empty.lg.boxed */
 .mc-panes { flex: 1; min-height: 0; display: grid; gap: 8px; }

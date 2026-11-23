@@ -802,7 +802,16 @@ const MENU_ACTIONS = {
   fullscreen: () => (viewer.isOpen ? viewer.controls.fullscreen(false) : activeWatch()?.fullscreen(false)),
   'fullscreen-chat': () => (viewer.isOpen ? viewer.controls.fullscreen(true) : activeWatch()?.fullscreen(true)),
   'close-viewer': () => (viewer.isOpen ? viewer.close() : activeWatch() && closeWatch()),
-  'chat-clear': () => activeChat()?.clear(true),
+  // 멀티채팅(화면·창)은 모든 채널 채팅을 지운다 — 예전엔 대상이 없어 ⇧⌘K 가 아무 일도 안 했다(감사 UX-C12)
+  'chat-clear': () => {
+    if (current === 'multichat' && pages.multichat) {
+      const mc = pages.multichat;
+      for (const c of mc.channels || []) c.panel?.clear(true);
+      if (mc.layout === 'merged' && mc.mergedList) { mc.lines?.reset?.(); mc.mergedList.innerHTML = '<div class="empty">채팅을 지웠습니다</div>'; }
+      return;
+    }
+    activeChat()?.clear(true);
+  },
   'chat-reconnect': () => activeChat()?.reconnect(),
   'chat-autoscroll': () => {
     const on = !chatPrefs().autoScroll;

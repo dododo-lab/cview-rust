@@ -345,6 +345,9 @@ export class WatchTools {
     this.body.classList.toggle('chat-hidden', watching && mode === 'hidden');
     const p = chatPrefs();
     this.body.style.setProperty('--overlay-w', `${Math.min(560, Math.max(240, Number(p.overlayWidth) || 320))}px`);
+    // 단독 보기 오버레이 채팅은 시청 화면과 같은 '오버레이 배경 투명도'(채팅 설정)를 따른다 — 그리드는 멀티라이브 설정(감사 UX-H20)
+    if (watching) this.body.style.setProperty('--ml-chat-opacity', String(Math.min(0.95, Math.max(0.1, Number(p.overlayBackgroundOpacity) || 0.5))));
+    else this.body.style.removeProperty('--ml-chat-opacity');
     for (const b of this.root.querySelectorAll('[data-mw="chatmode"]')) {
       const key = currentBindings().toggleChat;
       b.title = `${CHAT_MODE_LABEL[mode]} — 눌러서 바꾸기${key && key.key ? ` (${bindingLabel(key)})` : ''}`;
