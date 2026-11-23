@@ -908,9 +908,9 @@ async function openViewer(opts = {}) {
 }
 const VIEWER_FEATURES = [
   ['채널 정보', '[data-vt="channel"]'], ['팔로우', '[data-vt="follow"]'], ['즐겨찾기', '[data-vt="fav"]'], ['링크 복사', '[data-vt="copy"]'],
-  ['치지직에서 열기', '[data-vt="external"]'], ['멀티라이브에 추가', '[data-vt="multi"]'], ['북마크', '#ctl-bookmark'], ['스크린샷', '#ctl-shot'],
-  ['다시 연결', '#reload'], ['채팅 표시 방식', '#ctl-chatmode, [data-vt="chatmode"]'], ['새 창으로 분리', '[data-vt="popout"]'], ['PiP', '[data-vt="pip"]'],
-  ['영상+채팅 전체 화면', '#ctl-fullscreen-chat'], ['전체 화면', '#fullscreen'], ['닫기', '#viewer-close'], ['녹화', '#ctl-record'],
+  ['치지직에서 열기', '[data-vt="external"]'], ['멀티라이브에 추가', '[data-vt="multi"]'], ['북마크', '#ctl-bookmark, [data-vt="bookmark"]'], ['스크린샷', '#ctl-shot, [data-vt="shot"]'],
+  ['다시 연결', '#reload, [data-vt="retry"]'], ['채팅 표시 방식', '#ctl-chatmode, [data-vt="chatmode"]'], ['새 창으로 분리', '[data-vt="popout"]'], ['PiP', '[data-vt="pip"]'],
+  ['영상+채팅 전체 화면', '#ctl-fullscreen-chat, [data-vt="fullchat"]'], ['전체 화면', '#fullscreen'], ['닫기', '#viewer-close'], ['녹화', '#ctl-record'],
   ['플레이어 설정(재생 속도·화면·EQ)', '#ctl-panel'], ['화질', '#ctl-quality'], ['재생/일시정지', '#ctl-play'], ['볼륨', '#mute'],
 ];
 

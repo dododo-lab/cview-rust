@@ -179,12 +179,12 @@
 
 /* ── 모션 줄이기 ── 깜박이는 점·칩 눌림·칸 떠오름·막대 길이 움직임을 멈춘다(끝 상태 그대로). */
 @media (prefers-reduced-motion: reduce) {
-  .up-live i { animation: none; }
+  .usage-pop .up-live i { animation: none; }
   .usage-chip, .up-tile, .ug-bar i { transition: none; }
   .usage-chip:active { scale: none; }
   .up-tile:hover:not([aria-disabled="true"]) { translate: none; }
 }
-:root[data-motion="reduced"] .up-live i { animation: none; }
+:root[data-motion="reduced"] .usage-pop .up-live i { animation: none; }
 :root[data-motion="reduced"] :is(.usage-chip, .up-tile, .ug-bar i) { transition: none; }
 :root[data-motion="reduced"] .up-tile:hover { translate: none; }
 /* 고대비(Windows forced-colors) — 엔진이 box-shadow 를 지워 초점 고리(--focus-ring)가 사라진다 → 시스템 강조색 테두리 */
