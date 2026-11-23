@@ -12,6 +12,7 @@ import { chatPrefs, onChatPrefs, passesFilters, updateChatPrefs } from './chat-p
 import { kbd } from './platform.js';
 import { chatFollower, trimFront, scheduleChatFlush, flushStarted } from './chat-follow.js';
 import { MultiLiveAddDrawer } from './ml-add-drawer.js';
+import { armConfirm } from './confirm.js';
 import { verifiedBadge } from './verified-badge.js';
 
 export const multiChatIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H8l-4 3V5Z"/><path d="M18 8h1a2 2 0 0 1 2 2v10l-3.5-2.6H11a2 2 0 0 1-2-2V15h5a4 4 0 0 0 4-4V8Z" opacity=".6"/></svg>';
@@ -549,6 +550,10 @@ export class MultiChatPage {
     if (a.dataset.mc === 'add') this.addBar.toggle();
     if (a.dataset.mc === 'clear-search') { this.search.value = ''; this.applySearch(); this.search.focus(); }
     if (a.dataset.mc === 'remove') this.remove(a.closest('.mc-pane').dataset.channelId);
-    if (a.dataset.mc === 'close-all') for (const c of [...this.channels]) await this.remove(c.channelId);
+    // 모두 닫기는 되돌릴 수 없는 일괄 동작 — 두 번 눌러 확인(docs/UI_CONFIRM_RULES.md, 감사 UX-M11)
+    if (a.dataset.mc === 'close-all') {
+      if (!armConfirm(a, { armedLabel: '한 번 더 누르면 모두 닫습니다', what: '멀티채팅 채널' })) return;
+      for (const c of [...this.channels]) await this.remove(c.channelId);
+    }
   }
 }

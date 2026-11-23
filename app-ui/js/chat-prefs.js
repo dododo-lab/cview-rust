@@ -1,6 +1,7 @@
 // 채팅 설정 공유 — Rust 설정 `chat` 도메인(원본 ChatSettings JSON 키)을 모든 채팅 패널이 함께 본다.
 // 차단 사용자·금지어·표시 옵션·후원 필터·자동 스크롤 등. 바꾸면 저장하고 패널에 알린다.
 import { api } from './api.js';
+import { toast } from './dom.js';
 
 export const CHAT_DEFAULTS = Object.freeze({
   fontSize: 14,
@@ -61,7 +62,8 @@ export async function loadChatPrefs() {
 export async function updateChatPrefs(patch) {
   prefs = { ...prefs, ...patch };
   notify();
-  try { await api.settingsUpdate('chat', patch); } catch (e) { console.warn('채팅 설정 저장 실패', e); }
+  // 저장 실패를 조용히 삼키면 다음 실행에 설정이 되돌아가 있었다 — 알린다(감사 UX-M10). 화면 값은 이번 실행 동안 유지된다.
+  try { await api.settingsUpdate('chat', patch); } catch (e) { console.warn('채팅 설정 저장 실패', e); toast(`채팅 설정을 저장하지 못했습니다 — ${e.message || e}`); }
 }
 
 export function setMyNickname(nick) {

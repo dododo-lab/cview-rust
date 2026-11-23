@@ -29,8 +29,15 @@ export function installImageFade(root = document) {
     const img = e.target;
     if (img instanceof HTMLImageElement && img.closest(FADE_SCOPE)) img.classList.add('is-loaded');
   };
-  root.addEventListener('load', done, true);
-  root.addEventListener('error', done, true);
+  root.addEventListener('load', (e) => {
+    done(e);
+    if (e.target instanceof HTMLImageElement) e.target.classList.remove('is-broken'); // 같은 img 에 새 주소가 들어와 받아졌으면 다시 보이게
+  }, true);
+  // 실패한 그림은 is-broken 도 달아 투명하게 둔다 — 깨진 그림 표시 대신 자리(스켈레톤 바탕)만 남게(motion.css).
+  root.addEventListener('error', (e) => {
+    done(e);
+    if (e.target instanceof HTMLImageElement && e.target.closest(FADE_SCOPE)) e.target.classList.add('is-broken');
+  }, true);
   new MutationObserver((records) => {
     for (const r of records) {
       if (r.type === 'attributes') {

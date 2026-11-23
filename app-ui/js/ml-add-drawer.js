@@ -226,7 +226,7 @@ export class MultiLiveAddDrawer {
     const chat = this.host.querySelector(':scope > .ml-chat');
     const docked = chat && !chat.classList.contains('collapsed') && !this.host.classList.contains('chat-overlay');
     const w = docked ? chat.getBoundingClientRect().width : 0;
-    this.el.style.setProperty('--ml-addbar-w', `${Math.max(320, Math.round(w)) || 360}px`);
+    this.el.style.setProperty('--ml-addbar-w', `${w ? Math.max(320, Math.round(w)) : 360}px`); // 채팅이 없으면 기본 360(예전엔 늘 320 — `|| 360` 이 닿지 않았다)
     this.el.classList.add('open', 'entering');
     clearTimeout(this.enterTimer);
     this.enterTimer = setTimeout(() => this.el.classList.remove('entering'), 700); // 열 때만 줄이 차례로 떠오른다

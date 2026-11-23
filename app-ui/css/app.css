@@ -2017,7 +2017,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .mention-count[hidden] { display: none; }
 .chat-header .chat-collapse { margin-left: 0; }
 .chat-notice { display: flex; align-items: flex-start; gap: 6px; }
-.chat-notice .notice-body { flex: 1; min-width: 0; }
+.chat-notice .notice-body { flex: 1; min-width: 0; max-height: 7.5em; overflow-y: auto; overscroll-behavior: contain; } /* 긴 공지가 채팅 칸을 다 먹지 않게 */
 .notice-x { width: 22px; height: 22px; flex: none; font-size: var(--fs-tiny); color: var(--text-tertiary); }
 .chat-pin {
   display: flex; align-items: flex-start; gap: 6px; margin: 0 var(--sp-sm) var(--sp-sm); padding: 6px 8px; border-radius: var(--radius-ms);
@@ -2173,7 +2173,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .setting.column { flex-direction: column; align-items: stretch; }
 .range-field { display: inline-flex; align-items: center; gap: 8px; }
 .range-field input { width: 160px; accent-color: var(--primary); }
-.range-field output { min-width: 22px; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+.range-field output { min-width: 5.5ch; text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 .word-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .word-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 4px 3px 10px; border-radius: var(--radius-pill); background: var(--surface-elevated); border: 1px solid var(--border-subtle); font-size: var(--fs-footnote); }
 .word-chip button { border: 0; background: transparent; color: var(--text-tertiary); font-size: var(--fs-micro); padding: 2px 6px; border-radius: var(--radius-pill); }
@@ -2267,7 +2267,10 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
   border: 1px solid var(--border-subtle); background: var(--surface-base); padding: 0;
   transition: transform 0.18s var(--ease-out), box-shadow 0.18s var(--ease-out);
 }
-.category-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+/* 호버는 카드+고정 별 묶음(.category-item) 기준 — 별에 마우스를 올리면 카드 호버가 풀려 카드가 내려앉았다(감사 UX-M04) */
+.category-item:hover > .category-card { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.category-pin { transition: translate .15s var(--ease-out); }
+.category-item:hover > .category-pin { translate: 0 -2px; }
 .category-art { position: relative; aspect-ratio: 16 / 8; background: var(--surface-elevated); overflow: hidden; }
 .category-art img { width: 100%; height: 100%; object-fit: cover; filter: saturate(1.1); }
 .category-info { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px 12px; }
@@ -2325,7 +2328,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .about { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 8px 0; }
 .brand-mark.big { width: 64px; height: 64px; border-radius: var(--radius-lg); display: grid; place-items: center; font-size: var(--fs-title); color: var(--on-primary); background: var(--brand-gradient); box-shadow: 0 10px 30px var(--primary-glow); }
 .small { font-size: var(--fs-footnote); }
-.update-sheet { display: flex; flex-direction: column; gap: var(--sp-sm); min-width: 340px; max-width: 480px; }
+.update-sheet { display: flex; flex-direction: column; gap: var(--sp-sm); min-width: min(340px, 100%); max-width: 480px; }
 .update-summary { font-weight: 700; }
 .update-summary.is-new { color: var(--primary-text); }
 .update-facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: var(--fs-caption); }
@@ -2807,7 +2810,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .stats-card { padding: 16px 18px; border-radius: var(--radius-lg); background: var(--surface-elevated); border: 1px solid var(--border-subtle); min-width: 0; }
 .stats-card :is(h2, h3) { margin: 0 0 12px; font-size: var(--fs-subhead); }
 .stats-card .sub-h { margin-top: 18px; }
-.stats-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: var(--sp-md); }
+.stats-split { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: var(--sp-md); } /* 좁은 창·확대에서 가로로 넘쳤다 */
 .rank-no { color: var(--text-tertiary); font-variant-numeric: tabular-nums; text-align: right; }
 .rank-track { height: 8px; border-radius: var(--radius-xxs); background: var(--hover); overflow: hidden; }
 .rank-fill { display: block; height: 100%; border-radius: var(--radius-xxs); background: var(--brand-gradient, var(--primary)); }

@@ -4,7 +4,7 @@
 // PLY-10 녹화 시작·중지(MediaRecorder 조각 → Rust 파일). 값은 플레이어 설정에 저장하고 새 재생마다 다시 건다.
 import { api } from './api.js';
 import { esc, toast, hideWithExit, keepFocus } from './dom.js';
-import { kbd } from './platform.js';
+import { kbd, REVEAL_LABEL } from './platform.js';
 import {
   SHARPNESS_LEVELS, SHARPNESS_HELP, ENLARGED_ONLY_LABEL, ENLARGED_ONLY_HELP,
   sharpnessState, sharpnessReady, sharpnessArgs, setSharpness, sharpnessNote,
@@ -294,7 +294,7 @@ export class PlayerPanel {
         clearInterval(this.recTimer);
         if (st.path && st.bytes > 0) {
           const mb = (st.bytes / 1048576).toFixed(1);
-          toast(`녹화를 저장했습니다 (${mb}MB) — ${st.path}`, 6000, { label: 'Finder에서 보기', run: () => api.revealPath(st.path) });
+          toast(`녹화를 저장했습니다 (${mb}MB) — ${st.path}`, 6000, { label: REVEAL_LABEL, run: () => api.revealPath(st.path) });
         } else {
           toast('녹화된 내용이 없습니다');
         }

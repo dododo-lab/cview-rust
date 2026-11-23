@@ -66,6 +66,10 @@ export class Sidebar {
     document.body.append(this.tip);
     root.addEventListener('mouseover', (e) => this.showTip(e.target.closest('[data-tip]')));
     root.addEventListener('mouseleave', () => { this.tip.hidden = true; });
+    // 키보드로 접힌 사이드바를 돌 때도 이름을 보이고, 스크롤·초점 이동이면 숨긴다 — 예전엔 스크롤 뒤 옛 자리에 떠 있었다(감사 UX-L01).
+    root.addEventListener('focusin', (e) => { if (e.target.matches?.(':focus-visible')) this.showTip(e.target.closest('[data-tip]')); });
+    root.addEventListener('focusout', () => { this.tip.hidden = true; });
+    root.addEventListener('scroll', () => { this.tip.hidden = true; }, true);
     NARROW.addEventListener('change', () => this.applyCollapsed());
     this.applyCollapsed();
     this.renderNav();
@@ -362,7 +366,7 @@ export class Sidebar {
       <div class="ap-sep"></div>
       ${item('data-ap-route="following"', '팔로잉', icon('following'))}
       ${item('data-ap-route="library"', '보관함', icon('library'))}
-      ${item('data-ap-route="stats"', '시청 통계', icon('stats'))}
+      ${item('data-ap-route="stats"', '시청 리포트', icon('stats'))}
       <div class="ap-sep"></div>
       <div class="ap-theme"><span>테마</span>
         <div class="segmented" role="group" aria-label="테마">${THEMES.map((t) => `<button class="seg" data-ap-theme="${t}">${THEME_LABELS[t]}</button>`).join('')}</div>

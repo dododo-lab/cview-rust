@@ -894,7 +894,8 @@ export class ChatPanel {
   pin(line) {
     this.detachActions?.();
     const clone = line.cloneNode(true);
-    clone.classList.remove('mention', 'highlighted', 'kb-cur', 'search-match', 'solo-match');
+    // cont·has-next(이어진 메시지)·own(내 메시지)은 머리(아바타·닉네임)를 숨긴다 — 고정 줄은 홀로 있으니 늘 보이게(감사 UX-L03).
+    clone.classList.remove('mention', 'highlighted', 'kb-cur', 'search-match', 'solo-match', 'cont', 'has-next', 'own');
     clone.removeAttribute('id');
     clone.removeAttribute('data-uid');
     clone.removeAttribute('data-id');

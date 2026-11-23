@@ -44,7 +44,7 @@ export function relativeDate(iso, now = Date.now()) {
 export function vodCard(v) {
   const thumb = safeUrl(v.thumbnailImageUrl || v.videoImageUrl);
   return `
-    <article class="card media-card" tabindex="0" data-vod-no="${esc(v.videoNo)}" title="${esc(v.videoTitle)}">
+    <article class="card media-card" role="button" tabindex="0" data-vod-no="${esc(v.videoNo)}" title="${esc(v.videoTitle)}">
       <div class="thumb"${v.adult ? '' : previewAttr('vod', v.videoNo)}>
         ${thumb ? `<img src="${esc(imageSrc(thumb, 'vod'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
         <span class="badge-duration">${esc(formatDuration(v.duration))}</span>
@@ -60,7 +60,7 @@ export function vodCard(v) {
 export function clipCard(c) {
   const thumb = safeUrl(c.thumbnailImageUrl);
   return `
-    <article class="card media-card clip" tabindex="0" data-clip-uid="${esc(c.clipUID || c.clipUid)}" title="${esc(c.clipTitle)}">
+    <article class="card media-card clip" role="button" tabindex="0" data-clip-uid="${esc(c.clipUID || c.clipUid)}" title="${esc(c.clipTitle)}">
       <div class="thumb"${c.adult ? '' : previewAttr('clip', c.clipUID || c.clipUid)}>
         ${thumb ? `<img src="${esc(imageSrc(thumb, 'clip'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
         <span class="badge-duration">${esc(formatDuration(c.duration))}</span>
@@ -117,7 +117,8 @@ export class ChannelPage {
       this.render();
     } catch (e) {
       if (seq !== this.seq) return;
-      this.body.innerHTML = errorState('채널 정보를 불러오지 못했습니다', e);
+      // 뒤로 단추는 정상 화면(render)에만 있어 실패하면 막다른 화면이 됐다(감사 UX-M04) — onClick 의 'back' 이 받는다.
+      this.body.innerHTML = errorState('채널 정보를 불러오지 못했습니다', e, '<button class="btn" data-ch="back">뒤로</button>');
     }
   }
 

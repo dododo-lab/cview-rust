@@ -202,9 +202,9 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 .thumb img { transition: transform .5s var(--ease-out), opacity .3s ease; }
 .card:hover .thumb img { transform: scale(1.04); }
 .category-card { transition: transform var(--dur-3) var(--ease-out), box-shadow var(--dur-3) var(--ease-out), border-color var(--dur-2) var(--ease-out); }
-.category-card:hover { border-color: var(--border); }
+.category-item:hover > .category-card { border-color: var(--border); }
 .category-art img { transition: transform .5s var(--ease-out); }
-.category-card:hover .category-art img { transform: scale(1.04); }
+.category-item:hover > .category-card .category-art img { transform: scale(1.04); }
 .category-card:active { transform: translateY(-1px) scale(.99); transition-duration: var(--dur-1); }
 .recent-item:hover, .channel-row:hover, .bookmark-row:hover { translate: 0 -1px; }
 .recent-item, .channel-row, .bookmark-row { transition-property: background, color, border-color, box-shadow, scale, translate; transition-duration: var(--dur-2), var(--dur-2), var(--dur-2), var(--dur-2), .3s, var(--dur-3); }
@@ -213,7 +213,7 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 
 /* ── 썸네일 — 받아지면 부드럽게(motion.js 가 is-loaded 를 단다. 캐시에 있던 것은 그리기 전에, 실패해도 단다).
    아바타는 목록이 자주 다시 그려져(사이드바·채팅) 깜박일 수 있어 걸지 않는다. ── */
-:is(.thumb, .queue-thumb, .hero-media, .ml-addrow-thumb, .bookmark-thumb, .category-art, .ml-pick-thumb) img:not(.is-loaded) { opacity: 0; }
+:is(.thumb, .queue-thumb, .hero-media, .ml-addrow-thumb, .bookmark-thumb, .category-art, .ml-pick-thumb) img:is(:not(.is-loaded), .is-broken) { opacity: 0; }
 :is(.queue-thumb, .hero-media, .ml-addrow-thumb, .bookmark-thumb, .ml-pick-thumb) img { transition: opacity .3s ease; }
 .category-art img { transition: transform .5s var(--ease-out), opacity .3s ease; }
 .hero-media img { transition: transform 6s ease, opacity .45s ease; }
@@ -658,9 +658,11 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
 /* ── 모션 줄이기 — transform 으로 하는 누름·호버 크기도 없앤다(위 규칙들은 scale·translate 만 없앴다 — 시간 0 이면 크기가 뚝 바뀌었다) ── */
 @media (prefers-reduced-motion: reduce) {
   :is(.btn, .card, .category-card):active:not(:disabled),
-  .card:hover .thumb img, .category-card:hover .category-art img { transform: none !important; }
+  .card:hover .thumb img, .category-item:hover .category-art img { transform: none !important; }
+  .category-item:hover > .category-pin { translate: none; }
 }
-:root[data-motion="reduced"] :is(.btn:active, .card:active, .category-card:active, .card:hover .thumb img, .category-card:hover .category-art img) { transform: none !important; }
+:root[data-motion="reduced"] :is(.btn:active, .card:active, .category-card:active, .card:hover .thumb img, .category-item:hover .category-art img) { transform: none !important; }
+:root[data-motion="reduced"] .category-item:hover > .category-pin { translate: none; }
 
 /* ── 키보드 초점 — 고리가 바깥에서 조여 들며 나타난다(outline-offset·색만, 초점이 옮겨 갈 때 한 번) ── */
 @keyframes mo-focus-ring { from { outline-color: transparent; outline-offset: 6px; } }
@@ -911,6 +913,10 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
 }
 .mo-tilting > .mo-glare { opacity: 1; }
 :root[data-theme="light"] .mo-glare { background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, .34), rgba(255, 255, 255, .1) 32%, transparent 58%); }
+@media (prefers-color-scheme: light) { :root[data-theme="system"] .mo-glare { background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, .34), rgba(255, 255, 255, .1) 32%, transparent 58%); } }
+/* 호버 미리보기가 재생 중이면 기울기·빛 번짐을 멈춘다 — 움직이는 영상 위에 흰 빛이 겹쳐 보였다(감사 UX-L02) */
+.thumb.preview-on.mo-tilting { transform: none; }
+.preview-on > .mo-glare { display: none; }
 
 /* ── 배너 패럴랙스 — 흐린 배경은 마우스 반대쪽으로(--mo-px/py, live-motion.js), 스크롤하면 내용보다 느리게 내려간다 ── */
 .channel-hero-bg { transform: scale(1.4) translate(var(--mo-px, 0px), var(--mo-py, 0px)); transition: transform .9s var(--ease-out); }

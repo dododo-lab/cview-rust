@@ -6,6 +6,7 @@ import { emptyState } from './cards.js';
 import { relativeDate } from './channel.js';
 import { bytesText } from './stats.js';
 import { armConfirm } from './confirm.js';
+import { REVEAL_LABEL } from './platform.js';
 
 const STATE_LABEL = {
   queued: '대기 중', preparing: '주소 확인 중', downloading: '받는 중', assembling: '합치는 중',
@@ -20,7 +21,7 @@ listen(Events.downloadUpdate, (d) => {
   for (const j of d.jobs) {
     const prev = before.get(j.id);
     if (prev && prev !== j.state && j.state === 'completed') {
-      toast(`받기 완료 — ${j.title}`, 6000, { label: 'Finder에서 보기', run: () => api.revealPath(j.filePath).catch(() => {}) });
+      toast(`받기 완료 — ${j.title}`, 6000, { label: REVEAL_LABEL, run: () => api.revealPath(j.filePath).catch(() => {}) });
     } else if (prev && prev !== j.state && j.state === 'failed') {
       // 실패 알림에서 바로 다시 받는다(예전엔 보관함 › 다운로드까지 가야 했다).
       toast(`받기 실패 — ${j.title}: ${j.error || ''}`, 8000, { label: '다시 시도', run: () => startDownload(j.kind, j.target, j.title, j.channelName) });
@@ -61,7 +62,7 @@ function jobRow(j) {
       ${active ? `<span class="dl-track"><span class="dl-fill${indeterminate ? ' indeterminate' : ''}" style="--p:${pct / 100}"></span></span>` : ''}</span>
     ${active ? '<button class="btn ghost" data-dl="cancel">취소</button>' : ''}
     ${j.state === 'failed' || j.state === 'cancelled' ? `<button class="btn" data-dl="retry" data-kind="${esc(j.kind)}" data-target="${esc(j.target)}" data-title="${esc(j.title)}">다시 시도</button>` : ''}
-    ${j.state === 'completed' && j.filePath ? `<button class="btn" data-dl="reveal" data-path="${esc(j.filePath)}">Finder에서 보기</button>` : ''}
+    ${j.state === 'completed' && j.filePath ? `<button class="btn" data-dl="reveal" data-path="${esc(j.filePath)}">${REVEAL_LABEL}</button>` : ''}
   </div>`;
 }
 
@@ -72,7 +73,7 @@ function historyRow(h) {
     <span class="dl-kind">${kind === 'clip' ? '클립' : 'VOD'}</span>
     <span class="dl-text"><strong class="ellipsis">${esc(h.title)}</strong>
       <span class="ellipsis">${h.channelName ? `${esc(h.channelName)} · ` : ''}${esc(relativeDate(h.finishedAt))}${h.completed ? (h.fileSize ? ` · ${esc(bytesText(h.fileSize))}` : '') : ` · 실패${h.failureReason ? `: ${esc(h.failureReason)}` : ''}`}${missing ? ' · 파일이 없습니다' : ''}</span></span>
-    ${h.completed && !missing && h.filePath ? `<button class="btn" data-dl="reveal" data-path="${esc(h.filePath)}">Finder에서 보기</button><button class="btn ghost" data-dl="open" data-path="${esc(h.filePath)}">열기</button>` : ''}
+    ${h.completed && !missing && h.filePath ? `<button class="btn" data-dl="reveal" data-path="${esc(h.filePath)}">${REVEAL_LABEL}</button><button class="btn ghost" data-dl="open" data-path="${esc(h.filePath)}">열기</button>` : ''}
     ${!h.completed || missing ? `<button class="btn" data-dl="retry" data-kind="${esc(kind)}" data-target="${esc(rest.join('-'))}" data-title="${esc(h.title)}">다시 받기</button>` : ''}
     <button class="icon-btn" data-dl="remove" title="목록에서 지우기(파일은 남김)">✕</button>
   </div>`;

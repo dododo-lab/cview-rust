@@ -39,7 +39,8 @@
         if (!document.body) { document.addEventListener('DOMContentLoaded', showFailure, { once: true }); return; }
         var splash = document.getElementById('splash');
         if (splash) splash.remove();
-        var light = document.documentElement.dataset.theme === 'light';
+        var theme = document.documentElement.dataset.theme;
+        var light = theme === 'light' || (theme === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
         var box = document.createElement('div');
         box.id = 'boot-error';
         box.setAttribute('role', 'alert');

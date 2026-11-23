@@ -13,7 +13,7 @@ import { THEMES, THEME_LABELS, currentTheme, setTheme, syncTheme } from './theme
 import { streamAlertsEnabled, setStreamAlertsEnabled, ALERT_HOME } from './donations.js';
 import { chatPrefs, updateChatPrefs, blockedLabel, loadChatPrefs } from './chat-prefs.js';
 import { BACKGROUNDS, READING_WIDTHS } from './chat-extras.js';
-import { kbd, IS_WINDOWS } from './platform.js';
+import { kbd, IS_WINDOWS, REVEAL_LABEL } from './platform.js';
 import { thumbPreviewEnabled, setThumbPreviewEnabled } from './hover-preview.js';
 import { SHARPNESS_LEVELS, SHARPNESS_HELP, ENLARGED_ONLY_LABEL, ENLARGED_ONLY_HELP, sharpnessState, setSharpness } from './sharpness.js';
 import { checkForUpdate, lastUpdateResult, updateSummary, downloadTarget, openDownload, currentAppInfo, canInstall, installUpdate, progressHtml, renderProgress } from './update-check.js';
@@ -208,7 +208,8 @@ function itemHtml(item, values) {
   const v = item.local ? LOCAL_GET[item.local]() : (item.get ? item.get(values) : (values[item.d] || {})[item.k]);
   const off = item.disabled && item.disabled(values) ? ' disabled' : '';
   const attrs = item.local ? `data-local="${item.local}"` : `data-domain="${item.d}" data-key="${item.k}"`;
-  const label = `<span class="setting-label">${esc(item.label)}${item.help ? `<small>${esc(item.help)}</small>` : ''}</span>`;
+  // 설명 속 단축키(⌘= 등)도 Windows 표기로(감사 UX-M12)
+  const label = `<span class="setting-label">${esc(item.label)}${item.help ? `<small>${esc(kbd(item.help))}</small>` : ''}</span>`;
   const search = esc(`${item.label} ${item.help || ''} ${item.keywords || ''} ${item.k || ''}`.toLowerCase());
   const wrap = (inner) => `<label class="setting${item.adv ? ' adv' : ''}" data-search="${search}">${label}${inner}</label>`;
   switch (item.type) {
@@ -549,7 +550,7 @@ export class SettingsPage {
     const json = await api.settingsExport();
     const d = new Date();
     const path = await api.saveFile('settings', `CView-설정-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`, null, json);
-    if (!quiet) toast(`내보냈습니다 — ${path}`, 4000, { label: 'Finder에서 보기', run: () => api.revealPath(path) });
+    if (!quiet) toast(`내보냈습니다 — ${path}`, 4000, { label: REVEAL_LABEL, run: () => api.revealPath(path) });
     return path;
   }
 
@@ -924,7 +925,7 @@ export class SettingsPage {
       settingAction.setAttribute('aria-disabled', 'true');
       try {
         const path = await exportUsage(format);
-        toast(`내보냈습니다 — ${path}`, 4000, { label: IS_WINDOWS ? '탐색기에서 보기' : 'Finder에서 보기', run: () => api.revealPath(path) });
+        toast(`내보냈습니다 — ${path}`, 4000, { label: REVEAL_LABEL, run: () => api.revealPath(path) });
       } catch (er) { toast(er.message || String(er)); } finally { settingAction.removeAttribute('aria-disabled'); }
       return;
     }
@@ -960,7 +961,7 @@ export class SettingsPage {
       }
       try {
         this.settings = await api.settingsReset('all');
-        if (saved) toast(`내보낸 뒤 설정을 초기화했습니다 — ${saved}`, 5000, { label: 'Finder에서 보기', run: () => api.revealPath(saved) });
+        if (saved) toast(`내보낸 뒤 설정을 초기화했습니다 — ${saved}`, 5000, { label: REVEAL_LABEL, run: () => api.revealPath(saved) });
         else toast('설정을 초기화했습니다', 1800);
         this.render();
         this.broadcastAll();

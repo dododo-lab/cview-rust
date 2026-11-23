@@ -235,7 +235,7 @@ const PROVIDERS = {
     return header('보관함 인사이트', '저장해 둔 것 한눈에')
       + tiles([[String(cont.length), '이어 보기'], [String(later.length), '나중에 보기'], [String(marks.length), '북마크'], [String(done.length), '받은 파일']])
       + section('box', '받은 파일 용량', done.length ? rows([['파일', `${done.length}개`], ['합계', bytesText(done.reduce((a, h) => a + (h.fileSize || 0), 0))]]) : '')
-      + section('clock', '최근 본 채널', recent.length ? liveRows(recent.map((c) => ({ ...c, viewerCountText: '' })), (c) => (c.lastWatched ? new Date(c.lastWatched).toLocaleDateString() : '')) : '');
+      + section('clock', '최근 본 채널', recent.length ? liveRows(recent.map((c) => ({ ...c, viewerCountText: '' })), (c) => (c.lastWatched ? new Date(c.lastWatched).toLocaleDateString('ko-KR') : '')) : '');
   },
   async stats() {
     const o = await safe(overview(), null);

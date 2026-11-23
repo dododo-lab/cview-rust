@@ -3,7 +3,7 @@
 // 진단 보고서는 백엔드 diagnostic_report 가 만든다(개인 정보를 넣지 않는 규칙은 crates/cview-app/src/diagnostics.rs).
 import { api } from './api.js';
 import { esc, toast } from './dom.js';
-import { IS_WINDOWS, kbd } from './platform.js';
+import { IS_WINDOWS, kbd, REVEAL_LABEL } from './platform.js';
 import { showSheet } from './app-sheets.js';
 import { currentAppInfo, versionText, dateText } from './update-check.js';
 
@@ -14,7 +14,7 @@ export const ABOUT_LINKS = {
   source: 'https://github.com/dododo-lab/cview-rust',
   feedback: 'https://github.com/dododo-lab/cview-rust/issues/new/choose',
 };
-const REVEAL = IS_WINDOWS ? '탐색기에서 보기' : 'Finder에서 보기';
+const REVEAL = REVEAL_LABEL;
 const REPORT_PRIVACY = '로그인 정보(쿠키·토큰)·계정 이름·채팅·팔로잉과 시청한 채널·파일 경로는 넣지 않습니다';
 
 /**
