@@ -794,6 +794,14 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
   background: linear-gradient(90deg, transparent, var(--primary), transparent) 0 0 / 40% 100% no-repeat;
   animation: thumb-preview-load 1s linear infinite; opacity: 1;
 }
+/* 카드 썸네일은 위 '.card .thumb::after'(어둡게 까는 막, 명시도 0,2,1)가 이겨 빛줄기 대신 위쪽 2px 검은 띠가 됐다 —
+   카드 안에서는 같은 이상 명시도로 다시 건다. 영상이 나오면 어둡게 까는 막도 걷는다. */
+.card .thumb.preview-loading::after {
+  inset: auto 0 0 0; height: 2px; z-index: 3; opacity: 1;
+  background: linear-gradient(90deg, transparent, var(--primary), transparent) 0 0 / 40% 100% no-repeat;
+  animation: thumb-preview-load 1s linear infinite;
+}
+.card .thumb.preview-on::after { opacity: 0 !important; }
 @keyframes thumb-preview-load { from { background-position: -40% 0; } to { background-position: 140% 0; } }
 
 /* ══ 라이브 정보란·채널 화면 (2026-11-12) — 등장 순차·숫자·LIVE 맥동·탄성 호버·카드 기울기·배너 패럴랙스 ══

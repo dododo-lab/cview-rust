@@ -25,7 +25,8 @@ export function keyBelongsToTarget(e) {
   if (!t || !t.closest) return false;
   if (t.isContentEditable || t.closest('input, textarea, select')) return true;
   if ((e.key === ' ' || e.key === 'Enter') && t.closest('button, a[href], [role="button"]')) return true;
-  return Boolean(t.closest('.sheet-scrim, .palette-scrim, .player-panel, .emoji-picker, .dp-panel, .ctx-menu, .ml-addbar, .ml-more-menu, .ml-pane-menu, .quality-menu'));
+  // .vt-menu(시청 화면 ⋯)·.ad-overlay(프리롤 광고) 안의 Space·화살표·M 도 뒤의 방송으로 새지 않게.
+  return Boolean(t.closest('.sheet-scrim, .palette-scrim, .player-panel, .emoji-picker, .dp-panel, .ctx-menu, .ml-addbar, .ml-more-menu, .ml-pane-menu, .quality-menu, .vt-menu, .ad-overlay'));
 }
 
 /**
@@ -328,8 +329,9 @@ export function toast(message, ms = 2600, action = null) {
     stack.setAttribute('aria-live', 'polite');
     document.body.append(stack);
   }
-  // 같은 문구가 이미 떠 있으면 시간만 늘린다.
-  const same = [...stack.children].find((t) => t.dataset.msg === message);
+  // 같은 문구가 이미 떠 있으면 새것으로 바꾼다. 단 '되돌리기' 같은 동작이 달린 알림은 지우지 않는다 — 연달아 두 개를 지우면
+  // 첫 알림의 되돌리기가 사라진 채 시간이 지나 그대로 지워졌다(deferDelete, 감사 UX-C10).
+  const same = !action && [...stack.children].find((t) => t.dataset.msg === message && !t.querySelector('.toast-action'));
   if (same) { same.remove(); }
   const el = document.createElement('div');
   el.className = 'toast';
@@ -344,7 +346,11 @@ export function toast(message, ms = 2600, action = null) {
     b.addEventListener('click', () => { dismiss(el); action.run(); });
   }
   stack.append(el);
-  while (stack.children.length > 4) stack.firstElementChild.remove();
+  // 넘치면 오래된 것부터 — 동작 없는 알림을 먼저 내보낸다.
+  while (stack.children.length > 4) {
+    const plain = [...stack.children].find((t) => !t.querySelector('.toast-action'));
+    (plain || stack.firstElementChild).remove();
+  }
   setTimeout(() => dismiss(el), life);
 }
 

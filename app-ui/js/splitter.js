@@ -70,9 +70,12 @@ export function installChatSplitter({ container, chat, key }) {
   const apply = () => {
     const box = container.getBoundingClientRect().width;
     // 멀티라이브 '오버레이 채팅'은 이미 영상 위에 떠 있어 좁은 창 접기를 하지 않는다(그 모드에선 '채팅' 버튼도 숨는다)
-    const narrow = tooNarrowForChat(box) && !container.classList.contains('chat-overlay');
+    const overlay = container.classList.contains('chat-overlay');
+    const narrow = tooNarrowForChat(box) && !overlay;
     if (!narrow) openWhileNarrow = false;
-    const collapsed = state.collapsed || (narrow && !openWhileNarrow);
+    // 오버레이 채팅에서는 접지 않는다 — 그 모드는 '채팅' 펼치기 단추를 숨기므로(multilive.css), 사이드에서 접어 둔 채
+    // 오버레이로 바꾸면 채팅을 다시 열 길이 없었다(감사 UX-C07). 저장된 접힘은 사이드로 돌아가면 그대로 쓴다.
+    const collapsed = !overlay && (state.collapsed || (narrow && !openWhileNarrow));
     const width = clampChatWidth(state.width, box);
     chat.style.width = `${width}px`;
     chat.classList.toggle('collapsed', collapsed);

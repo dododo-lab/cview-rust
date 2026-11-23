@@ -130,6 +130,9 @@ export class PlayerPanel {
 
   toggle() {
     if (!this.el.hidden) { hideWithExit(this.el); return; }
+    // 화질 메뉴·⋯ 메뉴와 한 번에 하나만 — 단추들이 stopPropagation 이라 바깥 누르기로는 서로 닫히지 않아 셋이 겹쳐 열렸다.
+    this.viewer.controls?.closeQualityMenu();
+    this.viewer.topbar?.closeMenu();
     this.loadSettings().then(() => { this.render(); this.el.hidden = false; });
   }
 

@@ -31,7 +31,7 @@ export function liveCard(live) {
       <div class="thumb"${live.isLive && !live.adult ? previewAttr('live', live.channelId) : ''}>
         ${thumb ? `<img src="${esc(imageSrc(thumb, 'live'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
         ${live.isLive ? '<span class="badge-live">LIVE</span>' : ''}
-        ${live.adult ? '<span class="badge-adult">19</span>' : ''}
+        ${live.adult ? `<span class="badge-adult${live.isLive ? ' beside-add' : ''}">19</span>` : ''}
         <span class="badge-viewers"><i class="dot"></i>${esc(live.viewerCountText)}명</span>
         ${live.isLive ? '<button type="button" class="card-ml-add" data-ml-add title="멀티라이브에 추가" aria-label="멀티라이브에 추가"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></button>' : ''}
         ${uptime ? `<span class="badge-uptime">${esc(uptime)}</span>` : ''}

@@ -853,7 +853,7 @@ export class ChatPanel {
   openLineMenu(line, x, y) {
     const uid = line.dataset.uid;
     const nick = line.dataset.nick;
-    const amount = line.querySelector('.amount')?.textContent || '';
+    const amount = line.querySelector('.ev-value')?.textContent || ''; // 후원 금액(donations.js 의 .ev-value)
     const highlighted = (chatPrefs().highlightedUsers || []).includes(uid);
     const items = [
       ['copy-text', '메시지 복사'],
@@ -945,7 +945,12 @@ export class ChatPanel {
     const badges = first ? first.querySelectorAll('img.badge') : [];
     const role = first ? first.dataset.role : '';
     const roleLabel = { streamer: '스트리머', manager: '매니저', channelManager: '채널 관리자' }[role] || '시청자';
-    const recent = lines.slice(-10).reverse().map((l) => `<li><time>${esc(l.querySelector('.chat-time')?.textContent || '')}</time> ${l.querySelector('.text')?.innerHTML || ''}</li>`).join('');
+    // 후원 줄은 본문이 .text 가 아니라 .ev-body — 금액(.ev-value)을 앞에 붙인다(없으면 빈 줄이 나왔다).
+    const recent = lines.slice(-10).reverse().map((l) => {
+      const value = l.querySelector('.ev-value')?.textContent || '';
+      const body = l.querySelector('.text, .ev-body')?.innerHTML || '';
+      return `<li><time>${esc(l.querySelector('.chat-time')?.textContent || '')}</time> ${value ? `<b>${esc(value)}</b> ` : ''}${body}</li>`;
+    }).join('');
     const scrim = document.createElement('div');
     scrim.className = 'sheet-scrim';
     scrim.innerHTML = `

@@ -392,6 +392,7 @@ export class ViewerControls {
     }
     this.qualityOpener = opener;
     this.viewer.topbar?.closeMenu();
+    if (this.viewer.panel && !this.viewer.panel.el.hidden) hideWithExit(this.viewer.panel.el); // 플레이어 설정 패널과 겹치지 않게
     this.viewer.player.call('getLevels');
     this.renderQualityMenu();
     this.qualityMenu.hidden = false;

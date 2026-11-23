@@ -261,7 +261,7 @@
 /* 키보드 초점은 호버와 구별되게 고리를 더 둔다 — 라이트에서도 3:1 넘는 --primary-text(--primary 는 밝은 바탕에서 1.6) */
 .ml-addrow .ml-addrow-act:focus-visible:not(:disabled) { outline: 2px solid var(--primary-text); outline-offset: 2px; }
 .ml-addrow-act:disabled { cursor: default; background: transparent; }
-.ml-addrow.added .ml-addrow-act { color: var(--primary); background: var(--primary-dim); }
+.ml-addrow.added .ml-addrow-act { color: var(--primary-text); background: var(--primary-dim); }
 
 /* 방금 추가 — 체크가 톡, 줄이 잠깐 브랜드색으로 */
 .ml-addrow.just-added { animation: ml-added-glow 1.2s var(--ease-out) both; }
@@ -725,7 +725,8 @@
 
 /* ── 채널 칩 미리보기 말풍선(ml-chip-peek.js) — 칩 바로 아래, 꼬리가 칩 가운데를 가리킨다 ── */
 .ml-peek {
-  position: fixed; z-index: var(--z-overlay); pointer-events: none; box-sizing: border-box;
+  /* --z-float — 호버 말풍선이 팔레트·토스트·시트(150·200)까지 덮지 않게(예전 --z-overlay 1000) */
+  position: fixed; z-index: var(--z-float); pointer-events: none; box-sizing: border-box;
   --peek-bg: var(--surface-overlay); --peek-line: var(--border);
   padding: 6px; border-radius: var(--radius-ml); background: var(--peek-bg); border: 1px solid var(--peek-line);
   box-shadow: var(--shadow-lg); transform-origin: var(--tail-x, 50%) -10px;
@@ -1301,3 +1302,5 @@
 .ml-watch-picker .ml-watch-tab:is(.st-loading, .st-idle, .st-offline, .st-error) .ml-watch-chip:not(.active) :is(img, .ml-watch-dot) {
   -webkit-mask-image: radial-gradient(circle at 18px 18px, transparent 6px, #000 6.5px); mask-image: radial-gradient(circle at 18px 18px, transparent 6px, #000 6.5px);
 }
+/* 오버레이 채팅은 접지 않는다(splitter.js) — 접기 단추도 감춘다. 숨기려면 채팅 표시 방식을 '숨김'으로. */
+.ml-body.chat-overlay .chat-collapse { display: none; }

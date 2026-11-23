@@ -75,11 +75,20 @@ export async function loadShortcuts() {
   try { applyKeyboardSettings((await api.settingsGet()).keyboard); } catch { /* 기본값 */ }
 }
 
-/** 시청 화면 키 처리용 — 맨 글자(수식 키 없음) 바인딩만 맞춘다. 수식 키 바인딩은 메뉴 몫. */
+// 수식 키 바인딩을 메뉴 가속기로 받는 동작(menu.rs shortcut_action). 나머지(채팅 방식·재생·소리…)는 메뉴 항목이 없어
+// 수식 키로 바꾸면 아무 데서도 받지 않았다(감사 UX-C12) — 그런 동작은 여기서 수식 키까지 맞춘다.
+const MENU_ACTIONS = new Set(['screenshot', 'bookmarkStream', 'toggleFullscreen', 'togglePiP']);
+
+/** 시청 화면 키 처리용 — 맨 글자 바인딩, 그리고 메뉴가 받지 않는 동작의 수식 키 바인딩을 맞춘다. */
 export function matchPlainAction(e) {
-  if (e.metaKey || e.ctrlKey || e.altKey) return null;
   const b = bindingFromEvent(e);
   if (!b) return null;
+  if (e.metaKey || e.ctrlKey || e.altKey) {
+    for (const [action, bind] of Object.entries(bindings)) {
+      if (bind && bind.modifiers && !MENU_ACTIONS.has(action) && !FIXED.has(action) && bind.key === b.key && bind.modifiers === b.modifiers) return action;
+    }
+    return null;
+  }
   for (const [action, bind] of Object.entries(bindings)) {
     if (bind && !bind.modifiers && bind.key === b.key && !(e.shiftKey)) return action;
   }

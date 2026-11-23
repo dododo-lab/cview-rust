@@ -41,6 +41,7 @@
 
   /* 상태 */
   --live: #ff3b30;
+  --live-text: #ff3b30;          /* 작은 빨강 글자(방송 중·읽음 구분선 등) — 라이트에선 더 짙게(흰 바탕 4.5:1 이상) */
   --live-badge: #e5262b;        /* 흰 글자를 얹는 LIVE 배지 바탕 — 흰 글자 대비 4.5:1 이상(--live 는 점·글자·링용) */
   --donation: #ffcc33;
   --donation-bg: rgba(255, 204, 51, 0.1);
@@ -157,6 +158,7 @@
   --border: #d9dce3;
   --border-subtle: #e8eaef;
   --live: #f03a2e;
+  --live-text: #c9241b;         /* 흰 바탕 5.6:1 · #f1f2f5 5.0:1 (--live 는 3.9:1 로 작은 글자에 모자람) */
   --live-badge: #e5262b;
   --donation: #8f6100;
   --donation-bg: rgba(255, 190, 30, 0.14);
@@ -207,6 +209,7 @@
     --border: #d9dce3;
     --border-subtle: #e8eaef;
     --live: #f03a2e;
+    --live-text: #c9241b;
     --live-badge: #e5262b;
     --donation: #8f6100;
     --donation-bg: rgba(255, 190, 30, 0.14);
@@ -260,7 +263,7 @@ input[type="search"]::-webkit-search-cancel-button { -webkit-appearance: none; }
 :where(input[type="range"]) { accent-color: var(--primary); }
 :where(input[type="checkbox"], input[type="radio"]) { accent-color: var(--primary); }
 img { display: block; }
-a { color: var(--primary); }
+a { color: var(--primary-text); } /* --primary(#00d38a)는 라이트 흰 바탕 2.0:1 — 글자는 글자용 브랜드색 */
 
 .app { display: flex; height: 100vh; }
 
@@ -632,9 +635,11 @@ a { color: var(--primary); }
 .badge-uptime { left: auto; right: 8px; font-weight: 500; color: rgba(255, 255, 255, 0.85); }
 .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--live); flex: none; display: inline-block; }
 .badge-adult {
-  position: absolute; top: 8px; right: 8px; background: rgba(0, 0, 0, 0.72); color: var(--warning);
+  position: absolute; top: 8px; right: 8px; background: rgba(0, 0, 0, 0.72); color: #ffb020; /* 늘 어두운 썸네일 위 — 라이트 --warning(#9a5c00)은 3:1 아래 */
   font-size: var(--fs-micro); font-weight: 700; padding: 2px 6px; border-radius: var(--radius-xxs);
 }
+/* 라이브 카드는 같은 자리(오른쪽 위)에 호버하면 '+ 멀티라이브' 단추가 뜬다 — 19 배지는 그 왼쪽으로 비켜 둔다(cards.js) */
+.badge-adult.beside-add { right: 42px; }
 .card-body { display: flex; gap: var(--sp-sm); padding: var(--sp-sm) 2px 0; }
 .avatar {
   width: 34px; height: 34px; border-radius: 50%; flex: none; object-fit: cover;
@@ -663,7 +668,7 @@ a { color: var(--primary); }
 .vbadge.sm { width: 0.95em !important; height: 0.95em !important; vertical-align: -0.12em; }
 .vbadge.lg { width: 0.8em !important; height: 0.8em !important; margin-left: 0.3em; vertical-align: -0.04em; }
 .vbadge[hidden] { display: none; }
-.live-dot { color: var(--live); font-weight: 700; font-size: var(--fs-micro); margin-left: 6px; }
+.live-dot { color: var(--live-text); font-weight: 700; font-size: var(--fs-micro); margin-left: 6px; }
 
 /* ── 상태 ─────────────────────────────────── */
 .empty {
@@ -742,9 +747,13 @@ select.select {
 /* 영상 위 투명 클릭 차단층(viewer-controls.js) — 초점이 iframe 으로 넘어가 단축키가 죽지 않게(H-4). z-index 없이 DOM 순서로 오버레이 밑 */
 .player-hit { position: absolute; inset: 0; }
 .player-overlay {
-  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: var(--sp-sm); color: var(--text-secondary); pointer-events: none; background: rgba(0, 0, 0, 0.35);
+  position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  /* 무대는 두 테마 모두 검정 — 테마 글자색(라이트 --text-secondary #4d525b)은 검정 위 2.6:1 이라 영상용 흰 글자.
+     z 4 — 오류의 '다시 시도'가 재생 단추·버퍼링 표시 밑에 깔리지 않게(위·아래 막대 z 5 보다는 아래) */
+  gap: var(--sp-sm); color: rgba(255, 255, 255, 0.88); pointer-events: none; background: rgba(0, 0, 0, 0.35);
 }
+/* 안내막이 떠 있으면 무대 가운데 재생 단추·버퍼링 고리는 감춘다(안내막의 고리·글자와 겹쳐 두 겹으로 보였다). viewer.js showOverlay */
+.player-stage.has-overlay :is(.stage-buffer, .stage-center-play) { display: none !important; }
 .player-overlay[hidden] { display: none; }
 /* 오류 — #viewer 무대는 두 테마 모두 검정(아래 '#viewer .player-stage')이라 테마별 --error 가 아니라 영상용 빨강을 쓴다.
    라이트 --error(#c4291f)는 검정과 3.7:1 이다. */
@@ -1208,7 +1217,7 @@ select.select {
 .recent-item.is-live .avatar { box-shadow: 0 0 0 2px var(--deck), 0 0 0 4px var(--live); }
 .recent-text { min-width: 0; display: flex; flex-direction: column; font-size: var(--fs-caption); }
 .recent-meta { font-size: var(--fs-micro); color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
-.recent-meta b { color: var(--live); font-weight: 800; }
+.recent-meta b { color: var(--live-text); font-weight: 800; }
 
 /* 가로 선반 */
 .shelf {
@@ -1645,7 +1654,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .channel-avatar .strip-live { top: auto; bottom: -6px; left: 50%; transform: translateX(-50%); border-color: var(--surface-base); }
 .channel-id h1 { font-size: var(--fs-title); font-weight: 800; letter-spacing: -0.5px; display: flex; align-items: center; gap: 6px; }
 .channel-id p { color: var(--text-secondary); font-size: var(--fs-caption); margin-top: 4px; }
-.channel-id p b { color: var(--live); }
+.channel-id p b { color: var(--live-text); }
 .channel-actions { display: flex; align-items: center; gap: var(--sp-sm); flex-wrap: wrap; }
 .channel-actions .fav.on { color: var(--donation); }
 .channel-actions .icon-btn.round svg { width: 17px; height: 17px; }
@@ -1775,6 +1784,11 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .media-stage.vertical { aspect-ratio: 9 / 16; max-height: calc(100vh - 200px); max-width: 100%; height: calc(100vh - 200px); }
 .media-stage video { width: 100%; height: 100%; display: block; background: #000; }
 .media-stage .empty { height: 100%; color: #ccc; }
+.media-error { /* 영상 위 — 두 테마 모두 어두운 막이라 단추 글자·면도 영상용 값 */
+  --text-primary: #fff; --text-secondary: rgba(255, 255, 255, 0.78); --surface-elevated: rgba(255, 255, 255, 0.12); --border: rgba(255, 255, 255, 0.22); --hover: rgba(255, 255, 255, 0.16);
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  padding: 16px; text-align: center; background: rgba(0, 0, 0, 0.72); color: rgba(255, 255, 255, 0.88); font-size: var(--fs-body); }
+.media-error .error-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--sp-sm); }
 .media-stage .empty > strong { color: #fff; } /* 검은 무대 위 — 라이트 테마에서도 밝게 */
 .media-bar { display: flex; align-items: center; gap: var(--sp-sm); flex-wrap: wrap; margin-top: var(--sp-md); }
 .media-title { font-size: var(--fs-headline); font-weight: 800; letter-spacing: -0.3px; line-height: 1.3; }
@@ -1915,7 +1929,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .chat-line.mention { background: var(--primary-dim); border-radius: var(--radius-xs); box-shadow: inset 3px 0 0 var(--primary); padding-left: 8px; }
 .chat-line.highlighted { background: rgba(91, 163, 255, 0.12); border-radius: var(--radius-xs); padding-left: 8px; box-shadow: inset 3px 0 0 var(--accent-blue); }
 .chat-line[data-uid]:hover { background: var(--hover); border-radius: var(--radius-xs); }
-.read-divider { display: flex; align-items: center; gap: 8px; margin: 8px 0; color: var(--live); font-size: var(--fs-micro); font-weight: 700; }
+.read-divider { display: flex; align-items: center; gap: 8px; margin: 8px 0; color: var(--live-text); font-size: var(--fs-micro); font-weight: 700; }
 .read-divider::before, .read-divider::after { content: ""; flex: 1; height: 1px; background: currentColor; opacity: 0.5; }
 .chat-hbtn { width: 28px; height: 28px; position: relative; color: var(--text-tertiary); }
 .chat-hbtn svg { width: 16px; height: 16px; }
@@ -2079,7 +2093,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .user-pop[data-side="top"]::after { bottom: -7px; rotate: 45deg; }
 /* 닉네임이 연 자리를 떠나면(채팅이 흘러감) 꼬리를 감춘다 — 말풍선은 그 자리에 남는다 */
 .user-pop.detached::after { opacity: 0; transition: opacity var(--dur-2, .18s) ease; }
-.up-head { display: flex; align-items: center; gap: 10px; padding: 8px 8px 4px; }
+.user-pop .up-head { display: flex; align-items: center; gap: 10px; padding: 8px 8px 4px; }
 .up-avatar { width: 42px; height: 42px; flex: none; border-radius: 50%; object-fit: cover; background: var(--surface-overlay); }
 .up-avatar-text { display: grid; place-items: center; font-weight: 700; color: var(--text-secondary); }
 .up-who { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
@@ -2097,8 +2111,9 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .up-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 2px 8px 8px; color: var(--text-tertiary); font-size: var(--fs-footnote); min-height: 22px; }
 .up-facts i { font-style: normal; opacity: .6; }
 .up-facts.loading { color: var(--text-tertiary); }
-.up-live { color: var(--live); font-weight: 700; }
-.up-sub { color: var(--subscription); font-weight: 600; }
+/* .up-* 는 사용률 팝오버(usage.css .usage-pop)도 쓰는 이름 — 서로 덮지 않게 팝오버마다 한정한다. */
+.user-pop .up-live { color: var(--live-text); font-weight: 700; }
+.user-pop .up-sub { color: var(--subscription); font-weight: 600; }
 .up-main { display: flex; gap: 6px; padding: 0 6px 6px; }
 .up-main:empty { display: none; }
 .up-btn {
@@ -2303,7 +2318,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .small { font-size: var(--fs-footnote); }
 .update-sheet { display: flex; flex-direction: column; gap: var(--sp-sm); min-width: 340px; max-width: 480px; }
 .update-summary { font-weight: 700; }
-.update-summary.is-new { color: var(--primary); }
+.update-summary.is-new { color: var(--primary-text); }
 .update-facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: var(--fs-caption); }
 .update-facts dt { color: var(--text-tertiary); }
 .update-facts dd { margin: 0; font-variant-numeric: tabular-nums; word-break: break-all; }
@@ -2949,7 +2964,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .history-list { display: flex; flex-direction: column; gap: 6px; }
 .history-row { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border-radius: var(--radius-md); background: var(--surface-elevated); border: 1px solid var(--border-subtle); text-align: left; color: inherit; cursor: pointer; }
 .history-row:hover { background: var(--hover); }
-.live-dot-text { color: var(--live); font-size: var(--fs-micro); font-weight: 600; }
+.live-dot-text { color: var(--live-text); font-size: var(--fs-micro); font-weight: 600; }
 .data-table { width: 100%; border-collapse: collapse; font-size: var(--fs-footnote); }
 .data-table td { padding: 6px 2px; border-bottom: 1px solid var(--border-subtle); }
 .data-table td.num { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
@@ -2997,7 +3012,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .discover-item:hover { background: var(--hover); }
 .discover-item .avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; background: var(--hover); }
 .discover-item span { max-width: 100%; font-size: var(--fs-footnote); font-weight: 600; }
-.discover-item small { font-size: var(--fs-micro); color: var(--live); }
+.discover-item small { font-size: var(--fs-micro); color: var(--live-text); }
 .discovery { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
 .side-extras { display: flex; flex-direction: column; gap: 6px; margin: 8px 0 4px; }
 .side-quick { flex: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; height: 50px; transition: height var(--sb-dur) var(--sb-ease); }
@@ -3112,7 +3127,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .picker-row:hover { background: var(--hover); }
 .picker-row .avatar { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; background: var(--hover); flex: none; }
 .picker-row span { flex: 1; min-width: 0; font-size: var(--fs-footnote); }
-.picker-row small { color: var(--live); font-size: var(--fs-micro); }
+.picker-row small { color: var(--live-text); font-size: var(--fs-micro); }
 
 /* ── 투명도 (SYS-22) — 원본 TransparencyPolicy·LiquidGlass: 선명하게=유리 질감, 불투명=단색 ───────── */
 :root[data-transparency="full"] .sidebar { background: color-mix(in srgb, var(--sidebar) 72%, transparent); backdrop-filter: blur(28px) saturate(1.6); -webkit-backdrop-filter: blur(28px) saturate(1.6); }
@@ -3439,7 +3454,11 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .stage-center-play:hover { transform: scale(1.06); background: rgba(0, 0, 0, 0.6); }
 .player-stage.paused .stage-center-play { display: grid; }
 /* 오버레이 위로 뜨는 고급 패널·알림 OSD 는 막대보다 위 */
-.player-stage .player-panel { z-index: 7; bottom: 64px; }
+.player-stage .player-panel { z-index: 7; bottom: 64px; max-height: calc(100% - 76px); } /* 아래 64 + 위 12 — 100%-24 그대로면 위가 40px 잘려 탭 줄이 무대 밖으로 나갔다 */
+/* 알림 OSD(일시정지·볼륨)는 가운데 재생 단추(z 4)보다 위 */
+.player-stage .player-osd { z-index: 6; }
+/* 후원 알림은 위쪽 정보 막대(z 5)보다 위 — 막대가 보일 때 알림을 끌면 막대의 채널 제목을 눌러 채널 화면으로 가 버렸다 */
+#viewer .player-stage > .stream-alerts { z-index: 6; }
 
 /* 시청 화면 머리 — 다른 메뉴와 같은 페이지 제목("라이브"). 채널 정보·바로 전환·창 동작은 영상 위 위쪽 오버레이로. */
 .viewer-header.page-header { position: static; flex: none; margin: 0; }
@@ -3542,6 +3561,14 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
   .vt-menu .vt-narrow:not([hidden]) { display: flex; }
   .vt-q-badge { display: none; }
 }
+/* 아래 막대 — 단추 12개가 한 줄이라 무대 폭 약 450px 아래(플레이어 창 360px·채팅과 함께 보기)에서 오른쪽 단추가 잘렸다.
+   ⋯ 메뉴(.vt-menu)에도 있는 스크린샷·북마크·다시 연결·영상+채팅 전체 화면부터 감춘다(감사 UX-C05). */
+@container vstage (max-width: 560px) {
+  .chzzk-bar :is(#ctl-shot, #ctl-bookmark, #reload, #ctl-fullscreen-chat) { display: none; }
+}
+@container vstage (max-width: 420px) {
+  .chzzk-bar .player-status { display: none; }
+}
 .stage-top .rail-item[hidden], .stage-top .rail-more[hidden] { display: none; }
 .stage-top .rail-more { flex: none; height: 32px; min-width: 32px; padding: 0 8px; border-radius: var(--radius-lg); border: 1px solid rgba(255, 255, 255, 0.28);
   background: rgba(0, 0, 0, 0.3); color: #fff; font-size: var(--fs-footnote); font-weight: 700; cursor: pointer; }
@@ -3563,9 +3590,16 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 :root[data-platform="windows"] .titlebar-strip { height: 0; margin-top: 0; }
 /* !important — 화면마다 머리줄 여백을 다시 정한다(라이브·멀티라이브·시청 화면). 창 단추 자리는 어느 머리줄이든 비워야 한다. */
 :root[data-platform="windows"]:not([data-window]) .page-header { padding-right: calc(var(--sp-md) + var(--wc-w)) !important; }
+/* 홈 머리줄(검색·새로고침·사용률 칩)은 .page-header 가 아니다 — 같은 만큼 비킨다(.page 좌우 여백 --sp-xxl 은 이미 있다) */
+:root[data-platform="windows"]:not([data-window]) .home-header { padding-right: calc(var(--wc-w) - var(--sp-xxl) + var(--sp-md)); }
+/* 시청 화면 채팅은 창 오른쪽 위 끝까지 올라간다 — 창 단추 띠만큼 내려 머리줄 도구·접기 단추가 단추 밑에 깔리지 않게 */
+:root[data-platform="windows"]:not([data-window], .is-fullscreen) #viewer > .chat { padding-top: var(--wc-h); }
+/* 오프라인 띠(노랑) 위에 투명 창 단추가 겹치면 단추가 1.1~1.5:1 로 안 보였다 — 띠를 단추 띠 아래로 */
+:root[data-platform="windows"]:not([data-window]) .offline-banner { top: var(--wc-h); }
 /* 인사이트 패널이 펼쳐져 있으면 화면이 창 오른쪽 끝에 닿지 않는다 — 단추는 패널 위에 놓이니 머리줄은 비킬 필요 없다(좁은 창에선 패널을 숨긴다) */
 @media (min-width: 1241px) {
   :root[data-platform="windows"]:not([data-window]) .content.with-insights > .page > .page-header { padding-right: var(--sp-xxl) !important; }
+  :root[data-platform="windows"]:not([data-window]) .content.with-insights > .page > .home-header { padding-right: 0; }
 }
 :root[data-platform="windows"]:not([data-window]) .insight-panel { padding-top: var(--wc-h); }
 :root[data-platform="windows"]:not([data-window]) .ip-toggle { top: calc(var(--wc-h) + 14px); }
@@ -3640,7 +3674,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
   font-size: var(--fs-caption);
 }
 .ad-top { top: 0; background: linear-gradient(rgba(0, 0, 0, 0.55), transparent); }
-.ad-bottom { bottom: 0; background: linear-gradient(transparent, rgba(0, 0, 0, 0.6)); }
+.ad-bottom { bottom: 0; flex-wrap: wrap; row-gap: 6px; background: linear-gradient(transparent, rgba(0, 0, 0, 0.6)); } /* 좁은 패인에서 단추가 잘리지 않게 줄을 바꾼다 */
 .ad-badge {
   padding: 2px 7px;
   border-radius: var(--radius-xxs);

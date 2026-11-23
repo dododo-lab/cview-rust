@@ -126,6 +126,8 @@ export class Viewer {
   }
 
   showOverlay(text, isError = false, detail = '') {
+    // 안내막이 떠 있는 동안 무대 가운데 재생 단추·버퍼링 고리를 감춘다(app.css .has-overlay) — 두 겹으로 보이지 않게.
+    this.overlay.parentElement?.classList.toggle('has-overlay', Boolean(text));
     if (!text) {
       this.overlay.hidden = true;
       this.overlay.removeAttribute('title');
