@@ -116,11 +116,12 @@ try {
         expect(r.log.includes('commit2') && !r.log.includes('restore2'), `둘째 항목: ${r.log.join(',')}`);
       });
 
-      await check('U05', 'kbd(): 키가 붙은 묶음·끝 묶음은 Ctrl+Shift+ 로, macOS 는 그대로', async () => {
+      await check('U05', 'kbd(): 띄어 쓴 설명엔 + 를 붙이지 않고, 키가 붙거나 끝이면 붙인다', async () => {
         const r = await page.evaluate(async () => {
           const { kbd } = await import('/js/platform.js');
           return [kbd('(⇧ 60초)', true), kbd('⇧⌘F', true), kbd('⇧⌘', true), kbd('영상 전체 화면 (⇧⌘F)', true), kbd('⇧⌘F', false)];
         });
+        expect(r[0] === '(Shift 60초)', `띄어 쓴 설명: ${r[0]} — "Shift+ 60초" 처럼 + 가 매달렸다`);
         expect(r[1] === 'Ctrl+Shift+F' && r[2] === 'Ctrl+Shift+' && r[3] === '영상 전체 화면 (Ctrl+Shift+F)' && r[4] === '⇧⌘F', `kbd: ${JSON.stringify(r)}`);
       });
     }
