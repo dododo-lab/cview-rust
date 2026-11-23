@@ -368,10 +368,10 @@ export class MultiChatPage {
       c.rate = c.rate.filter((t) => now - t < 60000);
       const state = c.panel.state.className.includes('ok') ? 'ok' : (c.panel.state.className.includes('bad') ? 'bad' : 'warn');
       const avatar = safeUrl(c.image);
-      return `<button class="mc-chip${c.channelId === this.active ? ' active' : ''}" data-mc-focus="${esc(c.channelId)}" style="--mc-color:${c.color}">
+      // 닫기는 칩 단추와 형제인 따로 된 단추 — 칩 안 span 이라 키보드로 누를 수 없었다(감사 UX-H22)
+      return `<span class="mc-chip-group" style="--mc-color:${c.color}"><button class="mc-chip${c.channelId === this.active ? ' active' : ''}" data-mc-focus="${esc(c.channelId)}">
         ${avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}
-        <span class="mc-chip-name">${esc(c.name)}</span><i class="mc-dot ${state}"></i><span class="mc-rate">${c.rate.length}/분</span>
-        <span class="mc-chip-x" data-mc-remove="${esc(c.channelId)}" title="닫기">✕</span></button>`;
+        <span class="mc-chip-name">${esc(c.name)}</span><i class="mc-dot ${state}"></i><span class="mc-rate">${c.rate.length}/분</span></button><button class="mc-chip-x" data-mc-remove="${esc(c.channelId)}" title="닫기" aria-label="${esc(c.name)} 채팅 닫기">✕</button></span>`;
     }).join('');
   }
 

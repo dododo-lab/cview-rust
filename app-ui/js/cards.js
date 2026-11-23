@@ -85,6 +85,12 @@ export function channelRow(channel) {
 export function fallbackAvatar(e) {
   const img = e.target;
   const box = img && img.tagName === 'IMG' ? img.parentElement : null;
+  // 다른 곳의 동그란 아바타(.avatar)는 주소를 비워 바탕 원만 남긴다 — 깨진 그림 표시 대신(app.js 가 문서 전체에 건다, 감사 UX-M03)
+  if (img && img.tagName === 'IMG' && img.classList.contains('avatar') && !(box && box.classList.contains('cr-avatar'))) {
+    img.removeAttribute('src');
+    img.removeAttribute('srcset');
+    return;
+  }
   if (!box || !box.classList.contains('cr-avatar')) return;
   img.hidden = true;
   box.classList.add('fallback');

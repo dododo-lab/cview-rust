@@ -265,6 +265,9 @@ function openPop({ keyboard = true } = {}) {
   else pop.focus({ preventScroll: true });
 }
 
+/** 시트(확인 창)가 열릴 때 app.js 가 부른다 — 팝오버가 시트 바탕 위에 떠 있지 않게. */
+export function closeUsagePop() { closePop({ focus: false }); }
+
 function closePop({ focus = true } = {}) {
   if (!pop || pop.hidden) return;
   pop.hidden = true;

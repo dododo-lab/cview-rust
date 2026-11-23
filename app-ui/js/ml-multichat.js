@@ -332,7 +332,8 @@ export class MultiLiveMergedChat {
     const n = order.length;
     grid.classList.toggle('focus', focus);
     grid.style.setProperty('--mc-n', String(Math.max(1, n)));
-    grid.style.gridTemplateRows = focus && n > 1 ? `minmax(0, 3fr) repeat(${n - 1}, minmax(0, 1fr))` : '';
+    // 포커스 — 메인 칸 160px·나머지 90px 아래로는 줄이지 않고 넘치면 격자가 스크롤한다(ml-mc-grid)
+    grid.style.gridTemplateRows = focus && n > 1 ? `minmax(160px, 3fr) repeat(${n - 1}, minmax(90px, 1fr))` : '';
     // 칸 크기가 바뀌면(보기·선택·패인 수) 최신 메시지가 잘리지 않게 바닥으로 맞춘다.
     const sig = `${this.mode}|${order.join(',')}`;
     if (sig !== this.layoutSig) {

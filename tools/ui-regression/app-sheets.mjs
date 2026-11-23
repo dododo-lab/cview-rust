@@ -64,10 +64,10 @@ async function check(name, fn) {
   try { await fn(); console.log(`PASS ${name}`); } catch (e) { failed++; console.log(`FAIL ${name}: ${e.message}`); }
 }
 
-await check('단축키 시트: 세 묶음과 닫기', async () => {
+await check('단축키 시트: 묶음과 닫기(짧은 창에서도 닫기 단추가 보인다)', async () => {
   await menu('shortcuts');
   const t = await sheetText();
-  for (const h of ['키보드 단축키', '탐색', '시청', '채팅']) assert.ok(t.includes(h), h);
+  for (const h of ['키보드 단축키', '탐색', '시청', '다시보기', '채팅']) assert.ok(t.includes(h), h);
   await page.locator('.sheet-scrim.app-sheet [data-close]').click();
   await page.waitForSelector('.sheet-scrim.app-sheet', { state: 'detached' });
 });

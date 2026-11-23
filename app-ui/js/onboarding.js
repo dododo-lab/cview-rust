@@ -1,5 +1,10 @@
-import { kbd } from './platform.js';
-import { dismiss } from './dom.js';
+import { kbd, TRAY_LABEL } from './platform.js';
+import { dismiss, icons } from './dom.js';
+import { multiLiveIcon } from './live-mode.js';
+
+// 단계 그림 — 컬러 이모지 대신 앱의 선 아이콘(감사 UX-M04)
+const KEYBOARD_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M8 14h8"/></svg>';
+const BELL_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16V11a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></svg>';
 import { trapFocus } from './a11y.js';
 // 스플래시·부트 진행(SYS-10, 원본 SplashView/BootProgress)과 첫 실행 환영 안내(SYS-11, 원본 WelcomeOverlay).
 const WELCOME_KEY = 'cview.welcomed.v1';
@@ -30,11 +35,11 @@ export function hideSplash() {
 }
 
 const STEPS = [
-  ['👋', 'CView 에 오신 걸 환영해요', '치지직 라이브를 데스크톱 앱으로 편하게 봅니다. 몇 가지만 알려 드릴게요.'],
-  ['🔑', '로그인', '네이버로 로그인하면 팔로잉 방송·채팅 참여·알림을 쓸 수 있어요. 비밀번호는 네이버 로그인 창에만 입력됩니다.'],
-  ['▦', '멀티라이브 · 멀티채팅', '여러 방송을 한 화면에 띄우고, 여러 채팅을 한곳에서 볼 수 있어요. 카드의 ＋ 버튼이나 ⌘4 로 시작합니다.'],
-  ['⌨', '키보드', '⌘K 명령 팔레트, ⌘F 검색, ⌘1~7 메뉴 이동, ⌘/ 단축키 목록. 설정에서 단축키를 바꿀 수 있어요.'],
-  ['🔔', '알림 · 메뉴 막대', '팔로잉 방송 시작을 알려 드리고, 메뉴 막대 아이콘에서 방송 중 채널을 바로 열 수 있어요.'],
+  [icons.home, 'CView 에 오신 걸 환영해요', '치지직 라이브를 데스크톱 앱으로 편하게 봅니다. 몇 가지만 알려 드릴게요.'],
+  [icons.login, '로그인', '네이버로 로그인하면 팔로잉 방송·채팅 참여·알림을 쓸 수 있어요. 비밀번호는 네이버 로그인 창에만 입력됩니다.'],
+  [multiLiveIcon, '멀티라이브 · 멀티채팅', '여러 방송을 한 화면에 띄우고, 여러 채팅을 한곳에서 볼 수 있어요. 카드의 ＋ 버튼이나 ⌘8 로 시작합니다.'],
+  [KEYBOARD_ICON, '키보드', '⌘K 명령 팔레트, ⌘F 검색, ⌘1~7 사이드바 순서대로 이동, ⌘/ 단축키 목록. 설정에서 단축키를 바꿀 수 있어요.'],
+  [BELL_ICON, `알림 · ${TRAY_LABEL}`, `팔로잉 방송 시작을 알려 드리고, ${TRAY_LABEL} 아이콘에서 방송 중 채널을 바로 열 수 있어요.`],
 ];
 
 /** 환영 안내 — 처음 한 번, 또는 force 로 다시. */
@@ -46,11 +51,12 @@ export function showWelcome({ force = false, onLogin } = {}) {
   const render = () => {
     const [icon, title, body] = STEPS[i];
     scrim.innerHTML = `<div class="sheet welcome" role="dialog" aria-modal="true" aria-label="환영 안내">
-      <div class="welcome-icon">${icon}</div>
+      <div class="welcome-icon" aria-hidden="true">${icon}</div>
       <h2>${title}</h2><p>${kbd(body)}</p>
-      <div class="welcome-dots">${STEPS.map((_, k) => `<span class="${k === i ? 'on' : ''}"></span>`).join('')}</div>
+      <div class="welcome-dots">${STEPS.map((s, k) => `<button type="button" class="${k === i ? 'on' : ''}" data-w-step="${k}" aria-label="${k + 1}단계 · ${s[1]}"${k === i ? ' aria-current="step"' : ''}></button>`).join('')}</div>
       <div class="sheet-actions">
         <button class="btn ghost" data-w="skip">건너뛰기</button>
+        ${i > 0 ? '<button class="btn" data-w="prev">이전</button>' : ''}
         ${i === 1 && onLogin ? '<button class="btn" data-w="login">지금 로그인</button>' : ''}
         <button class="btn primary" data-w="next">${i === STEPS.length - 1 ? '시작하기' : '다음'}</button>
       </div></div>`;
@@ -68,9 +74,12 @@ export function showWelcome({ force = false, onLogin } = {}) {
     else if (e.key === 'ArrowLeft') { i = Math.max(0, i - 1); render(); }
   };
   scrim.addEventListener('click', (e) => {
+    const dot = e.target.closest('[data-w-step]');
+    if (dot) { i = Number(dot.dataset.wStep); render(); return; }
     const b = e.target.closest('[data-w]');
     if (!b) return;
     if (b.dataset.w === 'skip') close();
+    else if (b.dataset.w === 'prev') { i = Math.max(0, i - 1); render(); }
     else if (b.dataset.w === 'login') { close(); onLogin(); }
     else if (i === STEPS.length - 1) close();
     else { i += 1; render(); }
