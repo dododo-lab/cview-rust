@@ -667,12 +667,24 @@ const ESC_LAYERS = '.sheet-scrim:not(.leaving), .palette-scrim:not([hidden], .ex
  */
 function watchPageWidths(root) {
   const STEPS = [670, 770, 870];
-  const ro = new ResizeObserver((entries) => {
-    for (const { target, contentRect } of entries) {
-      if (!contentRect.width) continue;
-      const w = target.clientWidth;
-      for (const s of STEPS) target.classList.toggle(`w-lt${s}`, w < s);
+  // 잰 폭은 모아 두었다가 다음 프레임에 클래스로 — 크기 감시 콜백 안에서 바로 바꾸면 뒤이은 다른 감시(채팅 분할기 등)의
+  // 크기 읽기가 강제 레이아웃이 됐다(perf P01). 같은 단계면 건드리지 않는다.
+  const pending = new Map();
+  let raf = 0;
+  const flush = () => {
+    raf = 0;
+    for (const [el, w] of pending) {
+      for (const s of STEPS) { const on = w < s; if (el.classList.contains(`w-lt${s}`) !== on) el.classList.toggle(`w-lt${s}`, on); }
     }
+    pending.clear();
+  };
+  const ro = new ResizeObserver((entries) => {
+    for (const { target, borderBoxSize, contentRect } of entries) {
+      if (!contentRect.width) continue;
+      const box = borderBoxSize && borderBoxSize[0];
+      pending.set(target, box ? box.inlineSize : contentRect.width);
+    }
+    if (pending.size && !raf) raf = requestAnimationFrame(flush);
   });
   for (const p of root.querySelectorAll(':scope > .page')) ro.observe(p);
 }

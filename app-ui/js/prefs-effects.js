@@ -26,7 +26,8 @@ function apply(s, ctx) {
   // 화면 크기 — 웹뷰 확대는 Rust 가 건다(ui_zoom_sync·설정 저장). 여기선 썸네일 단계를 고를 배율만 알린다.
   setImageZoom(Number(a.uiScale) || 1);
   // CSS 도 배율을 안다 — macOS 신호등은 확대와 상관없이 물리 위치에 고정이라 줄이면 접힌 사이드바 밖으로 나왔다(app.css, 감사 UX-H02).
-  root.style.setProperty('--ui-scale', String(Number(a.uiScale) || 1));
+  const scale = String(Number(a.uiScale) || 1);
+  if (root.style.getPropertyValue('--ui-scale') !== scale) root.style.setProperty('--ui-scale', scale); // 같으면 쓰지 않는다(스타일 다시 계산)
   // 투명도 (SYS-22) — 시스템이면 macOS "투명도 줄이기"를 따른다.
   root.dataset.transparency = a.transparencyMode || 'system';
   for (const [k, v] of Object.entries(alertVars(s.player || {}))) root.style.setProperty(k, v);
