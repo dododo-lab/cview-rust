@@ -95,7 +95,7 @@ const shot = async (page, name) => { if (SHOTS) { fs.mkdirSync(SHOTS, { recursiv
     await page.keyboard.press('Escape');
     // 단축키 안내(app-sheets.js) — 원본 문자열 확인
     const src = await page.evaluate(async () => (await fetch('/js/app-sheets.js')).text());
-    assert.match(src, /홈 · 팔로잉 · 방송&클립 · 멀티라이브/);
+    assert.match(src, /홈 · 팔로잉 · 방송&클립 · 카테고리/); // ⌘1~7 = 사이드바 순서(menu.rs GO)
     const ws = await page.evaluate(async () => (await fetch('/js/workspace.js')).text());
     assert.match(ws, /\['5', 'popular', '방송&클립'\]/);
   });
