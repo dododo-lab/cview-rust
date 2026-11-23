@@ -248,6 +248,8 @@ pub(crate) fn configure(conn: &Connection, file_backed: bool) -> Result<()> {
     if file_backed {
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
+        // 체크포인트 뒤 WAL 파일을 4 MiB 까지만 남긴다(예전엔 한 번 커진 WAL 이 그대로 남았다).
+        conn.pragma_update(None, "journal_size_limit", 4 * 1024 * 1024)?;
         conn.busy_timeout(std::time::Duration::from_secs(5))?;
     }
     Ok(())

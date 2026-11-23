@@ -225,7 +225,7 @@ impl StreamRecordingService {
             if !self.still_recording() {
                 return None;
             }
-            let mut request = self.inner.client.get(url.clone());
+            let mut request = self.inner.client().get(url.clone());
             if let Some(range) = span.range_header() {
                 request = request.header(reqwest::header::RANGE, range);
             }

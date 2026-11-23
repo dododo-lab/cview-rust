@@ -46,6 +46,14 @@ pub fn neon_playback_url(video_id: &str, in_key: &str) -> Option<Url> {
     Some(url)
 }
 
+const CLIP_USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)";
+
+/// VOD·클립 재생 정보 요청 클라이언트 — 프로세스에 하나. 예전엔 요청마다 새로 만들어(TLS 루트·연결 풀까지) 버렸다.
+fn vod_client() -> &'static reqwest::Client {
+    static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+    CLIENT.get_or_init(reqwest::Client::new)
+}
+
 #[async_trait]
 impl VodDetailSource for ChzzkApiClient {
     async fn vod_detail(&self, video_no: i64) -> Result<VodDetail, ApiError> {
@@ -54,7 +62,7 @@ impl VodDetailSource for ChzzkApiClient {
 
     async fn neon_playback(&self, video_id: &str, in_key: &str) -> Result<String, ApiError> {
         let url = neon_playback_url(video_id, in_key).ok_or(ApiError::InvalidResponse)?;
-        let resp = reqwest::Client::new()
+        let resp = vod_client()
             .get(url)
             .header("Accept", "application/json")
             .header(
@@ -401,13 +409,11 @@ pub async fn resolve_clip_streams(clip_uid: &str) -> Result<NeonStreams, VodReso
         .map_err(|_| VodResolveError::NoPlayableUrl)?
         .pop_if_empty()
         .push(clip_uid);
-    let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)")
-        .timeout(Duration::from_secs(15))
-        .build()
-        .map_err(net)?;
+    let client = vod_client();
     let info: Value = client
         .get(url)
+        .header("User-Agent", CLIP_USER_AGENT)
+        .timeout(Duration::from_secs(15))
         .send()
         .await
         .map_err(net)?
@@ -423,6 +429,7 @@ pub async fn resolve_clip_streams(clip_uid: &str) -> Result<NeonStreams, VodReso
     let neon = neon_playback_url(video_id, in_key).ok_or(VodResolveError::NoPlayableUrl)?;
     let text = client
         .get(neon)
+        .header("User-Agent", CLIP_USER_AGENT)
         .header("Accept", "application/json")
         .send()
         .await

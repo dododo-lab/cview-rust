@@ -149,6 +149,9 @@ impl ImageCache {
         db.execute_batch(
             "PRAGMA journal_mode=WAL;
              PRAGMA synchronous=NORMAL;
+             PRAGMA busy_timeout=5000;
+             PRAGMA journal_size_limit=2097152;
+             PRAGMA cache_size=-512;
              CREATE TABLE IF NOT EXISTS images (
                 key TEXT PRIMARY KEY,
                 url TEXT NOT NULL,
@@ -163,6 +166,11 @@ impl ImageCache {
              CREATE INDEX IF NOT EXISTS images_last_access ON images(last_access);",
         )?;
         Ok(db)
+    }
+
+    /// 메모리 압박 때 — 색인 DB 의 페이지 캐시를 놓는다. 색인은 작아 기본 페이지 캐시(2 MiB)를 512 KiB 로 줄여 두었다.
+    pub fn release_memory(&self) {
+        let _ = self.lock().execute_batch("PRAGMA shrink_memory;");
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Connection> {

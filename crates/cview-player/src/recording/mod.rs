@@ -64,8 +64,17 @@ pub(crate) struct State {
     key_cache: HashMap<Url, Vec<u8>>,
 }
 
+impl Inner {
+    pub(crate) fn client(&self) -> &reqwest::Client {
+        self.client
+            .get_or_init(StreamRecordingService::default_client)
+    }
+}
+
 pub(crate) struct Inner {
-    pub(crate) client: reqwest::Client,
+    /// 받기 클라이언트 — 녹화를 처음 시작할 때 만든다([`Inner::client`]). 예전엔 앱 시작 때 늘 하나 만들어
+    /// 녹화를 한 번도 하지 않아도 TLS 설정·연결 풀을 들고 있었다.
+    client: std::sync::OnceLock<reqwest::Client>,
     auto_poll: bool,
     /// 조각 재시도의 첫 대기(이후 2배씩, 최대 64초).
     pub(crate) retry_base_delay: Duration,
@@ -96,7 +105,7 @@ impl Default for StreamRecordingService {
 impl StreamRecordingService {
     /// 기본 HTTP 클라이언트(요청 10초·전체 30초, Safari UA·치지직 Referer).
     pub fn new() -> Self {
-        Self::with_options(Self::default_client(), true, Duration::from_secs(1))
+        Self::build(None, true, Duration::from_secs(1))
     }
 
     pub fn default_client() -> reqwest::Client {
@@ -120,9 +129,17 @@ impl StreamRecordingService {
         auto_poll: bool,
         retry_base_delay: Duration,
     ) -> Self {
+        Self::build(Some(client), auto_poll, retry_base_delay)
+    }
+
+    fn build(client: Option<reqwest::Client>, auto_poll: bool, retry_base_delay: Duration) -> Self {
+        let cell = std::sync::OnceLock::new();
+        if let Some(client) = client {
+            let _ = cell.set(client);
+        }
         Self {
             inner: Arc::new(Inner {
-                client,
+                client: cell,
                 auto_poll,
                 retry_base_delay,
                 state: Mutex::new(State::default()),
@@ -227,7 +244,7 @@ impl StreamRecordingService {
         for _ in 0..MAX_PLAYLIST_HOPS {
             let resp = self
                 .inner
-                .client
+                .client()
                 .get(url.clone())
                 .send()
                 .await
@@ -301,7 +318,7 @@ impl StreamRecordingService {
         }
         let resp = self
             .inner
-            .client
+            .client()
             .get(url.clone())
             .send()
             .await
