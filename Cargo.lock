@@ -769,6 +769,7 @@ version = "0.2.24"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
+ "block2",
  "chrono",
  "cview-app-core",
  "cview-auth",

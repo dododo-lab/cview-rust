@@ -22,6 +22,8 @@ export const REVEAL_LABEL = IS_WINDOWS ? '탐색기에서 보기' : 'Finder에�
 
 /** 상태 아이콘 자리 이름 — macOS '메뉴 막대', Windows '알림 영역'(작업 표시줄 오른쪽, 감사 UX-M12). */
 export const TRAY_LABEL = IS_WINDOWS ? '알림 영역' : '메뉴 막대';
+/** 'TRAY_LABEL 로' — 조사까지(알림 영역으로 · 메뉴 막대로). */
+export const TRAY_TO = IS_WINDOWS ? '알림 영역으로' : '메뉴 막대로';
 
 /** 사용자 폴더 아래 경로 표기 — macOS '~/Downloads/CView', Windows '%USERPROFILE%\Downloads\CView'(Rust content.rs default_save_dir 와 같은 곳). */
 export function userPath(...parts) {

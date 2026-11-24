@@ -13,7 +13,7 @@ import { THEMES, THEME_LABELS, currentTheme, setTheme, syncTheme } from './theme
 import { streamAlertsEnabled, setStreamAlertsEnabled, ALERT_HOME } from './donations.js';
 import { chatPrefs, updateChatPrefs, blockedLabel, loadChatPrefs } from './chat-prefs.js';
 import { BACKGROUNDS, READING_WIDTHS } from './chat-extras.js';
-import { kbd, IS_WINDOWS, REVEAL_LABEL, TRAY_LABEL, userPath, SECRET_STORE_LABEL } from './platform.js';
+import { kbd, IS_WINDOWS, REVEAL_LABEL, TRAY_LABEL, TRAY_TO, userPath, SECRET_STORE_LABEL } from './platform.js';
 import { thumbPreviewEnabled, setThumbPreviewEnabled } from './hover-preview.js';
 import { SHARPNESS_LEVELS, SHARPNESS_HELP, ENLARGED_ONLY_LABEL, ENLARGED_ONLY_HELP, sharpnessState, setSharpness } from './sharpness.js';
 import { checkForUpdate, lastUpdateResult, updateSummary, downloadTarget, openDownload, currentAppInfo, canInstall, installUpdate, progressHtml, renderProgress } from './update-check.js';
@@ -104,7 +104,11 @@ export const SCHEMA = [
     { d: 'general', k: 'alwaysOnTop', label: '항상 위에', type: 'toggle' },
     // Windows 는 아직 자동 실행을 걸지 않는다(window_prefs.rs set_launch_at_login 이 macOS 만) — 켜도 아무 일이 없어 숨긴다.
     ...(IS_WINDOWS ? [] : [{ d: 'general', k: 'launchAtLogin', label: '로그인 시 자동 실행', type: 'toggle' }]),
-    { d: 'general', k: 'showInMenuBar', label: `${TRAY_LABEL}에 표시`, type: 'toggle' },
+    { d: 'general', k: 'showInMenuBar', label: `${TRAY_LABEL}에 표시`, help: `방송 중인 팔로잉·지금 시청 중인 방송을 아이콘 메뉴에서 봅니다. 창을 ${TRAY_TO} 숨겨 둔 동안에는 꺼 두어도 아이콘이 보입니다`, keywords: '트레이 시스템 트레이 메뉴바 아이콘', type: 'toggle' },
+    // 숨기기(tray.rs) — 창만 숨겨 재생·채팅·알림은 계속된다. 끝내려면 아이콘 메뉴의 'CView 종료'.
+    { d: 'general', k: 'closeToTray', label: `창을 닫으면 ${TRAY_TO} 숨기기`, help: `앱을 끝내지 않고 ${TRAY_LABEL} 아이콘으로 숨깁니다 — 재생·채팅·알림은 그대로 이어지고, 아이콘을 누르면 다시 열립니다. 끝내려면 아이콘을 오른쪽 클릭해 'CView 종료'`, keywords: '트레이 메뉴바 백그라운드 닫기 종료 숨기기', type: 'toggle' },
+    { d: 'general', k: 'minimizeToTray', label: `최소화하면 ${TRAY_TO} 숨기기`, help: IS_WINDOWS ? '작업 표시줄 대신 알림 영역 아이콘으로 숨깁니다' : 'Dock 대신 메뉴 막대 아이콘으로 숨깁니다', keywords: '트레이 메뉴바 백그라운드 최소화 숨기기', type: 'toggle' },
+    ...(IS_WINDOWS ? [] : [{ d: 'general', k: 'hideDockInTray', label: '숨겨 있는 동안 Dock 아이콘 숨기기', help: '메뉴 막대로 숨기면 Dock 에서도 빠집니다 — 창을 다시 열면 돌아옵니다', keywords: '독 dock 트레이 메뉴바', type: 'toggle', disabled: (v) => !((v.general || {}).closeToTray || (v.general || {}).minimizeToTray) }]),
   ]],
   ['general', '알림', [
     { d: 'general', k: 'notificationsEnabled', label: '알림 사용', type: 'toggle' },

@@ -63,11 +63,8 @@ pub fn deep_link_payload(link: &DeepLink) -> Value {
 }
 
 fn focus_main<R: Runtime>(app: &AppHandle<R>) {
-    if let Some(w) = app.get_webview_window(crate::MAIN_WINDOW) {
-        let _ = w.unminimize();
-        let _ = w.show();
-        let _ = w.set_focus();
-    }
+    // 메뉴 막대·알림 영역으로 숨겨 둔 창도(Dock 아이콘까지 숨겼으면 그것도) 되돌린다.
+    crate::tray::show_main(app);
 }
 
 /// URL 문자열들을 딥 링크로 처리한다. 프런트가 준비 전이면 쌓는다.
