@@ -296,7 +296,15 @@ impl WebViewHlsEngine {
 
     /// 명령 한 줄을 보낸다.
     pub fn send(&self, command: JsCommand) {
-        (self.sink)(command.script());
+        let script = command.script();
+        // 디버그 로그가 켜진 세션은 소스를 실을 때 지연 표본(초마다 `player.latency`)도 켠다 — 꺼져 있으면 비용이 없다.
+        if matches!(command, JsCommand::LoadSource { .. }) && crate::perf_log::enabled() {
+            (self.sink)(format!(
+                "{script}; if (typeof setLatencyTrace === 'function') setLatencyTrace(true);"
+            ));
+            return;
+        }
+        (self.sink)(script);
     }
 
     /// JS → 네이티브 메시지 반영.

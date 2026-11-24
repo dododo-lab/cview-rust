@@ -5721,6 +5721,57 @@ video.addEventListener('waiting', function() {
     if (!_isSeeking && !video.seeking && _wantsPlaying && _hasEverPlayed) webNoteUnhealthy('waiting');
 });
 
+// ─── [백그라운드 지연 계측 2026-11-25] 라이브 끝과의 거리·배속을 초마다 기록 ───
+//   디버그 로그(설정 "디버그 로그" 또는 CVIEW_DEBUG_LOG=1)가 켜진 세션에서만 앱이 `setLatencyTrace(true)` 를 부른다.
+//   꺼져 있으면 이 섹션은 리스너 하나가 null 을 보고 돌아갈 뿐이다. 표본은 `timeupdate`(미디어 시계, DOM 타이머 정렬을
+//   받지 않음)에서 1초 간격으로 뽑아 가려진 창에서도 같은 간격으로 남는다. 벽시계 지연 `wall` = Date.now() − hls.playingDate
+//   — 치지직 웹 측정과 같은 식이라 같은 기계 시계로 앱·웹을 바로 비교할 수 있다.
+//   `gap` 은 지난 표본 뒤 250ms 간격 타이머가 실제로 잰 가장 긴 간격(ms) — 숨은 페이지 타이머 감속을 보여 준다.
+let _latencyTrace = null;
+function setLatencyTrace(on) {
+    if (!on) {
+        if (_latencyTrace) clearInterval(_latencyTrace.probe);
+        _latencyTrace = null;
+        return;
+    }
+    if (_latencyTrace) return;
+    const tr = { last: 0, probeAt: performance.now(), gap: 0, waits: 0, probe: 0 };
+    tr.probe = setInterval(function() {
+        const n = performance.now();
+        if (n - tr.probeAt > tr.gap) tr.gap = n - tr.probeAt;
+        tr.probeAt = n;
+    }, 250);
+    _latencyTrace = tr;
+}
+function latencyTraceSample() {
+    const tr = _latencyTrace;
+    if (!tr || !hls || !video) return;
+    const now = Date.now();
+    if (now - tr.last < 1000) return;
+    tr.last = now;
+    const pd = hls.playingDate;
+    const r3 = function(v) { return (typeof v === 'number' && isFinite(v)) ? Math.round(v * 1000) / 1000 : null; };
+    let edge = null;
+    if (video.seekable && video.seekable.length > 0) edge = video.seekable.end(video.seekable.length - 1) - video.currentTime;
+    postToSwift('latencyTrace', {
+        t: now,
+        hidden: document.hidden ? 1 : 0,
+        wall: r3(pd ? (now - pd.getTime()) / 1000 : null),
+        latency: r3(hls.latency),
+        target: r3(hls.targetLatency),
+        ahead: r3(webForwardBuffer()),
+        edge: r3(edge),
+        rate: r3(video.playbackRate),
+        ll: hls.lowLatencyMode ? 1 : 0,
+        waits: tr.waits,
+        gap: Math.round(tr.gap),
+        bgTimers: (typeof bgTimersActive === 'function' && bgTimersActive()) ? 1 : 0,
+    });
+    tr.gap = 0;
+}
+video.addEventListener('timeupdate', latencyTraceSample);
+video.addEventListener('waiting', function() { if (_latencyTrace) _latencyTrace.waits++; });
+
 // ─── [matchWeb v2 2026-09-27] 웹 동기화 v2 — LL + ingest 드문 시크 ───
 //   설계: docs/hlsjs-chzzk-web-parity-research-2026-09-27.md §7. 설정 플래그(기본 꺼짐)를 켠
 //   matchWeb 세션(프로파일 webParity)에서만 켜진다. 켜지면
