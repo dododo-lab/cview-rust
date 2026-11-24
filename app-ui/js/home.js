@@ -136,6 +136,8 @@ function heroQueue(lives, active) {
 const AMBIENT_W = 48;
 const AMBIENT_SIGMA = 56; // CSS blur(56px) 의 표준편차 — 작은 그림 칸 단위로 바꿔 쓴다
 const AMBIENT_SATURATE = 1.6;
+const AMBIENT_BOX_W = 784; // 1280 창의 앰비언트 상자(히어로 + 좌우 24px)
+const AMBIENT_BOX_H = 420;
 const ambientCache = new Map(); // `${주소}|${가로}x${세로}` → data URL(최근 몇 장만)
 
 /** 세 번의 상자 흐림(가우시안 근사) — 밖은 투명으로 보고(CSS blur 처럼 가장자리가 옅어진다) 미리 곱한 알파로 계산한다. */
@@ -182,7 +184,6 @@ async function ambientDataUrl(src, boxW, boxH) {
   const dh = img.naturalHeight * scale;
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
-  img.src = ''; // 원본 디코드를 붙잡지 않게
   const data = ctx.getImageData(0, 0, w, h);
   const px = new Float32Array(data.data.length);
   for (let i = 0; i < px.length; i += 4) { // 미리 곱한 알파
@@ -215,9 +216,10 @@ async function paintAmbient(box, live) {
   const src = thumb ? imageSrc(thumb, 'live') : '';
   box.dataset.src = src;
   if (!src) { box.replaceChildren(); return; }
-  // 숨은 홈에서 그리면 크기가 0 — 보통 크기로 만든다(img 는 object-fit: cover 라 비율이 조금 달라도 흐린 빛은 같다).
-  const w = box.clientWidth || 784;
-  const h = box.clientHeight || 420;
+  // 상자 크기는 재지 않는다 — 홈을 갈아 끼운 직후 clientWidth 를 읽으면 강제 레이아웃(약 30ms, perf.mjs P01)이었다.
+  // 보통 크기(가로 784·세로 420)로 만들고 img 는 object-fit: cover 라 창 폭이 달라도 흐린 빛은 같다.
+  const w = AMBIENT_BOX_W;
+  const h = AMBIENT_BOX_H;
   let url = '';
   try { url = await ambientDataUrl(src, w, h); } catch { url = ''; }
   if (box.dataset.src !== src || !box.isConnected) return;
