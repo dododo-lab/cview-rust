@@ -128,9 +128,105 @@ function heroQueue(lives, active) {
 }
 
 /** 히어로 뒤 앰비언트 빛 — 지금 장의 썸네일을 크게 흐려 화면에 색을 번지게 한다(정지 화면, 장이 바뀔 때만 다시 그림). */
-function heroAmbient(live) {
+// ── 앰비언트 빛 ──────────────────────────────────────
+// 히어로 뒤로 번지는 빛은 썸네일을 아주 작게(가로 48칸) 줄여 흐리고 채도를 올린 그림(data URL)을 늘려 그린다.
+// 예전엔 썸네일 원본에 CSS `filter: blur(56px) saturate(1.6)` + `translateZ(0)` 을 걸어 상자·마스크·흐린 그림 합성 레이어를 만들었고,
+// 흐림 반경만큼 넓게 잡힌 레이어 경계가 아래 제목·선반까지 '겹침' 레이어로 끌어들였다(실제 앱 WebContent 약 80MB, 2026-11-24 VM 측정).
+// 흐린 빛은 저주파라 작은 그림을 늘려도 같아 보이고, 필터·합성 레이어가 없어 메모리가 들지 않는다.
+const AMBIENT_W = 48;
+const AMBIENT_SIGMA = 56; // CSS blur(56px) 의 표준편차 — 작은 그림 칸 단위로 바꿔 쓴다
+const AMBIENT_SATURATE = 1.6;
+const AMBIENT_BOX_W = 784; // 1280 창의 앰비언트 상자(히어로 + 좌우 24px)
+const AMBIENT_BOX_H = 420;
+const ambientCache = new Map(); // `${주소}|${가로}x${세로}` → data URL(최근 몇 장만)
+
+/** 세 번의 상자 흐림(가우시안 근사) — 밖은 투명으로 보고(CSS blur 처럼 가장자리가 옅어진다) 미리 곱한 알파로 계산한다. */
+function boxBlur3(px, w, h, sigma) {
+  const r = Math.max(1, Math.round((Math.sqrt(4 * sigma * sigma + 1) - 1) / 2)); // 3회 상자(폭 2r+1)의 분산 ≈ σ²
+  const tmp = new Float32Array(px.length);
+  const pass = (src, dst, horizontal) => {
+    const [n, m] = horizontal ? [w, h] : [h, w];
+    const at = (i, j) => (horizontal ? (j * w + i) : (i * w + j)) * 4;
+    for (let j = 0; j < m; j += 1) {
+      for (let c = 0; c < 4; c += 1) {
+        let sum = 0;
+        for (let k = -r; k <= r; k += 1) if (k >= 0 && k < n) sum += src[at(k, j) + c];
+        for (let i = 0; i < n; i += 1) {
+          dst[at(i, j) + c] = sum / (2 * r + 1);
+          const add = i + r + 1;
+          const sub = i - r;
+          if (add < n) sum += src[at(add, j) + c];
+          if (sub >= 0) sum -= src[at(sub, j) + c];
+        }
+      }
+    }
+  };
+  for (let k = 0; k < 3; k += 1) { pass(px, tmp, true); pass(tmp, px, false); }
+}
+
+/** 썸네일 → 상자 비율에 맞춰 덮어 자른(object-fit: cover) 작은 흐린 그림의 data URL. 실패하면 ''. */
+async function ambientDataUrl(src, boxW, boxH) {
+  const w = AMBIENT_W;
+  const h = Math.max(8, Math.round((AMBIENT_W * boxH) / Math.max(1, boxW)));
+  const key = `${src}|${w}x${h}`;
+  if (ambientCache.has(key)) return ambientCache.get(key);
+  const img = new Image();
+  img.crossOrigin = 'anonymous'; // cvimg 응답은 ACAO: * — 캔버스가 오염되지 않는다
+  img.referrerPolicy = 'no-referrer';
+  img.src = src;
+  await img.decode();
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+  const dw = img.naturalWidth * scale;
+  const dh = img.naturalHeight * scale;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+  const data = ctx.getImageData(0, 0, w, h);
+  const px = new Float32Array(data.data.length);
+  for (let i = 0; i < px.length; i += 4) { // 미리 곱한 알파
+    const a = data.data[i + 3] / 255;
+    px[i] = data.data[i] * a; px[i + 1] = data.data[i + 1] * a; px[i + 2] = data.data[i + 2] * a; px[i + 3] = data.data[i + 3];
+  }
+  boxBlur3(px, w, h, (AMBIENT_SIGMA * w) / Math.max(1, boxW));
+  const s = AMBIENT_SATURATE; // CSS saturate() 행렬(Filter Effects 1)
+  for (let i = 0; i < px.length; i += 4) {
+    const a = px[i + 3] / 255;
+    if (a <= 0) { data.data[i + 3] = 0; continue; }
+    const R = px[i] / a; const G = px[i + 1] / a; const B = px[i + 2] / a;
+    data.data[i] = (0.213 + 0.787 * s) * R + (0.715 - 0.715 * s) * G + (0.072 - 0.072 * s) * B;
+    data.data[i + 1] = (0.213 - 0.213 * s) * R + (0.715 + 0.285 * s) * G + (0.072 - 0.072 * s) * B;
+    data.data[i + 2] = (0.213 - 0.213 * s) * R + (0.715 - 0.715 * s) * G + (0.072 + 0.928 * s) * B;
+    data.data[i + 3] = px[i + 3];
+  }
+  ctx.putImageData(data, 0, 0);
+  const url = canvas.toDataURL('image/png');
+  canvas.width = 0; canvas.height = 0;
+  ambientCache.set(key, url);
+  if (ambientCache.size > HERO_SIZE * 2) ambientCache.delete(ambientCache.keys().next().value);
+  return url;
+}
+
+/** 앰비언트 상자에 live 의 빛을 칠한다 — 늦게 끝난 앞 장의 결과가 새 장을 덮지 않게 상자에 표시해 둔다. */
+async function paintAmbient(box, live) {
+  if (!box) return;
   const thumb = safeUrl(live && live.thumbnailUrl);
-  return thumb ? `<img loading="lazy" decoding="async" src="${esc(imageSrc(thumb, 'live'))}" alt="" referrerpolicy="no-referrer">` : '';
+  const src = thumb ? imageSrc(thumb, 'live') : '';
+  box.dataset.src = src;
+  if (!src) { box.replaceChildren(); return; }
+  // 상자 크기는 재지 않는다 — 홈을 갈아 끼운 직후 clientWidth 를 읽으면 강제 레이아웃(약 30ms, perf.mjs P01)이었다.
+  // 보통 크기(가로 784·세로 420)로 만들고 img 는 object-fit: cover 라 창 폭이 달라도 흐린 빛은 같다.
+  const w = AMBIENT_BOX_W;
+  const h = AMBIENT_BOX_H;
+  let url = '';
+  try { url = await ambientDataUrl(src, w, h); } catch { url = ''; }
+  if (box.dataset.src !== src || !box.isConnected) return;
+  if (!url) { box.replaceChildren(); return; }
+  let img = box.firstElementChild;
+  if (!(img instanceof HTMLImageElement)) { img = document.createElement('img'); img.alt = ''; box.replaceChildren(img); }
+  img.src = url;
 }
 
 function recentShelf(recent, liveById) {
@@ -411,7 +507,7 @@ export class HomePage {
         <section class="home-section home-spotlight">
         ${sectionHead('지금 눈여겨볼 라이브', '새롭게 만나는 인기 방송', '<button class="link-btn" data-goto="popular" data-goto-tab="live">전체 방송 보기</button>')}
         <div class="hero" aria-label="지금 뜨는 라이브">
-          <div class="hero-ambient" aria-hidden="true">${heroAmbient(this.hero[this.heroIndex])}</div>
+          <div class="hero-ambient" aria-hidden="true"></div>
           <div class="hero-slot">${heroSlide(this.hero[this.heroIndex])}</div>
           <div class="hero-queue" role="tablist" aria-label="추천 방송 넘기기">${heroQueue(this.hero, this.heroIndex)}</div>
         </div></section>`;
@@ -442,6 +538,7 @@ export class HomePage {
     html += '<section class="home-section" data-rail="clips" hidden></section>';
     html += '</div>';
     this.swapKeepingStrip(html);
+    paintAmbient(this.body.querySelector('.hero-ambient'), this.hero[this.heroIndex]);
     this.preloadNextHero();
   }
 
@@ -555,7 +652,7 @@ export class HomePage {
     slot.innerHTML = heroSlide(this.hero[this.heroIndex]);
     if (focused) slot.querySelector(focused)?.focus({ preventScroll: true });
     const ambient = this.body.querySelector('.hero-ambient');
-    if (ambient) ambient.innerHTML = heroAmbient(this.hero[this.heroIndex]);
+    paintAmbient(ambient, this.hero[this.heroIndex]);
     for (const q of this.body.querySelectorAll('.queue-item')) {
       const on = Number(q.dataset.heroIndex) === this.heroIndex;
       q.classList.toggle('active', on);

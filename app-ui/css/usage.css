@@ -70,7 +70,7 @@
 }
 .usage-pop[hidden] { display: none; }
 .usage-pop:focus { outline: none; }
-.usage-pop:not([hidden]) { animation: mo-pop-down var(--dur-2, .18s) var(--ease-out) both; }
+.usage-pop:not([hidden]) { animation: mo-pop-down var(--dur-2, .18s) var(--ease-out) backwards; }
 .usage-pop[data-side="top"]:not([hidden]) { animation-name: mo-pop-up; }
 /* .up-head·.up-sub·.up-live 는 채팅 사용자 말풍선(app.css .user-pop)도 쓰는 이름 — 팝오버 안으로 한정한다. */
 .usage-pop .up-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }

@@ -5,5 +5,14 @@
 	<!-- macOS 26+: Assets.car 의 AppIcon(밝은·어두운·틴트)을 시스템 외형에 따라 쓴다. 그 이하는 icon.icns. -->
 	<key>CFBundleIconName</key>
 	<string>AppIcon</string>
+	<!-- 앱 프로세스(Rust) 할당자를 공간 우선으로 — 기본 할당자는 놓은 페이지를 압박이 오기 전까지 쥐고 있어
+	     시작 직후 일시 할당이 그대로 footprint 로 남았다. 2026-11-24 VM 실측: 앱 프로세스 40~45 → 27 MB.
+	     Finder·Dock·open 으로 띄울 때(LaunchServices)만 적용되고 WebKit 프로세스와는 무관하다.
+	     비용: 할당이 잦은 채팅 파싱이 메시지당 약 2.5µs 느려짐(10개 묶음 6.4 → 8.9µs), 저장소·이미지 캐시는 차이 없음. -->
+	<key>LSEnvironment</key>
+	<dict>
+		<key>MallocSpaceEfficient</key>
+		<string>1</string>
+	</dict>
 </dict>
 </plist>
