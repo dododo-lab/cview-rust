@@ -2116,6 +2116,7 @@ document.addEventListener('visibilitychange', function() {
     bgTimersReconcile();
     // 정밀 타이머로 도는 가려진 재생은 따라잡기를 그대로 이어 간다(아래 webCatchupTick·maybeCorrectLatency).
     if (document.hidden && !bgTimersActive()) { releaseFallbackCatchup('hidden'); releaseWebCatchup('hidden'); }
+    if (document.hidden) webReturnCancel('hidden'); else webReturnArm();
     webOnVisibilityChange();
     cancelVisibilityResync();
     // [C-1 2026-10-26] **재생 의도가 남은 채 멈춘 패인도 여기서 되살린다.** 창이 가려진 동안 WebKit 은
@@ -5585,6 +5586,57 @@ let _webCatchupRate = 0;                  // 웹 규칙이 건 배속(0 = 걸지
 let _webRateChangedAt = 0;
 let _webSkipUntil = 0;
 let _webLastTick = 0;
+// [백그라운드 지연 2026-11-25] **복귀 보정.** 가려진 창이 다시 보일 때 WebKit 은 영상 레이어를 다시 붙이며 재생 시계를
+//   0.4~0.65초 멈칫한다(Tart VM 실측: 복귀 뒤 2초 동안 currentTime 이 1.3~1.4초만 진행, seeking·waiting 없음, 디코드
+//   프레임은 계속 증가 — 수정 전 코드에서도 같았다). 웹 규칙(전방 버퍼 4초 초과 때만 1.03배)으로는 버퍼가 얇으면 이 손실이
+//   그대로 남아 복귀 뒤 웹보다 그만큼 늦었다. 그래서 복귀 뒤 2.5초 동안 실제로 잃은 시간을 재고, 0.15초가 넘으면 그만큼만
+//   1.03배로 되찾는다(최대 30초, 전방 버퍼 1.5초 이하가 되면 멈춤). 끊김·시크·다시 가려짐이면 그만둔다 — 그건 웹 규칙 몫이다.
+const WEB_RETURN_MEASURE_MS = 2500;
+const WEB_RETURN_MIN_LOST_S = 0.15;
+const WEB_RETURN_MAX_MS = 30000;
+const WEB_RETURN_MIN_BUFFER_S = 1.5;
+let _webReturn = null;   // { at, ct, rate, until, owns }
+function webReturnArm() {
+    _webReturn = (_webLl.requested && hls && !video.paused && !_suspended && !_timeshiftMode)
+        ? { at: Date.now(), ct: video.currentTime, rate: video.playbackRate, until: 0, owns: false } : null;
+}
+function webReturnCancel(reason) {
+    const r = _webReturn;
+    _webReturn = null;
+    if (r && r.owns) releaseWebCatchup(reason);
+}
+// 웹 따라잡기 틱 안에서 복귀 보정을 돈다. 참이면 이번 틱의 배속은 복귀 보정이 정했다.
+function webReturnTick(now, ahead) {
+    const r = _webReturn;
+    if (!r) return false;
+    if (!r.until) {
+        if (now - r.at < WEB_RETURN_MEASURE_MS) return false;
+        const lost = (now - r.at) / 1000 * r.rate - (video.currentTime - r.ct);
+        runtimeDiagnostic('latency_return_lag', 'debug', {lostSeconds: lost});
+        if (!(lost > WEB_RETURN_MIN_LOST_S)) { _webReturn = null; return false; }
+        r.until = now + Math.min(WEB_RETURN_MAX_MS, lost / (WEB_CATCHUP_RATE - 1) * 1000);
+        r.lost = lost;
+    }
+    if (now >= r.until || ahead <= WEB_RETURN_MIN_BUFFER_S) {
+        webReturnCancel('returnDone');
+        return false;
+    }
+    if (r.owns) {
+        // 다른 주체가 배속을 바꿨으면 손을 뗀다.
+        if (Math.abs(video.playbackRate - WEB_CATCHUP_RATE) > 0.001) { _webCatchupRate = 0; _webReturn = null; return false; }
+        return true;
+    }
+    if (_webCatchupRate > 0) return false;                  // 웹 규칙이 이미 1.03배로 되찾는 중
+    if (Math.abs(video.playbackRate - 1.0) > 0.001) return false;
+    r.owns = true;
+    _webCatchupRate = WEB_CATCHUP_RATE;
+    _webRateChangedAt = now;
+    video.playbackRate = WEB_CATCHUP_RATE;
+    runtimeDiagnostic('latency_catchup_changed', 'debug', {
+        reason: 'web:returnLag', playbackRate: video.playbackRate, bufferAhead: ahead, lostSeconds: r.lost,
+    });
+    return true;
+}
 function webLlFreshSession(requested) {
     return { requested: !!requested, partTarget: 0, startAdjusted: false };
 }
@@ -5671,6 +5723,7 @@ function webOnVisibilityChange() {
 }
 function webNoteUnhealthy(reason) {
     if (!_webLl.requested) return;
+    _webReturn = null;
     _webSkipUntil = Date.now() + WEB_UNHEALTHY_SKIP_MS;
     releaseWebCatchup(reason || 'unhealthy');
 }
@@ -5696,6 +5749,7 @@ function webCatchupTick(force) {
     if (video.paused || video.seeking || _isSeeking || _recoveryInFlight || _suspended ||
         (document.hidden && !bgTimersActive()) ||
         !_liveLatencyCorrectionEnabled || _timeshiftMode) {
+        if (_webReturn && (video.seeking || _isSeeking || document.hidden || video.paused)) webReturnCancel('inactive');
         releaseWebCatchup('inactive');
         return;
     }
@@ -5705,6 +5759,7 @@ function webCatchupTick(force) {
         if (!(se - video.currentTime < WEB_LIVE_RANGE_S)) { releaseWebCatchup('outsideLiveRange'); return; }
     }
     const ahead = webForwardBuffer();
+    if (webReturnTick(now, ahead)) return;
     const held = now - _webRateChangedAt > WEB_CATCHUP_HOLD_MS;
     if (_webCatchupRate > 0) {
         // 다른 주체(컨트롤러 1.0 복원·사용자)가 배속을 바꿨으면 손을 뗀다.
@@ -5772,7 +5827,7 @@ function setLatencyTrace(on) {
         return;
     }
     if (_latencyTrace) return;
-    const tr = { last: 0, probeAt: performance.now(), gap: 0, waits: 0, probe: 0 };
+    const tr = { last: 0, probeAt: performance.now(), gap: 0, waits: 0, seeks: 0, probe: 0 };
     tr.probe = setInterval(function() {
         const n = performance.now();
         if (n - tr.probeAt > tr.gap) tr.gap = n - tr.probeAt;
@@ -5801,6 +5856,9 @@ function latencyTraceSample() {
         rate: r3(video.playbackRate),
         ll: hls.lowLatencyMode ? 1 : 0,
         waits: tr.waits,
+        seeks: tr.seeks,
+        ct: r3(video.currentTime),
+        frames: (video.getVideoPlaybackQuality ? video.getVideoPlaybackQuality().totalVideoFrames : null),
         gap: Math.round(tr.gap),
         bgTimers: (typeof bgTimersActive === 'function' && bgTimersActive()) ? 1 : 0,
     });
@@ -5808,6 +5866,9 @@ function latencyTraceSample() {
 }
 video.addEventListener('timeupdate', latencyTraceSample);
 video.addEventListener('waiting', function() { if (_latencyTrace) _latencyTrace.waits++; });
+video.addEventListener('seeking', function() { if (_latencyTrace) _latencyTrace.seeks++; });
+// 시크가 끼면 복귀 손실을 잴 수 없다(위치가 옮겨졌다) — 복귀 보정을 그만둔다.
+video.addEventListener('seeking', function() { if (_webReturn) webReturnCancel('seek'); });
 
 // ─── [matchWeb v2 2026-09-27] 웹 동기화 v2 — LL + ingest 드문 시크 ───
 //   설계: docs/hlsjs-chzzk-web-parity-research-2026-09-27.md §7. 설정 플래그(기본 꺼짐)를 켠

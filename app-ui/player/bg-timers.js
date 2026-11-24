@@ -129,7 +129,11 @@
         }
     }
     function rearmAll() {
-        timers.forEach(function (entry, id) { cancel(entry); schedule(id, entry); });
+        // 예정 시각 순으로 다시 건다 — 이미 늦은 타이머들(남은 시간 0)도 원래 순서대로 쏘게.
+        const list = [];
+        timers.forEach(function (entry, id) { cancel(entry); list.push([id, entry]); });
+        list.sort(function (a, b) { return a[1].due - b[1].due; });
+        for (let i = 0; i < list.length; i++) schedule(list[i][0], list[i][1]);
     }
 
     window.setTimeout = function (fn, delay) {
