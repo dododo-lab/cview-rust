@@ -1,6 +1,5 @@
-/* Pretendard(SIL OFL 1.1, fonts/Pretendard-OFL.txt) — 화면 글씨용으로 만든 한글·라틴 글꼴. 작은 글씨에서도 획이 또렷하다.
-   앱 안에 넣어 macOS·Windows 어디서나 같게 보인다. 가변 글꼴 하나로 100~900 굵기를 모두 낸다(예전 나눔고딕은 세 굵기뿐). */
-@font-face { font-family: "Pretendard"; src: url("../fonts/PretendardVariable.woff2") format("woff2-variations"), url("../fonts/PretendardVariable.woff2") format("woff2"); font-weight: 45 920; font-display: block; }
+/* 글꼴: 운영체제 글꼴(macOS SF Pro·Apple SD Gothic Neo, Windows Segoe UI·맑은 고딕).
+   예전에 넣었던 Pretendard 가변 웹폰트(2 MB)는 화면 글씨 그림 캐시로 GPU 프로세스 메모리를 약 43 MB 더 썼다. */
 
 /* CView — 원본 Swift DesignTokens(Sources/CViewCore/DesignSystem)를 바탕으로 한 토큰 체계. */
 /* ── 디자인 토큰 ──────────────────────────────
@@ -108,6 +107,8 @@
   --fs-subhead: 16px;
   --fs-callout: 15px;
   --fs-body: 14px;
+  /* 운영체제 글꼴. -apple-system 이 라틴은 SF Pro, 한글은 Apple SD Gothic Neo 로 고른다 */
+  --font-ui: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI Variable Text", "Segoe UI", "Malgun Gothic", "Noto Sans KR", sans-serif;
   --fs-caption: 13px;
   --fs-footnote: 12px;
   --fs-tiny: 11px;
@@ -237,8 +238,7 @@ html, body {
   height: 100%;
   background: var(--background);
   color: var(--text-primary);
-  font: var(--fs-body) / 1.45 "Pretendard", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo",
-    "Noto Sans KR", "Segoe UI", sans-serif;
+  font: var(--fs-body) / 1.45 var(--font-ui);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
   user-select: none;
@@ -1323,8 +1323,7 @@ select.select {
 
 /* ══ 2026 리프레시 — 공통 컴포넌트 ═════════════════════════════ */
 html, body {
-  font-family: "Pretendard", -apple-system, BlinkMacSystemFont, "SF Pro Text",
-    "Apple SD Gothic Neo", "Noto Sans KR", "Segoe UI", sans-serif;
+  font-family: var(--font-ui);
   letter-spacing: -0.1px;
 }
 .content {
@@ -2221,7 +2220,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 /* ══ 탐색 (pages.js·categories.js·palette.js) ═════════════════ */
 .list-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-sm); margin-bottom: var(--sp-lg); }
 .list-toolbar .chips { margin: 0; flex-basis: 100%; }
-.chip-count { font-size: var(--fs-micro); opacity: 0.7; margin-left: 2px; font-variant-numeric: tabular-nums; }
+.chip-count { font-size: var(--fs-micro); opacity: 0.7; margin-left: 2px; font-variant-numeric: tabular-nums; line-height: 1; } /* 작은 글씨가 칩 줄 높이(18px)를 넘어 키우지 않게 */
 .dense-list { display: flex; flex-direction: column; gap: 2px; }
 .dense-row {
   position: relative; display: grid; grid-template-columns: auto minmax(160px, 260px) 1fr auto; align-items: center; gap: var(--sp-md);
