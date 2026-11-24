@@ -47,6 +47,7 @@ import { kbd, IS_WINDOWS } from './platform.js';
 import { installWindowControls } from './window-controls.js';
 import { withRefreshVeil, cancelRefreshVeil } from './refresh-veil.js';
 import { initSharpness, flushSharpnessNotice } from './sharpness.js';
+import { installTrayState, syncTray } from './tray-state.js';
 
 // 사이드바 — Swift `AppRouter.SidebarItem` 라벨. `sidebar: false` 는 사이드바에 없고 다른 메뉴 속에서 여는 화면
 // (멀티라이브는 라이브 메뉴의 한 보기 — 머리줄 전환 버튼으로 오간다). ⌘K 팔레트에는 그대로 나온다.
@@ -774,7 +775,11 @@ const MENU_ACTIONS = {
   'notification-settings': () => api.openNotificationSettings().catch((e) => toast(e.message)),
   'open-logs': async () => { try { const i = await api.appInfo(); await api.revealPath(i.dataDir); } catch (e) { toast(e.message); } },
   'play-pause': () => (viewer.isOpen ? viewer.controls.togglePlay() : activeWatch()?.togglePlay()),
-  mute: () => (viewer.isOpen ? viewer.toggleMute() : activeWatch()?.toggleMute()),
+  // 메뉴 막대·알림 영역 메뉴의 '음소거'도 여기로 온다 — 바뀐 상태를 아이콘 메뉴에 바로 알린다.
+  mute: () => {
+    if (viewer.isOpen) viewer.toggleMute(); else activeWatch()?.toggleMute();
+    syncTray();
+  },
   'go-live': () => (viewer.isOpen ? viewer.controls.goLive() : activeWatch()?.goLive()),
   screenshot: () => (activeWatch() ? activeWatch().screenshot() : viewer.isPlaying && viewer.controls.screenshot()),
   bookmark: () => (activeWatch() ? activeWatch().bookmark() : viewer.isPlaying && viewer.controls.bookmark()),
@@ -957,6 +962,17 @@ async function main() {
   decoratePageHeader(document.querySelector('.viewer-header'), liveIcon, { compact: true });
   installBackgroundSaver();
   installPerfCollector();
+  // 메뉴 막대·알림 영역 메뉴의 '지금 시청 중'·'음소거'(tray-state.js) — 음소거 대상은 메뉴 동작 mute 와 같다
+  // (단독 보기, 아니면 시청 화면의 무대 패인). 패인은 소리 나는 패인('audible')이 아니면 음소거로 본다.
+  if (!AUX) {
+    installTrayState({
+      muted: () => {
+        if (viewer.isOpen) return viewer.player.isMuted();
+        const c = activeWatch()?.pane?.controls;
+        return c?.el ? !c.el.classList.contains('audible') : null;
+      },
+    });
+  }
   // 머리줄 앱 사용률 칩(설정 › 성능) — 메인 창만. 명령이 없으면 그리지 않는다.
   if (!AUX) installUsageChip();
 

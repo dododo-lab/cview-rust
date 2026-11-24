@@ -167,6 +167,8 @@ pub async fn settings_update(
     }
     if domain == "general" {
         crate::window_prefs::apply_general(&app, &services.settings.general());
+        // "메뉴 막대에 표시" — 아이콘을 바로 보이거나 숨긴다.
+        crate::tray::sync(&app);
     }
     if domain == "keyboard" {
         crate::menu::rebuild(&app);

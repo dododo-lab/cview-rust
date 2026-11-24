@@ -19,7 +19,12 @@ xcrun actool AppIcon.icon --compile "$work/car" --platform macosx --minimum-depl
 cp "$work/car/Assets.car" "$out/Assets.car"
 "$work/render" icon-light.svg "$out/dock-light.png" 512 >/dev/null
 "$work/render" icon-dark.svg "$out/dock-dark.png" 512 >/dev/null
-"$work/render" tray-template.svg "$out/tray-template.png" 44 >/dev/null
+# 메뉴 막대·알림 영역 아이콘(tray.rs) — macOS 템플릿은 18pt 의 2배(36px), Windows 컬러는 화면 배율별 크기
+mkdir -p "$out/tray"
+for v in "" -live; do
+  "$work/render" tray-template$v.svg "$out/tray/template$v.png" 36 >/dev/null
+  for s in 16 20 24 32 40 48; do "$work/render" tray-color$v.svg "$out/tray/color$v-$s.png" $s >/dev/null; done
+done
 # 화면 안 로고(사이드바·스플래시·정보) — 앱 테마에 맞춰 CSS 가 고른다
 mkdir -p ../app-ui/img
 "$work/render" icon-light.svg ../app-ui/img/logo-light.png 256 >/dev/null

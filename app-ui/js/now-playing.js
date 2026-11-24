@@ -12,6 +12,7 @@
 //   그래서 채널명 줄에 '라이브'를 붙여 구분한다.
 // - 음소거한 영상은 지금 재생 중 후보가 아니다. 볼륨 0 은 후보다(멀티라이브의 무음 패인).
 import { imageSrc, safeUrl } from './dom.js';
+import { noteNowPlaying } from './tray-state.js';
 
 /** 이 앱이 시스템에 알리는 동작 — 나머지는 처리기를 비워(null) WebKit 기본 버튼을 숨긴다. */
 export const SESSION_ACTIONS = ['play', 'pause', 'stop', 'seekbackward', 'seekforward', 'seekto', 'previoustrack', 'nexttrack', 'skipad'];
@@ -77,6 +78,7 @@ export function applyNowPlaying(win, info, handlers = {}) {
   const session = sessionOf(win);
   if (!session) return false;
   if (!info) return clearNowPlaying(win);
+  noteNowPlaying(win, info); // 메뉴 막대·알림 영역 메뉴의 '지금 시청 중'(tray-state.js)
   const meta = nowPlayingMetadata(info);
   const key = JSON.stringify(meta);
   const prev = applied.get(session);
@@ -96,6 +98,7 @@ export function applyNowPlaying(win, info, handlers = {}) {
 
 /** 지운다 — 재생을 끝내거나 화면을 닫을 때. 시스템 항목은 WebKit 이 영상이 비면 내린다. */
 export function clearNowPlaying(win) {
+  noteNowPlaying(win, null);
   const session = sessionOf(win);
   if (!session) return false;
   if (!applied.has(session) && !session.metadata) return true;

@@ -290,6 +290,8 @@ pub fn run() {
                         }
                         _ => {}
                     }
+                    // 설정에 따라 닫기·최소화를 메뉴 막대·알림 영역으로 숨기기로 바꾼다(tray.rs).
+                    tray::on_main_window_event(&w, event);
                     // 시스템 외형이 바뀌면(앱 테마 "시스템"일 때) Dock 아이콘을 다시 고른다.
                     if let tauri::WindowEvent::ThemeChanged(_) = event {
                         let app = w.app_handle();
@@ -298,6 +300,9 @@ pub fn run() {
                         }
                     }
                 });
+                // macOS 최소화는 창 이벤트가 없어 AppKit 알림으로 받는다(tray.rs).
+                #[cfg(target_os = "macos")]
+                tray::observe_minimize(&window);
             }
             if let Some(images) = image_service::open_service(&data_dir) {
                 app.manage(images);
@@ -393,6 +398,7 @@ pub fn run() {
             commands::insights::insights_report,
             commands::download::download_list,
             system::deeplink_take_pending,
+            tray::tray_set_state,
             windows::window_open,
             windows::window_close_self,
             menu::window_menu_popup,
@@ -485,6 +491,15 @@ pub fn run() {
         .expect("Tauri 앱을 만들지 못했습니다");
 
     app.run(|handle, event| {
+        // Dock 아이콘을 누르면 메뉴 막대로 숨겨 둔 창을 다시 연다.
+        #[cfg(target_os = "macos")]
+        if let RunEvent::Reopen {
+            has_visible_windows,
+            ..
+        } = event
+        {
+            tray::on_reopen(handle, has_visible_windows);
+        }
         if let RunEvent::Exit = event {
             // 종료 정리는 tao 의 applicationWillTerminate(extern "C") 안에서 돈다 — 여기서 패닉이 나면 풀 수 없어
             // 앱이 abort 로 죽는다(재부팅·로그아웃·⌘Q 때 크래시 보고서). 그래서 패닉을 잡아 기록만 하고 넘긴다.

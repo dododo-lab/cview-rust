@@ -1,4 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">
-  <!-- 메뉴 막대 템플릿 아이콘(단색) — macOS 가 메뉴 막대 외형(밝음·어두움)에 맞춰 색을 입힌다 -->
-  <path fill="#000" fill-rule="evenodd" d="M12.5 8h19a5.5 5.5 0 0 1 5.5 5.5v12a5.5 5.5 0 0 1-5.5 5.5H19l-6.3 5.2c-.7.6-1.7 0-1.6-.9l.6-4.3h-.2A5.5 5.5 0 0 1 7 25.5v-12A5.5 5.5 0 0 1 12.5 8Zm6.6 6.6v9.8c0 .8.9 1.3 1.6.9l8.2-4.9c.7-.4.7-1.4 0-1.8l-8.2-4.9c-.7-.4-1.6.1-1.6.9Z"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18">
+  <!-- macOS 메뉴 막대 템플릿 아이콘(단색 + 알파) — 18pt 격자. 시스템이 메뉴 막대 외형(밝음·어두움·강조)에 맞춰 색을 입힌다.
+       앱 아이콘과 같은 말풍선 + 재생 표시. 재생 표시는 뚫어서(마스크) 메뉴 막대 바탕이 비치게 한다. -->
+  <defs>
+    <mask id="cut" maskUnits="userSpaceOnUse" x="0" y="0" width="18" height="18">
+      <rect width="18" height="18" fill="#fff"/>
+      <path d="M7.7 6.2V10.3L11.2 8.25Z" fill="#000" stroke="#000" stroke-width="1.1" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <path fill="#000" mask="url(#cut)" d="M5 3H13A3.5 3.5 0 0 1 16.5 6.5V10A3.5 3.5 0 0 1 13 13.5H8.8L5.9 15.85Q5.1 16.45 5.15 15.5L5.25 13.5H5A3.5 3.5 0 0 1 1.5 10V6.5A3.5 3.5 0 0 1 5 3Z"/>
 </svg>

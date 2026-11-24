@@ -51,7 +51,9 @@ tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSApplication", "NSImage", "NSResponder", "NSWindow"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSData", "NSProcessInfo"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "block2", "NSData", "NSNotification", "NSOperation", "NSProcessInfo", "NSString"] }
+# 메인 창 최소화 알림 관찰(tray.rs) — 이미 의존성 트리에 있는 버전이다.
+block2 = "0.6"
 # 멈춘 WebKit 웹 콘텐츠 프로세스 끝내기(ui_watchdog). 이미 의존성 트리에 있는 크레이트다.
 libc = "0.2"
 

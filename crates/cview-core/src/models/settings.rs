@@ -462,6 +462,20 @@ pub struct GeneralSettings {
     pub restore_window_on_launch: bool,
     /// 새 버전 자동 확인 — 실행 직후와 몇 시간마다 업데이트 서버를 조용히 확인해 앱 안에서 알린다.
     pub auto_check_updates: bool,
+    /// 메인 창 닫기(빨간 단추·Alt+F4·Windows 닫기 단추)를 종료 대신 메뉴 막대·알림 영역으로 숨기기.
+    /// 숨겨도 재생·채팅·알림은 계속된다. 끄면 예전처럼 창을 닫는다.
+    pub close_to_tray: bool,
+    /// 메인 창 최소화를 Dock·작업 표시줄 대신 메뉴 막대·알림 영역으로 숨기기.
+    pub minimize_to_tray: bool,
+    /// (macOS) 메뉴 막대로 숨겨 있는 동안 Dock 아이콘도 숨기기 — 창을 다시 열면 Dock 아이콘이 돌아온다.
+    pub hide_dock_in_tray: bool,
+}
+
+impl GeneralSettings {
+    /// 창을 닫거나 최소화할 때 메뉴 막대·알림 영역으로 숨기는 경우가 있는가.
+    pub fn hides_to_tray(&self) -> bool {
+        self.close_to_tray || self.minimize_to_tray
+    }
 }
 
 impl Default for GeneralSettings {
@@ -478,6 +492,9 @@ impl Default for GeneralSettings {
             always_on_top: false,
             restore_window_on_launch: true,
             auto_check_updates: true,
+            close_to_tray: false,
+            minimize_to_tray: false,
+            hide_dock_in_tray: false,
         }
     }
 }
@@ -1051,6 +1068,21 @@ impl ChatMessageAlignment {
 mod tests {
     //! `SettingsForwardCompatibilityTests.swift` · `NetworkResourceSettingsTests.swift` 의 계약을 옮겼다.
     use super::*;
+
+    #[test]
+    fn tray_hiding_is_off_for_older_saved_settings() {
+        // 이 설정 전에 저장된 값에는 키가 없다 — 예전처럼 닫으면 닫히고 최소화하면 최소화된다.
+        let g: GeneralSettings = serde_json::from_str(r#"{"showInMenuBar":true}"#).unwrap();
+        assert!(!g.close_to_tray && !g.minimize_to_tray && !g.hide_dock_in_tray);
+        assert!(!g.hides_to_tray());
+        let on: GeneralSettings =
+            serde_json::from_str(r#"{"minimizeToTray":true,"hideDockInTray":true}"#).unwrap();
+        assert!(on.minimize_to_tray && on.hide_dock_in_tray && on.hides_to_tray());
+        let json = serde_json::to_value(GeneralSettings::default()).unwrap();
+        for key in ["closeToTray", "minimizeToTray", "hideDockInTray"] {
+            assert_eq!(json[key], false, "{key}");
+        }
+    }
 
     #[test]
     fn auto_check_updates_defaults_on_for_older_saved_settings() {
