@@ -27,7 +27,7 @@
 @keyframes logo-play { from { transform: translateX(-3%) scale(.82); opacity: .7; } to { transform: translateX(1.5%) scale(1.06); opacity: 1; } }
 @keyframes logo-dot { from { opacity: 1; } to { opacity: .2; } }
 .empty > .spinner { --s: 44px; }
-.empty > .spinner + span, .empty > .spinner + .loading-caption { animation: fade-in .3s ease-out both; }
+.empty > .spinner + span, .empty > .spinner + .loading-caption { animation: fade-in .3s ease-out backwards; }
 
 /* ── 빈 화면·오류 — 흐린 정지 로고 ── */
 .empty-logo { width: 46px; height: 46px; background: var(--logo-muted) center / contain no-repeat; opacity: .32; margin-bottom: 2px; }
@@ -53,9 +53,9 @@
 .ml-pane-state .spinner { --s: clamp(28px, 12cqw, 56px); }
 
 /* ── 메뉴 전환 — 짧은 페이드 + 8px 슬라이드, 불러온 내용은 살짝 떠오르며 ── */
-.page:not([hidden]) { animation: page-in .26s cubic-bezier(.2, .8, .2, 1) both; }
-.viewer:not([hidden]) .viewer-main { animation: page-in .26s cubic-bezier(.2, .8, .2, 1) both; }
-.page-body > .grid, .pop-panel > .grid, .pop-clip-body > .grid, .page-body > .channel-list, .page-body > section, .insight-panel .ip-scroll > * { animation: content-in .32s cubic-bezier(.2, .8, .2, 1) both; }
+.page:not([hidden]) { animation: page-in .26s cubic-bezier(.2, .8, .2, 1) backwards; }
+.viewer:not([hidden]) .viewer-main { animation: page-in .26s cubic-bezier(.2, .8, .2, 1) backwards; }
+.page-body > .grid, .pop-panel > .grid, .pop-clip-body > .grid, .page-body > .channel-list, .page-body > section, .insight-panel .ip-scroll > * { animation: content-in .32s cubic-bezier(.2, .8, .2, 1) backwards; }
 @keyframes page-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes content-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
@@ -65,14 +65,14 @@
 /* app.css 의 `.splash-mark svg`(30px)보다 구체적으로 — 예전엔 로고가 112px 자리 안에서 30px 로 작게 그려졌다 */
 .splash-mark .splash-logo { width: 100%; height: 100%; overflow: visible; }
 .splash-logo .sp-bubble, .splash-logo .sp-play, .splash-logo .sp-dot, .splash-logo .sp-dot-ring, .splash-logo .sp-ping { transform-box: fill-box; transform-origin: center; }
-.splash-logo .sp-bubble { animation: sp-bubble-in .7s cubic-bezier(.34, 1.56, .64, 1) both; }
-.splash-logo .sp-play { animation: sp-pop .45s cubic-bezier(.34, 1.7, .64, 1) .32s both; }
-.splash-logo .sp-dot-ring { fill: var(--background); animation: sp-pop .35s cubic-bezier(.34, 1.7, .64, 1) .5s both; }
-.splash-logo .sp-dot { animation: sp-pop .35s cubic-bezier(.34, 1.7, .64, 1) .5s both; }
+.splash-logo .sp-bubble { animation: sp-bubble-in .7s cubic-bezier(.34, 1.56, .64, 1) backwards; }
+.splash-logo .sp-play { animation: sp-pop .45s cubic-bezier(.34, 1.7, .64, 1) .32s backwards; }
+.splash-logo .sp-dot-ring { fill: var(--background); animation: sp-pop .35s cubic-bezier(.34, 1.7, .64, 1) .5s backwards; }
+.splash-logo .sp-dot { animation: sp-pop .35s cubic-bezier(.34, 1.7, .64, 1) .5s backwards; }
 .splash-logo .sp-ping { opacity: 0; animation: sp-ping 1.6s cubic-bezier(.2, .7, .3, 1) .85s infinite; }
 .splash-logo .sp-sheen { transform-box: fill-box; animation: sp-sheen 2.4s cubic-bezier(.45, 0, .2, 1) .55s infinite; transform: translateX(-120%) skewX(-18deg); }
-.splash-name { animation: sp-rise .45s cubic-bezier(.2, .8, .2, 1) .25s both; }
-.splash-bar, .splash-step { animation: sp-rise .45s cubic-bezier(.2, .8, .2, 1) .4s both; }
+.splash-name { animation: sp-rise .45s cubic-bezier(.2, .8, .2, 1) .25s backwards; }
+.splash-bar, .splash-step { animation: sp-rise .45s cubic-bezier(.2, .8, .2, 1) .4s backwards; }
 /* 진행 막대도 width 가 아니라 scaleX */
 .splash-bar span { width: 100% !important; transform: scaleX(var(--p, .08)); transform-origin: left center; transition: transform .35s cubic-bezier(.2, .8, .2, 1); }
 @keyframes sp-bubble-in { from { opacity: 0; transform: scale(.55) translateY(10%); } to { opacity: 1; transform: none; } }
@@ -82,7 +82,7 @@
 @keyframes sp-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 /* 걷힐 때 — 로고가 살짝 커지며 사라지고, 앱이 그 뒤에서 떠오른다 */
 .splash.leaving .splash-mark { transition: transform .34s cubic-bezier(.4, 0, .2, 1), opacity .3s ease; transform: scale(1.14); opacity: 0; }
-body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both; }
+body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) backwards; }
 @keyframes app-in { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: none; } }
 
 /* ── 모션 줄이기 — 정지한 로고·즉시 전환(무한 반복을 0.01ms 로 돌리지 않게 none) ── */
@@ -112,7 +112,7 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 .content.with-insights > .refresh-veil { right: var(--insight-w); }
 .rv-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 26px 16px; border-radius: var(--radius-xl);
   background: var(--surface-popover); border: 1px solid var(--border-subtle); box-shadow: var(--shadow-lg);
-  animation: rv-in .32s cubic-bezier(.34, 1.56, .64, 1) both; }
+  animation: rv-in .32s cubic-bezier(.34, 1.56, .64, 1) backwards; }
 .refresh-veil.leaving .rv-card { transition: opacity .2s ease, scale .2s cubic-bezier(.4, 0, .2, 1); opacity: 0; scale: .94; }
 .rv-logo { width: 60px; height: 56px; overflow: visible; }
 .rv-logo .rv-bubble, .rv-logo .rv-play, .rv-logo .rv-dot, .rv-logo .rv-dot-ring, .rv-logo .rv-ping { transform-box: fill-box; transform-origin: center; }
@@ -219,14 +219,14 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 .hero-media img { transition: transform 6s ease, opacity .45s ease; }
 
 /* ── 사이드바 ── */
-.nav-item.active::before { animation: mo-grow-y .32s var(--ease-spring) both; transform-origin: center; }
+.nav-item.active::before { animation: mo-grow-y .32s var(--ease-spring) backwards; transform-origin: center; }
 .nav-item .nav-icon { transition: color var(--dur-2) var(--ease-out), scale .3s var(--ease-spring); }
 .nav-item:hover .nav-icon { scale: 1.06; }
-.side-tip:not([hidden]) { animation: mo-fade var(--dur-1) var(--ease-out) both; }
+.side-tip:not([hidden]) { animation: mo-fade var(--dur-1) var(--ease-out) backwards; }
 /* 사이드바 너비 전환은 app.css(.sidebar 의 --sb-dur·--sb-ease)가 안쪽 위치 전환과 함께 맡는다 */
 
 /* ── 세그먼트·칩·토글 ── */
-.segmented:not(.has-glider) .seg.active { animation: mo-pop .22s var(--ease-out) both; } /* 판이 붙으면(아래) 판이 움직인다 */
+.segmented:not(.has-glider) .seg.active { animation: mo-pop .22s var(--ease-out) backwards; } /* 판이 붙으면(아래) 판이 움직인다 */
 .chip.active { transition-duration: var(--dur-2); }
 .toggle span { transition: background var(--dur-3) var(--ease-out), box-shadow var(--dur-3) var(--ease-out); }
 .toggle span::after { transition: transform .32s var(--ease-spring), width var(--dur-2) var(--ease-out); }
@@ -239,20 +239,20 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 ::selection { background: color-mix(in srgb, var(--primary) 32%, transparent); }
 
 /* ── 떠 있는 메뉴·팝오버 — 붙은 쪽에서 살짝 커지며 ── */
-:is(.ml-more-menu, .notify-pop, .design-menu, .chat-tray, .dp-panel):not([hidden]) { animation: mo-pop-down var(--dur-2) var(--ease-out) both; transform-origin: top right; }
-.account-pop[data-side="top"] { animation: mo-pop-up var(--dur-2) var(--ease-out) both; transform-origin: var(--tail) 100%; }
-.account-pop[data-side="right"] { animation: mo-pop var(--dur-2) var(--ease-out) both; transform-origin: 0 var(--tail); }
-.ctx-menu { animation: mo-pop-down var(--dur-2) var(--ease-out) both; transform-origin: top left; }
-.user-pop[data-side="bottom"] { animation: mo-pop-down var(--dur-2) var(--ease-out) both; transform-origin: var(--tail) 0; }
-.user-pop[data-side="top"] { animation: mo-pop-up var(--dur-2) var(--ease-out) both; transform-origin: var(--tail) 100%; }
+:is(.ml-more-menu, .notify-pop, .design-menu, .chat-tray, .dp-panel):not([hidden]) { animation: mo-pop-down var(--dur-2) var(--ease-out) backwards; transform-origin: top right; }
+.account-pop[data-side="top"] { animation: mo-pop-up var(--dur-2) var(--ease-out) backwards; transform-origin: var(--tail) 100%; }
+.account-pop[data-side="right"] { animation: mo-pop var(--dur-2) var(--ease-out) backwards; transform-origin: 0 var(--tail); }
+.ctx-menu { animation: mo-pop-down var(--dur-2) var(--ease-out) backwards; transform-origin: top left; }
+.user-pop[data-side="bottom"] { animation: mo-pop-down var(--dur-2) var(--ease-out) backwards; transform-origin: var(--tail) 0; }
+.user-pop[data-side="top"] { animation: mo-pop-up var(--dur-2) var(--ease-out) backwards; transform-origin: var(--tail) 100%; }
 /* 한 번 떠오른 뒤에는 위·아래가 바뀌어도(채팅이 흘러 자리를 옮김) 다시 튀지 않게 */
 .user-pop.settled { animation: none; }
-.chat-solo:not([hidden]) { animation: mo-pop-down var(--dur-3) var(--ease-out) both; transform-origin: top center; }
-:is(.quality-menu, .emoji-picker, .chat-autocomplete):not([hidden]) { animation: mo-pop-up var(--dur-2) var(--ease-out) both; transform-origin: bottom center; }
+.chat-solo:not([hidden]) { animation: mo-pop-down var(--dur-3) var(--ease-out) backwards; transform-origin: top center; }
+:is(.quality-menu, .emoji-picker, .chat-autocomplete):not([hidden]) { animation: mo-pop-up var(--dur-2) var(--ease-out) backwards; transform-origin: bottom center; }
 .quality-menu:not([hidden]) { transform-origin: bottom right; }
-.ml-pane-menu:not([hidden]) { animation: mo-pop var(--dur-2) var(--ease-out) both; transform-origin: top right; }
+.ml-pane-menu:not([hidden]) { animation: mo-pop var(--dur-2) var(--ease-out) backwards; transform-origin: top right; }
 .ml-gear-menu:not([hidden]) { transform-origin: bottom right; }
-.player-panel:not([hidden]) { animation: mo-pop-up var(--dur-3) var(--ease-emph) both; transform-origin: bottom right; }
+.player-panel:not([hidden]) { animation: mo-pop-up var(--dur-3) var(--ease-emph) backwards; transform-origin: bottom right; }
 /* 닫힐 때 — dom.js hideWithExit 가 겉모습만 복제해 둔다: 붙은 쪽으로 살짝 줄며 흐려진다(들어올 때보다 짧게).
    복제 안의 들어오는 애니메이션은 끄고, 그사이 원본을 다시 열면 복제는 감춘다. */
 .exit-ghost { pointer-events: none !important; }
@@ -263,31 +263,31 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 :not([hidden]) + .exit-ghost { display: none !important; }
 @keyframes mo-menu-out { to { opacity: 0; scale: .97; } }
 /* 메뉴 항목 — 체크·활성 표시가 톡 */
-.quality-item.active::after { animation: mo-pop .28s var(--ease-spring) both; }
+.quality-item.active::after { animation: mo-pop .28s var(--ease-spring) backwards; }
 
 /* ── 시트·팔레트 — 뒤가 흐려지며 카드가 떠오른다. 닫을 때는 dom.js dismiss() 가 leaving 을 단다 ── */
-.sheet-scrim { animation: mo-fade var(--dur-3) var(--ease-out) both; }
-.sheet-scrim > .sheet, .sheet-scrim > form.sheet { animation: mo-rise .32s var(--ease-emph) both; }
+.sheet-scrim { animation: mo-fade var(--dur-3) var(--ease-out) backwards; }
+.sheet-scrim > .sheet, .sheet-scrim > form.sheet { animation: mo-rise .32s var(--ease-emph) backwards; }
 .sheet-scrim.leaving { animation: mo-fade-out var(--dur-2) var(--ease-in) both; pointer-events: none; }
 .sheet-scrim.leaving > .sheet { animation: mo-sink var(--dur-2) var(--ease-in) both; }
-.palette-scrim:not([hidden]) { animation: mo-fade var(--dur-2) var(--ease-out) both; }
-.palette-scrim:not([hidden]) > .palette { animation: mo-pop-down .24s var(--ease-emph) both; transform-origin: top center; }
+.palette-scrim:not([hidden]) { animation: mo-fade var(--dur-2) var(--ease-out) backwards; }
+.palette-scrim:not([hidden]) > .palette { animation: mo-pop-down .24s var(--ease-emph) backwards; transform-origin: top center; }
 .palette-item { transition: background var(--dur-1) var(--ease-out); }
 .palette-item.active { box-shadow: inset 2px 0 0 var(--primary); }
 
 /* ── 토스트 — 아래에서 스프링으로 ── */
-.toast-stack .toast { animation: mo-toast-in .38s var(--ease-spring) both; }
+.toast-stack .toast { animation: mo-toast-in .38s var(--ease-spring) backwards; }
 .toast-stack .toast.leaving { animation: mo-toast-out var(--dur-2) var(--ease-in) both; }
 @keyframes mo-toast-in { from { opacity: 0; translate: 0 14px; scale: .96; } to { opacity: 1; translate: 0 0; scale: 1; } }
 @keyframes mo-toast-out { to { opacity: 0; translate: 0 6px; scale: .98; } }
 
 /* ── 채팅 — 사람이 보는 것(이벤트 카드·멘션·고정·점프)만 움직인다 ── */
-.chat-line.ev .ev-card { animation: mo-pop-up .3s var(--ease-out) both; transform-origin: left center; }
-.chat-line.mention, .chat-line.notice-line { animation: mo-fade .3s ease both; }
-.chat-pin:not([hidden]), .chat-notice:not([hidden]), .chat-input-banner:not([hidden]) { animation: mo-pop-down var(--dur-3) var(--ease-out) both; transform-origin: top center; }
+.chat-line.ev .ev-card { animation: mo-pop-up .3s var(--ease-out) backwards; transform-origin: left center; }
+.chat-line.mention, .chat-line.notice-line { animation: mo-fade .3s ease backwards; }
+.chat-pin:not([hidden]), .chat-notice:not([hidden]), .chat-input-banner:not([hidden]) { animation: mo-pop-down var(--dur-3) var(--ease-out) backwards; transform-origin: top center; }
 .chat-jump:not([hidden]) { animation: mo-pop-up .3s var(--ease-spring) backwards; }   /* both 면 끝난 뒤에도 scale: 1 을 붙들어 누름(.93)이 안 보였다 */
-.chat-reopen:not([hidden]), .ip-reopen:not([hidden]) { animation: mo-fade var(--dur-3) var(--ease-out) both; }
-.mention-count:not([hidden]) { animation: mo-pop .3s var(--ease-spring) both; }
+.chat-reopen:not([hidden]), .ip-reopen:not([hidden]) { animation: mo-fade var(--dur-3) var(--ease-out) backwards; }
+.mention-count:not([hidden]) { animation: mo-pop .3s var(--ease-spring) backwards; }
 /* '새 메시지' 호버(예전 밝기 필터 + 0 6px 18px 브랜드색 글로우)는 아래 "primary 단추 — 빛을 받는 키" */
 .chat-reopen:hover { background: var(--surface-popover); border-color: var(--border); }
 .toast-action:hover { background: color-mix(in srgb, var(--primary) 26%, transparent); }
@@ -295,21 +295,21 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 .chat-state { transition: color var(--dur-3) var(--ease-out); }
 
 /* ── 패널·오버레이 ── */
-.insight-panel:not([hidden]) { animation: mo-slide-left var(--dur-3) var(--ease-emph) both; }
-.player-overlay:not([hidden]) { animation: mo-fade var(--dur-3) var(--ease-out) both; }
-.offline-banner:not([hidden]) { animation: mo-pop-down var(--dur-3) var(--ease-out) both; }
-.player-osd:not([hidden]):not(.fade) { animation: mo-pop .22s var(--ease-spring) both; }
+.insight-panel:not([hidden]) { animation: mo-slide-left var(--dur-3) var(--ease-emph) backwards; }
+.player-overlay:not([hidden]) { animation: mo-fade var(--dur-3) var(--ease-out) backwards; }
+.offline-banner:not([hidden]) { animation: mo-pop-down var(--dur-3) var(--ease-out) backwards; }
+.player-osd:not([hidden]):not(.fade) { animation: mo-pop .22s var(--ease-spring) backwards; }
 
 /* ── 멀티라이브 ── */
 /* 패인 나타남·사라짐·자리 이동은 ml-motion.js(FLIP, transform·opacity 만)가 맡는다. */
 .ml-pane, .ml-chat { transition: box-shadow var(--dur-3) var(--ease-out); }
 .ml-pane.drop-target { scale: .985; transition: scale var(--dur-2) var(--ease-out); }
-.ml-empty { animation: mo-rise var(--dur-4) var(--ease-emph) both; }
+.ml-empty { animation: mo-rise var(--dur-4) var(--ease-emph) backwards; }
 .ml-addrow-act { transition: background var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out), scale .3s var(--ease-spring); }
 .ml-addrow-act:hover:not(:disabled):not(:active) { scale: 1.08; }   /* 누르면 호버 크기를 놓고 기본 누름(.95)으로 — 예전엔 1.08 에 머물렀다 */
 
 /* ── 풍부(rich) — 카드 격자가 앞에서부터 차례로(처음 12장만, 나머지는 같이) ── */
-:root[data-motion="rich"] :is(.grid, .shelf, .category-grid) > * { animation: mo-rise .36s var(--ease-emph) both; }
+:root[data-motion="rich"] :is(.grid, .shelf, .category-grid) > * { animation: mo-rise .36s var(--ease-emph) backwards; }
 :root[data-motion="rich"] :is(.grid, .shelf, .category-grid) > :nth-child(2) { animation-delay: 30ms; }
 :root[data-motion="rich"] :is(.grid, .shelf, .category-grid) > :nth-child(3) { animation-delay: 60ms; }
 :root[data-motion="rich"] :is(.grid, .shelf, .category-grid) > :nth-child(4) { animation-delay: 90ms; }
@@ -384,16 +384,16 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 .segmented.live-mode-seg .seg.active svg { transition: color var(--dur-3) var(--ease-out); }
 
 /* ── 머리줄 — 화면에 들어올 때 아이콘 칩이 톡, 제목·설명이 살짝 따라 미끄러진다 ── */
-.page:not([hidden]) > .page-header .ph-icon { animation: mo-pop .42s var(--ease-spring) .04s both; }
-.page:not([hidden]) > .page-header .ph-text { animation: mo-nudge .34s var(--ease-emph) .06s both; }
+.page:not([hidden]) > .page-header .ph-icon { animation: mo-pop .42s var(--ease-spring) .04s backwards; }
+.page:not([hidden]) > .page-header .ph-text { animation: mo-nudge .34s var(--ease-emph) .06s backwards; }
 @keyframes mo-nudge { from { opacity: 0; translate: -6px 0; } to { opacity: 1; translate: 0 0; } }
 
 /* ── 빈 화면·실패 화면 — 로고가 톡, 글이 떠오른다(불러오는 중은 제외) ── */
-.empty:not(.loading) { animation: mo-rise var(--dur-4) var(--ease-emph) both; }
-.empty:not(.loading) > .empty-logo { animation: mo-pop .5s var(--ease-spring) .08s both; }
+.empty:not(.loading) { animation: mo-rise var(--dur-4) var(--ease-emph) backwards; }
+.empty:not(.loading) > .empty-logo { animation: mo-pop .5s var(--ease-spring) .08s backwards; }
 
 /* ── 기본 등급(balanced)에서도 카드 격자가 앞에서부터 차례로 — 풍부(rich)보다 짧고 가볍게, 처음 8장만 ── */
-:root[data-motion="balanced"] :is(.grid, .shelf, .category-grid) > :nth-child(-n+8) { animation: mo-rise .3s var(--ease-emph) both; }
+:root[data-motion="balanced"] :is(.grid, .shelf, .category-grid) > :nth-child(-n+8) { animation: mo-rise .3s var(--ease-emph) backwards; }
 :root[data-motion="balanced"] :is(.grid, .shelf, .category-grid) > :nth-child(2) { animation-delay: 20ms; }
 :root[data-motion="balanced"] :is(.grid, .shelf, .category-grid) > :nth-child(3) { animation-delay: 40ms; }
 :root[data-motion="balanced"] :is(.grid, .shelf, .category-grid) > :nth-child(4) { animation-delay: 60ms; }
@@ -407,10 +407,10 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) both
 .no-enter .empty:not(.loading), .no-enter .empty:not(.loading) > .empty-logo, .ip-scroll.no-enter > * { animation: none !important; }
 
 /* ── 명령 팔레트 — 열 때만 항목이 차례로(palette.js 가 .opening 을 잠깐 단다) ── */
-.palette-scrim.opening .palette-item { animation: mo-rise .26s var(--ease-emph) both; animation-delay: calc(var(--i, 0) * 14ms + 40ms); }
+.palette-scrim.opening .palette-item { animation: mo-rise .26s var(--ease-emph) backwards; animation-delay: calc(var(--i, 0) * 14ms + 40ms); }
 
 /* ── 숫자 배지 — 늘어나면 톡 ── */
-.nav-badge.bump { animation: mo-pop .34s var(--ease-spring) both; }
+.nav-badge.bump { animation: mo-pop .34s var(--ease-spring) backwards; }
 
 /* ── 새로고침 — 누르면 아이콘이 한 바퀴(motion.js installMicroMotion) ── */
 @keyframes mo-spin-once { from { rotate: 0deg; } to { rotate: 360deg; } }
@@ -587,7 +587,7 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
 .page:is([data-page="live"], .page-multilive):not([hidden]) { animation: none; }
 .page:is([data-page="live"], .page-multilive) > .page-header :is(.ph-icon, .ph-text) { animation: none; }
 .page[data-page="live"]:not([hidden]) > .live-scroll,
-.page-multilive:not([hidden]) > .ml-body { animation: page-in .26s cubic-bezier(.2, .8, .2, 1) both; }
+.page-multilive:not([hidden]) > .ml-body { animation: page-in .26s cubic-bezier(.2, .8, .2, 1) backwards; }
 @media (prefers-reduced-motion: reduce) { .page:is([data-page="live"], .page-multilive) > :is(.live-scroll, .ml-body) { animation: none !important; } }
 :root[data-motion="reduced"] .page:is([data-page="live"], .page-multilive) > :is(.live-scroll, .ml-body) { animation: none !important; }
 /* 섹션 안 짧은 안내(로그인·한쪽 실패) */
@@ -1118,12 +1118,12 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
 /* ── 방송&클립 탭 전환 — 들어오는 패널은 고른 쪽에서 미끄러져 들어오고, 나가는 패널은 반대쪽으로 비켜나며 흐려진다(교차) ──
    --pop-dir: 1(오른쪽 탭으로) · -1(왼쪽으로). pages.js PopularPage.syncTabs 가 .entering·.leaving 을 잠깐 단다.
    transform 계열(translate)·opacity 만. 모션 줄이기면 JS 가 클래스를 달지 않고 바로 바꾼다(전역 규칙도 시간을 0 으로). */
-.pop-panel.entering { animation: pop-panel-in .34s var(--ease-emph) both; }
+.pop-panel.entering { animation: pop-panel-in .34s var(--ease-emph) backwards; }
 .pop-panel.leaving { animation: pop-panel-out .2s var(--ease-in) both; pointer-events: none; }
 @keyframes pop-panel-in { from { opacity: 0; translate: calc(var(--pop-dir, 1) * 28px) 0; } to { opacity: 1; translate: 0 0; } }
 @keyframes pop-panel-out { from { opacity: 1; translate: 0 0; } to { opacity: 0; translate: calc(var(--pop-dir, 1) * -18px) 0; } }
 /* 탭 아이콘 — 고르면 톡 */
-.pop-tabs .seg.active .pop-tab-icon svg { animation: mo-pop .36s var(--ease-spring) both; }
+.pop-tabs .seg.active .pop-tab-icon svg { animation: mo-pop .36s var(--ease-spring) backwards; }
 /* 클립 카드 — 세로 썸네일이 살짝 더 떠오르고 그림자가 깊어진다(누르면 기본 .card:active 로 눌림) */
 .pop-clip-grid .card .thumb { transition: box-shadow var(--dur-2) var(--ease-out), translate var(--dur-3) var(--ease-emph); }
 .pop-clip-grid .card:hover .thumb { translate: 0 -2px; }

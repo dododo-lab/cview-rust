@@ -270,11 +270,11 @@
 
 /* 방금 추가 — 체크가 톡, 줄이 잠깐 브랜드색으로 */
 .ml-addrow.just-added { animation: ml-added-glow 1.2s var(--ease-out) both; }
-.ml-addrow.just-added .ml-addrow-act svg { animation: mo-pop .36s var(--ease-spring) both; }
+.ml-addrow.just-added .ml-addrow-act svg { animation: mo-pop .36s var(--ease-spring) backwards; }
 @keyframes ml-added-glow { 0% { background: color-mix(in srgb, var(--primary) 18%, transparent); } 100% { background: transparent; } }
 
 /* 열 때 — 위 9줄이 차례로 떠오른다 */
-.ml-addbar.entering .ml-addrow { animation: mo-rise .34s var(--ease-emph) both; animation-delay: calc(var(--i, 0) * 26ms); }
+.ml-addbar.entering .ml-addrow { animation: mo-rise .34s var(--ease-emph) backwards; animation-delay: calc(var(--i, 0) * 26ms); }
 
 /* 불러오는 중 — 줄 모양 스켈레톤 */
 .ml-addrow-sk-list { display: flex; flex-direction: column; gap: 2px; }
@@ -1133,7 +1133,7 @@
 .mwi-count:empty { display: none; }
 .seg.active .mwi-count { color: var(--primary-text); }
 
-.mwi-body { min-width: 0; animation: content-in .28s var(--ease-emph) both; }
+.mwi-body { min-width: 0; animation: content-in .28s var(--ease-emph) backwards; }
 .mwi-tail { display: flex; justify-content: center; padding: var(--sp-xl) 0 var(--sp-sm); color: var(--text-tertiary); font-size: var(--fs-footnote); font-weight: 600; }
 .mwi-dots { display: inline-flex; gap: 5px; }
 .mwi-dots i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: mwi-dot 1s var(--ease-out) infinite; }
@@ -1161,10 +1161,10 @@
 .mwi-lightbox {
   position: fixed; inset: 0; z-index: var(--z-overlay); display: grid; place-items: center; padding: 48px 72px;
   background: rgba(6, 7, 9, .86); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  animation: mo-fade .18s var(--ease-out) both;
+  animation: mo-fade .18s var(--ease-out) backwards;
 }
 .mwi-lightbox.closing { animation: mo-fade-out .16s var(--ease-out) both; }
-.mwi-lightbox > img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--radius-md); box-shadow: 0 30px 80px rgba(0, 0, 0, .6); animation: mo-pop .24s var(--ease-emph) both; }
+.mwi-lightbox > img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--radius-md); box-shadow: 0 30px 80px rgba(0, 0, 0, .6); animation: mo-pop .24s var(--ease-emph) backwards; }
 .mwi-lb-btn { position: absolute; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; color: #fff; background: rgba(255, 255, 255, .1); transition: background .16s; }
 .mwi-lb-btn:hover { background: rgba(255, 255, 255, .2); }
 .mwi-lb-btn svg { width: 20px; height: 20px; }
@@ -1307,7 +1307,7 @@
 .ml-watch-more[aria-expanded="true"] { color: var(--primary-text); background: var(--seg-thumb); box-shadow: var(--seg-thumb-shadow), inset 0 0 0 1.5px var(--primary); }
 .ml-watch-more:focus-visible { outline-offset: -2px; }   /* 칩 줄 내용 높이(24)를 꽉 채워 바깥 링은 overflow 에 잘린다 — 안쪽에 */
 /* 넘침 메뉴 — "+N" 에서 아래로 살짝 커지며 */
-.ml-watch-overflow:not([hidden]) { animation: mo-pop-down var(--dur-2) var(--ease-out) both; transform-origin: top center; }
+.ml-watch-overflow:not([hidden]) { animation: mo-pop-down var(--dur-2) var(--ease-out) backwards; transform-origin: top center; }
 /* 고른 칩의 아바타 링·상태 점 테두리 — 링 사이 틈은 판 색(예전 고른 칩 면 --surface-base 는 판과 달라 틈이 비쳤다) */
 .ml-watch-picker .ml-watch-chip.active :is(img, .ml-watch-dot), .ml-watch-picker .ml-watch-tab.active .ml-watch-close { box-shadow: 0 0 0 2px var(--seg-thumb), 0 0 0 4px var(--primary); }
 .ml-watch-picker .ml-watch-chip.active .ml-watch-st { box-shadow: 0 0 0 2px var(--seg-thumb); }

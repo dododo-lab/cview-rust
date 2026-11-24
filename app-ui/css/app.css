@@ -401,7 +401,7 @@ a { color: var(--primary-text); } /* --primary(#00d38a)는 라이트 흰 바탕 
 .update-pill {
   position: relative; display: flex; align-items: center; margin-bottom: 8px; border-radius: var(--radius-md);
   background: var(--primary-dim); border: 1px solid var(--primary-ring); white-space: nowrap;
-  animation: update-pill-in 0.32s var(--ease-out, ease-out) both;
+  animation: update-pill-in 0.32s var(--ease-out, ease-out) backwards;
 }
 .update-pill-main {
   flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 7px 8px; border: 0; border-radius: var(--radius-ms);
@@ -516,7 +516,7 @@ a { color: var(--primary-text); } /* --primary(#00d38a)는 라이트 흰 바탕 
 .sidebar.collapsed .login-icon { display: block; }
 /* 전환 중 — 배치가 바뀌는 칸은 잠깐 숨겼다 나타나고, 줄임표(…)가 깜박이지 않게 그냥 자른다 */
 .sidebar.sb-anim :is(.nav-badge, .side-more, .side-widget, .side-quick-btn, .account, .side-empty),
-.sidebar.sb-anim.collapsed .nav-item.playing::after { animation: sb-reveal calc(var(--sb-dur) + 0.1s) ease-out both; }
+.sidebar.sb-anim.collapsed .nav-item.playing::after { animation: sb-reveal calc(var(--sb-dur) + 0.1s) ease-out backwards; }
 .sidebar.sb-anim :is(.nav-label, .side-live-name, .side-live-nm, .side-live-cat, .account-name) { text-overflow: clip; }
 .sidebar.sb-anim .side-quick { overflow: hidden; }
 @keyframes sb-reveal { 0%, 35% { opacity: 0; } 100% { opacity: 1; } }
@@ -1119,19 +1119,21 @@ select.select {
 
 /* 스포트라이트 히어로 — 큰 장 + 아래 넘김 탭, 뒤로는 지금 장의 색이 번지는 앰비언트 빛 */
 .hero { position: relative; display: flex; flex-direction: column; gap: 10px; isolation: isolate; }
+/* 흐림·채도는 home.js(paintAmbient)가 아주 작은 그림에 미리 입혀 늘려 그린다 — 여기서 CSS filter·translateZ 를 걸면 합성 레이어가 생기고,
+   흐림 반경만큼 넓게 잡힌 레이어 경계가 아래 제목·선반·페이지 전체를 '겹침' 레이어로 끌어들였다(실제 앱 WebContent 약 80MB). */
 .hero-ambient {
-  position: absolute; z-index: -1; inset: -40px -24px 30% -24px; pointer-events: none; overflow: hidden;
-  opacity: 0.5; filter: blur(56px) saturate(1.6); transform: translateZ(0);
+  position: absolute; z-index: -1; inset: -40px -24px 30% -24px; pointer-events: none; overflow: hidden; contain: paint;
+  opacity: 0.5;
   -webkit-mask-image: radial-gradient(70% 70% at 50% 45%, #000 40%, transparent 100%);
           mask-image: radial-gradient(70% 70% at 50% 45%, #000 40%, transparent 100%);
 }
-.hero-ambient img { width: 100%; height: 100%; object-fit: cover; }
+.hero-ambient img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .hero-slot { min-width: 0; display: flex; }
 .hero-main {
   position: relative; display: block; flex: 1; min-height: clamp(300px, 26vw, 400px); overflow: hidden;
   border-radius: var(--radius-xl); background: var(--surface-elevated); isolation: isolate;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.06) inset, 0 24px 60px -28px rgba(0, 0, 0, 0.7);
-  animation: hero-in 0.45s ease both;
+  animation: hero-in 0.45s ease backwards;
 }
 .hero-main:hover { transform: none; }
 .hero-media { position: absolute; inset: 0; z-index: -2; }
@@ -1562,7 +1564,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
   background: linear-gradient(135deg, color-mix(in srgb, var(--ev) 26%, rgba(14, 15, 18, 0.9)), rgba(14, 15, 18, 0.9) 60%);
   border: 1px solid color-mix(in srgb, var(--ev) 50%, transparent);
   box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
-  animation: alert-in 0.4s var(--ease-out) both;
+  animation: alert-in 0.4s var(--ease-out) backwards;
 }
 .stream-alert.leaving { animation: alert-out 0.35s ease both; pointer-events: none; }
 /* 알림을 끌어 옮긴다(donations.js) — 카드만 잡히고 빈 곳은 아래 영상으로 그대로 간다. */
