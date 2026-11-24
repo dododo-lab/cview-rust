@@ -240,6 +240,13 @@ pub fn log_player_page_message(source: &str, message: &Value) {
         return;
     }
     let kind = message.get("type").and_then(Value::as_str).unwrap_or("");
+    if kind == "latencyTrace" {
+        crate::perf_log::emit(
+            "player.latency",
+            serde_json::json!({ "source": source, "data": message.get("data").cloned().unwrap_or(Value::Null) }),
+        );
+        return;
+    }
     if matches!(
         kind,
         "fatalError"

@@ -210,6 +210,8 @@ pub struct HlsJsPlaybackSnapshot {
     pub paused: bool,
     /// 이 스냅샷 시점에 페이지가 가려져 있었는가(`document.hidden`).
     pub hidden: bool,
+    /// 가려진 채로도 정밀 타이머(`bg-timers.js` Worker)로 재생 중인가 — 그러면 지연 값이 보이는 창과 같이 신선하다.
+    pub precise_timers: bool,
     /// 현재 재생 레벨의 실제 비트레이트(bps).
     pub bitrate: f64,
     pub bandwidth_estimate: f64,
@@ -254,6 +256,7 @@ impl HlsJsPlaybackSnapshot {
             seekable_end: d("seekableEnd"),
             paused: boolean(data, "paused").unwrap_or(false),
             hidden: boolean(data, "hidden").unwrap_or(false),
+            precise_timers: boolean(data, "preciseTimers").unwrap_or(false),
             bitrate: d("currentLevelBitrateBps"),
             bandwidth_estimate: d("bandwidthEstimateBps"),
             buffer_ahead_seconds: d("bufferAheadSeconds"),

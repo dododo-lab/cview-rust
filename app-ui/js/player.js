@@ -25,7 +25,7 @@ window.__cviewPlayerBridge = (message, source) => {
 // surfaceFirstFrame — 멀티라이브 무대 전환이 새 패인의 첫 장을 보고 앞 패인을 내린다(없으면 2초 타임아웃).
 // watchActivity — 치지직 시청 이벤트(시청자 수·시청 기록)의 재생·일시정지 신호.
 // codecDiagnostics·hevc 는 디버그 로그용(세션마다 한두 번) — Rust 는 해석하지 않고 로그에만 남긴다.
-const FORWARDED = new Set(['ready', 'playStarted', 'playbackState', 'metrics', 'fatalError', 'error', 'levels', 'surfaceFirstFrame', 'watchActivity', 'codecDiagnostics', 'hevc']);
+const FORWARDED = new Set(['ready', 'playStarted', 'playbackState', 'metrics', 'fatalError', 'error', 'levels', 'surfaceFirstFrame', 'watchActivity', 'codecDiagnostics', 'hevc', 'latencyTrace']);
 
 export class PlayerBridge {
   /**

@@ -58,6 +58,8 @@ pub struct EngineSnapshot {
     pub error: Option<String>,
     /// 마지막 metrics 시점에 페이지가 가려져 있었는가.
     pub hidden: bool,
+    /// 가려졌어도 정밀 타이머로 재생 중이었는가 — 그러면 지연 표본을 보이는 창과 같이 쓴다.
+    pub precise_timers: bool,
     /// 실측 프래그먼트 길이(초). 0 이면 미측정.
     pub segment_duration: f64,
     /// 실측 LL 파트 길이(초). LL 로 파트를 받지 않으면 0.
@@ -105,6 +107,7 @@ impl EngineSnapshot {
                 self.seekable = (s.seekable_end > s.seekable_start)
                     .then_some((s.seekable_start, s.seekable_end));
                 self.hidden = s.hidden;
+                self.precise_timers = s.precise_timers;
                 self.segment_duration = s.frag_duration_seconds;
                 self.part_duration = s.part_duration_seconds;
                 self.buffer_ahead_seconds = s.buffer_ahead_seconds;
@@ -296,7 +299,15 @@ impl WebViewHlsEngine {
 
     /// 명령 한 줄을 보낸다.
     pub fn send(&self, command: JsCommand) {
-        (self.sink)(command.script());
+        let script = command.script();
+        // 디버그 로그가 켜진 세션은 소스를 실을 때 지연 표본(초마다 `player.latency`)도 켠다 — 꺼져 있으면 비용이 없다.
+        if matches!(command, JsCommand::LoadSource { .. }) && crate::perf_log::enabled() {
+            (self.sink)(format!(
+                "{script}; if (typeof setLatencyTrace === 'function') setLatencyTrace(true);"
+            ));
+            return;
+        }
+        (self.sink)(script);
     }
 
     /// JS → 네이티브 메시지 반영.
@@ -522,7 +533,9 @@ impl HlsEngineControl for WebViewHlsEngine {
 
     fn latency_sample_is_actionable(&self) -> bool {
         let s = self.snap();
-        s.has_metrics && !s.hidden
+        // 가려진 페이지의 값은 타이머 감속으로 낡을 수 있어 쓰지 않는다 — 단, 플레이어가 정밀 타이머로
+        // 재생 중이면(백그라운드 지연 2026-11-25) 보이는 창과 같이 신선하므로 보정을 이어 간다.
+        s.has_metrics && (!s.hidden || s.precise_timers)
     }
 
     fn is_match_web_v2_active(&self) -> bool {
@@ -699,6 +712,25 @@ mod tests {
         sent.lock().unwrap().clear();
         e.set_hevc_enabled(true);
         assert_eq!(*sent.lock().unwrap(), vec!["setHevcEnabled(true)"]);
+    }
+
+    #[test]
+    fn hidden_samples_are_actionable_only_with_precise_timers() {
+        let (e, _) = engine();
+        assert!(!e.latency_sample_is_actionable(), "지표 전에는 쓰지 않는다");
+        let metrics = |hidden: bool, precise: bool| {
+            parse(json!({"type":"metrics","data":{
+                "currentTime": 10.0, "latency": 2.4, "hidden": hidden, "preciseTimers": precise
+            }}))
+        };
+        e.handle_message(&metrics(false, false));
+        assert!(e.latency_sample_is_actionable());
+        // 가려진 페이지의 1초 정렬 타이머 값은 낡을 수 있다.
+        e.handle_message(&metrics(true, false));
+        assert!(!e.latency_sample_is_actionable());
+        // 가려졌어도 정밀 타이머로 재생 중이면 보이는 창과 같이 보정한다.
+        e.handle_message(&metrics(true, true));
+        assert!(e.latency_sample_is_actionable());
     }
 
     #[tokio::test]
