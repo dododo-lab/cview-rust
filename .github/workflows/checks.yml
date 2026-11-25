@@ -31,11 +31,33 @@ jobs:
         run: |
           rustup component add rustfmt
           cargo fmt --all -- --check
-      - name: app-ui JS 문법
+          if [ -f tools/server-monitor/Cargo.toml ]; then
+            cargo fmt --manifest-path tools/server-monitor/Cargo.toml -- --check
+          fi
+      - name: JS · MJS · 셸 문법
         run: |
-          for f in app-ui/js/*.js; do node --check "$f"; done
-      - name: 성능 게이트 스크립트 테스트
-        run: python3 -B -m unittest discover -s tools/perf-gate/tests -v
+          for f in app-ui/js/*.js app-ui/player/*.js tools/ui-regression/*.mjs; do node --check "$f"; done
+          if [ -d website/assets ]; then
+            for f in website/assets/*.js; do node --check "$f"; done
+          fi
+          if [ -d tools/website ]; then
+            for f in tools/website/*.mjs; do node --check "$f"; done
+            node --test tools/website/release-data.test.mjs
+          fi
+          if command -v zsh >/dev/null 2>&1; then
+            zsh -n scripts/release-macos.sh scripts/release-with-prs.sh
+          fi
+      - name: 자동화 · 성능 게이트 단위 테스트
+        env:
+          HOME: ${{ runner.temp }}/cview-ci-home
+        run: |
+          mkdir -p "$HOME"
+          python3 -B -m unittest discover -s tools/perf-gate/tests -v
+          python3 -B -m unittest discover -s tools/windows-update-server/tests -v
+          python3 -B -m unittest discover -s tools/build-server/tests -v
+          if [ -d tools/website ]; then
+            python3 -B -m unittest discover -s tools/website -p 'test_*.py' -v
+          fi
 
   core-tests:
     runs-on: ubuntu-latest
@@ -45,9 +67,24 @@ jobs:
         with:
           persist-credentials: false
       - name: 핵심 크레이트 테스트
-        run: cargo test -p cview-core -p cview-chat -p cview-persistence -p cview-networking
-      - name: 측정 예제 스모크(값은 기록만)
         run: |
-          cargo run --release -p cview-chat --example parse_probe
-          cargo run --release -p cview-persistence --example image_cache_probe -- 500
-          cargo run --release -p cview-persistence --example perf_probe -- "$RUNNER_TEMP/store.sqlite" 2000
+          cargo test --locked -p cview-core -p cview-chat -p cview-persistence -p cview-networking -p cview-player
+          if [ -f tools/server-monitor/Cargo.toml ]; then
+            cargo test --locked --manifest-path tools/server-monitor/Cargo.toml
+          fi
+      - name: 측정 예제 스모크 및 지표 파싱 검증
+        run: |
+          cargo run --release -p cview-chat --example parse_probe | tee "$RUNNER_TEMP/chat-parse.out"
+          cargo run --release -p cview-persistence --example image_cache_probe -- 500 | tee "$RUNNER_TEMP/image-cache.out"
+          cargo run --release -p cview-persistence --example perf_probe -- "$RUNNER_TEMP/store.sqlite" 2000 | tee "$RUNNER_TEMP/store.out"
+          python3 -c '
+          import importlib.util, os, sys
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location("perf_gate", "scripts/perf-gate.py")
+          gate = importlib.util.module_from_spec(spec); sys.modules["perf_gate"] = gate; spec.loader.exec_module(gate)
+          tmp = Path(os.environ["RUNNER_TEMP"])
+          for probe in gate.PROBES:
+              text = (tmp / f"{probe.key}.out").read_text(encoding="utf-8")
+              parsed = gate.collect_probe_metrics(probe, text, require_expected=True)
+              print(probe.key, len(parsed), "metrics verified")
+          '

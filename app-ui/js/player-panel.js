@@ -4,7 +4,7 @@
 // PLY-10 녹화 시작·중지(MediaRecorder 조각 → Rust 파일). 값은 플레이어 설정에 저장하고 새 재생마다 다시 건다.
 import { api } from './api.js';
 import { esc, toast, hideWithExit, keepFocus } from './dom.js';
-import { kbd, REVEAL_LABEL, userPath } from './platform.js';
+import { kbd, REVEAL_LABEL, saveDirPath } from './platform.js';
 import { bindTabKeys } from './a11y.js';
 import {
   SHARPNESS_LEVELS, SHARPNESS_HELP, ENLARGED_ONLY_LABEL, ENLARGED_ONLY_HELP,
@@ -184,7 +184,7 @@ export class PlayerPanel {
           <button class="btn" data-tool="bookmark">북마크</button>
           <button class="btn" data-tool="alert-pos">후원 알림 위치 조정</button>
         </div>
-        <p class="pp-note">녹화는 ${esc(userPath('Movies', 'CView'))}, 스크린샷은 설정한 폴더에 저장됩니다.</p>`;
+        <p class="pp-note">녹화는 ${esc(saveDirPath('recording'))}, 스크린샷은 설정한 폴더에 저장됩니다.</p>`;
     }
     this.el.innerHTML = `
       <div class="pp-head"><div class="segmented" role="tablist" aria-label="플레이어 설정">${tabs.map(([id, l]) => `<button class="seg${this.tab === id ? ' active' : ''}" data-pp-tab="${id}" role="tab" aria-selected="${this.tab === id}" tabindex="${this.tab === id ? 0 : -1}">${l}</button>`).join('')}</div></div>

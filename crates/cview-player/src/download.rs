@@ -14,6 +14,7 @@ use std::time::Duration;
 use futures_util::StreamExt;
 use url::Url;
 
+use crate::manifest::byte_span::HlsByteSpan;
 use crate::manifest::parser::{ByteRange, EncryptionMethod, HlsManifestParser, Segment};
 use crate::recording::aes128_cbc_decrypt;
 
@@ -141,37 +142,33 @@ impl VideoDownloader {
         }
         self.finish(output, async |file: &mut std::fs::File| {
             let n = segments.len();
+            let spans = HlsByteSpan::resolve(&segments, |u| u.as_str().to_string());
             let mut keys: HashMap<Url, Vec<u8>> = HashMap::new();
-            let mut last_init: Option<Url> = None;
-            let mut range_ends: HashMap<Url, i64> = HashMap::new();
+            let mut last_init: Option<(Url, Option<ByteRange>)> = None;
             let mut written = 0u64;
-            for (i, seg) in segments.iter().enumerate() {
+            for (i, (seg, span)) in segments.iter().zip(spans).enumerate() {
                 self.check_cancel()?;
                 if seg.is_gap {
                     continue;
                 }
                 if let Some(init) = &seg.init_segment {
-                    if last_init.as_ref() != Some(&init.uri) {
-                        let data = self
-                            .fetch(&init.uri, init.byte_range.as_ref(), None)
-                            .await?
-                            .0;
+                    let init_span = HlsByteSpan::of_init(init);
+                    if init_span == HlsByteSpan::Invalid {
+                        return Err(DownloadError::BadResponse(416));
+                    }
+                    let init_key = (init.uri.clone(), init_span.byte_range());
+                    if last_init.as_ref() != Some(&init_key) {
+                        let data = self.fetch(&init.uri, init_span).await?;
                         file.write_all(&data)
                             .map_err(|e| DownloadError::WriteFailed(e.to_string()))?;
                         written += data.len() as u64;
-                        last_init = Some(init.uri.clone());
+                        last_init = Some(init_key);
                     }
                 }
-                let (mut data, end) = self
-                    .fetch(
-                        &seg.uri,
-                        seg.byte_range.as_ref(),
-                        range_ends.get(&seg.uri).copied(),
-                    )
-                    .await?;
-                if let Some(end) = end {
-                    range_ends.insert(seg.uri.clone(), end);
+                if span == HlsByteSpan::Invalid {
+                    return Err(DownloadError::BadResponse(416));
                 }
+                let mut data = self.fetch(&seg.uri, span).await?;
                 if let Some(enc) = &seg.encryption_info {
                     if enc.method != EncryptionMethod::Aes128 {
                         return Err(DownloadError::DecryptFailed);
@@ -179,7 +176,7 @@ impl VideoDownloader {
                     let key = match keys.get(&enc.uri) {
                         Some(k) => k.clone(),
                         None => {
-                            let k = self.fetch(&enc.uri, None, None).await?.0;
+                            let k = self.fetch(&enc.uri, HlsByteSpan::Whole).await?;
                             keys.insert(enc.uri.clone(), k.clone());
                             k
                         }
@@ -225,12 +222,10 @@ impl VideoDownloader {
         result
     }
 
-    async fn fetch(
-        &self,
-        url: &Url,
-        range: Option<&ByteRange>,
-        previous_end: Option<i64>,
-    ) -> Result<(Vec<u8>, Option<i64>), DownloadError> {
+    async fn fetch(&self, url: &Url, span: HlsByteSpan) -> Result<Vec<u8>, DownloadError> {
+        if span == HlsByteSpan::Invalid {
+            return Err(DownloadError::BadResponse(416));
+        }
         let mut last_err = DownloadError::Network(String::new());
         for attempt in 0..3 {
             if attempt > 0 {
@@ -241,24 +236,39 @@ impl VideoDownloader {
                 .client
                 .get(url.clone())
                 .timeout(Duration::from_secs(30));
-            let mut next_end = None;
-            if let Some(r) = range {
-                let (h, end) = range_header(r, previous_end);
+            if let Some(h) = span.range_header() {
                 req = req.header("Range", h);
-                next_end = Some(end);
             }
             match req.send().await {
                 Ok(resp) => {
                     let status = resp.status().as_u16();
                     if !(200..300).contains(&status) {
                         last_err = DownloadError::BadResponse(status);
-                        if status < 500 {
+                        if HlsByteSpan::is_final_failure(status) {
                             break;
                         }
                         continue;
                     }
+                    let content_range = resp
+                        .headers()
+                        .get(reqwest::header::CONTENT_RANGE)
+                        .and_then(|v| v.to_str().ok())
+                        .map(str::to_owned);
                     match resp.bytes().await {
-                        Ok(b) => return Ok((b.to_vec(), next_end)),
+                        Ok(b) => {
+                            if let Some(slice) = HlsByteSpan::recordable_body(
+                                Some(&b),
+                                status,
+                                span.byte_range(),
+                                content_range.as_deref(),
+                            ) {
+                                return Ok(slice.to_vec());
+                            }
+                            last_err = DownloadError::BadResponse(status);
+                            if status == 206 || status == 200 {
+                                break;
+                            }
+                        }
                         Err(e) => last_err = DownloadError::Network(e.to_string()),
                     }
                 }
@@ -358,5 +368,119 @@ mod tests {
             offset: None,
         };
         assert_eq!(range_header(&r2, Some(110)), ("bytes=110-159".into(), 160));
+    }
+
+    async fn serve_byte_range_hls(mode: &'static str) -> (Url, tokio::task::JoinHandle<()>) {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let playlist_url = Url::parse(&format!("http://{addr}/index.m3u8")).unwrap();
+        let handle = tokio::spawn(async move {
+            while let Ok((mut stream, _)) = listener.accept().await {
+                tokio::spawn(async move {
+                    let mut buf = vec![0u8; 4096];
+                    let n = stream.read(&mut buf).await.unwrap_or(0);
+                    if n == 0 {
+                        return;
+                    }
+                    let req = String::from_utf8_lossy(&buf[..n]);
+                    let first_line = req.lines().next().unwrap_or("");
+                    if first_line.contains("/index.m3u8") {
+                        let body = "#EXTM3U\n#EXT-X-VERSION:4\n#EXT-X-TARGETDURATION:4\n\
+                                    #EXT-X-BYTERANGE:2@0\n#EXTINF:2.0,\nmedia.mp4\n\
+                                    #EXT-X-BYTERANGE:2\n#EXTINF:2.0,\nmedia.mp4\n\
+                                    #EXT-X-ENDLIST\n";
+                        let resp = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                            body.len(),
+                            body
+                        );
+                        let _ = stream.write_all(resp.as_bytes()).await;
+                        return;
+                    }
+                    let full = b"ABCD";
+                    match mode {
+                        "200-full" => {
+                            let resp = format!(
+                                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                full.len()
+                            );
+                            let _ = stream.write_all(resp.as_bytes()).await;
+                            let _ = stream.write_all(full).await;
+                        }
+                        "206-partial" => {
+                            let range_line = req
+                                .lines()
+                                .find(|l| l.to_ascii_lowercase().starts_with("range:"))
+                                .unwrap_or("");
+                            let (s, e) = if range_line.contains("0-1") {
+                                (0usize, 1usize)
+                            } else {
+                                (2usize, 3usize)
+                            };
+                            let slice = &full[s..=e];
+                            let resp = format!(
+                                "HTTP/1.1 206 Partial Content\r\nContent-Range: bytes {s}-{e}/4\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                slice.len()
+                            );
+                            let _ = stream.write_all(resp.as_bytes()).await;
+                            let _ = stream.write_all(slice).await;
+                        }
+                        _ => {
+                            // 잘못된 206: 요청은 2바이트인데 전체 4바이트를 내려보낸다.
+                            let resp = format!(
+                                "HTTP/1.1 206 Partial Content\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                full.len()
+                            );
+                            let _ = stream.write_all(resp.as_bytes()).await;
+                            let _ = stream.write_all(full).await;
+                        }
+                    }
+                });
+            }
+        });
+        (playlist_url, handle)
+    }
+
+    #[tokio::test]
+    async fn hls_byte_range_handles_206_and_200_identically_and_rejects_bad_206() {
+        let dir = std::env::temp_dir().join(format!("cview-dl-range-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // 1) 정상 206 부분 응답 → 정확히 "ABCD" 4바이트
+        let (url_206, h1) = serve_byte_range_hls("206-partial").await;
+        let out_206 = dir.join("ok_206.mp4");
+        let dl = VideoDownloader::new(Arc::new(AtomicBool::new(false)));
+        let n_206 = dl
+            .download_hls(&url_206, &out_206, Arc::new(|_, _| {}))
+            .await
+            .unwrap();
+        h1.abort();
+        assert_eq!(n_206, 4);
+        assert_eq!(std::fs::read(&out_206).unwrap(), b"ABCD");
+
+        // 2) Range 를 무시하고 200 으로 전체 "ABCD" 를 돌려주는 서버 → 요청 구간만 잘라 같은 "ABCD" 4바이트
+        let (url_200, h2) = serve_byte_range_hls("200-full").await;
+        let out_200 = dir.join("ok_200.mp4");
+        let n_200 = dl
+            .download_hls(&url_200, &out_200, Arc::new(|_, _| {}))
+            .await
+            .unwrap();
+        h2.abort();
+        assert_eq!(n_200, 4);
+        assert_eq!(std::fs::read(&out_200).unwrap(), b"ABCD");
+
+        // 3) 요청 구간 길이와 다른 206 응답 → 완료 처리하지 않고 중단하며 부분 파일도 정리한다
+        let (url_bad, h3) = serve_byte_range_hls("206-wrong-len").await;
+        let out_bad = dir.join("bad_206.mp4");
+        let err = dl
+            .download_hls(&url_bad, &out_bad, Arc::new(|_, _| {}))
+            .await;
+        h3.abort();
+        assert_eq!(err, Err(DownloadError::BadResponse(206)));
+        assert!(!out_bad.exists());
+        assert!(!part_path(&out_bad).exists());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

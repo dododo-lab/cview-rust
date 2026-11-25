@@ -8,7 +8,7 @@ use cview_core::models::equalizer::EqualizerPreset;
 use serde::Serialize;
 use tauri::State;
 
-use super::content::{default_save_dir, sanitize_file_name};
+use super::content::{app_save_dir, sanitize_file_name};
 use super::{CmdResult, CommandError};
 use crate::state::AppServices;
 
@@ -46,6 +46,7 @@ pub fn recording_file_name(channel: &str, now: chrono::DateTime<chrono::Local>) 
 /// WKWebView 에는 `video.captureStream` 이 없어 페이지 쪽 MediaRecorder 는 쓸 수 없다.
 #[tauri::command]
 pub async fn player_record_start(
+    app: tauri::AppHandle,
     services: State<'_, AppServices>,
 ) -> CmdResult<RecordingStatusDto> {
     let (url, name) = services
@@ -54,10 +55,7 @@ pub async fn player_record_start(
         .unwrap_or_else(|e| e.into_inner())
         .clone()
         .ok_or_else(|| CommandError("녹화할 방송이 없습니다".into()))?;
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
-    let dir = default_save_dir(&home, "recording");
+    let dir = app_save_dir(&app, "recording");
     let path = dir.join(recording_file_name(&name, chrono::Local::now()));
     services
         .recorder

@@ -369,8 +369,9 @@ await check('U07 설정 성능 탭', async () => {
   await page.evaluate(() => window.__usage.push(777));
   await page.waitForTimeout(80);
   assert.equal(await page.textContent(`${p} [data-st="now"]`), '78%');
-  // 표로 보기(1분 평균)
+  // 표로 보기(1분 평균) — <details> toggle 이벤트가 행을 채울 때까지 기다린 뒤 읽는다.
   await page.click(`${p} .usage-table summary`);
+  await page.waitForSelector(`${p} .usage-table tbody tr`);
   const rows = await page.$$eval(`${p} .usage-table tbody tr`, (r) => r.length);
   assert.ok(rows >= 4 && rows <= 6, `1분 평균 줄 ${rows}`);
   assert.equal(await page.$eval(`${p} .usage-table thead`, (t) => t.textContent.replace(/\s+/g, '')), '시각CPUGPU메모리네트워크');
@@ -395,6 +396,7 @@ await check('U07b 표는 분이 바뀔 때만', async () => {
   await openUsageTab(page);
   const p = '[data-usage-panel]';
   await page.click(`${p} .usage-table summary`);
+  await page.waitForSelector(`${p} .usage-table tbody tr`);
   const r = await page.evaluate(async (sel) => {
     const minute = (t) => Math.floor(t / 60000);
     let rebuilt = 0; let crossings = 0;

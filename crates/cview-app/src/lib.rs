@@ -308,7 +308,7 @@ pub fn run() {
             if let Some(images) = image_service::open_service(&data_dir) {
                 app.manage(images);
             }
-            app.manage(commands::download::Downloads::new(&data_dir));
+            app.manage(commands::download::Downloads::new(&handle, &data_dir));
             app.manage(services);
             app.manage(shell);
             app.manage(system::PendingDeepLinks::default());

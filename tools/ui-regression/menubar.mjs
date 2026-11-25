@@ -192,27 +192,38 @@ await check('MB04 라이브 탐색 — 즐겨찾기 우선·탭 전환·검색·
   await page.keyboard.press('Escape');
   assert.equal(await page.evaluate(() => window.__mb.closed), 1);
 
-  // 탭 화살표 전환(팔로잉 → 인기)
+  // 탭 화살표·Home·End 전환 및 로빙 tabindex(팔로잉 → 인기)
+  assert.equal(await page.getAttribute('#mb-tab-following', 'tabindex'), '0');
+  assert.equal(await page.getAttribute('#mb-tab-popular', 'tabindex'), '-1');
   await page.focus('#mb-tab-following');
   await page.keyboard.press('ArrowRight');
   assert.equal(await page.getAttribute('#mb-tab-popular', 'aria-selected'), 'true');
+  assert.equal(await page.getAttribute('#mb-tab-popular', 'tabindex'), '0');
+  assert.equal(await page.getAttribute('#mb-tab-following', 'tabindex'), '-1');
   assert.equal(await page.locator('.mb-item').count(), 10);
+  await page.keyboard.press('Home');
+  assert.equal(await page.getAttribute('#mb-tab-following', 'aria-selected'), 'true');
+  await page.keyboard.press('End');
+  assert.equal(await page.getAttribute('#mb-tab-popular', 'aria-selected'), 'true');
 
-  // 채널 줄 동작 3종(시청 / 멀티라이브 추가 / 독립 채팅 창)
+  // 채널 줄 동작 3종(시청 / 멀티라이브 추가 / 이미 담긴 채널은 멀티라이브 보기 / 독립 채팅 창)
   await page.click('.mb-item[data-channel-id="ch2"] [data-item-act="watch"]');
   await page.click('.mb-item[data-channel-id="ch2"] [data-item-act="multi"]');
+  assert.equal(await page.locator('.mb-item[data-channel-id="ch2"] .mb-act-btn.is-in-multi').count(), 1);
+  await page.click('.mb-item[data-channel-id="ch1"] [data-item-act="multi"]');
   await page.click('.mb-item[data-channel-id="ch2"] [data-item-act="chat"]');
-  const tail = await page.evaluate(() => window.__mb.controls.slice(-3));
+  const tail = await page.evaluate(() => window.__mb.controls.slice(-4));
   assert.deepEqual(tail, [
     { kind: 'open-live', channelId: 'ch2' },
     { kind: 'add-multilive', channelId: 'ch2' },
+    { kind: 'open-multilive' },
     { kind: 'open-chat-window', channelId: 'ch2' },
   ]);
   assert.deepEqual(errors, []);
   await ctx.close();
 });
 
-await check('MB05 비로그인 상태 — 로그인 안내 및 인기 탭 전환', async () => {
+await check('MB05 비로그인 상태 — 로그인 안내·인기 탭 전환 및 로그인 직후 즉시 팔로잉 전환', async () => {
   const { ctx, page, errors } = await openPopover({ loggedIn: false, nowPlaying: false });
   assert.equal(await page.isHidden('#mb-now'), true);
   assert.match(await page.textContent('#mb-list'), /로그인이 필요합니다/);
@@ -221,6 +232,17 @@ await check('MB05 비로그인 상태 — 로그인 안내 및 인기 탭 전환
   await page.click('[data-act="switch-popular"]');
   assert.equal(await page.getAttribute('#mb-tab-popular', 'aria-selected'), 'true');
   assert.equal(await page.locator('.mb-item').count(), 10);
+
+  // 다시 팔로잉 탭으로 둔 뒤 로그인 성공 이벤트가 오면, 트레이 주기 스냅샷이 아직 비로그인 값이어도 즉시 팔로잉 목록을 표시해야 한다.
+  await page.click('#mb-tab-following');
+  assert.match(await page.textContent('#mb-list'), /로그인이 필요합니다/);
+  await page.evaluate(() => {
+    // tray_get_state 의 snap.loggedIn 은 의도적으로 false 인 채로 두어 레이스를 재현한다.
+    window.__emitMenubar('auth://changed', { loggedIn: true, state: 'loggedIn', nickname: '도도' });
+  });
+  await page.waitForFunction(() => document.querySelectorAll('#mb-list .mb-item').length === 6);
+  assert.equal(await page.textContent('#mb-live-count'), '팔로잉 방송 중 6');
+  assert.doesNotMatch(await page.textContent('#mb-list'), /로그인이 필요합니다/);
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -234,7 +256,7 @@ for (const theme of ['dark', 'light']) {
     await page.addScriptTag({ content: AXE });
     const violations = await page.evaluate(async () => {
       const r = await window.axe.run(document.getElementById('mb-popover'), {
-        runOnly: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'],
+        runOnly: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'],
       });
       return r.violations.map((v) => `${v.id}: ${v.nodes.slice(0, 3).map((n) => n.target.join(' ')).join(' | ')}`);
     });

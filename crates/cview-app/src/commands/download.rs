@@ -43,14 +43,31 @@ pub struct Downloads {
 }
 
 impl Downloads {
-    pub fn new(data_dir: &std::path::Path) -> Self {
-        let home = std::env::var_os("HOME").map(PathBuf::from);
-        let folder =
-            cview_app_core::services::media_download::default_download_folder(home.as_deref());
-        let roots: Vec<PathBuf> = home
-            .iter()
-            .flat_map(|h| [h.join("Movies"), h.join("Downloads")])
-            .collect();
+    pub fn new<R: tauri::Runtime>(app: &AppHandle<R>, data_dir: &std::path::Path) -> Self {
+        let p = app.path();
+        let video_dir = p.video_dir().ok();
+        let download_dir = p.download_dir().ok();
+        let home = super::content::current_user_home();
+        let folder = cview_app_core::services::media_download::resolve_download_folder(
+            video_dir.as_deref(),
+            download_dir.as_deref(),
+            home.as_deref(),
+        );
+        let mut roots: Vec<PathBuf> = Vec::new();
+        for candidate in [
+            video_dir,
+            download_dir,
+            home.as_ref().map(|h| h.join("Movies")),
+            home.as_ref().map(|h| h.join("Videos")),
+            home.as_ref().map(|h| h.join("Downloads")),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            if !roots.contains(&candidate) {
+                roots.push(candidate);
+            }
+        }
         Self {
             entries: Mutex::new(Vec::new()),
             history: DownloadHistoryStore::new(

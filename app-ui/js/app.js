@@ -44,7 +44,7 @@ import { showMenu, refreshChatAuth, reconnectFailedChats } from './chat.js';
 import { installUiHealth } from './ui-health.js';
 import { installUsageChip, closeUsagePop } from './usage-chip.js';
 import { closeUserPop } from './chat-user-pop.js';
-import { kbd, IS_WINDOWS } from './platform.js';
+import { kbd, IS_WINDOWS, noteSaveDirs } from './platform.js';
 import { installWindowControls } from './window-controls.js';
 import { withRefreshVeil, cancelRefreshVeil } from './refresh-veil.js';
 import { initSharpness, flushSharpnessNotice } from './sharpness.js';
@@ -1220,7 +1220,10 @@ async function main() {
   const ws = settings?.general?.restoreWindowOnLaunch !== false ? loadWorkspace() : null;
   // 홈은 로딩 화면 뒤에서 먼저 불러 둔다 — 스켈레톤이 아니라 채워진 홈이 바로 보이게.
   navigate('home', {}, { push: false });
-  if (isTauri) api.authStatus().then(onAuthChanged).catch(() => {});
+  if (isTauri) {
+    api.authStatus().then(onAuthChanged).catch(() => {});
+    api.appInfo().then(noteSaveDirs).catch(() => {});
+  }
   await loadHomeBehindSplash();
   hideSplash();
   showWelcome({ onLogin: login });

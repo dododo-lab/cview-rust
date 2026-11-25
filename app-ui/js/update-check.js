@@ -3,6 +3,7 @@
 // 설치는 백엔드 `update_install` — 받기·SHA-256·서명 확인·교체·재실행까지 하고 앱이 끝난다.
 import { api, listen } from './api.js';
 import { esc } from './dom.js';
+import { noteSaveDirs } from './platform.js';
 
 let last = null; // 마지막 확인 결과 — 설정 화면을 다시 그려도 남긴다
 let appInfo = null;
@@ -15,7 +16,10 @@ export function versionText(info) {
 /** 앱 정보({ version, build, os, arch, dataDir }) — 한 번 받아 둔다. 앱 밖이면 null. */
 export async function currentAppInfo() {
   if (!appInfo) {
-    try { appInfo = await api.appInfo(); } catch { return null; }
+    try {
+      appInfo = await api.appInfo();
+      noteSaveDirs(appInfo);
+    } catch { return null; }
   }
   return appInfo;
 }

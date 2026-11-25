@@ -158,6 +158,18 @@ impl DataStore {
         self.inner.conn.lock().unwrap_or_else(|e| e.into_inner())
     }
 
+    /// 열린 스토어 연결에서 SQLite 온라인 백업 API 로 일관된 스냅샷을 찍는다(수동 백업 등).
+    pub fn backup_online(
+        &self,
+        backup: &crate::store_backup::StoreBackup,
+        reason: crate::store_backup::BackupReason,
+        app_build: &str,
+        preflight: Option<&str>,
+    ) -> Option<crate::store_backup::BackupEntry> {
+        let conn = self.lock();
+        backup.snapshot_online(&conn, reason, app_build, preflight)
+    }
+
     /// 읽기 전용 작업.
     pub(crate) fn read<T>(&self, f: impl FnOnce(&Connection) -> Result<T>) -> Result<T> {
         let conn = self.lock();

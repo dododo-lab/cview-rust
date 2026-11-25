@@ -679,11 +679,53 @@ pub async fn bookmark_delete(services: State<'_, AppServices>, id: String) -> Cm
 
 /// 저장 종류별 기본 폴더(사용자 폴더 아래). 스크린샷은 설정 `screenshotPath` 가 있으면 그곳.
 pub fn default_save_dir(home: &Path, kind: &str) -> PathBuf {
+    default_save_dir_for_os(home, kind, cfg!(windows))
+}
+
+/// 플랫폼별 사용자 폴더 하위 기본 저장 경로. Windows 동영상 폴더는 `Movies` 가 아니라 `Videos` 다. 순수 함수.
+pub fn default_save_dir_for_os(home: &Path, kind: &str, windows: bool) -> PathBuf {
     match kind {
         "screenshot" => home.join("Pictures").join("CView"),
-        "recording" => home.join("Movies").join("CView"),
+        "recording" => home
+            .join(if windows { "Videos" } else { "Movies" })
+            .join("CView"),
         _ => home.join("Downloads").join("CView"),
     }
+}
+
+/// 환경 변수(`HOME`, Windows 의 `USERPROFILE`)에서 사용자 홈 디렉터리를 고른다. 순수 함수.
+pub fn user_home_from_env(
+    home: Option<&std::ffi::OsStr>,
+    user_profile: Option<&std::ffi::OsStr>,
+) -> Option<PathBuf> {
+    home.filter(|s| !s.is_empty())
+        .or_else(|| user_profile.filter(|s| !s.is_empty()))
+        .map(PathBuf::from)
+}
+
+/// 현재 프로세스 환경에서 사용자 홈 디렉터리를 구한다(`HOME` → `USERPROFILE`).
+pub fn current_user_home() -> Option<PathBuf> {
+    user_home_from_env(
+        std::env::var_os("HOME").as_deref(),
+        std::env::var_os("USERPROFILE").as_deref(),
+    )
+}
+
+/// Tauri OS 경로 API(`video_dir` · `picture_dir` · `download_dir`)로 실제 기본 저장 폴더를 구한다.
+/// OS API 가 실패한 환경에서만 `HOME`/`USERPROFILE` → 임시 폴더 순으로 대체한다.
+pub fn app_save_dir<R: tauri::Runtime>(app: &tauri::AppHandle<R>, kind: &str) -> PathBuf {
+    use tauri::Manager;
+    let p = app.path();
+    let os_dir = match kind {
+        "screenshot" => p.picture_dir().ok(),
+        "recording" => p.video_dir().ok(),
+        _ => p.download_dir().ok(),
+    };
+    if let Some(base) = os_dir.filter(|d| !d.as_os_str().is_empty()) {
+        return base.join("CView");
+    }
+    let fallback_root = current_user_home().unwrap_or_else(std::env::temp_dir);
+    default_save_dir(&fallback_root, kind)
 }
 
 /// 파일 이름 정리 — 경로 구분자·제어 문자를 지우고 길이를 줄인다.
@@ -764,6 +806,7 @@ pub fn save_allowed(kind: &str, file_name: &str) -> bool {
 /// 파일 저장 — `data` 는 base64(바이너리) 또는 `text`(문자열) 중 하나. 저장한 경로를 돌려준다.
 #[tauri::command]
 pub async fn save_file(
+    app: tauri::AppHandle,
     services: State<'_, AppServices>,
     kind: String,
     file_name: String,
@@ -786,14 +829,12 @@ pub async fn save_file(
         (None, Some(t)) => t.into_bytes(),
         (None, None) => return Err(CommandError("저장할 내용이 없습니다".into())),
     };
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
+    let home = current_user_home().unwrap_or_else(std::env::temp_dir);
     let configured = (kind == "screenshot")
         .then(|| services.settings.player().screenshot_path)
         .filter(|p| !p.trim().is_empty())
         .map(|p| PathBuf::from(shellexpand_home(&p, &home)));
-    let dir = configured.unwrap_or_else(|| default_save_dir(&home, &kind));
+    let dir = configured.unwrap_or_else(|| app_save_dir(&app, &kind));
     std::fs::create_dir_all(&dir)
         .map_err(|e| CommandError(format!("폴더를 만들 수 없습니다: {e}")))?;
     let (path, mut file) = create_unique_file(&dir, &file_name)
@@ -808,10 +849,16 @@ pub async fn save_file(
 }
 
 fn shellexpand_home(path: &str, home: &Path) -> String {
-    match path.strip_prefix("~/") {
-        Some(rest) => home.join(rest).to_string_lossy().into_owned(),
-        None => path.to_string(),
+    if let Some(rest) = path.strip_prefix("~/").or_else(|| path.strip_prefix("~\\")) {
+        return home.join(rest).to_string_lossy().into_owned();
     }
+    if let Some(rest) = path
+        .strip_prefix("%USERPROFILE%\\")
+        .or_else(|| path.strip_prefix("%USERPROFILE%/"))
+    {
+        return home.join(rest).to_string_lossy().into_owned();
+    }
+    path.to_string()
 }
 
 /// 외부 도우미(open·explorer·xdg-open·rundll32)를 띄운다. 끝나기를 기다리지 않되, 끝난 프로세스는
@@ -1062,6 +1109,30 @@ mod tests {
             home.join("Pictures/CView")
         );
         assert_eq!(default_save_dir(home, "chat"), home.join("Downloads/CView"));
+        assert_eq!(
+            default_save_dir_for_os(Path::new(r"C:\Users\alice"), "recording", true),
+            PathBuf::from(r"C:\Users\alice")
+                .join("Videos")
+                .join("CView")
+        );
+        assert_eq!(
+            default_save_dir_for_os(home, "recording", false),
+            home.join("Movies/CView")
+        );
+        assert_eq!(
+            user_home_from_env(None, Some(std::ffi::OsStr::new(r"C:\Users\alice"))),
+            Some(PathBuf::from(r"C:\Users\alice")),
+            "Windows 처럼 HOME 이 없어도 USERPROFILE 로 사용자 폴더를 찾는다"
+        );
+        assert_eq!(
+            shellexpand_home(
+                r"%USERPROFILE%\Pictures\Shots",
+                Path::new(r"C:\Users\alice")
+            ),
+            Path::new(r"C:\Users\alice")
+                .join(r"Pictures\Shots")
+                .to_string_lossy()
+        );
         let dir = tempfile::tempdir().unwrap();
         let dir = dir.path();
         std::fs::write(dir.join("a.txt"), "x").unwrap();

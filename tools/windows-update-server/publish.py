@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Publish a static, GitHub-compatible CView update feed. Python standard library only."""
 import argparse
+from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
 import html
@@ -13,6 +14,8 @@ import subprocess
 import tempfile
 from urllib.parse import quote, urlsplit, urlunsplit
 
+STABLE_VERSION_RE = re.compile(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)')
+
 
 def public_base(value):
     url = urlsplit(value)
@@ -22,8 +25,22 @@ def public_base(value):
     return urlunsplit(url).rstrip('/')
 
 
+def _is_link(path):
+    return path.is_symlink() or (path.exists() and getattr(path.lstat(), 'st_file_attributes', 0) & 0x400)
+
+
+def _sha256_file(path):
+    digest = hashlib.sha256()
+    with path.open('rb') as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def atomic_write(path, data):
     path = Path(path)
+    if _is_link(path) or _is_link(path.parent):
+        raise ValueError(f'Refusing linked destination: {path}')
     descriptor, temporary = tempfile.mkstemp(prefix='.publish-', suffix='.tmp', dir=path.parent)
     try:
         with os.fdopen(descriptor, 'wb') as out:
@@ -37,9 +54,99 @@ def atomic_write(path, data):
         Path(temporary).unlink(missing_ok=True)
 
 
+def build_release_catalog(root):
+    """Read immutable release manifests under root/releases in descending semantic version order."""
+    releases = Path(root) / 'releases'
+    if not releases.is_dir():
+        return b'[]\n'
+    catalog = []
+    for folder in sorted(releases.iterdir()):
+        if not folder.is_dir() or _is_link(folder) or not STABLE_VERSION_RE.fullmatch(folder.name):
+            continue
+        manifest_path = folder / 'manifest.json'
+        if not manifest_path.is_file() or _is_link(manifest_path):
+            continue
+        value = json.loads(manifest_path.read_text(encoding='utf-8-sig'))
+        if value.get('tag_name') != 'v' + folder.name or not isinstance(value.get('assets'), list):
+            raise ValueError(f'Invalid release manifest: {folder.name}')
+        catalog.append(value)
+    catalog.sort(key=lambda item: tuple(map(int, item['tag_name'][1:].split('.'))), reverse=True)
+    return (json.dumps(catalog, ensure_ascii=False, indent=2) + '\n').encode('utf-8')
+
+
+def _verify_promoted_release(destination, release_url, version, sources, notes, signature):
+    """Return (manifest, encoded_bytes) if destination is an exact already-promoted copy of this release."""
+    manifest_path = destination / 'manifest.json'
+    index_path = destination / 'index.html'
+    if (not destination.is_dir() or _is_link(destination)
+            or not manifest_path.is_file() or _is_link(manifest_path)
+            or not index_path.is_file() or _is_link(index_path)):
+        return None
+    try:
+        raw = manifest_path.read_bytes()
+        manifest = json.loads(raw.decode('utf-8'))
+    except (OSError, UnicodeDecodeError, ValueError):
+        return None
+    if (manifest.get('tag_name') != 'v' + version
+            or manifest.get('name') != f'CView {version}'
+            or manifest.get('html_url') != release_url
+            or manifest.get('body') != notes):
+        return None
+    if signature is None:
+        if 'signature' in manifest:
+            return None
+    elif manifest.get('signature') != signature:
+        return None
+    expected_assets = []
+    for source in sources:
+        placed = destination / source.name
+        sums = destination / f'{source.name}.sha256'
+        if (not placed.is_file() or _is_link(placed)
+                or not sums.is_file() or _is_link(sums)):
+            return None
+        source_hash = _sha256_file(source)
+        if placed.stat().st_size != source.stat().st_size or _sha256_file(placed) != source_hash:
+            return None
+        if sums.read_text(encoding='utf-8') != f'{source_hash}  {source.name}\n':
+            return None
+        expected_assets.append({
+            'name': source.name,
+            'size': source.stat().st_size,
+            'browser_download_url': release_url + quote(source.name),
+            'sha256': source_hash,
+        })
+    if manifest.get('assets') != expected_assets:
+        return None
+    return manifest, raw
+
+
+@contextmanager
+def _publish_lock(root):
+    """OS kernel file lock: prevents concurrent publishes while automatically releasing on process crash."""
+    lock = root.parent / f'.{root.name}-publish.lock'
+    if _is_link(lock):
+        raise ValueError('Refusing linked publish lock')
+    with lock.open('a+b') as stream:
+        if stream.tell() == 0:
+            stream.write(b'0')
+            stream.flush()
+        stream.seek(0)
+        if os.name == 'nt':
+            import msvcrt
+            msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        stream.seek(0)
+        stream.truncate()
+        stream.write(f'{os.getpid()}\n'.encode('ascii'))
+        stream.flush()
+        yield
+
+
 def _publish(root, base_url, version, artifacts, notes='', signature=None):
     base_url = public_base(base_url)
-    if not re.fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version):
+    if not STABLE_VERSION_RE.fullmatch(version):
         raise ValueError('Use a stable version such as 0.1.1')
     sources = [Path(p).resolve(strict=True) for p in artifacts]
     if not sources or len({p.name.casefold() for p in sources}) != len(sources):
@@ -53,15 +160,24 @@ def _publish(root, base_url, version, artifacts, notes='', signature=None):
     root = Path(root).resolve()
     releases = root / 'releases'
     releases.mkdir(parents=True, exist_ok=True)
-    destination = releases / version
-    if destination.exists():
-        raise FileExistsError(f'Release {version} already exists; releases are immutable')
     latest = releases / 'latest.json'
     if latest.exists():
         previous = json.loads(latest.read_text(encoding='utf-8'))['tag_name'].lstrip('vV')
         if tuple(map(int, version.split('.'))) <= tuple(map(int, previous.split('.'))):
             raise ValueError('New version must be newer than the published release')
     release_url = f'{base_url}/releases/{version}/'
+    destination = releases / version
+    if destination.exists():
+        # 버전 폴더 배치 직후·latest.json 교체 직전에 비정상 종료된 경우:
+        # 이미 놓인 파일·manifest·서명이 요청과 완전히 일치할 때만 피드·카탈로그 갱신부터 이어 간다.
+        resumed = _verify_promoted_release(destination, release_url, version, sources, notes, signature)
+        if resumed is None:
+            raise FileExistsError(f'Release {version} already exists; releases are immutable')
+        manifest, encoded = resumed
+        atomic_write(latest, encoded)
+        atomic_write(root / 'release-catalog.json', build_release_catalog(root))
+        return manifest
+
     with tempfile.TemporaryDirectory(prefix='cview-publish-', dir=root.parent) as temporary:
         stage = Path(temporary) / version
         stage.mkdir()
@@ -69,11 +185,7 @@ def _publish(root, base_url, version, artifacts, notes='', signature=None):
         for source in sources:
             target = stage / source.name
             shutil.copyfile(source, target)
-            digest = hashlib.sha256()
-            with target.open('rb') as stream:
-                for chunk in iter(lambda: stream.read(1024 * 1024), b''):
-                    digest.update(chunk)
-            checksum = digest.hexdigest()
+            checksum = _sha256_file(target)
             (stage / f'{source.name}.sha256').write_text(f'{checksum}  {source.name}\n', encoding='utf-8')
             assets.append({'name': source.name, 'size': target.stat().st_size,
                            'browser_download_url': release_url + quote(source.name),
@@ -102,27 +214,22 @@ def _publish(root, base_url, version, artifacts, notes='', signature=None):
             subprocess.run(['icacls.exe', str(stage), '/grant',
                             '*S-1-5-32-568:(OI)(CI)(RX)', '/T', '/Q'],
                            check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        # Promote a complete immutable directory, then atomically change the feed.
+        # Promote a complete immutable directory, then atomically change the feed and release catalog.
         os.rename(stage, destination)
         try:
-            atomic_write(releases / 'latest.json', encoded)
+            atomic_write(latest, encoded)
         except OSError:
             shutil.rmtree(destination)
             raise
+        atomic_write(root / 'release-catalog.json', build_release_catalog(root))
     return manifest
 
 
 def publish(root, base_url, version, artifacts, notes='', signature=None):
     root = Path(root).resolve()
     root.parent.mkdir(parents=True, exist_ok=True)
-    lock = root.parent / f'.{root.name}-publish.lock'
-    descriptor = os.open(lock, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    try:
-        with os.fdopen(descriptor, 'w') as out:
-            out.write(str(os.getpid()))
+    with _publish_lock(root):
         return _publish(root, base_url, version, artifacts, notes, signature)
-    finally:
-        lock.unlink(missing_ok=True)
 
 
 def main():
