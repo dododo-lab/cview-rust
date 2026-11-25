@@ -58,12 +58,61 @@ def latest(root):
     return json.loads(path.read_text(encoding='utf-8')) if path.exists() else None
 
 
-def require_new(root, version):
+def require_newer_than_latest(root, version):
     previous = latest(root)
     if previous and version_tuple(version) <= version_tuple(previous['tag_name'].lstrip('v')):
         raise ValueError('Version must be newer than ' + previous['tag_name'])
-    if (root / 'site' / 'releases' / version).exists():
+
+
+def _promoted_manifest(root, version):
+    folder = root / 'site' / 'releases' / version
+    if not folder.exists():
+        return None
+    safe(folder)
+    manifest_path = safe(folder / 'manifest.json')
+    if not folder.is_dir() or not manifest_path.is_file() or not safe(folder / 'index.html').is_file():
         raise ValueError('Published releases are immutable')
+    try:
+        return json.loads(manifest_path.read_text(encoding='utf-8'))
+    except (OSError, UnicodeDecodeError, ValueError):
+        raise ValueError('Published releases are immutable') from None
+
+
+def _require_upload_allowed(root, version, name, size, sha256):
+    require_newer_than_latest(root, version)
+    manifest = _promoted_manifest(root, version)
+    if manifest is None:
+        return
+    # 버전 폴더 배치 직후 latest.json 교체 전에 중단된 릴리스의 재시도: 이미 놓인 파일과 일치할 때만 허용한다.
+    if name == 'notes.txt':
+        body = (manifest.get('body') or '').encode('utf-8')
+        actual = {'size': len(body), 'sha256': hashlib.sha256(body).hexdigest()}
+    else:
+        placed = safe(root / 'site' / 'releases' / version / name)
+        if not placed.is_file():
+            raise ValueError('Published releases are immutable')
+        actual = describe(placed)
+    if actual != {'size': size, 'sha256': sha256}:
+        raise ValueError('Published releases are immutable')
+
+
+def _require_publish_allowed(root, version, expected, signature):
+    require_newer_than_latest(root, version)
+    manifest = _promoted_manifest(root, version)
+    if manifest is None:
+        return False
+    try:
+        matched = same_release(manifest, version, expected)
+    except ValueError:
+        raise ValueError('Published releases are immutable') from None
+    if not matched or manifest.get('signature') != signature:
+        raise ValueError('Published releases are immutable')
+    folder = root / 'site' / 'releases' / version
+    for name in installers(version):
+        placed = safe(folder / name)
+        if not placed.is_file() or describe(placed) != expected[name]:
+            raise ValueError('Published releases are immutable')
+    return True
 
 
 @contextmanager
@@ -188,12 +237,12 @@ def dispatch(request, stream, root=ROOT):
         version = request['version']
         names = filenames(version)
         if action == 'upload':
-            require_new(root, version)
             name = request['name']
             if name not in names:
                 raise ValueError('Filename is not a release artifact')
             if name == 'notes.txt' and request['size'] > 65536:
                 raise ValueError('Release notes are too large')
+            _require_upload_allowed(root, version, name, request['size'], request['sha256'])
             folder = safe(incoming / version)
             folder.mkdir(exist_ok=True)
             destination = safe(folder / name)
@@ -213,14 +262,14 @@ def dispatch(request, stream, root=ROOT):
         if reused and current.get('signature') != signature:
             raise ValueError('Published signature differs; never overwrite it')
         if not reused:
-            require_new(root, version)
+            resumable = _require_publish_allowed(root, version, expected, signature)
             folder = safe(incoming / version)
             for name in names:
                 if describe(safe(folder / name)) != expected[name]:
                     raise ValueError('Staged file mismatch: ' + name)
             notes = (folder / 'notes.txt').read_bytes().decode('utf-8')
             if action == 'validate':
-                return {'validated': version, 'published': False}
+                return {'validated': version, 'published': False, **({'resumable': True} if resumable else {})}
             # Fixed, administrator-owned module; no client-supplied code or paths.
             sys.path.insert(0, str(root / 'tools'))
             from publish import publish

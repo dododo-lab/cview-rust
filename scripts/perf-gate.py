@@ -37,24 +37,70 @@ ROOT = Path(__file__).resolve().parent.parent
 
 @dataclass(frozen=True)
 class Probe:
-    """측정 예제 하나 — 크레이트·예제 이름·인자. 인자의 `{tmp}` 는 실행마다 새 임시 폴더."""
+    """측정 예제 하나 — 크레이트·예제 이름·인자·필수 지표. 인자의 `{tmp}` 는 실행마다 새 임시 폴더."""
 
     key: str
     package: str
     example: str
     args: tuple[str, ...] = ()
+    required_metrics: tuple[str, ...] = ()
 
 
 PROBES: tuple[Probe, ...] = (
-    Probe("chat-parse", "cview-chat", "parse_probe"),
-    Probe("store", "cview-persistence", "perf_probe", ("{tmp}/store.sqlite", "20000")),
-    Probe("image-cache", "cview-persistence", "image_cache_probe", ("3000",)),
+    Probe(
+        "chat-parse",
+        "cview-chat",
+        "parse_probe",
+        required_metrics=(
+            "parse 1-msg frame (per msg)",
+            "parse 10-msg frame (per msg)",
+        ),
+    ),
+    Probe(
+        "store",
+        "cview-persistence",
+        "perf_probe",
+        ("{tmp}/store.sqlite", "20000"),
+        required_metrics=(
+            "aggregate_insights",
+            "recent_watch_history_rows(60)",
+            "all_watch_history_rows",
+            "watch_report today",
+            "watch_report 7d",
+            "watch_report 30d",
+            "watch_report all",
+            "fetch_favorite_items",
+            "fetch_recent_items(20)",
+            "fetch_recent_vod_playback(40)",
+            "watch_history_fingerprint",
+            "table_row_count",
+        ),
+    ),
+    Probe(
+        "image-cache",
+        "cview-persistence",
+        "image_cache_probe",
+        ("3000",),
+        required_metrics=(
+            "get 60 hits (same screen)",
+            "put 20 new",
+        ),
+    ),
 )
 
 # parse_probe: "frame of 10 msgs (10972 B): 5.84 µs/msg"
 _FRAME = re.compile(r"^frame of\s+(\d+) msgs \(\d+ B\):\s+([0-9.]+)\s+µs/msg")
 # perf_probe · image_cache_probe: "name   median    1.533ms  min    1.451ms"
 _MEDIAN = re.compile(r"^(.+?)\s+median\s+([0-9.]+)ms\s+min\s+([0-9.]+)ms")
+
+
+class ProbeMeasurementError(RuntimeError):
+    """실행한 측정 예제에서 지표를 읽지 못했거나 필수 지표가 빠졌을 때 발생한다."""
+
+    def __init__(self, probe: Probe, detail: str) -> None:
+        self.probe = probe
+        self.detail = detail
+        super().__init__(f"{probe.key} ({probe.example}): {detail}")
 
 
 def parse_metrics(text: str) -> dict[str, float]:
@@ -72,13 +118,31 @@ def parse_metrics(text: str) -> dict[str, float]:
     return out
 
 
+def collect_probe_metrics(
+    probe: Probe,
+    text: str,
+    *,
+    require_expected: bool = True,
+) -> dict[str, float]:
+    """예제 출력에서 지표를 읽고, 0개이거나 필수 지표가 빠졌으면 예제 이름과 함께 오류를 낸다."""
+    raw = parse_metrics(text)
+    if not raw:
+        raise ProbeMeasurementError(probe, "측정된 지표가 0개입니다")
+    if require_expected and probe.required_metrics:
+        missing = [name for name in probe.required_metrics if name not in raw]
+        if missing:
+            raise ProbeMeasurementError(probe, f"필수 지표 누락: {', '.join(missing)}")
+    return {f"{probe.key}: {k}": v for k, v in raw.items()}
+
+
 @dataclass
 class Verdict:
     name: str
     base: float | None
-    head: float
+    head: float | None
     ratio: float | None
     regressed: bool
+    missing: bool = False
 
 
 def compare(
@@ -87,9 +151,13 @@ def compare(
     threshold: float,
     floor_ms: float,
 ) -> list[Verdict]:
-    """지표별 중앙값 비교. 느려진 비율이 threshold 를 넘고 절대 차이가 floor_ms 를 넘을 때만 회귀."""
-    verdicts = []
+    """지표별 중앙값 비교. 기준에 있던 지표가 현재 측정에서 빠지면 missing=True 로 기록한다."""
+    verdicts: list[Verdict] = []
+    seen: set[str] = set()
     for name, values in head.items():
+        if not values:
+            continue
+        seen.add(name)
         h = statistics.median(values)
         b_values = base.get(name)
         if not b_values:
@@ -99,6 +167,11 @@ def compare(
         ratio = h / b if b > 0 else None
         regressed = ratio is not None and ratio > threshold and (h - b) > floor_ms
         verdicts.append(Verdict(name, b, h, ratio, regressed))
+    for name, b_values in base.items():
+        if name in seen or not b_values:
+            continue
+        b = statistics.median(b_values)
+        verdicts.append(Verdict(name, b, None, None, False, missing=True))
     return verdicts
 
 
@@ -113,10 +186,37 @@ def markdown(verdicts: list[Verdict], base_ref: str, rounds: int, threshold: flo
     ]
     for v in verdicts:
         b = "—" if v.base is None else f"{v.base:.4f} ms"
+        h = "—" if v.head is None else f"{v.head:.4f} ms"
         r = "—" if v.ratio is None else f"×{v.ratio:.2f}"
-        mark = "회귀" if v.regressed else ("기준 없음" if v.base is None else "통과")
-        lines.append(f"| {v.name} | {b} | {v.head:.4f} ms | {r} | {mark} |")
+        if v.missing:
+            mark = "누락"
+        elif v.regressed:
+            mark = "회귀"
+        elif v.base is None:
+            mark = "기준 없음"
+        else:
+            mark = "통과"
+        lines.append(f"| {v.name} | {b} | {h} | {r} | {mark} |")
     return "\n".join(lines) + "\n"
+
+
+def gate_failures(
+    verdicts: list[Verdict],
+    probe_errors: list[str] | None = None,
+) -> list[str]:
+    """실패 사유 목록. 비어 있으면 게이트 통과(종료 코드 0)."""
+    failures: list[str] = []
+    if probe_errors:
+        failures.append("측정 예제 오류: " + "; ".join(probe_errors))
+    missing = [v.name for v in verdicts if v.missing]
+    if missing:
+        failures.append("지표 누락: " + ", ".join(missing))
+    regressed = [v.name for v in verdicts if v.regressed]
+    if regressed:
+        failures.append("회귀: " + ", ".join(regressed))
+    if not verdicts and not failures:
+        failures.append("측정된 지표가 없습니다")
+    return failures
 
 
 # ── 실행 ─────────────────────────────────────────
@@ -170,12 +270,12 @@ def build(tree: Path, target: Path, probes: list[Probe], borrowed: frozenset[Pro
     return built
 
 
-def measure(target: Path, probe: Probe) -> dict[str, float]:
+def measure(target: Path, probe: Probe, *, require_expected: bool = True) -> dict[str, float]:
     exe = target / "release" / "examples" / probe.example
     with tempfile.TemporaryDirectory(prefix="cview-perf-gate-") as tmp:
         args = [a.replace("{tmp}", tmp) for a in probe.args]
         out = run([str(exe), *args], Path(tmp), capture=True)
-    return {f"{probe.key}: {k}": v for k, v in parse_metrics(out).items()}
+    return collect_probe_metrics(probe, out, require_expected=require_expected)
 
 
 def static_checks(tree: Path) -> None:
@@ -218,14 +318,30 @@ def main(argv: list[str] | None = None) -> int:
 
         base_vals: dict[str, list[float]] = {}
         head_vals: dict[str, list[float]] = {}
+        probe_errors: list[str] = []
+        seen_errors: set[str] = set()
+        if not head_probes:
+            probe_errors.append("실행할 측정 예제가 없습니다")
         for i in range(args.rounds):
             print(f"── 라운드 {i + 1}/{args.rounds}", file=sys.stderr, flush=True)
             for p in head_probes:
                 if p in base_probes:
-                    for k, v in measure(work / "target-base", p).items():
-                        base_vals.setdefault(k, []).append(v)
-                for k, v in measure(work / "target-head", p).items():
-                    head_vals.setdefault(k, []).append(v)
+                    try:
+                        for k, v in measure(work / "target-base", p, require_expected=False).items():
+                            base_vals.setdefault(k, []).append(v)
+                    except ProbeMeasurementError as exc:
+                        msg = f"기준 {exc}"
+                        if msg not in seen_errors:
+                            seen_errors.add(msg)
+                            probe_errors.append(msg)
+                try:
+                    for k, v in measure(work / "target-head", p, require_expected=True).items():
+                        head_vals.setdefault(k, []).append(v)
+                except ProbeMeasurementError as exc:
+                    msg = str(exc)
+                    if msg not in seen_errors:
+                        seen_errors.add(msg)
+                        probe_errors.append(msg)
     finally:
         run(["git", "worktree", "remove", "--force", str(base_tree)], ROOT)
         if not args.work_dir:
@@ -238,12 +354,22 @@ def main(argv: list[str] | None = None) -> int:
         args.markdown.write_text(table, encoding="utf-8")
     if args.json:
         args.json.write_text(
-            json.dumps({"base": base_sha, "baseValues": base_vals, "headValues": head_vals}, ensure_ascii=False, indent=2),
+            json.dumps(
+                {
+                    "base": base_sha,
+                    "baseValues": base_vals,
+                    "headValues": head_vals,
+                    "probeErrors": probe_errors,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
             encoding="utf-8",
         )
-    regressed = [v.name for v in verdicts if v.regressed]
-    if regressed:
-        print("회귀: " + ", ".join(regressed), file=sys.stderr)
+    failures = gate_failures(verdicts, probe_errors)
+    if failures:
+        for line in failures:
+            print(line, file=sys.stderr)
         return 1
     return 0
 

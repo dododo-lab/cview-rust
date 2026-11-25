@@ -13,21 +13,25 @@
 // P07 같은 읽기 명령이 같은 인자로 동시에 나가면 한 번만 보내는지(api.js invoke) — 보관함에 들어갈 때 겹치는 요청이 없고,
 //     나눠 받은 결과는 부른 쪽마다 따로이며, 쓰기 뒤의 읽기는 쓰기 전에 나간 요청에 끼지 않는지.
 //     — 예전엔 시작할 때 settings_get 4번·following_lives 3번, 보관함 진입마다 같은 목록을 2~3번씩 물었다.
-// 저장소 루트에서: node tools/ui-regression/perf.mjs   (Playwright 가 필요하다)
+// 저장소 루트에서: node tools/ui-regression/perf.mjs   (Playwright 가 필요하다.
+//   CVIEW_UI_BROWSER=webkit 이면 WebKit 으로 실행하며, CDP 전용 추적·CPU 감속 검사는 건너뛴다.)
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { server, go, openApp, base, mockTauri } from './mock-app.mjs';
 
 const require = createRequire(import.meta.url);
-const { chromium } = require('playwright');
+const pw = require('playwright');
+const WEBKIT = process.env.CVIEW_UI_BROWSER === 'webkit';
+const engine = WEBKIT ? pw.webkit : pw.chromium;
 const results = [];
 async function check(id, fn) {
+  if (process.env.CVIEW_ONLY && !process.env.CVIEW_ONLY.split(',').some((o) => id.startsWith(o))) return;
   try { await fn(); results.push({ id, ok: true }); } catch (e) { results.push({ id, ok: false, error: e.message }); }
 }
-const browser = await chromium.launch();
+const browser = await engine.launch();
 
-// ── P01 시작 중 강제 동기 레이아웃 ──
-await check('P01 startup: app code forces almost no synchronous layout', async () => {
+// ── P01 시작 중 강제 동기 레이아웃 (Chromium CDP 전용) ──
+if (!WEBKIT) await check('P01 startup: app code forces almost no synchronous layout', async () => {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
   const cdp = await ctx.newCDPSession(page);
@@ -54,9 +58,9 @@ await check('P01 startup: app code forces almost no synchronous layout', async (
 // ── P02 대기 비용 ──
 {
   const { ctx, page } = await openApp(browser, { width: 1280 });
-  const cdp = await ctx.newCDPSession(page);
-  await cdp.send('Performance.enable');
-  const metrics = async () => Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map((m) => [m.name, m.value]));
+  const cdp = WEBKIT ? null : await ctx.newCDPSession(page);
+  if (cdp) await cdp.send('Performance.enable');
+  const metrics = async () => (cdp ? Object.fromEntries((await cdp.send('Performance.getMetrics')).metrics.map((m) => [m.name, m.value])) : null);
   // 팔로잉은 썸네일이 빈 카드를 몇 번 다시 채운다(pages.js fillThumbsLater, 횟수 제한) — 그만큼만 허용
   const IPC_BUDGET = { following: 3 };
   for (const route of ['home', 'following', 'popular', 'multichat', 'multilive', 'library', 'stats', 'settings']) {
@@ -74,10 +78,12 @@ await check('P01 startup: app code forces almost no synchronous layout', async (
       await page.waitForTimeout(10000);
       const b = await metrics();
       const calls = await page.evaluate((n) => window.__calls.slice(n), c0);
-      const script = (b.ScriptDuration - a.ScriptDuration) * 1000;
-      const layouts = b.LayoutCount - a.LayoutCount;
-      assert.ok(script < 60, `스크립트 ${script.toFixed(0)}ms`);
-      assert.ok(layouts <= 10, `레이아웃 ${layouts}회`);
+      if (a && b) {
+        const script = (b.ScriptDuration - a.ScriptDuration) * 1000;
+        const layouts = b.LayoutCount - a.LayoutCount;
+        assert.ok(script < 60, `스크립트 ${script.toFixed(0)}ms`);
+        assert.ok(layouts <= 10, `레이아웃 ${layouts}회`);
+      }
       assert.ok(calls.length <= (IPC_BUDGET[route] || 0), `요청 ${calls.length}회: ${calls.join(', ')}`);
     });
   }
@@ -102,7 +108,7 @@ await check('P01 startup: app code forces almost no synchronous layout', async (
 await check('P04 chat burst: trims overflow in batches and keeps frames', async () => {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
-  const cdp = await ctx.newCDPSession(page);
+  const cdp = WEBKIT ? null : await ctx.newCDPSession(page);
   await page.addInitScript(mockTauri, [base, 'dark']);
   // 모의 listen 은 아무것도 하지 않는다 — 채팅 이벤트를 흘려 보낼 수 있게 바꾼다.
   await page.addInitScript(() => {
@@ -132,7 +138,7 @@ await check('P04 chat burst: trims overflow in batches and keeps frames', async 
     window.__trims = [];
     new MutationObserver((ms) => { const k = ms.reduce((a, r) => a + [...r.removedNodes].filter((x) => !x.classList?.contains('empty')).length, 0); if (k) window.__trims.push(k); }).observe(panel.list, { childList: true });
   });
-  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+  if (cdp) await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
   const r = await page.evaluate(async () => {
     let n = 0;
     // 사용자 ID 를 넣어 아바타(아이콘·사진 찾기, chat-avatar.js)도 함께 잰다
@@ -151,7 +157,7 @@ await check('P04 chat burst: trims overflow in batches and keeps frames', async 
     const max = window.__panel.maxLines;
     return { over20: d.filter((x) => x > 20).length / d.length, lines: window.__panel.list.children.length, max, trims: window.__trims };
   });
-  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
+  if (cdp) await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
   assert.ok(r.lines <= r.max * 1.25 + 1 && r.lines >= r.max, `줄 수 ${r.lines}(상한 ${r.max})`);
   assert.ok(r.trims.length <= 15, `앞에서 지운 횟수 ${r.trims.length} — 붙일 때마다 지우고 있다`);
   assert.ok(r.trims.every((k) => k >= 20), `한 번에 지운 줄 ${r.trims}`);
@@ -164,7 +170,7 @@ await check('P04 chat burst: trims overflow in batches and keeps frames', async 
 await check('P05 hidden window: chat appends force no layout, snaps back to bottom when shown', async () => {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
-  const cdp = await ctx.newCDPSession(page);
+  const cdp = WEBKIT ? null : await ctx.newCDPSession(page);
   await page.addInitScript(mockTauri, [base, 'dark']);
   await page.goto(base);
   await page.waitForFunction(() => !document.getElementById('splash') || !document.getElementById('splash').isConnected, null, { timeout: 20000 });
@@ -185,15 +191,20 @@ await check('P05 hidden window: chat appends force no layout, snaps back to bott
     window.__setHidden(true);
   });
   const evs = [];
-  cdp.on('Tracing.dataCollected', (d) => evs.push(...d.value));
-  const done = new Promise((r) => cdp.once('Tracing.tracingComplete', r));
-  await cdp.send('Tracing.start', { categories: 'devtools.timeline,disabled-by-default-devtools.timeline.stack', transferMode: 'ReportEvents' });
+  let done = null;
+  if (cdp) {
+    cdp.on('Tracing.dataCollected', (d) => evs.push(...d.value));
+    done = new Promise((r) => cdp.once('Tracing.tracingComplete', r));
+    await cdp.send('Tracing.start', { categories: 'devtools.timeline,disabled-by-default-devtools.timeline.stack', transferMode: 'ReportEvents' });
+  }
   await page.evaluate(() => window.__burst(400));
-  await cdp.send('Tracing.end');
-  await done;
-  const forced = evs.filter((e) => e.name === 'Layout' && e.ph === 'X' && e.args?.beginData?.stackTrace?.some((f) => /chat-follow\.js|chat\.js/.test(f.url || '')));
-  // 고치기 전: 줄마다 snap 이 scrollHeight 를 읽어 400번 강제 레이아웃
-  assert.equal(forced.length, 0, `숨은 창에서 채팅이 레이아웃을 ${forced.length}번 당김`);
+  if (cdp) {
+    await cdp.send('Tracing.end');
+    await done;
+    const forced = evs.filter((e) => e.name === 'Layout' && e.ph === 'X' && e.args?.beginData?.stackTrace?.some((f) => /chat-follow\.js|chat\.js/.test(f.url || '')));
+    // 고치기 전: 줄마다 snap 이 scrollHeight 를 읽어 400번 강제 레이아웃
+    assert.equal(forced.length, 0, `숨은 창에서 채팅이 레이아웃을 ${forced.length}번 당김`);
+  }
   const gap = await page.evaluate(async () => {
     window.__setHidden(false);
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -208,7 +219,7 @@ await check('P05 hidden window: chat appends force no layout, snaps back to bott
 await check('P06 hidden page: chat appends force no layout, snaps back to bottom when the page is shown', async () => {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
-  const cdp = await ctx.newCDPSession(page);
+  const cdp = WEBKIT ? null : await ctx.newCDPSession(page);
   await page.addInitScript(mockTauri, [base, 'dark']);
   await page.goto(base);
   await page.waitForFunction(() => !document.getElementById('splash') || !document.getElementById('splash').isConnected, null, { timeout: 20000 });
@@ -235,14 +246,19 @@ await check('P06 hidden page: chat appends force no layout, snaps back to bottom
     window.__burst(50);
   });
   const evs = [];
-  cdp.on('Tracing.dataCollected', (d) => evs.push(...d.value));
-  const done = new Promise((r) => cdp.once('Tracing.tracingComplete', r));
-  await cdp.send('Tracing.start', { categories: 'devtools.timeline,disabled-by-default-devtools.timeline.stack', transferMode: 'ReportEvents' });
+  let done = null;
+  if (cdp) {
+    cdp.on('Tracing.dataCollected', (d) => evs.push(...d.value));
+    done = new Promise((r) => cdp.once('Tracing.tracingComplete', r));
+    await cdp.send('Tracing.start', { categories: 'devtools.timeline,disabled-by-default-devtools.timeline.stack', transferMode: 'ReportEvents' });
+  }
   await page.evaluate(() => { window.__burst(400); window.dispatchEvent(new Event('focus')); });
-  await cdp.send('Tracing.end');
-  await done;
-  const forced = evs.filter((e) => e.name === 'Layout' && e.ph === 'X' && e.args?.beginData?.stackTrace?.some((f) => /chat-follow\.js|chat\.js/.test(f.url || '')));
-  assert.equal(forced.length, 0, `숨은 화면의 채팅이 레이아웃을 ${forced.length}번 당김`);
+  if (cdp) {
+    await cdp.send('Tracing.end');
+    await done;
+    const forced = evs.filter((e) => e.name === 'Layout' && e.ph === 'X' && e.args?.beginData?.stackTrace?.some((f) => /chat-follow\.js|chat\.js/.test(f.url || '')));
+    assert.equal(forced.length, 0, `숨은 화면의 채팅이 레이아웃을 ${forced.length}번 당김`);
+  }
   const gap = await page.evaluate(async () => {
     window.__page.hidden = false;
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
@@ -309,5 +325,5 @@ await browser.close();
 server.close();
 for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'} ${r.id}${r.ok ? '' : `\n     ${r.error.split('\n').slice(0, 10).join('\n     ')}`}`);
 const failed = results.filter((r) => !r.ok).length;
-console.log(`\n${results.length - failed}/${results.length} passed`);
+console.log(`\n[${WEBKIT ? 'webkit' : 'chromium'}] ${results.length - failed}/${results.length} passed`);
 process.exitCode = failed ? 1 : 0;

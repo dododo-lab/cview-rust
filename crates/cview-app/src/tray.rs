@@ -331,13 +331,47 @@ pub(crate) fn is_main_hidden<R: Runtime>(app: &AppHandle<R>) -> bool {
 }
 
 /// 팝오버 스냅샷용 상태 읽기(로그인 여부·메인 창 숨김·프런트 재생 상태).
+/// 로그인 여부는 주기 폴링 캐시 대신 인증 관리자의 실시간 상태를 우선 읽는다.
 pub(crate) fn snapshot_state<R: Runtime>(app: &AppHandle<R>) -> (bool, bool, TrayFrontState) {
     let window_hidden = main_hidden(app);
+    let live_auth = app
+        .try_state::<AppServices>()
+        .map(|s| s.auth.is_authenticated());
     let Some(hub) = app.try_state::<TrayHub>() else {
-        return (false, window_hidden, TrayFrontState::default());
+        return (
+            live_auth.unwrap_or(false),
+            window_hidden,
+            TrayFrontState::default(),
+        );
     };
     let m = lock(&hub.model);
-    (m.logged_in, window_hidden, m.front.clone())
+    (
+        live_auth.unwrap_or(m.logged_in),
+        window_hidden,
+        m.front.clone(),
+    )
+}
+
+/// 인증 상태가 바뀌었을 때(`auth://changed` · 로그아웃) 트레이 모델과 팝오버를 지체 없이 갱신한다.
+pub fn on_auth_changed_generic<R: Runtime>(app: &AppHandle<R>, logged_in: bool) {
+    let changed = if let Some(hub) = app.try_state::<TrayHub>() {
+        let mut m = lock(&hub.model);
+        let prev = m.logged_in;
+        m.logged_in = logged_in;
+        if !logged_in {
+            m.lives.clear();
+        }
+        prev != logged_in
+    } else {
+        false
+    };
+    sync(app);
+    if logged_in && changed {
+        let handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            refresh_generic(&handle).await;
+        });
+    }
 }
 
 /// 앱 종료 요청 — 창 닫기 가로채기(`close_to_tray`)를 건너뛰고 끝낸다.
@@ -810,6 +844,10 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
 
 /// 팔로잉 방송·즐겨찾기를 다시 읽는다.
 async fn refresh(app: &AppHandle) {
+    refresh_generic(app).await;
+}
+
+async fn refresh_generic<R: Runtime>(app: &AppHandle<R>) {
     let services = app.state::<AppServices>();
     let logged_in = services.auth.is_authenticated();
     let mut lives: Vec<LiveEntry> = Vec::new();

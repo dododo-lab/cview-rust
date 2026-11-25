@@ -114,16 +114,37 @@ pub fn trim_finished_jobs(jobs: &mut Vec<DownloadJob>) -> HashSet<String> {
 /// 저장 폴더 키(사용자 지정 경로).
 pub const DOWNLOAD_FOLDER_DEFAULTS_KEY: &str = "CView.downloadFolderPath";
 
-/// 사용자 지정이 없을 때의 기본 폴더 — `~/Movies/CView`(없으면 `~/Downloads/CView`, 그다음 임시 폴더).
+/// 사용자 지정이 없을 때의 기본 폴더 — `~/Movies/CView` 또는 `~/Videos/CView`(없으면 `~/Downloads/CView`, 그다음 임시 폴더 아래 `Downloads/CView`).
 pub fn default_download_folder(home: Option<&Path>) -> PathBuf {
-    let base = home.map_or_else(std::env::temp_dir, |h| {
-        let movies = h.join("Movies");
-        if movies.is_dir() {
-            movies
-        } else {
-            h.join("Downloads")
+    resolve_download_folder(None, None, home)
+}
+
+/// OS 경로 API(`video_dir` · `download_dir`)와 홈 폴더 후보를 종합해 기본 다운로드 폴더를 정한다. 순수 함수에 가깝다.
+pub fn resolve_download_folder(
+    video_dir: Option<&Path>,
+    download_dir: Option<&Path>,
+    home: Option<&Path>,
+) -> PathBuf {
+    if let Some(v) = video_dir.filter(|p| p.is_dir()) {
+        return v.join("CView");
+    }
+    if let Some(d) = download_dir.filter(|p| !p.as_os_str().is_empty()) {
+        return d.join("CView");
+    }
+    let base = match home.filter(|p| !p.as_os_str().is_empty()) {
+        Some(h) => {
+            let movies = h.join("Movies");
+            let videos = h.join("Videos");
+            if movies.is_dir() {
+                movies
+            } else if videos.is_dir() {
+                videos
+            } else {
+                h.join("Downloads")
+            }
         }
-    });
+        None => std::env::temp_dir().join("Downloads"),
+    };
     base.join("CView")
 }
 

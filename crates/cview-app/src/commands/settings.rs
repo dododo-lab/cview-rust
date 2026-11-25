@@ -566,7 +566,7 @@ pub async fn appearance_set_theme(
     Ok(())
 }
 
-/// 앱 정보 — 버전·데이터 폴더(정보 창, 데이터 폴더 열기).
+/// 앱 정보 — 버전·데이터 폴더·기본 저장 폴더(정보 창, 데이터 폴더 열기, 화면 안내 경로 일치).
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppInfoDto {
@@ -575,6 +575,9 @@ pub struct AppInfoDto {
     /// 빌드 번호(CFBundleVersion).
     pub build: String,
     pub data_dir: String,
+    pub recording_dir: String,
+    pub screenshot_dir: String,
+    pub download_dir: String,
     pub os: String,
     pub arch: String,
 }
@@ -602,6 +605,15 @@ pub async fn app_info(app: tauri::AppHandle) -> CmdResult<AppInfoDto> {
             .app_data_dir()
             .map(|p| p.to_string_lossy().into_owned())
             .unwrap_or_default(),
+        recording_dir: super::content::app_save_dir(&app, "recording")
+            .to_string_lossy()
+            .into_owned(),
+        screenshot_dir: super::content::app_save_dir(&app, "screenshot")
+            .to_string_lossy()
+            .into_owned(),
+        download_dir: super::content::app_save_dir(&app, "download")
+            .to_string_lossy()
+            .into_owned(),
         os: std::env::consts::OS.into(),
         arch: std::env::consts::ARCH.into(),
     })

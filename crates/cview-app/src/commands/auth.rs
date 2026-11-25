@@ -101,10 +101,11 @@ mod tests {
     }
 }
 
-/// 상태를 프런트에 알린다.
+/// 상태를 프런트와 트레이에 알린다.
 pub async fn broadcast_status<R: Runtime>(app: &AppHandle<R>, services: &AppServices) {
     let status = current_status(services).await;
-    let _ = app.emit(events::AUTH_CHANGED, status);
+    let _ = app.emit(events::AUTH_CHANGED, status.clone());
+    crate::tray::on_auth_changed_generic(app, status.logged_in);
 }
 
 /// 계정 상태. `quick` 이면 서버 확인(`/users/me`) 없이 저장된 로그인 복원이 끝난 상태만 바로 돌려준다.
@@ -154,5 +155,6 @@ pub async fn auth_logout(
     services.sync_authentication().await;
     let status = current_status(&services).await;
     let _ = app.emit(events::AUTH_CHANGED, status.clone());
+    crate::tray::on_auth_changed_generic(&app, status.logged_in);
     Ok(status)
 }

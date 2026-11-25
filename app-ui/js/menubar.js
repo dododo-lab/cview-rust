@@ -174,8 +174,10 @@ function renderTabs() {
   const tPop = $('mb-tab-popular');
   tFol.classList.toggle('is-active', isFol);
   tFol.setAttribute('aria-selected', isFol ? 'true' : 'false');
+  tFol.tabIndex = isFol ? 0 : -1;
   tPop.classList.toggle('is-active', !isFol);
   tPop.setAttribute('aria-selected', !isFol ? 'true' : 'false');
+  tPop.tabIndex = isFol ? -1 : 0;
   $('mb-list').setAttribute('aria-labelledby', isFol ? 'mb-tab-following' : 'mb-tab-popular');
 }
 
@@ -302,44 +304,90 @@ function renderAll() {
   renderList();
 }
 
+let refreshSeq = 0;
+let inFlightRefresh = null;
+
 async function refreshData({ force = false } = {}) {
+  if (!force && inFlightRefresh) {
+    return inFlightRefresh;
+  }
   if (!force && state.lastLoadedAt && Date.now() - state.lastLoadedAt < REFRESH_TTL_MS) {
     renderAll();
     return;
   }
+  const seq = ++refreshSeq;
   state.loading = true;
   const refreshBtn = $('mb-refresh');
   if (force) refreshBtn.classList.add('is-spinning');
   renderList();
-  try {
-    const [snapRes, settingsRes, mlRes, popRes] = await Promise.allSettled([
-      api.trayGetState(),
-      api.settingsGet(),
-      api.multiLiveState(),
-      api.popularLives(30, force),
-    ]);
-    if (snapRes.status === 'fulfilled' && snapRes.value) {
-      applySnapshot(snapRes.value, { render: false });
+  const run = (async () => {
+    try {
+      const [authRes, snapRes, settingsRes, mlRes, popRes] = await Promise.allSettled([
+        api.authStatus(true),
+        api.trayGetState(),
+        api.settingsGet(),
+        api.multiLiveState(),
+        api.popularLives(30, force),
+      ]);
+      if (seq !== refreshSeq) return;
+      if (snapRes.status === 'fulfilled' && snapRes.value) {
+        applySnapshot(snapRes.value, { render: false, trustAuth: authRes.status !== 'fulfilled' });
+      }
+      if (authRes.status === 'fulfilled' && authRes.value && typeof authRes.value.loggedIn === 'boolean') {
+        state.loggedIn = authRes.value.loggedIn;
+      }
+      if (settingsRes.status === 'fulfilled' && settingsRes.value) {
+        const s = settingsRes.value;
+        if (s.general) state.general = s.general;
+        if (s.appearance && s.appearance.theme) syncTheme(s.appearance.theme);
+      }
+      if (mlRes.status === 'fulfilled' && mlRes.value) {
+        state.multiIds = new Set((mlRes.value.sessions || []).map((x) => x.channelId).filter(Boolean));
+      }
+      if (popRes.status === 'fulfilled' && Array.isArray(popRes.value)) {
+        state.popular = popRes.value;
+      }
+      if (state.loggedIn) {
+        const [folRes, favRes] = await Promise.allSettled([
+          api.followingLives(force),
+          api.favoritesList(),
+        ]);
+        if (seq !== refreshSeq) return;
+        if (folRes.status === 'fulfilled' && Array.isArray(folRes.value)) {
+          state.following = folRes.value;
+        }
+        if (favRes.status === 'fulfilled' && Array.isArray(favRes.value)) {
+          state.favorites = new Set(favRes.value.map((f) => f.channelId));
+        }
+      } else {
+        state.following = [];
+        state.favorites = new Set();
+      }
+      state.lastLoadedAt = Date.now();
+    } finally {
+      if (seq === refreshSeq) {
+        state.loading = false;
+        refreshBtn.classList.remove('is-spinning');
+        inFlightRefresh = null;
+        renderAll();
+      }
     }
-    if (settingsRes.status === 'fulfilled' && settingsRes.value) {
-      const s = settingsRes.value;
-      if (s.general) state.general = s.general;
-      if (s.appearance && s.appearance.theme) syncTheme(s.appearance.theme);
-    }
-    if (mlRes.status === 'fulfilled' && mlRes.value) {
-      state.multiIds = new Set((mlRes.value.sessions || []).map((x) => x.channelId).filter(Boolean));
-    }
-    if (popRes.status === 'fulfilled' && Array.isArray(popRes.value)) {
-      state.popular = popRes.value;
-    }
-    if (state.loggedIn) {
+  })();
+  inFlightRefresh = run;
+  return run;
+}
+
+/** 인증 이벤트 직후 새로고침 — 트레이 스냅샷이 아직 직전 주기 값이어도 방금 받은 로그인 상태를 지킨다. */
+async function refreshDataForAuth(expectedLoggedIn) {
+  await refreshData({ force: true });
+  if (state.loggedIn !== expectedLoggedIn) {
+    state.loggedIn = expectedLoggedIn;
+    if (expectedLoggedIn) {
       const [folRes, favRes] = await Promise.allSettled([
-        api.followingLives(force),
+        api.followingLives(true),
         api.favoritesList(),
       ]);
-      if (folRes.status === 'fulfilled' && Array.isArray(folRes.value)) {
-        state.following = folRes.value;
-      }
+      if (folRes.status === 'fulfilled' && Array.isArray(folRes.value)) state.following = folRes.value;
       if (favRes.status === 'fulfilled' && Array.isArray(favRes.value)) {
         state.favorites = new Set(favRes.value.map((f) => f.channelId));
       }
@@ -347,29 +395,21 @@ async function refreshData({ force = false } = {}) {
       state.following = [];
       state.favorites = new Set();
     }
-    state.lastLoadedAt = Date.now();
-  } finally {
-    state.loading = false;
-    refreshBtn.classList.remove('is-spinning');
     renderAll();
   }
 }
 
-function applySnapshot(snap, { render = true } = {}) {
+function applySnapshot(snap, { render = true, trustAuth = true } = {}) {
   if (!snap) return;
   const wasLoggedIn = state.loggedIn;
   const becameOpen = !state.open && Boolean(snap.open);
   state.open = Boolean(snap.open);
-  state.loggedIn = Boolean(snap.loggedIn);
+  if (trustAuth) state.loggedIn = Boolean(snap.loggedIn);
   state.windowHidden = Boolean(snap.windowHidden);
   if (typeof snap.arrowX === 'number') state.arrowX = snap.arrowX;
   if (snap.front) state.front = snap.front;
-  // 비로그인으로 시작했거나 팔로잉이 비었으면 첫 화면이 비어 보이지 않게 자동으로 맞춘다.
-  if (!state.loggedIn && state.tab === 'following' && !wasLoggedIn && state.popular.length) {
-    // 사용자가 직접 고르기 전까지만 유지
-  }
   if (render) renderAll();
-  if (becameOpen || wasLoggedIn !== state.loggedIn) {
+  if (becameOpen || (trustAuth && wasLoggedIn !== state.loggedIn)) {
     refreshData({ force: false });
   }
 }
@@ -491,9 +531,20 @@ function bindEvents() {
       const channelId = itemBtn.dataset.channelId;
       if (!channelId) return;
       const act = itemBtn.dataset.itemAct;
-      if (act === 'watch') api.trayControl({ kind: 'open-live', channelId }).catch(() => {});
-      else if (act === 'multi') api.trayControl({ kind: 'add-multilive', channelId }).catch(() => {});
-      else if (act === 'chat') api.trayControl({ kind: 'open-chat-window', channelId }).catch(() => {});
+      if (act === 'watch') {
+        api.trayControl({ kind: 'open-live', channelId }).catch(() => {});
+      } else if (act === 'multi') {
+        if (state.multiIds.has(channelId)) {
+          api.trayControl({ kind: 'open-multilive' }).catch(() => {});
+        } else {
+          state.multiIds.add(channelId);
+          renderTiles();
+          renderList();
+          api.trayControl({ kind: 'add-multilive', channelId }).catch(() => {});
+        }
+      } else if (act === 'chat') {
+        api.trayControl({ kind: 'open-chat-window', channelId }).catch(() => {});
+      }
       return;
     }
     const actBtn = e.target.closest('[data-act]');
@@ -595,11 +646,18 @@ function bindEvents() {
     }
   });
 
-  // 탭 좌우 화살표 전환(WAI-ARIA Tabs 패턴)
+  // 탭 좌우·처음·끝 화살표 전환(WAI-ARIA Tabs 패턴)
   document.querySelector('.mb-tabs').addEventListener('keydown', (e) => {
-    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    let next = null;
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      next = state.tab === 'following' ? 'popular' : 'following';
+    } else if (e.key === 'Home') {
+      next = 'following';
+    } else if (e.key === 'End') {
+      next = 'popular';
+    }
+    if (!next) return;
     e.preventDefault();
-    const next = state.tab === 'following' ? 'popular' : 'following';
     switchTab(next);
     $(`mb-tab-${next}`)?.focus();
   });
@@ -616,7 +674,7 @@ async function init() {
     if (loggedIn !== state.loggedIn) {
       state.loggedIn = loggedIn;
       state.lastLoadedAt = 0;
-      if (state.open) refreshData({ force: true });
+      if (state.open) refreshDataForAuth(loggedIn);
     }
   });
   listen(Events.appearanceChanged, (a) => {

@@ -196,6 +196,59 @@ class GatewayTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 self.call({'action': 'preflight'})
 
+    def test_interrupted_after_version_promotion_resumes_feed_and_rejects_mismatch(self):
+        # 0.1.0 먼저 정상 게시
+        self.version = '0.1.0'
+        first_files = self.stage()
+        with patch.object(gateway.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, b'', b'')):
+            self.call({'action': 'publish', 'version': '0.1.0', 'files': first_files, 'signature': SIGNATURE})
+
+        # 0.1.1 스테이징 후 버전 폴더만 옮겨진 채 latest.json 교체 직전에 강제 종료된 상황 모의
+        self.version = '0.1.1'
+        second_files = self.stage()
+        real_atomic = publish.atomic_write
+
+        def crash_before_latest(path, data):
+            if Path(path).name == 'latest.json':
+                raise KeyboardInterrupt('simulated hard stop after directory promotion')
+            return real_atomic(path, data)
+
+        with patch.object(publish, 'atomic_write', side_effect=crash_before_latest):
+            with self.assertRaises(KeyboardInterrupt):
+                self.call({'action': 'publish', 'version': '0.1.1', 'files': second_files, 'signature': SIGNATURE})
+
+        # latest.json 은 아직 v0.1.0 이고, 0.1.1 폴더와 잠금 파일은 남아 있다(강제 종료 잔재도 함께 모의).
+        self.assertEqual(gateway.latest(self.root)['tag_name'], 'v0.1.0')
+        self.assertTrue((self.root / 'site' / 'releases' / '0.1.1' / 'manifest.json').is_file())
+        (self.root / '.site-publish.lock').write_text('999999\n', encoding='ascii')
+
+        # 다른 서명이나 바뀐 파일로 덮어쓰려는 시도는 여전히 거부한다.
+        other_sig = {**SIGNATURE, 'key_id': 'f' * 16}
+        with self.assertRaisesRegex(ValueError, 'immutable'):
+            self.call({'action': 'publish', 'version': '0.1.1', 'files': second_files, 'signature': other_sig})
+        with self.assertRaisesRegex(ValueError, 'immutable'):
+            self.upload('notes.txt', b'different notes\n')
+
+        # 같은 파일·서명으로 업로드·재게시하면 latest.json 과 release-catalog.json 갱신부터 안전하게 재개된다.
+        self.upload('notes.txt', b'isolated notes.txt\n')
+        validated = self.call({'action': 'validate', 'version': '0.1.1', 'files': second_files, 'signature': SIGNATURE})
+        self.assertTrue(validated.get('resumable'))
+        with patch.object(gateway.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, b'', b'')):
+            resumed = self.call({'action': 'publish', 'version': '0.1.1', 'files': second_files, 'signature': SIGNATURE})
+        self.assertTrue(resumed['published'])
+        self.assertEqual(gateway.latest(self.root)['tag_name'], 'v0.1.1')
+        catalog = json.loads((self.root / 'site' / 'release-catalog.json').read_text(encoding='utf-8'))
+        self.assertEqual([item['tag_name'] for item in catalog], ['v0.1.1', 'v0.1.0'])
+
+    def test_consecutive_app_releases_keep_every_intermediate_version_in_catalog(self):
+        for ver in ('1.0.0', '1.0.1', '1.0.2'):
+            self.version = ver
+            files = self.stage()
+            with patch.object(gateway.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, b'', b'')):
+                self.call({'action': 'publish', 'version': ver, 'files': files, 'signature': SIGNATURE})
+        catalog = json.loads((self.root / 'site' / 'release-catalog.json').read_text(encoding='utf-8'))
+        self.assertEqual([item['tag_name'] for item in catalog], ['v1.0.2', 'v1.0.1', 'v1.0.0'])
+
 
 class ClientTests(unittest.TestCase):
     def test_ssh_does_not_reuse_unrestricted_master_or_password(self):
@@ -580,6 +633,68 @@ class WindowsInstallerTests(unittest.TestCase):
         self.assertLess(gate, publish)
         self.assertNotIn('CVIEW_LLVM_MINGW', script)
         self.assertNotIn('cargo tauri build --target "$t"', script)
+
+    def test_all_github_workflows_pin_external_actions_to_full_commit_sha(self):
+        workflows = sorted((TOOLS.parents[1] / '.github' / 'workflows').glob('*.yml'))
+        self.assertGreaterEqual(len(workflows), 3)
+        uses_re = gateway.re.compile(r'^\s*-?\s*uses:\s*([^\s#]+)')
+        pinned_re = gateway.re.compile(r'^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*@[0-9a-f]{40}$')
+        found = 0
+        for wf in workflows:
+            for lineno, line in enumerate(wf.read_text(encoding='utf-8').splitlines(), 1):
+                m = uses_re.match(line)
+                if not m:
+                    continue
+                ref = m.group(1)
+                if ref.startswith('./'):
+                    continue
+                found += 1
+                self.assertRegex(ref, pinned_re, f'{wf.name}:{lineno} uses unpinned action {ref}')
+        self.assertGreaterEqual(found, 6)
+
+    def test_release_wrapper_preserves_partial_staging_and_retains_conflicting_stash(self):
+        wrapper = (TOOLS.parents[1] / 'scripts/release-with-prs.sh').read_text(encoding='utf-8')
+        self.assertIn('git stash apply --index "$stash_sha"', wrapper)
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            env = {**os.environ, 'GIT_AUTHOR_NAME': 't', 'GIT_AUTHOR_EMAIL': 't@e',
+                   'GIT_COMMITTER_NAME': 't', 'GIT_COMMITTER_EMAIL': 't@e'}
+            run = lambda *args: subprocess.run(['git', *args], cwd=repo, env=env, check=True, capture_output=True, text=True)
+            run('init', '-b', 'main')
+            tracked = repo / 'a.txt'
+            tracked.write_text('base\n', encoding='utf-8')
+            run('add', 'a.txt')
+            run('commit', '-m', 'init')
+
+            # 부분 스테이징(MM) + 미추적 파일(??) 생성
+            tracked.write_text('staged-part\n', encoding='utf-8')
+            run('add', 'a.txt')
+            tracked.write_text('staged-part\nworking-part\n', encoding='utf-8')
+            (repo / 'untracked.txt').write_text('new\n', encoding='utf-8')
+
+            run('stash', 'push', '-u', '-m', 'test-partial')
+            sha = run('stash', 'list', '--format=%H').stdout.splitlines()[0].strip()
+            run('stash', 'apply', '--index', sha)
+            ref = run('stash', 'list', '--format=%H %gd').stdout.splitlines()[0].split()[1]
+            run('stash', 'drop', '-q', ref)
+
+            status = run('status', '--porcelain').stdout
+            self.assertIn('MM a.txt', status)
+            self.assertIn('?? untracked.txt', status)
+            self.assertEqual(run('show', ':a.txt').stdout, 'staged-part\n')
+            self.assertEqual(tracked.read_text(encoding='utf-8'), 'staged-part\nworking-part\n')
+
+            # 인덱스/작업 트리 충돌 시 --index 적용이 실패하며 stash 를 삭제하지 않고 남겨야 한다.
+            run('stash', 'push', '-u', '-m', 'test-conflict')
+            conflict_sha = run('stash', 'list', '--format=%H').stdout.splitlines()[0].strip()
+            tracked.write_text('upstream-change\n', encoding='utf-8')
+            run('add', 'a.txt')
+            run('commit', '-m', 'upstream')
+            failed = subprocess.run(['git', 'stash', 'apply', '--index', conflict_sha],
+                                    cwd=repo, env=env, capture_output=True, text=True)
+            self.assertNotEqual(failed.returncode, 0)
+            remaining = run('stash', 'list', '--format=%H').stdout.splitlines()
+            self.assertIn(conflict_sha, remaining)
 
 
 if __name__ == '__main__':

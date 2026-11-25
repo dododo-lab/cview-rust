@@ -439,6 +439,23 @@ pub(crate) fn send_main_control<R: Runtime>(app: &AppHandle<R>, payload: Value) 
     let _ = app.emit_to(crate::MAIN_WINDOW, TRAY_CONTROL_EVENT, payload);
 }
 
+/// `cview://` URL 쿼리에 넣을 채널 ID 를 검증한다(쿼리 구분자·제어 문자 주입 차단).
+pub fn validate_channel_id(raw: &str) -> CmdResult<&str> {
+    let id = raw.trim();
+    if id.is_empty() || id.len() > 64 {
+        return Err(CommandError("유효하지 않은 채널 ID 입니다".into()));
+    }
+    if !id
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+    {
+        return Err(CommandError(
+            "채널 ID 에 허용되지 않는 문자가 있습니다".into(),
+        ));
+    }
+    Ok(id)
+}
+
 /// 팝오버 UI 의 모든 제어 명령 진입점.
 #[tauri::command]
 pub async fn tray_control(app: AppHandle, action: TrayControlAction) -> CmdResult<()> {
@@ -470,27 +487,21 @@ pub async fn tray_control(app: AppHandle, action: TrayControlAction) -> CmdResul
             crate::tray::show_main(&app);
         }
         TrayControlAction::OpenLive { channel_id } => {
-            if channel_id.trim().is_empty() {
-                return Err(CommandError("채널 ID 가 비어 있습니다".into()));
-            }
-            crate::system::handle_urls(&app, [format!("cview://live?channelId={channel_id}")]);
+            let id = validate_channel_id(&channel_id)?;
+            crate::system::handle_urls(&app, [format!("cview://live?channelId={id}")]);
         }
         TrayControlAction::AddMultilive { channel_id } => {
-            if channel_id.trim().is_empty() {
-                return Err(CommandError("채널 ID 가 비어 있습니다".into()));
-            }
-            crate::system::handle_urls(
-                &app,
-                [format!("cview://live?channelId={channel_id}&mode=multi")],
-            );
+            let id = validate_channel_id(&channel_id)?;
+            crate::system::handle_urls(&app, [format!("cview://live?channelId={id}&mode=multi")]);
         }
         TrayControlAction::OpenMultilive => {
             crate::system::handle_urls(&app, ["cview://multilive".to_string()]);
         }
         TrayControlAction::OpenChatWindow { channel_id } => {
             let mut params = std::collections::HashMap::new();
-            if let Some(id) = channel_id.filter(|s| !s.trim().is_empty()) {
-                params.insert("channelId".into(), id);
+            if let Some(raw) = channel_id.filter(|s| !s.trim().is_empty()) {
+                let id = validate_channel_id(&raw)?;
+                params.insert("channelId".into(), id.to_string());
             }
             let arg = if params.is_empty() {
                 None
@@ -507,10 +518,14 @@ pub async fn tray_control(app: AppHandle, action: TrayControlAction) -> CmdResul
             );
         }
         TrayControlAction::QueueMulti { channel_ids } => {
+            let mut validated = Vec::with_capacity(channel_ids.len());
+            for raw in &channel_ids {
+                validated.push(validate_channel_id(raw)?.to_string());
+            }
             crate::tray::show_main(&app);
             send_main_control(
                 &app,
-                json!({ "kind": "queue-multi", "channelIds": channel_ids }),
+                json!({ "kind": "queue-multi", "channelIds": validated }),
             );
         }
         TrayControlAction::CheckUpdate => {
@@ -635,5 +650,40 @@ mod tests {
         assert!(!TrayControlAction::ToggleWindow.closes_popover(false));
         assert!(TrayControlAction::ToggleWindow.closes_popover(true));
         assert!(TrayControlAction::OpenMultilive.closes_popover(false));
+    }
+
+    #[test]
+    fn channel_id_validation_blocks_query_injection_and_accepts_valid_ids() {
+        assert_eq!(
+            validate_channel_id("  0dad8baf12a4b9c0_ch-1 ").unwrap(),
+            "0dad8baf12a4b9c0_ch-1"
+        );
+        for bad in [
+            "",
+            "   ",
+            "ch1&mode=multi",
+            "ch1?foo=bar",
+            "ch1#frag",
+            "../etc",
+            "ch 1",
+            &"a".repeat(65),
+        ] {
+            assert!(
+                validate_channel_id(bad).is_err(),
+                "주입·비정상 채널 ID 는 거부해야 한다: {bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn zero_size_icon_rect_falls_back_around_click_point() {
+        let zero = Rect {
+            position: Position::Physical(PhysicalPosition::new(0, 0)),
+            size: Size::Physical(tauri::PhysicalSize::new(0, 0)),
+        };
+        let bounds = icon_bounds_from_rect(zero, PhysicalPosition::new(1200.0, 18.0));
+        assert_eq!(bounds.width, 28.0);
+        assert_eq!(bounds.height, 24.0);
+        assert_eq!(bounds.x + bounds.width * 0.5, 1200.0);
     }
 }

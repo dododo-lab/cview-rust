@@ -17,12 +17,12 @@ scripts/release-with-prs.sh [PR번호 ...] [-- release-macos.sh 옵션]
 1. 검사(fmt·clippy·테스트·JS 문법)와 버전·macOS 빌드 번호 증가
 2. macOS DMG(Apple Silicon) — Developer ID 서명, Apple 공증, 티켓 첨부·검증
 3. Windows x64·ARM64 NSIS 설치 파일 — 같은 버전의 소스를 서버에 보내 MSVC로 빌드하고, Mac에서 SHA-256·아키텍처·DLL 의존성 검증(미서명)
-4. 업데이트 서버 업로드·게시(`latest.json`은 마지막에 원자적으로 갱신)
+4. 업데이트 서버 업로드·게시(`latest.json`과 `release-catalog.json`을 마지막에 원자적으로 갱신)
 5. 서버와 Mac 양쪽에서 전체 다운로드·SHA-256 검증
 6. 릴리스 커밋·`v<버전>` 태그 푸시
 7. GitHub 릴리스 — 같은 설치 파일 세 개, `CView_<버전>_SHA256SUMS.txt`, 앱 자동 업데이트용 서명 피드 `latest.json`을 `v<버전>` 릴리스에 올리고 다시 받아 확인(`scripts/github-release.py`), 게시 후 Actions `github-release`가 업데이트 서버의 서명된 manifest와 재대조
 
-Windows 빌드는 DMG 생성 직후 시작해 macOS 공증 대기와 겹친다. 버전을 올리기 전에 서버 연결과 도구를 점검하며,
+Windows 빌드는 버전을 올린 직후(macOS 앱·DMG 빌드 전) 백그라운드로 시작해 macOS 빌드·서명 및 공증 대기와 겹친다. 버전을 올리기 전에 서버 연결과 도구를 점검하며,
 서버 빌드나 두 파일의 검증이 실패하면 게시를 중단하고 버전 증가를 되돌린다.
 접속 설정은 저장소 밖 `~/.config/cview-build/`에 둔다([빌드 서버 설정](../tools/build-server/README.md)).
 Windows 전용 작업이므로 Mac 자동 작업자 실행 여부와 관계없이 정식 릴리스 스크립트가 처리한다.

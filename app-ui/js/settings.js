@@ -13,7 +13,7 @@ import { THEMES, THEME_LABELS, currentTheme, setTheme, syncTheme } from './theme
 import { streamAlertsEnabled, setStreamAlertsEnabled, ALERT_HOME } from './donations.js';
 import { chatPrefs, updateChatPrefs, blockedLabel, loadChatPrefs } from './chat-prefs.js';
 import { BACKGROUNDS, READING_WIDTHS } from './chat-extras.js';
-import { kbd, IS_WINDOWS, REVEAL_LABEL, TRAY_LABEL, TRAY_TO, userPath, SECRET_STORE_LABEL } from './platform.js';
+import { kbd, IS_WINDOWS, REVEAL_LABEL, TRAY_LABEL, TRAY_TO, saveDirPath, SECRET_STORE_LABEL } from './platform.js';
 import { thumbPreviewEnabled, setThumbPreviewEnabled } from './hover-preview.js';
 import { SHARPNESS_LEVELS, SHARPNESS_HELP, ENLARGED_ONLY_LABEL, ENLARGED_ONLY_HELP, sharpnessState, setSharpness } from './sharpness.js';
 import { checkForUpdate, lastUpdateResult, updateSummary, downloadTarget, openDownload, currentAppInfo, canInstall, installUpdate, progressHtml, renderProgress } from './update-check.js';
@@ -530,7 +530,7 @@ export class SettingsPage {
 
   backupHtml() {
     return `<section class="settings-group" data-g="advanced"><h2>백업 · 초기화</h2>
-      <div class="setting" data-search="설정 내보내기 백업"><span class="setting-label">설정 내보내기<small>모든 설정을 JSON 파일로 ${esc(userPath('Downloads', 'CView'))} 에 저장합니다</small></span><button class="btn" data-export>내보내기</button></div>
+      <div class="setting" data-search="설정 내보내기 백업"><span class="setting-label">설정 내보내기<small>모든 설정을 JSON 파일로 ${esc(saveDirPath('download'))} 에 저장합니다</small></span><button class="btn" data-export>내보내기</button></div>
       <div class="setting column" data-search="설정 가져오기 복원"><span class="setting-label">설정 가져오기<small>내보낸 JSON 내용을 붙여 넣으세요</small></span>
         <form class="word-form import-form" data-import><textarea rows="4" spellcheck="false" autocomplete="off" aria-label="가져올 설정 JSON" placeholder='{"player": …}'></textarea><button class="btn">가져오기</button></form></div>
       <div class="setting" data-search="초기화 기본값"><span class="setting-label">모든 설정 초기화<small>로그인·시청 기록은 그대로 둡니다</small></span><button class="btn danger" data-reset-all aria-haspopup="dialog">초기화…</button></div>
@@ -973,7 +973,7 @@ export class SettingsPage {
           ['그대로', '로그인, 시청 기록·통계, 즐겨찾기·북마크, 다운로드한 파일은 그대로 둡니다.'],
           ['복구', '초기화한 뒤에는 앱 안에서 되돌릴 수 없습니다. 내보내 둔 설정 파일이 있으면 \'설정 가져오기\'로 되돌릴 수 있습니다.'],
         ],
-        check: { label: '초기화 전에 지금 설정을 내보내기', hint: `${userPath('Downloads', 'CView')} 에 JSON 파일로 저장합니다 · 내보내기에 실패하면 초기화하지 않습니다` },
+        check: { label: '초기화 전에 지금 설정을 내보내기', hint: `${saveDirPath('download')} 에 JSON 파일로 저장합니다 · 내보내기에 실패하면 초기화하지 않습니다` },
       });
       if (!ok) { if (btn.isConnected) btn.focus(); return; }
       let saved = null;

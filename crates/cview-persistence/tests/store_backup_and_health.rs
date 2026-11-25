@@ -593,3 +593,65 @@ fn upgrade_backs_up_once_and_normal_launch_does_not() {
     );
     assert_eq!((normal.consecutive_failures, normal.total_opens), (0, 2));
 }
+
+#[test]
+fn online_backup_preserves_uncheckpointed_wal_commits_and_restores_values() {
+    let b = OpenBox::new();
+    let health = b.recorder();
+    let path = b.store_path("online_backup");
+    let store = b.open(&path, &health).unwrap();
+
+    // 1행 커밋 후 본체 DB 로 완전히 체크포인트한다.
+    let ch1 = cview_core::models::ChannelInfo::new("ch-alpha", "알파 채널");
+    store.set_favorite("ch-alpha", true, Some(&ch1)).unwrap();
+    store
+        .with_connection(|c| {
+            c.execute_batch("PRAGMA wal_checkpoint(FULL);")?;
+            Ok(())
+        })
+        .unwrap();
+
+    // 2행은 WAL 에만 커밋된 상태(자동 체크포인트 임계값 미만)로 둔다.
+    let ch2 = cview_core::models::ChannelInfo::new("ch-beta", "베타 채널");
+    store.set_favorite("ch-beta", true, Some(&ch2)).unwrap();
+    store.save_memo("ch-beta", "커밋 직후 메모").unwrap();
+
+    let backup = StoreBackup::new(&path);
+    let entry = store
+        .backup_online(&backup, BackupReason::Manual, "143", None)
+        .expect("온라인 백업 성공");
+    assert_eq!(entry.reason, BackupReason::Manual);
+
+    // 원본에서 2행을 지운 뒤 방금 찍은 온라인 백업으로 복원해 값까지 대조한다.
+    store
+        .with_connection(|c| {
+            c.execute(
+                "DELETE FROM PersistedChannel WHERE channelId = 'ch-beta'",
+                [],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+    assert!(store.fetch_channel("ch-beta").unwrap().is_none());
+    drop(store);
+
+    backup.restore(&entry).unwrap();
+    let restored = b.open(&path, &health).unwrap();
+    let r1 = restored
+        .fetch_channel("ch-alpha")
+        .unwrap()
+        .expect("1행 복원");
+    let r2 = restored
+        .fetch_channel("ch-beta")
+        .unwrap()
+        .expect("WAL 에 있던 2행 복원");
+    assert_eq!(r1.channel_name, "알파 채널");
+    assert!(r1.is_favorite);
+    assert_eq!(r2.channel_name, "베타 채널");
+    assert!(r2.is_favorite);
+    assert_eq!(r2.memo.as_deref(), Some("커밋 직후 메모"));
+    let qc: String = restored
+        .with_connection(|c| Ok(c.query_row("PRAGMA quick_check;", [], |row| row.get(0))?))
+        .unwrap();
+    assert_eq!(qc, "ok");
+}

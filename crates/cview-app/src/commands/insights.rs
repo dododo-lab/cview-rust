@@ -220,9 +220,12 @@ fn reason_name(r: BackupReason) -> &'static str {
     }
 }
 
-fn health(app: &tauri::AppHandle, services: &AppServices) -> CmdResult<DataHealthDto> {
-    let (path, backup) = backup_for(app)?;
-    let tables = match &services.data_store {
+fn health_blocking(
+    path: std::path::PathBuf,
+    backup: StoreBackup,
+    store: Option<cview_persistence::DataStore>,
+) -> DataHealthDto {
+    let tables = match &store {
         Some(store) => TABLES
             .iter()
             .map(|(t, label)| TableCount {
@@ -237,8 +240,8 @@ fn health(app: &tauri::AppHandle, services: &AppServices) -> CmdResult<DataHealt
         .parent()
         .map(|p| p.join("Backups").display().to_string())
         .unwrap_or_default();
-    Ok(DataHealthDto {
-        available: services.data_store.is_some(),
+    DataHealthDto {
+        available: store.is_some(),
         store_path: path.display().to_string(),
         store_bytes: StoreBackup::store_bytes(&path),
         free_bytes: path
@@ -256,7 +259,7 @@ fn health(app: &tauri::AppHandle, services: &AppServices) -> CmdResult<DataHealt
             })
             .collect(),
         backup_dir,
-    })
+    }
 }
 
 #[tauri::command]
@@ -264,28 +267,37 @@ pub async fn data_health(
     app: tauri::AppHandle,
     services: State<'_, AppServices>,
 ) -> CmdResult<DataHealthDto> {
-    health(&app, &services)
+    let (path, backup) = backup_for(&app)?;
+    let store = services.data_store.clone();
+    tauri::async_runtime::spawn_blocking(move || health_blocking(path, backup, store))
+        .await
+        .map_err(|e| CommandError(e.to_string()))
 }
 
 /// 지금 스토어를 백업한다(최근 2개 유지).
+/// 열린 스토어가 있으면 SQLite 온라인 백업 API 로 WAL 미체크포인트 행까지 빠짐없이 담는다.
 #[tauri::command]
 pub async fn data_backup_now(
     app: tauri::AppHandle,
     services: State<'_, AppServices>,
 ) -> CmdResult<DataHealthDto> {
-    let (_, backup) = backup_for(&app)?;
+    let (path, backup) = backup_for(&app)?;
     let build = app.package_info().version.to_string();
-    let made = tauri::async_runtime::spawn_blocking(move || {
-        backup.snapshot(BackupReason::Manual, &build, None)
+    let store = services.data_store.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let made = match &store {
+            Some(s) => s.backup_online(&backup, BackupReason::Manual, &build, None),
+            None => backup.snapshot(BackupReason::Manual, &build, None),
+        };
+        if made.is_none() {
+            return Err(CommandError(
+                "백업하지 못했습니다(저장 공간 부족이거나 스토어 파일 없음)".into(),
+            ));
+        }
+        Ok(health_blocking(path, backup, store))
     })
     .await
-    .map_err(|e| CommandError(e.to_string()))?;
-    if made.is_none() {
-        return Err(CommandError(
-            "백업하지 못했습니다(저장 공간 부족이거나 스토어 파일 없음)".into(),
-        ));
-    }
-    health(&app, &services)
+    .map_err(|e| CommandError(e.to_string()))?
 }
 
 /// 정리 — `kind`: liveCache · imageIndex · oldHistory · legacy · recent.
@@ -295,27 +307,38 @@ pub async fn data_cleanup(
     services: State<'_, AppServices>,
     kind: String,
 ) -> CmdResult<DataHealthDto> {
-    let Some(store) = &services.data_store else {
+    let Some(store) = services.data_store.clone() else {
         return Err(CommandError("데이터 저장소를 열지 못했습니다".into()));
     };
-    let err = |e: cview_persistence::PersistenceError| CommandError(e.to_string());
-    match kind.as_str() {
-        "liveCache" => {
-            store
-                .with_connection(|c| {
-                    c.execute("DELETE FROM CachedLiveChannel", [])?;
-                    Ok(())
-                })
-                .map_err(err)?;
-        }
-        "imageIndex" => store.delete_all_image_entries().map_err(err)?,
-        "oldHistory" => store.cleanup_old_watch_history(90).map_err(err)?,
-        "legacy" => {
-            store.purge_legacy_write_only_rows().map_err(err)?;
-            store.purge_legacy_home_cache().map_err(err)?;
-        }
-        "recent" => store.clear_all_last_watched().map_err(err)?,
-        other => return Err(CommandError(format!("알 수 없는 정리 항목: {other}"))),
+    if !matches!(
+        kind.as_str(),
+        "liveCache" | "imageIndex" | "oldHistory" | "legacy" | "recent"
+    ) {
+        return Err(CommandError(format!("알 수 없는 정리 항목: {kind}")));
     }
-    health(&app, &services)
+    let (path, backup) = backup_for(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let err = |e: cview_persistence::PersistenceError| CommandError(e.to_string());
+        match kind.as_str() {
+            "liveCache" => {
+                store
+                    .with_connection(|c| {
+                        c.execute("DELETE FROM CachedLiveChannel", [])?;
+                        Ok(())
+                    })
+                    .map_err(err)?;
+            }
+            "imageIndex" => store.delete_all_image_entries().map_err(err)?,
+            "oldHistory" => store.cleanup_old_watch_history(90).map_err(err)?,
+            "legacy" => {
+                store.purge_legacy_write_only_rows().map_err(err)?;
+                store.purge_legacy_home_cache().map_err(err)?;
+            }
+            "recent" => store.clear_all_last_watched().map_err(err)?,
+            _ => unreachable!(),
+        }
+        Ok(health_blocking(path, backup, Some(store)))
+    })
+    .await
+    .map_err(|e| CommandError(e.to_string()))?
 }

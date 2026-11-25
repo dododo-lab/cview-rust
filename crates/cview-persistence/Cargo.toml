@@ -14,7 +14,7 @@ tokio.workspace = true
 tracing.workspace = true
 url.workspace = true
 uuid.workspace = true
-rusqlite = { version = "0.32.1", features = ["bundled"] }
+rusqlite = { version = "0.32.1", features = ["bundled", "backup"] }
 sha2 = "0.10"
 base64 = "0.22"
 libc = "0.2"

@@ -233,6 +233,105 @@ impl StoreBackup {
         }
     }
 
+    /// 이미 열린 SQLite 연결에서 온라인 백업 API(`sqlite3_backup_*`)로 한 시점의 일관된 사본을 만든다.
+    ///
+    /// 파일 복사와 달리 WAL 에만 있고 아직 본체에 체크포인트되지 않은 커밋이나 백업 도중 일어난
+    /// WAL 체크포인트·잘라내기에도 행이 빠지지 않는다. 만들어지는 사본은 체크포인트가 끝난 단일 DB 파일이다.
+    pub fn snapshot_online(
+        &self,
+        source_conn: &rusqlite::Connection,
+        reason: BackupReason,
+        app_build: &str,
+        preflight: Option<&str>,
+    ) -> Option<BackupEntry> {
+        if self.keep == 0 {
+            return None;
+        }
+        self.remove_incomplete_leftovers();
+        let sources = self.present_store_files();
+        let store_name = self.store_name();
+        if !sources.iter().any(|(n, _)| *n == store_name) {
+            return None;
+        }
+        let total: i64 = sources.iter().map(|(_, b)| *b).sum();
+        if let Some(available) = (self.available_capacity)(&store_dir(&self.store_path)) {
+            if available < total * 2 {
+                tracing::warn!(
+                    "store_backup skipped reason=low_space need={} available={}",
+                    total * 2,
+                    available
+                );
+                return None;
+            }
+        }
+        let staging = self.directory.join(format!(
+            "{INCOMPLETE_PREFIX}{}",
+            uuid::Uuid::new_v4().to_string().to_uppercase()
+        ));
+        let result = (|| -> std::io::Result<BackupEntry> {
+            std::fs::create_dir_all(&staging)?;
+            let dst_store = staging.join(&store_name);
+            {
+                let mut dst =
+                    rusqlite::Connection::open(&dst_store).map_err(std::io::Error::other)?;
+                let backup = rusqlite::backup::Backup::new(source_conn, &mut dst)
+                    .map_err(std::io::Error::other)?;
+                backup
+                    .run_to_completion(256, std::time::Duration::from_millis(2), None)
+                    .map_err(std::io::Error::other)?;
+            }
+            // 온라인 백업 결과는 단일 DB 파일로 완결된다 — 혹시 생긴 부수 파일은 정리한다.
+            for side in [format!("{store_name}-wal"), format!("{store_name}-shm")] {
+                let _ = remove_item(&staging.join(side));
+            }
+            let mut written_files = vec![ManifestFile {
+                name: store_name.clone(),
+                bytes: item_bytes(&dst_store).unwrap_or(0),
+            }];
+            let support_name = format!(".{}_SUPPORT", self.stem());
+            let src_support = store_dir(&self.store_path).join(&support_name);
+            if src_support.exists() {
+                let dst_support = staging.join(&support_name);
+                (self.copy_item)(&src_support, &dst_support)?;
+                if let Some(bytes) = item_bytes(&dst_support) {
+                    written_files.push(ManifestFile {
+                        name: support_name,
+                        bytes,
+                    });
+                }
+            }
+            let manifest = Manifest {
+                version: MANIFEST_VERSION,
+                created_at: (self.now)(),
+                app_build: app_build.to_string(),
+                reason,
+                preflight: preflight.map(str::to_string),
+                files: written_files,
+            };
+            let data =
+                crate::json::to_sorted_vec_pretty(&manifest).map_err(std::io::Error::other)?;
+            crate::json::write_atomic(&staging.join(MANIFEST_NAME), &data)?;
+            let final_path =
+                self.unique_path(&self.completed_name(&manifest.created_at, app_build));
+            std::fs::rename(&staging, &final_path)?;
+            self.prune_completed();
+            let decoded: Manifest = serde_json::from_slice(&data).map_err(std::io::Error::other)?;
+            Ok(BackupEntry::from_manifest(file_name(&final_path), decoded))
+        })();
+        match result {
+            Ok(entry) => Some(entry),
+            Err(e) => {
+                let _ = remove_item(&staging);
+                tracing::warn!(
+                    "store_backup online failed error={} code={}",
+                    e,
+                    e.raw_os_error().unwrap_or(0)
+                );
+                None
+            }
+        }
+    }
+
     // MARK: - 목록·삭제
 
     /// manifest 가 있는 완성본만, 최신순.
