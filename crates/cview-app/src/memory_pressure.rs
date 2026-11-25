@@ -88,6 +88,7 @@ pub fn relieve(app: &AppHandle, level: Level) {
             }
         });
     }
+    crate::tray_popover::release_if_hidden(app);
     let _ = app.emit_to(MAIN_WINDOW, PRESSURE_EVENT, level.name());
 }
 

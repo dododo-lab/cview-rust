@@ -13,6 +13,7 @@ import { bindCardOpen, recentChannels, fallbackAvatar } from './cards.js';
 import { FollowingPage, PopularPage, SearchPage } from './pages.js';
 import { SettingsPage } from './settings.js';
 import { Viewer } from './viewer.js';
+import { togglePipFor } from './viewer-controls.js';
 import { HomePage } from './home.js';
 import { Sidebar } from './sidebar.js';
 import { buildSidebarList, sidebarListKind, sidebarListNeeds } from './sidebar-lists.js';
@@ -962,15 +963,121 @@ async function main() {
   decoratePageHeader(document.querySelector('.viewer-header'), liveIcon, { compact: true });
   installBackgroundSaver();
   installPerfCollector();
-  // 메뉴 막대·알림 영역 메뉴의 '지금 시청 중'·'음소거'(tray-state.js) — 음소거 대상은 메뉴 동작 mute 와 같다
-  // (단독 보기, 아니면 시청 화면의 무대 패인). 패인은 소리 나는 패인('audible')이 아니면 음소거로 본다.
+  // 메뉴 막대·알림 영역 메뉴와 macOS 팝오버의 '지금 시청 중'·재생 제어(tray-state.js, tray_popover.rs).
+  // 메인 창이 숨어 있거나 다른 화면에 있어도 시청 화면·단독 보기·멀티라이브·다시보기를 일관되게 제어한다.
   if (!AUX) {
-    installTrayState({
-      muted: () => {
-        if (viewer.isOpen) return viewer.player.isMuted();
-        const c = activeWatch()?.pane?.controls;
-        return c?.el ? !c.el.classList.contains('audible') : null;
-      },
+    const videoPip = (v) => Boolean(v && (v.webkitPresentationMode === 'picture-in-picture' || v.ownerDocument?.pictureInPictureElement === v));
+    const trayPane = () => {
+      const w = activeWatch();
+      if (w?.pane) return w.pane;
+      const ml = pages.multilive;
+      if (ml && ml.nowPlayingSlot != null) return ml.panes.get(ml.nowPlayingSlot) || null;
+      return null;
+    };
+    const readTrayMuted = () => {
+      if (viewer.isOpen || (viewer.isPlaying && !trayPane())) return viewer.player.isMuted();
+      const pane = trayPane();
+      if (pane?.controls?.el) return !pane.controls.el.classList.contains('audible');
+      if (current === 'media' && pages.media?.video) return Boolean(pages.media.video.muted || pages.media.video.volume === 0);
+      return null;
+    };
+    const readTrayPlayback = () => {
+      if (viewer.isOpen || (viewer.isPlaying && !trayPane())) {
+        const v = viewer.controls?.video;
+        return {
+          paused: v ? Boolean(v.paused) : false,
+          volume: viewer.player.isMuted() ? 0 : Math.round(Number(viewer.volume?.value ?? 100)),
+          pip: v ? videoPip(v) : false,
+        };
+      }
+      const pane = trayPane();
+      if (pane?.controls) {
+        const c = pane.controls;
+        const v = c.video;
+        const audible = c.el?.classList.contains('audible');
+        return {
+          paused: v ? Boolean(v.paused) : false,
+          volume: audible ? Math.round(Number(c.range?.value ?? 100)) : 0,
+          pip: v ? videoPip(v) : false,
+        };
+      }
+      if (current === 'media' && pages.media?.video) {
+        const v = pages.media.video;
+        return {
+          paused: Boolean(v.paused),
+          volume: v.muted ? 0 : Math.round((Number(v.volume) || 0) * 100),
+          pip: videoPip(v),
+        };
+      }
+      return null;
+    };
+    installTrayState({ muted: readTrayMuted, playback: readTrayPlayback });
+
+    listenHere(Events.trayControl, (p) => {
+      if (!p || !p.kind) return;
+      const pane = trayPane();
+      switch (p.kind) {
+        case 'play-pause':
+          if (viewer.isOpen || (viewer.isPlaying && !pane)) viewer.controls.togglePlay();
+          else if (activeWatch()) activeWatch().togglePlay();
+          else if (pane?.controls) pane.controls.togglePlay();
+          else if (current === 'media' && pages.media?.video) {
+            const v = pages.media.video;
+            if (v.paused) v.play().catch(() => {}); else v.pause();
+          }
+          setTimeout(syncTray, 120);
+          break;
+        case 'mute':
+          if (viewer.isOpen || (viewer.isPlaying && !pane)) viewer.toggleMute();
+          else if (activeWatch()) activeWatch().toggleMute();
+          else if (pane?.controls) {
+            if (!pane.controls.toggleMute()) pages.multilive.makeAudible(pane);
+          } else if (current === 'media' && pages.media?.video) {
+            pages.media.video.muted = !pages.media.video.muted;
+          }
+          syncTray();
+          setTimeout(syncTray, 120);
+          break;
+        case 'volume': {
+          const val = Math.max(0, Math.min(100, Math.round(Number(p.value) || 0)));
+          if (viewer.isOpen || (viewer.isPlaying && !pane)) {
+            viewer.volume.value = String(val);
+            viewer.player.call('setVolume', val / 100);
+            if (val > 0 && viewer.player.isMuted()) viewer.setMuted(false);
+            else if (val === 0 && !viewer.player.isMuted()) viewer.setMuted(true);
+            api.playerSetVolume(val / 100).catch(() => {});
+          } else if (pane?.controls) {
+            const c = pane.controls;
+            if (val > 0 && !c.el.classList.contains('audible')) pages.multilive.makeAudible(pane);
+            c.range.value = String(val);
+            c.setGain(val / 100);
+          } else if (current === 'media' && pages.media?.video) {
+            const v = pages.media.video;
+            v.volume = val / 100;
+            v.muted = val === 0;
+          }
+          syncTray();
+          break;
+        }
+        case 'pip':
+          if (activeWatch()) activeWatch().togglePip();
+          else if (viewer.isOpen || (viewer.isPlaying && !pane)) viewer.controls.togglePip();
+          else if (pane?.controls?.video) togglePipFor(pane.controls.video);
+          else if (current === 'media' && pages.media?.video) togglePipFor(pages.media.video);
+          setTimeout(syncTray, 160);
+          break;
+        case 'navigate':
+          if (p.route) navigate(p.route, p.params && typeof p.params === 'object' ? p.params : {});
+          break;
+        case 'queue-multi':
+          if (Array.isArray(p.channelIds)) queueMulti(p.channelIds);
+          break;
+        case 'check-update':
+          showUpdateCheck();
+          break;
+        default:
+          break;
+      }
     });
   }
   // 머리줄 앱 사용률 칩(설정 › 성능) — 메인 창만. 명령이 없으면 그리지 않는다.

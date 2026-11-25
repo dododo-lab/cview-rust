@@ -22,6 +22,7 @@ pub mod playback;
 pub mod state;
 pub mod system;
 pub mod tray;
+pub mod tray_popover;
 pub mod ui_watchdog;
 pub mod updater;
 pub mod usage;
@@ -399,6 +400,9 @@ pub fn run() {
             commands::download::download_list,
             system::deeplink_take_pending,
             tray::tray_set_state,
+            tray_popover::tray_get_state,
+            tray_popover::tray_popover_close,
+            tray_popover::tray_control,
             windows::window_open,
             windows::window_close_self,
             menu::window_menu_popup,

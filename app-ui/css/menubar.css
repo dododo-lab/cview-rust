@@ -1,0 +1,876 @@
+/* macOS 메뉴 막대 드롭다운 팝오버 — CView 디자인 토큰(app.css)을 그대로 써 다크·라이트·시스템 테마와
+   WCAG 2.1 AA 명도 대비를 유지한다. 창 자체는 투명이고 바깥 여백 안에 그림자와 위쪽 화살표를 그린다. */
+
+:root[data-window="menubar"],
+:root[data-window="menubar"] body.mb-body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.mb-stage {
+  --arrow-x: 192px;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  padding: 8px 10px 12px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 메뉴 막대 아이콘 중심을 가리키는 상단 포인터 */
+.mb-arrow {
+  position: absolute;
+  top: 3px;
+  left: var(--arrow-x);
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  background: var(--surface-popover);
+  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  transform: rotate(45deg);
+  border-top-left-radius: 3px;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.mb-popover {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-popover);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.36), 0 2px 8px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+  font-family: var(--font-ui);
+}
+
+:root[data-theme="light"] .mb-popover {
+  box-shadow: 0 14px 34px rgba(15, 20, 30, 0.18), 0 2px 6px rgba(15, 20, 30, 0.08);
+}
+
+/* ── 머리줄 ─────────────────────────────────── */
+.mb-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 9px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-base);
+}
+
+.mb-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 6px 3px 3px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  cursor: pointer;
+}
+
+.mb-brand:hover {
+  background: var(--hover);
+}
+
+.mb-brand:focus-visible,
+.mb-icon-btn:focus-visible,
+.mb-ctl-btn:focus-visible,
+.mb-now-media:focus-visible,
+.mb-tile:focus-visible,
+.mb-tab:focus-visible,
+.mb-item-main:focus-visible,
+.mb-act-btn:focus-visible,
+.mb-foot-btn:focus-visible,
+.mb-search-clear:focus-visible,
+.mb-cta-btn:focus-visible {
+  outline: 2px solid var(--primary-text);
+  outline-offset: -2px;
+}
+
+.mb-brand-mark {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.mb-brand-mark .app-logo {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-xs);
+}
+
+.mb-brand-title {
+  font-size: var(--fs-callout);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.mb-live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  font-size: var(--fs-tiny);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.mb-live-pill[hidden] {
+  display: none;
+}
+
+.mb-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--live);
+  flex-shrink: 0;
+}
+
+.mb-spacer {
+  flex: 1;
+}
+
+.mb-icon-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.mb-icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.mb-icon-btn:hover {
+  background: var(--hover);
+  color: var(--text-primary);
+}
+
+.mb-icon-btn.is-spinning svg {
+  animation: mb-spin 0.65s linear infinite;
+}
+
+@keyframes mb-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── 지금 시청 중 미니 컨트롤러 ────────────────── */
+.mb-now {
+  margin: 10px 10px 0;
+  padding: 9px 10px;
+  border-radius: var(--radius-md);
+  background: var(--surface-elevated);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mb-now[hidden] {
+  display: none;
+}
+
+.mb-now-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mb-now-media {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 2px;
+  margin: -2px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mb-now-media:hover .mb-now-title {
+  color: var(--primary-text);
+}
+
+.mb-now-thumb {
+  position: relative;
+  width: 68px;
+  height: 38px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-overlay);
+  overflow: hidden;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mb-now-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.mb-now-fallback {
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.mb-now-meta {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mb-now-kicker {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.mb-now-kind {
+  padding: 1px 5px;
+  border-radius: var(--radius-xxs);
+  background: var(--live-badge);
+  color: #ffffff;
+  font-size: var(--fs-nano);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
+.mb-now-kind.is-vod {
+  background: var(--surface-overlay);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+}
+
+.mb-now-channel {
+  font-size: var(--fs-footnote);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mb-now-title {
+  font-size: var(--fs-tiny);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mb-pip-btn[aria-pressed="true"] {
+  background: var(--primary-dim);
+  color: var(--primary-text);
+}
+
+.mb-now-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.mb-ctl-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-base);
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.mb-ctl-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.mb-ctl-btn:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: var(--primary-text);
+}
+
+.mb-ctl-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.mb-volume {
+  flex: 1;
+  min-width: 0;
+  height: 4px;
+  accent-color: var(--primary-text);
+  cursor: pointer;
+}
+
+.mb-vol-val {
+  min-width: 34px;
+  text-align: right;
+  font-size: var(--fs-tiny);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── 빠른 동작 & 토글 타일(제어 센터형 3열 그리드) ── */
+.mb-quick {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 10px 10px 8px;
+}
+
+.mb-tile {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-ms);
+  background: var(--surface-base);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.mb-tile:hover:not(:disabled) {
+  background: var(--surface-elevated);
+  border-color: var(--border);
+}
+
+.mb-tile:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.mb-tile.is-on,
+.mb-tile[aria-pressed="true"] {
+  background: var(--primary-dim);
+  border-color: var(--primary-ring);
+}
+
+.mb-tile-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-xs);
+  background: var(--surface-elevated);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.mb-tile.is-on .mb-tile-icon,
+.mb-tile[aria-pressed="true"] .mb-tile-icon {
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.mb-tile-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mb-tile-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.22;
+}
+
+.mb-tile-copy b {
+  font-size: var(--fs-tiny);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mb-tile-copy small {
+  font-size: var(--fs-micro);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── 라이브 탐색(탭·검색·목록) ──────────────────── */
+.mb-browse {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.mb-browse-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 6px;
+  background: var(--surface-popover);
+}
+
+.mb-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 3px;
+  border-radius: var(--radius-ms);
+  background: var(--surface-base);
+  border: 1px solid var(--border-subtle);
+}
+
+.mb-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--fs-footnote);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mb-tab:hover {
+  color: var(--text-primary);
+}
+
+.mb-tab.is-active {
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.mb-tab-count {
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--primary-dim);
+  color: var(--primary-text);
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.mb-tab-count[hidden] {
+  display: none;
+}
+
+.mb-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.mb-search-ico {
+  position: absolute;
+  left: 9px;
+  width: 13px;
+  height: 13px;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.mb-search {
+  width: 100%;
+  height: 28px;
+  padding: 0 26px 0 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-base);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--fs-footnote);
+}
+
+.mb-search::placeholder {
+  color: var(--text-tertiary);
+}
+
+.mb-search:focus {
+  outline: none;
+  border-color: var(--primary-text);
+  box-shadow: 0 0 0 1px var(--primary-text);
+}
+
+.mb-search::-webkit-search-cancel-button {
+  display: none;
+}
+
+.mb-search-clear {
+  position: absolute;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--fs-body);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mb-search-clear[hidden] {
+  display: none;
+}
+
+.mb-search-clear:hover {
+  background: var(--hover);
+  color: var(--text-primary);
+}
+
+.mb-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mb-group-label {
+  padding: 6px 6px 3px;
+  font-size: var(--fs-micro);
+  font-weight: 700;
+  color: var(--text-tertiary);
+  letter-spacing: 0.02em;
+}
+
+.mb-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--radius-ms);
+  padding: 2px;
+}
+
+.mb-item:hover,
+.mb-item:focus-within {
+  background: var(--hover);
+}
+
+.mb-item.is-watching {
+  background: var(--primary-dim);
+}
+
+.mb-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mb-avatar-wrap {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  padding: 1.5px;
+  border: 1.5px solid var(--live);
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.mb-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+  background: var(--surface-elevated);
+}
+
+.mb-avatar-initial {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: var(--surface-elevated);
+  color: var(--text-primary);
+  font-size: var(--fs-footnote);
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mb-item-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mb-item-row1 {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.mb-fav {
+  color: var(--accent-yellow);
+  font-size: var(--fs-tiny);
+  flex-shrink: 0;
+}
+
+.mb-item-name {
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mb-item-viewers {
+  margin-left: auto;
+  font-size: var(--fs-tiny);
+  font-weight: 600;
+  color: var(--live-text);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.mb-item-row2 {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-size: var(--fs-tiny);
+  color: var(--text-secondary);
+}
+
+.mb-item-cat {
+  max-width: 96px;
+  padding: 0 5px;
+  border-radius: var(--radius-xxs);
+  background: var(--surface-elevated);
+  color: var(--text-secondary);
+  font-size: var(--fs-micro);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+.mb-item-title {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mb-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 3px;
+  flex-shrink: 0;
+}
+
+.mb-act-btn {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.mb-act-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mb-act-btn:hover {
+  background: var(--surface-overlay);
+  color: var(--text-primary);
+}
+
+.mb-act-btn.is-in-multi {
+  color: var(--primary-text);
+}
+
+/* 빈 목록 · 로그인 안내 */
+.mb-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: var(--fs-footnote);
+}
+
+.mb-empty strong {
+  color: var(--text-primary);
+  font-size: var(--fs-caption);
+}
+
+.mb-empty-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.mb-cta-btn {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-base);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--fs-footnote);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mb-cta-btn.primary {
+  border-color: transparent;
+  background: var(--primary);
+  color: var(--on-primary);
+}
+
+.mb-cta-btn:hover {
+  filter: brightness(1.04);
+}
+
+/* ── 바닥줄 ─────────────────────────────────── */
+.mb-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 7px 10px;
+  border-top: 1px solid var(--border-subtle);
+  background: var(--surface-base);
+}
+
+.mb-foot-links {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mb-foot-btn {
+  height: 26px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--fs-tiny);
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mb-foot-btn:hover {
+  background: var(--hover);
+  color: var(--text-primary);
+}
+
+.mb-quit {
+  color: var(--error);
+}
+
+.mb-quit:hover {
+  background: rgba(255, 112, 102, 0.12);
+  color: var(--error);
+}
+
+:root[data-theme="light"] .mb-quit {
+  color: #b42318;
+}
+
+:root[data-theme="light"] .mb-quit:hover {
+  background: rgba(180, 35, 24, 0.1);
+  color: #b42318;
+}

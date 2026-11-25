@@ -167,8 +167,13 @@ pub async fn settings_update(
     }
     if domain == "general" {
         crate::window_prefs::apply_general(&app, &services.settings.general());
-        // "메뉴 막대에 표시" — 아이콘을 바로 보이거나 숨긴다.
+        // "메뉴 막대에 표시" — 아이콘을 바로 보이거나 숨긴다. 팝오버의 알림 토글도 함께 맞춘다.
         crate::tray::sync(&app);
+        let _ = tauri::Emitter::emit(
+            &app,
+            "settings://general",
+            to_value(&services.settings.general()),
+        );
     }
     if domain == "keyboard" {
         crate::menu::rebuild(&app);
@@ -176,9 +181,9 @@ pub async fn settings_update(
     Ok(snapshot(&services))
 }
 
-/// 화면 크기를 걸 창인가 — 네이버 로그인 창(외부 nid.naver.com)은 제외한다. 확대하면 폼·캡차가 창 밖으로 잘린다.
+/// 화면 크기를 걸 창인가 — 네이버 로그인 창(외부 nid.naver.com)과 고정 크기 메뉴 막대 팝오버는 제외한다.
 pub fn zoom_applies_to(label: &str) -> bool {
-    label != crate::login::LOGIN_WINDOW
+    label != crate::login::LOGIN_WINDOW && label != crate::tray_popover::TRAY_POPOVER_WINDOW
 }
 
 /// 이 창에 저장된 화면 크기를 건다 — 창을 만든 직후(메인 창 setup·보조 창 window_open)에 불러
@@ -420,8 +425,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn login_window_is_never_zoomed() {
+    fn login_and_popover_windows_are_never_zoomed() {
         assert!(!zoom_applies_to(crate::login::LOGIN_WINDOW));
+        assert!(!zoom_applies_to(crate::tray_popover::TRAY_POPOVER_WINDOW));
         assert!(zoom_applies_to("main"));
         assert!(zoom_applies_to("chat-1"));
     }
@@ -528,6 +534,9 @@ pub fn apply_window_theme<R: tauri::Runtime>(app: &tauri::AppHandle<R>, theme: A
         if let Err(e) = window.set_theme(window_theme(theme)) {
             tracing::debug!("창 테마 설정 실패: {e}");
         }
+        if window.label() == crate::tray_popover::TRAY_POPOVER_WINDOW {
+            continue;
+        }
         // 웹 화면이 그려지기 전 비치는 창 배경도 테마에 맞춘다(시스템이면 그대로 둔다).
         let background = match theme {
             AppTheme::Light => Some(tauri::window::Color(244, 245, 248, 255)),
@@ -553,6 +562,7 @@ pub async fn appearance_set_theme(
     appearance.theme = theme;
     services.settings.set_appearance(appearance);
     apply_window_theme(&app, theme);
+    appearance_changed(&app, &services);
     Ok(())
 }
 

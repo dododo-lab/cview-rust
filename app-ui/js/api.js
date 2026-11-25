@@ -30,7 +30,7 @@ const READ_ONLY = new Set([
   'channel_clips', 'channel_posts', 'search', 'search_more_clips', 'search_videos', 'following_channels_all',
   'following_vods', 'insights_report', 'multilive_state', 'multilive_stage_size', 'multilive_set_window_occluded',
   'image_cache_status', 'live_connector_status', 'player_record_status', 'preset_list', 'release_notes', 'vod_detail',
-  'usage_status', 'usage_history', 'usage_watch',
+  'usage_status', 'usage_history', 'usage_watch', 'tray_get_state',
 ]);
 const inflight = new Map();
 
@@ -101,10 +101,16 @@ export const Events = Object.freeze({
   networkPresetChanged: 'settings://network-preset',
   /** 외관 설정이 바뀌었다(화면 크기 단계·저장·가져오기·초기화) — 새 외관 값. 모든 창에 온다. */
   appearanceChanged: 'settings://appearance',
+  /** 일반 설정이 바뀌었다(알림 토글·메뉴 막대 표시 등) — 새 일반 설정 값. */
+  generalChanged: 'settings://general',
   downloadUpdate: 'download://update',
   deepLink: 'deeplink://open',
   /** 앱 사용률 표본(usage-monitor.js) — 화면이 usage_watch(true) 로 보고 있을 때만 메인 창에 온다. */
   usageSample: 'usage://sample',
+  /** 메뉴 막대 팝오버 상태 갱신(tray_popover.rs → menubar.html). */
+  trayState: 'tray://state',
+  /** 메뉴 막대 팝오버·우클릭 메뉴가 메인 창에 보내는 직접 제어 신호. */
+  trayControl: 'tray://control',
 });
 
 export const api = {
@@ -229,6 +235,9 @@ export const api = {
   notifySend: (title, body) => invoke('notify_send', { title, body }),
   notifyPermission: (request) => invoke('notify_permission', { request }),
   deeplinkTakePending: () => invoke('deeplink_take_pending'),
+  trayGetState: () => invoke('tray_get_state'),
+  trayPopoverClose: () => invoke('tray_popover_close'),
+  trayControl: (action) => invoke('tray_control', { action }),
   multiLiveRetry: (sessionId = null) => invoke('multilive_retry', { sessionId }),
   settingsExport: () => invoke('settings_export'),
   // 앱 사용률(설정 › 성능·머리줄 칩) — usage-monitor.js

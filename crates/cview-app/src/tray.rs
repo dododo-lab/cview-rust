@@ -24,7 +24,7 @@ use std::time::Duration;
 use cview_app_core::caching::following_store::to_live_channel_item;
 use cview_core::models::settings::GeneralSettings;
 use cview_core::utils::following_poll::FollowingPollReason;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, Runtime, WebviewWindow, WindowEvent};
@@ -59,23 +59,33 @@ static QUITTING: AtomicBool = AtomicBool::new(false);
 
 // ── 모델(순수) ─────────────────────────────────────
 
-/// 화면이 알려 주는 상태 — 지금 시청 중·음소거(app-ui/js/tray-state.js).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+/// 화면이 알려 주는 상태 — 지금 시청 중·음소거·재생·볼륨·PiP(app-ui/js/tray-state.js).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct TrayFrontState {
     pub now_playing: Option<NowPlaying>,
     /// 음소거할 대상(단독 보기·시청 화면)이 있으면 그 상태, 없으면 `None`(메뉴에 음소거를 두지 않는다).
     pub muted: Option<bool>,
+    /// 일시정지 여부(제어 가능한 재생 대상이 있을 때만 `Some`).
+    pub paused: Option<bool>,
+    /// 현재 볼륨 0..=100(조절 가능한 대상이 있을 때만 `Some`).
+    pub volume: Option<u8>,
+    /// 화면 속 화면(PiP) 상태(지원·재생 중일 때만 `Some`).
+    pub pip: Option<bool>,
 }
 
 /// 시스템 '지금 재생 중'에 올린 것과 같은 정보(now-playing.js).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct NowPlaying {
     /// `live` | `vod`
     pub kind: String,
     pub title: String,
     pub channel_name: String,
+    pub channel_id: String,
+    pub category: String,
+    pub thumbnail_url: String,
+    pub image_url: String,
 }
 
 /// 방송 중인 팔로잉 한 채널.
@@ -316,6 +326,26 @@ fn general<R: Runtime>(app: &AppHandle<R>) -> GeneralSettings {
 }
 
 /// 메인 창이 숨겨 있는가(아이콘으로 숨김·최소화·안 보임).
+pub(crate) fn is_main_hidden<R: Runtime>(app: &AppHandle<R>) -> bool {
+    main_hidden(app)
+}
+
+/// 팝오버 스냅샷용 상태 읽기(로그인 여부·메인 창 숨김·프런트 재생 상태).
+pub(crate) fn snapshot_state<R: Runtime>(app: &AppHandle<R>) -> (bool, bool, TrayFrontState) {
+    let window_hidden = main_hidden(app);
+    let Some(hub) = app.try_state::<TrayHub>() else {
+        return (false, window_hidden, TrayFrontState::default());
+    };
+    let m = lock(&hub.model);
+    (m.logged_in, window_hidden, m.front.clone())
+}
+
+/// 앱 종료 요청 — 창 닫기 가로채기(`close_to_tray`)를 건너뛰고 끝낸다.
+pub(crate) fn request_quit<R: Runtime>(app: &AppHandle<R>) {
+    QUITTING.store(true, Ordering::Relaxed);
+    app.exit(0);
+}
+
 fn main_hidden<R: Runtime>(app: &AppHandle<R>) -> bool {
     if HIDDEN.load(Ordering::Relaxed) {
         return true;
@@ -476,6 +506,7 @@ pub fn sync<R: Runtime>(app: &AppHandle<R>) {
     if changed(&|p| p.count != next.count) {
         set_count(app, &tray, next.count);
     }
+    crate::tray_popover::emit_state(app);
 }
 
 /// 다음 [`sync`] 가 메뉴·배지를 다시 만들게 한다(OS 가 체크 표시를 먼저 뒤집었거나 Dock 이 배지를 잃었을 때).
@@ -664,30 +695,38 @@ pub fn on_reopen<R: Runtime>(app: &AppHandle<R>, has_visible_windows: bool) {
         hidden = HIDDEN.load(Ordering::Relaxed),
         "Dock 다시 열기"
     );
-    if HIDDEN.load(Ordering::Relaxed) || !has_visible_windows {
+    if HIDDEN.load(Ordering::Relaxed) || !has_visible_windows || main_hidden(app) {
+        crate::tray_popover::hide(app);
         show_main(app);
     }
 }
 
 fn on_menu<R: Runtime>(app: &AppHandle<R>, id: &str) {
     if let Some(channel_id) = id.strip_prefix(LIVE_PREFIX) {
+        crate::tray_popover::hide(app);
         crate::system::handle_urls(app, [format!("cview://live?channelId={channel_id}")]);
         return;
     }
     match id {
-        "tray-multilive" => crate::system::handle_urls(app, ["cview://multilive".to_string()]),
-        "tray-now" => show_main(app),
+        "tray-multilive" => {
+            crate::tray_popover::hide(app);
+            crate::system::handle_urls(app, ["cview://multilive".to_string()]);
+        }
+        "tray-now" => {
+            crate::tray_popover::hide(app);
+            show_main(app);
+        }
         "tray-toggle" => {
             if main_hidden(app) {
+                crate::tray_popover::hide(app);
                 show_main(app);
             } else {
                 hide_main(app);
             }
         }
         "tray-mute" => {
-            // OS 가 체크 표시를 먼저 뒤집는다. 화면이 음소거를 바꾸고 새 상태를 알려 오면 그 값으로 다시 그리고,
-            // 바뀌지 않았으면(대상이 사라짐) 잠시 뒤 원래대로 되돌린다.
-            crate::menu::forward(app, "mute");
+            // OS 가 체크 표시를 먼저 뒤집는다. 메인 창이 숨어 있거나 초점이 없어도 동작하게 직접 보낸다.
+            crate::tray_popover::send_main_control(app, serde_json::json!({ "kind": "mute" }));
             invalidate(app, true, false);
             let app = app.clone();
             tauri::async_runtime::spawn(async move {
@@ -696,16 +735,23 @@ fn on_menu<R: Runtime>(app: &AppHandle<R>, id: &str) {
             });
         }
         "tray-settings" => {
+            crate::tray_popover::hide(app);
             show_main(app);
-            crate::menu::forward(app, "settings");
+            crate::tray_popover::send_main_control(
+                app,
+                serde_json::json!({ "kind": "navigate", "route": "settings" }),
+            );
         }
         "tray-update" => {
+            crate::tray_popover::hide(app);
             show_main(app);
-            crate::menu::forward(app, "check-update");
+            crate::tray_popover::send_main_control(
+                app,
+                serde_json::json!({ "kind": "check-update" }),
+            );
         }
         "tray-quit" => {
-            QUITTING.store(true, Ordering::Relaxed);
-            app.exit(0);
+            request_quit(app);
         }
         _ => {}
     }
@@ -718,17 +764,25 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
     let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .tooltip("CView")
         .menu(&menu)
-        // 왼쪽 클릭은 창 열기, 오른쪽 클릭(⌃클릭)은 메뉴.
+        // macOS 왼쪽 클릭은 드롭다운 팝오버(tray_popover.rs), Windows 왼쪽 클릭은 창 열기. 오른쪽 클릭(⌃클릭)은 기본 메뉴.
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| on_menu(app, event.id().as_ref()))
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,
+                rect,
+                position,
                 ..
             } = event
             {
-                show_main(tray.app_handle());
+                #[cfg(target_os = "macos")]
+                crate::tray_popover::toggle_from_tray(tray.app_handle(), rect, position);
+                #[cfg(not(target_os = "macos"))]
+                {
+                    let _ = (rect, position);
+                    show_main(tray.app_handle());
+                }
             }
         });
     if let Some(icon) = icon_image(false, icon_px(app)) {
@@ -846,6 +900,7 @@ mod tests {
             kind: kind.into(),
             title: title.into(),
             channel_name: ch.into(),
+            ..NowPlaying::default()
         };
         assert_eq!(
             now_playing_label(&n("live", "저녁 방송", "채널")),
@@ -895,6 +950,7 @@ mod tests {
             kind: "live".into(),
             title: "t".into(),
             channel_name: "c".into(),
+            ..NowPlaying::default()
         });
         assert_eq!(
             ids(&menu_spec(&m))[..4],
@@ -996,6 +1052,7 @@ mod tests {
             kind: "live".into(),
             title: "".into(),
             channel_name: "채널".into(),
+            ..NowPlaying::default()
         });
         assert_eq!(tooltip(&m), "CView — 채널 시청 중");
     }

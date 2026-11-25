@@ -90,6 +90,8 @@ export class Viewer {
       kind: 'live',
       title: live.liveTitle,
       channelName: live.channelName,
+      channelId: this.channelId,
+      category: live.categoryName || '',
       thumbnailUrl: live.thumbnailUrl,
       imageUrl: live.channelImageUrl,
     }, this.nowPlayingHandlers);

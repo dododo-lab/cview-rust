@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ko" data-window="menubar">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CView 메뉴 막대</title>
+  <script>
+    try { document.documentElement.dataset.theme = localStorage.getItem('cview.theme') || 'dark'; }
+    catch (e) { document.documentElement.dataset.theme = 'dark'; }
+    document.documentElement.dataset.platform = /Windows/.test(navigator.userAgent) ? 'windows' : (/Mac/.test(navigator.userAgent) ? 'macos' : 'other');
+  </script>
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/controls.css">
+  <link rel="stylesheet" href="css/menubar.css">
+  <script type="module" src="js/menubar.js"></script>
+</head>
+<body class="mb-body">
+  <div class="mb-stage" id="mb-stage">
+    <div class="mb-arrow" id="mb-arrow" aria-hidden="true"></div>
+    <main class="mb-popover" id="mb-popover" aria-label="CView 빠른 메뉴">
+      <header class="mb-header">
+        <button type="button" class="mb-brand" data-act="open-home" title="CView 홈 열기">
+          <span class="mb-brand-mark" aria-hidden="true">
+            <img class="app-logo logo-light" src="img/logo-light.png" alt="" draggable="false">
+            <img class="app-logo logo-dark" src="img/logo-dark.png" alt="" draggable="false">
+          </span>
+          <span class="mb-brand-title">CView</span>
+        </button>
+        <span class="mb-live-pill" id="mb-live-pill" hidden>
+          <span class="mb-live-dot" aria-hidden="true"></span>
+          <span id="mb-live-count">0</span>
+        </span>
+        <div class="mb-spacer"></div>
+        <button type="button" class="mb-icon-btn" id="mb-refresh" data-act="refresh" title="목록 새로고침 (⌘R)" aria-label="목록 새로고침">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7"/></svg>
+        </button>
+        <button type="button" class="mb-icon-btn" data-act="settings" title="설정 열기 (⌘,)" aria-label="설정 열기">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.08a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.08a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+        </button>
+      </header>
+
+      <section class="mb-now" id="mb-now" aria-label="지금 시청 중" hidden>
+        <div class="mb-now-top">
+          <button type="button" class="mb-now-media" id="mb-now-open" data-act="show-main" title="시청 화면으로 이동">
+            <div class="mb-now-thumb" id="mb-now-thumb"></div>
+            <div class="mb-now-meta">
+              <div class="mb-now-kicker">
+                <span class="mb-now-kind" id="mb-now-kind">LIVE</span>
+                <span class="mb-now-channel" id="mb-now-channel"></span>
+              </div>
+              <div class="mb-now-title" id="mb-now-title"></div>
+            </div>
+          </button>
+          <button type="button" class="mb-icon-btn mb-pip-btn" id="mb-pip" data-act="pip" title="화면 속 화면 (PiP)" aria-label="화면 속 화면 전환" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.2"/><rect x="11.5" y="11" width="7.5" height="6" rx="1.2" fill="currentColor"/></svg>
+          </button>
+        </div>
+        <div class="mb-now-bar">
+          <button type="button" class="mb-ctl-btn" id="mb-play" data-act="play-pause" title="일시정지" aria-label="일시정지"></button>
+          <button type="button" class="mb-ctl-btn" id="mb-mute" data-act="mute" title="음소거" aria-label="음소거"></button>
+          <input type="range" class="mb-volume" id="mb-volume" min="0" max="100" value="100" aria-label="볼륨">
+          <span class="mb-vol-val" id="mb-vol-val">100%</span>
+        </div>
+      </section>
+
+      <section class="mb-quick" aria-label="빠른 동작">
+        <button type="button" class="mb-tile" id="mb-tile-window" data-act="toggle-window">
+          <span class="mb-tile-icon" id="mb-tile-window-icon" aria-hidden="true"></span>
+          <span class="mb-tile-copy">
+            <b id="mb-tile-window-label">창 숨기기</b>
+            <small id="mb-tile-window-sub">실행 중</small>
+          </span>
+        </button>
+        <button type="button" class="mb-tile" id="mb-tile-queue" data-act="queue-top4">
+          <span class="mb-tile-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="8" height="7" rx="1.6"/><rect x="13" y="4" width="8" height="7" rx="1.6"/><rect x="3" y="13" width="8" height="7" rx="1.6"/><rect x="13" y="13" width="8" height="7" rx="1.6"/></svg>
+          </span>
+          <span class="mb-tile-copy">
+            <b>TOP 4 멀티</b>
+            <small id="mb-tile-queue-sub">동시 시청</small>
+          </span>
+        </button>
+        <button type="button" class="mb-tile" data-act="random-live">
+          <span class="mb-tile-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg>
+          </span>
+          <span class="mb-tile-copy">
+            <b>무작위 방송</b>
+            <small>바로 재생</small>
+          </span>
+        </button>
+        <button type="button" class="mb-tile" id="mb-tile-notify" data-act="toggle-notify" aria-pressed="false">
+          <span class="mb-tile-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          </span>
+          <span class="mb-tile-copy">
+            <b>방송 알림</b>
+            <small id="mb-tile-notify-sub">꺼짐</small>
+          </span>
+        </button>
+        <button type="button" class="mb-tile" id="mb-tile-theme" data-act="toggle-theme" aria-pressed="false">
+          <span class="mb-tile-icon" id="mb-tile-theme-icon" aria-hidden="true"></span>
+          <span class="mb-tile-copy">
+            <b>화면 테마</b>
+            <small id="mb-tile-theme-sub">다크</small>
+          </span>
+        </button>
+        <button type="button" class="mb-tile" id="mb-tile-multilive" data-act="open-multilive">
+          <span class="mb-tile-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2.5" y="4.5" width="12" height="15" rx="2"/><rect x="16.5" y="4.5" width="5" height="7" rx="1.4"/><rect x="16.5" y="13.5" width="5" height="6" rx="1.4"/></svg>
+          </span>
+          <span class="mb-tile-copy">
+            <b>멀티라이브</b>
+            <small id="mb-tile-ml-sub">무대 열기</small>
+          </span>
+        </button>
+      </section>
+
+      <section class="mb-browse" aria-label="라이브 채널 탐색">
+        <div class="mb-browse-bar">
+          <div class="mb-tabs" role="tablist" aria-label="라이브 목록 종류">
+            <button type="button" class="mb-tab is-active" role="tab" id="mb-tab-following" data-tab="following" aria-selected="true" aria-controls="mb-list">
+              <span>팔로잉</span>
+              <span class="mb-tab-count" id="mb-tab-following-count" hidden>0</span>
+            </button>
+            <button type="button" class="mb-tab" role="tab" id="mb-tab-popular" data-tab="popular" aria-selected="false" aria-controls="mb-list">
+              <span>인기 라이브</span>
+            </button>
+          </div>
+          <div class="mb-search-wrap">
+            <svg class="mb-search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+            <input type="search" class="mb-search" id="mb-search" placeholder="채널·제목·카테고리 필터 (/)" aria-label="방송 목록 필터" autocomplete="off" spellcheck="false">
+            <button type="button" class="mb-search-clear" id="mb-search-clear" title="검색어 지우기" aria-label="검색어 지우기" hidden>×</button>
+          </div>
+        </div>
+        <div class="mb-list" id="mb-list" role="tabpanel" aria-labelledby="mb-tab-following"></div>
+      </section>
+
+      <footer class="mb-footer">
+        <div class="mb-foot-links">
+          <button type="button" class="mb-foot-btn" data-act="open-multichat" title="멀티채팅 열기">멀티채팅</button>
+          <button type="button" class="mb-foot-btn" data-act="open-library" title="보관함 열기">보관함</button>
+          <button type="button" class="mb-foot-btn" data-act="open-stats" title="시청 리포트 열기">리포트</button>
+          <button type="button" class="mb-foot-btn" data-act="check-update" title="업데이트 확인">업데이트</button>
+        </div>
+        <button type="button" class="mb-foot-btn mb-quit" data-act="quit" title="CView 완전히 끝내기">종료</button>
+      </footer>
+    </main>
+  </div>
+</body>
+</html>

@@ -160,6 +160,8 @@ export function multiLiveNowPlayingInfo(s) {
     kind: 'live',
     title: s.liveTitle,
     channelName: s.channelName || s.channelId,
+    channelId: s.channelId || '',
+    category: s.liveCategoryValue || s.categoryName || '',
     thumbnailUrl: s.thumbnailUrl,
     imageUrl: s.profileImageUrl,
   };
