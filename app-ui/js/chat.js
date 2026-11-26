@@ -428,6 +428,9 @@ export class ChatPanel {
       clearTimeout(this.bannerTimer);
       this.setSolo(null);
       closeUserPop(this);
+      // 앞 채널 후원 읽어 주기(TTS)를 멈춘다 — 대기열이 전역이라 채널을 바꾸면(시청 화면 전환·채팅 창 '채널 바꾸기')
+      // 앞 채널 후원 문장(최대 4개)이 새 방송 위로 이어 읽혔다. 다른 채팅이 연결돼 있으면 그쪽 것이라 두는 것은 disconnect 와 같다.
+      if (window.speechSynthesis && ![...PANELS].some((p) => p !== this && p.connected)) speechSynthesis.cancel();
     }
     this.kicked = false;
     this.chatChannelId = chatChannelId;
@@ -614,7 +617,9 @@ export class ChatPanel {
     const follow = prefs.autoScroll && this.follower.stuck;
     // 지난 기록(입장 직후 recent)은 읽을 글이 아니다 — 구분선·새 메시지 수·후크(TTS·통계)는 지금 온 줄만 센다.
     const fresh = shown.some((m) => RECENT.has(m)) ? shown.filter((m) => !RECENT.has(m)) : shown;
-    if (!follow && fresh.length && !this.list.querySelector('.read-divider') && this.list.children.length) {
+    // 읽지 않은 줄이 이미 있으면(unread) 구분선이 앞줄 지우기로 잘려 나간 것이다 — 새로 붙이면 실제로 읽은 곳이 아닌
+    // 목록 끝에 '여기까지 읽음'이 떴다.
+    if (!follow && fresh.length && !this.unread && !this.list.querySelector('.read-divider') && this.list.children.length) {
       this.list.insertAdjacentHTML('beforeend', '<div class="read-divider"><span>여기까지 읽음</span></div>');
       this.lastGroup = null; // 구분선 너머로는 묶지 않는다
     }
@@ -630,14 +635,14 @@ export class ChatPanel {
     for (const fn of this.appendHooks) {
       try { fn(shown, fresh); } catch (e) { console.error(e); }
     }
-    this.trimLines();
+    this.trimLines(!follow);
     if (follow) this.follower.snap();
     else if (fresh.length) { this.unread += fresh.length; this.renderJump(); }
   }
 
   /** 줄 상한(trimFront — 넘친 줄을 모았다가 한 번에 지운다). */
-  trimLines() {
-    if (!trimFront(this.list, this.maxLines)) return;
+  trimLines(keepView = false) {
+    if (!trimFront(this.list, this.maxLines, { keepView })) return;
     // 맨 위에 남은 줄이 묶음 중간이면 아바타·이름을 다시 보인다
     this.list.firstElementChild?.classList.remove('cont');
   }

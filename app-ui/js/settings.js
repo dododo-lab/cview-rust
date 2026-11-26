@@ -229,7 +229,7 @@ function itemHtml(item, values) {
     case 'select':
       return wrap(`<select class="select" ${attrs}${off}>${item.options.map((o) => `<option value="${esc(o.value)}" ${String(o.value) === String(v) ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select>`);
     case 'range':
-      return wrap(`<span class="range-field"><input type="range" min="${item.min}" max="${item.max}" step="${item.step}" value="${esc(v)}" ${attrs} data-pct="${item.pct ? 1 : ''}"${off}><output>${esc(fmt(item, v))}</output></span>`);
+      return wrap(`<span class="range-field"><input type="range" min="${item.min}" max="${item.max}" step="${item.step}" value="${esc(v)}" ${attrs} data-pct="${item.pct ? 1 : ''}"${item.pct ? ` aria-valuetext="${esc(fmt(item, v))}"` : ''}${off}><output>${esc(fmt(item, v))}</output></span>`);
     case 'number':
       return wrap(`<input class="num-input" type="number" step="${item.step || 1}" value="${esc(v)}" ${attrs}>`);
     default:
@@ -285,6 +285,8 @@ export class SettingsPage {
       if (e.target.type === 'range') {
         const out = e.target.parentElement.querySelector('output');
         if (out) out.textContent = e.target.dataset.pct ? `${Math.round(Number(e.target.value) * 100)}%` : e.target.value;
+        // 비율 슬라이더는 낭독도 '50%'로 — 값(0.5)만 있으면 '0.5'·'0.55'로 읽혔다.
+        if (e.target.dataset.pct) e.target.setAttribute('aria-valuetext', `${Math.round(Number(e.target.value) * 100)}%`);
       }
     });
     this.body.addEventListener('submit', (e) => this.onSubmit(e));
@@ -758,6 +760,7 @@ export class SettingsPage {
       else el.value = String(v);
       const out = el.type === 'range' && el.parentElement.querySelector('output');
       if (out) out.textContent = el.dataset.pct ? `${Math.round(Number(v) * 100)}%` : String(v);
+      if (el.dataset.pct) el.setAttribute('aria-valuetext', `${Math.round(Number(v) * 100)}%`);
     }
     this.settings.appearance = { ...(this.settings.appearance || {}), ...apply };
     if (!b) return;

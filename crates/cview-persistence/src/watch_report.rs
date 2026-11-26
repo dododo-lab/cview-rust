@@ -176,7 +176,7 @@ fn span(r: &WatchHistory, now: Date) -> Option<(Date, Date, TimeInterval)> {
 }
 
 /// `[start, end)` 를 `[lo, hi)` 로 자르고 현지 정시마다 끊어 `(조각 시작, 초)` 로 넘긴다.
-fn for_each_hour_piece(
+pub(crate) fn for_each_hour_piece(
     start: Date,
     end: Date,
     lo: Date,

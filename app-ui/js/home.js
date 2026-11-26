@@ -420,7 +420,7 @@ export class HomePage {
     this.loadedLoggedIn = loggedIn;
     this.loadedAt = Date.now();
     this.resolveFirstRender();
-    this.loadRails(seq);
+    this.loadRails(seq, refresh);
     this.loadRecap(seq);
     this.fillThumbsLater(refresh, following.status === 'fulfilled' ? following.value : []);
   }
@@ -607,8 +607,9 @@ export class HomePage {
   }
 
   /** 이어 보기·인기 클립 레일 — 첫 화면을 막지 않게 나중에 채운다 (NAV-14). */
-  async loadRails(seq) {
-    const [cont, clips] = await Promise.allSettled([api.vodContinueList(12), api.popularClips('WITHIN_1_DAY', 'POPULAR')]);
+  async loadRails(seq, refresh = false) {
+    // 직접 새로고침(⌘R)이면 인기 클립도 응답 캐시(최대 60초)를 건너뛴다 — 라이브 줄과 같은 규칙.
+    const [cont, clips] = await Promise.allSettled([api.vodContinueList(12), api.popularClips('WITHIN_1_DAY', 'POPULAR', refresh)]);
     if (seq !== this.seq) return;
     const fill = (name, title, sub, html, more) => {
       const box = this.body.querySelector(`[data-rail="${name}"]`);

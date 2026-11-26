@@ -122,7 +122,12 @@ fn patched<T: Serialize + DeserializeOwned + Default>(
 ) -> Result<T, String> {
     match base {
         PatchBase::Current => apply_patch(&current(), patch),
-        PatchBase::Defaults => apply_patch(&T::default(), patch),
+        // 백업 자체를 먼저 해석한다 — 빠진 키는 구조체의 serde 기본값이 채우고, 옛 저장본 이전(예: 10-28 이전 백업의
+        // `maxConcurrentSessions` → `maxLiveChannels`)도 DB 에서 읽을 때와 똑같이 돈다. 예전엔 기본값을 직렬화한 위에
+        // 얹어 새 키가 늘 들어 있었고, 그래서 이전 갈래가 돌지 않아 '라이브 단독 보기 최대 채널'이 4 로 굳었다.
+        // 기본값 없는 필드가 있는 형식이면 예전처럼 기본값 위에 얹는다.
+        PatchBase::Defaults => serde_json::from_value::<T>(patch.clone())
+            .or_else(|_| apply_patch(&T::default(), patch)),
     }
 }
 
@@ -588,6 +593,20 @@ mod tests {
             patched(PatchBase::Defaults, || current.clone(), backup).unwrap();
         assert_eq!(restored.equalizer_preset, None);
         assert_eq!(restored.aspect_ratio, None);
+    }
+
+    /// 10-28 이전 백업(공유 상한 `maxConcurrentSessions` 만 있음)을 가져오면 DB 에서 읽을 때처럼 라이브 상한도 이어받는다.
+    #[test]
+    fn import_of_an_old_backup_migrates_the_shared_live_limit() {
+        let backup = serde_json::json!({ "maxConcurrentSessions": 8 });
+        let m: MultiLiveSettings =
+            patched(PatchBase::Defaults, MultiLiveSettings::default, backup).unwrap();
+        assert_eq!((m.max_concurrent_sessions, m.max_live_channels), (8, 8));
+        // 새 백업은 저장된 값을 그대로 쓴다.
+        let both = serde_json::json!({ "maxConcurrentSessions": 8, "maxLiveChannels": 6 });
+        let m: MultiLiveSettings =
+            patched(PatchBase::Defaults, MultiLiveSettings::default, both).unwrap();
+        assert_eq!((m.max_concurrent_sessions, m.max_live_channels), (8, 6));
     }
 
     #[test]

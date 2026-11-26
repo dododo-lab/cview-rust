@@ -960,6 +960,10 @@ async fn refresh_generic<R: Runtime>(app: &AppHandle<R>) {
             );
         }
     }
+    // 폴을 기다리는 사이 로그아웃했을 수 있다 — 그때 `on_auth_changed` 가 비운 목록을 낡은 '로그인함'으로 덮으면
+    // 트레이가 다음 주기(최대 60초)까지 로그인 상태 문구('방송 중인 팔로잉 없음')로 되돌아갔다.
+    let (logged_in, polled) =
+        settle_after_poll(logged_in, services.auth.is_authenticated(), polled);
     let Some(hub) = app.try_state::<TrayHub>() else {
         return;
     };
@@ -984,6 +988,19 @@ fn next_lives(
     polled.unwrap_or(previous)
 }
 
+/// 폴 뒤 로그인 상태를 다시 맞춘다 — 폴 전후 모두 로그인일 때만 그 결과를 쓴다. 순수 함수.
+fn settle_after_poll(
+    before: bool,
+    after: bool,
+    polled: Option<Vec<LiveEntry>>,
+) -> (bool, Option<Vec<LiveEntry>>) {
+    if before && after {
+        (true, polled)
+    } else {
+        (after, None)
+    }
+}
+
 /// 메인 창이 닫힌 뒤 함께 닫을 창 — 메인을 뺀 나머지. 순수 함수.
 fn secondary_windows_after_main_closed<'a>(labels: impl Iterator<Item = &'a str>) -> Vec<&'a str> {
     labels.filter(|l| *l != crate::MAIN_WINDOW).collect()
@@ -991,6 +1008,28 @@ fn secondary_windows_after_main_closed<'a>(labels: impl Iterator<Item = &'a str>
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn logout_during_the_poll_does_not_restore_the_logged_in_tray() {
+        use super::{next_lives, settle_after_poll, LiveEntry};
+        let entry = LiveEntry {
+            favorite: false,
+            channel_id: "c1".into(),
+            name: "채널".into(),
+            category: None,
+            viewers: 10,
+        };
+        // 폴 전 로그인 → 폴 중 로그아웃: 로그아웃으로 두고 폴 결과는 버린다.
+        let (logged_in, polled) = settle_after_poll(true, false, Some(vec![entry.clone()]));
+        assert!(!logged_in);
+        assert!(next_lives(Vec::new(), logged_in, polled).is_empty());
+        // 전후 모두 로그인 — 그대로.
+        let (logged_in, polled) = settle_after_poll(true, true, Some(vec![entry]));
+        assert!(logged_in);
+        assert_eq!(polled.map(|v| v.len()), Some(1));
+        // 폴 전 로그아웃 → 그새 로그인: 로그인으로 두되 폴하지 않았으니 앞 목록을 둔다(다음 주기·로그인 알림이 채운다).
+        assert_eq!(settle_after_poll(false, true, None), (true, None));
+    }
+
     #[test]
     fn failed_poll_keeps_the_previous_tray_list() {
         use super::{next_lives, LiveEntry};

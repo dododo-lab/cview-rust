@@ -159,16 +159,16 @@ await check('M04 chat stats participant table is capped (one-time talkers droppe
   const { ctx, page, errors } = await open();
   const r = await page.evaluate(async () => {
     const { trimStatsUsers } = await import('/js/chat-extras.js');
-    const stats = { users: new Map(), usersDropped: 0 };
+    const stats = { users: new Map(), dropped: new Set() };
     for (let i = 0; i < 50; i++) stats.users.set(`단골${i}`, 100 + i);
     for (let i = 0; i < 4100; i++) stats.users.set(`손님${i}`, 1);
     trimStatsUsers(stats);
-    const afterOnce = { size: stats.users.size, dropped: stats.usersDropped, regulars: [...stats.users.keys()].filter((n) => n.startsWith('단골')).length, newest: stats.users.has('손님4099') };
+    const afterOnce = { size: stats.users.size, dropped: stats.dropped.size, regulars: [...stats.users.keys()].filter((n) => n.startsWith('단골')).length, newest: stats.users.has('손님4099') };
     // 모두 여러 번 말한 사람뿐이어도 상한을 지킨다(오래된 순).
-    const all = { users: new Map(), usersDropped: 0 };
+    const all = { users: new Map(), dropped: new Set() };
     for (let i = 0; i < 5000; i++) all.users.set(`n${i}`, 2);
     trimStatsUsers(all);
-    return { afterOnce, allSize: all.users.size, allDropped: all.usersDropped, allNewest: all.users.has('n4999') };
+    return { afterOnce, allSize: all.users.size, allDropped: all.dropped.size, allNewest: all.users.has('n4999') };
   });
   assert.equal(r.afterOnce.size, 3000, JSON.stringify(r));
   assert.equal(r.afterOnce.size + r.afterOnce.dropped, 4150);
@@ -177,6 +177,25 @@ await check('M04 chat stats participant table is capped (one-time talkers droppe
   assert.equal(r.allSize, 3000);
   assert.equal(r.allDropped, 2000);
   assert.ok(r.allNewest);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('M06 a dropped participant who talks again is not counted twice', async () => {
+  const { ctx, page, errors } = await open();
+  const r = await page.evaluate(async () => {
+    const { trimStatsUsers, countStatsUser, statsParticipants } = await import('/js/chat-extras.js');
+    const stats = { users: new Map(), dropped: new Set() };
+    for (let i = 0; i < 4001; i++) countStatsUser(stats, `손님${i}`);
+    trimStatsUsers(stats);
+    const afterTrim = statsParticipants(stats);
+    // 덜어 낸 앞쪽 500명이 다시 말한다 — 실제 참여자는 그대로 4,001명.
+    for (let i = 0; i < 500; i++) countStatsUser(stats, `손님${i}`);
+    const afterReturn = statsParticipants(stats);
+    countStatsUser(stats, '새손님');
+    return { afterTrim, afterReturn, withNew: statsParticipants(stats) };
+  });
+  assert.deepEqual(r, { afterTrim: 4001, afterReturn: 4001, withNew: 4002 }, JSON.stringify(r));
   assert.deepEqual(errors, []);
   await ctx.close();
 });

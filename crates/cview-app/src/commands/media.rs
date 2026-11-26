@@ -191,6 +191,10 @@ pub async fn vod_watch_later_set(
     result.map_err(|e| CommandError(format!("저장소 오류: {e}")))
 }
 
+/// 보관함 › 나중에 보기 목록 상한. 담기에는 상한이 없어, 예전 100 이면 101번째부터 먼저 담은 영상이 목록에서
+/// 사라졌는데 그 영상 화면은 '담음'으로 보였다(꺼낼 길이 없음).
+pub(crate) const WATCH_LATER_LIST_LIMIT: usize = 10_000;
+
 #[tauri::command]
 pub async fn vod_watch_later_list(
     services: State<'_, AppServices>,
@@ -199,7 +203,7 @@ pub async fn vod_watch_later_list(
         return Ok(Vec::new());
     };
     Ok(store
-        .fetch_vod_watch_later(100)
+        .fetch_vod_watch_later(WATCH_LATER_LIST_LIMIT)
         .map_err(|e| CommandError(format!("저장소 오류: {e}")))?
         .into_iter()
         .map(|p| VodShelfItemDto {
@@ -215,6 +219,24 @@ pub async fn vod_watch_later_list(
 
 #[cfg(test)]
 mod tests {
+    /// 나중에 보기가 100개를 넘어도 목록에 모두 나온다.
+    #[test]
+    fn watch_later_list_limit_keeps_more_than_one_hundred() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = cview_persistence::DataStore::open(dir.path().join("cview.sqlite")).unwrap();
+        for i in 0..150 {
+            store
+                .add_vod_watch_later(i, "영상", "채널", None, 60.0)
+                .unwrap();
+        }
+        assert_eq!(
+            store
+                .fetch_vod_watch_later(super::WATCH_LATER_LIST_LIMIT)
+                .unwrap()
+                .len(),
+            150
+        );
+    }
     use super::*;
 
     #[test]

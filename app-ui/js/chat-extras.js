@@ -42,16 +42,31 @@ export function showDesignMenu(anchor) {
   const menu = document.createElement('div');
   menu.className = 'design-menu';
   menu.setAttribute('role', 'menu');
-  menu.innerHTML = `<div class="design-menu-head">읽기 폭</div>
-    <div class="segmented design-width">${READING_WIDTHS.map(([v, l]) => `<button class="seg${(p.readingWidth || 'full') === v ? ' active' : ''}" data-width="${v}">${l}</button>`).join('')}</div>`;
+  menu.setAttribute('aria-label', '읽기 폭');
+  // 메뉴 항목 역할·고른 상태를 달고 초점을 메뉴로 옮긴다 — 예전엔 항목 역할 없는 role=menu 가 body 맨 끝에 붙고 초점이
+  // 단추에 남아, 키보드로는 화면 전체를 Tab 으로 지나야 닿았다.
+  const cur = p.readingWidth || 'full';
+  menu.innerHTML = `<div class="design-menu-head" aria-hidden="true">읽기 폭</div>
+    <div class="segmented design-width" role="group">${READING_WIDTHS.map(([v, l]) => `<button class="seg${cur === v ? ' active' : ''}" role="menuitemradio" aria-checked="${cur === v}" tabindex="${cur === v ? 0 : -1}" data-width="${v}">${l}</button>`).join('')}</div>`;
   document.body.append(menu);
   const r = anchor.getBoundingClientRect();
   menu.style.top = `${Math.min(window.innerHeight - menu.offsetHeight - 8, r.bottom + 6)}px`;
   menu.style.left = `${Math.max(8, Math.min(window.innerWidth - menu.offsetWidth - 8, r.right - menu.offsetWidth))}px`;
+  const items = [...menu.querySelectorAll('[data-width]')];
+  const close = (refocus) => { menu.remove(); if (refocus && anchor.isConnected) anchor.focus({ preventScroll: true }); };
   menu.addEventListener('click', (e) => {
     const wd = e.target.closest('[data-width]');
-    if (wd) { updateChatPrefs({ readingWidth: wd.dataset.width }); menu.remove(); }
+    if (wd) { updateChatPrefs({ readingWidth: wd.dataset.width }); close(menu.contains(document.activeElement)); }
   });
+  menu.addEventListener('keydown', (e) => {
+    const i = items.indexOf(document.activeElement);
+    const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+    if (step) { e.preventDefault(); items[(i + step + items.length) % items.length].focus(); }
+    else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); items[e.key === 'Home' ? 0 : items.length - 1].focus(); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(true); }
+    else if (e.key === 'Tab') close(false);
+  });
+  (items.find((b) => b.dataset.width === cur) || items[0])?.focus({ preventScroll: true });
   setTimeout(() => document.addEventListener('pointerdown', function off(ev) {
     if (!menu.contains(ev.target)) { menu.remove(); document.removeEventListener('pointerdown', off); }
   }), 0);
@@ -98,33 +113,54 @@ function stamp() {
 const STATS_USERS_MAX = 4000;
 const STATS_USERS_KEEP = 3000;
 
-/** 채팅 통계 참여자 표를 STATS_USERS_KEEP 명으로 줄인다 — 한 번만 말한 사람(오래된 순)부터, 그래도 많으면 오래된 순. */
+/** 닉네임의 32비트 해시 — 덜어 낸 참여자는 문자열 대신 이 수로만 기억한다(메모리 상한 유지). */
+function nickHash(nick) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < nick.length; i += 1) h = Math.imul(h ^ nick.charCodeAt(i), 0x01000193);
+  return h >>> 0;
+}
+
+/**
+ * 채팅 통계 참여자 표를 STATS_USERS_KEEP 명으로 줄인다 — 한 번만 말한 사람(오래된 순)부터, 그래도 많으면 오래된 순.
+ * 덜어 낸 사람은 `dropped`(해시 집합)에 남긴다 — 예전엔 수만 셌다가, 그 사람이 다시 말하면 표에 새로 들어가 '참여자'에
+ * 두 번 셌다(4,001명 중 500명이 다시 말하면 4,501명).
+ */
 export function trimStatsUsers(stats) {
   let excess = stats.users.size - STATS_USERS_KEEP;
   if (excess <= 0) return;
+  const drop = (nick) => { stats.users.delete(nick); stats.dropped.add(nickHash(nick)); excess -= 1; };
   for (const [nick, count] of stats.users) {
     if (excess <= 0) break;
     if (count > 1) continue;
-    stats.users.delete(nick);
-    stats.usersDropped += 1;
-    excess -= 1;
+    drop(nick);
   }
   for (const nick of stats.users.keys()) {
     if (excess <= 0) break;
-    stats.users.delete(nick);
-    stats.usersDropped += 1;
-    excess -= 1;
+    drop(nick);
   }
+}
+
+/** 메시지 하나를 참여자 표에 센다 — 덜어 낸 사람이 다시 말하면 덜어 낸 집합에서 빼 두 번 세지 않는다. */
+export function countStatsUser(stats, nick) {
+  if (!nick) return;
+  const n = stats.users.get(nick);
+  if (n == null && stats.dropped.size) stats.dropped.delete(nickHash(nick));
+  stats.users.set(nick, (n || 0) + 1);
+}
+
+/** '참여자' 수 — 표에 있는 사람 + 덜어 낸 사람. */
+export function statsParticipants(stats) {
+  return stats.users.size + stats.dropped.size;
 }
 
 export function installChatExtras(panel) {
   const root = panel.root;
   // users — 닉네임 → 메시지 수. 상한이 없어 대형 방송을 몇 시간 보면 고유 채팅자 수만 명이 그대로 쌓였다(멀티채팅이면
-  // 채널마다). STATS_USERS_MAX 를 넘으면 한 번만 말한 사람부터(오래된 순) 덜어 내고, 덜어 낸 수는 usersDropped 로 센다 —
+  // 채널마다). STATS_USERS_MAX 를 넘으면 한 번만 말한 사람부터(오래된 순) 덜어 내고, 덜어 낸 사람은 dropped(해시)로 기억한다 —
   // '참여자' 는 둘을 더해 보여 주고, '가장 많이 말한 사람' 은 여러 번 말한 사람이 남으므로 그대로다.
   // total — 연결 뒤 받은 메시지 수. times 는 최근 1분 계산용이라 5000개로 자르는데, 예전엔 분당 평균도 times 로 나눠
   // 큰 방송을 오래 보면 평균이 계속 작아졌다(분당 500건 방송이 2시간 뒤 41로 보임).
-  const stats = { times: [], total: 0, users: new Map(), usersDropped: 0, donations: 0, cheese: 0, subs: 0, since: Date.now() };
+  const stats = { times: [], total: 0, users: new Map(), dropped: new Set(), donations: 0, cheese: 0, subs: 0, since: Date.now() };
   const muted = new Map(); // nick → 해제 시각
   const uidByNick = new Map(); // nick → userId (최근 본 순)
 
@@ -164,7 +200,7 @@ export function installChatExtras(panel) {
       <div class="stat-grid">
         <div><b>${minute}</b><span>최근 1분 메시지</span></div>
         <div><b>${Math.round(stats.total / mins)}</b><span>분당 평균</span></div>
-        <div><b>${stats.users.size + stats.usersDropped}</b><span>참여자</span></div>
+        <div><b>${statsParticipants(stats)}</b><span>참여자</span></div>
         <div><b>${stats.donations}</b><span>후원 · ${esc(formatCheese(stats.cheese) || '0치즈')}</span></div>
         <div><b>${stats.subs}</b><span>구독</span></div>
       </div>
@@ -224,7 +260,7 @@ export function installChatExtras(panel) {
       if (isNew) {
         stats.times.push(now);
         stats.total += 1;
-        if (m.nickname) stats.users.set(m.nickname, (stats.users.get(m.nickname) || 0) + 1);
+        countStatsUser(stats, m.nickname);
         if (m.kind === 'donation') { stats.donations += 1; if (Number.isFinite(m.donationAmount) && m.donationAmount > 0) stats.cheese += m.donationAmount; }
         if (m.kind === 'subscription') stats.subs += 1;
       }
@@ -252,7 +288,7 @@ export function installChatExtras(panel) {
   // 연결이 바뀌면 통계·후원 목록 초기화(멀티라이브 멀티채팅이 채우는 동안의 목록은 패인 선택이 바뀌어도 둔다)
   const origConnect = panel.connect.bind(panel);
   panel.connect = async (...args) => {
-    stats.times = []; stats.total = 0; stats.users.clear(); stats.usersDropped = 0; stats.donations = 0; stats.cheese = 0; stats.subs = 0; stats.since = Date.now();
+    stats.times = []; stats.total = 0; stats.users.clear(); stats.dropped.clear(); stats.donations = 0; stats.cheese = 0; stats.subs = 0; stats.since = Date.now();
     if (!donations.external) donations.reset();
     return origConnect(...args);
   };

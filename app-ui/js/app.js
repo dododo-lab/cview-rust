@@ -258,6 +258,7 @@ function multiLiveSessionFor(channelId) {
 // 채널을 무대에 올리는 중(openChannel·enterWatch) — 그 사이 오는 상태 알림이 화면을 멀티라이브로 끌고 가지 않게.
 let pendingWatch = 0;
 async function enterWatch(sessionId, { push = true } = {}) {
+  openSeq++; // 칩·패인으로 무대를 바꿔도 아직 추가 중인 앞선 열기가 나중에 무대를 빼앗지 않게
   pendingWatch++;
   try {
     if (viewer.isPlaying) await viewer.close({ silent: true });
@@ -371,14 +372,20 @@ const backStack = [];
 let currentParams = {};
 const BACK_MAX = 50;
 
-async function navigate(route, params = {}, { push = true } = {}) {
+async function navigate(route, params = {}, { push = true, back = false } = {}) {
   // 예전 통계 진입점(메뉴 막대·팔레트·작업 공간)은 홈 리포트로 모은다. 보조 통계 창은 그대로 지원한다.
   if (route === 'stats' && AUX !== 'stats') { route = 'home'; params = { ...params, view: 'report' }; }
   // 인기 클립은 보관함에서 방송&클립 › 클립 탭으로 옮겼다 — 예전 경로(저장된 작업 공간·뒤로 가기 기록·옛 진입점)도 그리로.
   if (route === 'library' && params && params.tab === 'clips') { route = 'popular'; params = { tab: 'clips' }; }
   if (!pages[route]) return;
   cancelRefreshVeil(); // 새로고침 덮개는 그 화면 것 — 옮기면 바로 걷는다
-  if (push && current && !(current === route && JSON.stringify(currentParams) === JSON.stringify(params))) {
+  // 같은 화면을 같은 값으로 다시 연 것이면 기록을 쌓지 않는다. 화면이 기록에 더 남기는 값(채널 화면의 탭 — routeParams)이
+  // 있어도 새로 넘긴 값이 지금 값의 일부면 같은 화면이다 — 예전엔 뒤로 가기로 돌아온 채널을 아바타·말풍선으로 다시 열면
+  // 기록이 하나 더 쌓여 ⌘[ 를 두 번 눌러야 했다.
+  const now = current === route ? liveParams() : null;
+  const same = Boolean(now) && (JSON.stringify(currentParams) === JSON.stringify(params)
+    || Object.keys(params).every((k) => JSON.stringify(now[k]) === JSON.stringify(params[k])) && Object.keys(params).length > 0);
+  if (push && current && !same) {
     backStack.push({ route: current, params: liveParams() });
     if (backStack.length > BACK_MAX) backStack.shift();
   }
@@ -433,14 +440,14 @@ async function navigate(route, params = {}, { push = true } = {}) {
     pages.multilive.reviveChatIfDropped();
   }
   // 파라미터는 받겠다고 표시한 화면(채널 상세 등)에만 넘긴다 — 목록 화면의 show(refresh) 와 겹치지 않게.
-  if (pages[route].acceptsParams) pages[route].show(params);
+  if (pages[route].acceptsParams) pages[route].show(params, { back });
   else pages[route].show();
 }
 
 /** 뒤로 가기 (`⌘[`, 마우스 뒤로 버튼). 스택이 비면 홈. */
 function goBack() {
   const prev = backStack.pop();
-  if (prev) navigate(prev.route, prev.params, { push: false });
+  if (prev) navigate(prev.route, prev.params, { push: false, back: true });
   else if (current !== 'home') navigate('home', {}, { push: false });
 }
 
@@ -540,9 +547,13 @@ async function openChannel(channelId) {
     return;
   }
   pendingWatch++;
-  try { await openChannelWatch(channelId); } finally { pendingWatch--; syncLiveIndicators(); }
+  const seq = ++openSeq;
+  try { await openChannelWatch(channelId, seq); } finally { pendingWatch--; syncLiveIndicators(); }
 }
-async function openChannelWatch(channelId) {
+// 가장 나중에 누른 열기만 무대에 올린다 — 예전엔 A(상세가 느림)를 누르고 곧 B 를 누르면 B 가 먼저 오른 뒤 늦게 끝난
+// A 가 무대를 빼앗고, 둘 다 프리롤 광고를 틀었다. 늦은 A 는 둘러본 채널로만 남는다(상한이 차면 먼저 빠짐).
+let openSeq = 0;
+async function openChannelWatch(channelId, seq = openSeq) {
   // 이미 멀티라이브에 있는 채널 — 같은 플레이어를 라이브 무대로(원본 commitExistingWatch).
   const existing = multiLiveSessionFor(channelId);
   if (existing) { await enterWatch(existing.id); return; }
@@ -561,6 +572,7 @@ async function openChannelWatch(channelId) {
   const s = multiLiveSessionFor(channelId);
   if (!s) return; // 추가 실패 — run 이 이미 알렸다
   browsedWatch.set(s.id, channelId);
+  if (seq !== openSeq) return; // 그새 다른 채널을 눌렀다
   await enterWatch(s.id);
   pages.multilive.playPaneAd(channelId);
 }
@@ -764,10 +776,24 @@ function closePopupsOnEscape(e) {
   if (popups.length || layers.length) e.preventDefault();
 }
 
+// 팝업 바깥에서 마지막으로 초점을 받은 요소 — 제 Esc 처리가 없는 팝업(플레이어 설정·멘션 모음 등)을 여기서 닫을 때
+// 초점을 돌려줄 곳. 예전엔 숨기기만 해 초점이 body 로 떨어졌고, 다음 Tab 은 문서 처음부터, 한 번 더 Esc 는 시청 화면을 닫았다.
+let focusBeforePopup = null;
+document.addEventListener('focusin', (e) => {
+  const t = e.target;
+  if (t instanceof Element && !t.closest(ESC_POPUPS)) focusBeforePopup = t;
+});
 function escapeTaken(e) {
   if (e.defaultPrevented) return true;
   const popups = document.querySelectorAll(ESC_POPUPS);
-  if (popups.length) { for (const p of popups) p.hidden = true; return true; }
+  if (popups.length) {
+    const active = document.activeElement;
+    const inside = [...popups].some((p) => p.contains(active));
+    for (const p of popups) p.hidden = true;
+    const back = focusBeforePopup;
+    if (inside && back && back.isConnected && back.getClientRects().length && !back.closest('[inert], [hidden]')) back.focus({ preventScroll: true });
+    return true;
+  }
   // 채널 추가 사이드바 — 안에 초점이 없을 때의 Esc 는 사이드바만 닫는다(라이브 단독 보기를 닫지 않게).
   const drawer = !pages.multilive.root.hidden && pages.multilive.addBar.isOpen;
   if (drawer) { pages.multilive.addBar.close(); return true; }

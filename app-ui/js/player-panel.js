@@ -41,7 +41,7 @@ export class PlayerPanel {
 
     const reload = viewer.root.querySelector('#reload');
     reload.insertAdjacentHTML('beforebegin', `
-      <button class="icon-btn rec-btn" id="ctl-record" title="${kbd('녹화 시작 (⌥⌘R)')}" aria-label="녹화"><span class="rec-dot"></span></button>
+      <button class="icon-btn rec-btn" id="ctl-record" title="${kbd('녹화 시작 (⌥⌘R)')}" aria-label="녹화 시작"><span class="rec-dot"></span></button>
       <button class="icon-btn" id="ctl-panel" title="플레이어 설정" aria-label="플레이어 설정"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>`);
     this.recButton = viewer.root.querySelector('#ctl-record');
     this.el = document.createElement('div');
@@ -374,6 +374,8 @@ export class PlayerPanel {
     // 아래 막대가 숨어도 녹화 중인 걸 알 수 있게 무대 왼쪽 위에 늘 작은 표시(app.css .player-stage.recording)
     this.recButton.closest('.player-stage')?.classList.toggle('recording', on);
     this.recButton.title = kbd(on ? '녹화 중지 (⌥⌘R)' : '녹화 시작 (⌥⌘R)');
+    // 낭독 이름도 — 예전엔 '녹화'로 굳어 녹화 중인지, 누르면 멈추는지 알 수 없었다.
+    this.recButton.setAttribute('aria-label', on ? '녹화 중지' : '녹화 시작');
     if (!this.el.hidden && this.tab === 'tools') this.render();
   }
 }

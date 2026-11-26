@@ -17,6 +17,9 @@ use crate::state::{store_path, AppServices};
 pub struct NamedSeconds {
     pub name: String,
     pub seconds: f64,
+    /// 채널 순위에만 — 팔로잉 인사이트가 팔로우한 채널만 고르고, 막대를 눌러 채널을 연다.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channel_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -62,7 +65,22 @@ pub struct InsightsDto {
 
 fn named(v: Vec<(String, f64)>) -> Vec<NamedSeconds> {
     v.into_iter()
-        .map(|(name, seconds)| NamedSeconds { name, seconds })
+        .map(|(name, seconds)| NamedSeconds {
+            name,
+            seconds,
+            channel_id: None,
+        })
+        .collect()
+}
+
+fn named_channels(v: Vec<(String, f64)>, ids: Vec<String>) -> Vec<NamedSeconds> {
+    v.into_iter()
+        .zip(ids.into_iter().map(Some).chain(std::iter::repeat(None)))
+        .map(|((name, seconds), channel_id)| NamedSeconds {
+            name,
+            seconds,
+            channel_id,
+        })
         .collect()
 }
 
@@ -117,7 +135,7 @@ fn overview(
         last30: a.w30,
         streak: a.streak,
         average: a.avg,
-        channels: named(a.channels),
+        channels: named_channels(a.channels, a.channel_ids),
         categories: named(a.categories),
         hourly,
         daily: a
@@ -359,6 +377,36 @@ pub async fn data_cleanup(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 채널 순위에는 같은 순서의 채널 id 가 실린다 — 팔로잉 인사이트가 팔로우하지 않은 채널을 거른다.
+    #[test]
+    fn overview_channel_ranking_carries_channel_ids_in_order() {
+        use cview_persistence::models::WatchHistory;
+        let dir = tempfile::tempdir().unwrap();
+        let store = cview_persistence::DataStore::open(dir.path().join("cview.sqlite")).unwrap();
+        let now = chrono::Utc::now();
+        let mut rows = Vec::new();
+        for (id, name, secs) in [("a", "가", 600.0), ("b", "나", 1800.0), ("c", "다", 1200.0)] {
+            let started = now - chrono::Duration::hours(2);
+            let mut r = WatchHistory::new(id, name, None, None, started);
+            r.ended_at = Some(started + chrono::Duration::seconds(secs as i64));
+            r.updated_at = r.ended_at;
+            r.duration = secs;
+            rows.push(r);
+        }
+        store.insert_watch_history_rows(&rows).unwrap();
+        let dto = overview(&store, now).unwrap();
+        let got: Vec<(&str, Option<&str>)> = dto
+            .channels
+            .iter()
+            .map(|c| (c.name.as_str(), c.channel_id.as_deref()))
+            .collect();
+        assert_eq!(
+            got,
+            vec![("나", Some("b")), ("다", Some("c")), ("가", Some("a"))]
+        );
+        assert!(dto.categories.iter().all(|c| c.channel_id.is_none()));
+    }
 
     /// 백업을 한 번도 만들지 않은 새 설치에서도 '백업 폴더 열기'가 열 폴더가 있다.
     #[test]

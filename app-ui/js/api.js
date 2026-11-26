@@ -175,7 +175,7 @@ export const api = {
   vodWatchLaterList: () => invoke('vod_watch_later_list'),
   followingChannelsAll: (refresh = false) => invoke('following_channels_all', { refresh }),
   followingVods: (channels = 24, perChannel = 3) => invoke('following_vods', { channels, perChannel }),
-  channelDetail: (channelId) => invoke('channel_detail', { channelId }),
+  channelDetail: (channelId, refresh = false) => invoke('channel_detail', { channelId, refresh }),
   // 정보 탭 묶음 — 마지막 방송·최근 다시보기·인기 클립·이 앱 시청 요약·(로그인 시) 팔로우 시작일
   channelOverview: (channelId) => invoke('channel_overview', { channelId }),
   channelVods: (channelId, page = 0, size = 24) => invoke('channel_vods', { channelId, page, size }),

@@ -307,6 +307,8 @@ export class PaneControls {
       this.playButton.dataset.playing = String(Boolean(playing));
       this.playButton.innerHTML = playing ? PANE_ICON.pause : PANE_ICON.play;
       this.playButton.title = playing ? '일시정지' : '재생';
+      // 낭독 이름도 — 예전엔 aria-label 이 '일시정지'로 굳어, 멈춘 패인에서 낭독기 사용자가 멈추려다 재생했다.
+      this.playButton.setAttribute('aria-label', this.playButton.title);
     }
     const badge = liveBadgeState(this.latency);
     // 700ms 마다 패인 수만큼 돈다 — 같은 값을 다시 쓰면(텍스트 노드 교체·title) 매번 스타일·레이아웃이 무효화된다.
@@ -321,7 +323,11 @@ export class PaneControls {
       this.audioButton.dataset.icon = String(muted);
     }
     const audioTitle = audible && this.gain > 0 ? '소리 끄기' : '이 패인 소리 켜기';
-    if (this.audioButton.title !== audioTitle) this.audioButton.title = audioTitle;
+    if (this.audioButton.title !== audioTitle) {
+      this.audioButton.title = audioTitle;
+      // 낭독 이름이 '소리'로 굳어 이 패인이 들리는지 알 수 없었다 — 보이는 이름과 같게.
+      this.audioButton.setAttribute('aria-label', audioTitle);
+    }
     if (this.stage) this.syncQualityBadge();
   }
 
@@ -441,7 +447,7 @@ export class PaneControls {
     const codec = this.currentCodec(chosen);
     this.gearMenu.innerHTML = `
       <div class="ml-menu-head">화질${height ? ` <span>${height}p${codec ? ` · ${esc(codec)}` : ''}</span>` : ''}</div>
-      ${items.map((o) => `<button class="ml-menu-item ml-level${o.index === this.manualIndex ? ' active' : ''}" role="menuitemradio" data-mp="level" data-level="${o.index}"><span>${esc(o.label)}</span>${codecTagHtml(o.codec)}</button>`).join('')}
+      ${items.map((o) => `<button class="ml-menu-item ml-level${o.index === this.manualIndex ? ' active' : ''}" role="menuitemradio" aria-checked="${o.index === this.manualIndex}" data-mp="level" data-level="${o.index}"><span>${esc(o.label)}</span>${codecTagHtml(o.codec)}</button>`).join('')}
       <div class="ml-menu-sep"></div>
       <div class="ml-menu-head">지연 <span>${lat}</span></div>
       <button class="ml-menu-item" data-mp="live"><span>라이브로 이동 (따라잡기)</span></button>

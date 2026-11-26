@@ -245,7 +245,7 @@ try {
   await check('P12 채널 화면 — 탭 기억·같은 채널 다시 받지 않음·별만 다시 그림·다시보기 중복·메모·팔로우', async () => {
     const ch = src('channel.js');
     assert.match(ch, /routeParams\(\) \{\s*\n\s*return this\.channelId \? \{ channelId: this\.channelId, tab: this\.tab \} : \{\};/);
-    assert.match(ch, /if \(!changed && !params\.refresh && this\.detail/);
+    assert.match(ch, /if \((back && )?!changed && !params\.refresh && this\.detail/);
     assert.match(ch, /this\.paintStar\(next\);/);
     assert.doesNotMatch(ch.slice(ch.indexOf("case 'favorite'"), ch.indexOf("case 'memo'")), /this\.render\(\)/, '별을 누르면 화면 전체를 다시 그리지 않는다');
     assert.match(ch, /!seen\.has\(v\.videoNo\) && seen\.add\(v\.videoNo\)/);
