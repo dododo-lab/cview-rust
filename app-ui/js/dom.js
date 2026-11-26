@@ -399,3 +399,10 @@ export function channelTone(id) {
   for (const ch of String(id || '')) { h ^= ch.codePointAt(0); h = Math.imul(h, 16777619) >>> 0; }
   return `hsl(${h % 360} 78% 58%)`;
 }
+
+/** 두 시각의 로컬 달력 날짜 차이(일) — '오늘'·'어제'를 24시간 단위가 아니라 날짜로 가른다(서머타임 날도 반올림으로 맞다). */
+export function calendarDaysBetween(t, now) {
+  const a = new Date(t);
+  const b = new Date(now);
+  return Math.round((new Date(b.getFullYear(), b.getMonth(), b.getDate()) - new Date(a.getFullYear(), a.getMonth(), a.getDate())) / 86400000);
+}

@@ -84,6 +84,17 @@ export function categoryGroups(lives) {
   return [...map.values()].sort((a, b) => b.viewers - a.viewers);
 }
 
+/** 칩에 보일 카테고리 — 위에서 `limit` 개, 고른 카테고리는 목록에서 빠졌거나 밀려나도 끝에 남긴다(개수 0).
+ *  예전엔 고른 분야 방송이 끝나면 필터는 남은 채 칩이 사라져, 어느 칩도 켜지지 않은 채 빈 목록이 보였다. 순수 함수. */
+export function categoryChipGroups(lives, selected, limit) {
+  const all = categoryGroups(lives);
+  const top = all.slice(0, limit);
+  if (selected && !top.some((c) => c.name === selected)) {
+    top.push(all.find((c) => c.name === selected) || { name: selected, count: 0, viewers: 0 });
+  }
+  return top;
+}
+
 export class PopularPage {
   constructor(root) {
     this.root = root;
@@ -235,7 +246,7 @@ export class PopularPage {
   }
 
   render() {
-    const cats = categoryGroups(this.lives).slice(0, 14);
+    const cats = categoryChipGroups(this.lives, this.category, 14);
     const list = arrangeLives(this.lives, { sort: this.sort, category: this.category });
     // 머리 설명도 지금 정렬·필터를 따른다(예전엔 '최근 시작'을 골라도 '시청자 많은 순'으로 남았다)
     const sub = this.root.querySelector('.page-subtitle');
@@ -249,7 +260,7 @@ export class PopularPage {
           ${cats.map((c) => `<button class="chip${this.category === c.name ? ' active' : ''}" data-cat="${esc(c.name)}">${esc(c.name)} <span class="chip-count">${c.count}</span></button>`).join('')}
         </div>
       </div>
-      ${list.length ? liveGrid(list) : emptyState('라이브 채널이 없습니다')}
+      ${list.length ? liveGrid(list) : emptyState('라이브 채널이 없습니다', this.category ? `지금 '${this.category}' 방송이 없습니다` : '')}
       ${this.lives.length >= this.limit && this.limit < POPULAR_MAX ? '<button class="btn load-more" data-more>더 보기</button>' : ''}`);
   }
 
@@ -385,12 +396,12 @@ export class FollowingPage {
     const tab = (id, label) => `<button class="seg${this.tab === id ? ' active' : ''}" data-ftab="${id}" role="tab" aria-selected="${this.tab === id}" tabindex="${this.tab === id ? 0 : -1}">${label}</button>`;
     const tabs = `<div class="segmented" role="tablist" aria-label="팔로잉 보기">${tab('live', '방송 중')}${tab('all', '전체 채널')}</div>`;
     if (this.tab === 'live') {
-      const cats = categoryGroups(this.lives).slice(0, 12);
+      const cats = categoryChipGroups(this.lives, this.category, 12);
       const list = arrangeLives(this.lives, { sort: this.sort, category: this.category });
       const sortSeg = `<div class="segmented"><button class="seg${this.sort === 'viewers' ? ' active' : ''}" data-sort="viewers">시청자순</button><button class="seg${this.sort === 'recent' ? ' active' : ''}" data-sort="recent">최근 시작</button></div>`;
       const body = list.length
         ? (this.dense ? `<div class="dense-list">${list.map(denseRow).join('')}</div>` : liveGrid(list))
-        : emptyState('라이브 채널이 없습니다', '팔로우한 채널 중 방송 중인 채널이 없습니다');
+        : emptyState('라이브 채널이 없습니다', this.category && this.lives.length ? `팔로우한 채널 중 지금 '${this.category}' 방송이 없습니다` : '팔로우한 채널 중 방송 중인 채널이 없습니다');
       swapContent(this.body, `
         ${followingInsights(this.lives, list)}
         <div class="list-toolbar">${tabs}${sortSeg}<button class="btn ghost" data-dense>${this.dense ? '격자 보기' : '간결 보기'}</button>

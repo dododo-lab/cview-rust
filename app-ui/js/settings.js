@@ -43,7 +43,7 @@ export const SCHEMA = [
   ]],
   ['watch', '지연(저지연)', [
     { d: 'player', k: 'lowLatencyMode', label: '저지연 모드', help: '라이브 엣지에 가깝게 재생합니다', type: 'toggle' },
-    { d: 'player', k: 'latencyPreset', label: '지연 프리셋', type: 'select', options: opt([['matchWeb', '웹과 같게'], ['webSync', '웹 동기'], ['standard', '표준'], ['ultraLow', '초저지연'], ['custom', '직접 조정']]) },
+    { d: 'player', k: 'latencyPreset', label: '지연 프리셋', type: 'select', options: opt([['matchWeb', '웹과 같게'], ['webSync', '웹 동기'], ['default', '표준'], ['ultraLow', '초저지연'], ['custom', '직접 조정']]) },
     { d: 'player', k: 'latencyTarget', label: '목표 지연(초)', type: 'range', min: 1, max: 15, step: 0.5, adv: true },
     { d: 'player', k: 'latencyMin', label: '최소 지연(초)', type: 'range', min: 0.5, max: 10, step: 0.5, adv: true },
     { d: 'player', k: 'latencyMax', label: '최대 지연(초)', type: 'range', min: 2, max: 30, step: 0.5, adv: true },

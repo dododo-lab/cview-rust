@@ -3,7 +3,7 @@
 // - 순수 함수(날짜 해석·정렬·요약)는 위에, 화면에 보이는 행만 천천히 채우는 FollowExtras 는 아래.
 // - 팔로워 수·마지막 방송은 채널마다 요청이 하나씩이라 보이는 행만, 동시에 2개씩, 앱 실행 중 10분 기억한다.
 import { api } from './api.js';
-import { esc } from './dom.js';
+import { esc, calendarDaysBetween } from './dom.js';
 import { compactCount } from './cards.js';
 import { verifiedBadge } from './verified-badge.js';
 
@@ -17,10 +17,11 @@ export function parseFollowDate(raw) {
   return Date.parse(/([zZ]|[+-]\d\d:?\d\d)$/.test(iso) ? iso : `${iso}+09:00`);
 }
 
-/** "오늘" / "3일 전" / "5개월 전" / "2년 전". */
+/** "오늘" / "3일 전" / "5개월 전" / "2년 전". 한 달 안은 달력 날짜로 센다 — 24시간 단위로 세면 어젯밤 방송이 아침에 '오늘'이었다. */
 export function agoText(t, now = Date.now()) {
   if (!Number.isFinite(t)) return '';
-  const days = Math.floor((now - t) / DAY);
+  const elapsed = Math.floor((now - t) / DAY);
+  const days = elapsed < 31 ? Math.max(0, calendarDaysBetween(t, now)) : elapsed;
   if (days < 1) return '오늘';
   if (days < 31) return `${days}일 전`;
   if (days < 365) return `${Math.floor(days / 30.44)}개월 전`;

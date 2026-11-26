@@ -112,7 +112,7 @@ export class ViewerExtras {
     const others = lives.filter((l) => l.channelId !== currentId).slice(0, 10);
     this.rail.innerHTML = others.map((l) => {
       const avatar = safeUrl(l.channelImageUrl);
-      return `<button class="rail-item" data-rail-channel="${esc(l.channelId)}" title="${esc(l.channelName)} · ${esc(l.liveTitle || '')}" aria-label="${esc(l.channelName)} 방송으로 바꾸기">${avatar ? `<img class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar">${esc((l.channelName || '?').slice(0, 1))}</span>`}</button>`;
+      return `<button class="rail-item" data-rail-channel="${esc(l.channelId)}" title="${esc(l.channelName)} · ${esc(l.liveTitle || '')}" aria-label="${esc(l.channelName)} 방송으로 바꾸기">${avatar ? `<img class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : `<span class="avatar">${esc(Array.from(String(l.channelName || '').trim())[0] || '?')}</span>`}</button>`;
     }).join('') + '<button class="rail-more" hidden></button>';
     this.fitRail();
   }

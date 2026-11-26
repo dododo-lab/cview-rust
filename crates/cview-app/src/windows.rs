@@ -96,16 +96,18 @@ pub async fn window_open(
         .map_err(|e| CommandError(format!("창을 열지 못했습니다: {e}")))?;
     // 저장된 화면 크기 — 보조 창도 100% 로 먼저 그렸다가 튀지 않게 만들자마자 건다.
     if let Some(services) = app.try_state::<crate::state::AppServices>() {
-        crate::commands::settings::apply_saved_zoom(
-            &window,
-            services.settings.appearance().ui_scale,
-        );
+        let appearance = services.settings.appearance();
+        crate::commands::settings::apply_saved_zoom(&window, appearance.ui_scale);
+        // 테마도 — 예전엔 보조 창 제목 막대가 OS 테마를 따르고, 라이트 테마에서 늘 어두운 배경으로 번쩍였다.
+        let _ = window.set_theme(crate::commands::settings::window_theme(appearance.theme));
+        if appearance.theme == cview_core::models::settings::AppTheme::Light {
+            let _ = window.set_background_color(Some(tauri::window::Color(244, 245, 248, 255)));
+        }
     }
     #[cfg(windows)]
     let _ = window.hide_menu();
     let handle = app.clone();
     let l = label.clone();
-    let is_player = kind == "player";
     window.on_window_event(move |event| {
         if !matches!(event, tauri::WindowEvent::Destroyed) {
             return;
@@ -113,7 +115,9 @@ pub async fn window_open(
         // 보조 창이 연 채팅 세션 — OS 닫기 버튼으로 닫혀도 정리한다(예전엔 웹소켓이 계속 돌았다).
         let h = handle.clone();
         let label = l.clone();
-        let stop_player = is_player && player_target() == l;
+        // 재생 대상 창이 닫히면 종류와 관계없이 멈춘다 — 예전엔 플레이어 창만 봐서, 다른 보조 창에서 연 재생은
+        // 창을 닫은 뒤에도 재생 상태·시청 기록·시청 집계가 남고 대상이 사라진 창을 가리켰다.
+        let stop_player = player_target() == l;
         if stop_player {
             set_player_target(crate::MAIN_WINDOW);
         }

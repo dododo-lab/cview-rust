@@ -8,7 +8,7 @@
 import { api, listen, listenHere, Events } from './api.js';
 import { playPreroll, cancelPreroll } from './ads.js';
 import { noteConnectorLimit } from './live-connector.js';
-import { esc, safeUrl, toast, imageSrc, streamEndedArt, dismiss, hideWithExit, fitPopover } from './dom.js';
+import { esc, safeUrl, toast, imageSrc, streamEndedArt, dismiss, hideWithExit, fitPopover, pixelScale } from './dom.js';
 import { PlayerBridge } from './player.js';
 import { ChatPanel, showMenu } from './chat.js';
 import { loadChannelSocial, setFollow, setFavorite, copyLiveLink, openOnChzzk } from './channel-actions.js';
@@ -1364,7 +1364,8 @@ export class MultiLivePage {
     this.sizeTimer = setTimeout(() => {
       const r = this.stage.getBoundingClientRect();
       if (r.width > 0 && r.height > 0) {
-        const scale = window.devicePixelRatio || 1;
+        // 화면 크기 확대(WKWebView 는 devicePixelRatio 에 넣지 않는다)까지 — 보조 칸 화질 계단이 실제 픽셀을 따른다.
+        const scale = pixelScale();
         api.multiLiveStageSize(r.width * scale, r.height * scale).catch(() => {});
       }
       this.syncChatOverlap();

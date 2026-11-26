@@ -561,7 +561,7 @@ export class ChatPanel {
         this.mentions.push(m);
         // 멘션 알림 (SYS-05) — 앱이 뒤에 있을 때만, 라이브·멀티라이브 채팅에서만(멀티채팅 패널 여럿은 빼고).
         if (!recent && prefs.mentionNotify !== false && !document.hasFocus() && this.active && this.mentionNotify) {
-          api.notifySend(`@${m.nickname} 님이 불렀어요`, String(m.content || '').slice(0, 140)).catch(() => {});
+          api.notifySend(`@${m.nickname} 님이 불렀어요`, Array.from(String(m.content || '')).slice(0, 140).join('')).catch(() => {});
         }
       }
     }

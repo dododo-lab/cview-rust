@@ -36,8 +36,8 @@ export function relativeDate(iso, now = Date.now()) {
   if (h < 24) return `${h}시간 전`;
   const d = Math.floor(h / 24);
   if (d < 30) return `${d}일 전`;
-  const mo = Math.floor(d / 30);
-  return mo < 12 ? `${mo}개월 전` : `${Math.floor(mo / 12)}년 전`;
+  // 해는 365일로 — 30일 달 12개(360일)로 나누면 360~364일 전이 '1년 전'이었다.
+  return d < 365 ? `${Math.min(11, Math.floor(d / 30))}개월 전` : `${Math.floor(d / 365)}년 전`;
 }
 
 /** 다시보기 카드. */

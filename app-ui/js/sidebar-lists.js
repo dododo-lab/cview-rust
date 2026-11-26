@@ -24,6 +24,9 @@ const KIND_BY_ROUTE = {
   library: 'recent',
 };
 
+/** '최근 본 채널'의 방송 중 판정에 인기 목록을 쓸 수 있는 나이(앱의 인기 목록 재사용 60초 + 여유). */
+const POPULAR_FRESH_MS = 2 * 60 * 1000;
+
 /** 메뉴 → 목록 종류. 정해 두지 않은 메뉴(홈·검색·통계·설정·채널 화면 등)는 'favorites'. */
 export function sidebarListKind(route) {
   return KIND_BY_ROUTE[route] || 'favorites';
@@ -111,7 +114,10 @@ export function buildSidebarList(route, data, now = Date.now()) {
       }
       case 'recent': {
         if (!data.recent) return null;
-        const onAir = new Map([...(data.popular || []), ...(following || [])].map((l) => [l.channelId, l]));
+        // 인기 목록은 갓 받은 것만 — 보관함은 인기 목록을 다시 받지 않아, 몇 시간 전 목록으로 끝난 방송을 LIVE·옛 시청자
+        // 수로 보이고 누르면 라이브를 열려 했다. 팔로잉은 2분마다 새로 받는다.
+        const popular = now - (Number(data.popularAt) || 0) <= POPULAR_FRESH_MS ? (data.popular || []) : [];
+        const onAir = new Map([...popular, ...(following || [])].map((l) => [l.channelId, l]));
         return finish('최근 본 채널', data.recent.map((c) => {
           const l = onAir.get(c.channelId);
           if (l) return liveItem({ ...l, channelName: c.channelName || l.channelName, channelImageUrl: l.channelImageUrl || c.channelImageUrl });

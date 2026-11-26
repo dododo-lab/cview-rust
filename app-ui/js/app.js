@@ -159,16 +159,19 @@ async function refreshSidebarFollowing() {
 }
 
 // 단독 라이브와 멀티라이브는 동시에 소리를 내지 않는다 — 마지막으로 연 쪽이 소리를 가진다.
+// 멀티라이브 매니저(Rust)는 메인 창 것 하나뿐이다. 보조 창(플레이어·채팅·멀티채팅·통계)이 여기에 음소거·접기를
+// 보내면 메인 창은 자기 소리 주인을 그대로 들고 있어 창을 닫아도 되돌리지 않았다(메인 멀티라이브가 계속 무음·정지).
+const mlAudioSuspended = (on) => { if (!AUX) api.multiLiveSetAudioSuspended(on).catch(() => {}); };
 let audioOwner = null;
 function setAudioOwner(owner) {
   if (owner === audioOwner) return;
   audioOwner = owner;
   if (owner === 'live') {
     viewer.suspendAudio(false);
-    api.multiLiveSetAudioSuspended(true).catch(() => {});
+    mlAudioSuspended(true);
   } else if (owner === 'multilive') {
     viewer.suspendAudio(true);
-    api.multiLiveSetAudioSuspended(false).catch(() => {});
+    mlAudioSuspended(false);
   }
 }
 
@@ -177,11 +180,11 @@ function setAudioOwner(owner) {
 setAdAudioHooks({
   hold(target) {
     if (target !== 'viewer') viewer.suspendAudio(true);
-    api.multiLiveSetAudioSuspended(true).catch(() => {});
+    mlAudioSuspended(true);
   },
   release(target) {
     if (target !== 'viewer') viewer.suspendAudio(audioOwner === 'multilive');
-    api.multiLiveSetAudioSuspended(audioOwner === 'live').catch(() => {});
+    mlAudioSuspended(audioOwner === 'live');
   },
 });
 
@@ -193,6 +196,7 @@ setAdAudioHooks({
 const isWatching = () => Boolean(pages.multilive && pages.multilive.watchSlot != null);
 let multiLiveParked = false;
 function setMultiLiveParked(on) {
+  if (AUX) return; // 메인 창 멀티라이브만 접는다(위 mlAudioSuspended 와 같은 까닭)
   const hasSessions = Boolean(pages.multilive && (pages.multilive.state.sessions || []).length);
   if (on && !hasSessions) return;
   if (on === multiLiveParked) return;
@@ -434,7 +438,7 @@ function onViewerClosed() {
   if (AUX === 'player') { api.windowCloseSelf().catch(() => {}); return; }
   syncLiveIndicators();
   setMenuHidden(viewer.player.iframe, false);
-  api.multiLiveSetAudioSuspended(false).catch(() => {});
+  mlAudioSuspended(false);
   audioOwner = null;
   setMultiLiveParked(false);
   if (current === 'live') goBack();
@@ -511,6 +515,12 @@ function oldestBrowsed() {
   return ids.find((id) => id !== st.watchId) || ids[0] || null;
 }
 async function openChannel(channelId) {
+  // 채팅·멀티채팅·통계 창의 '방송 보기'는 플레이어 창으로 — 예전엔 그 창 안에서 재생해 메인 창 채팅 세션(main)을
+  // 가져갔고, 창을 닫아도 재생·시청 기록·채팅 연결이 남았다(채팅 창 '▶ 영상 보기'와 같게).
+  if (AUX && AUX !== 'player') {
+    await api.windowOpen('player', { channelId }).catch((er) => toast(er.message));
+    return;
+  }
   if (AUX || !pages.multilive) {
     await openInViewer(channelId, { ad: true });
     return;
@@ -895,12 +905,23 @@ function installMenuAndShortcuts() {
       if (navigator.onLine === false) return;
       toast('다시 연결되었습니다', 1500);
       // 자동 복구 — 덮개 없이. 실패는 화면이 스스로 안내한다(처리되지 않은 거부로 남기지 않는다).
-      if (pages[current] && !viewer.isOpen) Promise.resolve(reloadCurrent()).catch(() => {});
+      // 재생·채팅·편집 화면은 스스로 복구한다(영상 오류 안내·실패한 채팅만 다시 연결) — 다시 불러오면 보던 다시보기가
+      // 광고부터 다시 열리고, 채팅 창 목록이 지워지고, 설정에 치던 글이 사라졌다. 목록 화면만 새로 받는다.
+      if (pages[current] && !viewer.isOpen && autoReloadOnOnline(current)) Promise.resolve(reloadCurrent()).catch(() => {});
       // 끊긴 동안 실패한 사이드바 팔로잉·채팅도 바로 다시 — 다음 주기(2분)·수동 "다시 연결"을 기다리지 않게.
       refreshSidebarFollowing();
       reconnectFailedChats();
     }, ONLINE_SETTLE_MS);
   });
+}
+
+/** 네트워크가 돌아왔을 때 이 화면을 다시 불러올까 — 목록 화면은 늘, 재생·채팅 화면은 열다 실패해 비어 있을 때만,
+ *  멀티라이브·멀티채팅·설정은 하지 않는다(스스로 복구하거나 다시 받을 것이 없다). */
+function autoReloadOnOnline(route) {
+  if (route === 'multichat' || route === 'multilive' || route === 'settings') return false;
+  if (route === 'media') return Boolean(pages.media.body.querySelector('.empty.error'));
+  if (route === 'chat') return !pages.chat.chat.active;
+  return true;
 }
 
 /** online 이벤트가 잠잠해지기를 기다리는 시간. */

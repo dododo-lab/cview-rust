@@ -1,7 +1,7 @@
 // 채널 상세 › 정보 탭 — 지금 방송(또는 마지막 방송)·채팅 설정·채널·소개·내 시청 기록·최근 다시보기·인기 클립·메모 카드 격자.
 // 채널 상세(channel_detail)로 바로 그릴 수 있는 칸은 먼저 그리고, channel_overview 가 오면 `data-ci` 칸의 속만 바꾼다
 // (카드 요소는 그대로 두어 등장 모션이 다시 돌지 않게). 순수 HTML 함수라 회귀 검사가 그대로 부른다.
-import { esc, safeUrl, imageSrc } from './dom.js';
+import { esc, safeUrl, imageSrc, calendarDaysBetween } from './dom.js';
 import { compactCount, uptimeText } from './cards.js';
 import { formatDuration } from './channel.js';
 import { VERIFIED_MARKS, badgeKind } from './verified-badge.js';
@@ -44,11 +44,11 @@ export function agoText(iso, now = Date.now()) {
   if (min < 60) return `${min}분 전`;
   const h = Math.floor(min / 60);
   if (h < 24) return `${h}시간 전`;
-  const d = Math.floor(h / 24);
+  // '어제'·'n일 전'은 달력 날짜로 — 24시간 단위로 세면 그저께 밤이 '어제'로 나왔다.
+  const d = Math.max(1, calendarDaysBetween(t, now));
   if (d === 1) return '어제';
   if (d < 30) return `${d}일 전`;
-  const mo = Math.floor(d / 30);
-  return mo < 12 ? `${mo}개월 전` : `${Math.floor(mo / 12)}년 전`;
+  return d < 365 ? `${Math.min(11, Math.floor(d / 30))}개월 전` : `${Math.floor(d / 365)}년 전`;
 }
 
 /** 방송 길이 — 시작·끝 RFC3339 → "5시간 1분". 모르면 ''. */

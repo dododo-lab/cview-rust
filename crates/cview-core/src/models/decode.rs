@@ -7,10 +7,12 @@
 //!   `serde_json::Map` 위에서 재현한다.
 //!
 //! ⚠ 타임존 의미가 형식마다 다르다 (원본과 동일):
-//!   - `yyyy-MM-dd HH:mm:ss` → **시스템 로컬 타임존**으로 해석
+//!   - `yyyy-MM-dd HH:mm:ss` → **한국 시간(UTC+9)** 으로 해석 — 치지직이 주는 이 형식은 KST 다
+//!     (원본은 시스템 로컬로 읽어, 한국 시간대가 아닌 PC 에서 방송 시작·다시보기 시각이 시간대 차이만큼 틀렸다.
+//!     `client_watch::parse_kst`·`content::kst_to_rfc3339` 는 이미 KST 로 읽는다)
 //!   - ISO8601(`T` 구분자) → 문자열이 들고 있는 오프셋(`Z` 또는 `±HH:MM`)
 
-use chrono::{DateTime, FixedOffset, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
+use chrono::{DateTime, FixedOffset, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Utc};
 use serde::de::{DeserializeOwned, Error as _};
 use serde::{Deserialize, Deserializer, Serializer};
 use serde_json::{Map, Value};
@@ -56,13 +58,13 @@ pub fn parse_chzzk_date(s: &str) -> Option<DateTime<Utc>> {
 
     match b[10] {
         b' ' => {
-            // legacy — 정확히 19자, 로컬 타임존.
+            // legacy — 정확히 19자, 한국 시간(UTC+9, 서머타임 없음).
             if b.len() != 19 {
                 return None;
             }
-            Local
+            FixedOffset::east_opt(9 * 3600)?
                 .from_local_datetime(&naive)
-                .earliest()
+                .single()
                 .map(|d| d.with_timezone(&Utc))
         }
         b'T' => {
@@ -312,15 +314,28 @@ mod tests {
     use super::*;
 
     fn local(y: i32, mo: u32, d: u32, h: u32, mi: u32, s: u32) -> DateTime<Utc> {
-        Local
+        FixedOffset::east_opt(9 * 3600)
+            .unwrap()
             .with_ymd_and_hms(y, mo, d, h, mi, s)
-            .earliest()
             .unwrap()
             .with_timezone(&Utc)
     }
 
     #[test]
-    fn legacy_format_is_local_time() {
+    fn legacy_format_is_korea_time_regardless_of_system_zone() {
+        // 시스템 시간대와 무관하게 KST — UTC 로 맞춘 PC 에서 방송이 9시간 미래로 읽혀 '방금 시작'으로 남았다.
+        assert_eq!(
+            parse_chzzk_date("2026-11-26 12:00:00"),
+            Some(Utc.with_ymd_and_hms(2026, 11, 26, 3, 0, 0).unwrap())
+        );
+        assert_eq!(
+            parse_chzzk_date("2026-01-01 08:59:59"),
+            Some(Utc.with_ymd_and_hms(2025, 12, 31, 23, 59, 59).unwrap())
+        );
+    }
+
+    #[test]
+    fn legacy_format_calendar_dates() {
         assert_eq!(
             parse_chzzk_date("2024-06-15 18:30:00"),
             Some(local(2024, 6, 15, 18, 30, 0))

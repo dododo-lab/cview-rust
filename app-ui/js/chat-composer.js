@@ -22,6 +22,13 @@ const SMILE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke
  * @property {(channelId: string) => void} [loadEmoticons]
  */
 
+/** 채팅 입력의 글자 한도(코드포인트, 백엔드 MAX_CHAT_LENGTH 와 같은 셈) — ChatComposer 가 maxlength 를 늘려 두어도 처음 값을 쓴다. */
+function maxChars(input) {
+  const saved = Number(input.dataset.maxChars);
+  if (saved > 0) return saved;
+  return input.maxLength > 0 ? input.maxLength : 100;
+}
+
 /**
  * 입력창 앞에 `@닉네임 ` 을 넣는다 — 보낼 수 없으면 알리고, 100자를 넘기면 넣지 않는다. input 이벤트를 보내
  * 그 입력창의 ChatComposer 가 글자 수·자동완성을 다시 본다(입력부를 직접 잡지 못하는 멀티라이브 통합 목록이 쓴다).
@@ -30,7 +37,7 @@ const SMILE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke
 export function mentionInto(input, nick) {
   if (!input || input.disabled) { toast('지금은 채팅을 보낼 수 없습니다'); return false; }
   const next = `${`@${nick} ${input.value}`.trimEnd()} `;
-  const max = input.maxLength > 0 ? input.maxLength : 100;
+  const max = maxChars(input);
   if ([...next].length > max) { toast(`채팅은 ${max}자까지 쓸 수 있어요`, 1500); return false; }
   input.value = next;
   input.focus();
@@ -102,7 +109,15 @@ export class ChatComposer {
     this.history = [];
     this.historyAt = -1;
     form.append(this.autocomplete);
-    this.input.addEventListener('input', () => { this.updateAutocomplete(); this.renderCount(); this.historyAt = -1; });
+    // maxlength 는 UTF-16 단위로 세서 이모지(2단위)를 쓰면 표시는 '50/100' 인데 더 칠 수 없었다. 한도는 코드포인트로
+    // 따로 들고(data-max-chars), maxlength 는 남은 글자만큼 넉넉히 다시 건다. 붙여넣기·엔진 차이로 넘치면 잘라 낸다.
+    this.input.dataset.maxChars = String(maxChars(this.input));
+    this.input.addEventListener('input', (e) => {
+      if (!e.isComposing) this.clampToLimit();
+      this.updateAutocomplete(); this.renderCount(); this.historyAt = -1;
+    });
+    this.input.addEventListener('compositionend', () => { this.clampToLimit(); this.renderCount(); });
+    this.renderCount();
     this.input.addEventListener('keydown', (e) => this.onInputKey(e));
     this.autocomplete.addEventListener('mousedown', (e) => {
       const item = e.target.closest('[data-ac]');
@@ -150,10 +165,20 @@ export class ChatComposer {
     return true;
   }
 
-  /** 남은 글자 수 — 제한에 가까울 때만. */
+  /** 코드포인트 한도를 넘었으면 뒤를 잘라 낸다(조합 중에는 부르지 않는다). */
+  clampToLimit() {
+    const max = maxChars(this.input);
+    const chars = [...this.input.value];
+    if (chars.length <= max) return;
+    this.input.value = chars.slice(0, max).join('');
+    toast(`채팅은 ${max}자까지 쓸 수 있어요`, 1500);
+  }
+
+  /** 남은 글자 수 — 제한에 가까울 때만. maxlength 도 남은 글자에 맞춰 다시 건다. */
   renderCount() {
-    const max = this.input.maxLength > 0 ? this.input.maxLength : 100;
+    const max = maxChars(this.input);
     const n = [...this.input.value].length;
+    this.input.maxLength = this.input.value.length + Math.max(0, max - n) * 2; // 남은 글자가 모두 이모지여도 들어가게(넘치면 clampToLimit)
     const show = n >= COUNT_FROM;
     this.counter.hidden = !show;
     this.host.classList.toggle('has-count', show);
@@ -166,7 +191,7 @@ export class ChatComposer {
   /** 입력 제한(maxlength 100 = 백엔드 MAX_CHAT_LENGTH) 안인가 — 넘으면 알리고 넣지 않는다. 멘션·이모티콘을 코드로 넣으면
    *  maxlength 가 막지 않아, 100자를 넘긴 글이 보낼 때 뒤가 잘렸다(글자 수 표시도 갱신되지 않았다). */
   fitsInput(value) {
-    const max = this.input.maxLength > 0 ? this.input.maxLength : 100;
+    const max = maxChars(this.input);
     if ([...value].length <= max) return true;
     toast(`채팅은 ${max}자까지 쓸 수 있어요`, 1500);
     return false;

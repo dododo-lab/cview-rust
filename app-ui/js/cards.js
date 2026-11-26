@@ -138,8 +138,9 @@ export function freshnessText(at, now = Date.now()) {
   if (!at) return '';
   const s = Math.max(0, Math.round((now - at) / 1000));
   if (s < 30) return '방금 갱신';
-  if (s < 3600) return `${Math.max(1, Math.round(s / 60))}분 전 갱신`;
-  return `${Math.round(s / 3600)}시간 전 갱신`;
+  // 내림 — 반올림하면 59분 30초부터 '60분 전'이, 1시간 30분부터 '2시간 전'이 됐다.
+  if (s < 3600) return `${Math.max(1, Math.floor(s / 60))}분 전 갱신`;
+  return `${Math.floor(s / 3600)}시간 전 갱신`;
 }
 
 /** 방송 경과 시간 — `openDate`(RFC3339) 기준 "2시간 5분" / "35분". 알 수 없으면 ''. */

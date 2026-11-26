@@ -113,6 +113,7 @@ pub struct PlayerSettings {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub aspect_ratio: Option<String>,
     /// 레이턴시 프리셋 ("matchWeb", "webSync", "default", "ultraLow", "custom")
+    #[serde(deserialize_with = "de_latency_preset")]
     pub latency_preset: String,
     pub latency_target: f64,
     pub latency_max: f64,
@@ -209,6 +210,17 @@ impl Default for PlayerSettings {
 
 fn de_kd<'de, D: Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
     Ok(f64::deserialize(d)?.min(0.5))
+}
+
+/// 지연 프리셋 — 설정 화면이 '표준'을 `"standard"` 로 보내 저장돼 있었다(Rust 이름은 `"default"`).
+/// 그 값은 어떤 프리셋으로도 읽히지 않아 재생이 '직접 조정' 슬라이더 값으로 돌았다. 읽을 때 맞춘다.
+fn de_latency_preset<'de, D: Deserializer<'de>>(d: D) -> Result<String, D::Error> {
+    let raw = String::deserialize(d)?;
+    Ok(if raw == "standard" {
+        LatencyPreset::Standard.raw_value().into()
+    } else {
+        raw
+    })
 }
 
 fn de_alert_scale<'de, D: Deserializer<'de>>(d: D) -> Result<f64, D::Error> {
@@ -1237,6 +1249,19 @@ mod tests {
         let s: PlayerSettings =
             serde_json::from_str(r#"{"streamProxyMode":"directVLCAdaptive"}"#).unwrap();
         assert_eq!(s.stream_proxy_mode, StreamProxyMode::LocalProxy);
+    }
+
+    #[test]
+    fn standard_latency_preset_from_settings_screen_is_absorbed() {
+        // 설정 화면이 보냈던 "standard" 는 어떤 프리셋으로도 읽히지 않았다.
+        let s: PlayerSettings = serde_json::from_str(r#"{"latencyPreset":"standard"}"#).unwrap();
+        assert_eq!(s.latency_preset, "default");
+        assert_eq!(s.current_preset(), LatencyPreset::Standard);
+        for p in LatencyPreset::ALL {
+            let raw = format!(r#"{{"latencyPreset":"{}"}}"#, p.raw_value());
+            let s: PlayerSettings = serde_json::from_str(&raw).unwrap();
+            assert_eq!(s.current_preset(), p);
+        }
     }
 
     #[test]

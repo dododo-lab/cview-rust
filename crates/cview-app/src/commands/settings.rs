@@ -275,11 +275,27 @@ pub fn apply_ui_zoom_all(app: &tauri::AppHandle, scale: f64) {
     }
 }
 
+/// 마지막으로 창에 건 테마와 다른가 — 화면 크기 슬라이더처럼 테마 밖 외관 저장마다 Dock 아이콘을 다시 그리지 않게.
+fn theme_changed_since_last(theme: AppTheme) -> bool {
+    static LAST: std::sync::Mutex<Option<AppTheme>> = std::sync::Mutex::new(None);
+    let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+    if *last == Some(theme) {
+        return false;
+    }
+    *last = Some(theme);
+    true
+}
+
 /// 외관 설정이 바뀌었다(저장·확대 단계·가져오기·초기화) — 모든 창에 확대를 걸고, 모든 창에 새 외관 값을 알린다.
 /// 화면(prefs-effects.js)은 썸네일 배율·모션 등급을, 설정 화면은 '화면 크기' 슬라이더를 이 값으로 맞춘다.
 fn appearance_changed(app: &tauri::AppHandle, services: &AppServices) {
     let appearance = services.settings.appearance();
     apply_ui_zoom_all(app, appearance.ui_scale);
+    // 창 테마·배경·Dock 아이콘도 — 예전엔 테마 단추(appearance_set_theme)만 걸어, 설정 가져오기·초기화 뒤 웹 화면과
+    // 창 제목 막대·Dock 아이콘·`prefers-color-scheme` 이 서로 다른 테마로 남았다.
+    if theme_changed_since_last(appearance.theme) {
+        apply_window_theme(app, appearance.theme);
+    }
     // 사용률 측정 켜기·간격·기간(설정 › 성능) — 같은 값이면 표본 스레드는 그대로다.
     if let Some(monitor) =
         tauri::Manager::try_state::<std::sync::Arc<crate::usage::UsageMonitor>>(app)
@@ -641,8 +657,7 @@ pub async fn appearance_set_theme(
     let mut appearance = services.settings.appearance();
     appearance.theme = theme;
     services.settings.set_appearance(appearance);
-    apply_window_theme(&app, theme);
-    appearance_changed(&app, &services);
+    appearance_changed(&app, &services); // 창 테마도 여기서 건다
     Ok(())
 }
 

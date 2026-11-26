@@ -21,6 +21,9 @@ pub struct WindowFrame {
     pub y: i32,
     pub width: u32,
     pub height: u32,
+    /// 최대화한 채였는가 — 위치·크기는 최대화 전 보통 창 값이다(옛 파일엔 없음 = false).
+    #[serde(default)]
+    pub maximized: bool,
 }
 
 impl WindowFrame {
@@ -50,8 +53,21 @@ pub fn current_frame<R: Runtime>(window: &WebviewWindow<R>) -> Option<WindowFram
         y: pos.y,
         width: size.width,
         height: size.height,
+        maximized: window.is_maximized().unwrap_or(false),
     };
     frame.is_sane().then_some(frame)
+}
+
+/// 최대화 중 값은 위치·크기를 앞 보통 창 값으로 둔다 — 예전엔 최대화한 채 끄면 화면 크기를 보통 창 크기로 저장해,
+/// 다음 실행부터 원래 크기로 돌아갈 수 없었다. 앞 값이 없으면(처음부터 최대화) 지금 값을 쓴다. 순수 함수.
+pub fn merge_frame(normal: Option<WindowFrame>, now: WindowFrame) -> WindowFrame {
+    match normal {
+        Some(n) if now.maximized => WindowFrame {
+            maximized: true,
+            ..n
+        },
+        _ => now,
+    }
 }
 
 pub fn write_frame(dir: &Path, frame: &WindowFrame) {
@@ -75,16 +91,35 @@ pub struct FrameSaver {
 struct SaverState {
     pending: Option<WindowFrame>,
     written: Option<WindowFrame>,
+    /// 마지막으로 본 보통(최대화 아닌) 창 값 — 시작 때 파일 값에서 출발한다.
+    normal: Option<WindowFrame>,
     generation: u64,
+}
+
+impl SaverState {
+    fn note(&mut self, frame: WindowFrame) -> WindowFrame {
+        let merged = merge_frame(self.normal, frame);
+        if !frame.maximized {
+            self.normal = Some(frame);
+        }
+        merged
+    }
 }
 
 impl FrameSaver {
     pub const QUIET: std::time::Duration = std::time::Duration::from_millis(500);
 
     pub fn new(dir: PathBuf) -> Self {
+        let normal = load_frame(&dir).map(|f| WindowFrame {
+            maximized: false,
+            ..f
+        });
         Self {
             dir,
-            state: Default::default(),
+            state: std::sync::Arc::new(std::sync::Mutex::new(SaverState {
+                normal,
+                ..SaverState::default()
+            })),
         }
     }
 
@@ -112,7 +147,7 @@ impl FrameSaver {
     /// 밀린 값을 바꾸고 새 세대를 돌려준다.
     fn record(&self, frame: WindowFrame) -> u64 {
         let mut st = self.lock();
-        st.pending = Some(frame);
+        st.pending = Some(st.note(frame));
         st.generation += 1;
         st.generation
     }
@@ -122,7 +157,7 @@ impl FrameSaver {
         let generation = {
             let mut st = self.lock();
             if let Some(frame) = frame {
-                st.pending = Some(frame);
+                st.pending = Some(st.note(frame));
             }
             st.generation
         }; // 잠금을 놓은 뒤 쓴다(flush_if 가 다시 잠근다)
@@ -159,6 +194,9 @@ pub fn apply_on_launch<R: Runtime>(app: &AppHandle<R>, dir: &Path, general: &Gen
         if let Some(f) = load_frame(dir) {
             let _ = window.set_size(PhysicalSize::new(f.width, f.height));
             let _ = window.set_position(PhysicalPosition::new(f.x, f.y));
+            if f.maximized {
+                let _ = window.maximize();
+            }
         }
     }
     let _ = window.set_always_on_top(general.always_on_top);
@@ -241,6 +279,7 @@ mod tests {
             y: 20,
             width: 1400,
             height: 900,
+            maximized: false,
         };
         std::fs::write(dir.join(FRAME_FILE), serde_json::to_vec(&f).unwrap()).unwrap();
         assert_eq!(load_frame(&dir), Some(f));
@@ -261,6 +300,7 @@ mod tests {
             y: 0,
             width: 1400,
             height: 900,
+            maximized: false,
         };
         let first = saver.record(at(1));
         let last = saver.record(at(2));
@@ -291,6 +331,7 @@ mod tests {
                 y: 0,
                 width: 1400,
                 height: 900,
+                maximized: false,
             }));
         }
         assert!(
@@ -299,6 +340,43 @@ mod tests {
         );
         std::thread::sleep(FrameSaver::QUIET + std::time::Duration::from_millis(700));
         assert_eq!(load_frame(&dir).map(|f| f.x), Some(19));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// 최대화한 채 끄면 보통 창 크기를 지키고 최대화만 표시한다(옛 파일은 maximized 없이도 읽힌다).
+    #[test]
+    fn maximized_frame_keeps_the_normal_size() {
+        let dir = std::env::temp_dir().join(format!("cview-saver-max-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join(FRAME_FILE),
+            br#"{"x":100,"y":80,"width":1200,"height":800}"#,
+        )
+        .unwrap();
+        assert_eq!(load_frame(&dir).map(|f| f.maximized), Some(false));
+        let saver = FrameSaver::new(dir.clone());
+        let full = WindowFrame {
+            x: 0,
+            y: 25,
+            width: 3024,
+            height: 1890,
+            maximized: true,
+        };
+        saver.save_now(Some(full));
+        let saved = load_frame(&dir).unwrap();
+        assert_eq!(
+            (saved.x, saved.y, saved.width, saved.height, saved.maximized),
+            (100, 80, 1200, 800, true)
+        );
+        // 되돌린 뒤 옮긴 값은 그대로.
+        let moved = WindowFrame {
+            x: 300,
+            maximized: false,
+            ..saved
+        };
+        saver.save_now(Some(moved));
+        assert_eq!(load_frame(&dir), Some(moved));
+        assert_eq!(merge_frame(None, full), full, "앞 값이 없으면 지금 값");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
