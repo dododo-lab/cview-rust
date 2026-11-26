@@ -1,7 +1,7 @@
 // 사용자 단축키 — 원본 KeyboardShortcutSettings·GeneralSettingsTab "키보드 단축키" (SET-12).
 // 바인딩은 설정 keyboard 도메인(`{ bindings: [동작, {key, modifiers}, …] }`)에 있다. 수식 키가 있는 바인딩은
 // 메뉴 막대가 가속기로 받고(셸이 메뉴를 다시 만든다), 맨 글자 바인딩은 여기서 시청 화면 키로 받는다.
-import { api } from './api.js';
+import { api, listen, Events } from './api.js';
 import { kbd, IS_WINDOWS } from './platform.js';
 
 export const MOD = { cmd: 1, shift: 2, option: 4, control: 8 };
@@ -122,7 +122,7 @@ export const RESERVED = [
   ['upArrow', 0, '볼륨 올리기'], ['downArrow', 0, '볼륨 내리기'],
   ['leftArrow', 0, '되감기'], ['rightArrow', 0, '앞으로 감기'], ['leftArrow', S, '되감기 60초'], ['rightArrow', S, '앞으로 60초'],
   ['escape', 0, '닫기'], ['tab', 0, '초점 이동'], ['return', 0, '누르기'],
-  ...['1', '2', '3', '4', '5', '6', '7'].map((k) => [k, C, '메뉴 이동']),
+  ...['1', '2', '3', '4', '5', '6', '7', '8'].map((k) => [k, C, '메뉴 이동']), // ⌘8 멀티라이브(menu.rs nav-multilive)
   ['f', C, '검색'], ['k', C, '명령 팔레트'], ['[', C, '뒤로'], ['r', C, '새로고침'], ['\\', C, '사이드바 접기'], [',', C, '설정'],
   ['=', C, '화면 크기 확대'], ['-', C, '화면 크기 축소'], ['0', C, '화면 실제 크기'],
   ['/', C, '키보드 단축키'], ['l', C | S, '다크/라이트 전환'], ['f', C | S, '영상 전체 화면'], ['f', C | MOD.control, '영상+채팅 전체 화면'],
@@ -130,6 +130,8 @@ export const RESERVED = [
   ['n', C, '새 플레이어 창'], ['c', C | S, '채팅 창'], ['m', C | S, '멀티채팅 창'], ['t', C | S, '통계 창'],
   ['q', C, '앱 종료'], ['h', C, '앱 가리기'], ['m', C, '창 최소화'],
   ['c', C, '복사'], ['v', C, '붙여넣기'], ['x', C, '잘라내기'], ['a', C, '전체 선택'], ['z', C, '실행 취소'],
+  // 시스템 메뉴(다시 실행·기타 가리기)와 앱의 ⌥⌘R 녹화 — 예전엔 빠져 있어 사용자 단축키로 고르면 메뉴가 먼저 가져갔다.
+  ['z', C | S, '다시 실행'], ['h', C | MOD.option, '기타 가리기'], ['r', C | MOD.option, '녹화 시작/중지'],
 ];
 
 /**
@@ -200,3 +202,5 @@ window.addEventListener('cview:settings-changed', (e) => {
   const s = e.detail && e.detail.settings;
   if (s && s.keyboard) applyKeyboardSettings(s.keyboard);
 });
+// 다른 창(설정이 있는 메인 창)에서 바꾼 단축키 — 따로 연 플레이어 창도 바로 따른다.
+listen(Events.keyboardChanged, (keyboard) => { if (keyboard) applyKeyboardSettings(keyboard); });

@@ -16,7 +16,10 @@ const shortcutGroups = () => [
 ];
 
 export function showSheet(html, cls = '') {
-  document.querySelector('.sheet-scrim.app-sheet')?.remove();
+  // 앞 시트가 떠 있으면 먼저 풀어 초점을 그 시트를 연 자리로 돌려 둔다 — 새 시트가 그 자리를 이어받는다.
+  // 예전엔 그냥 지워, 새 시트의 '연 자리'가 문서(body)가 되어 닫은 뒤 초점이 처음으로 떨어졌다.
+  const prev = document.querySelector('.sheet-scrim.app-sheet');
+  if (prev) { prev.releaseFocus?.(); prev.remove(); }
   const scrim = document.createElement('div');
   scrim.className = 'sheet-scrim app-sheet';
   scrim.innerHTML = `<div class="sheet ${cls}" role="dialog" aria-modal="true" tabindex="-1">${html}<div class="sheet-actions"><button class="btn primary" data-close>닫기</button></div></div>`;
@@ -27,6 +30,7 @@ export function showSheet(html, cls = '') {
   document.body.append(scrim);
   // 초점을 가두고, 닫으면 연 자리(메뉴 단추 등)로 돌려준다.
   const release = trapFocus(sheet);
+  scrim.releaseFocus = release;
   sheet.focus();
   const close = () => { release(); dismiss(scrim); };
   scrim.addEventListener('click', (e) => { if (e.target === scrim || e.target.closest('[data-close]')) close(); });

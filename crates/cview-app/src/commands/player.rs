@@ -141,9 +141,18 @@ async fn start_player(
 }
 
 #[tauri::command]
-pub async fn player_stop(services: State<'_, AppServices>) -> CmdResult<()> {
+pub async fn player_stop(window: tauri::Window, services: State<'_, AppServices>) -> CmdResult<()> {
+    if !stop_comes_from_target(window.label(), &crate::windows::player_target()) {
+        return Ok(());
+    }
     services.stop_player().await;
     Ok(())
+}
+
+/// 재생 정지는 지금 재생을 가진 창이 보낼 때만 한다. 재생 엔진은 하나라 새 플레이어 창이 재생을 가져가면 앞 창의
+/// 시청 화면은 멈춘 채 남는데, 예전엔 그 창을 ⌘W 로 닫으면 보낸 정지가 새 창의 재생(과 채팅)까지 멈췄다.
+fn stop_comes_from_target(caller: &str, target: &str) -> bool {
+    caller == target
 }
 
 /// 볼륨(0~1) — 설정에도 저장한다.
@@ -267,6 +276,18 @@ pub fn log_player_page_message(source: &str, message: &Value) {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn only_the_window_that_owns_playback_can_stop_it() {
+        assert!(stop_comes_from_target("main", "main"));
+        assert!(stop_comes_from_target("player-2", "player-2"));
+        assert!(
+            !stop_comes_from_target("player-1", "player-2"),
+            "앞 플레이어 창을 닫는 정지가 새 창의 재생을 멈췄다"
+        );
+        assert!(!stop_comes_from_target("main", "player-2"));
+    }
+
     use super::*;
     use async_trait::async_trait;
     use cview_networking::transport::{HttpRequest, HttpResponse, HttpTransport, TransportError};

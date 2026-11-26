@@ -30,7 +30,7 @@ const PHASE_TEXT = {
 };
 
 export class Viewer {
-  constructor(root, { isLoggedIn, onClose, onAddMulti = null, onPopout = null }) {
+  constructor(root, { isLoggedIn, onClose, onAddMulti = null, onPopout = null, chatSession = null }) {
     this.root = root;
     this.onClose = onClose;
     this.channelId = null;
@@ -45,7 +45,7 @@ export class Viewer {
 
     this.player = new PlayerBridge(root.querySelector('#player-frame'));
     this.alerts = new StreamAlerts(root.querySelector('.player-stage'));
-    this.chat = new ChatPanel(root.querySelector('.chat'), { isLoggedIn, onHighlight: (m) => this.alerts.push(m) });
+    this.chat = new ChatPanel(root.querySelector('.chat'), { isLoggedIn, onHighlight: (m) => this.alerts.push(m), session: chatSession, mentionNotify: true });
 
     this.player.onMessage((type, data) => this.onPlayerMessage(type, data));
     listen(Events.playerEvent, (ev) => this.onPlayerEvent(ev));
@@ -58,7 +58,7 @@ export class Viewer {
     this.volume.addEventListener('input', () => {
       const v = Number(this.volume.value) / 100;
       this.player.call('setVolume', v);
-      if (v > 0 && this.player.isMuted()) this.setMuted(false);
+      if (v > 0 && this.sessionMuted) this.setMuted(false);
     });
     this.volume.addEventListener('change', () => {
       api.playerSetVolume(Number(this.volume.value) / 100).catch(() => {});
@@ -116,7 +116,7 @@ export class Viewer {
     if (on === this.audioSuspended) return;
     this.audioSuspended = on;
     if (on) {
-      this.mutedBeforeSuspend = this.player.isMuted();
+      this.mutedBeforeSuspend = Boolean(this.sessionMuted);
       this.player.call('setMuted', true);
     } else {
       this.player.call('setMuted', this.mutedBeforeSuspend);
@@ -311,8 +311,10 @@ export class Viewer {
     this.muteButton.setAttribute('aria-label', this.muteButton.title);
   }
 
+  /** 사용자가 고른 음소거(sessionMuted)를 뒤집는다. 실제 video.muted 는 광고 중(setAdHold)·첫 프레임 전에 앱이
+   *  잠시 켜 두므로 그것을 읽으면 그 사이에는 음소거할 수 없었다(누를 때마다 '해제'만 되어 광고 뒤 소리가 났다). */
   toggleMute() {
-    this.setMuted(!this.player.isMuted());
+    this.setMuted(!this.sessionMuted);
   }
 
   onPlayerMessage(type, data) {

@@ -456,13 +456,13 @@ function denseRow(l) {
   </div>`;
 }
 
-function followedRow(c) {
+export function followedRow(c) {
   const avatar = safeUrl(c.channelImageUrl);
   const followed = parseFollowDate(c.followDate);
   const since = followAgeText(followed);
   const avatarImg = avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>';
   // 방송 중이면 줄은 방송을 열고 아바타는 채널 정보 — 꺼져 있으면 줄 전체가 채널 정보다(아바타는 그림일 뿐).
-  return `<div class="dense-row follow-row${c.isLive ? ' card' : ''}" data-fid="${esc(c.channelId)}" data-live="${c.isLive ? 1 : 0}" ${c.isLive ? `data-channel-id="${esc(c.channelId)}"` : `data-open-channel-id="${esc(c.channelId)}"`}>
+  return `<div class="dense-row follow-row${c.isLive ? ' card' : ''}" data-fid="${esc(c.channelId)}" data-live="${c.isLive ? 1 : 0}" ${c.isLive ? `data-channel-id="${esc(c.channelId)}" data-channel-name="${esc(c.channelName)}" data-channel-image="${esc(avatar)}"` : `data-open-channel-id="${esc(c.channelId)}"`}>
     ${cardOpenButton(c.isLive ? liveLabel(c) : `${c.channelName}, 오프라인, 채널 정보`)}
     ${c.isLive ? `<button type="button" class="card-avatar" data-open-channel aria-label="${esc(c.channelName)} 채널 정보">${avatarImg}</button>` : `<span class="card-avatar">${avatarImg}</span>`}
     <span class="dense-name ellipsis"><b>${esc(c.channelName)}</b>${followBadges(c)} <span>${c.isLive ? esc(c.categoryName || '방송 중') : '오프라인'}</span></span>
@@ -567,6 +567,11 @@ export class SearchPage {
     // ⌘R — 경로에 검색어가 없어도 마지막 검색을 다시 한다.
     if (params && params.refresh && this.lastQuery) return this.retry();
     return undefined;
+  }
+
+  /** 지금 검색어 — 검색창에서 새로 낸 검색도 ⌘R·뒤로 가기가 따르게(app.js liveParams). */
+  routeParams() {
+    return this.lastQuery ? { query: this.lastQuery } : {};
   }
 
   /** 오류 화면의 "다시 시도"(app.js) — 경로 매개변수가 없어도 마지막으로 제출한 검색어로 다시 찾는다. */

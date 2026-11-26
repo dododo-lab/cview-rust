@@ -23,6 +23,9 @@ export function snapshotFor(route, params, playingChannelId) {
   for (const [k, v] of Object.entries(params || {})) {
     if (['string', 'number', 'boolean'].includes(typeof v) && String(v).length < 200) safe[k] = v;
   }
+  // 다시보기·클립 화면은 보관함으로 되돌린다 — 그대로 복원하면 다음 실행 때 묻지도 않고 광고와 함께 다시 재생됐다
+  // (라이브도 자동 재생하지 않고 '이어 보기'로 묻는다).
+  if (route === 'media') return { route: 'library', params: {}, channelId: playingChannelId || null, at: Date.now() };
   return { route: route === 'live' ? 'home' : route, params: safe, channelId: playingChannelId || null, at: Date.now() };
 }
 
@@ -35,6 +38,7 @@ export function saveWorkspace(route, params, playingChannelId) {
 export function loadWorkspace() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY) || 'null');
+    if (s && s.route === 'media') return { ...s, route: 'library', params: {} }; // 예전 버전이 저장한 것
     return s && RESTORABLE.has(s.route) ? s : null;
   } catch { return null; }
 }

@@ -79,7 +79,7 @@ export class MediaPage {
             <div class="media-title-box">
               <h1 class="media-title">${esc(info.title)}</h1>
               <div class="media-meta">
-                ${info.channelId ? `<button class="link-btn" data-media="channel" data-channel-id="${esc(info.channelId)}">${esc(info.channelName)}</button> · ` : `${esc(info.channelName)} · `}
+                ${info.channelId ? `<button class="link-btn" data-media="channel" data-channel-id="${esc(info.channelId)}" data-channel-name="${esc(info.channelName || '')}">${esc(info.channelName)}</button> · ` : `${esc(info.channelName)} · `}
                 조회 ${esc(compactCount(info.readCount || 0))}${info.publishDate ? ` · ${esc(relativeDate(info.publishDate))}` : ''} · ${esc(formatDuration(info.duration))}
               </div>
             </div>
@@ -135,7 +135,7 @@ export class MediaPage {
             <div class="media-title-box">
               <h1 class="media-title">${esc(d.clipTitle || '')}</h1>
               <div class="media-meta">
-                ${channelId ? `<button class="link-btn" data-media="channel" data-channel-id="${esc(channelId)}">${esc(channelName || '채널')}</button> · ` : ''}조회 ${esc(compactCount(d.readCount || 0))} · ${esc(formatDuration(d.duration))}
+                ${channelId ? `<button class="link-btn" data-media="channel" data-channel-id="${esc(channelId)}" data-channel-name="${esc(channelName || '')}">${esc(channelName || '채널')}</button> · ` : ''}조회 ${esc(compactCount(d.readCount || 0))} · ${esc(formatDuration(d.duration))}
               </div>
             </div>
             <div class="grow"></div>
@@ -237,7 +237,13 @@ export class MediaPage {
       case 'retry': {
         const v = this.video;
         a.closest('.media-error')?.remove();
-        if (v && this.info && this.info.streamUrl) { v.src = this.info.streamUrl; v.load(); v.play().catch(() => {}); }
+        if (v && this.info && this.info.streamUrl) {
+          // 보던 자리에서 다시 — 예전엔 처음(0:00)부터 재생해, 10초 뒤 이어 보기 위치까지 처음으로 덮었다.
+          const at = Number.isFinite(v.currentTime) ? v.currentTime : 0;
+          const rate = v.playbackRate || 1;
+          if (at >= 1) v.addEventListener('loadedmetadata', () => { v.currentTime = at; v.playbackRate = rate; }, { once: true });
+          v.src = this.info.streamUrl; v.load(); v.play().catch(() => {});
+        }
         break;
       }
       case 'channel': this.onOpenChannel(a.dataset.channelId); break;

@@ -103,6 +103,8 @@ export const Events = Object.freeze({
   appearanceChanged: 'settings://appearance',
   /** 일반 설정이 바뀌었다(알림 토글·메뉴 막대 표시 등) — 새 일반 설정 값. */
   generalChanged: 'settings://general',
+  /** 단축키 설정이 바뀌었다(저장·가져오기·초기화) — 새 keyboard 값. 모든 창에 온다. */
+  keyboardChanged: 'settings://keyboard',
   downloadUpdate: 'download://update',
   deepLink: 'deeplink://open',
   /** 앱 사용률 표본(usage-monitor.js) — 화면이 usage_watch(true) 로 보고 있을 때만 메인 창에 온다. */
@@ -191,7 +193,7 @@ export const api = {
   favoritesList: () => invoke('favorites_list'),
   recentChannels: (limit = 20) => invoke('recent_channels', { limit }),
   recentChannelsClear: () => invoke('recent_channels_clear'),
-  memoSet: (channelId, memo) => invoke('memo_set', { channelId, memo }),
+  memoSet: (channelId, memo, channelName = null, channelImageUrl = null) => invoke('memo_set', { channelId, memo, channelName, channelImageUrl }),
   bookmarkAdd: (channelId, note) => invoke('bookmark_add', { channelId, note }),
   bookmarksList: () => invoke('bookmarks_list'),
   bookmarkDelete: (id) => invoke('bookmark_delete', { id }),

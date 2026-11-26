@@ -21,6 +21,8 @@ pub struct RecordingStatusDto {
     pub bytes: i64,
     /// 시작 시각(유닉스 밀리초).
     pub started_at: Option<i64>,
+    /// 쓰기 오류(디스크 가득 등)로 녹화가 멈췄으면 그 이유.
+    pub error: Option<String>,
 }
 
 fn status(services: &AppServices) -> RecordingStatusDto {
@@ -30,6 +32,7 @@ fn status(services: &AppServices) -> RecordingStatusDto {
         path: r.output_path().map(|p| p.to_string_lossy().into_owned()),
         bytes: r.bytes_written(),
         started_at: r.recording_start_date().map(|d| d.timestamp_millis()),
+        error: r.failure_reason(),
     }
 }
 
@@ -78,9 +81,10 @@ pub fn sniff_extension(head: &[u8]) -> Option<&'static str> {
 /// 녹화를 끝내고 내용에 맞게 확장자를 바로잡는다 — 중지 단추뿐 아니라 시청 화면 닫기·다른 방송 열기·
 /// 앱 종료(재생 정지)도 이 길로 끝낸다. 예전엔 중지 단추만 확장자를 맞춰, 그 밖의 길로 끝난 치지직
 /// LL-HLS(fMP4) 녹화는 `.ts` 로 남아 재생기가 열지 못했다. 녹화 중이 아니면 아무것도 하지 않는다.
+/// 쓰기 오류로 멈춘 녹화도 여기서 마무리한다(오류를 거두고, 거기까지 쓴 파일의 확장자를 맞춘다).
 pub(crate) fn finish_recording(services: &AppServices) -> RecordingStatusDto {
     let before = status(services);
-    if !before.recording {
+    if !before.recording && before.error.is_none() {
         return RecordingStatusDto {
             path: None,
             ..before

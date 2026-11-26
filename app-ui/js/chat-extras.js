@@ -77,11 +77,16 @@ export function parseCommand(text) {
 /** TTS 가 기다리게 두는 문장 수 상한 — 넘으면 새 후원은 읽지 않는다. */
 export const TTS_QUEUE_MAX = 3;
 
+/** 읽을 본문 — 이모티콘 코드(`{:d_10:}`)는 걷어 낸다. 예전엔 "중괄호 d 10…"처럼 읽고 200자 상한도 코드가 먹었다. */
+function ttsBody(m) {
+  return String(m.content || '').replace(/\{:[^{}:\s]+:\}/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
 export function ttsText(m) {
-  if (m.kind === 'subscription') return `${donorName(m)}님이 ${m.subscriptionMonths ? `${m.subscriptionMonths}개월 ` : ''}구독했습니다. ${m.content || ''}`;
+  if (m.kind === 'subscription') return `${donorName(m)}님이 ${m.subscriptionMonths ? `${m.subscriptionMonths}개월 ` : ''}구독했습니다. ${ttsBody(m)}`;
   // 금액 비공개면 금액 없이("익명님이 채팅 후원했습니다.") — 빈 금액 자리에 공백이 두 번 들어가지 않게.
   const amount = formatCheese(m.donationAmount);
-  return `${donorName(m)}님이 ${amount ? `${amount} ` : ''}${donationKindLabel(m.donationType)}했습니다. ${m.content || ''}`;
+  return `${donorName(m)}님이 ${amount ? `${amount} ` : ''}${donationKindLabel(m.donationType)}했습니다. ${ttsBody(m)}`;
 }
 
 function stamp() {
@@ -313,6 +318,13 @@ export function installChatExtras(panel) {
     for (const [v] of BACKGROUNDS) root.classList.toggle(`bg-${v}`, v === mode);
     root.style.setProperty('--chat-bg-strength', String(Math.min(1, Math.max(0, Number(bg.strength ?? 0.5)))));
   };
-  panel.cleanups.push(onChatPrefs(applyLook)); // 패널을 버리면 구독도 — 닫힌 멀티채팅 패널이 DOM 째 남았다
+  panel.cleanups.push(onChatPrefs(applyLook));
+  // 읽어 주기를 끄면(설정·/tts) 읽던 것과 기다리던 문장도 멈춘다 — 예전엔 새 문장만 막아 최대 4문장을 더 읽었다.
+  let ttsWasOn = Boolean(chatPrefs().ttsEnabled);
+  panel.cleanups.push(onChatPrefs((p) => {
+    const on = Boolean((p || chatPrefs()).ttsEnabled);
+    if (ttsWasOn && !on && window.speechSynthesis) { speechSynthesis.cancel(); ttsQueued = 0; }
+    ttsWasOn = on;
+  })); // 패널을 버리면 구독도 — 닫힌 멀티채팅 패널이 DOM 째 남았다
   applyLook();
 }

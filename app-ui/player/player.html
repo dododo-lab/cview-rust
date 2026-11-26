@@ -2400,6 +2400,8 @@ function maybeCorrectLatency() {
 //   seekByDriftMs 의 buffered 클램프를 재사용해 미버퍼 위치 seek 을 방지 — 큰 격차는
 //   (버퍼 확장 → 다음 제어 사이클 재-seek) 반복으로 안전하게 수렴한다.
 function seekToLatency(targetSec) {
+    // 탐색은 재생 의도를 바꾸지 않는다(형제 seekByDriftMs 와 같게) — 예전엔 세 갈래 모두 play() 를 불러,
+    // 사용자가 일시정지한 동안 늘어난 지연을 Rust 지연 보정이 당기면 방송이 저절로 다시 재생됐다.
     if (!hls || !video || _suspended) return;
     const lat = hls.latency;
     if (!(lat > 0) || !(targetSec > 0)) {
@@ -2410,14 +2412,14 @@ function seekToLatency(targetSec) {
                 MIN_FORWARD_BUFFER_AFTER_SEEK_S
             );
         }
-        video.play().catch(function() {});
+        if (_wantsPlaying) video.play().catch(function() {});
         return;
     }
     const driftMs = (lat - targetSec) * 1000;
     // [Micro-stutter 2026-08-08] 250→400ms — 데드존 근처의 잔차 seek 는 MSE 플러시만
     //   만들고 체감 위치는 안 바뀐다. rate PID 가 수렴할 여유를 남긴다.
     if (Math.abs(driftMs) < 400) {
-        video.play().catch(function() {});
+        if (_wantsPlaying) video.play().catch(function() {});
         return;
     }
     const moved = seekByDriftMs(driftMs, MIN_FORWARD_BUFFER_AFTER_SEEK_S);
@@ -2441,7 +2443,7 @@ function seekToLatency(targetSec) {
         if (ahead < RESYNC_RELOAD_MIN_BUFFER_S) {
             try { hls.startLoad(-1); } catch (e) {}
         }
-        video.play().catch(function() {});
+        if (_wantsPlaying) video.play().catch(function() {});
     }
 }
 // [2026-05-24] PDT drift snap — drift>0 이면 앱이 웹보다 뒤 → 앞으로 seek.

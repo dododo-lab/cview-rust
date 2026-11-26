@@ -450,7 +450,10 @@ export async function playPreroll(kind, id, { host = null, player = null, target
   } finally {
     if (watch) clearInterval(watch);
     if (ui) ui.remove();
-    if (player) player.exec('setAdHold(false)');
+    // 이 광고가 아직 이 영역의 주인일 때만 소리 막음을 푼다 — 광고 중에 다른 채널을 열면 새 광고가 같은 동기 구간에서
+    // 막아 둔 소리를 앞 광고의 정리(마이크로태스크)가 풀어, 새 광고와 방송 소리가 겹쳤다.
+    const owner = host ? hostSessions.get(host) === handle : active === handle;
+    if (player && owner) player.exec('setAdHold(false)');
     if (held) releaseAudio(host ? target : null);
     if (host) { if (hostSessions.get(host) === handle) hostSessions.delete(host); } else if (active === handle) active = null;
   }

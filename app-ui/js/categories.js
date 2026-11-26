@@ -59,6 +59,11 @@ export class CategoriesPage {
     });
   }
 
+  /** 지금 고른 카테고리('' = 모든 카테고리) — ⌘R·다시 시도·뒤로 가기가 따르게(app.js liveParams). */
+  routeParams() {
+    return { category: this.category || '' };
+  }
+
   async show(params = {}) {
     if (params.category !== undefined) this.category = params.category;
     const seq = ++this.seq;

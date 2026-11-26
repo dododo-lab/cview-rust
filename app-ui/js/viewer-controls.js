@@ -2,6 +2,7 @@
 //
 // PLY-01 화질 선택, PLY-02 재생/일시정지·라이브 복귀·지연 배지, PLY-09 스크린샷, PLY-11 전체 화면 2종,
 // PLY-13 오류 오버레이 재시도, PLY-15 휠 볼륨·% 표시, PLY-17 북마크, 시청 화면 단축키.
+import { screenshotFormat, screenshotExtension } from './screenshot-format.js';
 import { api } from './api.js';
 import { esc, toast, keyBelongsToTarget, hideWithExit } from './dom.js';
 import { matchPlainAction } from './shortcuts.js';
@@ -454,9 +455,9 @@ export class ViewerControls {
     this.renderStatus();
   }
 
-  screenshot() {
+  async screenshot() {
     if (!this.viewer.isPlaying) return;
-    this.viewer.player.call('takeScreenshot', 'png');
+    this.viewer.player.call('takeScreenshot', await screenshotFormat());
   }
 
   async saveScreenshot(data) {
@@ -466,7 +467,7 @@ export class ViewerControls {
     }
     const name = this.viewer.live?.channelName || 'CView';
     try {
-      const path = await api.saveFile('screenshot', `${name}_${stamp()}.png`, data.base64, null);
+      const path = await api.saveFile('screenshot', `${name}_${stamp()}.${screenshotExtension(data)}`, data.base64, null);
       this.flash('스크린샷 저장됨');
       toast(`스크린샷을 저장했습니다 — ${path}`, 3500);
     } catch (e) {
@@ -529,7 +530,7 @@ export class ViewerControls {
       this.togglePlay();
     } else if (e.key.toLowerCase() === 'm' && !mod) {
       this.viewer.toggleMute();
-      this.flash(this.viewer.player.isMuted() ? '음소거' : '음소거 해제');
+      this.flash(this.viewer.sessionMuted ? '음소거' : '음소거 해제');
     } else if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !mod) {
       e.preventDefault();
       range.value = String(Math.min(100, Math.max(0, Number(range.value) + (e.key === 'ArrowUp' ? 5 : -5))));

@@ -305,6 +305,7 @@ impl AppServices {
         let api = ChzzkApiClient::new(config);
 
         let data_store = open_store(data_dir);
+        recover_interrupted_watch_records(data_store.as_ref());
         let settings = SettingsStore::new(
             data_store.clone(),
             Some(data_dir.join(SETTINGS_SNAPSHOT_FILE_NAME)),
@@ -595,6 +596,7 @@ impl AppServices {
             Ok(started) => {
                 *self.watch_record.lock().unwrap_or_else(|e| e.into_inner()) =
                     Some((channel.channel_id.clone(), started));
+                spawn_watch_checkpoints(store.clone(), channel.channel_id.clone(), started);
             }
             Err(e) => tracing::debug!("시청 기록 시작 실패: {e}"),
         }
@@ -675,6 +677,7 @@ fn open_store(data_dir: &Path) -> Option<DataStore> {
             Ok(()) => {
                 tracing::warn!("손상된 스토어를 백업 {} 으로 되돌렸습니다", latest.id);
                 if let Ok(store) = DataStore::open(&path) {
+                    prefer_settings_mirror_after_restore(&store, data_dir);
                     return Some(store);
                 }
             }
@@ -704,6 +707,68 @@ fn open_store(data_dir: &Path) -> Option<DataStore> {
     }
 }
 
+/// 앞 실행이 비정상 종료로 남긴 열린 시청 기록을 마지막 체크포인트까지로 닫는다. 시작할 때는 재생 중인 것이
+/// 없으므로 열린 기록은 모두 끊긴 것이다. 예전엔 이 복구를 부르는 곳이 없어 통계 › 시청 기록에 그 채널이
+/// "시청 중"으로 계속 남았다.
+fn recover_interrupted_watch_records(store: Option<&DataStore>) {
+    let Some(store) = store else { return };
+    match store.recover_interrupted_watch_records(chrono::Utc::now()) {
+        Ok(0) => {}
+        Ok(n) => tracing::info!("끊긴 시청 기록 {n}개를 닫았습니다"),
+        Err(e) => tracing::warn!("끊긴 시청 기록 복구 실패: {e}"),
+    }
+}
+
+/// 단독 시청 화면의 시청 기록 체크포인트 — 멀티라이브 패인처럼 1분마다 시청 시간을 저장한다. 기록이 닫히면
+/// (정지·다른 방송) 체크포인트가 기록을 찾지 못해 스스로 끝난다. 예전엔 체크포인트가 없어 보는 동안 통계가
+/// "시청 중 · 0초"였고, 앱이 비정상 종료되면 그 시청이 0초로 남았다.
+fn spawn_watch_checkpoints(
+    store: DataStore,
+    channel_id: String,
+    started: chrono::DateTime<chrono::Utc>,
+) {
+    if tokio::runtime::Handle::try_current().is_err() {
+        return;
+    }
+    tokio::spawn(async move {
+        loop {
+            tokio::time::sleep(WATCH_CHECKPOINT_INTERVAL).await;
+            let id = channel_id.clone();
+            match store
+                .off_main(move |s| s.checkpoint_watch_record(&id, started, chrono::Utc::now()))
+                .await
+            {
+                Ok(true) => {}
+                Ok(false) => return,
+                Err(e) => tracing::debug!("시청 기록 체크포인트 실패: {e}"),
+            }
+        }
+    });
+}
+
+const WATCH_CHECKPOINT_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// 백업으로 되돌린 스토어의 설정을 미러(`settings.json`)로 덮는다.
+///
+/// 백업은 업그레이드 직전이나 사용자가 "지금 백업"을 누른 때의 것이라 대개 몇 주 묵었다. 미러는 설정을
+/// 저장할 때마다 함께 쓴다. 예전엔 백업이 설정 행을 되살려 미러 복원(빈 스토어일 때만)을 건너뛰었다.
+/// 그래서 백업 뒤에 바꾼 설정이 조용히 옛 값으로 돌아갔고, 다음 저장이 미러까지 옛 값으로 덮어 영영 잃었다.
+fn prefer_settings_mirror_after_restore(store: &DataStore, data_dir: &Path) {
+    let mirror = cview_persistence::SettingsSnapshotFile::read(Some(
+        &data_dir.join(SETTINGS_SNAPSHOT_FILE_NAME),
+    ));
+    let Some(mirror) = mirror.filter(|m| !m.is_empty()) else {
+        return;
+    };
+    match store.save_settings(&mirror) {
+        Ok(()) => tracing::warn!(
+            "되돌린 백업의 설정을 최신 미러로 덮었습니다({}개 도메인)",
+            mirror.len()
+        ),
+        Err(e) => tracing::error!("미러 설정을 되돌린 스토어에 쓰지 못했습니다: {e}"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -723,6 +788,87 @@ mod tests {
         assert!(!forward_to_shell(&pen(""), Some("")));
         assert!(forward_to_shell(&ChatEngineEvent::Kicked, None));
         assert!(forward_to_shell(&ChatEngineEvent::Connected, Some("me")));
+    }
+
+    #[test]
+    fn startup_closes_watch_records_left_open_by_a_crash() {
+        let store = DataStore::open_in_memory().unwrap();
+        let started = chrono::Utc::now() - chrono::Duration::minutes(30);
+        store
+            .start_watch_record("c1", "채널", None, None, started)
+            .unwrap();
+        recover_interrupted_watch_records(Some(&store));
+        let rows = store.all_watch_history_rows().unwrap();
+        assert!(
+            rows[0].ended_at.is_some(),
+            "비정상 종료로 남은 기록이 '시청 중'으로 남았다"
+        );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn viewer_watch_records_are_checkpointed_while_watching() {
+        let store = DataStore::open_in_memory().unwrap();
+        let started = store
+            .start_watch_record("c1", "채널", None, None, chrono::Utc::now())
+            .unwrap();
+        spawn_watch_checkpoints(store.clone(), "c1".into(), started);
+        let before = store.all_watch_history_rows().unwrap()[0].updated_at;
+        tokio::time::sleep(WATCH_CHECKPOINT_INTERVAL + std::time::Duration::from_secs(1)).await;
+        for _ in 0..50 {
+            tokio::task::yield_now().await;
+            if store.all_watch_history_rows().unwrap()[0].updated_at != before {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_ne!(
+            store.all_watch_history_rows().unwrap()[0].updated_at,
+            before,
+            "보는 동안 체크포인트가 저장되지 않았다"
+        );
+    }
+
+    #[test]
+    fn restoring_a_backup_keeps_the_newer_mirrored_settings() {
+        use cview_persistence::store_backup::{BackupReason, StoreBackup};
+        let dir = tempfile::tempdir().unwrap();
+        let path = store_path(dir.path());
+        let backup = StoreBackup::new(&path);
+        {
+            let store = open_store(dir.path()).unwrap();
+            store
+                .save_setting("general", &serde_json::json!({ "v": "A" }))
+                .unwrap();
+            assert!(store
+                .backup_online(&backup, BackupReason::Manual, "test", None)
+                .is_some());
+            // 백업 뒤 설정을 B 로 — 스토어와 미러 둘 다.
+            store
+                .save_setting("general", &serde_json::json!({ "v": "B" }))
+                .unwrap();
+        }
+        let mut mirror = std::collections::HashMap::new();
+        mirror.insert("general".to_string(), br#"{"v":"B"}"#.to_vec());
+        assert!(cview_persistence::SettingsSnapshotFile::write(
+            &mirror,
+            1.0,
+            Some(&dir.path().join(SETTINGS_SNAPSHOT_FILE_NAME))
+        ));
+        std::fs::write(
+            &path,
+            b"this is not a sqlite database at all, just garbage bytes",
+        )
+        .unwrap();
+        for side in ["-wal", "-shm"] {
+            let _ = std::fs::remove_file(path.with_file_name(format!("{STORE_FILE_NAME}{side}")));
+        }
+        let store = open_store(dir.path()).expect("백업으로 되돌려 열려야 한다");
+        let general: Option<serde_json::Value> = store.load_setting("general").unwrap();
+        assert_eq!(
+            general,
+            Some(serde_json::json!({ "v": "B" })),
+            "옛 백업의 설정이 최신 미러를 이겼다"
+        );
     }
 
     #[test]

@@ -14,6 +14,7 @@
 //! - 최종 실패(거절·자격 증명 없음)는 토큰을 버린다 — 죽은 POST 를 되풀이하지 않게.
 //! - 부팅 갱신은 일시 실패만 토큰을 쥔 채 로그인으로 끝낸다. 미분류 실패는 저장 토큰을 남기고 로그아웃.
 //! - 갱신 최종 실패 뒤 NAVER 쿠키가 있으면 쿠키 로그인으로 남는다(`Expired` 는 쿠키 접근까지 끈다).
+//! - 쿠키 없는 OAuth 세션의 일시 실패는 로그인을 유지하고 백오프 뒤 스스로 다시 갱신한다.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
@@ -580,8 +581,43 @@ impl AuthManager {
         }
         // 최종 실패 — 다음 요청이 곧바로 같은 POST 를 쏘지 못하게 백오프를 건다.
         self.note_refresh_failure(last_error.as_ref());
+        let transient = last_error
+            .as_ref()
+            .is_some_and(AuthServiceError::is_transient_refresh_failure);
+        if transient && !self.inner.cookie_manager.has_cookies() {
+            // 쿠키 없는 OAuth 세션의 일시 실패(오프라인·5xx·잠긴 키체인)는 부팅 때처럼 로그인을 유지하고
+            // 백오프 뒤 스스로 다시 갱신한다. 예전엔 `Expired` 로 바꿨는데, 앱은 로그인 상태에서만 인증 요청을
+            // 보내므로 갱신을 다시 부를 길이 없어 앱을 다시 켤 때까지 '로그인 만료'로 굳었다(만료 15분 전
+            // 자동 갱신이 실패하면 아직 쓸 수 있는 토큰을 쥔 채로도 그랬다).
+            self.schedule_refresh_retry();
+            return false;
+        }
         self.update_state(self.state_after_refresh_failure());
         false
+    }
+
+    /// 일시 실패한 갱신을 백오프가 끝나면 다시 시도한다. 로그아웃·재로그인(`begin_session`)이 거둔다.
+    fn schedule_refresh_retry(&self) {
+        let mut st = self.state();
+        if let Some(task) = st.token_refresh_task.take() {
+            task.abort();
+        }
+        let delay = st
+            .refresh_backoff_until
+            .map_or(OFFLINE_REFRESH_RETRY, |until| {
+                until.saturating_duration_since(Instant::now())
+            });
+        let weak: Weak<Inner> = Arc::downgrade(&self.inner);
+        st.token_refresh_task = Some(tokio::spawn(async move {
+            tokio::time::sleep(delay).await;
+            let Some(inner) = weak.upgrade() else {
+                return;
+            };
+            let manager = AuthManager { inner };
+            if let Some(tokens) = manager.oauth_tokens() {
+                let _ = manager.refresh(tokens, false).await;
+            }
+        }));
     }
 
     /// 다시 해도 갱신되지 않는 토큰은 버린다.

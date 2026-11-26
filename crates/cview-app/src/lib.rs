@@ -265,6 +265,7 @@ pub fn run() {
                 }),
                 &data_dir,
                 services.watch_events.clone(),
+                services.data_store.clone(),
             );
             perf_log::set_enabled(
                 &data_dir,

@@ -57,10 +57,9 @@ export const SCHEMA = [
     { d: 'player', k: 'latencyPidKd', label: 'PID Kd', type: 'number', step: 0.01, adv: true },
     { d: 'player', k: 'bufferDuration', label: '버퍼 길이(초)', type: 'range', min: 1, max: 10, step: 0.5, adv: true },
   ]],
-  ['watch', '라이브 되감기 · 실험', [
-    { d: 'player', k: 'liveRewindEnabled', label: '라이브 되감기', help: '방송을 뒤로 돌려 볼 수 있게 최근 구간을 기억합니다', type: 'toggle' },
-    { d: 'player', k: 'liveRewindWindowMinutes', label: '되감기 범위(분)', type: 'range', min: 5, max: 180, step: 5 },
-    { d: 'player', k: 'liveRewindDiskBudgetMB', label: '되감기 디스크 한도(MB)', type: 'range', min: 512, max: 20480, step: 512 },
+  ['watch', '실험', [
+    // '라이브 되감기'(켜기·범위·디스크 한도)는 뺐다 — 앱이 로컬 타임시프트 기록기를 붙이지 않아(set_timeshift_recorder_factory
+    //  호출 없음) 아무 효과가 없었다. ←/→ 되감기는 이 설정과 상관없이 재생 목록 범위 안에서 동작한다.
     { d: 'player', k: 'experimentalServerTimeMachine', label: '서버 타임머신(실험)', type: 'toggle' },
     { d: 'player', k: 'experimentalMatchWebV2', label: '웹 지연 맞춤 v2(실험)', type: 'toggle' },
   ]],
@@ -76,7 +75,7 @@ export const SCHEMA = [
     { local: 'streamAlerts', label: '후원·구독 알림', help: '시청 화면 위에 새 후원과 구독을 잠깐 띄웁니다', type: 'toggle' },
     { d: 'player', k: 'streamAlertAnchorX', label: '알림 가로 위치', type: 'range', min: 0.1, max: 0.9, step: 0.05, pct: true },
     { d: 'player', k: 'streamAlertAnchorY', label: '알림 세로 위치', type: 'range', min: 0.02, max: 0.9, step: 0.02, pct: true },
-    { d: 'player', k: 'streamAlertScale', label: '알림 크기', type: 'range', min: 0.6, max: 1.6, step: 0.1 },
+    { d: 'player', k: 'streamAlertScale', label: '알림 크기', type: 'range', min: 0.7, max: 1.7, step: 0.1 }, // Rust 저장 범위(0.7~1.7)와 같게
     { type: 'action', action: 'reset-alert-pos', label: '알림 위치 초기화', help: '영상 위 알림은 끌어서 옮길 수 있어요(알림을 더블클릭해도 기본 위치로 돌아갑니다)', button: '기본 위치로' },
   ]],
   ['multi', '멀티라이브', [
@@ -812,13 +811,15 @@ export class SettingsPage {
     };
     // 다른 곳을 누르면 취소(이 버튼을 다시 누르는 것은 위의 토글이 처리한다).
     const onDown = (e) => { if (!btn.contains(e.target)) { done(); this.render(); } };
+    // 키는 window 캡처로 받는다 — 문서 캡처에 먼저 걸린 ⌘K(명령 팔레트) 처리기보다 앞서야 한다. 예전엔 ⌘K 를 누르면
+    // 예약 키 안내 대신 팔레트가 열리고, 팔레트에 친 첫 글자가 이 단축키로 저장됐다.
     const done = () => {
-      document.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('keydown', onKey, true);
       document.removeEventListener('pointerdown', onDown, true);
       this.cancelCapture = null;
     };
     this.cancelCapture = () => { done(); this.render(); };
-    document.addEventListener('keydown', onKey, true);
+    window.addEventListener('keydown', onKey, true);
     document.addEventListener('pointerdown', onDown, true);
   }
 

@@ -15,6 +15,14 @@ import { MultiLiveAddDrawer } from './ml-add-drawer.js';
 import { armConfirm } from './confirm.js';
 import { verifiedBadge } from './verified-badge.js';
 
+// 창마다 세션을 따로 — 메인 창 멀티채팅 화면과 멀티채팅 창이 같은 'mc:<채널>' 을 쓰면, 세션 주인이 마지막에 연결한 창으로
+// 바뀌어 그 창을 닫을 때 다른 쪽 채팅까지 끊겼고(windows.rs drop_chat_sessions_of_window), 한쪽에서 채널을 닫아도 같이 끊겼다.
+const AUX_WINDOW = new URLSearchParams(location.search).get('w');
+/** 멀티채팅 채널의 채팅 세션 키 — 보조 창이면 창 이름을 붙인다. 순수 함수. */
+export function multichatSession(channelId, auxWindow = AUX_WINDOW) {
+  return auxWindow ? `mc-${auxWindow}:${channelId}` : `mc:${channelId}`;
+}
+
 export const multiChatIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H8l-4 3V5Z"/><path d="M18 8h1a2 2 0 0 1 2 2v10l-3.5-2.6H11a2 2 0 0 1-2-2V15h5a4 4 0 0 0 4-4V8Z" opacity=".6"/></svg>';
 const COLORS = ['#00c77f', '#5ba3ff', '#ff8a3d', '#c77dff', '#ff5d8f', '#2ec4b6', '#f4c430', '#8d99ae'];
 const MAX_CHANNELS = 8;
@@ -201,7 +209,8 @@ export class MultiChatPage {
     listen('chat://session-event', (p) => this.onSessionEvent(p));
     document.addEventListener('keydown', (e) => {
       if (this.root.hidden) return;
-      if (e.metaKey && e.altKey && e.key.toLowerCase() === 'f') { e.preventDefault(); this.search.focus(); }
+      // ⌥F 는 macOS 에서 글자가 ƒ 로 바뀐다 — 자리(e.code)로 본다.
+      if (e.metaKey && e.altKey && (e.code === 'KeyF' || e.key.toLowerCase() === 'f')) { e.preventDefault(); this.search.focus(); }
       if (e.ctrlKey && e.key === 'Tab' && this.channels.length) {
         e.preventDefault();
         const i = this.channels.findIndex((c) => c.channelId === this.active);
@@ -267,7 +276,7 @@ export class MultiChatPage {
     this.panesBox.append(el);
     el.querySelector('.mc-name').textContent = live.channelName || channelId;
     el.querySelector('.mc-name').insertAdjacentHTML('afterend', verifiedBadge(live, 'sm'));
-    const session = `mc:${channelId}`;
+    const session = multichatSession(channelId);
     const panel = new ChatPanel(el.querySelector('.chat'), { isLoggedIn: this.isLoggedIn, session });
     // 패널 머리 버튼들이 생긴 뒤 맨 끝에 닫기를 둔다.
     // 도구 아이콘은 ChatPanel 이 '⋯' 서랍에 접어 두므로, 닫기만 그 뒤에 둔다.
