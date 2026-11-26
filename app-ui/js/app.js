@@ -32,6 +32,7 @@ import { loadShortcuts } from './shortcuts.js';
 import { InsightPanel } from './insight-panel.js';
 import { installA11y } from './a11y.js';
 import { splashStep, hideSplash, showWelcome } from './onboarding.js';
+import { needsNotice, showNotice, showNoticeReview, showLicenses, openProjectLink, noticeOpen } from './notice.js';
 import { HUBS, saveWorkspace, loadWorkspace, installSidebarExtras, hubFlash } from './workspace.js';
 import { CategoriesPage, categoryIcon } from './categories.js';
 import { CommandPalette } from './palette.js';
@@ -832,6 +833,11 @@ const MENU_ACTIONS = {
     else toast('재생 중인 방송이 없습니다');
   },
   welcome: () => showWelcome({ force: true, onLogin: login }),
+  // 도움말 › 프로젝트 — 이용 고지·오픈소스 라이선스는 시트, 문의는 메일 앱, 저장소는 기본 브라우저(notice.js).
+  notice: () => showNoticeReview(),
+  licenses: () => showLicenses(),
+  contact: () => openProjectLink('contact'),
+  'github-repo': () => openProjectLink('repo'),
   fullscreen: () => (viewer.isOpen ? viewer.controls.fullscreen(false) : activeWatch()?.fullscreen(false)),
   'fullscreen-chat': () => (viewer.isOpen ? viewer.controls.fullscreen(true) : activeWatch()?.fullscreen(true)),
   'close-viewer': () => (viewer.isOpen ? viewer.close() : activeWatch() && closeWatch()),
@@ -868,7 +874,8 @@ function installMenuAndShortcuts() {
   // 메뉴 이벤트는 모든 창에 간다 — 앞에 있는 창만 실행한다.
   listen('menu://action', (p) => {
     const run = p && MENU_ACTIONS[p.id];
-    if (run && document.hasFocus()) run();
+    // 처음 실행 고지가 떠 있는 동안은 메뉴 막대 동작도 받지 않는다(동의 전에 앱을 쓰지 않게).
+    if (run && document.hasFocus() && !noticeOpen()) run();
   });
   // 메뉴가 없는 환경(브라우저 미리보기 등)과 ⌘/ 보조.
   document.addEventListener('keydown', (e) => {
@@ -1114,6 +1121,10 @@ async function main() {
         case 'check-update':
           showUpdateCheck();
           break;
+        // 알림 영역 메뉴 › 도움말(tray.rs help_menu_action) — 오픈소스 라이선스·이용 고지 시트.
+        case 'menu':
+          if ((p.id === 'licenses' || p.id === 'notice') && !noticeOpen()) MENU_ACTIONS[p.id]();
+          break;
         default:
           break;
       }
@@ -1161,7 +1172,7 @@ async function main() {
   window.addEventListener('mouseup', (e) => { if (e.button === 3) goBack(); });
   window.addEventListener('cview:open-vod', (e) => e.detail && navigate('media', { kind: 'vod', id: e.detail.videoNo }));
   window.addEventListener('cview:open-clip', (e) => e.detail && navigate('media', { kind: 'clip', id: e.detail.clipUid }));
-  window.addEventListener('cview:menu', (e) => { const run = MENU_ACTIONS[e.detail]; if (run) run(); });
+  window.addEventListener('cview:menu', (e) => { const run = MENU_ACTIONS[e.detail]; if (run && !noticeOpen()) run(); });
   window.addEventListener('cview:play', (e) => e.detail && openChannel(e.detail.channelId));
   window.addEventListener('cview:ml-watch', (e) => e.detail && enterWatch(e.detail.sessionId));
   window.addEventListener('cview:ml-watch-close', (e) => closeWatch(e.detail || {}));
@@ -1265,6 +1276,9 @@ async function main() {
   }
   await loadHomeBehindSplash();
   hideSplash();
+  // 처음 실행(또는 고지 문구가 바뀐 뒤) — 비영리·비공식·오픈소스 고지에 동의해야 이어 간다. 동의하지 않으면 앱을 끝낸다.
+  // 환영 안내는 동의한 뒤에 뜬다(두 창이 겹치지 않게).
+  if (needsNotice(settings && settings.general)) await showNotice();
   showWelcome({ onLogin: login });
   flushSharpnessNotice(); // 선명도 이전 안내(한 번) — 시작 화면 뒤에 가려지지 않게 여기서
   // 새 버전 알림 — 메인 창에서만. 조용히 확인하고 사이드바 줄·토스트로 알린다(창·포커스는 건드리지 않음).

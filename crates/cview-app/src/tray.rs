@@ -256,9 +256,37 @@ pub fn menu_spec(m: &TrayModel) -> Vec<Entry> {
     out.push(item("tray-multilive", "멀티라이브"));
     out.push(item("tray-settings", "설정…"));
     out.push(item("tray-update", "업데이트 확인…"));
+    // 도움말 — Windows 에는 메뉴 막대가 없어 알림 영역 메뉴에서도 문의·저장소·라이선스·고지를 찾게 한다.
+    out.push(Entry::Submenu {
+        label: "도움말".into(),
+        items: help_entries(),
+    });
     out.push(Entry::Separator);
     out.push(item("tray-quit", "CView 종료"));
     out
+}
+
+/// 알림 영역 메뉴의 도움말 묶음 — 앱 메뉴 막대 도움말(menu.rs HELP)의 프로젝트 항목과 같은 이름. 순수 함수.
+fn help_entries() -> Vec<Entry> {
+    vec![
+        item(
+            "tray-contact",
+            format!("문의하기 ({})", crate::menu::CONTACT_EMAIL),
+        ),
+        item("tray-repo", "GitHub 저장소"),
+        item("tray-licenses", "오픈소스 라이선스…"),
+        Entry::Separator,
+        item("tray-notice", "이용 고지 다시 보기…"),
+    ]
+}
+
+/// 알림 영역 도움말 항목 → 화면 메뉴 동작 id(app.js MENU_ACTIONS). 메일·저장소는 화면 없이 바로 연다. 순수 함수.
+fn help_menu_action(id: &str) -> Option<&'static str> {
+    match id {
+        "tray-licenses" => Some("licenses"),
+        "tray-notice" => Some("notice"),
+        _ => None,
+    }
 }
 
 /// 아이콘 툴팁. 순수 함수.
@@ -798,7 +826,27 @@ fn on_menu<R: Runtime>(app: &AppHandle<R>, id: &str) {
         "tray-quit" => {
             request_quit(app);
         }
-        _ => {}
+        "tray-contact" => {
+            let url = format!("mailto:{}", crate::menu::CONTACT_EMAIL);
+            if let Err(e) = crate::commands::content::open_url(&url) {
+                tracing::warn!("문의 메일을 열지 못함: {}", e.0);
+            }
+        }
+        "tray-repo" => {
+            if let Err(e) = crate::commands::content::open_url(crate::menu::REPO_URL) {
+                tracing::warn!("저장소를 열지 못함: {}", e.0);
+            }
+        }
+        other => {
+            if let Some(action) = help_menu_action(other) {
+                crate::tray_popover::hide(app);
+                show_main(app);
+                crate::tray_popover::send_main_control(
+                    app,
+                    serde_json::json!({ "kind": "menu", "id": action }),
+                );
+            }
+        }
     }
 }
 
@@ -981,6 +1029,35 @@ mod tests {
     }
 
     #[test]
+    fn tray_help_submenu_matches_app_help_menu() {
+        let spec = menu_spec(&TrayModel::default());
+        let Some(Entry::Submenu { label, items }) = spec
+            .iter()
+            .find(|e| matches!(e, Entry::Submenu { label, .. } if label == "도움말"))
+        else {
+            panic!("도움말 하위 메뉴 없음");
+        };
+        assert_eq!(label, "도움말");
+        assert_eq!(
+            ids(items),
+            [
+                "tray-contact",
+                "tray-repo",
+                "tray-licenses",
+                "-",
+                "tray-notice"
+            ]
+        );
+        assert!(items.contains(&item("tray-contact", "문의하기 (do@dododo.app)")));
+        // 시트를 여는 항목은 화면 메뉴 동작으로, 메일·저장소는 화면 없이 바로 연다.
+        assert_eq!(help_menu_action("tray-licenses"), Some("licenses"));
+        assert_eq!(help_menu_action("tray-notice"), Some("notice"));
+        assert_eq!(help_menu_action("tray-contact"), None);
+        assert_eq!(help_menu_action("tray-repo"), None);
+        assert!(crate::menu::is_known("licenses") && crate::menu::is_known("notice"));
+    }
+
+    #[test]
     fn logged_out_menu_keeps_controls() {
         let spec = menu_spec(&TrayModel::default());
         assert_eq!(
@@ -992,6 +1069,7 @@ mod tests {
                 "tray-multilive",
                 "tray-settings",
                 "tray-update",
+                "[도움말:5]",
                 "-",
                 "tray-quit"
             ]
@@ -1070,7 +1148,7 @@ mod tests {
         assert_eq!(got[0], "#팔로잉 · 방송 중 3");
         assert_eq!(got[4], "-");
         assert!(
-            !got.iter().any(|s| s.starts_with('[')),
+            !got.iter().any(|s| s.starts_with("[더 보기")),
             "넘치지 않으면 더 보기 없음"
         );
 

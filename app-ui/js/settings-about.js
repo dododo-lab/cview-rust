@@ -6,6 +6,7 @@ import { esc, toast } from './dom.js';
 import { IS_WINDOWS, kbd, REVEAL_LABEL } from './platform.js';
 import { showSheet } from './app-sheets.js';
 import { currentAppInfo, versionText, dateText } from './update-check.js';
+import { CONTACT_EMAIL, LICENSE_NAME, openProjectLink, showLicenses, showNoticeReview } from './notice.js';
 
 // 공개된 주소만 — 웹사이트(내려받기)는 README, 피드백은 저장소 이슈 양식(.github/ISSUE_TEMPLATE).
 export const ABOUT_LINKS = {
@@ -34,7 +35,7 @@ export function aboutHtml({ autoCheckHtml = '', updateText = '', searching = fal
         <button type="button" class="about-link" data-ext-url="${ABOUT_LINKS.releases}" title="브라우저에서 GitHub 릴리스 열기">변경 내역</button>
         <button type="button" class="about-link" data-ext-url="${ABOUT_LINKS.source}" title="브라우저에서 GitHub 저장소 열기 (GPL-3.0)">소스 코드</button>
       </nav>
-      <span class="about-credit">개인이 만든 비공식 앱 · NAVER·치지직과 관련 없음</span>
+      <span class="about-credit">개인이 비영리로 만든 오픈소스(GPL-3.0) 비공식 앱 · NAVER·치지직과 관련 없음</span>
     </footer>`;
   return `${hero}
     <section class="settings-group" data-g="about"><h2>업데이트</h2>
@@ -53,6 +54,10 @@ export function aboutHtml({ autoCheckHtml = '', updateText = '', searching = fal
         <span class="setting-label">피드백 보내기<small>버그 제보나 제안을 GitHub 이슈로 남겨 주세요. GitHub 계정이 필요합니다.</small></span>
         <button class="btn" data-about="feedback" aria-label="피드백 작성 — GitHub 이슈 열기">작성…</button>
       </div>
+      <div class="setting" data-search="문의하기 메일 이메일 연락 do@dododo.app">
+        <span class="setting-label">문의하기<small>${CONTACT_EMAIL} 로 메일을 보냅니다. 버그 제보는 위의 피드백(GitHub 이슈)이 더 빠릅니다.</small></span>
+        <button class="btn" data-about="contact" aria-label="문의 메일 쓰기 — ${CONTACT_EMAIL}">메일 쓰기</button>
+      </div>
       <div class="setting" data-search="진단 보고서 복사 로그 버그 문제">
         <span class="setting-label">진단 보고서<small>앱 버전·운영체제·주요 설정·최근 디버그 로그를 복사합니다. ${REPORT_PRIVACY}. 이슈에 붙여 넣어 보내 주세요.</small></span>
         <span class="shortcut-edit setting-actions"><button class="link-btn" data-about="report-view" aria-haspopup="dialog" aria-label="진단 보고서 내용 보기">내용 보기</button><button class="btn" data-about="report-copy" aria-label="진단 보고서 복사">보고서 복사</button></span>
@@ -60,6 +65,16 @@ export function aboutHtml({ autoCheckHtml = '', updateText = '', searching = fal
       <div class="setting" data-search="사용 데이터 폴더 앱 데이터 저장 위치 finder 탐색기">
         <span class="setting-label">사용 데이터<small>설정·시청 기록·썸네일 캐시·디버그 로그가 담긴 앱 데이터 폴더입니다. 이 컴퓨터에만 저장됩니다.</small></span>
         <button class="btn" data-about="data" aria-label="사용 데이터 폴더를 ${REVEAL}">${REVEAL}</button>
+      </div>
+    </section>
+    <section class="settings-group" data-g="about"><h2>오픈소스</h2>
+      <div class="setting" data-search="오픈소스 라이선스 GPL 소스 코드 저작권 hls.js tauri">
+        <span class="setting-label">오픈소스 라이선스<small>CView는 ${LICENSE_NAME} 라이선스로 소스를 공개한 오픈소스 프로젝트입니다. 함께 쓰는 오픈소스의 라이선스도 봅니다.</small></span>
+        <button class="btn" data-about="licenses" aria-haspopup="dialog" aria-label="오픈소스 라이선스 보기">보기…</button>
+      </div>
+      <div class="setting" data-search="이용 고지 안내 비영리 비공식 동의 약관 치지직 네이버">
+        <span class="setting-label">이용 고지<small>처음 실행할 때 동의한 안내(비영리·비공식·오픈소스·보증 없음)를 다시 봅니다.</small></span>
+        <button class="btn" data-about="notice" aria-haspopup="dialog" aria-label="이용 고지 다시 보기">보기…</button>
       </div>
     </section>
     ${foot}`;
@@ -90,6 +105,9 @@ export function onAboutClick(e) {
   if (b.getAttribute('aria-disabled') === 'true') return true;
   const act = b.dataset.about;
   if (act === 'notes') showReleaseNotes();
+  else if (act === 'contact') openProjectLink('contact');
+  else if (act === 'licenses') showLicenses();
+  else if (act === 'notice') showNoticeReview();
   else if (act === 'feedback') api.openExternal(ABOUT_LINKS.feedback).catch((er) => toast(er.message || String(er)));
   else if (act === 'report-copy') copyReport(b);
   else if (act === 'report-view') viewReport(b);

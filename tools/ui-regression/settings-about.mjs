@@ -8,6 +8,7 @@
 // SA04 '0.1.103의 새로운 기능' [보기…] — 릴리스 노트 시트(제목·게시일·노트·GitHub에서 보기), 실패면 다시 시도, 노트 없음 안내.
 //      Esc 로 닫으면 초점이 [보기…]로 돌아온다. 노트를 자체 서버에서 받았으면 단추 이름이 '업데이트 서버에서 보기'.
 // SA05 피드백·링크 — [작성…]은 저장소 이슈 양식, 아래 띠 링크(웹사이트·변경 내역·소스 코드)는 기본 브라우저로(웹뷰는 그대로).
+//      메일 주소는 공개 문의처 do@dododo.app 하나만.
 //      링크는 href 없는 단추라 가운데 클릭·문맥 메뉴 '링크 열기'로 앱 안에서 열릴 길이 없다.
 //      지어낸 메일 주소·제작자 이름·개인정보 처리방침 링크가 없다.
 // SA06 진단 보고서 — 설명에 빼는 개인 정보(쿠키·토큰·계정·채팅·팔로잉)를 적고, [보고서 복사]는 백엔드 글을 그대로 클립보드에.
@@ -354,7 +355,8 @@ await check('SA05 피드백·아래 띠 링크 — 공개된 주소를 기본 �
   assert.equal(page.url(), before, '웹뷰는 다른 주소로 가지 않는다');
   assert.equal(await page.getAttribute(`${S} .about-links`, 'aria-label'), 'CView 링크');
   const text = await page.textContent(`${S} .settings-groups.about-tab`);
-  assert.doesNotMatch(text, /@[\w-]+\.\w/, '메일 주소를 지어내지 않는다');
+  // 메일 주소는 공개한 문의처(do@dododo.app, 도움말 › 문의하기)만 — 다른 주소를 지어내지 않는다.
+  assert.deepEqual([...new Set(text.match(/[\w.+-]+@[\w-]+\.[\w.]+/g) || [])], ['do@dododo.app'], '문의 메일만');
   assert.doesNotMatch(text, /제작|개인정보 처리방침|개인정보 보호/, '확인 안 된 제작자·정책 링크 없음');
   assert.match(text, /비공식/);
   await ctx.close();

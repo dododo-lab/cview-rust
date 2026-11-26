@@ -481,9 +481,22 @@ pub struct GeneralSettings {
     pub minimize_to_tray: bool,
     /// (macOS) 메뉴 막대로 숨겨 있는 동안 Dock 아이콘도 숨기기 — 창을 다시 열면 Dock 아이콘이 돌아온다.
     pub hide_dock_in_tray: bool,
+    /// 처음 실행 고지(비영리·비공식·오픈소스 안내)에 동의한 문구 버전. 0 이면 아직 동의하지 않았다.
+    /// 화면(notice.js `NOTICE_VERSION`)보다 낮으면 실행할 때 다시 묻는다. 설정 초기화·가져오기로는 바뀌지 않는다.
+    pub notice_accepted_version: u32,
+    /// 고지에 동의한 때(유닉스 밀리초). 동의하지 않았으면 없음.
+    pub notice_accepted_at: Option<i64>,
 }
 
 impl GeneralSettings {
+    /// 고지 동의 기록만 `from` 의 값으로 둔다 — 설정 초기화·가져오기가 이 설치의 동의를 지우거나
+    /// 다른 컴퓨터의 백업으로 덮어쓰지 않게.
+    pub fn with_notice_from(mut self, from: &GeneralSettings) -> Self {
+        self.notice_accepted_version = from.notice_accepted_version;
+        self.notice_accepted_at = from.notice_accepted_at;
+        self
+    }
+
     /// 창을 닫거나 최소화할 때 메뉴 막대·알림 영역으로 숨기는 경우가 있는가.
     pub fn hides_to_tray(&self) -> bool {
         self.close_to_tray || self.minimize_to_tray
@@ -507,6 +520,8 @@ impl Default for GeneralSettings {
             close_to_tray: false,
             minimize_to_tray: false,
             hide_dock_in_tray: false,
+            notice_accepted_version: 0,
+            notice_accepted_at: None,
         }
     }
 }

@@ -46,11 +46,26 @@ export function showShortcuts() {
 export async function showAbout() {
   let info = null;
   try { info = await api.appInfo(); } catch { /* 앱 밖 */ }
-  showSheet(`<div class="about"><span class="brand-mark big"><img class="app-logo logo-light" src="img/logo-light.png" alt=""><img class="app-logo logo-dark" src="img/logo-dark.png" alt=""></span><h2>CView</h2>
+  const scrim = showSheet(`<div class="about"><span class="brand-mark big"><img class="app-logo logo-light" src="img/logo-light.png" alt=""><img class="app-logo logo-dark" src="img/logo-dark.png" alt=""></span><h2>CView</h2>
     <p>치지직 라이브·채팅 데스크톱 앱 (Rust/Tauri 포팅판)</p>
     <p class="muted">버전 ${info ? versionText(info) : '-'} · ${info ? `${info.os} ${info.arch}` : ''}</p>
-    <p class="muted small">재생: hls.js (Apache-2.0) · 셸: Tauri (MIT/Apache-2.0)</p></div>`);
+    <p class="about-oss">개인이 비영리로 만든 오픈소스 프로젝트입니다. NAVER·치지직과 관련 없는 비공식 앱입니다.</p>
+    <p class="muted small">라이선스: GNU GPL v3.0 (GPL-3.0-only) · 재생: hls.js (Apache-2.0) · 셸: Tauri (MIT/Apache-2.0)</p>
+    <nav class="about-sheet-links" aria-label="CView 프로젝트">${ABOUT_MENU.map(([id, label]) => `<button type="button" class="link-btn" data-about-menu="${id}">${label}</button>`).join('')}</nav></div>`);
+  // 도움말 메뉴와 같은 동작(app.js MENU_ACTIONS) — 문의는 메일 앱, 저장소는 브라우저, 라이선스·고지는 시트.
+  scrim.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-about-menu]');
+    if (b) window.dispatchEvent(new CustomEvent('cview:menu', { detail: b.dataset.aboutMenu }));
+  });
 }
+
+/** 정보 시트 아래 링크 — 도움말 메뉴(menu.rs HELP)의 프로젝트 항목과 같은 id·이름. */
+const ABOUT_MENU = [
+  ['contact', '문의하기 (do@dododo.app)'],
+  ['github-repo', 'GitHub 저장소'],
+  ['licenses', '오픈소스 라이선스'],
+  ['notice', '이용 고지'],
+];
 
 /** 앱 메뉴 "업데이트 확인…" — 시트를 먼저 띄우고 결과로 채운다. 새 버전이면 "업데이트 설치" 로 받아 바꾸고 다시 연다. */
 export async function showUpdateCheck() {

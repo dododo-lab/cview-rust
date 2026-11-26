@@ -140,7 +140,12 @@ fn apply_domain_on(
     let s = &services.settings;
     match domain {
         "player" => s.set_player(patched::<PlayerSettings>(base, || s.player(), patch)?),
-        "general" => s.set_general(patched::<GeneralSettings>(base, || s.general(), patch)?),
+        // 고지 동의 기록은 notice_accept 만 바꾼다 — 설정 저장·가져오기가 지우거나 덮어쓰지 않는다.
+        "general" => {
+            let current = s.general();
+            let next = patched::<GeneralSettings>(base, || current.clone(), patch)?;
+            s.set_general(next.with_notice_from(&current));
+        }
         "appearance" => s.set_appearance(patched::<AppearanceSettings>(
             base,
             || s.appearance(),
@@ -250,6 +255,34 @@ pub async fn settings_update(
     apply_domain(&services, &domain, patch)?;
     after_domain_change(&app, &services, &shell, &domain);
     Ok(snapshot(&services))
+}
+
+/// 처음 실행 고지에 동의했다 — 동의한 문구 버전과 때를 일반 설정에 남긴다(낮은 버전으로는 되돌리지 않는다).
+/// 화면은 다음 실행부터 `settings_get` 의 `general.noticeAcceptedVersion` 으로 다시 물을지 정한다.
+#[tauri::command]
+pub async fn notice_accept(
+    services: State<'_, AppServices>,
+    version: u32,
+) -> CmdResult<SettingsDto> {
+    if version == 0 {
+        return Err(CommandError("고지 버전이 올바르지 않습니다".into()));
+    }
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or_default();
+    services
+        .settings
+        .update_general(|g| record_notice(g, version, now));
+    Ok(snapshot(&services))
+}
+
+/// 동의 기록 — 이미 더 높은 버전에 동의했으면 그대로 둔다. 순수 함수.
+fn record_notice(g: &mut GeneralSettings, version: u32, now_ms: i64) {
+    if version >= g.notice_accepted_version {
+        g.notice_accepted_version = version;
+        g.notice_accepted_at = Some(now_ms);
+    }
 }
 
 /// 화면 크기를 걸 창인가 — 네이버 로그인 창(외부 nid.naver.com)과 고정 크기 메뉴 막대 팝오버는 제외한다.
@@ -469,7 +502,7 @@ pub async fn settings_reset(
     let reset = |d: &str| match d {
         // 선명도는 명시적 끔 — 기본값(None)이면 화면이 예전 값에서 다시 이전해 초기화가 먹지 않는다.
         "player" => s.set_player(PlayerSettings::reset_defaults()),
-        "general" => s.set_general(GeneralSettings::default()),
+        "general" => s.set_general(GeneralSettings::default().with_notice_from(&s.general())),
         "appearance" => s.set_appearance(AppearanceSettings::default()),
         "chat" => s.set_chat(Value::Object(Default::default())),
         "network" => s.set_network(NetworkSettings::default()),
@@ -518,6 +551,55 @@ mod tests {
             patched(PatchBase::Defaults, || current.clone(), backup).unwrap();
         assert_eq!(restored.equalizer_preset, None);
         assert_eq!(restored.aspect_ratio, None);
+    }
+
+    #[test]
+    fn notice_record_keeps_the_highest_version() {
+        let mut g = GeneralSettings::default();
+        assert_eq!(g.notice_accepted_version, 0);
+        assert_eq!(g.notice_accepted_at, None);
+        record_notice(&mut g, 1, 1_000);
+        assert_eq!(
+            (g.notice_accepted_version, g.notice_accepted_at),
+            (1, Some(1_000))
+        );
+        record_notice(&mut g, 2, 2_000);
+        assert_eq!(
+            (g.notice_accepted_version, g.notice_accepted_at),
+            (2, Some(2_000))
+        );
+        // 옛 화면이 낮은 버전으로 다시 동의해도 새 동의를 지우지 않는다.
+        record_notice(&mut g, 1, 3_000);
+        assert_eq!(
+            (g.notice_accepted_version, g.notice_accepted_at),
+            (2, Some(2_000))
+        );
+    }
+
+    #[test]
+    fn settings_patch_and_import_never_touch_notice_consent() {
+        let current = GeneralSettings {
+            notice_accepted_version: 1,
+            notice_accepted_at: Some(5),
+            ..GeneralSettings::default()
+        };
+        // 화면 저장(Current)·백업 가져오기(Defaults) 모두 동의 기록은 지금 값을 둔다.
+        for base in [PatchBase::Current, PatchBase::Defaults] {
+            let patch = serde_json::json!({ "noticeAcceptedVersion": 0, "noticeAcceptedAt": null, "alwaysOnTop": true });
+            let next = patched::<GeneralSettings>(base, || current.clone(), patch)
+                .unwrap()
+                .with_notice_from(&current);
+            assert!(next.always_on_top);
+            assert_eq!(next.notice_accepted_version, 1);
+            assert_eq!(next.notice_accepted_at, Some(5));
+        }
+        // 초기화도 마찬가지.
+        let reset = GeneralSettings::default().with_notice_from(&current);
+        assert_eq!(reset.notice_accepted_version, 1);
+        // 화면은 필드가 늘 있다고 보고 판단한다(없으면 옛 백엔드로 보고 묻지 않는다) — 직렬화에 꼭 들어간다.
+        let v = serde_json::to_value(GeneralSettings::default()).unwrap();
+        assert_eq!(v["noticeAcceptedVersion"], serde_json::json!(0));
+        assert!(v.get("noticeAcceptedAt").is_some());
     }
 
     #[test]

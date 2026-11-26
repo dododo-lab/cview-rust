@@ -108,10 +108,21 @@ const WINDOWS: &[Item] = &[
     ("window-stats", "통계 창", Some("CmdOrCtrl+Shift+T")),
 ];
 
-/// 도움말 — 사용법 안내 / 문제 해결.
+/// 문의 메일 주소 — 도움말 › 문의하기, 알림 영역 메뉴, 화면의 정보 시트(notice.js `CONTACT_EMAIL`)와 같다.
+pub const CONTACT_EMAIL: &str = "do@dododo.app";
+/// 공개 저장소 — 소스 코드(GPL-3.0-only).
+pub const REPO_URL: &str = "https://github.com/dododo-lab/cview-rust";
+
+/// 도움말 — 사용법 안내 / 프로젝트(문의·저장소·라이선스) / 문제 해결.
+/// 화면(app.js MENU_ACTIONS)이 같은 id 로 연다 — `contact` 는 mailto, `github-repo` 는 브라우저, 나머지는 시트.
 const HELP: &[Item] = &[
     ("shortcuts", "키보드 단축키", Some("CmdOrCtrl+/")),
     ("welcome", "처음 안내 다시 보기", None),
+    ("notice", "이용 고지 다시 보기…", None),
+    SEP,
+    ("contact", "문의하기 (do@dododo.app)", None),
+    ("github-repo", "GitHub 저장소", None),
+    ("licenses", "오픈소스 라이선스…", None),
     SEP,
     ("report-issue", "문제 보고…", None),
     ("open-logs", "데이터 폴더 열기", None),
@@ -412,6 +423,47 @@ mod tests {
                 assert!(seen.insert(*a), "중복 단축키 {a}");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod help_tests {
+    use super::*;
+
+    fn help_ids() -> Vec<&'static str> {
+        HELP.iter().map(|(id, _, _)| *id).collect()
+    }
+
+    #[test]
+    fn help_menu_has_project_items() {
+        let ids = help_ids();
+        for id in ["contact", "github-repo", "licenses", "notice"] {
+            assert!(ids.contains(&id), "도움말에 {id} 없음");
+            assert!(is_known(id), "{id} 가 화면으로 가지 않음");
+        }
+        // 문의·저장소·라이선스는 한 묶음(앞뒤 구분선) — 문제 보고 묶음과 섞이지 않는다.
+        let at = |id: &str| ids.iter().position(|x| *x == id).unwrap();
+        assert_eq!(ids[at("contact") - 1], "");
+        assert_eq!(at("github-repo"), at("contact") + 1);
+        assert_eq!(at("licenses"), at("contact") + 2);
+        assert_eq!(ids[at("licenses") + 1], "");
+        // 고지 다시 보기는 사용법 안내 묶음에.
+        assert_eq!(at("notice"), at("welcome") + 1);
+    }
+
+    #[test]
+    fn contact_label_shows_the_address() {
+        let label = HELP.iter().find(|(id, _, _)| *id == "contact").unwrap().1;
+        assert!(label.contains(CONTACT_EMAIL), "{label}");
+        assert!(label.starts_with("문의하기"));
+        // 시트를 여는 항목만 '…'(macOS 관례) — 메일 앱·브라우저로 바로 가는 항목은 붙이지 않는다.
+        for (id, label, _) in HELP {
+            let opens_sheet = matches!(*id, "notice" | "licenses" | "report-issue");
+            if !id.is_empty() && matches!(*id, "contact" | "github-repo" | "notice" | "licenses") {
+                assert_eq!(label.ends_with('…'), opens_sheet, "{id}: {label}");
+            }
+        }
+        assert_eq!(REPO_URL, "https://github.com/dododo-lab/cview-rust");
     }
 }
 

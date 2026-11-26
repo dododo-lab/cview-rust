@@ -3179,6 +3179,33 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .welcome-dots button:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 0; }
 .welcome .sheet-actions { width: 100%; justify-content: center; }
 
+/* 처음 실행 고지·이용 고지 다시 보기·오픈소스 라이선스(notice.js) — 길어지면 본문만 스크롤하고 단추 줄은 보인다 */
+.sheet.notice { width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); display: flex; flex-direction: column; gap: var(--sp-sm); }
+.notice h2 { margin: 0; }
+.notice-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 10px; }
+.notice-lead { margin: 0; font-weight: 700; color: var(--text-primary); line-height: 1.5; word-break: keep-all; }
+.notice-list { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.notice-list > div { padding: 8px 12px; border-radius: var(--radius-md); background: var(--surface-base); border: 1px solid var(--border-subtle); }
+.notice-list dt { font-size: var(--fs-caption); font-weight: 700; color: var(--text-primary); }
+.notice-list dd { margin: 2px 0 0; font-size: var(--fs-caption); color: var(--text-secondary); line-height: 1.5; word-break: keep-all; overflow-wrap: anywhere; }
+.notice-contact, .notice-ask, .licenses-links { margin: 0; font-size: var(--fs-caption); color: var(--text-secondary); word-break: keep-all; }
+.notice-ask { color: var(--text-primary); }
+.notice-contact .link-btn, .licenses-links .link-btn, .about-sheet-links .link-btn { padding: 2px 2px; color: var(--primary-text); font-weight: 600; }
+:is(.notice, .licenses-sheet, .about-sheet-links) .link-btn:focus-visible { outline: 2px solid var(--primary-text); outline-offset: 1px; }
+.notice-status { margin: 0; }
+.sheet.notice-sheet, .sheet.licenses { width: min(560px, calc(100vw - 32px)); }
+.notice-review { display: flex; flex-direction: column; gap: var(--sp-sm); }
+.licenses-sheet { display: flex; flex-direction: column; gap: 8px; }
+.licenses-sheet p { margin: 0; color: var(--text-secondary); line-height: 1.55; word-break: keep-all; }
+.licenses-sheet h3 { margin: 6px 0 0; font-size: var(--fs-body); }
+.licenses-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.licenses-list li { padding: 8px 12px; border-radius: var(--radius-md); background: var(--surface-base); border: 1px solid var(--border-subtle); }
+.licenses-name { font-weight: 700; color: var(--text-primary); }
+.licenses-license { color: var(--primary-text); font-size: var(--fs-caption); font-weight: 600; }
+.licenses-list small { display: block; margin-top: 2px; color: var(--text-secondary); font-size: var(--fs-footnote); word-break: keep-all; }
+.about-oss { word-break: keep-all; }
+.about-sheet-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 12px; margin-top: 4px; }
+
 /* ── 보조 창 (PLY-18·CHT-23·MUL-05·DAT-05) ───────── */
 :root[data-window] .sidebar, :root[data-window] .offline-banner { display: none !important; }
 :root[data-window] { --sidebar-width: 0px; }
