@@ -926,3 +926,32 @@ fn default_recording_path_sanitizes_channel_name() {
         PathBuf::from("/movies/CView/한글_Name_ㄱㅏ_x_-__2026-10-19T143005.ts")
     );
 }
+
+#[tokio::test]
+async fn write_error_stops_recording_and_allows_restart() {
+    let h = Harness::new().await;
+    h.cdn.set_all(vec![
+        ("/live/chunklist.m3u8", media(&["#EXTINF:2,", "seg_0.ts"])),
+        ("/live/seg_0.ts", body(SEG0)),
+    ]);
+    let out = h.dir.join("full.ts");
+    let url = h.cdn.url("/live/chunklist.m3u8");
+    h.service.start_recording(&url, &out).unwrap();
+    // 디스크 가득·드라이브 분리처럼 쓰기가 실패하게 — 읽기 전용 핸들로 바꿔 끼운다.
+    h.service.st().file = Some(File::open(&out).unwrap());
+    h.service.poll_once(&url).await;
+    assert!(
+        !h.service.is_recording(),
+        "쓰기 오류 뒤에도 녹화 중으로 남았다"
+    );
+    assert!(h.service.failure_reason().is_some());
+    assert_eq!(h.service.output_path().as_deref(), Some(out.as_path()));
+    // 오류로 멈춘 뒤에도 다시 시작할 수 있고, 중지하면 오류가 걷힌다.
+    let again = h.dir.join("again.ts");
+    h.service.start_recording(&url, &again).unwrap();
+    assert!(h.service.is_recording());
+    assert!(h.service.failure_reason().is_none());
+    h.service.stop_recording();
+    assert_eq!(h.service.current_state(), RecordingState::Idle);
+    let _ = std::fs::remove_dir_all(&h.dir);
+}

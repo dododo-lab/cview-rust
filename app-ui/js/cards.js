@@ -173,6 +173,12 @@ export function recentChannels() {
   }
 }
 
+/** 최근 시청 지우기 — 저장소(DB)와 함께 이 화면 쪽 목록도 비운다. 예전엔 DB 만 지워, 홈·라이브 화면의 '최근 시청'이
+ *  DB 가 비면 쓰는 이 목록으로 지운 채널을 그대로 다시 보여 줬다. */
+export function forgetRecentChannels() {
+  try { localStorage.removeItem(RECENT_KEY); } catch { /* 저장 불가 — 무시 */ }
+}
+
 export function rememberChannel({ channelId, channelName = '', channelImage = '' }) {
   if (!channelId) return;
   const entry = { channelId, channelName, channelImageUrl: safeUrl(channelImage), at: Date.now() };

@@ -364,7 +364,7 @@ async function navigate(route, params = {}, { push = true } = {}) {
   if (!pages[route]) return;
   cancelRefreshVeil(); // 새로고침 덮개는 그 화면 것 — 옮기면 바로 걷는다
   if (push && current && !(current === route && JSON.stringify(currentParams) === JSON.stringify(params))) {
-    backStack.push({ route: current, params: currentParams });
+    backStack.push({ route: current, params: liveParams() });
     if (backStack.length > BACK_MAX) backStack.shift();
   }
   current = route;
@@ -574,7 +574,7 @@ async function addToMultiLive(channelId, { quiet = false } = {}) {
   keepTransient(channelId); // 직접 넣은 채널은 다음 재생 때 빼지 않는다
   // 라이브 시청 화면의 채널이면 넘겨준다 — 시청 화면을 닫고(같은 채널 두 번 재생 없음) 볼륨을 이어받아 선택 패인으로.
   const handoff = viewer.isPlaying && viewer.channelId === channelId;
-  const muted = handoff && viewer.player.isMuted();
+  const muted = handoff && Boolean(viewer.sessionMuted);
   if (handoff) {
     // 패인은 설정의 볼륨을 기본으로 튼다 — 시청 화면 볼륨을 먼저 저장해 같은 크기로 이어받는다.
     // (예전엔 이 값을 패인 배율에도 넣어 볼륨이 제곱으로 줄었다: 30% → 9%.)
@@ -745,12 +745,19 @@ function activeChat() {
 
 // 영상이 주인공인 화면은 새로고침 덮개로 흐리지 않는다(다시 불러올 목록이 없고 영상 흐림은 무겁다).
 const NO_REFRESH_VEIL = new Set(['multilive', 'multichat', 'media', 'chat']);
+/** 지금 화면의 경로 인자 — 화면 안에서 바꾼 것(검색창에 새로 낸 검색어·고른 카테고리)을 덧씌운다. 예전엔 들어올 때의
+ *  인자만 써서 ⌘R·네트워크 재연결·'다시 시도'·뒤로 가기가 검색어와 카테고리를 처음 값으로 되돌렸다. */
+function liveParams() {
+  const page = pages[current];
+  return page && page.routeParams ? { ...currentParams, ...page.routeParams() } : currentParams;
+}
+
 /** 지금 화면을 다시 불러온다. `veil` 은 사용자가 직접 고른 새로고침(⌘R·메뉴·팔레트) — 로고 덮개(refresh-veil.js)를 띄운다. */
 function reloadCurrent({ veil = false } = {}) {
   const page = pages[current];
   // 라이브 메뉴에서 무대·시청 화면이 앞에 있으면 뒤에 숨은 목록은 다시 불러오지 않는다.
   if (!page || liveListHidden()) return undefined;
-  const run = () => (page.acceptsParams ? page.show({ ...currentParams, refresh: true }) : page.show(true));
+  const run = () => (page.acceptsParams ? page.show({ ...liveParams(), refresh: true }) : page.show(true));
   return veil && !NO_REFRESH_VEIL.has(current) ? withRefreshVeil(page.root, run) : run();
 }
 
@@ -981,7 +988,7 @@ async function main() {
       return null;
     };
     const readTrayMuted = () => {
-      if (viewer.isOpen || (viewer.isPlaying && !trayPane())) return viewer.player.isMuted();
+      if (viewer.isOpen || (viewer.isPlaying && !trayPane())) return Boolean(viewer.sessionMuted);
       const pane = trayPane();
       if (pane?.controls?.el) return !pane.controls.el.classList.contains('audible');
       if (current === 'media' && pages.media?.video) return Boolean(pages.media.video.muted || pages.media.video.volume === 0);
@@ -992,7 +999,7 @@ async function main() {
         const v = viewer.controls?.video;
         return {
           paused: v ? Boolean(v.paused) : false,
-          volume: viewer.player.isMuted() ? 0 : Math.round(Number(viewer.volume?.value ?? 100)),
+          volume: viewer.sessionMuted ? 0 : Math.round(Number(viewer.volume?.value ?? 100)),
           pip: v ? videoPip(v) : false,
         };
       }
@@ -1049,8 +1056,8 @@ async function main() {
           if (viewer.isOpen || (viewer.isPlaying && !pane)) {
             viewer.volume.value = String(val);
             viewer.player.call('setVolume', val / 100);
-            if (val > 0 && viewer.player.isMuted()) viewer.setMuted(false);
-            else if (val === 0 && !viewer.player.isMuted()) viewer.setMuted(true);
+            if (val > 0 && viewer.sessionMuted) viewer.setMuted(false);
+            else if (val === 0 && !viewer.sessionMuted) viewer.setMuted(true);
             api.playerSetVolume(val / 100).catch(() => {});
           } else if (pane?.controls) {
             const c = pane.controls;
@@ -1139,7 +1146,7 @@ async function main() {
     if (!page) return;
     // 검색처럼 입력으로 연 화면은 경로 매개변수에 검색어가 없다 — 제 retry 가 마지막 입력으로 다시 한다
     if (page.retry) page.retry();
-    else if (page.acceptsParams) page.show(currentParams);
+    else if (page.acceptsParams) page.show(liveParams());
     else page.show(true);
   });
   // 라이브 무대의 채널이 닫힌 "순간"에만 화면을 옮긴다 — 조건만 보면 목록 화면에 머물 때도(1초마다 오는 알림)

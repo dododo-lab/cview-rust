@@ -201,7 +201,8 @@ export class MultiChatPage {
     listen('chat://session-event', (p) => this.onSessionEvent(p));
     document.addEventListener('keydown', (e) => {
       if (this.root.hidden) return;
-      if (e.metaKey && e.altKey && e.key.toLowerCase() === 'f') { e.preventDefault(); this.search.focus(); }
+      // ⌥F 는 macOS 에서 글자가 ƒ 로 바뀐다 — 자리(e.code)로 본다.
+      if (e.metaKey && e.altKey && (e.code === 'KeyF' || e.key.toLowerCase() === 'f')) { e.preventDefault(); this.search.focus(); }
       if (e.ctrlKey && e.key === 'Tab' && this.channels.length) {
         e.preventDefault();
         const i = this.channels.findIndex((c) => c.channelId === this.active);

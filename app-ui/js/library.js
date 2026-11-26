@@ -4,7 +4,7 @@
 // 인기 클립(VOD-04)은 사이드바 '방송&클립' › 클립 탭으로 옮겼다(pages.js). 옛 경로 library?tab=clips 는 app.js navigate 가 그리로 보낸다.
 import { api } from './api.js';
 import { esc, safeUrl, toast, imageSrc } from './dom.js';
-import { emptyState, loadingState, errorState } from './cards.js';
+import { emptyState, loadingState, errorState, forgetRecentChannels } from './cards.js';
 import { vodCard, relativeDate, formatDuration } from './channel.js';
 import { continueCard } from './media.js';
 import { mountDownloads } from './downloads.js';
@@ -258,6 +258,7 @@ export class LibraryPage {
           try { await api.dataBackupNow(); } catch (er) { toast(`백업하지 못해 지우지 않았습니다 — ${er.message}`, 5000); return; }
         }
         await api.recentChannelsClear();
+        forgetRecentChannels();
         toast(ok.backup ? '백업한 뒤 최근 시청 기록을 지웠습니다' : '최근 시청 기록을 지웠습니다', 1800);
         this.load();
       } catch (er) { toast(er.message); } finally { a.disabled = false; }

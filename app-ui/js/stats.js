@@ -3,7 +3,7 @@
 // DAT-04 통계 화면, DSN-05 차트·랭킹 바, DAT-06 저장소 상태·정리·백업.
 import { api } from './api.js';
 import { esc, safeUrl, toast, imageSrc } from './dom.js';
-import { emptyState, loadingState, errorState } from './cards.js';
+import { emptyState, loadingState, errorState, forgetRecentChannels } from './cards.js';
 import { relativeDate } from './channel.js';
 import { syncTabs, bindTabKeys } from './a11y.js';
 import { confirmDialog } from './confirm.js';
@@ -669,6 +669,7 @@ export class StatsPage {
             }
           }
           paint(await api.dataCleanup(kind));
+          if (kind === 'recent') forgetRecentChannels();
           this.reportCache.clear();
           toast(ok.backup ? '백업한 뒤 지웠습니다' : '지웠습니다', 1800);
           return;

@@ -529,7 +529,7 @@ export class ViewerControls {
       this.togglePlay();
     } else if (e.key.toLowerCase() === 'm' && !mod) {
       this.viewer.toggleMute();
-      this.flash(this.viewer.player.isMuted() ? '음소거' : '음소거 해제');
+      this.flash(this.viewer.sessionMuted ? '음소거' : '음소거 해제');
     } else if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !mod) {
       e.preventDefault();
       range.value = String(Math.min(100, Math.max(0, Number(range.value) + (e.key === 'ArrowUp' ? 5 : -5))));

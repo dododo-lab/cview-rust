@@ -237,7 +237,13 @@ export class MediaPage {
       case 'retry': {
         const v = this.video;
         a.closest('.media-error')?.remove();
-        if (v && this.info && this.info.streamUrl) { v.src = this.info.streamUrl; v.load(); v.play().catch(() => {}); }
+        if (v && this.info && this.info.streamUrl) {
+          // 보던 자리에서 다시 — 예전엔 처음(0:00)부터 재생해, 10초 뒤 이어 보기 위치까지 처음으로 덮었다.
+          const at = Number.isFinite(v.currentTime) ? v.currentTime : 0;
+          const rate = v.playbackRate || 1;
+          if (at >= 1) v.addEventListener('loadedmetadata', () => { v.currentTime = at; v.playbackRate = rate; }, { once: true });
+          v.src = this.info.streamUrl; v.load(); v.play().catch(() => {});
+        }
         break;
       }
       case 'channel': this.onOpenChannel(a.dataset.channelId); break;

@@ -569,6 +569,11 @@ export class SearchPage {
     return undefined;
   }
 
+  /** 지금 검색어 — 검색창에서 새로 낸 검색도 ⌘R·뒤로 가기가 따르게(app.js liveParams). */
+  routeParams() {
+    return this.lastQuery ? { query: this.lastQuery } : {};
+  }
+
   /** 오류 화면의 "다시 시도"(app.js) — 경로 매개변수가 없어도 마지막으로 제출한 검색어로 다시 찾는다. */
   retry() {
     const q = this.lastQuery;

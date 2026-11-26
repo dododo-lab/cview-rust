@@ -221,7 +221,16 @@ fn after_domain_change(
                 to_value(&services.settings.general()),
             );
         }
-        "keyboard" => crate::menu::rebuild(app),
+        "keyboard" => {
+            crate::menu::rebuild(app);
+            // 모든 창(따로 연 플레이어 창 등)의 맨 글자 단축키도 바로 바꾼다 — 예전엔 메뉴 가속기만 바뀌고,
+            // 다른 창은 연 때 읽은 단축키를 그대로 써서 메뉴 동작과 맨 글자 동작이 어긋났다.
+            let _ = tauri::Emitter::emit(
+                app,
+                "settings://keyboard",
+                to_value(&services.settings.keyboard()),
+            );
+        }
         "network" => services
             .api
             .update_network_settings(&services.settings.network()),

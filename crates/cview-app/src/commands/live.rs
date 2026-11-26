@@ -66,6 +66,18 @@ pub async fn following_lives(
     }
 }
 
+/// 인기 라이브를 다시 받지 않고 그대로 내줄 수 있는 시간.
+const POPULAR_REUSE_SECS: i64 = 60;
+
+/// 받은 지 오래된 인기 목록인가. 예전엔 한 번 받으면(앱 시작 때 미리 받기) 사용자가 ⌘R 을 누를 때까지
+/// 다시 받지 않아, 자동 새로고침·화면 다시 들어오기가 시작 때 목록(끝난 방송·옛 시청자 수)을 계속 보여 줬다.
+fn popular_is_stale(
+    fetched_at: Option<chrono::DateTime<chrono::Utc>>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    fetched_at.is_some_and(|t| (now - t).num_seconds() >= POPULAR_REUSE_SECS)
+}
+
 /// 인기 라이브 (시청자 순) — app-core `AllBroadcastsViewModel` 의 첫 페이지.
 #[tauri::command]
 pub async fn popular_lives(
@@ -76,7 +88,8 @@ pub async fn popular_lives(
     let size = size.unwrap_or(POPULAR_DEFAULT_SIZE).clamp(1, 300) as usize;
     let vm = &services.popular;
     let failed = matches!(vm.read().state, LoadState::Error(_));
-    if refresh.unwrap_or(false) || failed {
+    let stale = popular_is_stale(vm.read().feed_fetched_at, chrono::Utc::now());
+    if refresh.unwrap_or(false) || failed || stale {
         vm.reload().await;
     } else {
         vm.load_initial_if_needed().await;
@@ -211,6 +224,28 @@ pub async fn live_detail(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn popular_list_is_refetched_after_the_reuse_window() {
+        let now = chrono::Utc::now();
+        assert!(
+            !popular_is_stale(None, now),
+            "아직 받지 않았으면 첫 받기 경로가 맡는다"
+        );
+        assert!(!popular_is_stale(
+            Some(now - chrono::Duration::seconds(30)),
+            now
+        ));
+        assert!(popular_is_stale(
+            Some(now - chrono::Duration::seconds(61)),
+            now
+        ));
+        assert!(popular_is_stale(
+            Some(now - chrono::Duration::hours(1)),
+            now
+        ));
+    }
+
     use super::*;
 
     #[test]

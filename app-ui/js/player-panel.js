@@ -22,6 +22,11 @@ const ADJUST = [
   ['videoGamma', '감마', 0.5, 1.5, 0.01, 1],
 ];
 
+/** ⌥⌘R(녹화) — 키 이름이 아니라 자리(e.code)로 본다. macOS 에서 ⌥ 는 글자를 바꿔(⌥R → ®) e.key 로는 맞지 않았다. */
+export function isRecordShortcut(e) {
+  return Boolean(e.metaKey && e.altKey && (e.code === 'KeyR' || e.key.toLowerCase() === 'r'));
+}
+
 export class PlayerPanel {
   /** @param {import('./viewer.js').Viewer} viewer */
   constructor(viewer) {
@@ -57,7 +62,7 @@ export class PlayerPanel {
     });
     document.addEventListener('keydown', (e) => {
       // 숨긴 시청 화면(다른 메뉴로 옮겨 재생만 이어지는 중)에서는 녹화를 켜고 끄지 않는다 — 보이지 않는 곳에서 녹화가 시작됐다.
-      if (e.metaKey && e.altKey && e.key.toLowerCase() === 'r' && viewer.isPlaying && !viewer.root.hidden) { e.preventDefault(); this.toggleRecording(); }
+      if (isRecordShortcut(e) && viewer.isPlaying && !viewer.root.hidden) { e.preventDefault(); this.toggleRecording(); }
     });
     this.player.onMessage((type, data) => this.onPlayerMessage(type, data));
     this.sharpMsg = null;
@@ -312,7 +317,14 @@ export class PlayerPanel {
       this.recTimer = setInterval(async () => {
         try {
           const s = await api.playerRecordStatus();
-          if (!s.recording) { clearInterval(this.recTimer); this.recording = null; this.setRecUi(false); return; }
+          if (!s.recording) {
+            clearInterval(this.recTimer);
+            this.recording = null;
+            this.setRecUi(false);
+            // 쓰기 오류(디스크 가득 등)로 멈췄으면 알리고 거기까지 쓴 파일을 마무리한다 — 예전엔 아무 말 없이 꺼졌다.
+            if (s.error) await this.reportRecordingFailure(s.error);
+            return;
+          }
           const sec = Math.round((Date.now() - (s.startedAt || Date.now())) / 1000);
           this.recButton.title = `녹화 중 ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')} · ${(s.bytes / 1048576).toFixed(1)}MB — 눌러서 중지`;
         } catch { /* 무시 */ }
@@ -347,6 +359,14 @@ export class PlayerPanel {
         toast(`녹화를 저장했습니다 (${mb}MB) — ${st.path}`, 6000, { label: REVEAL_LABEL, run: () => api.revealPath(st.path) });
       }
     } catch { /* 재생 정지가 녹화도 끝낸다 */ }
+  }
+
+  /** 녹화가 쓰기 오류로 멈췄을 때 — 마무리(확장자 맞추기)하고 이유와 저장된 부분을 알린다. */
+  async reportRecordingFailure(reason) {
+    let st = null;
+    try { st = await api.playerRecordStop(); } catch { /* 이유만 알린다 */ }
+    const saved = st?.path && st.bytes > 0 ? ` — 여기까지 저장됨 (${(st.bytes / 1048576).toFixed(1)}MB): ${st.path}` : '';
+    toast(`녹화가 중단됐습니다 · ${reason}${saved}`, 8000, st?.path && st.bytes > 0 ? { label: REVEAL_LABEL, run: () => api.revealPath(st.path) } : undefined);
   }
 
   setRecUi(on) {

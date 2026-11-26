@@ -65,9 +65,25 @@ struct HotEntry {
     last_modified: Option<String>,
 }
 
+/// 같은 URL 을 여러 종류로 부를 때 더 자주 바뀌는 쪽(라이브)을 따른다. 캐시 키는 URL 하나뿐이라,
+/// 통계의 작은 썸네일(정적으로 부름)이 라이브 카드와 같은 `image_405.jpg` 를 받으면 항목이 정적(7일)으로
+/// 바뀌어 홈·팔로잉 카드 썸네일이 방송 내내 첫 화면에 굳었다(응답도 하루 캐시).
+fn stricter(a: ImageKind, b: ImageKind) -> ImageKind {
+    if a == ImageKind::Live || b == ImageKind::Live {
+        ImageKind::Live
+    } else {
+        b
+    }
+}
+
 impl HotEntry {
     fn fresh(&self, now: i64) -> bool {
         now - self.fetched_at < self.kind.ttl_ms()
+    }
+    /// 이번 요청 종류까지 따져 본 항목 — 라이브가 섞이면 라이브로 다룬다.
+    fn with_requested_kind(mut self, requested: ImageKind) -> Self {
+        self.kind = stricter(self.kind, requested);
+        self
     }
     fn served(&self) -> Served {
         Served {
@@ -289,8 +305,9 @@ impl ImageService {
         let now = (self.now_ms)();
         let hot = self.hot().get(url);
         if let Some(entry) = hot {
+            let entry = entry.with_requested_kind(kind);
             if !entry.fresh(now) {
-                self.revalidate(url, kind, &entry);
+                self.revalidate(url, entry.kind, &entry);
             }
             return Ok(entry.served());
         }
@@ -307,8 +324,9 @@ impl ImageService {
             if let Some(c) = cached {
                 let entry = HotEntry::from_cached(c);
                 self.hot().put(url, entry.clone());
+                let entry = entry.with_requested_kind(kind);
                 if !entry.fresh(now) {
-                    self.revalidate(url, kind, &entry);
+                    self.revalidate(url, entry.kind, &entry);
                 }
                 return Ok(entry.served());
             }

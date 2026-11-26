@@ -302,8 +302,12 @@ export class ChannelPage {
   /** 채널별 알림 (SET-13) — 방송 시작·카테고리·제목 변경. 전역 스위치는 설정 › 일반. */
   async editNotify(anchor) {
     document.querySelector('.notify-pop')?.remove();
+    // 설정을 읽는 동안 다시 누르면 두 번째 호출만 팝업을 띄운다 — 예전엔 둘 다 붙어 팝업이 겹쳐 열렸다.
+    const seq = (this.notifySeq = (this.notifySeq || 0) + 1);
     let all = {};
     try { all = (await api.settingsGet()).channelNotifications?.settings || {}; } catch { /* 기본값 */ }
+    if (seq !== this.notifySeq || !anchor.isConnected) return;
+    document.querySelector('.notify-pop')?.remove();
     const id = this.channelId;
     const name = this.detail?.channelName || this.detail?.channel?.channelName || id;
     const cur = all[id] || { channelId: id, channelName: name, notifyOnLive: true, notifyOnCategoryChange: true, notifyOnTitleChange: true };
@@ -328,14 +332,21 @@ export class ChannelPage {
       anchor.focus({ preventScroll: true });
     });
     pop.addEventListener('change', async (e) => {
-      const k = e.target.dataset.nk;
+      const box = e.target;
+      const k = box.dataset.nk;
       if (!k) return;
-      cur[k] = e.target.checked;
+      const on = box.checked;
+      cur[k] = on;
       cur.channelName = name;
       try {
         const fresh = (await api.settingsGet()).channelNotifications?.settings || {};
         await api.settingsUpdate('channelNotifications', { settings: { ...fresh, [id]: cur } });
-      } catch (er) { toast(er.message); }
+      } catch (er) {
+        // 저장하지 못했으면 체크와 기억한 값을 되돌린다 — 예전엔 켜진 것처럼 보였지만 저장되지 않았다.
+        cur[k] = !on;
+        if (box.checked === on) box.checked = !on;
+        toast(er.message);
+      }
     });
     setTimeout(() => document.addEventListener('pointerdown', function off(ev) {
       if (!pop.contains(ev.target)) { pop.remove(); document.removeEventListener('pointerdown', off); }

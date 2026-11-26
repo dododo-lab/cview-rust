@@ -22,7 +22,7 @@ use cview_app_core::viewmodels::multi_live::deps::{
     ChatConnectionKind, LaunchPlan, LaunchPlanError, LiveStatusSnapshot, MultiLiveBackendError,
     MultiLiveChat, MultiLiveEnginePool, MultiLiveHlsEngine, MultiLivePlayer,
     MultiLiveSessionBackend, MultiLiveSessionFactory, MultiLiveSettingsSource,
-    MultiLiveStreamRequest, SharedHlsEngine, StreamEndedProbe,
+    MultiLiveStreamRequest, SharedHlsEngine, StreamEndedProbe, WatchRecordStart,
 };
 use cview_app_core::viewmodels::multi_live::layout::LayoutPrefsStore;
 use cview_app_core::viewmodels::multi_live::{
@@ -37,7 +37,7 @@ use cview_core::models::settings_ui::MultiLiveSettings;
 use cview_core::models::LiveInfo;
 use cview_core::protocols::PlayerEngineProtocol;
 use cview_networking::ChzzkApiClient;
-use cview_persistence::SettingsStore;
+use cview_persistence::{DataStore, SettingsStore};
 use cview_player::coordinator::StreamPhase;
 use cview_player::hlsjs::network_metrics::StreamTransferSample;
 use cview_player::hlsjs::profile::HlsJsForcedQualityTarget;
@@ -729,10 +729,62 @@ pub struct ShellBackend {
     settings: SettingsStore,
     registry: Arc<PaneRegistry>,
     auth_key_channels: AuthKeyChannels,
+    /// 시청 기록 저장소. 예전엔 넣지 않아 기록 시작·체크포인트·종료가 기본 구현(`None`)으로 빠졌다.
+    /// 카드로 연 방송은 모두 이 길(라이브 단독 보기·멀티라이브)이라 통계·최근 시청·연속 시청에 남지 않았다.
+    data_store: Option<DataStore>,
 }
 
 #[async_trait]
 impl MultiLiveSessionBackend for ShellBackend {
+    async fn start_watch_record(
+        &self,
+        record: &WatchRecordStart,
+    ) -> Option<Result<DateTime<Utc>, String>> {
+        let store = self.data_store.as_ref()?;
+        let record = record.clone();
+        Some(
+            store
+                .off_main(move |s| {
+                    s.start_watch_record(
+                        &record.channel_id,
+                        &record.channel_name,
+                        record.thumbnail_url.as_deref(),
+                        None,
+                        Utc::now(),
+                    )
+                })
+                .await
+                .map_err(|e| e.to_string()),
+        )
+    }
+    async fn end_watch_record(
+        &self,
+        channel_id: &str,
+        started_at: DateTime<Utc>,
+    ) -> Option<Result<bool, String>> {
+        let store = self.data_store.as_ref()?;
+        let channel_id = channel_id.to_string();
+        Some(
+            store
+                .off_main(move |s| s.end_watch_record(&channel_id, started_at, Utc::now()))
+                .await
+                .map_err(|e| e.to_string()),
+        )
+    }
+    async fn checkpoint_watch_record(
+        &self,
+        channel_id: &str,
+        started_at: DateTime<Utc>,
+    ) -> Option<Result<bool, String>> {
+        let store = self.data_store.as_ref()?;
+        let channel_id = channel_id.to_string();
+        Some(
+            store
+                .off_main(move |s| s.checkpoint_watch_record(&channel_id, started_at, Utc::now()))
+                .await
+                .map_err(|e| e.to_string()),
+        )
+    }
     async fn live_detail(&self, channel_id: &str) -> Result<LiveInfo, MultiLiveBackendError> {
         self.api
             .live_detail(channel_id, true)
@@ -881,6 +933,7 @@ impl MultiLiveShell {
         sink: SlotCommandSink,
         data_dir: &std::path::Path,
         watch_events: LiveWatchReporter,
+        data_store: Option<DataStore>,
     ) -> Self {
         let pool = Arc::new(PanePool::new(sink));
         let registry = Arc::new(PaneRegistry::default());
@@ -901,6 +954,7 @@ impl MultiLiveShell {
             settings: settings.clone(),
             registry: registry.clone(),
             auth_key_channels,
+            data_store,
         });
         manager.lock().configure(
             Some(backend),
@@ -1218,6 +1272,46 @@ mod tests {
         ) -> Result<(), cview_core::error::ApiError> {
             unreachable!("재생하지 않은 테스트는 시청 이벤트를 보내지 않는다")
         }
+    }
+
+    #[tokio::test]
+    async fn shell_backend_writes_watch_history() {
+        let store = DataStore::open_in_memory().unwrap();
+        let backend = ShellBackend {
+            api: ChzzkApiClient::new(cview_networking::ClientConfig::new(Arc::new(
+                cview_networking::ReqwestTransport::new().unwrap(),
+            ))),
+            settings: SettingsStore::new(
+                None,
+                None,
+                Arc::new(cview_persistence::settings_store::MemoryDefaults::default()),
+            ),
+            registry: Arc::default(),
+            auth_key_channels: Arc::default(),
+            data_store: Some(store.clone()),
+        };
+        let record = WatchRecordStart {
+            channel_id: "c1".into(),
+            channel_name: "채널".into(),
+            thumbnail_url: None,
+            avatar_url: None,
+        };
+        let started = backend
+            .start_watch_record(&record)
+            .await
+            .expect("저장소가 있으면 기록을 시작한다(예전엔 None)")
+            .unwrap();
+        assert_eq!(
+            backend.checkpoint_watch_record("c1", started).await,
+            Some(Ok(true))
+        );
+        assert_eq!(
+            backend.end_watch_record("c1", started).await,
+            Some(Ok(true))
+        );
+        let rows = store.all_watch_history_rows().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].ended_at.is_some());
     }
 
     fn test_pane(settings: &PlayerSettings) -> Arc<PanePlayer> {

@@ -163,6 +163,14 @@ impl StreamRecordingService {
         self.st().state == RecordingState::Recording
     }
 
+    /// 쓰기 오류로 녹화가 멈췄으면 그 이유. 중지하거나 새로 시작하면 지워진다.
+    pub fn failure_reason(&self) -> Option<String> {
+        match &self.st().state {
+            RecordingState::Error(reason) => Some(reason.clone()),
+            _ => None,
+        }
+    }
+
     pub fn bytes_written(&self) -> i64 {
         self.st().total_bytes
     }
@@ -172,9 +180,13 @@ impl StreamRecordingService {
     }
 
     /// 녹화 시작 — 출력 디렉터리를 만들고 파일을 새로 연다. 이미 녹화 중이면 오류.
+    /// 쓰기 오류로 멈춘(`Error`) 녹화 뒤에는 새로 시작할 수 있다.
     pub fn start_recording(&self, playlist_url: &Url, output: &Path) -> Result<(), PlayerError> {
         let mut s = self.st();
-        if s.state != RecordingState::Idle {
+        if matches!(
+            s.state,
+            RecordingState::Recording | RecordingState::Stopping
+        ) {
             return Err(PlayerError::RecordingFailed("이미 녹화 중입니다".into()));
         }
         if let Some(dir) = output.parent().filter(|d| !d.as_os_str().is_empty()) {
@@ -209,9 +221,13 @@ impl StreamRecordingService {
         Ok(())
     }
 
-    /// 녹화 중지 — 폴링을 멈추고 파일을 닫는다.
+    /// 녹화 중지 — 폴링을 멈추고 파일을 닫는다. 쓰기 오류로 멈춘 녹화는 오류를 거두고 `Idle` 로 돌린다.
     pub fn stop_recording(&self) {
         let mut s = self.st();
+        if matches!(s.state, RecordingState::Error(_)) {
+            s.state = RecordingState::Idle;
+            return;
+        }
         if s.state != RecordingState::Recording {
             return;
         }
@@ -333,6 +349,10 @@ impl StreamRecordingService {
     }
 
     /// 출력 파일에 이어 쓴다. 디스크 오류는 `RecordingFailed` 로 돌려준다.
+    ///
+    /// 쓰기에 실패하면(디스크 가득·드라이브 분리·권한) 녹화를 `Error` 로 멈추고 파일을 닫는다.
+    /// 예전엔 이 폴만 건너뛰고 `Recording` 으로 남아, 화면은 계속 "녹화 중"인데 파일은 더 커지지 않았고
+    /// 공간이 생기면 반쯤 쓴 조각 뒤에 이어 써서 파일이 깨졌다.
     pub(crate) fn write_data(&self, data: &[u8]) -> Result<(), PlayerError> {
         let mut s = self.st();
         let Some(file) = s.file.as_mut() else {
@@ -340,8 +360,21 @@ impl StreamRecordingService {
                 "출력 파일 핸들이 없습니다".into(),
             ));
         };
-        file.write_all(data)
-            .map_err(|e| PlayerError::RecordingFailed(e.to_string()))?;
+        if let Err(e) = file.write_all(data) {
+            let reason = format!("파일에 쓸 수 없습니다: {e}");
+            if let Some(mut file) = s.file.take() {
+                let _ = file.flush();
+            }
+            if let Some(task) = s.task.take() {
+                // 폴링 루프 자신이 여기 있을 수 있다 — abort 는 다음 await 에서 끝내므로 안전하다.
+                task.abort();
+            }
+            tracing::warn!("녹화 중단: {reason}");
+            s.downloaded = HashSet::new();
+            s.key_cache = HashMap::new();
+            s.state = RecordingState::Error(reason.clone());
+            return Err(PlayerError::RecordingFailed(reason));
+        }
         s.total_bytes += data.len() as i64;
         Ok(())
     }

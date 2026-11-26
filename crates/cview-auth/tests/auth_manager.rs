@@ -637,10 +637,36 @@ async fn transient_failure_after_boot_keeps_tokens() {
     f.manager.clear_refresh_backoff();
     assert_eq!(f.manager.access_token().await, None);
     assert_eq!(stub.refreshes(), 2);
-    assert_eq!(f.manager.auth_state(), AuthState::Expired);
+    // 일시 실패는 로그인을 유지한다 — 앱은 로그인 상태에서만 인증 요청을 보내므로 '만료'로 바꾸면 굳는다.
+    assert_eq!(f.manager.auth_state(), logged_in("oauth"));
     assert_eq!(
         refresh_token_of(f.manager.oauth_tokens()).as_deref(),
         Some("refresh-stale")
+    );
+    f.manager.logout().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn transient_refresh_failure_retries_on_its_own_after_backoff() {
+    let stub = SwitchableStub::new(Mode::Offline);
+    let f = stub_fixture(stub.clone(), stale_keychain(), NO_OPTS);
+    f.manager.initialize().await;
+    f.manager.clear_refresh_backoff();
+    assert_eq!(f.manager.access_token().await, None);
+    let before = stub.refreshes();
+    assert_eq!(f.manager.auth_state(), logged_in("oauth"));
+
+    // 아무도 토큰을 다시 묻지 않아도(앱이 요청을 멈춘 상태) 백오프 뒤 스스로 갱신해 살아난다.
+    stub.set(Mode::Online);
+    tokio::time::sleep(OFFLINE_REFRESH_RETRY + Duration::from_secs(1)).await;
+    for _ in 0..20 {
+        tokio::task::yield_now().await;
+    }
+    assert_eq!(stub.refreshes(), before + 1);
+    assert_eq!(f.manager.auth_state(), logged_in("oauth"));
+    assert_eq!(
+        f.manager.oauth_tokens().map(|t| t.access_token).as_deref(),
+        Some("fresh")
     );
     f.manager.logout().await;
 }
@@ -834,7 +860,8 @@ async fn unreadable_credentials_mid_session_keep_tokens() {
     f.manager.clear_refresh_backoff();
     assert_eq!(f.manager.access_token().await, None);
     assert_eq!(stub.refreshes(), 1);
-    assert_eq!(f.manager.auth_state(), AuthState::Expired);
+    // 잠긴 키체인은 일시 실패 — 로그인을 유지하고 백오프 뒤 다시 갱신한다.
+    assert_eq!(f.manager.auth_state(), logged_in("oauth"));
     assert_eq!(
         refresh_token_of(f.manager.oauth_tokens()).as_deref(),
         Some("refresh-stale")

@@ -59,8 +59,10 @@ export const SCHEMA = [
   ]],
   ['watch', '라이브 되감기 · 실험', [
     { d: 'player', k: 'liveRewindEnabled', label: '라이브 되감기', help: '방송을 뒤로 돌려 볼 수 있게 최근 구간을 기억합니다', type: 'toggle' },
-    { d: 'player', k: 'liveRewindWindowMinutes', label: '되감기 범위(분)', type: 'range', min: 5, max: 180, step: 5 },
-    { d: 'player', k: 'liveRewindDiskBudgetMB', label: '되감기 디스크 한도(MB)', type: 'range', min: 512, max: 20480, step: 512 },
+    // Rust 는 정해진 값(LIVE_REWIND_WINDOW_CHOICES·LIVE_REWIND_DISK_BUDGET_CHOICES) 중 가장 가까운 것으로 저장한다 —
+    // 예전 슬라이더(5~180분·512MB~)는 고를 수 없는 값을 보여 줘, 120분을 골라도 60분으로 저장됐다.
+    { d: 'player', k: 'liveRewindWindowMinutes', label: '되감기 범위', type: 'select', options: opt([[10, '10분'], [30, '30분'], [60, '1시간']]) },
+    { d: 'player', k: 'liveRewindDiskBudgetMB', label: '되감기 디스크 한도', type: 'select', options: opt([[2048, '2GB'], [5120, '5GB'], [10240, '10GB'], [20480, '20GB']]) },
     { d: 'player', k: 'experimentalServerTimeMachine', label: '서버 타임머신(실험)', type: 'toggle' },
     { d: 'player', k: 'experimentalMatchWebV2', label: '웹 지연 맞춤 v2(실험)', type: 'toggle' },
   ]],
@@ -76,7 +78,7 @@ export const SCHEMA = [
     { local: 'streamAlerts', label: '후원·구독 알림', help: '시청 화면 위에 새 후원과 구독을 잠깐 띄웁니다', type: 'toggle' },
     { d: 'player', k: 'streamAlertAnchorX', label: '알림 가로 위치', type: 'range', min: 0.1, max: 0.9, step: 0.05, pct: true },
     { d: 'player', k: 'streamAlertAnchorY', label: '알림 세로 위치', type: 'range', min: 0.02, max: 0.9, step: 0.02, pct: true },
-    { d: 'player', k: 'streamAlertScale', label: '알림 크기', type: 'range', min: 0.6, max: 1.6, step: 0.1 },
+    { d: 'player', k: 'streamAlertScale', label: '알림 크기', type: 'range', min: 0.7, max: 1.7, step: 0.1 }, // Rust 저장 범위(0.7~1.7)와 같게
     { type: 'action', action: 'reset-alert-pos', label: '알림 위치 초기화', help: '영상 위 알림은 끌어서 옮길 수 있어요(알림을 더블클릭해도 기본 위치로 돌아갑니다)', button: '기본 위치로' },
   ]],
   ['multi', '멀티라이브', [

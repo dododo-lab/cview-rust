@@ -460,3 +460,31 @@ fn hot_cache_caps_total_and_entry_size_and_trims_on_pressure() {
     hot.trim(0);
     assert_eq!((hot.bytes, hot.map.len(), hot.order.len()), (0, 0, 0));
 }
+
+#[tokio::test]
+async fn a_static_request_does_not_freeze_a_live_thumbnail() {
+    let dir = tempfile::tempdir().unwrap();
+    let clock = Arc::new(AtomicI64::new(0));
+    let fake = Fake::new(0);
+    let s = service(fake.clone(), dir.path(), clock.clone());
+    s.load(URL, ImageKind::Live).await.unwrap();
+    // 46초 뒤 통계의 작은 썸네일이 같은 주소를 정적으로 부른다.
+    clock.store(46_000, Ordering::SeqCst);
+    let thumb = s.load(URL, ImageKind::Static).await.unwrap();
+    assert_eq!(
+        thumb.kind,
+        ImageKind::Live,
+        "라이브 그림은 하루 캐시로 내주지 않는다"
+    );
+    settle().await;
+    let after_thumb = fake.calls.load(Ordering::SeqCst);
+    // 다시 46초 뒤 홈 카드 — 여전히 라이브 TTL 로 새로 받는다(예전엔 정적 7일로 굳었다).
+    *fake.body.lock().unwrap() = b"img-2".to_vec();
+    clock.store(92_000, Ordering::SeqCst);
+    s.load(URL, ImageKind::Live).await.unwrap();
+    settle().await;
+    assert_eq!(fake.calls.load(Ordering::SeqCst), after_thumb + 1);
+    let got = s.load(URL, ImageKind::Live).await.unwrap();
+    assert_eq!(got.bytes.as_slice(), b"img-2");
+    assert_eq!(got.kind, ImageKind::Live);
+}
