@@ -89,8 +89,10 @@ export function matchPlainAction(e) {
     }
     return null;
   }
+  // 맨 글자와 ⇧ 하나뿐인 바인딩 — 수식 키까지 똑같아야 맞는다. 예전엔 ⇧ 바인딩(⇧C 등)을 저장해도 여기서도 메뉴에서도
+  // 받지 않아 아무 일이 없었다(⇧ 만 있는 바인딩은 menu.rs accelerator 가 메뉴에 달지 않는다).
   for (const [action, bind] of Object.entries(bindings)) {
-    if (bind && !bind.modifiers && bind.key === b.key && !(e.shiftKey)) return action;
+    if (bind && bind.key === b.key && (bind.modifiers || 0) === b.modifiers) return action;
   }
   return null;
 }

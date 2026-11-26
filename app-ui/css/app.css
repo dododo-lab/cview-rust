@@ -3182,6 +3182,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 /* ── 보조 창 (PLY-18·CHT-23·MUL-05·DAT-05) ───────── */
 :root[data-window] .sidebar, :root[data-window] .offline-banner { display: none !important; }
 :root[data-window] { --sidebar-width: 0px; }
+/* 보조 창은 멀티라이브로 가지 않는다(app.js) — 카드·홈 히어로·팔로잉 띠의 '멀티라이브에 추가' 단추를 숨긴다. */
+:root[data-window] [data-ml-add] { display: none !important; }
 :root[data-window="chat"] .page-chatonly { padding: 10px; }
 :root[data-window="chat"] .chatonly-head .page-title { font-size: var(--fs-headline); }
 .chat-picker { margin: 8px 0 12px; }
@@ -3432,6 +3434,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .ip-tile strong { font-size: var(--fs-subhead); font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ip-tile span { font-size: var(--fs-micro); color: var(--text-tertiary); }
 .ip-tile:first-child strong { background: var(--brand-gradient); -webkit-background-clip: text; background-clip: text; color: transparent; }
+/* 라이트 — 밝은 그라디언트(#00d38a→#00a6e0) 글자는 흰 타일 위에서 대비 1.8~2.5:1 이었다. 브랜드 글자색 단색(#007a52, 약 5:1). */
+:root[data-theme="light"] .ip-tile:first-child strong { background: none; color: var(--primary-text); }
+@media (prefers-color-scheme: light) { :root[data-theme="system"] .ip-tile:first-child strong { background: none; color: var(--primary-text); } }
 .ip-section { padding: 12px; border-radius: var(--radius-ml); background: var(--surface-elevated); border: 1px solid var(--border-subtle); display: flex; flex-direction: column; gap: 10px; }
 .ip-section h2 { margin: 0; display: flex; align-items: center; gap: 7px; font-size: var(--fs-footnote); font-weight: 700; color: var(--text-primary); }
 .ip-sec-icon { width: 20px; height: 20px; border-radius: var(--radius-xs); display: grid; place-items: center; color: var(--primary-text); background: var(--primary-dim); }

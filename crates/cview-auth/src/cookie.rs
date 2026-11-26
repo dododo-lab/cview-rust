@@ -359,7 +359,7 @@ impl CookieManager {
         self.has_cookies()
     }
 
-    /// 인증 쿠키 삭제 + 웹뷰 인증 쿠키·웹사이트 데이터 정리 + 저장소 항목 삭제.
+    /// 인증 쿠키 삭제 + 웹뷰의 NAVER 쿠키 정리 + 저장소 항목 삭제.
     pub async fn clear_cookies(&self) {
         self.session_generation.advance();
         for cookie in self.jar.cookies() {
@@ -369,20 +369,21 @@ impl CookieManager {
                 self.jar.delete_cookie(&cookie);
             }
         }
-        // 웹뷰 영구 저장소 — 로그아웃 뒤 재시작 시 sync 가 쿠키를 되살리지 않게.
+        // 웹뷰 영구 저장소 — 로그아웃 뒤 재시작 시 sync 가 쿠키를 되살리지 않게, 웹 세션도 남지 않게 NAVER 도메인
+        // 쿠키를 모두 지운다. 예전엔 웹사이트 데이터 전체(clear_all_browsing_data)를 지웠는데, 그것은 앱 화면 자신의
+        // localStorage(화면 보정·고정 카테고리·최근 채널·멀티라이브 구성·환영 표시 등)까지 지워 로그아웃할 때마다
+        // 설정이 사라지고 다음 실행에 온보딩이 다시 떴다. 전체 삭제는 clear_all_website_data 를 따로 부를 때만 한다.
         if let Some(webview) = &self.webview {
             for cookie in webview.all_cookies().await {
-                if naver_cookie_policy::is_authentication_cookie(&cookie.name, &cookie.domain) {
+                if naver_cookie_policy::matches_domain(&cookie.domain) {
                     webview.delete_cookie(&cookie).await;
                 }
             }
         }
-        // 인증 쿠키만 지우면 localStorage/세션이 남아 웹 로그인이 부활할 수 있다.
-        self.clear_all_website_data().await;
         if let Err(e) = self.keychain.delete(COOKIE_KEYCHAIN_KEY) {
             tracing::error!("Failed to delete cookies from keychain: {e}");
         }
-        tracing::info!("All auth cookies + website data cleared");
+        tracing::info!("All auth cookies + NAVER webview cookies cleared");
     }
 
     /// 웹뷰 웹사이트 데이터 전체 삭제 (데이터 삭제 UI 용).
@@ -645,7 +646,8 @@ mod tests {
         *web.cookies.lock().unwrap() = vec![
             naver("NID_AUT", "a"),
             naver("NID_SES", "s"),
-            naver("NNB", "keep"),
+            naver("NNB", "gone"),
+            StoredCookie::new("APP", "keep", "tauri.localhost"),
         ];
         let jar = Arc::new(CookieJar::new());
         let keychain = Arc::new(KeychainService::in_memory());
@@ -653,7 +655,8 @@ mod tests {
         assert!(m.sync_from_webview_store().await);
         assert!(keychain.load(COOKIE_KEYCHAIN_KEY).unwrap().is_some());
         m.clear_cookies().await;
-        assert!(*web.wiped.lock().unwrap());
+        // 로그아웃은 앱 화면의 저장소(localStorage 등)까지 지우지 않는다 — NAVER 쿠키만.
+        assert!(!*web.wiped.lock().unwrap());
         let left: Vec<_> = web
             .cookies
             .lock()
@@ -661,7 +664,12 @@ mod tests {
             .iter()
             .map(|c| c.name.clone())
             .collect();
-        assert_eq!(left, ["NNB"]);
+        assert_eq!(left, ["APP"]);
         assert!(!m.sync_from_webview_store().await);
+        m.clear_all_website_data().await;
+        assert!(
+            *web.wiped.lock().unwrap(),
+            "데이터 지우기 UI 는 전체를 지운다"
+        );
     }
 }

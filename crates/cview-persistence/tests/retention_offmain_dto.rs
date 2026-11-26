@@ -64,6 +64,42 @@ fn playback_prune_deletes_only_expired_rows() {
     assert_eq!(s.prune_vod_playback(VOD_PLAYBACK_RETENTION).unwrap(), 0);
 }
 
+#[tokio::test]
+async fn periodic_playback_prune_keeps_recent_and_watch_history() {
+    let s = store();
+    let old = add(&now(), -90.0 * 86_400.0);
+    let vod = |no: i64, seen| PersistedVodPlayback {
+        id: 0,
+        video_no: no,
+        last_position_sec: 60.0,
+        duration_sec: 600.0,
+        video_title: "v".into(),
+        channel_name: "c".into(),
+        thumbnail_url_string: None,
+        last_seen_at: seen,
+    };
+    s.insert_vod_playback_rows(&[vod(1, old), vod(2, now())])
+        .unwrap();
+    s.record_clip_playback("old", 5.0, 30.0, "old", "c", None)
+        .unwrap();
+    s.with_connection(|c| {
+        c.execute(
+            "UPDATE PersistedClipPlayback SET lastSeenAt = ? WHERE clipUID = 'old'",
+            [to_db(&old)],
+        )?;
+        Ok(())
+    })
+    .unwrap();
+    s.start_watch_record("ch", "옛", None, None, add(&now(), -400.0 * 86_400.0))
+        .unwrap();
+    assert_eq!(s.prune_playback_positions().await, (1, 1));
+    assert!(s.fetch_vod_playback(2).unwrap().is_some());
+    assert!(s.fetch_vod_playback(1).unwrap().is_none());
+    assert_eq!(s.prune_playback_positions().await, (0, 0));
+    // 시청 기록은 1년이 지나도 그대로(통계 '전체' 기간).
+    assert_eq!(s.fetch_watch_history(10).unwrap().len(), 1);
+}
+
 #[test]
 fn watch_history_cleanup_keeps_recent() {
     let s = store();

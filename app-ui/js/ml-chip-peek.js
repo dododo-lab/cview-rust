@@ -51,6 +51,13 @@ export class ChipPeek {
       if (chip && chip.matches(':focus-visible')) this.hover(chip, 0);
     });
     picker.addEventListener('focusout', () => this.scheduleClose());
+    // Esc 는 떠 있는 말풍선만 닫는다(WCAG 1.4.13) — 예전엔 말풍선은 남고 app.js 가 단독 보기 전체를 닫았다.
+    // defaultPrevented 면 app.js escapeTaken 이 시청 화면을 닫지 않는다.
+    picker.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || this.el.hidden || e.defaultPrevented) return;
+      e.preventDefault();
+      this.close();
+    });
     picker.addEventListener('pointerdown', () => this.close(), true);
     picker.addEventListener('scroll', () => this.close(), { passive: true });
     window.addEventListener('blur', () => this.close());

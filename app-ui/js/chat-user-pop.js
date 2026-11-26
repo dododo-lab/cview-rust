@@ -69,8 +69,16 @@ export function openUserPop(panel, anchor, line) {
 
   const badgesHtml = [...line.querySelectorAll('.badges img.badge')].map((b) => b.outerHTML).join('');
   const state = { card: null, loading: true, error: '', busy: false };
+  // 다시 그릴 때 초점 — innerHTML 을 통째로 바꿔 키보드로 '하이라이트'·'팔로우'를 누르거나 프로필이 늦게 오면 초점이
+  // body 로 떨어졌다(감사 UX-H22). 초점이 있던 단추(data-up)를 기억해 다시 그린 뒤 돌려준다 — 팔로우↔언팔로우는 서로,
+  // 바쁜 동안(disabled) 말풍선 자체에 둔 초점도 끝나면 그 단추로.
+  let focusUp = null;
+  const FOCUS_ALIAS = { follow: 'unfollow', unfollow: 'follow' };
 
   const render = () => {
+    const active = document.activeElement;
+    if (active && active !== pop && pop.contains(active) && active.dataset.up) focusUp = active.dataset.up;
+    else if (active !== pop) focusUp = null;
     const c = state.card || {};
     const prof = c.profile || null;
     const ch = c.channel || null;
@@ -139,6 +147,12 @@ export function openUserPop(panel, anchor, line) {
         ${ch ? '<button class="up-item" role="menuitem" data-up="open">치지직에서 열기</button>' : ''}
         ${isSelf ? '' : '<button class="up-item danger" role="menuitem" data-up="block">채팅 숨기기(차단)</button>'}
       </div>`;
+    if (focusUp) {
+      const pick = (v) => (v ? pop.querySelector(`[data-up="${v}"]:not(:disabled)`) : null);
+      const target = pick(focusUp) || pick(FOCUS_ALIAS[focusUp]);
+      if (target) target.focus({ preventScroll: true });
+      else if (pop.contains(document.activeElement) || document.activeElement === document.body) pop.focus({ preventScroll: true });
+    }
     place();
   };
 

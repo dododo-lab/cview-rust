@@ -651,6 +651,17 @@ pub fn on_main_window_event<R: Runtime>(window: &WebviewWindow<R>, event: &Windo
                 sync(app);
             }
         }
+        // 메인 창이 정말 닫혔다(숨기기 아님) — 보조 창(채팅·플레이어·통계)이 남으면 앱이 살아 있는데 메인 창을 다시 열
+        // 길이 없었다(Dock·트레이 '열기'는 메인 창이 있어야 한다). 메인이 돌리던 멀티라이브·채팅 세션도 그대로 돌았다.
+        // 보조 창도 닫아 마지막 창이 닫힐 때처럼 앱을 끝낸다.
+        WindowEvent::Destroyed => {
+            let labels: Vec<String> = app.webview_windows().into_keys().collect();
+            for label in secondary_windows_after_main_closed(labels.iter().map(String::as_str)) {
+                if let Some(w) = app.get_webview_window(label) {
+                    let _ = w.close();
+                }
+            }
+        }
         // macOS 최소화는 tao 이벤트가 없어 observe_minimize 가 AppKit 알림으로 받는다.
         WindowEvent::Focused(_) => sync(app),
         WindowEvent::ScaleFactorChanged { .. } => sync(app),
@@ -893,8 +904,23 @@ async fn refresh_generic<R: Runtime>(app: &AppHandle<R>) {
     sync(app);
 }
 
+/// 메인 창이 닫힌 뒤 함께 닫을 창 — 메인을 뺀 나머지. 순수 함수.
+fn secondary_windows_after_main_closed<'a>(labels: impl Iterator<Item = &'a str>) -> Vec<&'a str> {
+    labels.filter(|l| *l != crate::MAIN_WINDOW).collect()
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn closing_main_closes_secondary_windows() {
+        let labels = ["main", "chat-1", "player"];
+        assert_eq!(
+            super::secondary_windows_after_main_closed(labels.into_iter()),
+            ["chat-1", "player"]
+        );
+        assert!(super::secondary_windows_after_main_closed(["main"].into_iter()).is_empty());
+    }
+
     use super::*;
 
     fn live(id: &str, viewers: i64, favorite: bool) -> LiveEntry {

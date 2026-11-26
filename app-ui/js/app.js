@@ -940,7 +940,9 @@ async function main() {
   if (AUX !== 'stats') pages.home.attachReport(pages.stats);
   pages.media = new MediaPage(content, { onBack: goBack, onOpenChannel: openChannelPage });
   watchPageWidths(content);
-  pages.channel = new ChannelPage(content, { onBack: goBack, onPlay: openChannel, onAddMulti: addToMultiLive });
+  // 보조 창(플레이어 창 등)에는 사이드바가 없다 — 채널 화면·카드의 '멀티라이브에 추가'로 그 창이 멀티라이브로 바뀌면
+  // 보던 방송이 닫히고 돌아올 길이 ⌘[ 뿐이었다(감사 UX-H15 남은 부분). 시청 화면 ⋯ 처럼 보조 창에선 뺀다.
+  pages.channel = new ChannelPage(content, { onBack: goBack, onPlay: openChannel, onAddMulti: AUX ? null : addToMultiLive });
   // 위 막대 ⋯ 의 '멀티라이브에 추가'·'새 창으로 분리'(보조 창 안에서는 없다) — viewer-topbar.js
   viewer = new Viewer(document.getElementById('viewer'), {
     isLoggedIn, onClose: onViewerClosed,
@@ -949,7 +951,7 @@ async function main() {
     onPopout: AUX ? null : () => MENU_ACTIONS['window-player'](),
   });
   if (!AUX) insights = new InsightPanel(content, { isLoggedIn });
-  bindMultiLiveAddButtons(addToMultiLive);
+  if (!AUX) bindMultiLiveAddButtons(addToMultiLive);
   if (!AUX) {
     document.querySelector('.viewer-header .page-title').insertAdjacentHTML('afterend', liveModeSwitch('live'));
     bindLiveModeSwitch(switchLiveMode);

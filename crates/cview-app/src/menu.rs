@@ -180,9 +180,15 @@ fn menu_accelerator(user: Option<Option<String>>, default: Option<&str>) -> Opti
     }
 }
 
-/// `KeyBinding` → Tauri 가속기 문자열. 수식 키가 없거나 키가 비면 `None`. 순수 함수.
+/// `KeyBinding` → Tauri 가속기 문자열. 수식 키가 없거나 ⇧ 만 있거나 키가 비면 `None`. 순수 함수.
+///
+/// ⇧ 하나뿐인 바인딩(예: ⇧F)은 맨 글자처럼 시청 화면이 받는다(shortcuts.js matchPlainAction). 메뉴 가속기로 달면
+/// 채팅 입력·검색란에서 대문자 F 를 칠 때마다 메뉴가 가로챘다.
 pub fn accelerator(b: &KeyBinding) -> Option<String> {
-    if b.modifiers == ShortcutModifiers::empty() || b.key.is_empty() {
+    if b.modifiers == ShortcutModifiers::empty()
+        || b.modifiers == ShortcutModifiers::SHIFT
+        || b.key.is_empty()
+    {
         return None;
     }
     let mut parts: Vec<String> = Vec::new();
@@ -449,6 +455,19 @@ mod accel_tests {
         assert_eq!(
             accelerator(&KeyBinding::new("f", ShortcutModifiers::empty())),
             None
+        );
+        // ⇧ 만 있는 바인딩은 메뉴가 아니라 시청 화면이 받는다 — 메뉴 기본값이 남는다.
+        assert_eq!(
+            accelerator(&KeyBinding::new("f", ShortcutModifiers::SHIFT)),
+            None
+        );
+        assert_eq!(
+            menu_accelerator(
+                Some(accelerator(&KeyBinding::new("f", ShortcutModifiers::SHIFT))),
+                Some("CmdOrCtrl+Shift+F")
+            )
+            .as_deref(),
+            Some("CmdOrCtrl+Shift+F")
         );
     }
 }

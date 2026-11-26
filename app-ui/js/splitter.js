@@ -137,8 +137,12 @@ export function installChatSplitter({ container, chat, key }) {
     persist();
   });
   reopen.addEventListener('click', () => {
-    if (!state.collapsed && tooNarrowForChat(container.getBoundingClientRect().width)) { openWhileNarrow = true; apply(); return; }
+    const narrow = tooNarrowForChat(container.getBoundingClientRect().width);
+    if (!state.collapsed && narrow) { openWhileNarrow = true; apply(); return; }
+    // 직접 접어 둔 채 좁은 창에서 누르면 저장된 접힘을 풀고 바로 연다 — 예전엔 첫 번은 저장값만 풀고 좁은 창 접힘이
+    // 남아 두 번 눌러야 열렸다.
     state.collapsed = false;
+    if (narrow) openWhileNarrow = true;
     apply();
     persist();
   });

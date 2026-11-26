@@ -32,7 +32,11 @@ import { decoratePageHeader } from './page-header.js';
 import { verifiedBadge } from './verified-badge.js';
 import { visibleSessions, viewLimit, headerAddMode, syncHeaderAddButton, openViewPicker } from './ml-view-picker.js';
 import { liveHandlers, pickNowPlayingSession, multiLiveNowPlayingInfo } from './now-playing.js';
+
 import { setPaneOffscreen } from './background-saver.js';
+
+/** 사용자 배치(경계 끌기)를 쓸 수 있는 패인 수 상한 — 그보다 많으면 균등 그리드. */
+const CUSTOM_MAX_PANES = 4;
 
 export { multiLiveIcon };
 
@@ -416,7 +420,7 @@ export class MultiLivePage {
     document.addEventListener('keydown', (e) => {
       if (this.root.hidden || this.watchSlot != null || !(e.metaKey && e.ctrlKey)) return;
       const map = { '1': 'grid', '2': 'focus', '3': 'custom' };
-      if (map[e.key]) { e.preventDefault(); this.run(api.multiLiveSetLayout(map[e.key])); }
+      if (map[e.key]) { e.preventDefault(); this.setLayout(map[e.key]); }
     });
     this.proposed = new Set();
     // 보조 창은 멀티라이브를 그리지 않는다(render) — 패인 주기 작업도 돌리지 않는다.
@@ -449,6 +453,12 @@ export class MultiLivePage {
       getPanes: () => this.panes,
       onSelect: (id) => { if (id !== this.state.selectedId) this.run(api.multiLiveSelect(id)); },
     });
+    // 채팅 지우기(⋯·⇧⌘K·/clear)는 선택 패인 ChatPanel 이 받는다 — 멀티채팅 보기면 보이는 통합·칸 목록도 지운다.
+    const clearPanel = this.chat.clear.bind(this.chat);
+    this.chat.clear = (byUser = false) => {
+      clearPanel(byUser);
+      if (byUser) this.mergedChat.clearByUser();
+    };
 
     this.state = { sessions: [], selectedId: null, canAdd: true, maxSessions: 4, layout: 'grid' };
     this.panes = new Map(); // slot → { el, bridge, sessionId }
@@ -706,8 +716,14 @@ export class MultiLivePage {
     this.count.title = limit.limited ? `라이브에 담은 ${total}개 중 ${n}개 재생 중 — 최대 ${state.maxSessions}개` : full ? `가득 찼어요 — 최대 ${state.maxSessions}개` : `${state.maxSessions}개 중 ${n}개 재생 중`;
     syncHeaderAddButton(this.headAdd, state, { addInner: ADD_INNER, drawerOpen: this.addBar.isOpen });
     setText(this.empty.querySelector('.ml-empty-text'), `채널을 추가하면 최대 ${state.maxSessions}개까지 나란히 재생합니다. 패인을 누르면 소리와 채팅이 그 방송으로 바뀝니다.`);
+    // 사용자 배치는 패인 4개까지다(ml-custom·applyCustomGrid). 5개부터는 균등 그리드로 보이므로 그리드를 켜 보이고,
+    // '사용자'는 aria-disabled — 예전엔 눌러도 단추만 켜지고 배치는 그대로라 아무 일도 없어 보였다.
+    this.customBlocked = n > CUSTOM_MAX_PANES;
+    const shownLayout = state.layout === 'custom' && this.customBlocked ? 'grid' : state.layout;
     for (const b of this.root.querySelectorAll('[data-layout]')) {
-      b.classList.toggle('active', b.dataset.layout === state.layout);
+      b.classList.toggle('active', b.dataset.layout === shownLayout);
+      if (b.dataset.layout !== 'custom') continue;
+      if (this.customBlocked) b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled');
     }
     // 가득 참 — disabled 면 탭 순서에서 빠지고 안내가 title 뿐이었다. aria-disabled 로 두고 누르면 안내(onClick).
     // (초점이 그대로 남으니 사이드바를 닫을 때도 초점을 돌려줄 곳이 있다.)
@@ -755,7 +771,7 @@ export class MultiLivePage {
     const focus = state.layout === 'focus' && n > 1;
     const stack = this.stackApplies(state, single);
     // 같은 값이면 대입하지 않는다 — 대입만으로도 class 변화로 잡혀 문서 전체 class 관찰자(motion·a11y)가 초마다 깼다.
-    const stageClass = `ml-stage ml-n${n <= 4 ? n : (n <= 9 ? 'many' : 'lots')} ${focus ? `ml-focus dir-${state.focusDirection}` : ''} ${state.layout === 'custom' && n > 1 && n <= 4 ? 'ml-custom' : ''} ${single != null ? 'ml-single' : ''} ${stack ? 'ml-stack' : ''}`;
+    const stageClass = `ml-stage ml-n${n <= 4 ? n : (n <= 9 ? 'many' : 'lots')} ${focus ? `ml-focus dir-${state.focusDirection}` : ''} ${state.layout === 'custom' && n > 1 && n <= CUSTOM_MAX_PANES ? 'ml-custom' : ''} ${single != null ? 'ml-single' : ''} ${stack ? 'ml-stack' : ''}`;
     if (this.stage.className !== stageClass) this.stage.className = stageClass;
     this.empty.hidden = total > 0;
     this.focusControls.hidden = state.layout !== 'focus';
@@ -796,7 +812,7 @@ export class MultiLivePage {
       this.renderPane(pane, s, order.indexOf(s.id), s.id === state.selectedId);
     }
     this.applyFocusGrid(focus, order);
-    this.applyCustomGrid(state.layout === 'custom' && n > 1 && n <= 4 && single == null, n);
+    this.applyCustomGrid(state.layout === 'custom' && n > 1 && n <= CUSTOM_MAX_PANES && single == null, n);
     for (const [slot, pane] of this.panes) pane.el.classList.toggle('ml-single-target', single === slot);
     for (const [slot, pane] of this.panes) {
       if (live.has(slot) || pane.exiting) continue;
@@ -1603,7 +1619,11 @@ export class MultiLivePage {
   /** 머리줄 폭이 바뀌면 보이는 칩 수를 다시 정한다(바뀔 때만 다시 나눈다). */
   /** 지금 머리줄에 둘 칩 수 — 칩 줄을 다시 그릴 때(renderWatchPicker)와 머리줄 폭이 바뀔 때(syncChipWindowSize) 같은 값을 쓴다. */
   chipWindowNow() {
-    return chipWindowFor(this.header.clientWidth);
+    // Windows 메인 창은 머리줄 오른쪽에 창 단추 자리(--wc-w, 194px)를 비운다(app.css) — 그 몫을 빼지 않으면 칩을 한 단계
+    // 더 많이 두어 칩 줄이 넘쳤다. 양쪽 여백이 같은 macOS 는 0 이다.
+    const cs = getComputedStyle(this.header);
+    const inset = Math.max(0, (parseFloat(cs.paddingRight) || 0) - (parseFloat(cs.paddingLeft) || 0));
+    return chipWindowFor(this.header.clientWidth - inset);
   }
 
   syncChipWindowSize() {
@@ -2025,10 +2045,19 @@ export class MultiLivePage {
     });
   }
 
+  /** 배치 바꾸기 — 사용자 배치는 패인 4개까지라 그보다 많으면 안내만 한다. */
+  setLayout(layout) {
+    if (layout === 'custom' && this.customBlocked) {
+      toast(`사용자 배치는 패인 ${CUSTOM_MAX_PANES}개까지 쓸 수 있습니다 — 패인을 줄이면 켜집니다`, 2600);
+      return;
+    }
+    this.run(api.multiLiveSetLayout(layout));
+  }
+
   async onClick(e) {
     const layout = e.target.closest('[data-layout]');
     if (layout) {
-      this.run(api.multiLiveSetLayout(layout.dataset.layout));
+      this.setLayout(layout.dataset.layout);
       return;
     }
     const action = e.target.closest('[data-ml]');
