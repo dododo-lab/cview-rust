@@ -105,6 +105,8 @@ export const Events = Object.freeze({
   generalChanged: 'settings://general',
   /** 단축키 설정이 바뀌었다(저장·가져오기·초기화) — 새 keyboard 값. 모든 창에 온다. */
   keyboardChanged: 'settings://keyboard',
+  /** 채팅 설정이 바뀌었다(어느 창에서든·가져오기·초기화) — 새 chat 값. 모든 창에 온다. */
+  chatChanged: 'settings://chat',
   downloadUpdate: 'download://update',
   deepLink: 'deeplink://open',
   /** 앱 사용률 표본(usage-monitor.js) — 화면이 usage_watch(true) 로 보고 있을 때만 메인 창에 온다. */

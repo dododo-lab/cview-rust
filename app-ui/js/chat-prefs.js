@@ -1,6 +1,6 @@
 // 채팅 설정 공유 — Rust 설정 `chat` 도메인(원본 ChatSettings JSON 키)을 모든 채팅 패널이 함께 본다.
 // 차단 사용자·금지어·표시 옵션·후원 필터·자동 스크롤 등. 바꾸면 저장하고 패널에 알린다.
-import { api } from './api.js';
+import { api, listen, Events } from './api.js';
 import { toast } from './dom.js';
 
 export const CHAT_DEFAULTS = Object.freeze({
@@ -50,7 +50,20 @@ export function onChatPrefs(fn) {
   return () => listeners.delete(fn);
 }
 
+let followingOtherWindows = false;
+/** 다른 창·가져오기·초기화로 바뀐 채팅 설정을 이 창에도 — 저장할 때 옛 목록으로 덮어쓰지 않게(한 번만 건다). */
+function followOtherWindows() {
+  if (followingOtherWindows) return;
+  followingOtherWindows = true;
+  listen(Events.chatChanged, (chat) => {
+    if (!chat || typeof chat !== 'object') return;
+    prefs = { ...CHAT_DEFAULTS, ...chat };
+    notify();
+  }).catch(() => {});
+}
+
 export async function loadChatPrefs() {
+  followOtherWindows();
   try {
     const s = await api.settingsGet();
     prefs = { ...CHAT_DEFAULTS, ...(s && s.chat ? s.chat : {}) };

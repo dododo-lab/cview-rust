@@ -137,6 +137,14 @@ pub fn resolve(info: &LiveInfo) -> Result<PlaybackPlan, PlaybackPlanError> {
     Err(PlaybackPlanError::MissingPlaybackJson)
 }
 
+/// 재연결용 새 재생 URL — 방송 중일 때만(종료면 `None` → 재연결 루프의 종료 확인이 마무리한다).
+pub fn refreshed_stream_url(info: &LiveInfo) -> Option<Url> {
+    if info.status != cview_core::models::LiveStatus::Open {
+        return None;
+    }
+    resolve(info).ok().map(|plan| plan.stream_url)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,6 +156,27 @@ mod tests {
 
     fn live(json: serde_json::Value) -> LiveInfo {
         serde_json::from_value(json).unwrap()
+    }
+
+    #[test]
+    fn refreshed_stream_url_only_while_open() {
+        let open = live(serde_json::json!({
+            "liveId": 1, "liveTitle": "t", "status": "OPEN", "livePlaybackJson": PLAYBACK
+        }));
+        assert_eq!(
+            refreshed_stream_url(&open)
+                .map(|u| u.path().to_string())
+                .as_deref(),
+            Some("/llhls/playlist.m3u8")
+        );
+        let closed = live(serde_json::json!({
+            "liveId": 1, "liveTitle": "t", "status": "CLOSE", "livePlaybackJson": PLAYBACK
+        }));
+        assert_eq!(
+            refreshed_stream_url(&closed),
+            None,
+            "꺼진 방송의 URL 로 재연결했다"
+        );
     }
 
     #[test]

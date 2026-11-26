@@ -130,6 +130,12 @@ impl PlayerViewModel {
                 check(channel_id.clone())
             }));
         }
+        if let Some(refresh) = self.callbacks().on_refresh_stream_url {
+            let channel_id = req.channel_id.clone();
+            coordinator.set_refresh_stream_url_callback(std::sync::Arc::new(move || {
+                refresh(channel_id.clone())
+            }));
+        }
         if let Some(manifest) = req.prefetched_manifest.clone() {
             coordinator.set_prefetched_manifest(manifest);
         }

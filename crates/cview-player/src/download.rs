@@ -93,6 +93,32 @@ impl VideoDownloader {
         }
     }
 
+    /// 본문 다음 조각 — 기다리는 동안에도 취소를 보고, 오래 멈추면 실패로 끝낸다. 예전엔 조각이 올 때만 취소를 봐서,
+    /// 연결이 본문 도중 멈추면(네트워크 전환) 취소가 듣지 않고 '받는 중'으로 남았고 같은 영상을 다시 받을 수도 없었다.
+    async fn next_chunk<S, T>(&self, stream: &mut S) -> Result<Option<T>, DownloadError>
+    where
+        S: futures_util::Stream<Item = T> + Unpin,
+    {
+        let mut idle = Duration::ZERO;
+        loop {
+            self.check_cancel()?;
+            match tokio::time::timeout(Self::CANCEL_POLL, stream.next()).await {
+                Ok(item) => return Ok(item),
+                Err(_) => {
+                    idle += Self::CANCEL_POLL;
+                    if idle >= Self::STALL_LIMIT {
+                        return Err(DownloadError::Network(
+                            "응답이 멈췄습니다(네트워크를 확인해 주세요)".into(),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    const CANCEL_POLL: Duration = Duration::from_millis(250);
+    const STALL_LIMIT: Duration = Duration::from_secs(30);
+
     /// 단일 파일(MP4)을 받는다. 크기를 알면 진행률을 낸다.
     pub async fn download_file(
         &self,
@@ -113,9 +139,8 @@ impl VideoDownloader {
             }
             let total = resp.content_length().unwrap_or(0);
             let mut written = 0u64;
-            let mut stream = resp.bytes_stream();
-            while let Some(chunk) = stream.next().await {
-                self.check_cancel()?;
+            let mut stream = Box::pin(resp.bytes_stream());
+            while let Some(chunk) = self.next_chunk(&mut stream).await? {
                 let chunk = chunk.map_err(|e| DownloadError::Network(e.to_string()))?;
                 file.write_all(&chunk)
                     .map_err(|e| DownloadError::WriteFailed(e.to_string()))?;
@@ -282,9 +307,11 @@ impl VideoDownloader {
         let parser = HlsManifestParser::new();
         let mut url = playlist.clone();
         for _ in 0..4 {
+            // 재생목록 요청에도 시간 제한 — 멈추면 취소도 듣지 않았다.
             let resp = self
                 .client
                 .get(url.clone())
+                .timeout(Duration::from_secs(30))
                 .send()
                 .await
                 .map_err(|e| DownloadError::Network(e.to_string()))?;
@@ -368,6 +395,51 @@ mod tests {
             offset: None,
         };
         assert_eq!(range_header(&r2, Some(110)), ("bytes=110-159".into(), 160));
+    }
+
+    /// 본문 1000바이트만 보내고 연결을 붙잡은 채 멈추는 서버.
+    async fn serve_stalling_mp4() -> Url {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            while let Ok((mut stream, _)) = listener.accept().await {
+                tokio::spawn(async move {
+                    let mut buf = vec![0u8; 4096];
+                    let _ = stream.read(&mut buf).await;
+                    let mut resp = b"HTTP/1.1 200 OK\r\nContent-Length: 100000\r\n\r\n".to_vec();
+                    resp.extend_from_slice(&[1u8; 1000]);
+                    let _ = stream.write_all(&resp).await;
+                    tokio::time::sleep(Duration::from_secs(60)).await;
+                });
+            }
+        });
+        Url::parse(&format!("http://{addr}/v.mp4")).unwrap()
+    }
+
+    /// 본문 도중 멈춘 연결에서도 취소가 바로 듣는다 — 예전엔 다음 조각이 올 때까지 '받는 중'으로 남았다.
+    #[tokio::test]
+    async fn cancel_works_while_the_body_stalls() {
+        let url = serve_stalling_mp4().await;
+        let dir = std::env::temp_dir().join(format!("cview-dl-stall-{}", std::process::id()));
+        let out = dir.join("v.mp4");
+        let cancel = Arc::new(AtomicBool::new(false));
+        let dl = VideoDownloader::new(cancel.clone());
+        let c = cancel.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            c.store(true, Ordering::Relaxed);
+        });
+        let r = tokio::time::timeout(
+            Duration::from_secs(5),
+            dl.download_file(&url, &out, Arc::new(|_, _| {})),
+        )
+        .await;
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(
+            matches!(r, Ok(Err(DownloadError::Cancelled))),
+            "취소 5초 뒤에도 끝나지 않았다: {r:?}"
+        );
     }
 
     async fn serve_byte_range_hls(mode: &'static str) -> (Url, tokio::task::JoinHandle<()>) {

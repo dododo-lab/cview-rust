@@ -239,6 +239,12 @@ fn after_domain_change(
         "network" => services
             .api
             .update_network_settings(&services.settings.network()),
+        // 채팅 설정(차단·강조·금지어·글자 크기…)도 모든 창에 — 예전엔 창마다 연 때 읽은 값을 들고 있다가 그 위에 저장해,
+        // 채팅 창에서 차단하면 메인 창에서 한 차단이 풀렸다(목록을 통째로 덮어씀).
+        "chat" => {
+            let _ =
+                tauri::Emitter::emit(app, "settings://chat", to_value(&services.settings.chat()));
+        }
         _ => {}
     }
 }

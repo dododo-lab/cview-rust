@@ -91,16 +91,26 @@ pub(crate) fn finish_recording(services: &AppServices) -> RecordingStatusDto {
         };
     }
     services.recorder.stop_recording();
-    let path = before.path.as_deref().map(|p| {
-        fix_recording_extension(&PathBuf::from(p))
-            .to_string_lossy()
-            .into_owned()
-    });
+    let path = before
+        .path
+        .as_deref()
+        .and_then(|p| finalize_recording_file(&PathBuf::from(p)))
+        .map(|p| p.to_string_lossy().into_owned());
     RecordingStatusDto {
         recording: false,
         path,
         ..before
     }
+}
+
+/// 끝난 녹화 파일 마무리 — 아무것도 쓰지 못한(0바이트) 파일은 지우고 `None`, 아니면 확장자를 맞춘 경로.
+/// 예전엔 화면은 '녹화된 내용이 없습니다'라고 하면서 빈 `.ts` 파일이 녹화 폴더에 쌓였다.
+fn finalize_recording_file(p: &std::path::Path) -> Option<PathBuf> {
+    if std::fs::metadata(p).is_ok_and(|m| m.len() == 0) {
+        let _ = std::fs::remove_file(p);
+        return None;
+    }
+    Some(fix_recording_extension(p))
 }
 
 /// 치지직 LL-HLS 는 fMP4 라 .ts 로 두면 재생기가 못 연다 — 내용을 보고 확장자를 맞춘다. 바꾼(또는 그대로인) 경로.
@@ -160,6 +170,19 @@ pub async fn equalizer_presets() -> CmdResult<(Vec<f32>, Vec<EqualizerPresetDto>
 mod tests {
     use super::*;
     use chrono::TimeZone;
+
+    #[test]
+    fn empty_recording_file_is_removed_and_reports_no_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let empty = dir.path().join("빈 녹화.ts");
+        std::fs::write(&empty, b"").unwrap();
+        assert_eq!(finalize_recording_file(&empty), None);
+        assert!(!empty.exists(), "빈 녹화 파일이 남았다");
+        let full = dir.path().join("녹화.ts");
+        std::fs::write(&full, [0x47u8; 376]).unwrap();
+        assert_eq!(finalize_recording_file(&full), Some(full.clone()));
+        assert!(full.exists());
+    }
 
     #[test]
     fn fmp4_recording_gets_mp4_extension_and_ts_stays() {

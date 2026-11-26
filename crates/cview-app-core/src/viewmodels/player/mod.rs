@@ -111,6 +111,9 @@ impl RewindSettings {
 /// 코디네이터 이벤트 탭.
 pub type StreamEventTap = Arc<dyn Fn(&StreamEvent) + Send + Sync>;
 
+/// 채널 ID → 새 재생 URL(재연결용).
+pub type RefreshStreamUrlFn = Arc<dyn Fn(String) -> BoxFuture<'static, Option<Url>> + Send + Sync>;
+
 /// 사용자 이벤트 콜백.
 #[derive(Default, Clone)]
 pub struct PlayerCallbacks {
@@ -118,6 +121,9 @@ pub struct PlayerCallbacks {
     /// 재연결 전에 방송이 끝났는지 묻는다 — 인자는 재생 중인 채널 ID.
     pub on_check_stream_ended:
         Option<Arc<dyn Fn(String) -> BoxFuture<'static, bool> + Send + Sync>>,
+    /// 재연결이 첫 시도에 실패하면 같은 채널의 재생 URL 을 다시 묻는다(만료 토큰·방송 재시작). 인자는 채널 ID.
+    /// 방송이 꺼졌거나 받지 못하면 `None`. 멀티라이브는 자체 주기 재취득이 있어 넣지 않는다.
+    pub on_refresh_stream_url: Option<RefreshStreamUrlFn>,
     pub on_volume_changed: Option<Arc<dyn Fn(f32) + Send + Sync>>,
     pub on_mute_changed: Option<Arc<dyn Fn(bool) + Send + Sync>>,
     /// 코디네이터 이벤트 탭 — 뷰모델이 처리하기 직전에 현재 세션 이벤트를 그대로 넘긴다

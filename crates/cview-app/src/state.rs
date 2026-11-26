@@ -356,6 +356,7 @@ impl AppServices {
         let player_event = sinks.player_event.clone();
         let watch_events = LiveWatchReporter::new(Arc::new(api.clone()));
         let ended_api = api.clone();
+        let refresh_api = api.clone();
         player.set_callbacks(PlayerCallbacks {
             // 재연결 루프가 방송 종료를 알아야 "재연결 최대 횟수 초과" 대신 종료로 끝난다.
             on_check_stream_ended: Some(Arc::new(move |channel_id| {
@@ -364,6 +365,15 @@ impl AppServices {
                     api.live_status(&channel_id)
                         .await
                         .is_ok_and(|s| s.status != LiveStatus::Open)
+                }
+                .boxed()
+            })),
+            // 재연결이 처음 받은 마스터 URL(만료 토큰)만 다시 쓰지 않게 같은 채널의 재생 URL 을 새로 받는다.
+            on_refresh_stream_url: Some(Arc::new(move |channel_id| {
+                let api = refresh_api.clone();
+                async move {
+                    let info = api.live_detail(&channel_id, true).await.ok()?;
+                    crate::playback::refreshed_stream_url(&info)
                 }
                 .boxed()
             })),

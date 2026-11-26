@@ -19,6 +19,11 @@
 // T15 맨 글자 단축키(M·L·B)는 한글 입력 상태(e.key 'ㅡ')에서도 물리 키로 알아본다.
 // T16 시청 화면 — 다시 연결이 음소거를 되돌리지 않고, 녹화를 먼저 마무리하고, 재생 시작마다 화질을 다시 읽고,
 //     무대 위 목록에서 휠은 스크롤하고, 닫을 때 전체 화면을 푼다(코드 확인 — 플레이어 iframe 은 모의 앱에서 돌지 않는다).
+// (7차)
+// T17 다시보기 — 오류 뒤 화질을 바꾸면 오류 막이 걷히고, '다시 시도'는 재생 주소를 새로 받아 고른 화질로 다시 연다.
+// T18 채팅 설정 — 다른 창이 바꾼 설정(settings://chat)을 이 창도 따른다(차단 목록을 옛 값으로 덮지 않게).
+// T19 채팅 — /unmute 로 /mute 를 풀고, 말풍선 카드 캐시는 팔로우 변경에 비워진다(코드 확인).
+// T20 다시보기 한글 입력 단축키, 다운로드 '다시 받기'의 채널 이름(코드 확인).
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { base, server, mockTauri, go } from './mock-app.mjs';
@@ -305,6 +310,65 @@ try {
     assert.match(v, /document\.exitFullscreen\(\)\.catch/);
     assert.match(vc, /if \(type === 'playStarted'\) this\.viewer\.player\.call\('getLevels'\);/);
     assert.match(vc, /closest\('\.player-panel, \.vt-menu, \.quality-menu'\)\) return;/);
+  });
+
+  await check('T17 다시보기 오류 막·다시 시도', async () => {
+    const { ctx, page } = await open({ extra: {
+      vod_play: () => { window.__vodPlays = (window.__vodPlays || 0) + 1; return { videoNo: 500, title: '다시보기', channelName: '릴카', duration: 100, resumeAt: 0, streamUrl: `${location.origin}/auto-${window.__vodPlays}.mp4`, qualities: [{ url: `${location.origin}/q1080-${window.__vodPlays}.mp4`, resolution: '1920x1080', name: '1080p' }, { url: `${location.origin}/q720-${window.__vodPlays}.mp4`, resolution: '1280x720', name: '720p' }] }; },
+      vod_progress_save: () => null,
+      ad_preroll_plan: () => null,
+    } });
+    await go(page, 'media', { kind: 'vod', id: 500 });
+    await page.waitForSelector('[data-page="media"] video', { state: 'attached', timeout: 8000 });
+    const r = await page.evaluate(async () => {
+      const root = document.querySelector('[data-page="media"]');
+      const v = root.querySelector('video');
+      const sel = root.querySelector('[data-media-select="quality"]');
+      v.dispatchEvent(new Event('error'));
+      await new Promise((res) => setTimeout(res, 50));
+      const shown = Boolean(root.querySelector('.media-error'));
+      sel.value = '1'; sel.dispatchEvent(new Event('change', { bubbles: true }));
+      const cleared = !root.querySelector('.media-error');
+      v.dispatchEvent(new Event('error'));
+      await new Promise((res) => setTimeout(res, 50));
+      root.querySelector('[data-media="retry"]').click();
+      await new Promise((res) => setTimeout(res, 300));
+      return { shown, cleared, plays: window.__vodPlays, src: v.getAttribute('src') || v.src };
+    });
+    assert.equal(r.shown, true, '오류 막이 뜨지 않았다(검사 전제)');
+    assert.equal(r.cleared, true, '화질을 바꿨는데 오류 막이 남았다');
+    assert.equal(r.plays, 2, '다시 시도가 재생 주소를 새로 받지 않았다');
+    assert.match(r.src, /q720-2\.mp4$/, `고른 화질(720p)의 새 주소로 열지 않았다: ${r.src}`);
+    await ctx.close();
+  });
+
+  await check('T18 다른 창이 바꾼 채팅 설정을 따른다', async () => {
+    const { ctx, page } = await open({ events: true });
+    const r = await page.evaluate(async () => {
+      const { loadChatPrefs, chatPrefs } = await import('/js/chat-prefs.js');
+      await loadChatPrefs();
+      (window.__ev['settings://chat'] || []).forEach((cb) => cb({ payload: { blockedUsers: ['A'], blockedUserNames: { A: '가' } } }));
+      return chatPrefs().blockedUsers;
+    });
+    assert.deepEqual(r, ['A']);
+    await ctx.close();
+  });
+
+  await check('T19 /unmute·말풍선 캐시', async () => {
+    const ex = await (await fetch(`${base}js/chat-extras.js`)).text();
+    assert.match(ex, /case '\/unmute': \{/);
+    assert.doesNotMatch(ex, /SERVER_ONLY = new Set\(\[[^\]]*'\/unmute'/);
+    const pop = await (await fetch(`${base}js/chat-user-pop.js`)).text();
+    assert.match(pop, /addEventListener\(CHANNEL_SOCIAL_EVENT, \(\) => cardCache\.clear\(\)\)/);
+    assert.match(pop, /listen\(Events\.authChanged, \(\) => cardCache\.clear\(\)\)/);
+  });
+
+  await check('T20 다시보기 한글 단축키·다시 받기 채널 이름', async () => {
+    const media = await (await fetch(`${base}js/media.js`)).text();
+    assert.match(media, /plainLetter\(e\) \|\| e\.key/);
+    const dl = await (await fetch(`${base}js/downloads.js`)).text();
+    assert.match(dl, /startDownload\(b\.dataset\.kind, b\.dataset\.target, b\.dataset\.title, b\.dataset\.channel \|\| undefined\)/);
+    assert.equal((dl.match(/data-channel="\$\{esc\(/g) || []).length, 2);
   });
 } finally {
   await browser.close();

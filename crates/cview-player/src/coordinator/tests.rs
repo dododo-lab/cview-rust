@@ -1946,3 +1946,128 @@ async fn server_time_machine_stream_disables_local_recording() {
     assert!(c.stream_proxy().timeshift_backend().is_none());
     c.stop_stream().await;
 }
+
+// MARK: - 재연결 URL 재발급
+
+/// URL 별로 응답하는 다운로더 — 옛 토큰 URL 은 403.
+struct UrlFetcher {
+    expired: Url,
+}
+
+#[async_trait]
+impl ManifestFetcher for UrlFetcher {
+    async fn fetch(&self, url: &Url, _: Option<Duration>) -> Result<FetchedManifest, String> {
+        if url == &self.expired {
+            return Err("HTTP 403".into());
+        }
+        Ok(FetchedManifest {
+            body: MASTER.into(),
+            final_url: None,
+        })
+    }
+}
+
+fn fresh_url() -> Url {
+    Url::parse("https://example.com/live/stream.m3u8?token=fresh").unwrap()
+}
+
+#[tokio::test(start_paused = true)]
+async fn reconnect_replays_with_refreshed_stream_url_after_first_failure() {
+    let c = StreamCoordinator::with_fetcher(
+        config(false),
+        PlaybackKeyAccess::anonymous(),
+        Arc::new(UrlFetcher {
+            expired: test_url(),
+        }),
+    );
+    let engine = MockEngine::new();
+    c.set_player_engine(engine.shared()).await;
+    c.start_stream(test_url()).await.unwrap();
+    c.report_engine_playing().await;
+    let asked = Arc::new(AtomicUsize::new(0));
+    c.set_refresh_stream_url_callback(Arc::new({
+        let asked = asked.clone();
+        move || {
+            asked.fetch_add(1, Ordering::SeqCst);
+            Box::pin(async { Some(fresh_url()) })
+        }
+    }));
+    engine.reset();
+    c.trigger_reconnect("CDN 403 토큰 만료 감지", false);
+    // 1차: 옛 URL(재발급 없이) — 첫 프레임이 오지 않아 8초 뒤 2차.
+    tokio::time::sleep(Duration::from_secs(1)).await;
+    assert_eq!(engine.s().play_count, 1);
+    assert_eq!(engine.s().last_play_url, Some(test_url()));
+    assert_eq!(
+        asked.load(Ordering::SeqCst),
+        0,
+        "첫 시도는 API 를 부르지 않는다"
+    );
+    tokio::time::sleep(Duration::from_secs(10)).await;
+    assert_eq!(engine.s().play_count, 2);
+    assert_eq!(
+        engine.s().last_play_url,
+        Some(fresh_url()),
+        "2차 시도가 처음 받은 만료 URL 을 다시 썼다"
+    );
+    assert_eq!(asked.load(Ordering::SeqCst), 1);
+    c.report_engine_playing().await;
+    assert_eq!(c.phase(), StreamPhase::Playing);
+    assert!(!c.reconnection_handler().is_reconnecting());
+    // 이후 재연결·갱신도 새 URL 을 기준으로 한다.
+    assert_eq!(c.st().stream_url, Some(fresh_url()));
+    c.stop_stream().await;
+}
+
+#[tokio::test(start_paused = true)]
+async fn refreshed_url_arriving_after_stop_is_discarded() {
+    let c = coordinator_with(config(false), MockFetcher::always(Ok(MASTER)));
+    let engine = MockEngine::new();
+    c.set_player_engine(engine.shared()).await;
+    c.start_stream(test_url()).await.unwrap();
+    c.report_engine_playing().await;
+    let entered = Arc::new(Notify::new());
+    let release = Arc::new(Notify::new());
+    c.set_refresh_stream_url_callback(Arc::new({
+        let entered = entered.clone();
+        let release = release.clone();
+        move || {
+            let entered = entered.clone();
+            let release = release.clone();
+            Box::pin(async move {
+                entered.notify_one();
+                release.notified().await;
+                Some(fresh_url())
+            })
+        }
+    }));
+    engine.reset();
+    c.trigger_reconnect("stall", false);
+    entered.notified().await;
+    c.stop_stream().await;
+    release.notify_one();
+    tokio::time::sleep(Duration::from_secs(30)).await;
+    assert_eq!(c.phase(), StreamPhase::Idle);
+    assert_eq!(
+        c.st().stream_url,
+        None,
+        "정지한 세션에 늦은 URL 이 들어왔다"
+    );
+    assert_eq!(engine.s().play_count, 1, "늦은 URL 로 재생을 되살렸다");
+}
+
+#[tokio::test(start_paused = true)]
+async fn refresh_returning_none_keeps_existing_url() {
+    let c = coordinator_with(config(false), MockFetcher::always(Ok(MASTER)));
+    let engine = MockEngine::new();
+    c.set_player_engine(engine.shared()).await;
+    c.start_stream(test_url()).await.unwrap();
+    c.report_engine_playing().await;
+    c.set_refresh_stream_url_callback(Arc::new(|| Box::pin(async { None })));
+    engine.reset();
+    c.trigger_reconnect("stall", false);
+    tokio::time::sleep(Duration::from_secs(10)).await;
+    assert_eq!(engine.s().play_count, 2);
+    assert_eq!(engine.s().last_play_url, Some(test_url()));
+    c.stop_stream().await;
+}

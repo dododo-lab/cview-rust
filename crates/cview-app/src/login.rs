@@ -124,11 +124,11 @@ async fn run_login<R: Runtime>(
             s = rx.recv() => s,
             _ = tokio::time::sleep(COOKIE_POLL_INTERVAL) => Some(LoginSignal::PageLoaded),
         };
-        if app.get_webview_window(LOGIN_WINDOW).is_none() {
-            break Outcome::Failed("로그인 창이 닫혔습니다".into());
+        if app.get_webview_window(LOGIN_WINDOW).is_none() || signal.is_none() {
+            break closed_outcome(&app, &flow).await;
         }
         let action = match signal {
-            None => break Outcome::Failed("로그인 창이 닫혔습니다".into()),
+            None => break closed_outcome(&app, &flow).await,
             Some(LoginSignal::PageLoaded) => {
                 let cookies = read_window_cookies(&window).await;
                 flow.lock()
@@ -162,6 +162,23 @@ async fn run_login<R: Runtime>(
         }
         Outcome::Continue => {}
     }
+}
+
+/// 창이 닫혔을 때 — 동의 단계였으면 쿠키 로그인으로 마치고, 아니면 취소로 알린다.
+async fn closed_outcome<R: Runtime>(
+    app: &AppHandle<R>,
+    flow: &Arc<Mutex<UnifiedLoginFlow>>,
+) -> Outcome {
+    let action = flow
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .on_window_closed();
+    let services = app.state::<AppServices>();
+    if matches!(action, LoginAction::CookieOnlySuccess { .. }) && services.cookies.has_cookies() {
+        services.auth.handle_login_success().await;
+        return Outcome::Finished;
+    }
+    Outcome::Failed("로그인 창이 닫혔습니다".into())
 }
 
 async fn perform<R: Runtime>(

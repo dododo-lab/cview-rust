@@ -114,6 +114,9 @@ pub struct BackgroundUpdateBaseline {
     /// 직전 폴의 팔로우 채널 전체(방송 중·아님). 그 사이 새로 팔로우한 채널은 이미 방송 중이어도
     /// "방송 시작"이 아니다 — 예전엔 방송 중인 채널을 팔로우하면 다음 주기에 시작 알림이 떴다.
     pub followed_ids: HashSet<String>,
+    /// 실제 폴로 만든 기준선인가 — 팔로우가 0개여도 참이다. 예전엔 `followed_ids` 가 비었는지로만 갈라, 팔로우가
+    /// 없던 계정이 방송 중인 채널을 팔로우하면 기본값 기준선처럼 다뤄 '방송 시작' 알림이 거짓으로 떴다.
+    pub knows_followed: bool,
     pub categories: HashMap<String, String>,
     pub titles: HashMap<String, String>,
 }
@@ -147,7 +150,8 @@ impl BackgroundUpdateDiff {
                 }
             }
             if let Some(old) = previous.titles.get(&channel.channel_id) {
-                if *old != channel.live_title && !channel.live_title.is_empty() {
+                // 옛 제목이 비어 있던 것(상세를 못 받은 폴)도 변경이 아니다 — 예전엔 다음 폴에 '"" → 제목' 으로 알렸다.
+                if *old != channel.live_title && !channel.live_title.is_empty() && !old.is_empty() {
                     title_changed.push(ChannelChangeInfo::from_channel(
                         channel,
                         old,
@@ -157,7 +161,9 @@ impl BackgroundUpdateDiff {
             }
         }
         // 팔로우 목록 정보가 없는 기준선(기본값)이면 예전처럼 방송 중 여부만 본다.
-        let knows_followed = !previous.followed_ids.is_empty() || !previous.online_ids.is_empty();
+        let knows_followed = previous.knows_followed
+            || !previous.followed_ids.is_empty()
+            || !previous.online_ids.is_empty();
         let newly_online = current
             .iter()
             .filter(|c| !previous.online_ids.contains(&c.channel_id))
@@ -172,13 +178,22 @@ impl BackgroundUpdateDiff {
                     .entry(ch.channel_id.clone())
                     .or_insert_with(|| cat.clone());
             }
-            titles
-                .entry(ch.channel_id.clone())
-                .or_insert_with(|| ch.live_title.clone());
+            // 빈 제목은 앞 기준선의 제목을 이어받는다(카테고리처럼 — 없을 때만 넣는다).
+            let title = if ch.live_title.is_empty() {
+                previous
+                    .titles
+                    .get(&ch.channel_id)
+                    .cloned()
+                    .unwrap_or_default()
+            } else {
+                ch.live_title.clone()
+            };
+            titles.entry(ch.channel_id.clone()).or_insert(title);
         }
         let next_baseline = BackgroundUpdateBaseline {
             online_ids: current.iter().map(|c| c.channel_id.clone()).collect(),
             followed_ids: following.iter().map(|c| c.channel_id.clone()).collect(),
+            knows_followed: true,
             categories,
             titles,
         };
@@ -540,6 +555,43 @@ mod tests {
         assert_eq!(ids, vec!["b"]);
         // n 은 이제 기준선에 있어 다음 폴부터 제목·카테고리 변경을 본다.
         assert!(diff.next_baseline.online_ids.contains("n"));
+    }
+
+    #[test]
+    fn following_from_zero_does_not_fake_a_live_start() {
+        // 팔로우가 하나도 없던 계정이 지금 방송 중인 n 을 팔로우 — 방송 시작이 아니다.
+        let base = BackgroundUpdateDiff::new(&[], &BackgroundUpdateBaseline::default());
+        assert!(base.next_baseline.knows_followed);
+        let next: Vec<LiveChannelItem> = [item("n", 9, "y", None)]
+            .iter()
+            .map(to_live_channel_item)
+            .collect();
+        let diff = BackgroundUpdateDiff::new(&next, &base.next_baseline);
+        assert!(diff.newly_online.is_empty(), "{:?}", diff.newly_online);
+    }
+
+    #[test]
+    fn title_appearing_after_an_empty_poll_is_not_a_title_change() {
+        let a = |t: &str| -> Vec<LiveChannelItem> {
+            [item("a", 1, t, None)]
+                .iter()
+                .map(to_live_channel_item)
+                .collect()
+        };
+        let base = BackgroundUpdateDiff::new(&a("제목"), &BackgroundUpdateBaseline::default());
+        // 상세를 못 받아 빈 제목 → 다시 같은 제목: 알리지 않고, 기준선은 앞 제목을 지킨다.
+        let empty = BackgroundUpdateDiff::new(&a(""), &base.next_baseline);
+        assert!(empty.title_changed.is_empty());
+        assert_eq!(empty.next_baseline.titles["a"], "제목");
+        let back = BackgroundUpdateDiff::new(&a("제목"), &empty.next_baseline);
+        assert!(back.title_changed.is_empty());
+        // 처음부터 빈 제목이던 기준선에서 제목이 생겨도 변경이 아니다.
+        let first = BackgroundUpdateDiff::new(&a(""), &BackgroundUpdateBaseline::default());
+        let later = BackgroundUpdateDiff::new(&a("새 제목"), &first.next_baseline);
+        assert!(later.title_changed.is_empty());
+        // 진짜 바뀐 제목은 그대로 알린다.
+        let changed = BackgroundUpdateDiff::new(&a("다른 제목"), &back.next_baseline);
+        assert_eq!(changed.title_changed.len(), 1);
     }
 
     fn result(reason: FollowingPollReason, channels: Vec<MergedFollowingItem>) -> PollResult {

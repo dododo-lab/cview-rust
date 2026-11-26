@@ -61,7 +61,7 @@ function jobRow(j) {
       <span class="ellipsis dl-status">${esc(jobStatusText(j))}</span>
       ${active ? `<span class="dl-track"><span class="dl-fill${indeterminate ? ' indeterminate' : ''}" style="--p:${pct / 100}"></span></span>` : ''}</span>
     ${active ? '<button class="btn ghost" data-dl="cancel">취소</button>' : ''}
-    ${j.state === 'failed' || j.state === 'cancelled' ? `<button class="btn" data-dl="retry" data-kind="${esc(j.kind)}" data-target="${esc(j.target)}" data-title="${esc(j.title)}">다시 시도</button>` : ''}
+    ${j.state === 'failed' || j.state === 'cancelled' ? `<button class="btn" data-dl="retry" data-kind="${esc(j.kind)}" data-target="${esc(j.target)}" data-title="${esc(j.title)}" data-channel="${esc(j.channelName || '')}">다시 시도</button>` : ''}
     ${j.state === 'completed' && j.filePath ? `<button class="btn" data-dl="reveal" data-path="${esc(j.filePath)}">${REVEAL_LABEL}</button>` : ''}
   </div>`;
 }
@@ -74,7 +74,7 @@ function historyRow(h) {
     <span class="dl-text"><strong class="ellipsis">${esc(h.title)}</strong>
       <span class="ellipsis">${h.channelName ? `${esc(h.channelName)} · ` : ''}${esc(relativeDate(h.finishedAt))}${h.completed ? (h.fileSize ? ` · ${esc(bytesText(h.fileSize))}` : '') : ` · 실패${h.failureReason ? `: ${esc(h.failureReason)}` : ''}`}${missing ? ' · 파일이 없습니다' : ''}</span></span>
     ${h.completed && !missing && h.filePath ? `<button class="btn" data-dl="reveal" data-path="${esc(h.filePath)}">${REVEAL_LABEL}</button><button class="btn ghost" data-dl="open" data-path="${esc(h.filePath)}">열기</button>` : ''}
-    ${!h.completed || missing ? `<button class="btn" data-dl="retry" data-kind="${esc(kind)}" data-target="${esc(rest.join('-'))}" data-title="${esc(h.title)}">다시 받기</button>` : ''}
+    ${!h.completed || missing ? `<button class="btn" data-dl="retry" data-kind="${esc(kind)}" data-target="${esc(rest.join('-'))}" data-title="${esc(h.title)}" data-channel="${esc(h.channelName || '')}">다시 받기</button>` : ''}
     <button class="icon-btn" data-dl="remove" title="목록에서 지우기(파일은 남김)">✕</button>
   </div>`;
 }
@@ -117,7 +117,8 @@ export async function mountDownloads(container) {
     try {
       switch (b.dataset.dl) {
         case 'cancel': render(await api.downloadCancel(id)); break;
-        case 'retry': await startDownload(b.dataset.kind, b.dataset.target, b.dataset.title); break;
+        // 채널 이름도 — 예전엔 빠져서 클립을 다시 받으면 파일 이름·기록에서 채널이 사라졌다.
+        case 'retry': await startDownload(b.dataset.kind, b.dataset.target, b.dataset.title, b.dataset.channel || undefined); break;
         case 'reveal': await api.revealPath(b.dataset.path); break;
         case 'open': await api.openPath(b.dataset.path); break;
         case 'folder': await api.revealPath(b.dataset.path); break;

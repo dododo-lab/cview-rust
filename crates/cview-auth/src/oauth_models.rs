@@ -183,8 +183,26 @@ pub struct TokenContent {
     pub access_token: String,
     #[serde(default)]
     pub refresh_token: Option<String>,
+    /// 초. 치지직 문서는 문자열(`"86400"`)로 적는다 — 숫자·문자열 둘 다 받는다. 예전엔 숫자만 받아, 문자열로 오면
+    /// 연결·갱신이 늘 '토큰 교환 실패'(디코드 오류)로 끝났다.
+    #[serde(deserialize_with = "de_seconds")]
     pub expires_in: i64,
     pub token_type: String,
+}
+
+fn de_seconds<'de, D: serde::Deserializer<'de>>(d: D) -> Result<i64, D::Error> {
+    use serde::de::Error as _;
+    match serde_json::Value::deserialize(d)? {
+        serde_json::Value::Number(n) => n
+            .as_i64()
+            .or_else(|| n.as_f64().map(|f| f as i64))
+            .ok_or_else(|| D::Error::custom("expiresIn 범위 밖")),
+        serde_json::Value::String(s) => s
+            .trim()
+            .parse::<i64>()
+            .map_err(|_| D::Error::custom(format!("expiresIn 이 숫자가 아님: {s}"))),
+        other => Err(D::Error::custom(format!("expiresIn 형식: {other}"))),
+    }
 }
 
 /// 프로필 응답 envelope.
@@ -394,5 +412,28 @@ mod tests {
         assert_eq!(c.channel_id.as_deref(), Some("ch-002"));
         assert_eq!(c.nickname, None);
         assert_eq!(c.verified_mark, None);
+    }
+}
+
+#[cfg(test)]
+mod expires_in_tests {
+    use super::*;
+
+    #[test]
+    fn expires_in_accepts_number_and_string() {
+        let n: TokenContent = serde_json::from_str(
+            r#"{"accessToken":"a","refreshToken":"r","expiresIn":86400,"tokenType":"Bearer"}"#,
+        )
+        .unwrap();
+        let s: TokenContent = serde_json::from_str(
+            r#"{"accessToken":"a","refreshToken":"r","expiresIn":"86400","tokenType":"Bearer"}"#,
+        )
+        .unwrap();
+        assert_eq!(n.expires_in, 86400);
+        assert_eq!(s.expires_in, 86400);
+        assert!(serde_json::from_str::<TokenContent>(
+            r#"{"accessToken":"a","expiresIn":"하루","tokenType":"Bearer"}"#
+        )
+        .is_err());
     }
 }
