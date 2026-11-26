@@ -287,6 +287,26 @@ impl ChzzkApiClient {
         Ok(paged.data)
     }
 
+    /// 인기 클립 — `bypass_cache` 면 응답 캐시(60초)를 읽지 않고 새로 받는다(새로고침). 받은 값은 캐시에 쓴다.
+    pub async fn home_popular_clips_with(
+        &self,
+        filter_type: &str,
+        order_type: &str,
+        bypass_cache: bool,
+    ) -> Result<Vec<ClipInfo>, ApiError> {
+        let aged = self
+            .request_with_age::<PagedContent<ClipInfo>>(
+                &ChzzkEndpoint::HomePopularClips {
+                    filter_type: filter_type.into(),
+                    order_type: order_type.into(),
+                },
+                bypass_cache,
+                true,
+            )
+            .await?;
+        Ok(aged.value.data)
+    }
+
     /// 클립 상세.
     pub async fn clip_detail(&self, clip_uid: &str) -> Result<ClipDetail, ApiError> {
         self.request(&ChzzkEndpoint::ClipDetail {

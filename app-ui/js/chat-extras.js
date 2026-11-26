@@ -296,7 +296,9 @@ export function installChatExtras(panel) {
         if (!nick) { toast('사용법: /mute 닉네임 [초]'); return true; }
         const sec = Math.min(86400, Math.max(10, Number(args[1]) || 300));
         muted.set(nick, Date.now() + sec * 1000);
-        for (const el of panel.list.querySelectorAll(`.chat-line[data-nick="${CSS.escape(nick)}"]`)) el.remove();
+        // 패널 상자 안의 모든 목록 — 멀티라이브 멀티채팅의 통합·칸 목록도 이 상자 안에 있다(예전엔 숨은 패널 목록만 지웠다).
+        for (const el of panel.root.querySelectorAll(`.chat-line[data-nick="${CSS.escape(nick)}"]`)) el.remove();
+        panel.onMute?.(nick);
         toast(`${nick} 님 메시지를 ${sec}초 동안 숨깁니다`, 2000);
         return true;
       }

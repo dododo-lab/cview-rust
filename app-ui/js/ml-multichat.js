@@ -173,6 +173,9 @@ export class MultiLiveMergedChat {
       if (head && head.dataset.session) this.onSelect(head.dataset.session);
     });
     listen('chat://session-event', (p) => this.onEvent(p));
+    // 선택 패인 채팅(패널) 목록은 켜 둔 동안 숨는다 — 패널 안내(/help·퇴장·연결 오류)는 보이는 목록에도 띄운다.
+    const panel = panelOf(chatEl);
+    if (panel) panel.onSystem = (text) => { if (this.on) this.system(null, text); };
     this.applyChrome();
   }
 
@@ -413,12 +416,14 @@ export class MultiLiveMergedChat {
     const items = [];
     const cells = new Map();
     const events = [];
+    // /mute(선택 패인 채팅 패널의 localHidden) — 통합·칸 목록도 같은 기준으로 거른다(버퍼에도 남겨 다시 그릴 때도).
+    const hide = panelOf(this.chatEl)?.localHidden || null;
     for (const [c, msgs, recent] of batch) {
       if (!this.conns.has(c.key.slice(4)) || this.conns.get(c.key.slice(4)) !== c) continue; // 그사이 닫힌 패인
       const style = `--lh:${Number(c.hue) || 0}`;
-      for (const m of msgs) items.push({ m, name: c.name, style, src: c.key });
+      for (const m of msgs) items.push({ m, name: c.name, style, src: c.key, hide });
       if (!cells.has(c)) cells.set(c, []);
-      for (const m of msgs) cells.get(c).push({ m, style, src: c.key });
+      for (const m of msgs) cells.get(c).push({ m, style, src: c.key, hide });
       events.push([c, msgs, recent]);
     }
     if (!items.length) return;
@@ -451,10 +456,12 @@ export class MultiLiveMergedChat {
     }
   }
 
+  /** @param {object|null} c 칸 — 없으면(패널 안내) 선택 패인 칸 */
   system(c, text) {
     if (this.pending.length) this.flush(); // 앞서 온 메시지 뒤에
     const line = `<div class="chat-line system">${esc(text)}</div>`;
+    const cell = c || this.conns.get((this.getState() || {}).selectedId) || null;
     if (this.mode === 'merged') appendTo(this.list, line, MAX_LINES);
-    else if ((this.mode === 'grid' || this.mode === 'focus') && c.list) appendTo(c.list, line, MAX_CELL_LINES);
+    else if ((this.mode === 'grid' || this.mode === 'focus') && cell?.list) appendTo(cell.list, line, MAX_CELL_LINES);
   }
 }

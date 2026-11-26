@@ -57,6 +57,10 @@ export class MediaPage {
   }
 
   async openVod(videoNo, seq) {
+    // 재생 정보부터 — 예전엔 광고를 먼저 다 본 뒤에야 성인·구독자 전용·삭제된 영상이라 '재생할 수 없습니다'가 떴다.
+    // 실패하면 광고 없이 바로 오류(show 의 catch).
+    const info = await api.vodPlay(videoNo);
+    if (seq !== this.seq) return;
     // 치트키가 없으면 치지직처럼 재생 전에 프리롤 광고를 본다(그 사이 다른 영상을 열면 그만).
     if (!(await playPreroll('vod', videoNo))) {
       // 광고를 그만뒀다 — 다른 영상에 밀려났거나(그쪽이 화면을 맡는다) 광고 중에 다른 화면으로 옮겨 이 화면이
@@ -65,8 +69,6 @@ export class MediaPage {
       if (seq === this.seq && !this.root.hidden && this.onBack) this.onBack();
       return;
     }
-    if (seq !== this.seq) return;
-    const info = await api.vodPlay(videoNo);
     if (seq !== this.seq) return;
     this.info = info;
     const qualities = info.qualities || [];

@@ -12,6 +12,7 @@ import {
   fmtPct, fmtBytes, fmtRate, cpuLevel, sparkPath, niceMax,
 } from './usage-monitor.js';
 import { resolvedTheme } from './theme.js';
+import { pixelScale } from './dom.js';
 
 const SPARK_N = 40;
 // 펼침 줄 꺾은선 — 사이드바 안쪽 폭(232 − 12×2)에서 칸 여백·이름·값 열(usage.css .su-row)을 뺀 고정 크기.
@@ -139,7 +140,8 @@ function colorOf(id, level) {
 function drawRow(canvas, recent, id, w, h, level) {
   const g = canvas && canvas.getContext && canvas.getContext('2d');
   if (!g) return;
-  const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
+  // 화면 크기 확대까지(WKWebView 는 devicePixelRatio 에 넣지 않는다) — 125%·150% 에서 2배로 그려 늘려 흐렸다.
+  const dpr = Math.max(1, Math.min(3, pixelScale()));
   if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, w, h);

@@ -27,7 +27,8 @@ function setAdMutedPref(on) {
 }
 function adVolume() {
   const v = Number(document.querySelector('#volume')?.value);
-  return Number.isFinite(v) && v > 0 ? Math.min(1, v / 100) : 1;
+  // 0 은 0 — 예전엔 0 을 '모름'처럼 다뤄, 볼륨을 0 으로 둔 사람에게 광고가 최대 볼륨으로 나왔다.
+  return Number.isFinite(v) && v >= 0 ? Math.min(1, v / 100) : 1;
 }
 
 /** 광고 동안 보던 방송 소리를 끄고 되살리는 훅(app.js 가 소리 주인 규칙으로 건다). */

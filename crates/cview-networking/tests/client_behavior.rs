@@ -1201,3 +1201,21 @@ async fn follow_forgets_the_cached_following_list() {
         "팔로우한 채널이 캐시된 목록에 가려졌다"
     );
 }
+
+/// 인기 클립 새로고침은 응답 캐시를 거치지 않는다 — 예전엔 60초 안 새로고침이 같은 목록을 돌려줬다.
+#[tokio::test]
+async fn popular_clips_refresh_bypasses_the_response_cache() {
+    let t = MockTransport::new(Duration::ZERO, |_req, _| ok(json!({"size": 0, "data": []})));
+    let c = client(t.clone(), None);
+    c.home_popular_clips_with("WITHIN_7_DAYS", "POPULAR", false)
+        .await
+        .unwrap();
+    c.home_popular_clips_with("WITHIN_7_DAYS", "POPULAR", false)
+        .await
+        .unwrap();
+    assert_eq!(t.sends(), 1, "처음 열기는 캐시를 쓴다");
+    c.home_popular_clips_with("WITHIN_7_DAYS", "POPULAR", true)
+        .await
+        .unwrap();
+    assert_eq!(t.sends(), 2, "새로고침이 캐시를 읽었다");
+}

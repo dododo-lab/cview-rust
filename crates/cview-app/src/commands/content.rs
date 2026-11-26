@@ -310,14 +310,21 @@ pub async fn popular_clips(
     services: State<'_, AppServices>,
     filter: Option<String>,
     order: Option<String>,
+    refresh: Option<bool>,
 ) -> CmdResult<Vec<ClipInfo>> {
     let filter = match filter.as_deref() {
         Some("WITHIN_1_DAY") => "WITHIN_1_DAY",
         _ => "WITHIN_7_DAYS",
     };
+    // 새로고침(⌘R·'새로고침'·'다시 시도')은 응답 캐시를 거치지 않는다 — 예전엔 60초 안엔 같은 목록이 오는데 갱신 시각만
+    // '방금'으로 바뀌었다(인기 라이브와 같게).
     Ok(services
         .api
-        .home_popular_clips(filter, order.as_deref().unwrap_or("POPULAR"))
+        .home_popular_clips_with(
+            filter,
+            order.as_deref().unwrap_or("POPULAR"),
+            refresh.unwrap_or(false),
+        )
         .await?)
 }
 

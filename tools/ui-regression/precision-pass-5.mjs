@@ -24,6 +24,12 @@
 // T18 채팅 설정 — 다른 창이 바꾼 설정(settings://chat)을 이 창도 따른다(차단 목록을 옛 값으로 덮지 않게).
 // T19 채팅 — /unmute 로 /mute 를 풀고, 말풍선 카드 캐시는 팔로우 변경에 비워진다(코드 확인).
 // T20 다시보기 한글 입력 단축키, 다운로드 '다시 받기'의 채널 이름(코드 확인).
+// (8차)
+// T21 메뉴 막대·트레이 '지금 재생 중'은 창만 열지 않고 재생 중인 화면(show-now-playing)으로 간다.
+// T22 카테고리 없는 방송은 '기타'로 묶이고, '기타'를 고르면 그 방송들이 보인다.
+// T23 검색 — 같은 검색 결과로 뒤로 돌아오면 다시 찾지 않고, 검색창을 비우면 ⌘R 이 지운 검색어로 다시 찾지 않는다.
+// T24 다시보기 — 재생 정보를 광고보다 먼저 받는다(재생할 수 없는 영상은 광고 없이 바로 오류). 인기 클립 새로고침은 refresh 를 보낸다.
+// T25 사이드바 사용률 그래프 배율(pixelScale)·시계 역행 처리·광고 볼륨 0(코드 확인).
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { base, server, mockTauri, go } from './mock-app.mjs';
@@ -369,6 +375,80 @@ try {
     const dl = await (await fetch(`${base}js/downloads.js`)).text();
     assert.match(dl, /startDownload\(b\.dataset\.kind, b\.dataset\.target, b\.dataset\.title, b\.dataset\.channel \|\| undefined\)/);
     assert.equal((dl.match(/data-channel="\$\{esc\(/g) || []).length, 2);
+  });
+
+  await check('T21 지금 재생 중 카드는 재생 화면으로 간다', async () => {
+    const { ctx, page } = await open({ events: true });
+    await go(page, 'settings');
+    await settle(page, 200);
+    const r = await page.evaluate(async () => {
+      // 다시보기가 아닌 화면에서 재생 중 칸이 없으면 그대로(오류 없이) — 실제 이동은 시청 화면이 있어야 해서 코드로 확인한다.
+      (window.__ev['tray://control'] || []).forEach((cb) => cb({ payload: { kind: 'show-now-playing' } }));
+      const src = await (await fetch('/js/app.js')).text();
+      return { handled: /case 'show-now-playing':/.test(src), route: document.querySelector('[data-page="settings"]:not([hidden])') !== null };
+    });
+    assert.deepEqual(r, { handled: true, route: true });
+    await ctx.close();
+  });
+
+  await check('T22 기타 카테고리를 고르면 카테고리 없는 방송이 보인다', async () => {
+    const { ctx, page } = await open();
+    const r = await page.evaluate(async () => {
+      const { categoryGroups, arrangeLives } = await import('/js/pages.js');
+      const lives = [{ categoryName: 'LoL', viewerCount: 3 }, { categoryName: null, viewerCount: 2 }, { viewerCount: 1 }];
+      return { groups: categoryGroups(lives).map((g) => `${g.name}:${g.count}`), etc: arrangeLives(lives, { category: '기타' }).length };
+    });
+    assert.deepEqual(r, { groups: ['LoL:1', '기타:2'], etc: 2 });
+    await ctx.close();
+  });
+
+  await check('T23 검색 뒤로 가기·비운 뒤 ⌘R', async () => {
+    const { ctx, page } = await open();
+    const count = () => page.evaluate(() => window.__qCalls.filter(([c]) => c === 'search').length);
+    await go(page, 'search', { query: '릴카' });
+    await settle(page, 600);
+    const first = await count();
+    assert.ok(first >= 1);
+    await go(page, 'home');
+    await settle(page, 300);
+    await go(page, 'search', { query: '릴카' });
+    await settle(page, 400);
+    assert.equal(await count(), first, '같은 검색 결과로 돌아왔는데 다시 찾았다');
+    await page.evaluate(() => { const i = document.querySelector('[data-page="search"] input'); i.value = ''; i.dispatchEvent(new Event('input', { bubbles: true })); });
+    await settle(page, 200);
+    await page.keyboard.press('Meta+r');
+    await settle(page, 600);
+    const r = await page.evaluate(() => document.querySelector('[data-page="search"] input').value);
+    assert.equal(await count(), first, '비운 뒤 ⌘R 이 지운 검색어로 다시 찾았다');
+    assert.equal(r, '');
+    await ctx.close();
+  });
+
+  await check('T24 다시보기는 재생 정보를 광고보다 먼저, 클립 새로고침은 refresh', async () => {
+    const { ctx, page } = await open({ extra: {
+      vod_play: () => { throw new Error('성인 인증이 필요한 영상입니다'); },
+    } });
+    await go(page, 'media', { kind: 'vod', id: 77 });
+    await settle(page, 600);
+    const r = await page.evaluate(() => ({
+      calls: window.__qCalls.map(([c]) => c).filter((c) => c === 'vod_play' || c.startsWith('ad_')),
+      err: Boolean(document.querySelector('[data-page="media"] .empty.error')),
+    }));
+    assert.equal(r.calls[0], 'vod_play', `광고를 먼저 불렀다: ${r.calls.join(',')}`);
+    assert.ok(!r.calls.some((c) => c.startsWith('ad_')), '재생할 수 없는 영상에 광고를 요청했다');
+    assert.equal(r.err, true);
+    const pages = await (await fetch(`${base}js/pages.js`)).text();
+    assert.match(pages, /api\.popularClips\(this\.clipFilter, this\.clipOrder, Boolean\(refresh\)\)/);
+    await ctx.close();
+  });
+
+  await check('T25 사용률 그래프 배율·시계 역행·광고 볼륨 0', async () => {
+    const su = await (await fetch(`${base}js/sidebar-usage.js`)).text();
+    assert.match(su, /Math\.min\(3, pixelScale\(\)\)/);
+    const um = await (await fetch(`${base}js/usage-monitor.js`)).text();
+    assert.match(um, /if \(last\.t - s\.t <= BACKWARD_TOLERANCE_MS\) return;/);
+    const ads = await (await fetch(`${base}js/ads.js`)).text();
+    assert.match(ads, /Number\.isFinite\(v\) && v >= 0 \? Math\.min\(1, v \/ 100\) : 1/);
   });
 } finally {
   await browser.close();

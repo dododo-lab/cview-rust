@@ -59,7 +59,8 @@ function clipSkeleton(n = 10) {
 
 /** 정렬·카테고리 필터 — 순수 함수. */
 export function arrangeLives(lives, { sort = 'viewers', category = '' } = {}) {
-  const list = category ? lives.filter((l) => l.categoryName === category) : [...lives];
+  // 묶을 때(categoryGroups)와 같은 키로 — 카테고리 없는 방송은 '기타'로 묶이는데 null 과 비교해, '기타'를 누르면 늘 비었다.
+  const list = category ? lives.filter((l) => (l.categoryName || '기타') === category) : [...lives];
   if (sort === 'recent') list.sort((a, b) => Date.parse(b.openDate || 0) - Date.parse(a.openDate || 0));
   else list.sort((a, b) => (b.viewerCount || 0) - (a.viewerCount || 0));
   return list;
@@ -269,7 +270,7 @@ export class PopularPage {
     const key = `${this.clipFilter}:${this.clipOrder}`;
     const hit = this.clipCache.get(key);
     if (!refresh && hit && Date.now() - hit.at < CLIP_CACHE_MS) return hit.promise;
-    const promise = api.popularClips(this.clipFilter, this.clipOrder);
+    const promise = api.popularClips(this.clipFilter, this.clipOrder, Boolean(refresh));
     this.clipCache.set(key, { at: Date.now(), promise });
     promise.catch(() => { if (this.clipCache.get(key)?.promise === promise) this.clipCache.delete(key); });
     return promise;
@@ -574,6 +575,9 @@ export class SearchPage {
     this.input.focus();
     // 숨은 채로 그리려던 첫 화면(인기 카테고리·채널) — 처음 보일 때 채운다.
     if (this.discoveryPending) { this.discoveryPending = false; this.renderDiscovery(); }
+    // 뒤로 가기로 같은 검색 결과에 돌아오면 그대로 둔다 — 예전엔 다시 찾아 로딩이 깜빡이고, '더 보기'로 넓힌 다시보기·
+    // 클립과 스크롤이 처음으로 돌아갔다. ⌘R(refresh)은 다시 찾는다.
+    if (params && params.query && !params.refresh && !this.idle && String(params.query).trim() === this.query && (this.result || this.videos)) return undefined;
     if (params && params.query) { this.input.value = params.query; return this.run(params.query); }
     // ⌘R — 경로에 검색어가 없어도 마지막 검색을 다시 한다.
     if (params && params.refresh && this.lastQuery) return this.retry();
@@ -637,6 +641,8 @@ export class SearchPage {
     this.videosRetrying = false;
     if (!q) {
       this.query = '';
+      // 마지막 검색어도 잊는다 — 예전엔 비운 뒤에도 ⌘R·재연결·'다시 시도'·뒤로 가기가 지운 검색어로 다시 찾았다.
+      this.lastQuery = '';
       this.result = null;
       this.clips = null;
       this.videos = null;

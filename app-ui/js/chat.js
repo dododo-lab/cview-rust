@@ -138,6 +138,18 @@ const emoticonCache = new Map();
 /** 모든 채팅 패널 — Rust 채팅 세션은 하나라 마지막으로 연결한 패널만 이벤트를 그린다. */
 const PANELS = new Set();
 
+// 차단은 설정 하나(blockedUsers)라 어느 목록·창에서 막았든 이 창의 모든 채팅 목록(다른 패널·멀티채팅 통합 목록·멀티라이브 칸)에서
+// 그 사람 지난 줄을 걷는다 — 예전엔 차단을 누른 목록에서만 지워, 그리드의 다른 패널·통합 목록에 그대로 남았다.
+let blockedSeen = new Set();
+onChatPrefs((p) => {
+  const now = new Set((p && p.blockedUsers) || []);
+  for (const uid of now) {
+    if (blockedSeen.has(uid)) continue;
+    for (const el of document.querySelectorAll(`.chat-line[data-uid="${CSS.escape(uid)}"]`)) el.remove();
+  }
+  blockedSeen = now;
+});
+
 /**
  * 로그인 상태가 바뀌면(로그인·만료·로그아웃) 열린 채팅을 새 신원으로 다시 연결한다 — 비로그인으로 붙은 채팅은
  * 로그인한 뒤에도 익명 연결이라 보내기가 되지 않았다(닫았다 열어야 했다). 입력창 상태도 함께 고친다.
@@ -645,6 +657,8 @@ export class ChatPanel {
 
   system(text) {
     this.append([{ id: `sys-${Date.now()}`, kind: 'system', content: text }]);
+    // 이 패널 목록이 숨은 보기(멀티채팅 통합·멀티라이브 멀티채팅)는 보이는 목록에도 띄운다(/help·연결 오류·퇴장 안내).
+    if (this.onSystem) { try { this.onSystem(text); } catch (e) { console.error(e); } }
   }
 
   onEvent(ev) {

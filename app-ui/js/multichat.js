@@ -71,14 +71,15 @@ export function setMergedChatStyle(style) {
 /**
  * 통합(머지) 채팅 줄 여러 개 — 단일 채팅과 같은 줄 렌더러(chat.js lineHtml: 말풍선 묶음·아바타·이모티콘 단독 확대·
  * 줄 메뉴용 data-uid)에 출처 태그를 붙인다. 채팅 설정(차단·금지어·후원 필터·이모티콘)을 따른다.
- * @param {{ m: object, name?: string, style?: string, src?: string }[]} items 붙일 순서대로. name — 태그(없으면 태그 없음),
- *   style — 줄의 색 변수, src — 관리자 삭제(blinded)를 찾을 출처 키.
+ * @param {{ m: object, name?: string, style?: string, src?: string, hide?: (m: object) => boolean }[]} items 붙일 순서대로. name — 태그(없으면 태그 없음),
+ *   style — 줄의 색 변수, src — 관리자 삭제(blinded)를 찾을 출처 키, hide — 참이면 그리지 않는다(출처 패널의 /mute).
  * @param {Element|null} [prev] 이 줄들이 붙을 목록의 지금 마지막 줄 — 같은 출처·같은 사람·같은 분이면 묶음을 잇는다
  *   (그 줄에 has-next 를 붙인다). 출처가 다르면 같은 사람이어도 묶지 않는다.
  */
 export function mergedItemsHtml(items, prev = null) {
   const prefs = chatPrefs();
-  const shown = (items || []).filter(({ m }) => m && m.kind !== 'system' && passesFilters(m, prefs));
+  // hide — 출처 패널의 /mute(ChatPanel.localHidden). 예전엔 통합 목록이 보지 않아 숨긴 사람 글이 계속 붙었다.
+  const shown = (items || []).filter(({ m, hide }) => m && m.kind !== 'system' && passesFilters(m, prefs) && !(hide && hide(m)));
   if (!shown.length) return '';
   const keys = shown.map(({ m, src = '' }) => { const k = groupKey(m); return k ? `${src}|${k}` : ''; });
   const prevKey = (prev && prev.dataset && prev.dataset.g) || '';
@@ -267,7 +268,9 @@ export class MultiChatPage {
     try { live = await api.liveDetail(channelId, false); } catch (e) { this.pendingAdds.delete(channelId); toast(e.message); return; }
     this.pendingAdds.delete(channelId);
     if (this.channels.some((c) => c.channelId === channelId)) { this.focus(channelId); return; }
-    const color = COLORS[this.channels.length % COLORS.length];
+    // 남은 채널이 쓰지 않는 색 — 개수로 고르면 채널을 닫은 뒤 더한 채널이 남은 채널과 같은 색이 되어 통합 목록에서 구분되지 않았다.
+    const used = new Set(this.channels.map((c) => c.color));
+    const color = COLORS.find((x) => !used.has(x)) || COLORS[this.channels.length % COLORS.length];
     const el = document.createElement('div');
     el.className = 'mc-pane';
     el.dataset.channelId = channelId;
@@ -296,6 +299,11 @@ export class MultiChatPage {
       if (this.search.value.trim()) this.filterTail(panel.list, msgs.length);
     });
     panel.inputHooks.push(() => this.updateMergedInput());
+    // 통합 보기에서는 패널이 숨어 있다 — 패널 안내(/help·연결 오류·퇴장)는 통합 목록에, /mute 는 통합 목록의 지난 줄에도.
+    panel.onSystem = (text) => { if (this.layout === 'merged' && this.channels.includes(entry)) this.appendMergedSystem(entry, text); };
+    panel.onMute = (nick) => {
+      for (const el of this.mergedList.querySelectorAll(`.merged-line[data-src="${CSS.escape(channelId)}"][data-nick="${CSS.escape(nick)}"]`)) el.remove();
+    };
     this.channels.push(entry);
     panel.connect(live.chatChannelId, channelId);
     if (!this.active) this.active = channelId;
@@ -349,6 +357,10 @@ export class MultiChatPage {
 
   /** 보낼 채널을 바꾸면 — 이모티콘·닉네임 후보가 그 채널 것으로 바뀐다. */
   onTargetChange() {
+    // 고른 채널을 선택 채널로 — 예전엔 다시 그릴 때(다른 채널 닫기·추가) 보낼 채널이 선택 채널로 조용히 되돌아가
+    // 고르지 않은 채널로 보냈다(render 가 active 로 option 을 다시 고른다).
+    const c = this.targetEntry();
+    if (c && c.channelId !== this.active) { this.active = c.channelId; this.renderOverview(); this.persist(); }
     this.pendingSend = null;
     this.composer.setAutocompleteOpen(false);
     if (!this.composer.picker.hidden) this.composer.renderPicker();
@@ -454,7 +466,7 @@ export class MultiChatPage {
     for (const [c, msgs] of list) {
       if (!this.channels.includes(c)) continue;
       const style = `--mc-color:${c.color}`;
-      for (const m of msgs) items.push({ m, name: c.name, style, src: c.channelId });
+      for (const m of msgs) items.push({ m, name: c.name, style, src: c.channelId, hide: c.panel.localHidden });
     }
     this.appendMerged(items.slice(-MERGED_BACKLOG));
   }
@@ -484,6 +496,32 @@ export class MultiChatPage {
     if (follow) follower.snap();
   }
 
+  /** 패널 안내 한 줄을 통합 목록에 — 앞서 모아 둔 메시지 뒤에. */
+  appendMergedSystem(c, text) {
+    if (this.backlog?.length) this.flushBacklog();
+    const follower = chatFollower(this.mergedList);
+    const follow = follower.stuck;
+    this.mergedList.querySelector(':scope > .empty')?.remove();
+    this.mergedList.insertAdjacentHTML('beforeend', `<div class="chat-line system merged-line" data-src="${esc(c.channelId)}" style="--mc-color:${esc(c.color)}"><span class="sys-pill">${esc(c.name)} · ${esc(text)}</span></div>`);
+    trimFront(this.mergedList, 600);
+    if (follow) follower.snap();
+  }
+
+  /** 패널 트레이(/stats)는 숨은 패널 안이라 — 통합 상자에 같은 내용으로 띄운다. 바깥을 누르거나 Esc 면 닫는다. */
+  showMergedTray(panel) {
+    if (panel.tray.hidden) return;
+    if (!this.mergedTray) {
+      this.mergedTray = document.createElement('div');
+      this.mergedTray.className = 'chat-tray mc-merged-tray';
+      this.merged.append(this.mergedTray);
+      document.addEventListener('click', (e) => { if (!this.mergedTray.contains(e.target)) this.mergedTray.hidden = true; });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.mergedTray.hidden = true; });
+    }
+    this.mergedTray.innerHTML = panel.tray.innerHTML;
+    panel.tray.hidden = true;
+    this.mergedTray.hidden = false;
+  }
+
   async sendMerged() {
     const input = this.mergedInput;
     const submitted = input.value;
@@ -497,6 +535,7 @@ export class MultiChatPage {
           this.lines?.reset?.();
           this.mergedList.innerHTML = '<div class="empty">채팅을 지웠습니다</div>';
         }
+        if (/^\/stats\b/i.test(text)) this.showMergedTray?.(entry.panel);
         input.value = '';
         this.composer.renderCount();
         return;

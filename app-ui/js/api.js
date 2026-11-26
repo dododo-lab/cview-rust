@@ -180,7 +180,7 @@ export const api = {
   // 클립은 쪽 번호 대신 앞 응답의 nextCursor 로 넘긴다(서버가 page 를 무시). null 이면 첫 쪽.
   channelClips: (channelId, cursor = null, size = 24) => invoke('channel_clips', { channelId, cursor, size }),
   channelPosts: (channelId, page = 0) => invoke('channel_posts', { channelId, page }),
-  popularClips: (filter, order) => invoke('popular_clips', { filter, order }),
+  popularClips: (filter, order, refresh = false) => invoke('popular_clips', { filter, order, refresh }),
   searchVideos: (keyword, offset = 0, size = 24) => invoke('search_videos', { keyword, offset, size }),
   clipPlay: (clipUid) => invoke('clip_play', { clipUid }),
   vodDetail: (videoNo) => invoke('vod_detail', { videoNo }),

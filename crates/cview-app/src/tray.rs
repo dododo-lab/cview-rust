@@ -801,6 +801,10 @@ fn on_menu<R: Runtime>(app: &AppHandle<R>, id: &str) {
         "tray-now" => {
             crate::tray_popover::hide(app);
             show_main(app);
+            crate::tray_popover::send_main_control(
+                app,
+                serde_json::json!({ "kind": "show-now-playing" }),
+            );
         }
         "tray-toggle" => {
             if main_hidden(app) {
