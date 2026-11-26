@@ -206,6 +206,18 @@ pub async fn chat_send(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn user_card_live_flag_prefers_the_fresh_live_detail() {
+        use cview_core::models::live::LiveStatus;
+        // 채널 정보 캐시는 '방송 안 함'인데 막 켰다 → 방송 중
+        assert!(super::card_open_live(false, Some(LiveStatus::Open)));
+        // 캐시는 '방송 중'인데 끝났다 → 방송 안 함
+        assert!(!super::card_open_live(true, Some(LiveStatus::Close)));
+        // 라이브 상세를 못 받았으면 채널 정보 값
+        assert!(super::card_open_live(true, None));
+        assert!(!super::card_open_live(false, None));
+    }
     use super::*;
 
     #[test]
@@ -278,6 +290,17 @@ pub struct ChatUserCardDto {
     pub is_self: bool,
 }
 
+/// 말풍선의 '방송 중' — 라이브 상세를 받았으면 그 상태, 못 받았으면 채널 정보 값. 순수 함수.
+pub fn card_open_live(
+    cached_open_live: bool,
+    live: Option<cview_core::models::live::LiveStatus>,
+) -> bool {
+    match live {
+        Some(status) => status == cview_core::models::live::LiveStatus::Open,
+        None => cached_open_live,
+    }
+}
+
 #[tauri::command]
 pub async fn chat_user_card(
     services: State<'_, AppServices>,
@@ -315,9 +338,21 @@ pub async fn chat_user_card(
             None
         }
     };
-    let (profile, channel, following, me) = tokio::join!(profile, channel, follow, me);
+    // 방송 중인지는 라이브 상세(60초 캐시)로 본다 — 채널 정보의 openLive 는 5분(묵은 값 1시간) 캐시라, 말풍선이 막 켠 방송의
+    // '방송 보기'를 빠뜨리거나 끝난 방송에 '방송 보기'를 띄웠다(채널 화면 channel_detail_for 와 같은 처리).
+    let live = async {
+        api.live_detail(&user_id, false)
+            .await
+            .ok()
+            .map(|l| l.status)
+    };
+    let (profile, channel, following, me, live) = tokio::join!(profile, channel, follow, me, live);
     let channel = match (channel, &profile) {
-        (Ok(c), _) => Some(crate::dto::ChannelDto::from(&c)),
+        (Ok(c), _) => {
+            let mut dto = crate::dto::ChannelDto::from(&c);
+            dto.open_live = card_open_live(dto.open_live, live);
+            Some(dto)
+        }
         (Err(_), Some(_)) => None,
         (Err(e), None) => return Err(e.into()),
     };

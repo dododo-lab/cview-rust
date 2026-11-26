@@ -74,9 +74,13 @@ export async function showUpdateCheck() {
   const actions = scrim.querySelector('.sheet-actions');
   const closeBtn = actions.querySelector('[data-close]');
   let u = null;
+  // 단추를 갈아 끼울 때 초점이 그 단추에 있었으면 새 단추(없으면 시트)로 옮긴다 — 예전엔 키보드로 '다시 시도'를 누르면
+  // 초점이 body 로 떨어져 Esc(시트에 걸린 처리기)가 듣지 않았다.
   const setButtons = (html) => {
+    const hadFocus = Boolean(document.activeElement && document.activeElement.closest?.('[data-update]') && actions.contains(document.activeElement));
     actions.querySelectorAll('[data-update]').forEach((b) => b.remove());
     closeBtn.insertAdjacentHTML('beforebegin', html);
+    if (hadFocus) (actions.querySelector('[data-update]:not([disabled])') || scrim.querySelector('.sheet'))?.focus({ preventScroll: true });
   };
   const run = async () => {
     setButtons('');
@@ -98,6 +102,8 @@ export async function showUpdateCheck() {
     setButtons(buttons.join(''));
   };
   const install = async () => {
+    // 누른 단추를 끄면 초점이 body 로 떨어진다 — 시트로 옮겨 둔다(Esc·Tab 이 계속 듣게).
+    if (actions.contains(document.activeElement)) scrim.querySelector('.sheet')?.focus({ preventScroll: true });
     actions.querySelectorAll('[data-update]').forEach((b) => { b.disabled = true; });
     body.querySelector('.update-error')?.remove();
     body.insertAdjacentHTML('beforeend', progressHtml());

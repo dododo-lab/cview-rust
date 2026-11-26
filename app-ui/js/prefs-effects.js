@@ -60,6 +60,14 @@ export async function installPrefsEffects(ctx) {
     syncTheme(appearance.theme);
     apply({ ...(settings || {}), appearance }, ctx);
   });
+  // 재생·일반 설정 — 다른 창(메인 창 설정·가져오기·초기화·메뉴 막대)에서 바꾸면 이 창도 따른다. 예전엔 연 때 읽은 값을 계속 써서
+  // 플레이어 창이 '백그라운드 재생' 끔·후원 알림 위치·자동 새로고침 간격을 따르지 않았다.
+  for (const [ev, key] of [[Events.playerChanged, 'player'], [Events.generalChanged, 'general']]) {
+    listen(ev, (v) => {
+      if (!v || typeof v !== 'object' || !settings) return;
+      apply({ ...settings, [key]: v }, ctx);
+    });
+  }
   window.addEventListener('cview:settings-changed', (e) => {
     if (e.detail && e.detail.settings) apply(e.detail.settings, ctx);
   });

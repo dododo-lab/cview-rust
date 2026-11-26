@@ -87,7 +87,8 @@ export function showNotice({ windows = IS_WINDOWS } = {}) {
       </div></div>`;
   const sheet = scrim.querySelector('.sheet');
   // 뒤의 앱은 누르거나 초점을 줄 수 없게 — 떠 있는 동안 body 의 다른 자식은 inert.
-  const inerted = [...document.body.children].filter((el) => !el.inert);
+  // Windows 창 단추(최소화·최대화·닫기, window-controls.js)는 남긴다 — 제목 막대가 없어 이것까지 막으면 창을 내리거나 닫을 수 없었다.
+  const inerted = [...document.body.children].filter((el) => !el.inert && !el.classList.contains('win-controls'));
   let resolve;
   const done = new Promise((r) => { resolve = r; });
   scrim.done = done;

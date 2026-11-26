@@ -280,6 +280,8 @@ impl ManagerState {
     pub fn multi_live_limits_changed(&mut self) {
         self.reconcile_decode_budget();
         self.update_estimated_pane_sizes();
+        // 보조 패인 볼륨도 바로 — 예전엔 설정에서 바꿔도 다음 소리 전환 때까지 옛 비율로 냈다.
+        self.sync_audio_volumes();
     }
 
     pub fn reconcile_decode_budget(&mut self) {

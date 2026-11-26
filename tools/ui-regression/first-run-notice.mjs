@@ -49,7 +49,7 @@ function noticeMock({ welcomed }) {
 }
 
 /** 앱을 연다. notice — 저장된 동의 버전(없으면 0). bump — 화면의 NOTICE_VERSION 을 이 값으로 바꿔 서빙(문구 개정 흉내). */
-async function open({ ua = MAC_UA, theme = 'dark', notice = 0, welcomed = true, bump = null, ctx = null } = {}) {
+async function open({ ua = MAC_UA, theme = 'dark', notice = 0, welcomed = true, bump = null, ctx = null, url = '', events = false, waitPage = true } = {}) {
   ctx ||= await browser.newContext({ viewport: { width: 1280, height: 860 }, colorScheme: theme, userAgent: ua });
   const page = await ctx.newPage();
   page.setDefaultTimeout(8000);
@@ -61,8 +61,10 @@ async function open({ ua = MAC_UA, theme = 'dark', notice = 0, welcomed = true, 
   await page.addInitScript(mockTauri, [base, theme, 12]);
   if (notice) await page.addInitScript((v) => { try { localStorage.setItem('__mock.notice', JSON.stringify({ v, at: Date.UTC(2026, 10, 1) })); } catch { /* 무시 */ } }, notice);
   await page.addInitScript(noticeMock, { welcomed });
-  await page.goto(base);
-  await page.waitForSelector('[data-page]', { state: 'attached' });
+  // 이벤트 흉내 — 검사가 window.__ev[이름] 처리기를 직접 부른다(트레이·메뉴 막대 동작 등).
+  if (events) await page.addInitScript(() => { window.__ev = {}; window.__TAURI__.event.listen = async (n, cb) => { (window.__ev[n] ||= []).push(cb); return () => {}; }; });
+  await page.goto(`${base}${url}`);
+  if (waitPage) await page.waitForSelector('[data-page]', { state: 'attached' });
   return { ctx, page, errors };
 }
 
@@ -290,6 +292,69 @@ await check('N11 이 기능 이전 백엔드(noticeAcceptedVersion 없음)에서
   await sleep(1200);
   assert.equal(await shown(page), false);
   await ctx.close();
+});
+
+// ── 9차 — 고지와 다른 시작 흐름 ──
+const fire = (page, name, payload) => page.evaluate(([n, p]) => (window.__ev[n] || []).forEach((cb) => cb({ payload: p })), [name, payload]);
+
+await check('N12 고지가 떠 있으면 메뉴 막대·트레이의 화면 이동·멀티라이브 추가·업데이트 확인을 하지 않는다', async () => {
+  const { ctx, page } = await open({ events: true });
+  await waitNotice(page);
+  const route0 = await page.evaluate(() => [...document.querySelectorAll('[data-page]')].find((p) => !p.hidden)?.dataset.page);
+  await fire(page, 'tray://control', { kind: 'queue-multi', channelIds: ['ch1', 'ch2'] });
+  await fire(page, 'tray://control', { kind: 'navigate', route: 'search' });
+  await fire(page, 'tray://control', { kind: 'check-update' });
+  await fire(page, 'tray://control', { kind: 'show-now-playing' });
+  await sleep(400);
+  const after = await page.evaluate(() => ({
+    route: [...document.querySelectorAll('[data-page]')].find((p) => !p.hidden)?.dataset.page,
+    sheets: document.querySelectorAll('.sheet-scrim:not(.notice-scrim)').length,
+    multiAdd: window.__calls.filter((c) => c === 'multi_live_add').length,
+  }));
+  assert.equal(after.route, route0, '화면이 바뀌지 않는다');
+  assert.equal(after.sheets, 0, '업데이트 시트가 고지 위에 뜨지 않는다');
+  assert.equal(after.multiAdd, 0, '멀티라이브에 넣지 않는다');
+  assert.ok(await shown(page));
+  // 동의한 뒤에는 그대로 듣는다
+  await page.click(`${NOTICE} [data-notice="accept"]`);
+  await page.waitForFunction((s) => !document.querySelector(s), NOTICE);
+  await page.evaluate(() => document.querySelectorAll('.sheet-scrim.welcome-scrim').forEach((x) => x.remove()));
+  await fire(page, 'tray://control', { kind: 'navigate', route: 'search' });
+  await page.waitForFunction(() => !document.querySelector('[data-page="search"]').hidden);
+  await ctx.close();
+});
+
+await check('N13 동의하기 전에는 보조 창(채팅 창 등)이 열리지 않고 스스로 닫힌다', async () => {
+  const { ctx, page } = await open({ url: '?w=chat&channelId=ch1', waitPage: false });
+  await page.waitForFunction(() => window.__calls.includes('window_close_self'), null, { timeout: 5000 }).catch(() => {});
+  const r = await page.evaluate(() => ({ closed: window.__calls.includes('window_close_self'), chat: window.__calls.filter((c) => c.startsWith('chat_connect')).length }));
+  assert.ok(r.closed, 'window_close_self 를 부른다');
+  assert.equal(r.chat, 0, '채팅을 연결하지 않는다');
+  await ctx.close();
+  // 동의한 뒤에는 그대로 연다
+  const b = await open({ url: '?w=chat&channelId=ch1', notice: 1, waitPage: false });
+  await sleep(1200);
+  assert.equal(await b.page.evaluate(() => window.__calls.includes('window_close_self')), false);
+  await b.ctx.close();
+});
+
+await check('N14 Windows — 고지가 떠 있어도 창 단추(최소화·최대화·닫기)는 누를 수 있다', async () => {
+  const { ctx, page } = await open({ ua: WIN_UA });
+  await waitNotice(page);
+  const r = await page.evaluate(() => {
+    const bar = document.querySelector('.win-controls');
+    return { has: Boolean(bar), inert: bar ? bar.inert : null, others: [...document.body.children].filter((e) => !e.matches('.win-controls, .notice-scrim')).every((e) => e.inert) };
+  });
+  assert.ok(r.has, '창 단추가 있다');
+  assert.equal(r.inert, false, '창 단추는 inert 가 아니다');
+  assert.ok(r.others, '나머지 화면은 inert');
+  await ctx.close();
+});
+
+await check('N15 고지를 물어야 하면 홈 데이터를 기다리지 않고 고지를 띄운다(시작 화면이 먼저 걷혀 홈을 누를 틈이 없다)', async () => {
+  const src = fs.readFileSync(path.resolve('app-ui/js/app.js'), 'utf8');
+  assert.match(src, /const askNotice = needsNotice\(settings && settings\.general\);\s*\n\s*if \(!askNotice\) await loadHomeBehindSplash\(\);/);
+  assert.match(src, /if \(askNotice\) await showNotice\(\);/);
 });
 
 await browser.close();

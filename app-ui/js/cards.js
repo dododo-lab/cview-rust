@@ -104,8 +104,12 @@ export function emptyState(title, detail = '', action = '') {
 export function friendlyError(err) {
   const raw = String((err && err.message) || err || '');
   if (/network|연결|timed? ?out|시간 초과|dns|offline|connect/i.test(raw)) return '인터넷 연결을 확인한 뒤 다시 시도해 주세요';
-  if (/401|403|로그인|unauthor|forbidden|인증/i.test(raw)) return '로그인이 필요하거나 접근 권한이 없습니다';
-  if (/429|한도|rate/i.test(raw)) return '요청이 많아 잠시 막혔습니다 — 조금 뒤 다시 시도해 주세요';
+  // Rust 문구(cview-core error.rs)는 상태 코드 없이 한국어로 온다 — '접근 권한이 없습니다'(403)·'찾을 수 없습니다'(404)·
+  // '요청이 많아…'(429)·'서버 응답을 읽지 못했습니다'(해석 실패)를 예전엔 엉뚱한 원인(일반 문구·'서버가 응답하지 않습니다')으로 바꿨다.
+  if (/401|403|로그인|unauthor|forbidden|인증|권한/i.test(raw)) return '로그인이 필요하거나 접근 권한이 없습니다';
+  if (/429|한도|rate|요청이 많아/i.test(raw)) return '요청이 많아 잠시 막혔습니다 — 조금 뒤 다시 시도해 주세요';
+  if (/404|찾을 수 없/i.test(raw)) return '찾을 수 없습니다 — 삭제됐거나 주소가 바뀌었을 수 있습니다';
+  if (/서버 응답(을 읽지| 형식)/.test(raw)) return '서버 응답을 해석하지 못했습니다 — 잠시 뒤 다시 시도해 주세요';
   if (/5\d\d|server|서버/i.test(raw)) return '서버가 응답하지 않습니다 — 잠시 뒤 다시 시도해 주세요';
   return '잠시 뒤 다시 시도해 주세요';
 }

@@ -84,8 +84,9 @@ export const SCHEMA = [
     { d: 'multiLive', k: 'defaultLayoutMode', label: '기본 레이아웃', type: 'select', options: opt([['preset', '균등 분할'], ['focus', '포커스 모드']]) },
     { d: 'multiLive', k: 'defaultFocusDirection', label: '포커스 메인 위치', type: 'select', options: opt([['left', '왼쪽'], ['right', '오른쪽'], ['top', '위'], ['bottom', '아래']]) },
     { d: 'multiLive', k: 'rememberLastLayout', label: '마지막 레이아웃 기억', type: 'toggle' },
-    { d: 'multiLive', k: 'multiAudioEnabled', label: '여러 패인 소리', help: '선택 패인 외에도 보조 볼륨으로 소리를 냅니다', type: 'toggle' },
-    { d: 'multiLive', k: 'secondaryVolume', label: '보조 패인 볼륨', type: 'range', min: 0, max: 1, step: 0.05, pct: true, disabled: offWhen('multiLive', 'multiAudioEnabled') },
+    // '여러 패인 소리' 토글은 뺐다 — 읽는 곳이 없어 켜도 바뀌는 것이 없었고, 꺼 두면(기본) 실제로 쓰이는 보조 패인 볼륨
+    // (멀티라이브 화면의 '여러 소리' 모드, audio_grid.rs sync_audio_volumes)을 바꿀 수 없었다.
+    { d: 'multiLive', k: 'secondaryVolume', label: '보조 패인 볼륨', help: '멀티라이브 \'여러 소리\'를 켰을 때 선택 패인 밖 패인의 볼륨', type: 'range', min: 0, max: 1, step: 0.05, pct: true },
     { d: 'multiLive', k: 'bandwidthCoordinationEnabled', label: '대역폭 분배', help: '선택 패인에 대역폭을 더 줍니다', type: 'toggle' },
     { d: 'multiLive', k: 'selectedSessionBWWeight', label: '선택 패인 대역폭 가중치', type: 'range', min: 1, max: 3, step: 0.1, disabled: offWhen('multiLive', 'bandwidthCoordinationEnabled') },
     { d: 'multiLive', k: 'levelCappingEnabled', label: '패인 크기 화질 제한', type: 'toggle' },

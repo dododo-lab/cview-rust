@@ -133,8 +133,18 @@ const STATE_LABEL = {
   failed: ['연결 실패', 'bad'],
 };
 
-/** 이모티콘 팩 캐시(채널별). */
+/**
+ * 이모티콘 팩 캐시(채널별) — 채널 id → { packs, at }. 쓸 수 있는 팩은 로그인·구독에 따라 달라진다(Rust 는 잠긴 구독 팩을 거른다).
+ * 예전엔 앱을 끝낼 때까지 그대로 써서, 로그인하거나 그 채널을 구독해도 새 이모티콘이 선택기·자동완성에 나오지 않았고,
+ * 계정을 바꾸면 앞 계정의 구독 이모티콘이 남아 보내기에 실패했다. 로그인이 바뀌면 비우고, 10분이 지나면 다시 받는다.
+ */
 const emoticonCache = new Map();
+const EMOTICON_TTL_MS = 10 * 60 * 1000;
+/** 캐시 값이 아직 쓸 만한가. 순수 함수. */
+export function emoticonCacheFresh(entry, now = Date.now(), ttl = EMOTICON_TTL_MS) {
+  return Boolean(entry && Array.isArray(entry.packs) && now - entry.at < ttl);
+}
+listen(Events.authChanged, () => emoticonCache.clear());
 /** 모든 채팅 패널 — Rust 채팅 세션은 하나라 마지막으로 연결한 패널만 이벤트를 그린다. */
 const PANELS = new Set();
 
@@ -1024,12 +1034,14 @@ export class ChatPanel {
   async loadEmoticons(channelId) {
     if (!channelId) return;
     this.emoticonError = false;
-    if (emoticonCache.has(channelId)) { this.emoticons = emoticonCache.get(channelId); return; }
-    this.emoticons = []; // 앞 채널의 팩이 남아 다른 채널 이모티콘을 고르지 않게
+    const hit = emoticonCache.get(channelId);
+    if (emoticonCacheFresh(hit)) { this.emoticons = hit.packs; return; }
+    // 앞 채널의 팩이 남아 다른 채널 이모티콘을 고르지 않게 — 이 채널의 만료된 팩은 새로 받는 동안 그대로 쓴다.
+    this.emoticons = hit ? hit.packs : [];
     try {
       const packs = await api.chatEmoticons(channelId);
       // 빈 목록은 캐시하지 않는다 — 한 번 실패한 채널이 앱을 다시 켤 때까지 빈 선택기로 남았다.
-      if (packs.length) emoticonCache.set(channelId, packs);
+      if (packs.length) emoticonCache.set(channelId, { packs, at: Date.now() });
       if (this.channelId !== channelId) return;
       this.emoticons = packs;
       // 목록이 오기 전에 선택기를 열었으면 바로 다시 그린다(닫았다 열어야 보였다).

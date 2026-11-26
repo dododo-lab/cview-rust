@@ -1,6 +1,6 @@
 // 보관함 "개요" 탭 — 다른 탭 전부를 카드 하나씩으로 요약한다(개수 · 핵심 수치 · 최근 항목 몇 개).
 // 카드를 누르면 그 탭으로 간다. 요약은 순수 함수(summarizeSection)로 계산하고, 카드 마크업은 overviewCard 가 만든다.
-import { esc, safeUrl, imageSrc } from './dom.js';
+import { esc, safeUrl, imageSrc, calendarDaysBetween } from './dom.js';
 import { compactCount, friendlyError } from './cards.js';
 import { relativeDate, formatDuration } from './channel.js';
 import { bytesText } from './stats.js';
@@ -41,7 +41,8 @@ export function summarizeSection(tab, data, now = Date.now()) {
   switch (tab) {
     case 'vods': {
       const sorted = [...list].sort((a, b) => (toMs(b.publishDate) || 0) - (toMs(a.publishDate) || 0));
-      const fresh = list.filter((v) => now - toMs(v.publishDate) < DAY_MS).length;
+      // 달력 날짜로 — 예전엔 24시간 안이면 '오늘'로 세어, 오전 9시에 보면 어제 오전 10시 이후 것까지 셌다.
+      const fresh = list.filter((v) => { const t = toMs(v.publishDate); return Number.isFinite(t) && calendarDaysBetween(t, now) === 0; }).length;
       return {
         ...base,
         metrics: list.length ? [['채널', `${distinct(list, (v) => v.channel?.channelId || v.channel?.channelName)}곳`], ['오늘 올라옴', `${fresh}개`]] : [],

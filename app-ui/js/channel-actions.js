@@ -1,7 +1,7 @@
 // 시청 화면 상단 바의 채널 동작 — 팔로우·즐겨찾기·링크 복사·치지직에서 열기.
 // 라이브 단독 보기(ml-watch.js)와 예전 시청 화면(viewer.js)이 같이 쓴다. 모두 이미 있는 명령만 부른다:
 //   팔로우 상태 following_channels_all(캐시) · 바꾸기 channel_follow · 즐겨찾기 favorites_list / favorite_set · open_external.
-import { api } from './api.js';
+import { api, listen } from './api.js';
 import { toast } from './dom.js';
 
 export const CHANNEL_ICON = {
@@ -28,6 +28,26 @@ export function channelSocialChanged(channelId, change) {
   if (!channelId) return;
   overrides.set(channelId, { ...(overrides.get(channelId) || {}), ...change });
   window.dispatchEvent(new CustomEvent(CHANNEL_SOCIAL_EVENT, { detail: { channelId, ...change } }));
+}
+
+/**
+ * 다른 창에서 바꾼 팔로우·즐겨찾기(Rust 가 channel_follow·favorite_set 뒤 social://changed 로 모든 창에 알린다) —
+ * 이 창의 덮어쓰기도 고치고 열린 상단 바·사이드바가 따라가게 창 안 이벤트를 다시 낸다. 보낸 창(origin)은 이미 알고 있어 거른다.
+ * 예전엔 창 안에서만 알려, 플레이어 창에서 즐겨찾기를 빼도 메인 창 별이 켜진 채 남고 누르면 같은 요청을 한 번 더 보냈다.
+ */
+export function onSocialChangedElsewhere(p, here) {
+  if (!p || !p.channelId || p.origin === here) return false;
+  const change = {};
+  if (typeof p.following === 'boolean') change.following = p.following;
+  if (typeof p.favorite === 'boolean') change.favorite = p.favorite;
+  if (!Object.keys(change).length) return false;
+  channelSocialChanged(p.channelId, change);
+  return true;
+}
+if (typeof window !== 'undefined' && window.__TAURI__) {
+  const w = window.__TAURI__.webviewWindow?.getCurrentWebviewWindow?.() || window.__TAURI__.window?.getCurrentWindow?.();
+  const here = w ? w.label : null;
+  listen('social://changed', (p) => onSocialChangedElsewhere(p, here));
 }
 
 /** 로그아웃·다른 계정 — 팔로우 덮어쓰기는 그 계정 것이라 버린다(즐겨찾기는 이 기기 저장이라 남긴다). */

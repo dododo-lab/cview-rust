@@ -87,8 +87,9 @@ pub enum ApiError {
     DecodingFailed(String),
     #[error("네트워크에 연결하지 못했습니다")]
     NetworkError(String),
-    /// `retry_after` 는 초 단위.
-    #[error("요청이 많아 {}초 후 다시 시도합니다", *retry_after as i64)]
+    /// `retry_after` 는 초 단위. 요청 계층이 재시도 예산을 다 쓴 뒤에만 올라오므로 저절로 다시 하지 않는다 —
+    /// 예전 문구("…초 후 다시 시도합니다")는 자동 재시도를 약속해, 팔로우가 바뀌지 않은 채 기다리게 했다.
+    #[error("요청이 많아 잠시 막혔습니다 — {}초 뒤 다시 시도해 주세요", *retry_after as i64)]
     RateLimited { retry_after: f64 },
     #[error("서버 응답 형식이 예상과 다릅니다")]
     MalformedResponse(String),
@@ -369,7 +370,7 @@ mod tests {
         );
         assert_eq!(
             ApiError::RateLimited { retry_after: 30.0 }.to_string(),
-            "요청이 많아 30초 후 다시 시도합니다"
+            "요청이 많아 잠시 막혔습니다 — 30초 뒤 다시 시도해 주세요"
         );
     }
 

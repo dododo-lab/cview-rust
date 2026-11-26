@@ -245,6 +245,15 @@ fn after_domain_change(
             let _ =
                 tauri::Emitter::emit(app, "settings://chat", to_value(&services.settings.chat()));
         }
+        // 재생 설정(백그라운드 재생·후원 알림 위치·크기…)도 모든 창에 — 예전엔 플레이어 창이 연 때 읽은 값을 계속 써서,
+        // 메인 창에서 '백그라운드 재생'을 꺼도 그 창은 가려진 채 계속 재생했다.
+        "player" => {
+            let _ = tauri::Emitter::emit(
+                app,
+                "settings://player",
+                to_value(&services.settings.player()),
+            );
+        }
         _ => {}
     }
 }
