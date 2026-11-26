@@ -144,7 +144,9 @@ const EMOTICON_TTL_MS = 10 * 60 * 1000;
 export function emoticonCacheFresh(entry, now = Date.now(), ttl = EMOTICON_TTL_MS) {
   return Boolean(entry && Array.isArray(entry.packs) && now - entry.at < ttl);
 }
-listen(Events.authChanged, () => emoticonCache.clear());
+// 세대 — 받는 중에 로그인이 바뀌면 늦게 온 옛 계정 팩을 캐시에 다시 넣지 않는다.
+let emoticonGen = 0;
+listen(Events.authChanged, () => { emoticonGen += 1; emoticonCache.clear(); });
 /** 모든 채팅 패널 — Rust 채팅 세션은 하나라 마지막으로 연결한 패널만 이벤트를 그린다. */
 const PANELS = new Set();
 
@@ -1039,7 +1041,9 @@ export class ChatPanel {
     // 앞 채널의 팩이 남아 다른 채널 이모티콘을 고르지 않게 — 이 채널의 만료된 팩은 새로 받는 동안 그대로 쓴다.
     this.emoticons = hit ? hit.packs : [];
     try {
+      const gen = emoticonGen;
       const packs = await api.chatEmoticons(channelId);
+      if (gen !== emoticonGen) return; // 그사이 로그인이 바뀌었다 — 새 로그인으로 다시 연결할 때 다시 받는다
       // 빈 목록은 캐시하지 않는다 — 한 번 실패한 채널이 앱을 다시 켤 때까지 빈 선택기로 남았다.
       if (packs.length) emoticonCache.set(channelId, { packs, at: Date.now() });
       if (this.channelId !== channelId) return;

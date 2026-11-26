@@ -101,23 +101,35 @@ export class ChannelPage {
     // 별을 누르면 이미 바뀐 쪽으로 한 번 더 요청해 아무것도 바뀌지 않았다.
     window.addEventListener(CHANNEL_SOCIAL_EVENT, (e) => {
       const d = e.detail || {};
-      if (!this.detail || d.channelId !== this.channelId || !('favorite' in d) || this.detail.isFavorite === d.favorite) return;
+      if (!this.detail || d.channelId !== this.channelId) return;
+      // 팔로우도 — 정보 탭 '내 팔로우'가 다른 곳(플레이어 창·말풍선)에서 바꾼 뒤에도 옛 상태로 남았다.
+      if ('following' in d && this.overview && this.overview.follow && this.overview.follow.following !== d.following) {
+        this.overview.follow.following = d.following;
+        const box = this.body.querySelector('.channel-tab-body');
+        if (this.tab === 'info' && box) fillOverview(box, this.detail, this.overview);
+      }
+      if (!('favorite' in d) || this.detail.isFavorite === d.favorite) return;
       this.detail.isFavorite = d.favorite;
-      const star = this.body.querySelector('[data-ch="favorite"]');
-      if (!star) return;
-      star.classList.toggle('on', d.favorite);
-      star.title = d.favorite ? '즐겨찾기 해제' : '즐겨찾기';
-      star.innerHTML = d.favorite ? ICON_STAR : ICON_STAR_LINE;
+      this.paintStar(false);
     });
     this.enterNext = false; // 다음 render 에 등장 모션을 걸까 — 화면에 들어올 때만(즐겨찾기로 다시 그릴 때는 X)
     this.favPop = false;
   }
 
+  /** 뒤로 가기 기록에 고른 탭도 남긴다 — 예전엔 채널 id 만 남아, 다른 채널을 거쳐 돌아오면 '정보' 탭으로 열렸다. */
+  routeParams() {
+    return this.channelId ? { channelId: this.channelId, tab: this.tab } : {};
+  }
+
   async show(params = {}) {
     if (!params.channelId) return;
     const changed = params.channelId !== this.channelId;
+    // 뒤로 가기로 같은 채널에 돌아오면(5분 안) 그대로 둔다 — 예전엔 다시 받아 로딩이 깜빡이고, '더 보기'로 넓힌 다시보기·
+    // 클립과 스크롤이 처음으로 돌아갔다. ⌘R(refresh)·다른 탭을 지정한 이동은 다시 그린다.
+    if (!changed && !params.refresh && this.detail && this.body.querySelector('.channel-tabs')
+      && (!params.tab || params.tab === this.tab) && Date.now() - (this.loadedAt || 0) < 5 * 60 * 1000) return;
     this.channelId = params.channelId;
-    if (changed) this.tab = params.tab || 'info';
+    if (changed || params.tab) this.tab = params.tab || 'info';
     const seq = ++this.seq;
     this.enterNext = !params.refresh;
     if (!(params.refresh && !changed && refreshVeiled(this.root))) this.body.innerHTML = loadingState();
@@ -125,6 +137,7 @@ export class ChannelPage {
       const detail = await api.channelDetail(this.channelId);
       if (seq !== this.seq) return;
       this.detail = detail;
+      this.loadedAt = Date.now();
       this.overview = undefined; // 채널이 바뀌거나 새로 고치면 정보 탭 묶음도 다시 받는다
       this.render();
     } catch (e) {
@@ -198,6 +211,7 @@ export class ChannelPage {
     if (!append) {
       this.pages[kind] = 0;
       if (kind === 'clip') { this.clipCursor = null; this.clipSeen.clear(); }
+      if (kind === 'vod') this.vodSeen = new Set();
       box.innerHTML = loadingState();
     }
     const seq = this.seq;
@@ -209,6 +223,10 @@ export class ChannelPage {
       if (kind === 'clip') {
         this.clipCursor = page.nextCursor;
         page.items = page.items.filter((c) => !this.clipSeen.has(c.clipUID) && this.clipSeen.add(c.clipUID));
+      } else {
+        // 다시보기는 쪽 번호라 사이에 새 다시보기가 올라오면(방송 종료 직후) 앞 쪽 끝 카드가 다음 쪽에 또 온다 — 거른다.
+        const seen = this.vodSeen || (this.vodSeen = new Set());
+        page.items = page.items.filter((v) => v.videoNo == null || (!seen.has(v.videoNo) && seen.add(v.videoNo)));
       }
       const cards = page.items.map(kind === 'vod' ? vodCard : clipCard).join('');
       if (!append) {
@@ -288,9 +306,9 @@ export class ChannelPage {
           await api.favoriteSet(this.channelId, next, c.channelName, c.channelImageUrl || null);
           this.detail.isFavorite = next;
           channelSocialChanged(this.channelId, { favorite: next }); // 상단 바 별·사이드바도 따라간다
-          this.favPop = next; // 켜면 별이 톡 튄다
           toast(next ? '즐겨찾기에 추가했습니다' : '즐겨찾기에서 뺐습니다', 1500);
-          this.render();
+          // 별만 바꾼다 — 예전엔 화면 전체를 다시 그려 다시보기·클립 탭이 첫 쪽부터 다시 받혔다('더 보기'로 넓힌 목록을 잃음).
+          this.paintStar(next);
         } catch (er) { toast(er.message); }
         break;
       }
@@ -369,6 +387,18 @@ export class ChannelPage {
     }), 0);
   }
 
+  /** 즐겨찾기 별만 다시 그린다. pop — 켜면 톡 튄다. */
+  paintStar(pop) {
+    const star = this.body.querySelector('[data-ch="favorite"]');
+    if (!star || !this.detail) return;
+    const on = Boolean(this.detail.isFavorite);
+    star.classList.toggle('on', on);
+    star.title = on ? '즐겨찾기 해제' : '즐겨찾기';
+    star.innerHTML = on ? ICON_STAR : ICON_STAR_LINE;
+    star.classList.remove('mo-pop');
+    if (pop) { void star.offsetWidth; star.classList.add('mo-pop'); }
+  }
+
   editMemo() {
     // 연 채널을 붙잡아 둔다 — 시트는 body 에 붙어 ⌘[·마우스 뒤로 가기로 다른 채널 화면이 되어도 남는데, 예전엔 저장할 때의
     // this.channelId 로 써서 앞 채널의 메모가 지금 채널에 저장됐다.
@@ -395,6 +425,8 @@ export class ChannelPage {
       try {
         await api.memoSet(channelId, area.value, ch.channelName || '', ch.channelImageUrl || null);
         detail.memo = area.value.trim();
+        // 시트를 연 사이 화면을 다시 불러왔으면(⌘R·온라인 복구) 새 상세에도 — 예전엔 '내 메모'와 다시 연 시트가 옛 글이었다.
+        if (this.channelId === channelId && this.detail && this.detail !== detail) this.detail.memo = detail.memo;
         toast('메모를 저장했습니다', 1400);
         close();
         if (this.channelId === channelId && this.tab === 'info') this.renderTab();

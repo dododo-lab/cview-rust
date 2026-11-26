@@ -478,6 +478,12 @@ pub async fn settings_export(services: State<'_, AppServices>) -> CmdResult<Stri
     serde_json::to_string_pretty(&v).map_err(|e| CommandError(e.to_string()))
 }
 
+/// 설정 영역 키가 하나라도 있는가 — 예전엔 영역 키가 없는 JSON(다른 앱 파일, `{"theme":"dark"}`)도 아무것도 바꾸지 않고
+/// '설정을 가져왔습니다'로 받았다. 순수 함수.
+pub fn has_any_domain(map: &serde_json::Map<String, Value>) -> bool {
+    DOMAINS.iter().any(|d| map.contains_key(*d))
+}
+
 /// 설정 가져오기 — 내보낸 JSON 을 도메인별로 덮어쓴다. 잘못된 도메인 값은 건너뛰고 이름을 돌려준다.
 #[tauri::command]
 pub async fn settings_import(
@@ -491,6 +497,11 @@ pub async fn settings_import(
     let Value::Object(map) = root else {
         return Err(CommandError("백업 파일 형식이 아닙니다".into()));
     };
+    if !has_any_domain(&map) {
+        return Err(CommandError(
+            "CView 설정 백업이 아닙니다 — 설정 항목이 하나도 없습니다".into(),
+        ));
+    }
     let mut skipped = Vec::new();
     for domain in DOMAINS {
         if let Some(v) = map.get(*domain) {
@@ -547,6 +558,17 @@ pub async fn settings_reset(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn import_needs_at_least_one_settings_domain() {
+        let m = |j: &str| match serde_json::from_str::<Value>(j).unwrap() {
+            Value::Object(m) => m,
+            _ => unreachable!(),
+        };
+        assert!(!super::has_any_domain(&m(r#"{"theme":"dark"}"#)));
+        assert!(!super::has_any_domain(&m(r#"{"cviewSettingsVersion":1}"#)));
+        assert!(super::has_any_domain(&m(r#"{"player":{}}"#)));
+    }
     use super::*;
 
     #[test]
@@ -854,7 +876,7 @@ pub struct ImageCacheStatusDto {
     pub cap_bytes: u64,
 }
 
-fn image_service(
+pub(crate) fn image_service(
     app: &tauri::AppHandle,
 ) -> Option<std::sync::Arc<crate::image_service::ImageService>> {
     tauri::Manager::try_state::<std::sync::Arc<crate::image_service::ImageService>>(app)

@@ -353,7 +353,7 @@ await check('N14 Windows — 고지가 떠 있어도 창 단추(최소화·최�
 
 await check('N15 고지를 물어야 하면 홈 데이터를 기다리지 않고 고지를 띄운다(시작 화면이 먼저 걷혀 홈을 누를 틈이 없다)', async () => {
   const src = fs.readFileSync(path.resolve('app-ui/js/app.js'), 'utf8');
-  assert.match(src, /const askNotice = needsNotice\(settings && settings\.general\);\s*\n\s*if \(!askNotice\) await loadHomeBehindSplash\(\);/);
+  assert.match(src, /const askNotice = needsNotice\(settings && settings\.general\);[^]*?\n\s*if \(!askNotice\) await loadHomeBehindSplash\(\);/);
   assert.match(src, /if \(askNotice\) await showNotice\(\);/);
 });
 

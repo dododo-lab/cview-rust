@@ -42,6 +42,7 @@ async function cached(key, fn) {
 // 팔로우가 바뀌거나 로그인이 바뀌면 비운다 — 예전엔 팔로우 직후 45초 동안 옛 목록이, 계정을 바꾸면 앞 계정의 팔로잉이 보였다.
 if (typeof window !== 'undefined') window.addEventListener(CHANNEL_SOCIAL_EVENT, () => cache.clear());
 listen(Events.authChanged, () => cache.clear());
+if (typeof window !== 'undefined') window.addEventListener('cview:recent-cleared', () => cache.clear());
 const safe = async (p, fallback) => { try { return await p; } catch { return fallback; } };
 
 // ── 순수 계산(원본 PopularInsights / FollowingInsights 규칙) ─────

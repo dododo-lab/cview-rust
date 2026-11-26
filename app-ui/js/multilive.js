@@ -643,7 +643,7 @@ export class MultiLivePage {
       <div class="ml-pane-state"><div class="spinner"></div>${streamEndedArt}<span class="ml-state-text"></span><button class="ml-state-retry" data-ml="retry" hidden>${PANE_ICON.retry}다시 연결</button></div>
       <div class="ml-drop-hint" aria-hidden="true"></div>
       <div class="ml-pane-top">
-        <button class="ml-pane-btn ml-drag" title="끌어서 자리 바꾸기 — 메인 패인에 놓으면 메인이 됩니다" aria-label="끌어서 자리 바꾸기"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>
+        <button class="ml-pane-btn ml-drag" title="끌어서 옮기기 — 메인 패인에 놓으면 메인이 됩니다" aria-label="끌어서 옮기기"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>
         <div class="ml-pane-avatar" data-ml="info" title="채널 정보"></div>
         <div class="ml-pane-text">
           <div class="ml-pane-title ellipsis"></div>
@@ -760,7 +760,8 @@ export class MultiLivePage {
       // 카드로 잠깐 연 방송(app.js 의 '둘러본 채널')은 구성에 넣지 않는다 — 예전엔 단독 보기로 하나만 봐도 지난 구성
       // (예: 4채널)이 그 채널 하나로 덮였다.
       const kept = rememberedChannels(sessions, this.isTransient);
-      if (kept.length) this.saveSessionIds(kept);
+      const keep = [...kept, ...(this.unopened || []).filter((id) => !kept.includes(id))];
+      if (kept.length && !this.restoring) this.saveSessionIds(keep);
       restore.hidden = true;
     } else {
       const savedIds = this.savedSessionIds();
@@ -1227,10 +1228,25 @@ export class MultiLivePage {
     try { localStorage.setItem('cview.ml.lastSessions', json); this.savedSessionsJson = json; } catch { /* 무시 */ }
   }
 
+  /**
+   * 지난 구성·프리셋 열기. 진행 중이면 다시 하지 않는다(두 번 누르면 '이미 추가하는 중'·순서 뒤섞임·선택 이동).
+   * 열지 못한 채널(일시 오류·상한)은 지난 구성에서 빼지 않는다 — 예전엔 응답마다 지금 열린 채널만 저장해, 한 번 실패한
+   * 채널이 지난 구성에서 영영 빠졌다(멀티채팅 #168-18 과 같은 처리).
+   */
   async restoreSessions(ids) {
-    for (const id of ids) {
-      try { this.render(await api.multiLiveAdd(id)); } catch (e) { toast(e.message); }
+    if (this.restoring) return;
+    this.restoring = true;
+    this.root.querySelector('[data-ml="restore"]').hidden = true;
+    const failed = [];
+    try {
+      for (const id of ids) {
+        try { this.render(await api.multiLiveAdd(id)); } catch (e) { failed.push(id); toast(e.message); }
+      }
+    } finally {
+      this.restoring = false;
     }
+    this.unopened = failed;
+    if (this.state) this.render(this.state);
   }
 
   // ── 멀티라이브에서 볼 채널 고르기 ─────────────────────
@@ -1314,7 +1330,8 @@ export class MultiLivePage {
       e.preventDefault();
       const name = scrim.querySelector('.word-form input')?.value.trim();
       if (!name) return;
-      try { await api.presetSave(name, ids); toast(`프리셋 "${name}" 저장`, 1500); close(); } catch (er) { toast(er.message); }
+      // 같은 이름이 있으면 Rust 가 'A (1)' 처럼 바꿔 저장한다 — 알림도 저장된 이름으로.
+      try { const saved = await api.presetSave(name, ids); toast(`프리셋 "${(saved && saved.name) || name}" 저장`, 1500); close(); } catch (er) { toast(er.message); }
     });
   }
 

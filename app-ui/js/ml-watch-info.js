@@ -253,6 +253,7 @@ export class WatchInfoPanel {
       this.pages[kind] = 0;
       if (kind === 'community') this.postImages.clear();
       if (kind === 'clip') { this.clipCursor = null; this.clipSeen.clear(); }
+      if (kind === 'vod') this.vodSeen = new Set();
       box.innerHTML = this.skeletonHtml(kind);
     }
     const seq = this.seq;
@@ -267,6 +268,10 @@ export class WatchInfoPanel {
       if (kind === 'clip') {
         this.clipCursor = res.nextCursor;
         res.items = res.items.filter((c) => !this.clipSeen.has(c.clipUID) && this.clipSeen.add(c.clipUID));
+      } else if (kind === 'vod') {
+        // 쪽 번호 방식 — 사이에 새 다시보기가 올라오면 앞 쪽 끝 카드가 또 온다(채널 화면과 같은 거르기).
+        const seen = this.vodSeen || (this.vodSeen = new Set());
+        res.items = res.items.filter((v) => v.videoNo == null || (!seen.has(v.videoNo) && seen.add(v.videoNo)));
       }
       const badge = this.el.querySelector(`[data-count="${kind}"]`);
       if (badge && res.totalCount > 0) badge.textContent = compactCount(res.totalCount);

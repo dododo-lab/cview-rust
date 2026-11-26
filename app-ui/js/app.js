@@ -9,7 +9,7 @@ import { installLiveMotion } from './live-motion.js';
 import { installHoverPreview } from './hover-preview.js';
 import { setAdAudioHooks } from './ads.js';
 import { noteConnectorLimit } from './live-connector.js';
-import { bindCardOpen, recentChannels, fallbackAvatar } from './cards.js';
+import { bindCardOpen, recentChannels, fallbackAvatar, RECENT_CLEARED_EVENT } from './cards.js';
 import { FollowingPage, PopularPage, SearchPage } from './pages.js';
 import { SettingsPage } from './settings.js';
 import { Viewer } from './viewer.js';
@@ -289,6 +289,8 @@ function activeWatch() {
   return current === 'live' && !viewer.isOpen && isWatching() ? pages.multilive.watch : null;
 }
 // 단독 보기를 닫은 뒤 보던 화면으로 돌아갈지 — 멀티라이브 상태 알림(남은 패인이 있으면 멀티라이브로)보다 먼저 본다.
+/** 고지를 물어야 하는데 아직 동의하지 않았다(고지를 DOM 에 붙이기 전부터) — 트레이 동작 막기에 쓴다. */
+let noticePending = false;
 let watchCloseBack = false;
 /**
  * 단독 보기 닫기(닫기 단추·Esc·⌘W) — 예전 시청 화면처럼 보던 화면(인기·카테고리 등)으로 돌아간다.
@@ -607,7 +609,11 @@ async function addToMultiLive(channelId, { quiet = false } = {}) {
   await pages.multilive.add(channelId, { quiet });
   const s = multiLiveSessionFor(channelId);
   if (!s) return;
-  if (s.id !== pages.multilive.state.selectedId) await pages.multilive.run(api.multiLiveSelect(s.id));
+  // 포커스 배치면 메인으로도 올린다 — 이미 있던 채널은 Rust 가 선택만 해(올리지 않음) 선택 id 가 같아 건너뛰었고,
+  // 소리·채팅은 옮겨 가는데 작은 서브 칸에 남았다(새 채널의 '+' 는 메인으로 올라간다).
+  const st = pages.multilive.state || {};
+  const notMain = st.layout === 'focus' && st.focusMainId && st.focusMainId !== s.id;
+  if (s.id !== st.selectedId || notMain) await pages.multilive.run(api.multiLiveSelect(s.id));
   const pane = pages.multilive.panes.get(s.slot);
   // 음소거였으면 패인도 끈 채로(소리 버튼을 누르면 원래 크기로).
   if (pane && muted) {
@@ -1089,7 +1095,7 @@ async function main() {
       // 처음 실행 고지가 떠 있으면 화면을 옮기거나 방송을 여는 동작은 하지 않는다 — 예전엔 메뉴 막대 '멀티라이브 4채널'이
       // 고지 뒤에서 4개 방송을 소리와 함께 틀고, '업데이트 확인…' 시트가 고지 위에 떠 Esc 로도 닫히지 않았다.
       // (채널 열기·로그인 등 딥 링크 경로는 Rust 대기열이 이미 동의 뒤로 미룬다.)
-      if (noticeOpen() && TRAY_BLOCKED_BY_NOTICE.has(p.kind)) return;
+      if ((noticeOpen() || noticePending) && TRAY_BLOCKED_BY_NOTICE.has(p.kind)) return;
       const pane = trayPane();
       switch (p.kind) {
         case 'play-pause':
@@ -1283,6 +1289,12 @@ async function main() {
   window.addEventListener('cview:login', login);
   // 팔로우·즐겨찾기가 어디서든 바뀌면(상단 바·채팅 말풍선·채널 화면·카드 메뉴) 사이드바·홈 팔로잉(즐겨찾기 순서)을 다시 읽는다.
   window.addEventListener(CHANNEL_SOCIAL_EVENT, () => refreshSidebarFollowing());
+  window.addEventListener(RECENT_CLEARED_EVENT, () => {
+    sideData.recent = [];
+    sideData.recentAt = Date.now();
+    paintSidebarList();
+    if (pages.home) { pages.home.dbRecent = []; pages.home.loadedAt = 0; }
+  });
   loadChatPrefs();
   loadShortcuts();
   listen(Events.loginFailed, (p) => p && p.message && toast(p.message));
@@ -1303,7 +1315,12 @@ async function main() {
   // 보조 창은 홈이 없다 — 스플래시(최소 0.4초)만 걷고 제 화면으로.
   // 고지에 동의하기 전 — 보조 창(메뉴 막대 '채팅' 등)은 열지 않는다. 메인 창의 고지에서 동의해야 쓸 수 있다
   // (예전엔 고지를 띄운 채 채팅 창을 열고 그 창의 '영상 보기'로 방송까지 볼 수 있었다).
-  if (AUX && settings && needsNotice(settings.general)) { api.windowCloseSelf().catch(() => {}); return; }
+  // 닫기 전에 메인 창(고지)을 앞으로 — 트레이로 숨겨 둔 메인 창이면 창이 아무 안내 없이 사라지기만 했다.
+  if (AUX && settings && needsNotice(settings.general)) {
+    try { await api.trayControl({ kind: 'show-main' }); } catch { /* 앱 밖 */ }
+    api.windowCloseSelf().catch(() => {});
+    return;
+  }
   if (AUX) { hideSplash(); openAuxWindow(); return; }
   // 작업 공간 복원 (NAV-16) — "실행 시 창 복원"이 켜져 있으면 마지막 화면으로. 방송은 자동 재생하지 않고 묻는다.
   const ws = settings?.general?.restoreWindowOnLaunch !== false ? loadWorkspace() : null;
@@ -1316,11 +1333,13 @@ async function main() {
   // 고지를 물어야 하면 홈 데이터를 기다리지 않고 바로 고지를 띄운다 — 홈은 고지 뒤에서 채워진다. 예전엔 느린 망에서
   // 8초 안전 타이머(onboarding.js)가 시작 화면을 먼저 걷어, 그림을 기다리는 동안 고지 없이 홈을 누를 수 있었다.
   const askNotice = needsNotice(settings && settings.general);
+  noticePending = askNotice; // 고지를 띄우기 전 틈(홈 이동 등)에도 트레이 동작을 막는다
   if (!askNotice) await loadHomeBehindSplash();
   hideSplash();
   // 처음 실행(또는 고지 문구가 바뀐 뒤) — 비영리·비공식·오픈소스 고지에 동의해야 이어 간다. 동의하지 않으면 앱을 끝낸다.
   // 환영 안내는 동의한 뒤에 뜬다(두 창이 겹치지 않게).
   if (askNotice) await showNotice();
+  noticePending = false;
   showWelcome({ onLogin: login });
   flushSharpnessNotice(); // 선명도 이전 안내(한 번) — 시작 화면 뒤에 가려지지 않게 여기서
   // 새 버전 알림 — 메인 창에서만. 조용히 확인하고 사이드바 줄·토스트로 알린다(창·포커스는 건드리지 않음).

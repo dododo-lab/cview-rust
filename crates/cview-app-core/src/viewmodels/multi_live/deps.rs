@@ -242,6 +242,9 @@ pub struct WatchRecordStart {
     pub channel_name: String,
     pub thumbnail_url: Option<String>,
     pub avatar_url: Option<String>,
+    /// 방송 카테고리 — 예전엔 이 경로(카드·멀티라이브, 지금 기본 시청 경로)의 기록에 카테고리가 없어
+    /// 카테고리 통계·인사이트가 모두 '분류 없음'이었다.
+    pub category_name: Option<String>,
 }
 
 /// `ChzzkAPIClient` + `AppState` 중 세션과 매니저가 쓰는 부분.

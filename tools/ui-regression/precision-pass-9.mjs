@@ -12,6 +12,15 @@
 // P08 업데이트 확인 시트 — 키보드로 '다시 시도'를 눌러도 초점이 시트에 남아 Esc 로 닫힌다.
 // P09 코드 확인 — 멀티라이브 채팅 메뉴 Esc 가 단독 보기를 닫지 않음, 채팅 통계 분당 평균, 다시보기 첫 로드 중 화질 변경,
 //     패인 재시작 뒤 화질 다시 읽기, 숨은 화면의 전체 화면 풀기, 멀티라이브 후원 목록 /mute, 인사이트 캐시 비우기.
+// (10차)
+// P10 설정 내보내기에 이 기기 설정(후원·구독 알림, 썸네일 미리보기)을 싣는다(순수 함수), 초기화·가져오기가 되살린다(코드 확인).
+// P11 최근 시청 지우기를 사이드바·홈·인사이트에 알린다, 보관함이 즐겨찾기 변경을 따르고 지우는 중인 북마크를 개요에서 뺀다.
+// P12 채널 화면 — 뒤로 가기에 탭을 남기고 같은 채널이면 다시 받지 않음, 별은 별만 다시 그림, 다시보기 쪽 중복 거르기,
+//     메모·팔로우 표시를 새 상세에도.
+// P13 멀티라이브 — 지난 구성 열기 진행 중 가드·열지 못한 채널 보존, 포커스 배치에서 '+' 는 메인으로, 안내 '여기로 옮기기',
+//     프리셋 알림은 저장된 이름.
+// P14 9차 수정 보강 — 가려진 창에 백그라운드 재생 끔 바로 적용, 고지 전 틈의 트레이 동작, 보조 창 닫기 전 메인 창 보이기,
+//     이모티콘 받는 중 로그인 변경.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -199,7 +208,78 @@ try {
     const ins = src('insight-panel.js');
     assert.match(ins, /addEventListener\(CHANNEL_SOCIAL_EVENT, \(\) => cache\.clear\(\)\)/);
     assert.match(ins, /listen\(Events\.authChanged, \(\) => cache\.clear\(\)\)/);
-    assert.match(src('chat.js'), /listen\(Events\.authChanged, \(\) => emoticonCache\.clear\(\)\);/);
+    assert.match(src('chat.js'), /listen\(Events\.authChanged, \(\) => \{ emoticonGen \+= 1; emoticonCache\.clear\(\); \}\);/);
+  });
+  await check('P10 설정 내보내기에 이 기기 설정을 싣고, 초기화·가져오기가 되살린다', async () => {
+    const { ctx, page } = await open();
+    const r = await page.evaluate(async () => {
+      const { withLocalSettings } = await import('/js/settings.js');
+      const out = JSON.parse(withLocalSettings('{"player":{"volumeLevel":0.5}}', { streamAlerts: false, thumbPreview: true }));
+      return { out, bad: withLocalSettings('not json') };
+    });
+    assert.deepEqual(r.out, { player: { volumeLevel: 0.5 }, local: { streamAlerts: false, thumbPreview: true } });
+    assert.equal(r.bad, 'not json');
+    const st = src('settings.js');
+    assert.match(st, /applyLocalSettings\(text\);/);
+    assert.match(st, /settingsReset\('all'\);\s*\n(?:\s*\/\/[^\n]*\n)*\s*setStreamAlertsEnabled\(true\);\s*\n\s*setThumbPreviewEnabled\(true\);/);
+    await ctx.close();
+  });
+
+  await check('P11 최근 시청 지우기 알림·보관함 즐겨찾기 반영·지우는 중 북마크', async () => {
+    const { ctx, page } = await open();
+    const got = await page.evaluate(async () => {
+      let n = 0;
+      window.addEventListener('cview:recent-cleared', () => { n += 1; });
+      (await import('/js/cards.js')).forgetRecentChannels();
+      return n;
+    });
+    assert.equal(got, 1, '지우면 알린다');
+    const app = src('app.js');
+    assert.match(app, /addEventListener\(RECENT_CLEARED_EVENT, \(\) => \{\s*\n\s*sideData\.recent = \[\];/);
+    const lib = src('library.js');
+    assert.match(lib, /addEventListener\(CHANNEL_SOCIAL_EVENT,/);
+    assert.match(lib, /if \(id === 'bookmarks' && Array\.isArray\(data\)\) data = data\.filter\(\(b\) => !deletingBookmarks\.has\(b\.id\)\);/);
+    await ctx.close();
+  });
+
+  await check('P12 채널 화면 — 탭 기억·같은 채널 다시 받지 않음·별만 다시 그림·다시보기 중복·메모·팔로우', async () => {
+    const ch = src('channel.js');
+    assert.match(ch, /routeParams\(\) \{\s*\n\s*return this\.channelId \? \{ channelId: this\.channelId, tab: this\.tab \} : \{\};/);
+    assert.match(ch, /if \(!changed && !params\.refresh && this\.detail/);
+    assert.match(ch, /this\.paintStar\(next\);/);
+    assert.doesNotMatch(ch.slice(ch.indexOf("case 'favorite'"), ch.indexOf("case 'memo'")), /this\.render\(\)/, '별을 누르면 화면 전체를 다시 그리지 않는다');
+    assert.match(ch, /!seen\.has\(v\.videoNo\) && seen\.add\(v\.videoNo\)/);
+    assert.match(src('ml-watch-info.js'), /!seen\.has\(v\.videoNo\) && seen\.add\(v\.videoNo\)/);
+    assert.match(ch, /this\.detail !== detail\) this\.detail\.memo = detail\.memo;/);
+    assert.match(ch, /'following' in d && this\.overview && this\.overview\.follow/);
+  });
+
+  await check('P13 멀티라이브 — 다시 열기 가드·열지 못한 채널 보존·포커스 메인·옮기기 안내·프리셋 이름', async () => {
+    const ml = src('multilive.js');
+    assert.match(ml, /if \(this\.restoring\) return;/);
+    assert.match(ml, /failed\.push\(id\)/);
+    assert.match(ml, /\.\.\.\(this\.unopened \|\| \[\]\)\.filter/);
+    assert.match(ml, /if \(kept\.length && !this\.restoring\) this\.saveSessionIds\(keep\);/);
+    assert.match(ml, /\(saved && saved\.name\) \|\| name/);
+    assert.match(src('app.js'), /const notMain = st\.layout === 'focus' && st\.focusMainId && st\.focusMainId !== s\.id;/);
+    const { ctx, page } = await open();
+    const hint = await page.evaluate(async () => {
+      const m = await import('/js/ml-motion.js');
+      return Object.values(m).filter((f) => typeof f === 'function').map((f) => { try { return f({}, {}, 'grid'); } catch { return null; } }).filter((x) => typeof x === 'string');
+    });
+    assert.ok(!hint.includes('자리 바꾸기'), JSON.stringify(hint));
+    assert.doesNotMatch(src('ml-motion.js'), /return '자리 바꾸기'/);
+    await ctx.close();
+  });
+
+  await check('P14 9차 수정 보강 — 가려진 창·고지 전 틈·보조 창·이모티콘 세대', async () => {
+    assert.match(src('prefs-effects.js'), /if \(key === 'player' && document\.visibilityState === 'hidden'\) onVisibility\(\);/);
+    const app = src('app.js');
+    assert.match(app, /\(noticeOpen\(\) \|\| noticePending\) && TRAY_BLOCKED_BY_NOTICE\.has/);
+    assert.match(app, /noticePending = askNotice;/);
+    assert.match(app, /await api\.trayControl\(\{ kind: 'show-main' \}\)/);
+    const chat = src('chat.js');
+    assert.match(chat, /if \(gen !== emoticonGen\) return;/);
   });
 } finally {
   await browser.close();

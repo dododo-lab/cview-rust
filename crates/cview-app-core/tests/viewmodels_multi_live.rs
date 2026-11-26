@@ -1504,6 +1504,29 @@ fn layout_prefs_round_trip_and_restore() {
     assert!(st2.has_applied_layout_prefs());
 }
 
+/// 빈 멀티라이브에서 고른 배치는 첫 채널을 넣을 때(add_session 의 초기 선호 적용) 덮이지 않는다 — 배치 명령
+/// (`multilive_set_layout`·`set_focus_layout`·`set_ratios`)이 바꾸기 전에 초기 선호를 먼저 적용한다.
+#[test]
+fn layout_chosen_while_empty_survives_the_first_add() {
+    let m = manager_with(
+        Arc::new(FakePool::default()),
+        Arc::new(MemoryLayoutPrefsStore::default()),
+    );
+    let ml = MultiLiveSettings {
+        remember_last_layout: false,
+        ..MultiLiveSettings::default()
+    };
+    m.lock()
+        .configure(None, Some(Arc::new(FakeSettings { ml })), None, None, None);
+    let mut st = m.lock();
+    // 명령의 순서: 초기 선호 먼저 → 사용자가 고른 배치
+    st.apply_initial_layout_prefs_if_needed();
+    st.apply_grid_layout_mode(MultiLiveGridLayoutMode::Focus);
+    // 첫 채널 추가가 부르는 초기 적용은 이미 적용됨이라 고른 배치를 덮지 않는다.
+    st.apply_initial_layout_prefs_if_needed();
+    assert_eq!(st.grid_layout_mode(), MultiLiveGridLayoutMode::Focus);
+}
+
 // MARK: - 세션 추가·제거 (MultiLiveAdmissionPolicyTests)
 
 #[tokio::test]

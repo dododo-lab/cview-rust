@@ -13,6 +13,7 @@ import { refreshVeiled } from './refresh-veil.js';
 import { summarizeSection, overviewCard, overviewLayout, RECENT_LIMIT } from './library-overview.js';
 import { confirmCleanup } from './stats.js';
 import { deferDelete } from './confirm.js';
+import { CHANNEL_SOCIAL_EVENT } from './channel-actions.js';
 
 export const libraryIcon = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h4v16H4zM10 4h4v16h-4zM16.2 4.4l3.8-1 4 15.5-3.8 1z" transform="scale(.92) translate(1 1)"/></svg>';
 
@@ -86,6 +87,12 @@ export class LibraryPage {
     this.cache = new Map();
     bindTabKeys(this.tabs);
     this.root.addEventListener('click', (e) => this.onClick(e));
+    // 다른 곳(사이드바 메뉴·플레이어 창 별·채널 화면)에서 즐겨찾기가 바뀌면 보이는 즐겨찾기·최근 시청·개요를 다시 읽는다 —
+    // 예전엔 탭을 다시 눌러야 맞춰졌다.
+    window.addEventListener(CHANNEL_SOCIAL_EVENT, (e) => {
+      if (this.root.hidden || !('favorite' in (e.detail || {}))) return;
+      if (['favorites', 'recent', 'overview'].includes(this.tab)) this.load({ keep: true });
+    });
   }
 
   show(params = {}) {
@@ -144,7 +151,9 @@ export class LibraryPage {
       if (only) put(id, label, { status: 'loading' });
       if (id === 'vods' && !this.isLoggedIn()) { put(id, label, { status: 'login' }); return; }
       try {
-        const data = await this.fetchTab(id);
+        let data = await this.fetchTab(id);
+        // 지우는 중(되돌리기 대기)인 북마크는 개요에서도 뺀다 — 예전엔 개요 카드가 지운 북마크를 개수·최근 줄에 셌다.
+        if (id === 'bookmarks' && Array.isArray(data)) data = data.filter((b) => !deletingBookmarks.has(b.id));
         put(id, label, { status: 'ok', summary: summarizeSection(id, data) });
       } catch (error) {
         put(id, label, { status: 'error', error });

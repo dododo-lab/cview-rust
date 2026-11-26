@@ -182,7 +182,10 @@ export function recentChannels() {
  *  DB 가 비면 쓰는 이 목록으로 지운 채널을 그대로 다시 보여 줬다. */
 export function forgetRecentChannels() {
   try { localStorage.removeItem(RECENT_KEY); } catch { /* 저장 불가 — 무시 */ }
+  // 사이드바 '최근 본 채널'·홈 '최근 시청'·인사이트 패널도 비우게 알린다 — 예전엔 보관함을 떠날 때까지(홈은 60초) 남았다.
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent(RECENT_CLEARED_EVENT));
 }
+export const RECENT_CLEARED_EVENT = 'cview:recent-cleared';
 
 export function rememberChannel({ channelId, channelName = '', channelImage = '' }) {
   if (!channelId) return;

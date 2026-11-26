@@ -183,8 +183,15 @@ fn aggregate_counts_active_open_session() {
     let s = store();
     let n = now();
     let started = add(&n, -120.0);
-    s.start_watch_record("ch1", "채널1", None, Some("게임"), started)
+    let started = s
+        .start_watch_record("ch1", "채널1", None, Some("게임"), started)
         .unwrap();
+    // 진행 중 기록은 체크포인트로 늘어난다(마지막 갱신 뒤 시간은 상한까지만 센다).
+    for t in [-60.0, -5.0] {
+        assert!(s
+            .checkpoint_watch_record("ch1", started, add(&n, t))
+            .unwrap());
+    }
     let insights = s.aggregate_insights(n).unwrap();
     assert!(approx(insights.all, 120.0, 0.1), "all={}", insights.all);
     assert_eq!(insights.active_session_count, 1);
@@ -281,4 +288,42 @@ fn file_in_place_of_directory_errors_then_recovers() {
     assert_eq!(std::fs::read(&blocker).unwrap(), b"keep");
     std::fs::remove_file(&blocker).unwrap();
     assert!(resolve().is_ok());
+}
+
+#[test]
+fn sleep_or_long_pause_is_not_counted_as_watch_time() {
+    let s = store();
+    let base = add(&now(), -40_000.0);
+    let started = s
+        .start_watch_record("ch1", "채널1", None, None, base)
+        .unwrap();
+    assert!(s
+        .checkpoint_watch_record("ch1", started, add(&base, 60.0))
+        .unwrap());
+    // 노트북을 덮었다 8시간 뒤 깨어나 닫힘 — 8시간을 더하지 않는다(체크포인트 틈 상한까지만).
+    assert!(s
+        .end_watch_record("ch1", started, add(&base, 60.0 + 8.0 * 3600.0))
+        .unwrap());
+    let row = &s.all_watch_history_rows().unwrap()[0];
+    assert!(
+        row.duration <= 60.0 + WatchHistoryAggregationPolicy::MAX_CHECKPOINT_GAP + 0.001,
+        "duration={}",
+        row.duration
+    );
+    assert!(row.duration >= 60.0);
+}
+
+#[test]
+fn open_session_between_checkpoints_does_not_drop_back() {
+    // 체크포인트 간격(60초)보다 짧은 유예면 45~60초 사이에 진행 중 시간이 마지막 체크포인트 값으로 돌아갔다.
+    let start = ts(1_000_000.0);
+    let updated = add(&start, 60.0);
+    let d = WatchHistoryAggregationPolicy::effective_duration(
+        start,
+        None,
+        60.0,
+        Some(updated),
+        add(&updated, 55.0),
+    );
+    assert!(approx(d, 115.0, 0.001), "d={d}");
 }

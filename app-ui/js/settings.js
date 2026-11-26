@@ -237,6 +237,26 @@ function itemHtml(item, values) {
   }
 }
 
+/**
+ * 이 기기 저장(localStorage) 설정 — 후원·구독 알림, 썸네일 미리보기. Rust 설정 백업에는 없어 내보내기·가져오기에서 빠졌다.
+ * 내보낸 JSON 에 `local` 로 싣고(Rust 는 모르는 키를 무시한다), 가져올 때 되살린다. 순수 함수(JSON 문자열 → 문자열).
+ */
+export function withLocalSettings(json, local = { streamAlerts: streamAlertsEnabled(), thumbPreview: thumbPreviewEnabled() }) {
+  try {
+    const v = JSON.parse(json);
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return json;
+    v.local = { ...local };
+    return JSON.stringify(v, null, 2);
+  } catch { return json; }
+}
+function applyLocalSettings(text) {
+  let local = null;
+  try { local = JSON.parse(text)?.local; } catch { return; }
+  if (!local || typeof local !== 'object') return;
+  if (typeof local.streamAlerts === 'boolean') setStreamAlertsEnabled(local.streamAlerts);
+  if (typeof local.thumbPreview === 'boolean') setThumbPreviewEnabled(local.thumbPreview);
+}
+
 export class SettingsPage {
   constructor(root, { getAuth, onLogin, onLogout }) {
     this.root = root;
@@ -568,7 +588,7 @@ export class SettingsPage {
 
   /** 설정을 JSON 파일로 ~/Downloads/CView 에 저장하고 경로를 돌려준다. quiet 가 아니면 알림도 띄운다. */
   async exportSettings({ quiet = false } = {}) {
-    const json = await api.settingsExport();
+    const json = withLocalSettings(await api.settingsExport());
     const d = new Date();
     const path = await api.saveFile('settings', `CView-설정-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`, null, json);
     if (!quiet) toast(`내보냈습니다 — ${path}`, 4000, { label: REVEAL_LABEL, run: () => api.revealPath(path) });
@@ -775,6 +795,7 @@ export class SettingsPage {
             await api.settingsUpdate('player', { sharpnessLevel: null });
           }
         } catch { /* 형식 오류는 위 가져오기가 이미 알린다 */ }
+        applyLocalSettings(text);
         this.settings = await api.settingsGet();
         toast(skipped.length ? `가져왔습니다 (건너뜀: ${skipped.join(', ')})` : '설정을 가져왔습니다', 2500);
         this.render();
@@ -998,6 +1019,9 @@ export class SettingsPage {
       }
       try {
         this.settings = await api.settingsReset('all');
+        // 이 기기에만 두는 항목(후원·구독 알림, 썸네일 미리보기)도 기본(켬)으로 — 예전엔 '모든 설정 초기화' 뒤에도 꺼진 채였다.
+        setStreamAlertsEnabled(true);
+        setThumbPreviewEnabled(true);
         if (saved) toast(`내보낸 뒤 설정을 초기화했습니다 — ${saved}`, 5000, { label: REVEAL_LABEL, run: () => api.revealPath(saved) });
         else toast('설정을 초기화했습니다', 1800);
         this.render();
