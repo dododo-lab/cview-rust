@@ -406,3 +406,11 @@ export function calendarDaysBetween(t, now) {
   const b = new Date(now);
   return Math.round((new Date(b.getFullYear(), b.getMonth(), b.getDate()) - new Date(a.getFullYear(), a.getMonth(), a.getDate())) / 86400000);
 }
+
+/** 맨 글자 단축키의 글자(a~z, 소문자) — 자판과 관계없이 물리 키(e.code)로 본다. 한글 입력 상태에서는 e.key 가
+ *  'ㅡ'·'ㅣ'·'ㅠ' 로 와서 M·L·B 가 듣지 않았다(사용자 단축키는 이미 e.code 로 본다). 글자 키가 아니면 ''. */
+export function plainLetter(e) {
+  if (e && typeof e.key === 'string' && /^[a-z]$/i.test(e.key)) return e.key.toLowerCase();
+  const m = /^Key([A-Z])$/.exec((e && e.code) || '');
+  return m ? m[1].toLowerCase() : '';
+}

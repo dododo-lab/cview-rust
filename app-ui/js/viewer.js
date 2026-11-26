@@ -234,6 +234,7 @@ export class Viewer {
     if (channelId !== this.topbar.loadedFor) { this.topbar.loadedFor = channelId; this.topbar.load(channelId); }
     this.syncNowPlaying(null);
     this.showOverlay(PHASE_TEXT.loadingInfo);
+    this.controls.resetStream();
     this.status.textContent = '';
     if (settings && !reopened && typeof settings.volumeLevel === 'number') {
       this.volume.value = String(Math.round(settings.volumeLevel * 100));
@@ -243,7 +244,14 @@ export class Viewer {
     this.startMuted = settings ? Boolean(settings.startMuted) : false;
     // 이번 시청의 음소거 — 재연결·화질 바꾸기·정지 복구로 페이지가 다시 시작해도(playStarted 가 또 온다)
     // 사용자가 바꾼 음소거를 지킨다. 예전엔 매번 '음소거로 시작' 설정으로 되돌아가 소리가 갑자기 났다.
-    this.sessionMuted = this.startMuted;
+    // 다시 연결·다시 시도(같은 설정 객체)도 같은 시청이다 — 예전엔 여기서도 설정값으로 되돌려, M 으로 끈 소리가 ⟳ 뒤에 났다.
+    if (!reopened) this.sessionMuted = this.startMuted;
+    // 녹화 중에 다시 연결하거나 다른 채널을 열면 재생 시작(Rust)이 녹화를 끝낸다 — 닫기처럼 먼저 끝내고 저장 위치를
+    // 알린다. 예전엔 녹화 표시만 조용히 사라져 파일이 어디 있는지 알 수 없었다.
+    if (this.panel.recording) {
+      await this.panel.resetRecording();
+      if (token !== this.startToken) return;
+    }
     try {
       const started = await api.playerStart(channelId);
       if (token !== this.startToken) return;
@@ -282,6 +290,9 @@ export class Viewer {
   async close({ silent = false } = {}) {
     const token = ++this.startToken;
     this.cancelAd();
+    // 전체 화면이던 무대·시청 화면을 닫으면 숨긴 요소가 전체 화면으로 남아 검은 화면만 보였다 — 먼저 빠져나온다.
+    const fs = document.fullscreenElement;
+    if (fs && (fs === this.root || this.root.contains(fs)) && document.exitFullscreen) document.exitFullscreen().catch(() => {});
     this.root.hidden = true;
     this.channelId = null;
     this.topbar.loadedFor = null;

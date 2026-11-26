@@ -3,7 +3,7 @@
 // 다시보기는 WebView 기본 HLS(<video src=m3u8>)로 재생한다 — CDN CORS 를 피하고 macOS 기본 컨트롤·PiP 를
 // 쓴다. 클립은 원본처럼 치지직 임베드 페이지가 주 경로다(대부분 ABR_HLS 라 인키 재생이 막힌다).
 import { api } from './api.js';
-import { esc, safeUrl, toast, imageSrc, keyBelongsToTarget } from './dom.js';
+import { esc, safeUrl, toast, imageSrc, keyBelongsToTarget, plainLetter } from './dom.js';
 import { emptyState, loadingState, compactCount, errorState } from './cards.js';
 import { formatDuration, relativeDate, clipCard } from './channel.js';
 import { startDownload } from './downloads.js';
@@ -57,6 +57,10 @@ export class MediaPage {
   }
 
   async openVod(videoNo, seq) {
+    // 재생 정보부터 — 예전엔 광고를 먼저 다 본 뒤에야 성인·구독자 전용·삭제된 영상이라 '재생할 수 없습니다'가 떴다.
+    // 실패하면 광고 없이 바로 오류(show 의 catch).
+    const info = await api.vodPlay(videoNo);
+    if (seq !== this.seq) return;
     // 치트키가 없으면 치지직처럼 재생 전에 프리롤 광고를 본다(그 사이 다른 영상을 열면 그만).
     if (!(await playPreroll('vod', videoNo))) {
       // 광고를 그만뒀다 — 다른 영상에 밀려났거나(그쪽이 화면을 맡는다) 광고 중에 다른 화면으로 옮겨 이 화면이
@@ -65,8 +69,6 @@ export class MediaPage {
       if (seq === this.seq && !this.root.hidden && this.onBack) this.onBack();
       return;
     }
-    if (seq !== this.seq) return;
-    const info = await api.vodPlay(videoNo);
     if (seq !== this.seq) return;
     this.info = info;
     const qualities = info.qualities || [];
@@ -181,7 +183,8 @@ export class MediaPage {
     if (this.root.hidden || e.metaKey || e.ctrlKey || e.altKey || keyBelongsToTarget(e)) return;
     const v = this.video;
     if (!v || e.target === v || document.querySelector('.ad-overlay')) return;
-    const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    // 글자 키는 물리 키로도 — 한글 입력 상태에서 K·M·F 가 'ㅏ'·'ㅡ'·'ㄹ' 로 와 듣지 않았다(시청 화면과 같게).
+    const k = e.key.length === 1 ? (plainLetter(e) || e.key) : e.key;
     if (k === ' ' || k === 'k') { e.preventDefault(); if (v.paused) v.play().catch(() => {}); else v.pause(); }
     else if (k === 'ArrowLeft' || k === 'ArrowRight') {
       e.preventDefault();
@@ -237,13 +240,26 @@ export class MediaPage {
       case 'retry': {
         const v = this.video;
         a.closest('.media-error')?.remove();
-        if (v && this.info && this.info.streamUrl) {
-          // 보던 자리에서 다시 — 예전엔 처음(0:00)부터 재생해, 10초 뒤 이어 보기 위치까지 처음으로 덮었다.
-          const at = Number.isFinite(v.currentTime) ? v.currentTime : 0;
-          const rate = v.playbackRate || 1;
-          if (at >= 1) v.addEventListener('loadedmetadata', () => { v.currentTime = at; v.playbackRate = rate; }, { once: true });
-          v.src = this.info.streamUrl; v.load(); v.play().catch(() => {});
+        if (!v || !this.info) break;
+        // 보던 자리에서 다시 — 예전엔 처음(0:00)부터 재생해, 10초 뒤 이어 보기 위치까지 처음으로 덮었다.
+        const at = Number.isFinite(v.currentTime) ? v.currentTime : 0;
+        const rate = v.playbackRate || 1;
+        // 다시보기는 재생 주소를 새로 받는다 — 주소에 서명이 붙어 있어, 오래 멈췄다가 만료되면 같은 주소로는 계속 실패했다.
+        const seq = this.seq;
+        if (this.kind === 'vod' && this.info.videoNo != null) {
+          try {
+            const fresh = await api.vodPlay(this.info.videoNo);
+            if (seq !== this.seq) break;
+            this.info = { ...this.info, ...fresh };
+          } catch { /* 옛 주소로라도 다시 해 본다 */ }
         }
+        // 고른 화질 그대로 — 예전엔 늘 '자동' 주소를 다시 넣어, 화질 칸은 1080p 인데 자동으로 재생됐다.
+        const sel = this.body ? this.body.querySelector('[data-media-select="quality"]') : null;
+        const q = sel && sel.value !== '' ? (this.info.qualities || [])[Number(sel.value)] : null;
+        const src = (q && q.url) || this.info.streamUrl;
+        if (!src) break;
+        v.addEventListener('loadedmetadata', () => { if (at >= 1) v.currentTime = at; v.playbackRate = rate; }, { once: true });
+        v.src = src; v.load(); v.play().catch(() => {});
         break;
       }
       case 'channel': this.onOpenChannel(a.dataset.channelId); break;
@@ -284,6 +300,8 @@ export class MediaPage {
       v.playbackRate = Number(sel.value) || 1;
     } else if (sel.dataset.mediaSelect === 'quality') {
       const q = sel.value === '' ? null : this.info.qualities[Number(sel.value)];
+      // 오류 막을 걷는다 — 예전엔 다른 화질로 재생이 돼도 검은 오류 막이 영상을 덮은 채 남았다.
+      v.closest('.media-stage')?.querySelector('.media-error')?.remove();
       const at = v.currentTime;
       const rate = v.playbackRate;
       v.src = q ? q.url : this.info.streamUrl;

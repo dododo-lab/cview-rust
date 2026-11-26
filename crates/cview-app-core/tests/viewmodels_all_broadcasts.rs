@@ -50,6 +50,7 @@ struct FakeApi {
     release_more: Notify,
     release_first: Notify,
     first_page_calls: AtomicUsize,
+    bypass_calls: Mutex<Vec<bool>>,
     searches: Mutex<Vec<(String, i64)>>,
 }
 
@@ -58,8 +59,10 @@ impl AllBroadcastsApi for FakeApi {
     async fn top_lives_with_age(
         &self,
         _size: i64,
+        bypass_cache: bool,
     ) -> Result<AgedResponse<PagedContent<LiveInfo>>, String> {
         self.first_page_calls.fetch_add(1, Ordering::SeqCst);
+        self.bypass_calls.lock().unwrap().push(bypass_cache);
         if self.hold_first.swap(false, Ordering::SeqCst) {
             let n = self.release_first.notified();
             self.holding_first.store(true, Ordering::SeqCst);
@@ -177,6 +180,16 @@ async fn overlapping_fill_waits_for_the_running_page() {
     api.release_more.notify_waiters();
     first.await.unwrap();
     assert_eq!(second.await.unwrap(), 54);
+}
+
+#[tokio::test]
+async fn refresh_skips_the_response_cache_but_first_open_may_use_it() {
+    // ⌘R·자동 새로고침(reload)이 응답 캐시를 읽어 60초~10분 동안 옛 목록을 돌려줬다.
+    let api = Arc::new(FakeApi::default());
+    let vm = AllBroadcastsViewModel::new(api.clone());
+    vm.load_initial_if_needed().await;
+    vm.reload().await;
+    assert_eq!(*api.bypass_calls.lock().unwrap(), vec![false, true]);
 }
 
 #[tokio::test]

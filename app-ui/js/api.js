@@ -105,6 +105,8 @@ export const Events = Object.freeze({
   generalChanged: 'settings://general',
   /** 단축키 설정이 바뀌었다(저장·가져오기·초기화) — 새 keyboard 값. 모든 창에 온다. */
   keyboardChanged: 'settings://keyboard',
+  /** 채팅 설정이 바뀌었다(어느 창에서든·가져오기·초기화) — 새 chat 값. 모든 창에 온다. */
+  chatChanged: 'settings://chat',
   downloadUpdate: 'download://update',
   deepLink: 'deeplink://open',
   /** 앱 사용률 표본(usage-monitor.js) — 화면이 usage_watch(true) 로 보고 있을 때만 메인 창에 온다. */
@@ -178,7 +180,7 @@ export const api = {
   // 클립은 쪽 번호 대신 앞 응답의 nextCursor 로 넘긴다(서버가 page 를 무시). null 이면 첫 쪽.
   channelClips: (channelId, cursor = null, size = 24) => invoke('channel_clips', { channelId, cursor, size }),
   channelPosts: (channelId, page = 0) => invoke('channel_posts', { channelId, page }),
-  popularClips: (filter, order) => invoke('popular_clips', { filter, order }),
+  popularClips: (filter, order, refresh = false) => invoke('popular_clips', { filter, order, refresh }),
   searchVideos: (keyword, offset = 0, size = 24) => invoke('search_videos', { keyword, offset, size }),
   clipPlay: (clipUid) => invoke('clip_play', { clipUid }),
   vodDetail: (videoNo) => invoke('vod_detail', { videoNo }),

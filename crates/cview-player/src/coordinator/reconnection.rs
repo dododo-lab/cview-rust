@@ -57,7 +57,7 @@ impl StreamCoordinator {
     pub fn trigger_reconnect(&self, reason: &str, bypass_cooldown: bool) {
         let engine = self.engine();
         let suspend = engine.is_some_and(|e| e.is_suspend_intent_active());
-        let (raw_url, generation) = {
+        let generation = {
             let mut s = self.st();
             if s.user_paused
                 || matches!(s.phase, StreamPhase::Idle | StreamPhase::StreamEnded)
@@ -65,10 +65,10 @@ impl StreamCoordinator {
             {
                 return;
             }
-            let Some(raw_url) = s.stream_url.clone() else {
+            if s.stream_url.is_none() {
                 tracing::warn!("StreamCoordinator: 재연결 실패 — 저장된 URL 없음");
                 return;
-            };
+            }
             if s.phase == StreamPhase::Reconnecting {
                 return;
             }
@@ -83,7 +83,7 @@ impl StreamCoordinator {
             }
             s.last_reconnect_time = Some(now);
             s.reconnect_generation = s.reconnect_generation.wrapping_add(1);
-            (raw_url, s.reconnect_generation)
+            s.reconnect_generation
         };
         self.update_phase(StreamPhase::Reconnecting);
         tracing::info!("StreamCoordinator: 재연결 시작 ({reason})");
@@ -116,11 +116,9 @@ impl StreamCoordinator {
             let attempt_weak = weak.clone();
             let on_attempt: AttemptCallback = Arc::new(move |attempt, delay| {
                 let weak = attempt_weak.clone();
-                let raw_url = raw_url.clone();
                 Box::pin(async move {
                     if let Some(this) = StreamCoordinator::from_weak(&weak) {
-                        this.run_reconnect_attempt(attempt, delay, raw_url, generation)
-                            .await;
+                        this.run_reconnect_attempt(attempt, delay, generation).await;
                     }
                 })
             });
@@ -149,7 +147,40 @@ impl StreamCoordinator {
         }
     }
 
-    async fn run_reconnect_attempt(&self, attempt: u32, delay: f64, raw_url: Url, generation: u64) {
+    /// 첫 시도가 실패한 뒤부터 앱에서 같은 채널의 재생 URL 을 다시 받는다 — 처음 받은 마스터 URL 의 CDN 토큰이
+    /// 만료됐거나 방송을 껐다 켜 경로가 바뀌면 그 URL 로는 10회 모두 실패한다. 세션이 그대로일 때만 바꾼다.
+    async fn refresh_stream_url(&self, generation: u64) {
+        let Some(callback) = self.st().on_refresh_stream_url.clone() else {
+            return;
+        };
+        let Some(fresh) = callback().await else {
+            return;
+        };
+        if !self.owns_reconnect(generation) {
+            return;
+        }
+        let swapped = {
+            let mut s = self.st();
+            if s.stream_url.as_ref() == Some(&fresh) {
+                false
+            } else {
+                s.stream_url = Some(fresh);
+                // 옛 마스터에서 나온 variant·임대는 버린다 — 새 마스터 갱신이 다시 채운다.
+                s.current_variant_url = None;
+                s.current_manifest_lease = None;
+                s.manifest_refresh_fail_count = 0;
+                true
+            }
+        };
+        if swapped {
+            tracing::info!("StreamCoordinator: 재연결 — 재생 URL 재발급");
+            if self.st().is_proxy_active {
+                self.inner.proxy.reset_session();
+            }
+        }
+    }
+
+    async fn run_reconnect_attempt(&self, attempt: u32, delay: f64, generation: u64) {
         tracing::info!("StreamCoordinator: 재시도 {attempt} — {delay:.1}초 대기");
         self.inner.reconnection.wait_for_backoff(delay).await;
         // 백오프는 수십 초일 수 있다 — 그 사이 세션이 정리됐으면 시도하지 않는다.
@@ -165,6 +196,12 @@ impl StreamCoordinator {
             return;
         }
         // 매 시도마다 매니페스트 재갱신 → 최신 CDN 토큰. 화질을 고정했으면 첫 시도부터.
+        if attempt > 1 {
+            self.refresh_stream_url(generation).await;
+            if !self.owns_reconnect(generation) {
+                return;
+            }
+        }
         let pinned = self.st().user_selected_variant.is_some();
         if attempt > 1 || pinned {
             self.refresh_master_manifest().await;
@@ -172,6 +209,9 @@ impl StreamCoordinator {
         if !self.owns_reconnect(generation) {
             return;
         }
+        let Some(raw_url) = self.st().stream_url.clone() else {
+            return;
+        };
         let target = self.reconnect_playback_url(&raw_url);
         let url = if self.st().is_proxy_active {
             self.inner.proxy.proxy_url(&target)

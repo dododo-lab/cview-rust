@@ -24,9 +24,11 @@ use super::support::{cancel_slot, slot_is, Observed, ObservedGuard, TaskSlot};
 /// 이 화면이 부르는 API.
 #[async_trait]
 pub trait AllBroadcastsApi: Send + Sync {
+    /// `bypass_cache` — 응답 캐시를 읽지 않고 새로 받는다(새로고침). 받은 값은 캐시에 쓴다.
     async fn top_lives_with_age(
         &self,
         size: i64,
+        bypass_cache: bool,
     ) -> Result<AgedResponse<PagedContent<LiveInfo>>, String>;
     async fn top_lives(
         &self,
@@ -47,8 +49,9 @@ impl AllBroadcastsApi for ChzzkApiClient {
     async fn top_lives_with_age(
         &self,
         size: i64,
+        bypass_cache: bool,
     ) -> Result<AgedResponse<PagedContent<LiveInfo>>, String> {
-        ChzzkApiClient::top_lives_with_age(self, size, None, None, false)
+        ChzzkApiClient::top_lives_with_age(self, size, None, None, bypass_cache)
             .await
             .map_err(|e| e.to_string())
     }
@@ -414,12 +417,19 @@ impl AllBroadcastsViewModel {
             s.initial_load = Some(rx);
             tx
         };
-        self.reload().await;
+        self.reload_from(false).await;
         let _ = tx.send(true);
         self.lock().initial_load = None;
     }
 
+    /// 첫 페이지를 새로 받는다 — 응답 캐시를 거치지 않는다. 예전엔 ⌘R·자동 새로고침·60초 재사용 만료가 모두 캐시를
+    /// 읽어, 60초 안엔 같은 목록을, 그 뒤 10분까지는 옛(stale) 목록을 곧바로 돌려줬다(끝난 방송·옛 시청자 수).
     pub async fn reload(&self) {
+        self.reload_from(true).await;
+    }
+
+    /// 첫 페이지 받기. `bypass_cache` 가 거짓이면(처음 열기) 갓 받은 캐시를 쓸 수 있다.
+    async fn reload_from(&self, bypass_cache: bool) {
         let generation = {
             let mut s = self.lock();
             s.feed_generation = s.feed_generation.wrapping_add(1);
@@ -433,7 +443,7 @@ impl AllBroadcastsViewModel {
         let result = self
             .shared
             .api
-            .top_lives_with_age(Self::FETCH_SIZE as i64)
+            .top_lives_with_age(Self::FETCH_SIZE as i64, bypass_cache)
             .await;
         let mut s = self.lock();
         if generation != s.feed_generation {

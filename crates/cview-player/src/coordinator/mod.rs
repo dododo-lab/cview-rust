@@ -251,6 +251,11 @@ impl BufferHealth {
 /// 방송 종료 확인 콜백 — true 면 재연결 대신 종료 처리.
 pub type CheckStreamEndedCallback = Arc<dyn Fn() -> BoxFuture<'static, bool> + Send + Sync>;
 
+/// 재생 URL 재발급 콜백 — 같은 채널의 새 마스터 URL(새 CDN 토큰·새 방송 경로). 받지 못했거나 방송이
+/// 꺼졌으면 `None`(기존 URL 로 계속).
+pub type RefreshStreamUrlCallback =
+    Arc<dyn Fn() -> BoxFuture<'static, Option<url::Url>> + Send + Sync>;
+
 // MARK: - 본체
 
 pub(crate) struct State {
@@ -297,6 +302,7 @@ pub(crate) struct State {
     pub(crate) current_manifest_lease: Option<ManifestLease>,
     pub(crate) engine: Option<SharedEngine>,
     pub(crate) on_check_stream_ended: Option<CheckStreamEndedCallback>,
+    pub(crate) on_refresh_stream_url: Option<RefreshStreamUrlCallback>,
     pub(crate) events: Option<UnboundedSender<StreamEvent>>,
     pub(crate) last_network_interface: Option<InterfaceType>,
 }
@@ -415,6 +421,7 @@ impl StreamCoordinator {
             current_manifest_lease: None,
             engine: None,
             on_check_stream_ended: None,
+            on_refresh_stream_url: None,
             events: None,
             last_network_interface: None,
         };
@@ -526,6 +533,10 @@ impl StreamCoordinator {
 
     pub fn set_check_stream_ended_callback(&self, callback: CheckStreamEndedCallback) {
         self.st().on_check_stream_ended = Some(callback);
+    }
+
+    pub fn set_refresh_stream_url_callback(&self, callback: RefreshStreamUrlCallback) {
+        self.st().on_refresh_stream_url = Some(callback);
     }
 
     /// 호버 프리페치로 받은 마스터 매니페스트를 주입한다.

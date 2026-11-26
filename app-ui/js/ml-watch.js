@@ -9,7 +9,7 @@
 // 앱 메뉴 동작(⌘S·⇧⌘F·PiP·⌘W 등)은 app.js 가 이 도구로 넘긴다.
 import { screenshotFormat, screenshotExtension } from './screenshot-format.js';
 import { api } from './api.js';
-import { esc, toast, keyBelongsToTarget } from './dom.js';
+import { esc, toast, keyBelongsToTarget, plainLetter } from './dom.js';
 import { chatPrefs, onChatPrefs, updateChatPrefs } from './chat-prefs.js';
 import { matchPlainAction, currentBindings, bindingLabel, onShortcuts } from './shortcuts.js';
 import { togglePipFor, stamp, toggleFullscreenOn } from './viewer-controls.js';
@@ -508,7 +508,7 @@ export class WatchTools {
       else if (e.metaKey && e.ctrlKey && e.key.toLowerCase() === 'f') { e.preventDefault(); this.fullscreen(true); }
       return;
     }
-    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    const key = e.key.length === 1 ? (plainLetter(e) || e.key) : e.key;
     if (key === ' ') { e.preventDefault(); this.togglePlay(); }
     else if (key === 'm') this.toggleMute();
     else if (key === 'ArrowUp' || key === 'ArrowDown') { e.preventDefault(); this.changeVolume(key === 'ArrowUp' ? 5 : -5); }

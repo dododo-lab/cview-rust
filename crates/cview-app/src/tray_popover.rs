@@ -485,6 +485,9 @@ pub async fn tray_control(app: AppHandle, action: TrayControlAction) -> CmdResul
         }
         TrayControlAction::ShowMain => {
             crate::tray::show_main(&app);
+            // '지금 시청 중' 카드(툴팁 '시청 화면으로 이동') — 창만 열지 않고 재생 중인 화면으로 간다. 예전엔 홈·설정에
+            // 있던 그대로 창만 앞으로 와서, 이미 앞에 있으면 아무 변화가 없었다.
+            send_main_control(&app, json!({ "kind": "show-now-playing" }));
         }
         TrayControlAction::OpenLive { channel_id } => {
             let id = validate_channel_id(&channel_id)?;

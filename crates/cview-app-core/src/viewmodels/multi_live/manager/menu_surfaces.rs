@@ -161,7 +161,10 @@ impl ManagerState {
             }
             if resume_menu_suspended_hls {
                 if let Some(h) = &hls {
-                    if h.is_loading_suspended() && decode_not_off {
+                    // 메뉴 이탈로 건 숨김 단계는 디코드가 꺼진(가림) 패인에서도 푼다 — 가림 정지는 엔진이 따로 들고 있어
+                    // 가림이 풀릴 때 재개된다. 예전엔 여기서 건너뛰어, 시청 화면을 5초 넘게 보다 닫으면 가림이 풀린 뒤에도
+                    // 숨김 단계가 남아 보조 패인이 '절전'으로 얼어 있었다.
+                    if h.is_loading_suspended() {
                         h.set_gpu_render_tier(tier);
                     }
                     s.player().sync_network_activity();

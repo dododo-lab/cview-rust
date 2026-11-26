@@ -113,8 +113,20 @@ pub struct ProcessSet {
     /// 찾아 둔 프로세스와 종류.
     watched: Vec<(Pid, ProcKind)>,
     discovered_at: Option<Instant>,
+    /// 프로세스마다 직전 표본의 누적 CPU 시간(ms).
+    last_cpu_ms: std::collections::HashMap<u32, u64>,
     #[cfg(target_os = "macos")]
     mac: mac::Discovery,
+}
+
+/// 이번 표본 CPU% — 그 사이 누적 CPU 시간이 그대로면 0. macOS sysinfo 는 CPU 시간이 늘지 않은 표본에서 값을 갱신하지
+/// 않고 앞 값을 남겨, 재생을 멈춘 뒤 쉬는 디코더·GPU 도우미가 마지막으로 바쁘던 값(예: 48.9%)에 굳어 보였다. 순수 함수.
+fn sampled_cpu(previous_ms: Option<u64>, now_ms: u64, reported: f32) -> f32 {
+    if previous_ms == Some(now_ms) {
+        0.0
+    } else {
+        reported.max(0.0)
+    }
 }
 
 impl Default for ProcessSet {
@@ -137,6 +149,7 @@ impl ProcessSet {
             my_start: 0,
             watched: vec![(me, ProcKind::App)],
             discovered_at: None,
+            last_cpu_ms: Default::default(),
             #[cfg(target_os = "macos")]
             mac: mac::Discovery::default(),
         }
@@ -169,7 +182,12 @@ impl ProcessSet {
             let Some(p) = self.sys.process(*pid) else {
                 continue;
             };
-            let cpu = p.cpu_usage().max(0.0);
+            let total_ms = p.accumulated_cpu_time();
+            let cpu = sampled_cpu(
+                self.last_cpu_ms.insert(pid.as_u32(), total_ms),
+                total_ms,
+                p.cpu_usage(),
+            );
             let mem = footprint(pid.as_u32()).unwrap_or_else(|| private_bytes(p));
             rows.push((*kind, cpu, mem));
             alive.push(pid.as_u32());
@@ -423,6 +441,19 @@ mod mac {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn idle_process_cpu_is_zero_not_the_last_busy_value() {
+        use super::sampled_cpu;
+        assert_eq!(sampled_cpu(None, 2485, 48.9), 48.9, "첫 표본은 그대로");
+        assert_eq!(
+            sampled_cpu(Some(2485), 2485, 48.9),
+            0.0,
+            "CPU 시간이 그대로면 0"
+        );
+        assert_eq!(sampled_cpu(Some(2485), 2515, 3.5), 3.5);
+        assert_eq!(sampled_cpu(Some(1), 2, -1.0), 0.0);
+    }
+
     use super::*;
 
     #[test]

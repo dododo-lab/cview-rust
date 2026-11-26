@@ -5,6 +5,9 @@
 // - 값 글자는 aria-live 로 읽지 않는다(초마다 바뀐다). 그래프는 role=img 요약 + 키보드로 점을 옮기며 읽는 말풍선.
 import { api, listen, Events, isTauri } from './api.js';
 
+/** 이만큼(ms) 넘게 거꾸로 온 표본은 시계가 뒤로 간 것으로 본다(채우기와 겹친 표본은 몇 초 안). */
+const BACKWARD_TOLERANCE_MS = 30_000;
+
 const store = {
   status: null, // UsageStatus — enabled·intervalMs·historyMinutes·cores·platform·gpu·latest
   appearance: null, // 외관 설정(usageMonitor·usageInHeader …)
@@ -72,7 +75,12 @@ function merge(list) {
 function push(s) {
   const a = store.samples;
   const last = a[a.length - 1];
-  if (last && s.t <= last.t) return; // 채우기(backfill)와 이벤트가 겹친 표본
+  if (last && s.t <= last.t) {
+    // 채우기(backfill)와 이벤트가 겹친 표본이면 버린다. 시스템 시계가 크게 뒤로 갔으면(간격 몇 배 넘게) 기록을 그 시각 기준으로
+    // 다시 맞춘다 — 예전엔 되돌린 만큼(예: 1시간) 그래프·통계가 멈췄다(Rust History::push 와 같은 규칙).
+    if (last.t - s.t <= BACKWARD_TOLERANCE_MS) return;
+    while (a.length && a[a.length - 1].t >= s.t) a.pop();
+  }
   a.push(s);
   const oldest = s.t - keepMs();
   let cut = 0;

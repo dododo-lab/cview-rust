@@ -337,6 +337,8 @@ struct FakeBackend {
     hang: AtomicBool,
     status_closed: AtomicBool,
     plan_error: AtomicBool,
+    /// live_detail 이 일시 오류(네트워크)를 낸다.
+    detail_error: AtomicBool,
     detail_calls: AtomicUsize,
     poll_status_calls: AtomicUsize,
 }
@@ -356,6 +358,9 @@ impl MultiLiveSessionBackend for FakeBackend {
         self.detail_calls.fetch_add(1, Ordering::SeqCst);
         if self.hang.load(Ordering::SeqCst) {
             tokio::time::sleep(Duration::from_secs(60)).await;
+        }
+        if self.detail_error.load(Ordering::SeqCst) {
+            return Err(MultiLiveBackendError::Message("네트워크 오류".into()));
         }
         let status = if self.closed.lock().unwrap().contains(channel_id) {
             LiveStatus::Close
@@ -2458,4 +2463,140 @@ fn multi_view_change_rebalances_rate_budget_and_latency_margin() {
     for i in 0..6 {
         assert_eq!(rate(i), None, "세션 {i}");
     }
+}
+
+// ===== 6차: 방송 재개·시작 실패 뒤 복구 =====
+async fn settle_tasks() {
+    for _ in 0..20 {
+        tokio::task::yield_now().await;
+    }
+}
+
+fn session_with(
+    backend: &Arc<FakeBackend>,
+    player: &Arc<FakePlayer>,
+    id: &str,
+) -> Arc<MultiLiveSession> {
+    MultiLiveSession::with_live_info(
+        id,
+        "이름",
+        None,
+        live(id, LiveStatus::Open),
+        backend.clone(),
+        player.clone(),
+        Arc::new(FakeChat::default()),
+    )
+}
+
+/// 방송이 잠깐 꺼졌다가(2분 안) 다시 켜지면 패인을 다시 시작한다 — 예전엔 '방송 종료'로 멈춘 채 남았다.
+#[tokio::test(start_paused = true)]
+async fn brief_close_then_reopen_restarts_the_pane() {
+    let backend = Arc::new(FakeBackend::default());
+    let player = FakePlayer::new(None);
+    let session = session_with(&backend, &player, "r1");
+    session.start(1).await;
+    backend.status_closed.store(true, Ordering::SeqCst);
+    tokio::time::sleep(Duration::from_secs(61)).await;
+    settle_tasks().await;
+    assert_eq!(session.load_state(), MultiLiveLoadState::Offline);
+    backend.status_closed.store(false, Ordering::SeqCst);
+    tokio::time::sleep(Duration::from_secs(61)).await;
+    settle_tasks().await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    settle_tasks().await;
+    assert!(
+        session.load_state().is_playing(),
+        "{:?}",
+        session.load_state()
+    );
+    assert_eq!(player.starts.lock().unwrap().len(), 2);
+}
+
+/// 2분 넘게 꺼져 재생 정보가 없는 방송 — 오류가 아니라 방송 종료로 두고, 다시 켜지면 시작한다.
+#[tokio::test(start_paused = true)]
+async fn long_close_waits_offline_and_restarts_on_reopen() {
+    let backend = Arc::new(FakeBackend::default());
+    let player = FakePlayer::new(None);
+    let session = session_with(&backend, &player, "r2");
+    session.start(1).await;
+    backend.status_closed.store(true, Ordering::SeqCst);
+    backend.closed.lock().unwrap().insert("r2".into());
+    backend.plan_error.store(true, Ordering::SeqCst);
+    tokio::time::sleep(Duration::from_secs(61)).await;
+    settle_tasks().await;
+    tokio::time::sleep(Duration::from_secs(130)).await;
+    settle_tasks().await;
+    assert_eq!(
+        session.load_state(),
+        MultiLiveLoadState::Offline,
+        "유예 뒤에도 방송 종료"
+    );
+    assert!(session.read().has_poll_task(), "꺼진 동안에도 상태를 본다");
+    backend.status_closed.store(false, Ordering::SeqCst);
+    backend.closed.lock().unwrap().clear();
+    backend.plan_error.store(false, Ordering::SeqCst);
+    tokio::time::sleep(Duration::from_secs(121)).await;
+    settle_tasks().await;
+    assert!(
+        session.load_state().is_playing(),
+        "{:?}",
+        session.load_state()
+    );
+    assert_eq!(player.starts.lock().unwrap().len(), 2);
+}
+
+/// 다시 시작할 때 정보 받기가 일시 실패해도(오프라인) 돌아오면 다시 시작한다 — 예전엔 오류 카드에 영영 남았다.
+#[tokio::test(start_paused = true)]
+async fn failed_restart_recovers_when_the_network_returns() {
+    let backend = Arc::new(FakeBackend::default());
+    let player = FakePlayer::new(None);
+    let session = session_with(&backend, &player, "r3");
+    session.start(1).await;
+    backend.detail_error.store(true, Ordering::SeqCst);
+    session.retry().await;
+    settle_tasks().await;
+    assert!(
+        matches!(session.load_state(), MultiLiveLoadState::Error(_)),
+        "{:?}",
+        session.load_state()
+    );
+    assert!(
+        session.read().has_poll_task(),
+        "실패 뒤에도 상태 폴링이 살아 있다"
+    );
+    backend.detail_error.store(false, Ordering::SeqCst);
+    tokio::time::sleep(Duration::from_secs(61)).await;
+    settle_tasks().await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    settle_tasks().await;
+    assert!(
+        session.load_state().is_playing(),
+        "{:?}",
+        session.load_state()
+    );
+}
+
+/// 포커스 → 균등으로 바꾸면 같은 무대 크기로 패인 크기를 다시 낸다 — 예전엔 보조 패인이 포커스 때 좁은 크기(360p 상한)로 남았다.
+#[tokio::test(start_paused = true)]
+async fn layout_switch_resubmits_pane_geometry() {
+    let m = manager();
+    let p = panes(2, "geo");
+    let id = ids(&p);
+    {
+        let mut st = m.lock();
+        st.set_sessions(p.iter().map(|x| x.session.clone()).collect());
+        st.set_grid_layout(true);
+        st.apply_grid_layout_mode(MultiLiveGridLayoutMode::Focus);
+        st.select_session(id[0], true);
+        st.report_stage_size((1920.0, 1080.0));
+    }
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    settle_tasks().await;
+    let rev = m.read().pane_geometry_revision();
+    m.lock()
+        .apply_grid_layout_mode(MultiLiveGridLayoutMode::Preset);
+    assert!(
+        m.read().pane_geometry_revision() > rev,
+        "배치를 바꿨는데 패인 크기를 다시 내지 않았다"
+    );
 }

@@ -192,6 +192,12 @@ impl UnifiedLoginFlow {
         }
     }
 
+    /// 로그인 창이 닫혔다 — 동의(OAuth) 단계면 이미 끝난 네이버 로그인(쿠키)으로 마친다. 예전엔 '로그인 창이 닫혔습니다'로
+    /// 버려 비로그인으로 남았는데, 웹뷰에 남은 쿠키 때문에 다음 실행엔 로그인돼 떴다. 다른 단계면 `None`(닫힘 = 취소).
+    pub fn on_window_closed(&mut self) -> LoginAction {
+        self.fallback("동의 단계에서 창을 닫음".into())
+    }
+
     fn fallback(&mut self, reason: String) -> LoginAction {
         if self.phase != LoginPhase::OAuthConsent {
             return LoginAction::None;
@@ -276,6 +282,21 @@ mod tests {
 
     fn auth_url() -> Url {
         Url::parse("https://chzzk.naver.com/account-interlock?clientId=c&state=S").unwrap()
+    }
+
+    #[test]
+    fn closing_during_consent_keeps_the_finished_naver_login() {
+        let mut f = UnifiedLoginFlow::new(Some(auth_url()), REDIRECT);
+        // 로그인 전에 닫으면 취소.
+        assert_eq!(f.on_window_closed(), LoginAction::None);
+        let _ = f.on_cookies(&cookies());
+        assert_eq!(f.phase(), LoginPhase::OAuthConsent);
+        assert!(matches!(
+            f.on_window_closed(),
+            LoginAction::CookieOnlySuccess { .. }
+        ));
+        assert_eq!(f.phase(), LoginPhase::Completed);
+        assert_eq!(f.on_window_closed(), LoginAction::None, "한 번만");
     }
 
     #[test]

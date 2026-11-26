@@ -72,18 +72,24 @@ pub async fn channel_detail(
     services: State<'_, AppServices>,
     channel_id: String,
 ) -> CmdResult<ChannelDetailDto> {
-    let channel = services.api.channel_info(&channel_id).await?;
-    let live = if channel.open_live {
-        services
-            .api
-            .live_detail(&channel_id, false)
-            .await
-            .ok()
-            .filter(|l| l.status == LiveStatus::Open)
-            .map(|l| crate::dto::LiveDetailDto::from_live_info(&l, &channel_id))
-    } else {
-        None
-    };
+    channel_detail_for(&services, channel_id).await
+}
+
+pub(crate) async fn channel_detail_for(
+    services: &AppServices,
+    channel_id: String,
+) -> CmdResult<ChannelDetailDto> {
+    // 방송 중인지는 채널 정보의 `openLive` 가 아니라 라이브 상세(60초 캐시)로 본다 — 채널 정보는 5분(묵은 값은 1시간까지)
+    // 캐시라, 방송이 막 시작된 채널 화면에 LIVE·'라이브 보기'가 몇 분씩 없었다. 둘을 함께 받아 기다리는 시간은 같다.
+    let (channel, live) = tokio::join!(
+        services.api.channel_info(&channel_id),
+        services.api.live_detail(&channel_id, false)
+    );
+    let channel = channel?;
+    let live = live
+        .ok()
+        .filter(|l| l.status == LiveStatus::Open)
+        .map(|l| crate::dto::LiveDetailDto::from_live_info(&l, &channel_id));
     let (is_favorite, memo) = match &services.data_store {
         Some(store) => (
             store.is_favorite(&channel_id).unwrap_or(false),
@@ -304,14 +310,21 @@ pub async fn popular_clips(
     services: State<'_, AppServices>,
     filter: Option<String>,
     order: Option<String>,
+    refresh: Option<bool>,
 ) -> CmdResult<Vec<ClipInfo>> {
     let filter = match filter.as_deref() {
         Some("WITHIN_1_DAY") => "WITHIN_1_DAY",
         _ => "WITHIN_7_DAYS",
     };
+    // 새로고침(⌘R·'새로고침'·'다시 시도')은 응답 캐시를 거치지 않는다 — 예전엔 60초 안엔 같은 목록이 오는데 갱신 시각만
+    // '방금'으로 바뀌었다(인기 라이브와 같게).
     Ok(services
         .api
-        .home_popular_clips(filter, order.as_deref().unwrap_or("POPULAR"))
+        .home_popular_clips_with(
+            filter,
+            order.as_deref().unwrap_or("POPULAR"),
+            refresh.unwrap_or(false),
+        )
         .await?)
 }
 
@@ -1028,6 +1041,69 @@ pub async fn app_quit(app: tauri::AppHandle) -> CmdResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod channel_live {
+        use super::*;
+        use async_trait::async_trait;
+        use cview_networking::transport::{
+            HttpRequest, HttpResponse, HttpTransport, TransportError,
+        };
+        use std::sync::Arc;
+
+        struct EmptyWebView;
+
+        #[async_trait]
+        impl cview_auth::WebViewDataStore for EmptyWebView {
+            async fn all_cookies(&self) -> Vec<cview_auth::StoredCookie> {
+                Vec::new()
+            }
+            async fn delete_cookie(&self, _: &cview_auth::StoredCookie) {}
+            async fn remove_all_website_data(&self) {}
+        }
+
+        /// 채널 정보는 아직 `openLive:false`(캐시된 옛 값), 라이브 상세는 방금 시작한 OPEN.
+        struct JustStarted;
+
+        #[async_trait]
+        impl HttpTransport for JustStarted {
+            async fn send(&self, request: HttpRequest) -> Result<HttpResponse, TransportError> {
+                let path = request.url.path().to_string();
+                let body = if path.contains("live-detail") {
+                    serde_json::json!({"code":200,"content":{
+                        "liveId":7,"liveTitle":"방금 시작","status":"OPEN",
+                        "channel":{"channelId":"c1","channelName":"테스트"}
+                    }})
+                } else {
+                    serde_json::json!({"code":200,"content":{
+                        "channelId":"c1","channelName":"테스트","openLive":false
+                    }})
+                };
+                Ok(HttpResponse::new(200, serde_json::to_vec(&body).unwrap()))
+            }
+        }
+
+        /// 방송이 막 시작돼 채널 정보 캐시가 아직 꺼짐이어도 채널 화면은 라이브를 보인다.
+        #[tokio::test]
+        async fn channel_detail_uses_live_detail_not_cached_open_live() {
+            let dir = tempfile::tempdir().unwrap();
+            let mut services = AppServices::initialize(
+                dir.path(),
+                "app.cview.test.channel-live",
+                Arc::new(EmptyWebView),
+                crate::state::ShellSinks::noop(),
+            )
+            .await;
+            services.api = cview_networking::ChzzkApiClient::new(
+                cview_networking::ClientConfig::new(Arc::new(JustStarted)),
+            );
+            let d = channel_detail_for(&services, "c1".into()).await.unwrap();
+            assert!(!d.channel.open_live);
+            assert!(
+                d.live.is_some(),
+                "라이브 상세가 OPEN 인데 채널 화면이 라이브를 숨겼다"
+            );
+        }
+    }
 
     #[test]
     fn external_links_allow_web_and_a_single_mail_address() {

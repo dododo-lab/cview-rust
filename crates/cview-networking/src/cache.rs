@@ -280,6 +280,11 @@ impl ResponseCache {
         self.lock().storage.remove(key);
     }
 
+    /// 키에 `needle` 이 든 항목을 모두 지운다(경로 단위 무효화 — 키는 세대·타입·경로·쿼리를 담는다).
+    pub fn remove_containing(&self, needle: &str) {
+        self.lock().storage.retain(|k, _| !k.contains(needle));
+    }
+
     pub fn clear(&self) {
         self.lock().storage.clear();
     }

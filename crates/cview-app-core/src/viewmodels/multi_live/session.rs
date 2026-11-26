@@ -91,6 +91,8 @@ pub struct SessionState {
     offline_retry_task: Option<TaskSlot>,
     chat_connection_task: Option<TaskSlot>,
     watch_checkpoint_task: Option<TaskSlot>,
+    /// 시작이 일시 오류(정보 받기 실패)로 끝났다 — 상태 폴링이 방송이 열린 것을 보면 다시 시작한다.
+    retry_on_poll: bool,
 }
 
 impl SessionState {
@@ -434,6 +436,7 @@ impl MultiLiveSession {
             }
             st.lifecycle_generation = st.lifecycle_generation.wrapping_add(1);
             st.load_state = MultiLiveLoadState::Loading;
+            st.retry_on_poll = false;
             (st.lifecycle_generation, st.prefetched_live_info.take())
         };
         self.set_backend(Some(backend.clone()));
@@ -479,8 +482,16 @@ impl MultiLiveSession {
                 if !self.generation_is(generation) {
                     return;
                 }
-                self.obs.lock().load_state = MultiLiveLoadState::Error(m);
+                {
+                    let mut st = self.obs.lock();
+                    st.load_state = MultiLiveLoadState::Error(m);
+                    st.retry_on_poll = true;
+                }
                 self.finish_watch_tracking().await;
+                // 정보 받기 실패(오프라인·5xx·시간 초과)는 일시적이다 — 상태 폴링을 살려 둬 돌아오면 다시 시작한다.
+                // 예전엔 자동 재시작(엔진 오류·CDN 토큰 갱신·오프라인 유예)이 폴링을 끊은 뒤 여기서 끝나, 네트워크가
+                // 돌아와도 패인이 오류 카드에 영영 남았다(영상·채팅·상태 폴링 모두 멈춤).
+                self.start_status_polling();
                 return;
             }
         };
@@ -490,8 +501,22 @@ impl MultiLiveSession {
         let mut plan = match backend.build_plan(&live, &channel_id) {
             Ok(p) => p,
             Err(e) => {
-                self.obs.lock().load_state = MultiLiveLoadState::Error(e.message().into());
+                let closed = !live_is_open(&live);
+                {
+                    let mut st = self.obs.lock();
+                    if closed {
+                        // 꺼진 방송(재생 정보 없음) — 오류가 아니라 방송 종료로 두고 상태 폴링으로 다시 켜지기를 기다린다.
+                        // 예전엔 오류로 끝나고 폴링도 없어, 2분 넘게 꺼졌다 켜진 방송·꺼진 채 불러온 구성을 되살리지 못했다.
+                        st.is_offline = true;
+                        st.load_state = MultiLiveLoadState::Offline;
+                    } else {
+                        st.load_state = MultiLiveLoadState::Error(e.message().into());
+                    }
+                }
                 self.finish_watch_tracking().await;
+                if closed {
+                    self.start_status_polling();
+                }
                 return;
             }
         };
@@ -1077,13 +1102,16 @@ impl MultiLiveSession {
     }
 
     fn start_polling(&self) {
-        let weak = self.this.clone();
-        {
-            let mut st = self.obs.lock();
-            cancel_slot(&mut st.poll_task);
-            st.poll_task = Some(TaskSlot::spawn(move |_| poll_loop(weak)));
-        }
+        self.start_status_polling();
         self.schedule_proactive_refresh();
+    }
+
+    /// 방송 상태 폴링만 — 재생하지 않는 패인(꺼진 방송·시작 실패)이 다시 켜지는 것을 알아챈다.
+    fn start_status_polling(&self) {
+        let weak = self.this.clone();
+        let mut st = self.obs.lock();
+        cancel_slot(&mut st.poll_task);
+        st.poll_task = Some(TaskSlot::spawn(move |_| poll_loop(weak)));
     }
 
     fn schedule_proactive_refresh(&self) {
@@ -1165,7 +1193,21 @@ async fn poll_loop(weak: Weak<MultiLiveSession>) {
                         }));
                     }
                 } else {
-                    s.obs.lock().is_offline = false;
+                    // 방송이 (다시) 열려 있다 — 꺼졌던 패인이나 일시 오류로 시작하지 못한 패인은 다시 시작한다.
+                    // 예전엔 잠깐 꺼졌다 2분 안에 다시 켜지면 is_offline 만 풀고 '방송 종료'로 멈춘 채 남았다.
+                    let restart = {
+                        let mut st = s.obs.lock();
+                        let was_offline =
+                            st.is_offline && st.load_state == MultiLiveLoadState::Offline;
+                        st.is_offline = false;
+                        was_offline
+                            || (st.retry_on_poll
+                                && matches!(st.load_state, MultiLiveLoadState::Error(_)))
+                    };
+                    if restart {
+                        s.schedule_automatic_retry("live reopened");
+                        return;
+                    }
                 }
             }
             Err(e) => tracing::debug!("멀티라이브 상태 폴링 실패: {e:?}"),

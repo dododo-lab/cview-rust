@@ -256,6 +256,17 @@ impl DownloadHistoryStore {
                     channel_name,
                     reason,
                 } => {
+                    // 같은 영상을 다시 받다 실패해도 앞서 받아 둔(파일이 있는) 완료 기록은 지킨다 — 예전엔 '실패 · 다시 받기'
+                    // 로 덮어 디스크에 멀쩡히 있는 첫 파일의 'Finder 에서 보기·열기'가 사라졌다.
+                    let keeps_completed = st.entries.iter().any(|e| {
+                        e.id == id
+                            && e.state == DownloadState::Completed
+                            && st.file_status.get(&id) != Some(&DownloadHistoryFileStatus::Missing)
+                    });
+                    if keeps_completed {
+                        drop(st);
+                        return;
+                    }
                     Self::insert(
                         &mut st,
                         DownloadHistoryEntry {
@@ -559,6 +570,29 @@ mod tests {
             channel_name: None,
             reason: "네트워크".into(),
         }
+    }
+
+    #[tokio::test]
+    async fn failed_retry_keeps_the_completed_record_with_its_file() {
+        let dir = temp_dir();
+        let path = dir.join(DownloadHistoryDocument::FILE_NAME);
+        let video = dir.join("a.mp4");
+        std::fs::write(&video, b"1234").unwrap();
+        let store = DownloadHistoryStore::new(Some(path), vec![dir.clone()], None);
+        store.record(completed("a", &video));
+        store.record(failed("a"));
+        let e = store.entries();
+        assert_eq!(e.len(), 1);
+        assert_eq!(
+            e[0].state,
+            DownloadState::Completed,
+            "다시 받기 실패가 완료 기록을 덮었다"
+        );
+        assert!(e[0].file_path.is_some());
+        // 완료 기록이 없던 영상의 실패는 그대로 남긴다.
+        store.record(failed("b"));
+        assert_eq!(store.entries()[0].state, DownloadState::Failed);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]

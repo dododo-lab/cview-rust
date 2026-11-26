@@ -1115,6 +1115,13 @@ async function main() {
         case 'navigate':
           if (p.route) navigate(p.route, p.params && typeof p.params === 'object' ? p.params : {});
           break;
+        case 'show-now-playing':
+          // 메뉴 막대·트레이 '지금 재생 중' — 재생 중인 화면으로(라이브 시청·단독 보기 → 라이브, 멀티라이브 칸 → 멀티라이브).
+          // 다시보기 화면이면 이미 그 화면이라 그대로 둔다.
+          if (current === 'media') break;
+          if (viewer.isPlaying || isWatching()) { if (current !== 'live') navigate('live'); }
+          else if (pane && current !== 'multilive') navigate('multilive');
+          break;
         case 'queue-multi':
           if (Array.isArray(p.channelIds)) queueMulti(p.channelIds);
           break;

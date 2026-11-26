@@ -4,8 +4,8 @@
 // - 위치는 누른 닉네임 아래(자리가 없으면 위), 꼬리가 닉네임을 가리킨다. 붐비는 채널은 줄이 1~2초 만에 밀려
 //   지워지므로 말풍선은 연 자리에 머물고, 닉네임이 그 자리를 떠나면 꼬리만 감춘다(누르려던 버튼이 도망가지 않게).
 // - 바깥 누르기·Esc·창 전환으로 닫는다. 열고 닫는 움직임은 motion.css 규칙(모션 줄이기면 바로)을 따른다.
-import { channelSocialChanged } from './channel-actions.js';
-import { api } from './api.js';
+import { channelSocialChanged, CHANNEL_SOCIAL_EVENT } from './channel-actions.js';
+import { api, listen, Events } from './api.js';
 import { esc, safeUrl, imageSrc, toast, hideWithExit } from './dom.js';
 import { verifiedBadge } from './verified-badge.js';
 import { compactCount } from './cards.js';
@@ -16,6 +16,10 @@ const ROLE_LABEL = { streamer: '스트리머', manager: '매니저', channelMana
 // 같은 사람을 다시 누르면 바로 그리도록 잠깐 기억한다(팔로우 상태는 매번 새로 받는다).
 const CARD_TTL_MS = 60_000;
 const cardCache = new Map(); // `${chatChannelId}|${uid}` → { at, card }
+// 카드에는 팔로우·로그인 상태도 들어 있다 — 다른 곳에서 팔로우를 바꾸거나 로그인·로그아웃하면 버린다. 예전엔 60초 동안
+// 옛 '팔로우' 단추나 '로그인하면 팔로우'가 남았다.
+if (typeof window !== 'undefined') window.addEventListener(CHANNEL_SOCIAL_EVENT, () => cardCache.clear());
+listen(Events.authChanged, () => cardCache.clear()).catch(() => {});
 
 let current = null; // { pop, close }
 

@@ -1391,6 +1391,76 @@ mod tests {
         (pool, sent)
     }
 
+    struct NoFactory;
+    impl MultiLiveSessionFactory for NoFactory {
+        fn make_player(&self, _e: Option<SharedHlsEngine>) -> Arc<dyn MultiLivePlayer> {
+            unreachable!()
+        }
+        fn make_chat(&self) -> Arc<dyn MultiLiveChat> {
+            unreachable!()
+        }
+    }
+
+    async fn menu_test_manager(
+        n: usize,
+    ) -> (MultiLiveManager, Vec<Arc<PaneEngine>>, Vec<uuid::Uuid>) {
+        let (pool, _) = pool();
+        pool.set_max_pool_size(n).await;
+        let manager = MultiLiveManager::new(MultiLiveDeps::new(pool.clone(), Arc::new(NoFactory)));
+        manager.lock().is_terminating = true;
+        let cookies = Arc::new(CookieManager::new(
+            Arc::new(cview_auth::secret_store::KeychainService::in_memory()),
+            Arc::new(cview_auth::cookie::CookieJar::new()),
+        ));
+        let mut engines = Vec::new();
+        let mut ids = Vec::new();
+        for i in 0..n {
+            let e = pool.acquire().await.unwrap();
+            let pe = pool.find_active(&e).unwrap();
+            let player = PanePlayer::new(
+                Some(pe.clone()),
+                cookies.clone(),
+                Arc::new(Mutex::new(HashMap::new())),
+                &PlayerSettings::default(),
+                LiveWatchReporter::new(Arc::new(NoWatchApi)),
+            );
+            let session = cview_app_core::viewmodels::multi_live::MultiLiveSession::new(
+                format!("c{i}"),
+                player,
+                Arc::new(PaneChat::default()),
+            );
+            ids.push(session.id());
+            manager.lock().push_session(session);
+            engines.push(pe);
+        }
+        manager.lock().set_grid_layout(true);
+        manager.lock().select_session(ids[0], true);
+        (manager, engines, ids)
+    }
+
+    /// 예전 시청 화면(멀티라이브 접힘) 5초 이상 → 닫기(접기 풀기) → 멀티라이브로 돌아옴(가림 풀기) — 보조 패인도 모두 재개.
+    #[tokio::test]
+    async fn panes_resume_after_viewer_longer_than_occlusion_delay() {
+        let (manager, engines, ids) = menu_test_manager(4).await;
+        {
+            let mut st = manager.lock();
+            st.park_video_surfaces_for_resident_menu_leave();
+            st.release_video_surfaces_for_menu_leave(); // 2.5초 뒤
+            st.set_window_occluded(true); // 5초 뒤
+        }
+        manager.lock().restore_video_surfaces_for_menu_enter(); // onViewerClosed → multilive_park(false)
+        manager.lock().set_window_occluded(false); // navigate('multilive') → 가림 풀기
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        let st = manager.read();
+        for (i, e) in engines.iter().enumerate() {
+            assert_eq!(st.decode_active(ids[i]), Some(true), "pane{i}");
+            assert!(
+                !e.is_loading_suspended(),
+                "pane{i} 이 숨김 단계로 얼어 있다"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn pool_reuses_released_slots_and_respects_max() {
         let (pool, _) = pool();

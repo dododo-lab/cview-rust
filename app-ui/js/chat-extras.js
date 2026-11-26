@@ -60,10 +60,10 @@ export const BACKGROUNDS = [['neutral', '기본'], ['tint', '브랜드 색'], ['
 
 const COMMANDS = [
   ['/clear', '채팅 지우기'], ['/export', '채팅 내보내기(텍스트 파일)'], ['/filter 단어', '금지어 추가'],
-  ['/block 닉네임', '사용자 차단(로컬)'], ['/unblock 닉네임', '차단 해제'], ['/mute 닉네임 [초]', '잠시 숨기기(로컬, 기본 300초)'],
+  ['/block 닉네임', '사용자 차단(로컬)'], ['/unblock 닉네임', '차단 해제'], ['/mute 닉네임 [초]', '잠시 숨기기(로컬, 기본 300초)'], ['/unmute 닉네임', '숨기기 풀기'],
   ['/tts', '후원 읽어 주기 켜기·끄기'], ['/stats', '채팅 통계'], ['/help', '명령어 목록'],
 ];
-const SERVER_ONLY = new Set(['/ban', '/unban', '/slow', '/notice', '/host', '/unmute']);
+const SERVER_ONLY = new Set(['/ban', '/unban', '/slow', '/notice', '/host']);
 
 /** 슬래시 명령 해석 — [명령, 인자들] 또는 null. 순수 함수. */
 export function parseCommand(text) {
@@ -296,8 +296,18 @@ export function installChatExtras(panel) {
         if (!nick) { toast('사용법: /mute 닉네임 [초]'); return true; }
         const sec = Math.min(86400, Math.max(10, Number(args[1]) || 300));
         muted.set(nick, Date.now() + sec * 1000);
-        for (const el of panel.list.querySelectorAll(`.chat-line[data-nick="${CSS.escape(nick)}"]`)) el.remove();
+        // 패널 상자 안의 모든 목록 — 멀티라이브 멀티채팅의 통합·칸 목록도 이 상자 안에 있다(예전엔 숨은 패널 목록만 지웠다).
+        for (const el of panel.root.querySelectorAll(`.chat-line[data-nick="${CSS.escape(nick)}"]`)) el.remove();
+        panel.onMute?.(nick);
         toast(`${nick} 님 메시지를 ${sec}초 동안 숨깁니다`, 2000);
+        return true;
+      }
+      case '/unmute': {
+        // 이 앱의 /mute(숨기기)를 푼다 — 예전엔 '방송 관리 명령'이라며 막아, 숨긴 사람을 최대 24시간 되돌릴 수 없었다.
+        // 숨긴 적이 없으면 예전처럼 방송 관리 명령 안내.
+        const nick = (args[0] || '').replace(/^@/, '');
+        if (nick && muted.delete(nick)) { toast(`${nick} 님 메시지를 다시 보입니다`, 1500); return true; }
+        toast(nick ? `숨긴 목록에 ${nick} 님이 없습니다 — 방송 관리 명령은 치지직 웹에서 해 주세요` : '사용법: /unmute 닉네임', 2000);
         return true;
       }
       case '/help':

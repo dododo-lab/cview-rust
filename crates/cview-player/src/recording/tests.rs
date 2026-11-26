@@ -869,6 +869,36 @@ async fn decrypts_aes128_segments_with_cached_key() {
     );
 }
 
+/// 키 요청이 한 번 실패해도 그 응답을 키로 기억하지 않는다 — 다음 폴에서 다시 받아 녹화가 이어진다.
+#[tokio::test]
+async fn failed_key_response_is_not_cached() {
+    use aes::cipher::{BlockEncryptMut, KeyIvInit};
+    let h = Harness::new().await;
+    let key = [5u8; 16];
+    let iv: [u8; 16] = core::array::from_fn(|i| i as u8);
+    let enc = |p: &[u8]| {
+        cbc::Encryptor::<aes::Aes128>::new(&key.into(), &iv.into())
+            .encrypt_padded_vec_mut::<Pkcs7>(p)
+    };
+    h.cdn.set_all(vec![
+        (
+            "/live/chunklist.m3u8",
+            media(&[
+                "#EXT-X-KEY:METHOD=AES-128,URI=\"key.bin\",IV=0x000102030405060708090A0B0C0D0E0F",
+                "#EXTINF:2,",
+                "seg_0.ts",
+                "#EXTINF:2,",
+                "seg_1.ts",
+            ]),
+        ),
+        ("/live/key.bin", Route::FailFirst(1, key.to_vec())),
+        ("/live/seg_0.ts", Route::Body(enc(SEG0))),
+        ("/live/seg_1.ts", Route::Body(enc(SEG1))),
+    ]);
+    let file = h.record("/live/chunklist.m3u8", 4).await;
+    assert_eq!(file, cat(&[SEG0, SEG1]), "키 실패 한 번에 녹화가 비었다");
+}
+
 #[tokio::test]
 async fn start_twice_fails_and_stop_resets_state() {
     let h = Harness::new().await;

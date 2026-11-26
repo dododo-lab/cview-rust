@@ -339,12 +339,23 @@ impl StreamRecordingService {
             .send()
             .await
             .map_err(|e| PlayerError::RecordingFailed(e.to_string()))?;
+        let status = resp.status();
+        if !status.is_success() {
+            return Err(PlayerError::RecordingFailed(format!(
+                "AES 키를 받지 못했습니다: HTTP {}",
+                status.as_u16()
+            )));
+        }
         let data = resp
             .bytes()
             .await
             .map_err(|e| PlayerError::RecordingFailed(e.to_string()))?
             .to_vec();
-        self.st().key_cache.insert(url.clone(), data.clone());
+        // 올바른 키(16바이트)만 기억한다 — 예전엔 한 번 실패한 응답 본문(오류 페이지)을 키로 기억해, 그 녹화는
+        // 끝까지 모든 조각이 복호화에 실패하는데(0바이트) 화면은 '녹화 중'으로 남았다.
+        if data.len() == 16 {
+            self.st().key_cache.insert(url.clone(), data.clone());
+        }
         Ok(data)
     }
 

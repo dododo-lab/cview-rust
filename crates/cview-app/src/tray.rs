@@ -212,6 +212,19 @@ pub fn menu_spec(m: &TrayModel) -> Vec<Entry> {
             favorites.len()
         )));
         out.extend(favorites.iter().take(MAX_FAVORITES).map(|l| live_item(l)));
+        // 넘친 즐겨찾기도 열 수 있게 — 예전엔 머리말은 '방송 중 10'인데 9번째부터 메뉴 어디에도 없었다.
+        let more: Vec<Entry> = favorites
+            .iter()
+            .skip(MAX_FAVORITES)
+            .take(MAX_MORE)
+            .map(|l| live_item(l))
+            .collect();
+        if !more.is_empty() {
+            out.push(Entry::Submenu {
+                label: format!("즐겨찾기 더 보기 ({})", favorites.len() - MAX_FAVORITES),
+                items: more,
+            });
+        }
         out.push(Entry::Separator);
     }
 
@@ -788,6 +801,10 @@ fn on_menu<R: Runtime>(app: &AppHandle<R>, id: &str) {
         "tray-now" => {
             crate::tray_popover::hide(app);
             show_main(app);
+            crate::tray_popover::send_main_control(
+                app,
+                serde_json::json!({ "kind": "show-now-playing" }),
+            );
         }
         "tray-toggle" => {
             if main_hidden(app) {
@@ -909,7 +926,7 @@ async fn refresh(app: &AppHandle) {
 async fn refresh_generic<R: Runtime>(app: &AppHandle<R>) {
     let services = app.state::<AppServices>();
     let logged_in = services.auth.is_authenticated();
-    let mut lives: Vec<LiveEntry> = Vec::new();
+    let mut polled: Option<Vec<LiveEntry>> = None;
     if logged_in {
         if let Some(result) = services
             .following
@@ -929,16 +946,18 @@ async fn refresh_generic<R: Runtime>(app: &AppHandle<R>) {
                 .filter(|i| i.is_live)
                 .collect();
             items.sort_by_key(|i| std::cmp::Reverse(i.viewer_count));
-            lives = items
-                .into_iter()
-                .map(|i| LiveEntry {
-                    favorite: favorites.contains(&i.channel_id),
-                    channel_id: i.channel_id,
-                    name: i.channel_name,
-                    category: i.category_name,
-                    viewers: i.viewer_count,
-                })
-                .collect();
+            polled = Some(
+                items
+                    .into_iter()
+                    .map(|i| LiveEntry {
+                        favorite: favorites.contains(&i.channel_id),
+                        channel_id: i.channel_id,
+                        name: i.channel_name,
+                        category: i.category_name,
+                        viewers: i.viewer_count,
+                    })
+                    .collect(),
+            );
         }
     }
     let Some(hub) = app.try_state::<TrayHub>() else {
@@ -947,9 +966,22 @@ async fn refresh_generic<R: Runtime>(app: &AppHandle<R>) {
     {
         let mut m = lock(&hub.model);
         m.logged_in = logged_in;
-        m.lives = lives;
+        m.lives = next_lives(std::mem::take(&mut m.lives), logged_in, polled);
     }
     sync(app);
+}
+
+/// 다음 트레이 방송 목록 — 로그아웃이면 비우고, 폴이 실패·취소(None)면 앞 목록을 그대로 둔다. 예전엔 한 번 실패
+/// (Wi-Fi 전환·깨어남·5xx)에 메뉴가 '방송 중인 팔로잉 없음'이 되고 아이콘 숫자·Dock 배지가 다음 주기까지 사라졌다. 순수 함수.
+fn next_lives(
+    previous: Vec<LiveEntry>,
+    logged_in: bool,
+    polled: Option<Vec<LiveEntry>>,
+) -> Vec<LiveEntry> {
+    if !logged_in {
+        return Vec::new();
+    }
+    polled.unwrap_or(previous)
 }
 
 /// 메인 창이 닫힌 뒤 함께 닫을 창 — 메인을 뺀 나머지. 순수 함수.
@@ -959,6 +991,29 @@ fn secondary_windows_after_main_closed<'a>(labels: impl Iterator<Item = &'a str>
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn failed_poll_keeps_the_previous_tray_list() {
+        use super::{next_lives, LiveEntry};
+        let a = LiveEntry {
+            channel_id: "a".into(),
+            name: "A".into(),
+            category: None,
+            viewers: 3,
+            favorite: false,
+        };
+        assert_eq!(
+            next_lives(vec![a.clone()], true, None),
+            vec![a.clone()],
+            "폴 실패에 비웠다"
+        );
+        assert_eq!(next_lives(vec![a.clone()], true, Some(vec![])), vec![]);
+        assert_eq!(
+            next_lives(vec![a], false, None),
+            vec![],
+            "로그아웃이면 비운다"
+        );
+    }
+
     #[test]
     fn closing_main_closes_secondary_windows() {
         let labels = ["main", "chat-1", "player"];
@@ -1134,6 +1189,28 @@ mod tests {
                 "[더 보기 (4):4]",
                 "-",
             ]
+        );
+    }
+
+    #[test]
+    fn overflowing_favorites_go_to_a_more_submenu() {
+        let lives: Vec<_> = (0..10)
+            .map(|i| live(&format!("f{i}"), 100 - i, true))
+            .collect();
+        let m = TrayModel {
+            logged_in: true,
+            lives,
+            ..TrayModel::default()
+        };
+        let got = ids(&menu_spec(&m));
+        assert_eq!(got[0], "#즐겨찾기 · 방송 중 10");
+        assert_eq!(
+            got.iter().filter(|s| s.starts_with("tray-live:")).count(),
+            8
+        );
+        assert!(
+            got.contains(&"[즐겨찾기 더 보기 (2):2]".to_string()),
+            "{got:?}"
         );
     }
 

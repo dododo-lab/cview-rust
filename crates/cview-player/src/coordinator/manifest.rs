@@ -71,6 +71,12 @@ impl ManifestFetcher for HttpManifestFetcher {
             request = request.timeout(t);
         }
         let response = request.send().await.map_err(|e| e.to_string())?;
+        // HTTP 오류(만료 토큰 403·404·5xx)는 실패로 — 예전엔 본문(HTML)에 STREAM-INF 가 없다는 이유로 '마스터 아님(성공)'이
+        // 되어 갱신 실패 횟수가 오르지 않았고, 5회 실패 → 재연결 승격 경로가 HTTP 오류에서는 돌지 않았다.
+        let status = response.status();
+        if !status.is_success() {
+            return Err(format!("HTTP {}", status.as_u16()));
+        }
         let final_url = Some(response.url().clone());
         let body = response.text().await.map_err(|e| e.to_string())?;
         Ok(FetchedManifest { body, final_url })
@@ -234,5 +240,44 @@ impl StreamCoordinator {
         if let Some(q) = best {
             self.emit_event(StreamEvent::QualitySelected(q));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 한 번만 응답하는 로컬 HTTP 서버.
+    async fn serve_once(status_line: &'static str, body: &'static str) -> Url {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            if let Ok((mut stream, _)) = listener.accept().await {
+                let mut buf = vec![0u8; 4096];
+                let _ = stream.read(&mut buf).await;
+                let resp = format!(
+                    "HTTP/1.1 {status_line}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = stream.write_all(resp.as_bytes()).await;
+            }
+        });
+        Url::parse(&format!("http://{addr}/playlist.m3u8")).unwrap()
+    }
+
+    /// 만료 토큰 403 은 '마스터 아님'이 아니라 실패다 — 그래야 갱신 실패를 세어 재연결로 올린다.
+    #[tokio::test]
+    async fn http_error_is_a_fetch_failure_not_a_non_master() {
+        let fetcher = HttpManifestFetcher::with_client(reqwest::Client::new());
+        let url = serve_once("403 Forbidden", "<html>expired</html>").await;
+        let r = fetch_stream_variants(&fetcher, &HlsManifestParser, &url, None).await;
+        assert_eq!(r.err().as_deref(), Some("HTTP 403"));
+        let url = serve_once("200 OK", "#EXTM3U\n#EXT-X-TARGETDURATION:2\n").await;
+        let r = fetch_stream_variants(&fetcher, &HlsManifestParser, &url, None).await;
+        assert!(
+            matches!(r, Ok(None)),
+            "미디어 재생 목록은 예전처럼 마스터 아님"
+        );
     }
 }
