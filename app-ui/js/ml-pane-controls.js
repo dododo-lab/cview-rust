@@ -253,6 +253,9 @@ export class PaneControls {
       this.patchVolume();
       this.applyPicture();
       this.applySharpness(true); // 새 플레이어 문서·새 재생 — 앞 문서에 보낸 값은 사라졌다
+      // 재생이 새로 시작되면 화질을 다시 읽는다 — 재시작(토큰 갱신·오류 복구·오프라인 뒤)은 새 hls 라 수동 화질이 풀리는데,
+      // 예전엔 배지·⚙ 가 옛 '720p 수동'에 남았다(시청 화면 viewer-controls 와 같은 처리).
+      if (type === 'playStarted') this.bridge.call('getLevels');
       if (this.stage) {
         // 새 재생·새 플레이어 문서는 1배속(예전 시청 화면과 같다) — 메뉴가 고른 배속과 어긋나지 않게 맞춘다.
         if (this.rate !== 1) this.normalRate();

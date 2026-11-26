@@ -59,6 +59,8 @@ pub const OFFLINE_RETRY_GRACE: Duration = Duration::from_secs(120);
 pub struct SessionState {
     pub channel_name: String,
     pub live_title: String,
+    /// 방송 카테고리(시청 기록에 남긴다).
+    pub category_name: Option<String>,
     pub thumbnail_url: Option<Url>,
     pub profile_image_url: Option<Url>,
     /// 인증 마크 종류(`"partner"` · `"challenger"` · `"official"`).
@@ -556,6 +558,10 @@ impl MultiLiveSession {
                 plan.channel_name.clone()
             };
             st.live_title = plan.live_title.clone();
+            st.category_name = live
+                .live_category_value
+                .clone()
+                .filter(|c| !c.trim().is_empty());
             if let Some(badge) = live_badge(&live) {
                 st.verified_badge = Some(badge);
             }
@@ -806,6 +812,7 @@ impl MultiLiveSession {
                 channel_name: st.channel_name.clone(),
                 thumbnail_url: st.thumbnail_url.as_ref().map(|u| u.to_string()),
                 avatar_url: st.profile_image_url.as_ref().map(|u| u.to_string()),
+                category_name: st.category_name.clone(),
             }
         };
         match backend.start_watch_record(&record).await {

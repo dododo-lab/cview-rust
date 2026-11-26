@@ -122,7 +122,9 @@ export function installChatExtras(panel) {
   // users — 닉네임 → 메시지 수. 상한이 없어 대형 방송을 몇 시간 보면 고유 채팅자 수만 명이 그대로 쌓였다(멀티채팅이면
   // 채널마다). STATS_USERS_MAX 를 넘으면 한 번만 말한 사람부터(오래된 순) 덜어 내고, 덜어 낸 수는 usersDropped 로 센다 —
   // '참여자' 는 둘을 더해 보여 주고, '가장 많이 말한 사람' 은 여러 번 말한 사람이 남으므로 그대로다.
-  const stats = { times: [], users: new Map(), usersDropped: 0, donations: 0, cheese: 0, subs: 0, since: Date.now() };
+  // total — 연결 뒤 받은 메시지 수. times 는 최근 1분 계산용이라 5000개로 자르는데, 예전엔 분당 평균도 times 로 나눠
+  // 큰 방송을 오래 보면 평균이 계속 작아졌다(분당 500건 방송이 2시간 뒤 41로 보임).
+  const stats = { times: [], total: 0, users: new Map(), usersDropped: 0, donations: 0, cheese: 0, subs: 0, since: Date.now() };
   const muted = new Map(); // nick → 해제 시각
   const uidByNick = new Map(); // nick → userId (최근 본 순)
 
@@ -161,7 +163,7 @@ export function installChatExtras(panel) {
       <div class="tray-head"><strong>채팅 통계</strong><div class="grow"></div><span class="muted">${Math.round(mins)}분 동안</span></div>
       <div class="stat-grid">
         <div><b>${minute}</b><span>최근 1분 메시지</span></div>
-        <div><b>${Math.round(stats.times.length / mins)}</b><span>분당 평균</span></div>
+        <div><b>${Math.round(stats.total / mins)}</b><span>분당 평균</span></div>
         <div><b>${stats.users.size + stats.usersDropped}</b><span>참여자</span></div>
         <div><b>${stats.donations}</b><span>후원 · ${esc(formatCheese(stats.cheese) || '0치즈')}</span></div>
         <div><b>${stats.subs}</b><span>구독</span></div>
@@ -221,6 +223,7 @@ export function installChatExtras(panel) {
       const isNew = !live || live.has(m);
       if (isNew) {
         stats.times.push(now);
+        stats.total += 1;
         if (m.nickname) stats.users.set(m.nickname, (stats.users.get(m.nickname) || 0) + 1);
         if (m.kind === 'donation') { stats.donations += 1; if (Number.isFinite(m.donationAmount) && m.donationAmount > 0) stats.cheese += m.donationAmount; }
         if (m.kind === 'subscription') stats.subs += 1;
@@ -249,7 +252,7 @@ export function installChatExtras(panel) {
   // 연결이 바뀌면 통계·후원 목록 초기화(멀티라이브 멀티채팅이 채우는 동안의 목록은 패인 선택이 바뀌어도 둔다)
   const origConnect = panel.connect.bind(panel);
   panel.connect = async (...args) => {
-    stats.times = []; stats.users.clear(); stats.usersDropped = 0; stats.donations = 0; stats.cheese = 0; stats.subs = 0; stats.since = Date.now();
+    stats.times = []; stats.total = 0; stats.users.clear(); stats.usersDropped = 0; stats.donations = 0; stats.cheese = 0; stats.subs = 0; stats.since = Date.now();
     if (!donations.external) donations.reset();
     return origConnect(...args);
   };

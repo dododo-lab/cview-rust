@@ -166,7 +166,13 @@ export class MultiLiveMergedChat {
     this.lines = new MergedLineHost(this.list, lineOpts);
     this.cellLines = new MergedLineHost(this.grid, lineOpts);
     document.addEventListener('pointerdown', (e) => { if (!this.menu.hidden && !e.target.closest('.ml-mc-view')) this.openMenu(false); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !this.menu.hidden) this.openMenu(false); });
+    // 이 Esc 는 메뉴만 닫는다 — 앱 전체 Esc(app.js escapeTaken)는 메뉴가 이미 숨은 뒤에 보므로, 막지 않으면
+    // 단독 보기(또는 채널 추가 서랍)까지 함께 닫혔다(패인 ⚙·⋯ 메뉴와 같은 처리).
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape' || this.menu.hidden) return;
+      e.preventDefault(); // escapeTaken·채널 추가 서랍이 defaultPrevented 를 보고 양보한다
+      this.openMenu(false);
+    });
     window.addEventListener('resize', () => { if (!this.menu.hidden) fitPopover(this.menu, this.chatEl); });
     this.grid.addEventListener('click', (e) => {
       const head = e.target.closest('.ml-mc-cell-head');
@@ -450,7 +456,8 @@ export class MultiLiveMergedChat {
     const donations = panelOf(this.chatEl)?.donations;
     if (donations && donations.external === 'ml') {
       for (const [c, msgs, recent] of events) {
-        const shown = msgs.filter((m) => (m.kind === 'donation' || m.kind === 'subscription') && passesFilters(m));
+        // /mute 로 숨긴 사람의 후원도 뺀다 — 예전엔 줄은 숨는데 후원 띠·목록에는 계속 떴다(단일 채팅 chat.js 와 같은 기준).
+        const shown = msgs.filter((m) => (m.kind === 'donation' || m.kind === 'subscription') && passesFilters(m) && !(hide && hide(m)));
         if (shown.length) donations.add(shown, { fresh: recent ? new Set() : null, src: { key: c.key, name: c.name, hue: c.hue } });
       }
     }

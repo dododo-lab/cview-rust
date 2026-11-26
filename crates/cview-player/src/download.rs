@@ -116,6 +116,30 @@ impl VideoDownloader {
         }
     }
 
+    /// 응답 머리를 기다리는 동안에도 취소·멈춤을 본다 — 예전엔 `send()` 에 시간 제한이 없어, 요청 직후 네트워크가 바뀌면
+    /// 본문을 받기 전이라 취소가 듣지 않고 '받는 중'(다시 받으면 '이미 받는 중')으로 남았다.
+    async fn until_ready<F: std::future::Future>(
+        &self,
+        fut: F,
+    ) -> Result<F::Output, DownloadError> {
+        tokio::pin!(fut);
+        let mut idle = Duration::ZERO;
+        loop {
+            self.check_cancel()?;
+            match tokio::time::timeout(Self::CANCEL_POLL, &mut fut).await {
+                Ok(v) => return Ok(v),
+                Err(_) => {
+                    idle += Self::CANCEL_POLL;
+                    if idle >= Self::STALL_LIMIT {
+                        return Err(DownloadError::Network(
+                            "응답이 멈췄습니다(네트워크를 확인해 주세요)".into(),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
     const CANCEL_POLL: Duration = Duration::from_millis(250);
     const STALL_LIMIT: Duration = Duration::from_secs(30);
 
@@ -128,10 +152,8 @@ impl VideoDownloader {
     ) -> Result<u64, DownloadError> {
         self.finish(output, async |file: &mut std::fs::File| {
             let resp = self
-                .client
-                .get(url.clone())
-                .send()
-                .await
+                .until_ready(self.client.get(url.clone()).send())
+                .await?
                 .map_err(|e| DownloadError::Network(e.to_string()))?;
             let status = resp.status().as_u16();
             if !(200..300).contains(&status) {
@@ -398,6 +420,48 @@ mod tests {
     }
 
     /// 본문 1000바이트만 보내고 연결을 붙잡은 채 멈추는 서버.
+    /// 연결만 받고 응답 머리를 보내지 않는 서버.
+    async fn serve_silent() -> Url {
+        use tokio::io::AsyncReadExt;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            while let Ok((mut stream, _)) = listener.accept().await {
+                tokio::spawn(async move {
+                    let mut buf = vec![0u8; 4096];
+                    let _ = stream.read(&mut buf).await;
+                    tokio::time::sleep(Duration::from_secs(60)).await;
+                });
+            }
+        });
+        Url::parse(&format!("http://{addr}/v.mp4")).unwrap()
+    }
+
+    /// 응답 머리를 받기 전에 멈춘 요청도 취소가 바로 듣는다.
+    #[tokio::test]
+    async fn cancel_works_before_the_response_head_arrives() {
+        let url = serve_silent().await;
+        let dir = std::env::temp_dir().join(format!("cview-dl-head-{}", std::process::id()));
+        let out = dir.join("v.mp4");
+        let cancel = Arc::new(AtomicBool::new(false));
+        let dl = VideoDownloader::new(cancel.clone());
+        let c = cancel.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            c.store(true, Ordering::Relaxed);
+        });
+        let r = tokio::time::timeout(
+            Duration::from_secs(5),
+            dl.download_file(&url, &out, Arc::new(|_, _| {})),
+        )
+        .await;
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(
+            matches!(r, Ok(Err(DownloadError::Cancelled))),
+            "취소 5초 뒤에도 끝나지 않았다: {r:?}"
+        );
+    }
+
     async fn serve_stalling_mp4() -> Url {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

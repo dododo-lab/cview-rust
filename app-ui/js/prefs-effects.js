@@ -60,6 +60,17 @@ export async function installPrefsEffects(ctx) {
     syncTheme(appearance.theme);
     apply({ ...(settings || {}), appearance }, ctx);
   });
+  // 재생·일반 설정 — 다른 창(메인 창 설정·가져오기·초기화·메뉴 막대)에서 바꾸면 이 창도 따른다. 예전엔 연 때 읽은 값을 계속 써서
+  // 플레이어 창이 '백그라운드 재생' 끔·후원 알림 위치·자동 새로고침 간격을 따르지 않았다.
+  for (const [ev, key] of [[Events.playerChanged, 'player'], [Events.generalChanged, 'general']]) {
+    listen(ev, (v) => {
+      if (!v || typeof v !== 'object' || !settings) return;
+      apply({ ...settings, [key]: v }, ctx);
+      // 이미 가려진 창이면 지금 상태에 맞춘다 — visibilitychange 는 다시 오지 않아, 가려진 플레이어 창이 '백그라운드 재생'
+      // 끔을 받고도 다음에 보였다 가려질 때까지 계속 재생했다.
+      if (key === 'player' && document.visibilityState === 'hidden') onVisibility();
+    });
+  }
   window.addEventListener('cview:settings-changed', (e) => {
     if (e.detail && e.detail.settings) apply(e.detail.settings, ctx);
   });
@@ -67,7 +78,8 @@ export async function installPrefsEffects(ctx) {
   // 지금 라이브 시청의 기본 경로는 멀티라이브 단독 보기(무대 패인)다 — 예전엔 옛 시청 화면(ctx.viewer)만 멈춰,
   // 설정을 꺼도 단독 보기는 가려진 창에서 계속 받고 디코드했다. 무대 패인도 같은 규칙으로 멈췄다가 이어 본다.
   let pausedWatchSlot = null;
-  document.addEventListener('visibilitychange', () => {
+  document.addEventListener('visibilitychange', () => onVisibility());
+  function onVisibility() {
     const keep = !settings || !settings.player || settings.player.continuePlaybackInBackground !== false;
     const ml = ctx.multilive;
     if (document.visibilityState === 'hidden') {
@@ -90,5 +102,5 @@ export async function installPrefsEffects(ctx) {
       v.player.call('play');
       v.player.call('seekToLiveEdge');
     }
-  });
+  }
 }

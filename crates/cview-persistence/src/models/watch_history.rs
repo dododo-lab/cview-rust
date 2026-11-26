@@ -81,7 +81,9 @@ impl WatchHistory {
 pub struct WatchHistoryAggregationPolicy;
 
 impl WatchHistoryAggregationPolicy {
-    pub const ACTIVE_GRACE_INTERVAL: TimeInterval = 45.0;
+    /// 진행 중으로 볼 마지막 갱신 뒤 시간 — 체크포인트 간격(60초)보다 길어야 한다. 예전 45초는 간격보다 짧아,
+    /// 매분 45~60초 사이에 진행 중 시청 시간이 마지막 체크포인트 값으로 뒤로 갔다(첫 1분은 0초 취급).
+    pub const ACTIVE_GRACE_INTERVAL: TimeInterval = 75.0;
     /// 재생 중 시청 기록 체크포인트 간격(초).
     pub const CHECKPOINT_INTERVAL: TimeInterval = 30.0;
     /// 체크포인트 허용 오차(초).
@@ -108,6 +110,33 @@ impl WatchHistoryAggregationPolicy {
         (-Self::ACTIVE_GRACE_INTERVAL..=Self::ACTIVE_GRACE_INTERVAL).contains(&age)
     }
 
+    /// 체크포인트·종료 한 번에 더하는 시간의 상한(초). 체크포인트 간격(60초)을 몇 번 놓친 정도는 그대로 세고,
+    /// 그보다 긴 틈(노트북을 덮은 잠자기, 멀티라이브 일시정지·메뉴 이탈로 체크포인트를 건너뛴 시간)은 세지 않는다 —
+    /// 예전엔 시작 시각부터 잰 벽시계 시간을 써서, 8시간 잠들었다 깨면 그 채널에 8시간이 쌓였다.
+    pub const MAX_CHECKPOINT_GAP: TimeInterval = 300.0;
+
+    /// 기록 시간을 `at` 까지 늘린다 — 마지막 갱신(없으면 시작) 뒤 지난 시간을 [`Self::MAX_CHECKPOINT_GAP`] 까지만 더한다.
+    pub fn advanced_duration(
+        persisted: TimeInterval,
+        started_at: Date,
+        updated_at: Option<Date>,
+        at: Date,
+    ) -> TimeInterval {
+        let persisted = if persisted.is_finite() {
+            persisted.max(0.0)
+        } else {
+            0.0
+        };
+        // 마지막 갱신이 대상 시각보다 뒤(시계가 되돌아감·과거 시각으로 연 기록)면 시작 시각부터 잰다.
+        let last = updated_at
+            .filter(|u| interval_since(&at, u) >= 0.0)
+            .unwrap_or(started_at);
+        let gap = interval_since(&at, &last).clamp(0.0, Self::MAX_CHECKPOINT_GAP);
+        // 시작부터 잰 길이를 넘지는 않는다(시계가 앞뒤로 흔들려도).
+        let wall = interval_since(&at, &started_at).max(0.0);
+        (persisted + gap).min(wall.max(persisted))
+    }
+
     pub fn effective_duration(
         started_at: Date,
         ended_at: Option<Date>,
@@ -123,7 +152,7 @@ impl WatchHistoryAggregationPolicy {
         if !Self::is_actively_updating(ended_at, updated_at, started_at, now) {
             return persisted;
         }
-        persisted.max(interval_since(&now, &started_at).max(0.0))
+        Self::advanced_duration(persisted, started_at, updated_at, now)
     }
 }
 

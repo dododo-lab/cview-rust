@@ -495,7 +495,9 @@ fn bucket_holds_persisted_share_and_insights_add_open_increment() {
     assert_eq!(buckets[0].sessions, 1);
     assert_eq!(buckets[0].raw_sessions, 1);
     let result = WatchRollupMath::insights(&buckets, &[open], &[], now, &cal);
-    assert!(approx(result.all, 100.0, 0.001));
+    // 진행 중 증가분은 마지막 갱신 뒤 시간(10초)만 — 시작부터 잰 벽시계 시간(100초)이 아니다. 저장된 30초가
+    // 갱신 시각까지 실제로 센 시간이고, 그 앞의 틈(일시정지·잠자기)은 세지 않는다.
+    assert!(approx(result.all, 40.0, 0.001), "all={}", result.all);
     assert_eq!(result.active_session_count, 1);
 }
 

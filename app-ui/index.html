@@ -15,6 +15,16 @@
     // Windows: 화면 단축키는 ⌘(metaKey) 기준으로 짜여 있다 — Ctrl 조합을 ⌘ 조합으로 읽게 한다(모든 처리기보다 먼저, 캡처 단계).
     if (document.documentElement.dataset.platform === 'windows') {
       // 대응: Ctrl → ⌘, Ctrl+Alt → ⌘⌥, Ctrl+Shift+Alt → ⌃⌘(Windows 에는 ⌘·⌃ 가 따로 없다), Ctrl+Tab 은 그대로.
+      // WebView2 의 브라우저 단축키(F5 문서 다시 불러오기·Ctrl+P 인쇄)는 앱에서 쓰지 않는다 — F5 는 문서를 통째로 다시 불러
+      // 시작 화면부터 다시 뜨고 재생이 끊겼다. F5 는 앱의 새로고침(보기 › 새로고침)으로, Ctrl+P 는 막는다.
+      window.addEventListener('keydown', function (e) {
+        if (e.key === 'F5' && !e.altKey && !e.shiftKey && !e.metaKey) {
+          e.preventDefault();
+          window.dispatchEvent(new CustomEvent('cview:menu', { detail: 'refresh' }));
+        } else if (e.ctrlKey && !e.altKey && !e.shiftKey && (e.key === 'p' || e.key === 'P')) {
+          e.preventDefault();
+        }
+      }, true);
       window.addEventListener('keydown', function (e) {
         if (!e.ctrlKey || e.metaKey || e.key === 'Tab') return;
         var def = function (k, v) { Object.defineProperty(e, k, { value: v }); };

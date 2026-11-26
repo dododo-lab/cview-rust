@@ -389,6 +389,7 @@ pub async fn vod_detail(
 
 #[tauri::command]
 pub async fn channel_follow(
+    window: tauri::WebviewWindow,
     services: State<'_, AppServices>,
     channel_id: String,
     follow: bool,
@@ -402,7 +403,28 @@ pub async fn channel_follow(
         services.api.unfollow(&channel_id).await?;
     }
     services.following.invalidate_reuse();
+    emit_social_changed(&window, &channel_id, "following", follow);
     Ok(())
+}
+
+/// 팔로우·즐겨찾기가 바뀌었다고 모든 창에 알린다 — 예전엔 바꾼 창 안에서만 알려, 다른 창(메인·플레이어·채팅 창)은
+/// 옛 상태(별·하트)를 계속 보여 주고 누르면 이미 바뀐 쪽으로 같은 요청을 한 번 더 보냈다. `origin` 으로 보낸 창은 거른다.
+fn emit_social_changed(window: &tauri::WebviewWindow, channel_id: &str, key: &str, on: bool) {
+    let _ = tauri::Emitter::emit(
+        window,
+        "social://changed",
+        social_changed_payload(window.label(), channel_id, key, on),
+    );
+}
+
+/// `social://changed` 내용. 순수 함수.
+pub fn social_changed_payload(
+    origin: &str,
+    channel_id: &str,
+    key: &str,
+    on: bool,
+) -> serde_json::Value {
+    serde_json::json!({ "origin": origin, "channelId": channel_id, key: on })
 }
 
 // MARK: - 팔로잉 전체·다시보기 피드
@@ -531,6 +553,7 @@ fn channel_stub(channel_id: &str, name: Option<String>, image: Option<String>) -
 
 #[tauri::command]
 pub async fn favorite_set(
+    window: tauri::WebviewWindow,
     services: State<'_, AppServices>,
     channel_id: String,
     favorite: bool,
@@ -542,9 +565,11 @@ pub async fn favorite_set(
         .as_ref()
         .ok_or_else(|| CommandError("저장소를 열 수 없습니다".into()))?;
     let info = channel_stub(&channel_id, channel_name, channel_image_url);
-    store
+    let saved = store
         .set_favorite(&channel_id, favorite, Some(&info))
-        .map_err(store_err)
+        .map_err(store_err)?;
+    emit_social_changed(&window, &channel_id, "favorite", favorite);
+    Ok(saved)
 }
 
 #[tauri::command]
@@ -887,11 +912,17 @@ fn shellexpand_home(path: &str, home: &Path) -> String {
     if let Some(rest) = path.strip_prefix("~/").or_else(|| path.strip_prefix("~\\")) {
         return home.join(rest).to_string_lossy().into_owned();
     }
-    if let Some(rest) = path
-        .strip_prefix("%USERPROFILE%\\")
-        .or_else(|| path.strip_prefix("%USERPROFILE%/"))
+    // %USERPROFILE% 는 대소문자를 가리지 않는다(Windows 환경 변수) — 예전엔 '%userprofile%\Pictures' 가 펼쳐지지 않아
+    // 사용자 폴더 아래에 '%userprofile%' 폴더를 만들었다.
+    const VAR: &str = "%USERPROFILE%";
+    if path.len() > VAR.len()
+        && path.is_char_boundary(VAR.len())
+        && path[..VAR.len()].eq_ignore_ascii_case(VAR)
     {
-        return home.join(rest).to_string_lossy().into_owned();
+        let rest = &path[VAR.len()..];
+        if let Some(rest) = rest.strip_prefix('\\').or_else(|| rest.strip_prefix('/')) {
+            return home.join(rest).to_string_lossy().into_owned();
+        }
     }
     path.to_string()
 }
@@ -906,6 +937,22 @@ fn launch(spawned: std::io::Result<std::process::Child>, fail: &str) -> CmdResul
     Ok(())
 }
 
+/// 화면의 '…에서 보기' 이름 — 오류 문구에 쓴다(예전엔 Windows 에서도 'Finder 에서 보기'라 했다).
+#[cfg(target_os = "windows")]
+const REVEAL_LABEL: &str = "탐색기에서 보기";
+#[cfg(not(target_os = "windows"))]
+const REVEAL_LABEL: &str = "Finder에서 보기";
+
+/// explorer 에 넘길 경로 — 따옴표로 감싼다(쉼표·공백이 든 경로). Windows 경로에는 `"` 가 올 수 없다. 순수 함수.
+pub fn explorer_quoted(p: &Path) -> String {
+    format!("\"{}\"", p.display())
+}
+
+/// explorer 의 파일 선택 인자 — `/select,"C:\…\이름.mp4"`. 순수 함수.
+pub fn explorer_select_arg(p: &Path) -> String {
+    format!("/select,{}", explorer_quoted(p))
+}
+
 /// Finder(탐색기)에서 파일·폴더를 보여 준다.
 #[tauri::command]
 pub async fn reveal_path(path: String) -> CmdResult<()> {
@@ -915,10 +962,15 @@ pub async fn reveal_path(path: String) -> CmdResult<()> {
     }
     #[cfg(target_os = "macos")]
     let result = std::process::Command::new("open").arg("-R").arg(&p).spawn();
+    // explorer 는 인자를 제 방식으로 읽는다 — Rust 가 공백 든 인자를 통째로 따옴표로 감싸면("/select,C:\…\제목 1.mp4")
+    // /select 로 알아보지 못해 다른 폴더(문서)를 열었고, 공백 없이 쉼표만 있으면 쉼표에서 경로가 끊겼다. 경로만 따옴표로.
     #[cfg(target_os = "windows")]
-    let result = std::process::Command::new("explorer")
-        .arg(format!("/select,{}", p.display()))
-        .spawn();
+    let result = {
+        use std::os::windows::process::CommandExt;
+        std::process::Command::new("explorer")
+            .raw_arg(explorer_select_arg(&p))
+            .spawn()
+    };
     #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
     let result = std::process::Command::new("xdg-open")
         .arg(p.parent().unwrap_or(&p))
@@ -951,14 +1003,19 @@ pub async fn open_path(path: String) -> CmdResult<()> {
         return Err(CommandError("파일이 없습니다".into()));
     }
     if !is_openable_file(&p) {
-        return Err(CommandError(
-            "이 파일은 열 수 없습니다 — Finder 에서 보기를 쓰세요".into(),
-        ));
+        return Err(CommandError(format!(
+            "이 파일은 열 수 없습니다 — {REVEAL_LABEL}를 쓰세요"
+        )));
     }
     #[cfg(target_os = "macos")]
     let result = std::process::Command::new("open").arg(&p).spawn();
     #[cfg(target_os = "windows")]
-    let result = std::process::Command::new("explorer").arg(&p).spawn();
+    let result = {
+        use std::os::windows::process::CommandExt;
+        std::process::Command::new("explorer")
+            .raw_arg(explorer_quoted(&p))
+            .spawn()
+    };
     #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
     let result = std::process::Command::new("xdg-open").arg(&p).spawn();
     launch(result, "열 수 없습니다")
@@ -1040,6 +1097,18 @@ pub async fn app_quit(app: tauri::AppHandle) -> CmdResult<()> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn social_change_payload_names_the_origin_window_and_the_changed_key() {
+        let v = super::social_changed_payload("player-1", "abc", "favorite", false);
+        assert_eq!(
+            v,
+            serde_json::json!({ "origin": "player-1", "channelId": "abc", "favorite": false })
+        );
+        let v = super::social_changed_payload("main", "abc", "following", true);
+        assert_eq!(v["following"], true);
+        assert!(v.get("favorite").is_none());
+    }
     use super::*;
 
     mod channel_live {
@@ -1314,6 +1383,37 @@ mod tests {
         );
         let abs = std::env::temp_dir().join("shots");
         assert_eq!(resolve_user_dir(&abs.to_string_lossy(), home), abs);
+    }
+
+    #[test]
+    fn userprofile_prefix_is_case_insensitive() {
+        let home = Path::new("/home/u");
+        for raw in [
+            "%USERPROFILE%/Pictures",
+            "%userprofile%/Pictures",
+            "%UserProfile%\\Pictures",
+        ] {
+            assert_eq!(
+                PathBuf::from(shellexpand_home(raw, home)),
+                home.join("Pictures"),
+                "{raw}"
+            );
+        }
+        // 접두어가 아닌 이름은 그대로
+        assert_eq!(
+            shellexpand_home("%USERPROFILEX%/a", home),
+            "%USERPROFILEX%/a"
+        );
+    }
+
+    #[test]
+    fn explorer_args_quote_the_path_with_spaces_and_commas() {
+        let p = Path::new("C:\\Users\\u\\Movies\\채널_방송 제목, 2부_1.mp4");
+        assert_eq!(
+            explorer_select_arg(p),
+            "/select,\"C:\\Users\\u\\Movies\\채널_방송 제목, 2부_1.mp4\""
+        );
+        assert_eq!(explorer_quoted(Path::new("C:\\a,b.mp4")), "\"C:\\a,b.mp4\"");
     }
 
     #[test]

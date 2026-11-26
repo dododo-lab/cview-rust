@@ -322,6 +322,7 @@ pub async fn data_cleanup(
         return Err(CommandError(format!("알 수 없는 정리 항목: {kind}")));
     }
     let (path, backup) = backup_for(&app)?;
+    let images = crate::commands::settings::image_service(&app);
     tauri::async_runtime::spawn_blocking(move || {
         let err = |e: cview_persistence::PersistenceError| CommandError(e.to_string());
         match kind.as_str() {
@@ -333,7 +334,14 @@ pub async fn data_cleanup(
                     })
                     .map_err(err)?;
             }
-            "imageIndex" => store.delete_all_image_entries().map_err(err)?,
+            // 실제 썸네일 캐시(image-cache/ 의 색인·파일)도 비운다 — 예전엔 앱이 더는 쓰지 않는 옛 표(CachedImageEntry)만
+            // 지워, '정리했습니다'가 떠도 썸네일을 다시 받지 않고 디스크 공간도 그대로였다(설정 › 이미지 캐시 비우기와 같게).
+            "imageIndex" => {
+                store.delete_all_image_entries().map_err(err)?;
+                if let Some(i) = &images {
+                    i.clear();
+                }
+            }
             "oldHistory" => store.cleanup_old_watch_history(90).map_err(err)?,
             "legacy" => {
                 store.purge_legacy_write_only_rows().map_err(err)?;

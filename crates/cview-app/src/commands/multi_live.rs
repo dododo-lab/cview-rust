@@ -163,6 +163,9 @@ pub async fn multilive_set_layout(
         .ok_or_else(|| CommandError(format!("알 수 없는 레이아웃: {layout}")))?;
     {
         let mut st = shell.manager.lock();
+        // 빈 멀티라이브에서 바꾼 배치가 첫 채널을 넣을 때(초기 선호 적용) 덮이지 않게, 바꾸기 전에 초기 선호를 먼저 적용한다 —
+        // 예전엔 고른 '포커스'가 기본 레이아웃으로 돌아가고, 기억한 포커스 방향·비율을 빈 화면 값으로 덮어 잃었다.
+        st.apply_initial_layout_prefs_if_needed();
         st.apply_grid_layout_mode(mode);
         st.save_state();
     }
@@ -245,6 +248,9 @@ pub async fn multilive_set_focus_layout(
     let (direction, ratio) = focus_layout_update(direction.as_deref(), ratio);
     {
         let mut st = shell.manager.lock();
+        // 빈 멀티라이브에서 바꾼 배치가 첫 채널을 넣을 때(초기 선호 적용) 덮이지 않게, 바꾸기 전에 초기 선호를 먼저 적용한다 —
+        // 예전엔 고른 '포커스'가 기본 레이아웃으로 돌아가고, 기억한 포커스 방향·비율을 빈 화면 값으로 덮어 잃었다.
+        st.apply_initial_layout_prefs_if_needed();
         if let Some(d) = direction {
             st.set_focus_direction(d);
         }
@@ -341,6 +347,9 @@ pub async fn multilive_set_ratios(
 ) -> CmdResult<MultiLiveStateDto> {
     {
         let mut st = shell.manager.lock();
+        // 빈 멀티라이브에서 바꾼 배치가 첫 채널을 넣을 때(초기 선호 적용) 덮이지 않게, 바꾸기 전에 초기 선호를 먼저 적용한다 —
+        // 예전엔 고른 '포커스'가 기본 레이아웃으로 돌아가고, 기억한 포커스 방향·비율을 빈 화면 값으로 덮어 잃었다.
+        st.apply_initial_layout_prefs_if_needed();
         let mut r: MultiLiveLayoutRatios = st.layout_ratios();
         if let Some(h) = horizontal.filter(|v| v.is_finite()) {
             r.horizontal_ratio = MultiLiveLayoutRatios::clamped(h);

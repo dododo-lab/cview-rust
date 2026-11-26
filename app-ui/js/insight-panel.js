@@ -1,7 +1,8 @@
 // 오른쪽 인사이트 패널 — 원본 DiscoveryInsightRail(인기·카테고리)·FollowingLiveInsightRail(팔로잉)을 옮기고,
 // 나머지 메뉴(홈·검색·멀티채팅·보관함·통계·설정)는 앱이 이미 가진 데이터로 화면에 맞는 요약을 보여 준다.
 // 라이브(시청)·멀티라이브에서는 숨긴다. 접기 상태는 기억하고, 좁은 창에서는 자동으로 숨긴다(CSS).
-import { api } from './api.js';
+import { api, listen, Events } from './api.js';
+import { CHANNEL_SOCIAL_EVENT } from './channel-actions.js';
 import { esc, safeUrl, imageSrc } from './dom.js';
 import { compactCount } from './cards.js';
 import { categoryGroups } from './pages.js';
@@ -38,6 +39,10 @@ async function cached(key, fn) {
   cache.set(key, { at: Date.now(), value });
   return value;
 }
+// 팔로우가 바뀌거나 로그인이 바뀌면 비운다 — 예전엔 팔로우 직후 45초 동안 옛 목록이, 계정을 바꾸면 앞 계정의 팔로잉이 보였다.
+if (typeof window !== 'undefined') window.addEventListener(CHANNEL_SOCIAL_EVENT, () => cache.clear());
+listen(Events.authChanged, () => cache.clear());
+if (typeof window !== 'undefined') window.addEventListener('cview:recent-cleared', () => cache.clear());
 const safe = async (p, fallback) => { try { return await p; } catch { return fallback; } };
 
 // ── 순수 계산(원본 PopularInsights / FollowingInsights 규칙) ─────

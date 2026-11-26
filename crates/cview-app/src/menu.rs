@@ -279,9 +279,31 @@ pub fn window_menu_popup<R: Runtime>(
         .app_handle()
         .menu()
         .ok_or_else(|| crate::commands::CommandError("메뉴가 없습니다".into()))?;
+    // 화면 좌표는 CSS 픽셀이다 — '화면 크기'(웹뷰 확대, apply_saved_zoom)를 100% 가 아니게 두면 논리 좌표와 배율만큼 달라,
+    // 예전엔 125% 에서 메뉴가 단추보다 한참 왼쪽·위에 떴다.
+    let scale = tauri::Manager::try_state::<crate::state::AppServices>(window.app_handle())
+        .map(|s| s.settings.appearance().ui_scale)
+        .unwrap_or(1.0);
+    let (lx, ly) = css_to_logical(x, y, scale);
     window
-        .popup_menu_at(&menu, tauri::LogicalPosition::new(x, y))
+        .popup_menu_at(&menu, tauri::LogicalPosition::new(lx, ly))
         .map_err(|e| crate::commands::CommandError(e.to_string()))
+}
+
+/// 웹뷰 확대(`scale`) 아래의 CSS 좌표 → 창 논리 좌표. 배율이 이상하면(0·NaN) 1 로 본다. 순수 함수.
+pub fn css_to_logical(x: f64, y: f64, scale: f64) -> (f64, f64) {
+    let s = if scale.is_finite() && scale > 0.0 {
+        scale
+    } else {
+        1.0
+    };
+    (x * s, y * s)
+}
+
+/// 가리기·기타 가리기·모두 보기·전체 화면 기본 항목을 넣는가 — macOS 에서만(Windows muda 는 가리기를 SW_HIDE 로,
+/// 나머지는 아무 일도 하지 않는다). 순수 함수.
+pub fn app_menu_has_hide_items(macos: bool) -> bool {
+    macos
 }
 
 /// 메뉴를 만든다.
@@ -297,24 +319,36 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         true,
         None::<&str>,
     )?;
-    let app_menu = Submenu::with_items(
-        app,
-        "CView",
-        true,
-        &[
-            &about,
-            &check_update,
-            &PredefinedMenuItem::separator(app)?,
-            &settings,
-            &notification_settings,
-            &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::hide(app, Some("CView 가리기"))?,
-            &PredefinedMenuItem::hide_others(app, Some("기타 가리기"))?,
-            &PredefinedMenuItem::show_all(app, Some("모두 보기"))?,
-            &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::quit(app, Some("CView 종료"))?,
-        ],
-    )?;
+    let macos = cfg!(target_os = "macos");
+    let mut app_items: Vec<Box<dyn tauri::menu::IsMenuItem<R>>> = vec![
+        Box::new(about),
+        Box::new(check_update),
+        Box::new(PredefinedMenuItem::separator(app)?),
+        Box::new(settings),
+        Box::new(notification_settings),
+        Box::new(PredefinedMenuItem::separator(app)?),
+    ];
+    // 가리기·기타 가리기·모두 보기는 macOS 에만 — Windows 에서 '가리기'(⌃H)는 창을 SW_HIDE 로 숨기면서 앱의 숨김 상태
+    // (tray::hide_main)를 거치지 않아, 알림 영역 아이콘을 꺼 두었으면 되돌릴 길이 없었다. 나머지 둘은 Windows 에서 아무 일도 하지 않았다.
+    if app_menu_has_hide_items(macos) {
+        app_items.push(Box::new(PredefinedMenuItem::hide(
+            app,
+            Some("CView 가리기"),
+        )?));
+        app_items.push(Box::new(PredefinedMenuItem::hide_others(
+            app,
+            Some("기타 가리기"),
+        )?));
+        app_items.push(Box::new(PredefinedMenuItem::show_all(
+            app,
+            Some("모두 보기"),
+        )?));
+        app_items.push(Box::new(PredefinedMenuItem::separator(app)?));
+    }
+    app_items.push(Box::new(PredefinedMenuItem::quit(app, Some("CView 종료"))?));
+    let app_refs: Vec<&dyn tauri::menu::IsMenuItem<R>> =
+        app_items.iter().map(|i| i.as_ref()).collect();
+    let app_menu = Submenu::with_items(app, "CView", true, &app_refs)?;
     let edit = Submenu::with_items(
         app,
         "편집",
@@ -349,11 +383,20 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let chat = sub("채팅", Vec::new(), CHAT)?;
     let window = sub(
         "윈도우",
-        vec![
-            Box::new(PredefinedMenuItem::minimize(app, Some("최소화"))?),
-            Box::new(PredefinedMenuItem::maximize(app, Some("확대/축소"))?),
-            Box::new(PredefinedMenuItem::fullscreen(app, Some("전체 화면"))?),
-        ],
+        {
+            let mut items: Vec<Box<dyn tauri::menu::IsMenuItem<R>>> = vec![
+                Box::new(PredefinedMenuItem::minimize(app, Some("최소화"))?),
+                Box::new(PredefinedMenuItem::maximize(app, Some("확대/축소"))?),
+            ];
+            // '전체 화면'(기본 항목)은 Windows 에서 muda 가 처리하지 않아 눌러도 아무 일도 없었다.
+            if app_menu_has_hide_items(macos) {
+                items.push(Box::new(PredefinedMenuItem::fullscreen(
+                    app,
+                    Some("전체 화면"),
+                )?));
+            }
+            items
+        },
         WINDOWS,
     )?;
     let help = sub("도움말", Vec::new(), HELP)?;
@@ -382,6 +425,20 @@ pub fn is_known(id: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn popup_position_follows_the_web_view_zoom() {
+        assert_eq!(super::css_to_logical(100.0, 40.0, 1.25), (125.0, 50.0));
+        assert_eq!(super::css_to_logical(100.0, 40.0, 0.9), (90.0, 36.0));
+        assert_eq!(super::css_to_logical(100.0, 40.0, 0.0), (100.0, 40.0));
+        assert_eq!(super::css_to_logical(100.0, 40.0, f64::NAN), (100.0, 40.0));
+    }
+
+    #[test]
+    fn hide_and_fullscreen_predefined_items_are_macos_only() {
+        assert!(super::app_menu_has_hide_items(true));
+        assert!(!super::app_menu_has_hide_items(false));
+    }
     use super::*;
 
     #[test]

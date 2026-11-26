@@ -745,13 +745,17 @@ impl MultiLiveSessionBackend for ShellBackend {
         Some(
             store
                 .off_main(move |s| {
-                    s.start_watch_record(
+                    let started = s.start_watch_record(
                         &record.channel_id,
                         &record.channel_name,
                         record.thumbnail_url.as_deref(),
-                        None,
+                        record.category_name.as_deref(),
                         Utc::now(),
-                    )
+                    )?;
+                    if let Some(avatar) = record.avatar_url.as_deref() {
+                        let _ = s.note_channel_avatar(&record.channel_id, avatar);
+                    }
+                    Ok(started)
                 })
                 .await
                 .map_err(|e| e.to_string()),
@@ -1294,7 +1298,8 @@ mod tests {
             channel_id: "c1".into(),
             channel_name: "채널".into(),
             thumbnail_url: None,
-            avatar_url: None,
+            avatar_url: Some("https://example.com/a.png".into()),
+            category_name: Some("게임".into()),
         };
         let started = backend
             .start_watch_record(&record)
@@ -1312,6 +1317,14 @@ mod tests {
         let rows = store.all_watch_history_rows().unwrap();
         assert_eq!(rows.len(), 1);
         assert!(rows[0].ended_at.is_some());
+        // 카테고리도 남긴다 — 예전엔 이 경로의 기록이 늘 '분류 없음'이었다.
+        assert_eq!(rows[0].category_name.as_deref(), Some("게임"));
+        // 아바타도 채널 행에 남긴다(보관함·사이드바 최근 본 채널).
+        let ch = store.fetch_recent_items(5).unwrap();
+        assert_eq!(
+            ch[0].image_url.as_deref(),
+            Some("https://example.com/a.png")
+        );
     }
 
     fn test_pane(settings: &PlayerSettings) -> Arc<PanePlayer> {

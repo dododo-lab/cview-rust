@@ -473,7 +473,8 @@ fn future_row_is_ignored() {
 fn actively_updating_open_session_counts_today() {
     let mut rows = vec![Row {
         started: add(&streak_now(), -120.0),
-        duration: 0.0,
+        // 마지막 체크포인트(지금)까지 늘어난 시간 — 진행 중 기록은 체크포인트가 duration 을 채운다.
+        duration: 120.0,
         open: true,
     }];
     rows.extend(one_each([-1]));

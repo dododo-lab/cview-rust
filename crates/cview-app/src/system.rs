@@ -91,7 +91,27 @@ pub fn handle_urls<R: Runtime>(app: &AppHandle<R>, urls: impl IntoIterator<Item 
 /// 두 번째 실행 — 기존 창을 앞으로, 인자 속 `cview://` 를 넘긴다.
 pub fn on_second_instance<R: Runtime>(app: &AppHandle<R>, argv: Vec<String>) {
     focus_main(app);
-    handle_urls(app, argv.into_iter().filter(|a| a.starts_with("cview://")));
+    handle_urls(
+        app,
+        second_instance_links(argv, cfg!(any(windows, target_os = "linux"))),
+    );
+}
+
+/// 두 번째 실행 인자에서 여기서 처리할 `cview://` 링크. Windows·Linux 에서는 single-instance 의 deep-link 기능이
+/// 우리 콜백보다 먼저 `handle_cli_arguments` 로 '인자가 링크 하나뿐'인 경우를 `on_open_url` 에 넘긴다 — 그 경우까지 여기서
+/// 또 넘기면 같은 링크가 두 번 열려(채널 두 번 열기·단독 보기 둘러본 칸 두 개 축출·로그인 창 두 번) 거른다. 순수 함수.
+pub fn second_instance_links(argv: Vec<String>, plugin_forwards_single: bool) -> Vec<String> {
+    if plugin_forwards_single
+        && argv.len() == 2
+        && argv[1]
+            .parse::<url::Url>()
+            .is_ok_and(|u| u.scheme() == "cview")
+    {
+        return Vec::new();
+    }
+    argv.into_iter()
+        .filter(|a| a.starts_with("cview://"))
+        .collect()
 }
 
 /// 프런트가 준비되면 부른다 — 쌓인 링크를 넘기고 비운다(이벤트로도 이미 갔으면 프런트가 중복을 거른다).
@@ -590,6 +610,26 @@ fn update_dto(release: Option<GitHubRelease>, current: String) -> CmdResult<Upda
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn second_instance_single_link_is_left_to_the_deep_link_plugin_on_windows() {
+        let argv = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let one = argv(&["cview.exe", "cview://live?channelId=abc"]);
+        // Windows·Linux — 플러그인이 on_open_url 로 이미 넘긴다(두 번 열지 않게).
+        assert!(super::second_instance_links(one.clone(), true).is_empty());
+        // macOS — 플러그인이 argv 를 보지 않으니 여기서 넘긴다.
+        assert_eq!(
+            super::second_instance_links(one, false),
+            vec!["cview://live?channelId=abc".to_string()]
+        );
+        // 인자가 여럿이면 플러그인이 넘기지 않는다 — 여기서 링크만 골라 넘긴다.
+        let many = argv(&["cview.exe", "--flag", "cview://home"]);
+        assert_eq!(
+            super::second_instance_links(many, true),
+            vec!["cview://home".to_string()]
+        );
+        assert!(super::second_instance_links(argv(&["cview.exe"]), true).is_empty());
+    }
     use super::*;
 
     #[test]

@@ -202,7 +202,8 @@ export function bindPaneDrag(page, onDrop) {
   stage.addEventListener('lostpointercapture', (e) => { if (drag && drag.started && e.pointerId === drag.id) end(e, true); });
 }
 
-/** 놓을 패인 위에 띄울 말 — 포커스 배치에서 메인이 걸리면 "메인으로", 아니면 "자리 바꾸기". */
+/** 놓을 패인 위에 띄울 말 — 포커스 배치에서 메인이 걸리면 "메인으로", 아니면 "여기로 옮기기"(그 자리에 끼워 넣는다 —
+ *  Rust tile_drop 은 두 칸을 맞바꾸지 않고 옮긴다. 예전 '자리 바꾸기'는 실제 동작과 달랐다). */
 function dropHint(page, dragged, target) {
   const st = page.state || {};
   if (st.layout === 'focus') {
@@ -210,7 +211,7 @@ function dropHint(page, dragged, target) {
     if (target.sessionId === main) return '메인으로';
     if (dragged.sessionId === main) return '여기와 메인 바꾸기';
   }
-  return '자리 바꾸기';
+  return '여기로 옮기기';
 }
 
 /** 끌고 놓은 패인 — 지금 보이는 자리를 잰 뒤 끌기 transform 을 푼다(이후 FLIP 이 새 자리로 데려간다). */

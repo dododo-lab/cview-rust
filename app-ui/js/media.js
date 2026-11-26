@@ -304,8 +304,11 @@ export class MediaPage {
       v.closest('.media-stage')?.querySelector('.media-error')?.remove();
       const at = v.currentTime;
       const rate = v.playbackRate;
+      // 첫 로드 중(메타데이터 전)에 바꾸면 위치를 옮기지 않는다 — 남아 있는 이어 보기 처리가 새 주소에서 위치를 맞춘다.
+      // 예전엔 그 뒤에 0 으로 되돌려 이어 보기 위치를 잃고, 주기 저장이 처음부터 본 위치로 저장 값을 덮었다.
+      const keepPosition = v.readyState >= 1;
       v.src = q ? q.url : this.info.streamUrl;
-      v.addEventListener('loadedmetadata', () => { v.currentTime = at; v.playbackRate = rate; v.play().catch(() => {}); }, { once: true });
+      v.addEventListener('loadedmetadata', () => { if (keepPosition) v.currentTime = at; v.playbackRate = rate; v.play().catch(() => {}); }, { once: true });
     }
   }
 }

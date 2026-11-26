@@ -84,8 +84,9 @@ export const SCHEMA = [
     { d: 'multiLive', k: 'defaultLayoutMode', label: '기본 레이아웃', type: 'select', options: opt([['preset', '균등 분할'], ['focus', '포커스 모드']]) },
     { d: 'multiLive', k: 'defaultFocusDirection', label: '포커스 메인 위치', type: 'select', options: opt([['left', '왼쪽'], ['right', '오른쪽'], ['top', '위'], ['bottom', '아래']]) },
     { d: 'multiLive', k: 'rememberLastLayout', label: '마지막 레이아웃 기억', type: 'toggle' },
-    { d: 'multiLive', k: 'multiAudioEnabled', label: '여러 패인 소리', help: '선택 패인 외에도 보조 볼륨으로 소리를 냅니다', type: 'toggle' },
-    { d: 'multiLive', k: 'secondaryVolume', label: '보조 패인 볼륨', type: 'range', min: 0, max: 1, step: 0.05, pct: true, disabled: offWhen('multiLive', 'multiAudioEnabled') },
+    // '여러 패인 소리' 토글은 뺐다 — 읽는 곳이 없어 켜도 바뀌는 것이 없었고, 꺼 두면(기본) 실제로 쓰이는 보조 패인 볼륨
+    // (멀티라이브 화면의 '여러 소리' 모드, audio_grid.rs sync_audio_volumes)을 바꿀 수 없었다.
+    { d: 'multiLive', k: 'secondaryVolume', label: '보조 패인 볼륨', help: '멀티라이브 \'여러 소리\'를 켰을 때 선택 패인 밖 패인의 볼륨', type: 'range', min: 0, max: 1, step: 0.05, pct: true },
     { d: 'multiLive', k: 'bandwidthCoordinationEnabled', label: '대역폭 분배', help: '선택 패인에 대역폭을 더 줍니다', type: 'toggle' },
     { d: 'multiLive', k: 'selectedSessionBWWeight', label: '선택 패인 대역폭 가중치', type: 'range', min: 1, max: 3, step: 0.1, disabled: offWhen('multiLive', 'bandwidthCoordinationEnabled') },
     { d: 'multiLive', k: 'levelCappingEnabled', label: '패인 크기 화질 제한', type: 'toggle' },
@@ -234,6 +235,26 @@ function itemHtml(item, values) {
     default:
       return wrap(`<input class="text-input" type="text" value="${esc(v ?? '')}" ${attrs}>`);
   }
+}
+
+/**
+ * 이 기기 저장(localStorage) 설정 — 후원·구독 알림, 썸네일 미리보기. Rust 설정 백업에는 없어 내보내기·가져오기에서 빠졌다.
+ * 내보낸 JSON 에 `local` 로 싣고(Rust 는 모르는 키를 무시한다), 가져올 때 되살린다. 순수 함수(JSON 문자열 → 문자열).
+ */
+export function withLocalSettings(json, local = { streamAlerts: streamAlertsEnabled(), thumbPreview: thumbPreviewEnabled() }) {
+  try {
+    const v = JSON.parse(json);
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return json;
+    v.local = { ...local };
+    return JSON.stringify(v, null, 2);
+  } catch { return json; }
+}
+function applyLocalSettings(text) {
+  let local = null;
+  try { local = JSON.parse(text)?.local; } catch { return; }
+  if (!local || typeof local !== 'object') return;
+  if (typeof local.streamAlerts === 'boolean') setStreamAlertsEnabled(local.streamAlerts);
+  if (typeof local.thumbPreview === 'boolean') setThumbPreviewEnabled(local.thumbPreview);
 }
 
 export class SettingsPage {
@@ -567,7 +588,7 @@ export class SettingsPage {
 
   /** 설정을 JSON 파일로 ~/Downloads/CView 에 저장하고 경로를 돌려준다. quiet 가 아니면 알림도 띄운다. */
   async exportSettings({ quiet = false } = {}) {
-    const json = await api.settingsExport();
+    const json = withLocalSettings(await api.settingsExport());
     const d = new Date();
     const path = await api.saveFile('settings', `CView-설정-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.json`, null, json);
     if (!quiet) toast(`내보냈습니다 — ${path}`, 4000, { label: REVEAL_LABEL, run: () => api.revealPath(path) });
@@ -774,6 +795,7 @@ export class SettingsPage {
             await api.settingsUpdate('player', { sharpnessLevel: null });
           }
         } catch { /* 형식 오류는 위 가져오기가 이미 알린다 */ }
+        applyLocalSettings(text);
         this.settings = await api.settingsGet();
         toast(skipped.length ? `가져왔습니다 (건너뜀: ${skipped.join(', ')})` : '설정을 가져왔습니다', 2500);
         this.render();
@@ -997,6 +1019,9 @@ export class SettingsPage {
       }
       try {
         this.settings = await api.settingsReset('all');
+        // 이 기기에만 두는 항목(후원·구독 알림, 썸네일 미리보기)도 기본(켬)으로 — 예전엔 '모든 설정 초기화' 뒤에도 꺼진 채였다.
+        setStreamAlertsEnabled(true);
+        setThumbPreviewEnabled(true);
         if (saved) toast(`내보낸 뒤 설정을 초기화했습니다 — ${saved}`, 5000, { label: REVEAL_LABEL, run: () => api.revealPath(saved) });
         else toast('설정을 초기화했습니다', 1800);
         this.render();

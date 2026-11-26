@@ -31,10 +31,11 @@ use crate::db::{self, dv};
 use crate::error::{PersistenceError, Result};
 use crate::models::{
     ChannelListData, PersistedChannel, PersistedSetting, PersistedStatistic, WatchHistory,
+    WatchHistoryAggregationPolicy,
 };
 use crate::revision::WatchInsightsRevision;
 use crate::schema;
-use crate::time::{adding, interval_since, now, Calendar, Date};
+use crate::time::{adding, now, Calendar, Date};
 use cview_core::models::ChannelInfo;
 use rusqlite::types::Value;
 use rusqlite::{Connection, Transaction, TransactionBehavior};
@@ -587,7 +588,10 @@ impl DataStore {
             );
             db::insert(tx, &mut record)?;
             if let Some(mut channel) = Self::channel_by_id(tx, channel_id)? {
-                channel.channel_name = channel_name.to_string();
+                // 이름을 모르는 시작(빈 이름)이 알던 이름을 지우지 않게.
+                if !channel_name.trim().is_empty() {
+                    channel.channel_name = channel_name.to_string();
+                }
                 channel.last_watched = Some(started_at);
                 db::update(tx, &channel)?;
             } else {
@@ -617,6 +621,26 @@ impl DataStore {
         Ok(rows.into_iter().find(|r| r.started_at == *started_at))
     }
 
+    /// 채널 아바타를 기억한다(비어 있지 않을 때만, 채널 행이 있을 때만). 멀티라이브·단독 보기로 시작한 시청은
+    /// 아바타를 넘기지 않아, 처음 본 채널이 보관함·사이드바 '최근 본 채널'에서 빈 원으로 보였다.
+    pub fn note_channel_avatar(&self, channel_id: &str, avatar_url: &str) -> Result<bool> {
+        let avatar = avatar_url.trim();
+        if avatar.is_empty() {
+            return Ok(false);
+        }
+        self.write(|tx| {
+            let Some(mut channel) = Self::channel_by_id(tx, channel_id)? else {
+                return Ok((false, false));
+            };
+            if channel.image_url.as_deref() == Some(avatar) {
+                return Ok((false, false));
+            }
+            channel.image_url = Some(avatar.to_string());
+            db::update(tx, &channel)?;
+            Ok((true, true))
+        })
+    }
+
     /// 진행 중인 시청 기록의 duration 을 저장한다. 못 찾으면 false(리비전 그대로).
     pub fn checkpoint_watch_record(
         &self,
@@ -628,9 +652,12 @@ impl DataStore {
             let Some(mut record) = Self::open_watch_record(tx, channel_id, &started_at)? else {
                 return Ok((false, false));
             };
-            record.duration = record
-                .duration
-                .max(interval_since(&checkpoint, &record.started_at).max(0.0));
+            record.duration = WatchHistoryAggregationPolicy::advanced_duration(
+                record.duration,
+                record.started_at,
+                record.updated_at,
+                checkpoint,
+            );
             record.updated_at = Some(checkpoint);
             record.synced_at = None;
             db::update(tx, &record)?;
@@ -654,9 +681,12 @@ impl DataStore {
                 return Ok((false, false));
             };
             record.ended_at = Some(ended_at);
-            record.duration = record
-                .duration
-                .max(interval_since(&ended_at, &record.started_at).max(0.0));
+            record.duration = WatchHistoryAggregationPolicy::advanced_duration(
+                record.duration,
+                record.started_at,
+                record.updated_at,
+                ended_at,
+            );
             record.updated_at = Some(ended_at);
             record.synced_at = None;
             db::update(tx, &record)?;
