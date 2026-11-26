@@ -374,6 +374,21 @@ async fn buffering_is_debounced_after_recent_playing() {
     assert_eq!(vm.read().stream_phase, StreamPhase::StreamEnded);
 }
 
+#[tokio::test]
+async fn pending_buffering_debounce_does_not_overwrite_a_later_phase() {
+    // 재생 1.5초 뒤의 버퍼링은 1초 디바운스 — 그 안에 일시정지·끝남이 오면 디바운스가 덮어쓰지 않는다.
+    for later in [StreamPhase::Paused, StreamPhase::StreamEnded] {
+        let vm = PlayerViewModel::new(None);
+        vm.handle_stream_event(StreamEvent::PhaseChanged(StreamPhase::Playing));
+        tokio::time::sleep(std::time::Duration::from_millis(1_600)).await;
+        vm.handle_stream_event(StreamEvent::PhaseChanged(StreamPhase::Buffering));
+        assert_eq!(vm.read().stream_phase, StreamPhase::Playing, "디바운스 중");
+        vm.handle_stream_event(StreamEvent::PhaseChanged(later.clone()));
+        tokio::time::sleep(std::time::Duration::from_millis(1_300)).await;
+        assert_eq!(vm.read().stream_phase, later);
+    }
+}
+
 // MARK: - 볼륨
 
 #[test]

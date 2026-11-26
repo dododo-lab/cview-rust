@@ -384,6 +384,9 @@ export class MultiLivePage {
     // 키보드 — 분할선에 초점을 두고 화살표로 메인 크기를 바꾼다(도구 막대의 비율 슬라이더와 같은 값, 감사 UX-H19)
     bindSeparatorKeys(this.divider, {
       label: '메인 크기',
+      // 메인 비율의 실제 범위(슬라이더 45~85%) — 기본값(20%)이면 Home 과 aria-valuemin 이 실제 값과 어긋났다.
+      min: FOCUS_RATIO.min,
+      max: FOCUS_RATIO.max,
       get: () => Number(this.ratioInput.value) / 100,
       set: (r) => {
         this.ratioInput.value = String(Math.round(r * 100));
@@ -797,6 +800,9 @@ export class MultiLivePage {
         pane.el.style.setProperty('--ml-hue', String(pane.hue));
         // 같은 슬롯을 다른 채널이 다시 쓰면 앞 채널의 볼륨 0·수동 화질이 넘어왔다.
         pane.controls?.reset();
+        // 첫 프레임 자동 재연결 횟수도 앞 채널 것 — 남기면 새 채널은 영상이 안 떠도 다시 연결하지 않았다.
+        pane.frameRetries = 0;
+        pane.zeroSince = null;
         // 시스템 일시정지 기록도 앞 채널 것 — 남기면 다음 시스템 재생이 새 채널의 수동 정지를 푼다.
         this.systemPaused.delete(s.slot);
       }

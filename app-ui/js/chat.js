@@ -727,6 +727,9 @@ export class ChatPanel {
     const request = { seq: this.connSeq, chatChannelId: this.chatChannelId };
     const current = () => this.pendingSend === request && this.connSeq === request.seq
       && this.chatChannelId === request.chatChannelId && this.active && !this.destroyed;
+    // 보내는 동안 입력창을 끄면(disabled) 초점이 문서로 빠진다 — 끄기 전에 기억해 두었다가 되돌린다.
+    // 예전엔 끈 뒤에 확인해 언제나 거짓이라, 보낼 때마다 입력창을 다시 눌러야 이어 칠 수 있었다.
+    const hadFocus = this.root.contains(document.activeElement);
     this.pendingSend = request;
     this.updateInput();
     let failed = '';
@@ -743,7 +746,7 @@ export class ChatPanel {
         this.pendingSend = null;
         this.updateInput();
         this.renderCount();
-        if (this.root.contains(document.activeElement)) this.input.focus();
+        if (hadFocus && !this.input.disabled) this.input.focus();
       }
     }
     // 실패는 이 패널 입력창 위에 — 멀티채팅처럼 패널이 여럿이면 토스트만으로는 어느 채팅인지 몰랐다. 쓴 글은 남긴다.

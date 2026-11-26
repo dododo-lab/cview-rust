@@ -461,7 +461,22 @@ impl MultiLiveManager {
                 st.set_focus_main_session_id(next);
             }
             if st.is_multi_audio_mode {
-                st.audio_enabled_session_ids.remove(&id);
+                let was_audible = st.audio_enabled_session_ids.remove(&id);
+                // 하나뿐이던 들리는 패인을 닫았으면 새로 고른 패인으로 소리를 넘긴다(보이는 패인 맞춤과 같은 방식) —
+                // 예전엔 남은 패인이 모두 무음이었다. 사용자가 다 꺼 둔 상태면 그대로 둔다.
+                if was_audible && st.audio_enabled_session_ids.is_empty() {
+                    if let Some(target) = st
+                        .selected_session_id
+                        .filter(|s| *s != id && st.contains(*s))
+                        .or_else(|| st.sessions.iter().map(|s| s.id()).find(|s| *s != id))
+                    {
+                        st.audio_enabled_session_ids.insert(target);
+                        if let Some(s) = st.session(target) {
+                            s.set_muted(false);
+                        }
+                        st.sync_audio_volumes();
+                    }
+                }
                 if st.audio_session_id == Some(id) {
                     st.audio_session_id = st
                         .audio_enabled_session_ids

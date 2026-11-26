@@ -259,6 +259,22 @@ async fn screen_entry_reuses_recent_result_and_retries_after_failure() {
     );
 }
 
+#[tokio::test]
+async fn follow_change_makes_the_next_screen_entry_fetch_again() {
+    // 팔로우·언팔로우 직후 — 재사용 창 안이어도 다음 화면 진입은 새 목록을 받는다.
+    let fake = Fake::new(vec![row("a", true)]);
+    let clock = ManualClock::new(from_unix(0.0));
+    let s = store(&fake, &clock);
+    s.poll(FollowingPollReason::Scheduled).await;
+    clock.advance(10.0);
+    s.poll(FollowingPollReason::ScreenEntry).await;
+    assert_eq!(fake.page_requests(), 1, "창 안이면 재사용");
+    s.invalidate_reuse();
+    assert!(s.fresh_result(600.0).is_none());
+    assert!(s.poll(FollowingPollReason::ScreenEntry).await.is_some());
+    assert_eq!(fake.page_requests(), 2);
+}
+
 #[test]
 fn reuse_age_follows_cadence_with_cap() {
     assert_eq!(FollowingStore::reuse_age(None), 60.0);

@@ -355,10 +355,7 @@ async fn run_job(
     emit(app);
 
     let ext = if progressive.is_some() { "mp4" } else { "ts" };
-    let name = sanitize_file_name(&match &channel {
-        Some(c) => format!("{c}_{title}_{target}.{ext}"),
-        None => format!("{title}_{target}.{ext}"),
-    });
+    let name = download_file_name(channel.as_deref(), &title, target, ext);
     // 최종 이름을 빈 파일로 먼저 예약한다 — 동시에 받는 같은 이름 작업이나 기존 파일을 `.part` → 이름
     // 바꾸기로 덮어쓰지 않게. 받기에 실패하면 예약한 빈 파일을 지운다.
     std::fs::create_dir_all(folder).map_err(|e| DownloadError::WriteFailed(e.to_string()))?;
@@ -432,9 +429,62 @@ pub async fn download_clear(
     Ok(snapshot(&downloads))
 }
 
+/// 받은 파일 이름 — 이름 부분만 정리·길이 제한하고 확장자는 그 뒤에 붙인다. 확장자까지 붙인 이름을
+/// 120자로 자르면 긴 제목에서 `.mp4`·`.ts` 가 잘려 나가 재생기로 열 수 없는 파일이 됐다.
+pub(crate) fn download_file_name(
+    channel: Option<&str>,
+    title: &str,
+    target: &str,
+    ext: &str,
+) -> String {
+    let stem = match channel {
+        Some(c) => format!("{c}_{title}_{target}"),
+        None => format!("{title}_{target}"),
+    };
+    format!("{}.{ext}", sanitize_file_name(&stem))
+}
+
+/// 앱을 끝낼 때 — 진행 중인 받기를 모두 취소하고 정리가 끝날 때까지(`limit` 안에서) 기다린다.
+/// 취소된 작업은 `.part` 와 미리 예약한 빈 최종 파일을 스스로 지운다. 예전엔 ⌘Q 로 끝내면 받던 작업이
+/// 그대로 끊겨 0바이트 최종 파일과 수백 MB `.part` 가 남고, 다시 받으면 ` (2)` 가 붙었다.
+pub async fn cancel_all_for_exit<R: tauri::Runtime>(
+    app: &AppHandle<R>,
+    limit: std::time::Duration,
+) {
+    let Some(d) = app.try_state::<Downloads>() else {
+        return;
+    };
+    let active = |d: &Downloads| {
+        let list = d.lock();
+        for e in list.iter().filter(|e| e.job.is_active()) {
+            e.cancel.store(true, Ordering::Relaxed);
+        }
+        list.iter().filter(|e| e.job.is_active()).count()
+    };
+    let started = Instant::now();
+    while active(&d) > 0 && started.elapsed() < limit {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+}
+
 /// 진행 중 작업 수(메뉴 막대 배지 등).
 pub fn active_count(app: &AppHandle) -> usize {
     app.try_state::<Downloads>()
         .map(|d| d.lock().iter().filter(|e| e.job.is_active()).count())
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn long_titles_keep_the_extension_and_target() {
+        let title = "가".repeat(200);
+        let name = download_file_name(Some("채널"), &title, "12345", "mp4");
+        assert!(name.ends_with(".mp4"), "{name}");
+        assert_eq!(name.chars().count(), 120 + ".mp4".len());
+        let short = download_file_name(None, "a/b: 제목.", "7", "ts");
+        assert_eq!(short, "a_b_ 제목._7.ts");
+    }
 }

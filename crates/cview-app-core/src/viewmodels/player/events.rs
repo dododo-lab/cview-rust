@@ -67,7 +67,10 @@ impl PlayerViewModel {
                             s.buffering_debounce = Some(TaskSlot::spawn(move |id| async move {
                                 tokio::time::sleep(Duration::from_secs(1)).await;
                                 let mut s = state.lock();
-                                if slot_is(&s.buffering_debounce, id) {
+                                // 그 사이 다른 단계(일시정지·끝남·재연결 등)로 바뀌었으면 덮어쓰지 않는다.
+                                if slot_is(&s.buffering_debounce, id)
+                                    && s.stream_phase == StreamPhase::Playing
+                                {
                                     s.buffering_started_at.get_or_insert_with(Instant::now);
                                     s.stream_phase = StreamPhase::Buffering;
                                     s.buffering_debounce = None;
@@ -91,6 +94,9 @@ impl PlayerViewModel {
                     }
                 }
                 other => {
+                    // 재생 중 잠깐의 버퍼링 디바운스는 다른 단계가 오면 거둔다 — 예전엔 1초 뒤 Paused·StreamEnded·
+                    // Reconnecting 을 Buffering 으로 덮어써 멀티라이브 복귀·멈춘 패인 다시 열기가 동작하지 않았다.
+                    cancel_slot(&mut s.buffering_debounce);
                     if &s.stream_phase != other {
                         s.stream_phase = other.clone();
                     }

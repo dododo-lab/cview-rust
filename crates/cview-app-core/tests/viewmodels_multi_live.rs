@@ -861,6 +861,62 @@ fn multi_audio_selection_preserves_enabled_set() {
 }
 
 #[test]
+fn restoring_suspended_audio_keeps_multi_audio_panes() {
+    // 여러 소리로 세 패인을 켠 채 단독 시청·광고가 소리를 껐다가 되살린다 — 세 패인 모두 다시 들린다.
+    let (m, p) = audio_setup();
+    let mut st = m.lock();
+    st.toggle_multi_audio_mode();
+    st.toggle_session_audio(p[1].session.id());
+    st.toggle_session_audio(p[2].session.id());
+    assert_eq!(audible(&p), vec![true, true, true]);
+    for x in &p {
+        x.session.set_muted(true);
+    }
+    st.restore_audio();
+    assert_eq!(audible(&p), vec![true, true, true]);
+    // 단일 소리면 예전처럼 소리 패인 하나만.
+    st.toggle_multi_audio_mode();
+    for x in &p {
+        x.session.set_muted(true);
+    }
+    st.restore_audio();
+    assert_eq!(audible(&p).iter().filter(|a| **a).count(), 1);
+}
+
+#[test]
+fn leaving_multi_audio_follows_the_selected_pane() {
+    let (m, p) = audio_setup();
+    let mut st = m.lock();
+    st.route_audio(p[0].session.id());
+    st.toggle_multi_audio_mode();
+    st.select_session(p[1].session.id(), false);
+    st.toggle_multi_audio_mode();
+    assert_eq!(st.audio_session_id(), Some(p[1].session.id()));
+    assert_eq!(audible(&p), vec![false, true, false]);
+}
+
+#[tokio::test]
+async fn closing_the_only_audible_pane_in_multi_audio_hands_audio_over() {
+    let (m, p) = audio_setup();
+    m.lock().toggle_multi_audio_mode();
+    let only = m
+        .read()
+        .audio_enabled_session_ids()
+        .iter()
+        .next()
+        .copied()
+        .unwrap();
+    m.remove_session(only).await;
+    let st = m.read();
+    let left: Vec<bool> = p
+        .iter()
+        .filter(|x| x.session.id() != only)
+        .map(|x| st.is_audible(&x.session))
+        .collect();
+    assert_eq!(left.iter().filter(|a| **a).count(), 1, "{left:?}");
+}
+
+#[test]
 fn toggle_semantics_single_and_multi() {
     let (m, p) = audio_setup();
     let mut st = m.lock();

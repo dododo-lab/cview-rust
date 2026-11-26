@@ -24,6 +24,20 @@ impl ManagerState {
         self.reconcile_focus_quality(None);
     }
 
+    /// 단독 시청·광고로 잠시 꺼 둔 소리를 되살린다. 여러 소리 모드면 켜 둔 패인들을 그대로 다시 켠다 —
+    /// 예전엔 언제나 `route_audio` 로 한 패인만 남겨, 광고 한 번·단독 시청 한 번 뒤 여러 소리가 무너졌다.
+    pub fn restore_audio(&mut self) {
+        if self.is_multi_audio_mode {
+            for s in &self.sessions {
+                s.set_muted(!self.audio_enabled_session_ids.contains(&s.id()));
+            }
+            self.sync_audio_volumes();
+            self.reconcile_focus_quality(None);
+        } else if let Some(id) = self.audio_session_id.or(self.selected_session_id) {
+            self.route_audio(id);
+        }
+    }
+
     /// 여러 소리 모드에서 선택 패인 밖의 들리는 패인은 설정의 보조 패인 볼륨(기본 볼륨에 곱하는 비율)으로 낸다.
     pub fn sync_audio_volumes(&self) {
         let Some(settings) = &self.settings else {
@@ -60,7 +74,10 @@ impl ManagerState {
             }
         } else {
             self.audio_enabled_session_ids.clear();
-            let active = self.audio_session_id.or(self.selected_session_id);
+            // 여러 소리 동안엔 패인을 골라도 소리 패인이 바뀌지 않는다 — 끌 때는 지금 고른 패인(채팅·테두리가
+            // 따라간 패인)으로 소리를 모은다. 예전엔 여러 소리를 켜던 순간의 패인으로 돌아갔다.
+            let active = self.selected_session_id.or(self.audio_session_id);
+            self.audio_session_id = active;
             for s in &self.sessions {
                 s.set_muted(Some(s.id()) != active);
             }

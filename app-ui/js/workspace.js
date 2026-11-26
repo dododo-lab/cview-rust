@@ -1,6 +1,6 @@
 // 작업 공간 — 원본 Persistence/WorkspaceSnapshot·AppState+StoreRecovery(NAV-16),
 // MainShell/MenuHubSegment(NAV-15 ⌘⌥1~6 허브 전환), Components/SidebarQuickActions·SidebarWidgets·SidebarPlaybackInsights(NAV-13).
-import { esc, toast } from './dom.js';
+import { toast } from './dom.js';
 import { kbd } from './platform.js';
 
 const KEY = 'cview.workspace';
@@ -69,5 +69,6 @@ export function installSidebarExtras({ onRandomLive, onQueueMulti, onRefresh }) 
 }
 
 export function hubFlash(label) {
-  toast(`허브 · ${esc(label)}`, 900);
+  // toast 는 글자(textContent)로 넣는다 — 이스케이프하면 '방송&클립'이 '방송&amp;클립'으로 보였다.
+  toast(`허브 · ${label}`, 900);
 }

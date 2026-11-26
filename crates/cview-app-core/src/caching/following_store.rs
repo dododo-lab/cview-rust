@@ -396,6 +396,12 @@ impl FollowingStore {
         (age >= 0.0 && age <= max_age).then(|| result.clone())
     }
 
+    /// 팔로우·언팔로우 직후 — 재사용 창 안의 결과를 다시 쓰지 않게 한다(다음 화면 진입이 새로 받는다).
+    /// 예전엔 팔로우를 바꾼 뒤 사이드바·홈 팔로잉 줄이 최대 3분 동안 바꾸기 전 목록을 보였다.
+    pub fn invalidate_reuse(&self) {
+        lock(&self.inner).last_success_uptime = None;
+    }
+
     /// 폴 한 번. 성공하면 싱크에 넘긴 결과를, 실패·취소·경계 뒤면 `None` 을 돌려준다.
     pub fn poll(&self, reason: FollowingPollReason) -> BoxFuture<'static, Option<PollResult>> {
         let this = self.clone();

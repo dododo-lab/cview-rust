@@ -615,6 +615,10 @@ export class SearchPage {
   async run(keyword) {
     const q = keyword.trim();
     const seq = ++this.seq; // 비운 검색도 순번을 올린다 — 늦게 온 이전 결과가 최근 검색 화면을 덮지 않게
+    // 앞 검색의 "다시 시도"가 끝나기 전에 새로 찾으면 그 재시도는 결과를 버리고 빠진다 — 표시를 여기서 거둔다
+    // (예전엔 새 검색도 실패하면 단추 없는 "다시 찾는 중…"에 멈췄다).
+    this.mainRetrying = false;
+    this.videosRetrying = false;
     if (!q) {
       this.query = '';
       this.result = null;

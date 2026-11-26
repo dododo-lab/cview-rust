@@ -111,6 +111,9 @@ impl BackgroundUpdateEvent {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct BackgroundUpdateBaseline {
     pub online_ids: HashSet<String>,
+    /// 직전 폴의 팔로우 채널 전체(방송 중·아님). 그 사이 새로 팔로우한 채널은 이미 방송 중이어도
+    /// "방송 시작"이 아니다 — 예전엔 방송 중인 채널을 팔로우하면 다음 주기에 시작 알림이 떴다.
+    pub followed_ids: HashSet<String>,
     pub categories: HashMap<String, String>,
     pub titles: HashMap<String, String>,
 }
@@ -153,9 +156,12 @@ impl BackgroundUpdateDiff {
                 }
             }
         }
+        // 팔로우 목록 정보가 없는 기준선(기본값)이면 예전처럼 방송 중 여부만 본다.
+        let knows_followed = !previous.followed_ids.is_empty() || !previous.online_ids.is_empty();
         let newly_online = current
             .iter()
             .filter(|c| !previous.online_ids.contains(&c.channel_id))
+            .filter(|c| !knows_followed || previous.followed_ids.contains(&c.channel_id))
             .cloned()
             .collect();
         let mut categories = HashMap::new();
@@ -172,6 +178,7 @@ impl BackgroundUpdateDiff {
         }
         let next_baseline = BackgroundUpdateBaseline {
             online_ids: current.iter().map(|c| c.channel_id.clone()).collect(),
+            followed_ids: following.iter().map(|c| c.channel_id.clone()).collect(),
             categories,
             titles,
         };
@@ -501,16 +508,52 @@ mod tests {
         }
     }
 
+    fn offline(id: &str) -> MergedFollowingItem {
+        MergedFollowingItem {
+            is_live: false,
+            ..item(id, 0, "", None)
+        }
+    }
+
+    #[test]
+    fn newly_followed_live_channel_is_not_a_live_start() {
+        // 직전 폴: a 방송 중, b 팔로우·오프라인. 이번: b 방송 시작 + 이미 방송 중이던 n 을 새로 팔로우.
+        let prev: Vec<LiveChannelItem> = [item("a", 1, "t", None), offline("b")]
+            .iter()
+            .map(to_live_channel_item)
+            .collect();
+        let base = BackgroundUpdateDiff::new(&prev, &BackgroundUpdateBaseline::default());
+        let next: Vec<LiveChannelItem> = [
+            item("a", 1, "t", None),
+            item("b", 1, "x", None),
+            item("n", 9, "y", None),
+        ]
+        .iter()
+        .map(to_live_channel_item)
+        .collect();
+        let diff = BackgroundUpdateDiff::new(&next, &base.next_baseline);
+        let ids: Vec<&str> = diff
+            .newly_online
+            .iter()
+            .map(|c| c.channel_id.as_str())
+            .collect();
+        assert_eq!(ids, vec!["b"]);
+        // n 은 이제 기준선에 있어 다음 폴부터 제목·카테고리 변경을 본다.
+        assert!(diff.next_baseline.online_ids.contains("n"));
+    }
+
     fn result(reason: FollowingPollReason, channels: Vec<MergedFollowingItem>) -> PollResult {
         FollowingPollResult::new(reason, channels, from_unix(1_700_000_000.0), 0)
     }
 
     #[test]
     fn diff_detects_new_title_category_and_orders() {
-        let prev_items: Vec<LiveChannelItem> = [item("a", 1, "t", Some("g"))]
-            .iter()
-            .map(to_live_channel_item)
-            .collect();
+        // b·c 는 직전 폴에 팔로우 중·방송 아님(오프라인 행).
+        let prev_items: Vec<LiveChannelItem> =
+            [item("a", 1, "t", Some("g")), offline("b"), offline("c")]
+                .iter()
+                .map(to_live_channel_item)
+                .collect();
         let base = BackgroundUpdateDiff::new(&prev_items, &BackgroundUpdateBaseline::default());
         let next: Vec<LiveChannelItem> = [
             item("a", 1, "t2", Some("h")),
@@ -542,7 +585,7 @@ mod tests {
         s.ingest(
             &result(
                 FollowingPollReason::Scheduled,
-                vec![item("a", 1, "t", None)],
+                vec![item("a", 1, "t", None), offline("b")],
             ),
             IngestMode::Normal,
         );

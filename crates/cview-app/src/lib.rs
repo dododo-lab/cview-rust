@@ -545,7 +545,11 @@ fn exit_cleanup<R: Runtime>(handle: &AppHandle<R>) {
                 shell.manager.stop_all().await;
             }
         };
-        tokio::time::timeout(LIMIT, async { tokio::join!(services, multilive) }).await
+        let downloads = commands::download::cancel_all_for_exit(handle, LIMIT);
+        tokio::time::timeout(LIMIT, async {
+            tokio::join!(services, multilive, downloads)
+        })
+        .await
     });
     if done.is_err() {
         tracing::warn!("종료 정리가 3초를 넘어 건너뜁니다");
