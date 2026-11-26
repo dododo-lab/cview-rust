@@ -2,9 +2,9 @@
 // 패널은 설정을 다시 그릴 때마다 새로 붙고(mountUsagePanel), 떨어져 나가거나 설정 화면이 숨으면 실시간 표본을 그만 받는다.
 import {
   usage, initUsage, watchUsage, subscribeUsage, measuring, METRICS, metric, gpuState, stats, cores,
-  fmtPct, fmtBytes, fmtRate, UsageChart,
+  fmtPct, fmtBytes, fmtRate, UsageChart, GROUP_LABELS,
 } from './usage-monitor.js';
-import { renderGroups } from './usage-chip.js';
+import { esc } from './dom.js';
 
 const RANGES = [[60000, '1분'], [300000, '5분'], [900000, '15분'], [0, '전체']];
 const view = { metric: 'cpu', range: 300000 };
@@ -187,3 +187,18 @@ export async function mountUsagePanel(panel) {
   if (panel.parentElement && panel.parentElement.parentElement) bodyObs.observe(panel.parentElement.parentElement, { childList: true });
 }
 
+
+/** 종류별 내역 — 이름 · CPU(전체 대비) · 메모리, 가는 막대는 앱 전체 CPU 중 몫. */
+function renderGroups(list, groups) {
+  if (!list) return;
+  const rows = (groups || []).filter((g) => g.count > 0);
+  const total = rows.reduce((a, g) => a + g.cpu, 0);
+  const html = rows.map((g) => {
+    const share = total > 0 ? Math.round((g.cpu / total) * 100) : 0;
+    const name = GROUP_LABELS[g.kind] || g.kind;
+    return `<li data-kind="${esc(g.kind)}"><span class="ug-name">${name}${g.count > 1 ? `<small>${g.count}개</small>` : ''}</span>
+      <span class="ug-bar" aria-hidden="true"><i style="width:${share}%"></i></span>
+      <span class="ug-cpu">${fmtPct(g.cpu / cores())}</span><span class="ug-mem">${fmtBytes(g.mem)}</span></li>`;
+  }).join('') || '<li class="ug-empty">아직 값이 없습니다</li>';
+  if (list.dataset.html !== html) { list.innerHTML = html; list.dataset.html = html; }
+}

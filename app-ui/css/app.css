@@ -2152,7 +2152,7 @@ select.select { border-radius: var(--radius-ms); padding: 6px 10px; border-color
 .up-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 2px 8px 8px; color: var(--text-tertiary); font-size: var(--fs-footnote); min-height: 22px; }
 .up-facts i { font-style: normal; opacity: .6; }
 .up-facts.loading { color: var(--text-tertiary); }
-/* .up-* 는 사용률 팝오버(usage.css .usage-pop)도 쓰는 이름 — 서로 덮지 않게 팝오버마다 한정한다. */
+/* .up-* 는 설정 › 성능 패널(usage.css .up-state·.up-groups)도 쓰는 이름 — 말풍선 안으로 한정한다. */
 .user-pop .up-live { color: var(--live-text); font-weight: 700; }
 .user-pop .up-sub { color: var(--subscription); font-weight: 600; }
 .up-main { display: flex; gap: 6px; padding: 0 6px 6px; }

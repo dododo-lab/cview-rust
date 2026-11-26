@@ -130,10 +130,10 @@ export const SCHEMA = [
     { d: 'sync', k: 'watchHistorySyncEnabled', label: '시청 기록 동기화', type: 'toggle', disabled: (v) => !(v.sync || {}).explicitlyOptedIn },
     { d: 'sync', k: 'endpoint', label: '동기화 서버', type: 'text' },
   ]],
-  // 성능 — 앱 사용률 측정·기록(그래프 패널은 settings-usage.js, 값은 외관 도메인 usage*). 머리줄 칩은 usage-chip.js.
+  // 성능 — 앱 사용률 측정·기록(그래프 패널은 settings-usage.js, 값은 외관 도메인 usage*). 사이드바 아래 표시는 sidebar-usage.js.
   ['usage', '측정 · 기록', [
     { d: 'appearance', k: 'usageMonitor', label: '사용률 측정', help: '앱과 웹 화면·GPU·네트워크 도우미 프로세스의 CPU·GPU·메모리·네트워크 수신을 재어 기록합니다. 끄면 측정을 멈춰 CPU를 쓰지 않습니다', keywords: '성능 사용률 모니터 cpu gpu 메모리 램 네트워크 자원', type: 'toggle' },
-    { d: 'appearance', k: 'usageInHeader', label: '머리줄에 표시', help: '화면 위 머리줄에 실시간 사용률 칩을 보입니다 — 누르면 자세히 봅니다(측정이 켜져 있을 때)', keywords: '상단 메뉴 칩 사용률', type: 'toggle' },
+    { d: 'appearance', k: 'usageInHeader', label: '사이드바에 표시', help: '왼쪽 사이드바 아래에 실시간 CPU·GPU·메모리·네트워크를 보입니다 — 누르면 이 탭으로 옵니다(측정이 켜져 있을 때)', keywords: '사이드바 머리줄 칩 사용률 하단', type: 'toggle' },
     { d: 'appearance', k: 'usageIntervalMs', label: '측정 간격', help: '짧을수록 그래프가 촘촘하고, 길수록 측정 부담이 줄어듭니다', type: 'select', options: opt([[1000, '1초'], [2000, '2초'], [5000, '5초'], [10000, '10초']]) },
     { d: 'appearance', k: 'usageHistoryMinutes', label: '기록 기간', help: '이만큼 지난 기록은 지웁니다. 기록은 메모리에만 있고 앱을 끄면 사라집니다', type: 'select', options: opt([[5, '5분'], [15, '15분'], [30, '30분'], [60, '1시간'], [120, '2시간']]) },
     { type: 'action', action: 'usage-export-csv', label: '기록 내보내기', help: '다운로드 › CView 폴더에 저장합니다 — CSV는 표 계산 앱에서, JSON은 기기 정보·단위와 함께', keywords: '사용률 csv json 저장', button: 'CSV로 내보내기', button2: ['usage-export-json', 'JSON'] },
@@ -253,7 +253,7 @@ export class SettingsPage {
     // 시스템 목소리 목록은 늦게 온다(첫 getVoices 가 빈 배열) — 오면 목소리 칸만 다시 채운다(감사 UX-M10)
     window.speechSynthesis?.addEventListener?.('voiceschanged', () => this.fillVoices());
     window.addEventListener('cview:sharpness', () => this.syncSharpnessControls());
-    // 머리줄 사용률 팝오버의 '기록·내보내기' — 성능 탭으로 연다(검색은 닫는다).
+    // 사이드바 사용률 표시를 누르면 — 성능 탭으로 연다(검색은 닫는다).
     window.addEventListener('cview:settings-group', (e) => {
       const g = e.detail && e.detail.group;
       if (!GROUPS.some(([id]) => id === g)) return;

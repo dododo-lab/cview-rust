@@ -240,7 +240,7 @@ export const api = {
   trayControl: (action) => invoke('tray_control', { action }),
   multiLiveRetry: (sessionId = null) => invoke('multilive_retry', { sessionId }),
   settingsExport: () => invoke('settings_export'),
-  // 앱 사용률(설정 › 성능·머리줄 칩) — usage-monitor.js
+  // 앱 사용률(설정 › 성능·사이드바 표시) — usage-monitor.js
   usageStatus: () => invoke('usage_status'),
   usageHistory: (since = null) => invoke('usage_history', { since }),
   usageWatch: (on) => invoke('usage_watch', { on }),

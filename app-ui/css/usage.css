@@ -1,4 +1,4 @@
-/* 앱 사용률 — 머리줄 칩(usage-chip.js) · 자세히 팝오버 · 설정 › 성능 패널(settings-usage.js) · 공용 그래프(usage-monitor.js UsageChart).
+/* 앱 사용률 — 사이드바 아래 표시(sidebar-usage.js) · 설정 › 성능 패널(settings-usage.js) · 공용 그래프(usage-monitor.js UsageChart).
    색은 토큰만. 지표 색(--u-*)은 그래프 선·면·칸의 작은 표식에만 쓰고 글자는 글자 토큰으로 쓴다(색만으로 구별하지 않는다 — 칸마다 이름).
    지표 색은 범주 팔레트 1~4번(파랑·주황·청록·노랑)을 배경면에 맞춰 고른 값이다 — 다크(#26282d·#1a1b1f)에서 모두 3:1 이상,
    라이트에서 청록·노랑은 3:1 아래라 이름 글자·표로 보기를 함께 둔다(색각 이상 ΔE·밝기 대역 검사 통과). */
@@ -15,90 +15,50 @@
   :root[data-theme="system"] { --u-cpu: #2a78d6; --u-gpu: #d95926; --u-mem: #178f65; --u-net: #b07400; }
 }
 
-/* ── 머리줄 칩 ── 유리 알약(둥근 아이콘 단추와 같은 재질). 숫자는 초마다 바뀌어 고정 폭 숫자. */
-.usage-chip {
-  flex: none; display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 12px 0 9px; margin-inline-start: auto;
-  border: 1px solid var(--glass-edge); border-radius: var(--radius-pill); color: var(--text-secondary);
-  background-color: var(--glass-fill); background-image: linear-gradient(to bottom, var(--glass-sheen), transparent 62%);
-  box-shadow: inset 0 1px 0 var(--glass-hi), inset 0 -1px 0 var(--glass-lo), var(--glass-drop);
-  font-size: var(--fs-footnote); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; line-height: 1;
-  transition: background-color .15s var(--ease-out), border-color .15s var(--ease-out), color .15s var(--ease-out), scale .18s var(--ease-out);
+/* ── 사이드바 아래 사용률(sidebar-usage.js) ── 계정 칸과 같은 재질의 칸 하나가 통째로 단추(누르면 설정 › 성능).
+   펼침: 지표 4줄(머리 줄 없이 — 줄어드는 '방송 중' 목록에 높이를 남긴다) — 이름 · 꺾은선(캔버스, 지표 색) · 값. 열 폭이 모두 고정이라 값("9.8%"→"100%",
+   "586 kbps"→"12.5 Mbps")·경고 아이콘에 따라 칸이 흔들리지 않는다(U19). 접힘: 레일 가운데 CPU 꺾은선 + CPU %. */
+.side-usage {
+  flex: none; display: block; width: 100%; margin-bottom: 8px; padding: 7px 10px; text-align: start;
+  border: 1px solid var(--border-subtle); border-radius: var(--radius-ml); background: var(--surface-base); color: var(--text-secondary);
+  font-variant-numeric: tabular-nums; line-height: 1; white-space: nowrap; cursor: pointer;
+  transition: background-color var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out), scale .18s var(--ease-out), padding var(--sb-dur) var(--sb-ease);
 }
-.usage-chip[hidden] { display: none; }
-.usage-chip:hover { color: var(--text-primary); background-color: var(--glass-fill-hover); border-color: var(--glass-edge-hover); }
-.usage-chip:active { scale: .97; background-color: var(--glass-fill-press); background-image: none; box-shadow: var(--glass-press-inset); }
-.usage-chip[aria-expanded="true"] { color: var(--text-primary); border-color: color-mix(in srgb, var(--u-cpu) 55%, var(--glass-edge)); }
-.usage-chip:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.uchip-spark { flex: none; display: block; width: 44px; height: 18px; color: var(--u-cpu); }
-.uchip-cpu { position: relative; display: inline-flex; align-items: baseline; gap: 4px; }
-.uchip-k { font-size: var(--fs-micro); font-weight: 700; letter-spacing: .3px; color: var(--text-tertiary); }
-/* 칩 폭은 값과 상태에 따라 바뀌지 않는다 — "9.8%"→"15%"→"100%"·경고 아이콘 유무로 폭이 바뀌면 옆 채널 칩 줄이 좌우로 흔들렸다.
-   값 칸은 "100%"(고정 폭 숫자)가 들어가는 너비로 잡고, 경고 아이콘은 'CPU' 글자 자리에 겹친다(높을 때 글자 대신 아이콘). */
-.uchip-v { display: inline-block; min-width: 4.6ch; color: var(--text-primary); text-align: end; }
-.uchip-mem { color: var(--text-secondary); padding-inline-start: 7px; border-inline-start: 1px solid var(--border); }
-.uchip-mem:empty { display: none; }
-.uchip-warn { position: absolute; inset-inline-start: 0; top: 50%; translate: 0 -50%; width: 13px; height: 13px; color: var(--warning); visibility: hidden; }
-.usage-chip[data-level="high"] .uchip-warn { visibility: visible; }
-.usage-chip[data-level="high"] .uchip-k { visibility: hidden; }
-.usage-chip[data-level="high"] .uchip-spark { color: var(--warning); }
-/* 라이브 머리줄(빽빽한 툴바)·시청 화면은 작게 — 꺾은선과 CPU 만. 메모리는 팝오버에서. */
-.usage-chip.compact { height: 30px; padding: 0 10px 0 8px; gap: 6px; }
-.usage-chip.compact .uchip-mem { display: none; }
-.ml-toolbar > .usage-chip { margin-inline-start: 0; margin-inline-end: 2px; }
-/* 라이브 머리줄이 좁으면(채널 칩 줄과 폭을 나눈다) 꺾은선도 빼고 'CPU 12%' 만. */
-@media (max-width: 1180px) { .ml-toolbar > .usage-chip .uchip-spark { display: none; } .ml-toolbar > .usage-chip { padding-inline-start: 10px; } }
-@media (max-width: 1100px) { .usage-chip .uchip-mem { display: none; } }
-/* 홈 — 칩이 들어오면 검색 칸이 먼저 줄어든다(입력 칸의 고유 최소 폭 탓에 큰 인사말이 대신 줄바꿈되던 것). */
-.home-header:has(> .usage-chip:not([hidden])) .home-search { min-width: 140px; }
-.home-header:has(> .usage-chip:not([hidden])) .home-search input { min-width: 0; }
-/* 아주 좁으면 'CPU' 글자를 빼고, 경고 아이콘 자리는 늘 잡아 둔다(보이지 않아도 폭은 같다). */
-@media (max-width: 860px) {
-  .usage-chip .uchip-spark { display: none; }
-  .usage-chip .uchip-k { display: none; }
-  .usage-chip .uchip-cpu { align-items: center; }
-  .usage-chip .uchip-warn { position: static; translate: none; flex: none; }
-}
+.side-usage[hidden] { display: none; }
+.side-usage:hover { background: var(--surface-elevated); border-color: var(--border); }
+.side-usage:active { scale: .98; }
+.side-usage:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.su-full { display: grid; gap: 3px; }
+/* 이름 52 · 꺾은선 58(sidebar-usage.js ROW_W) · 값 나머지(≥ "12.5 Mbps") — 사이드바 안쪽 208 − 칸 여백 22. */
+.su-row { position: relative; display: grid; grid-template-columns: 52px 58px minmax(0, 1fr); align-items: center; column-gap: 6px; height: 17px; margin: 0 -4px; padding: 0 4px; border-radius: var(--radius-xs); }
+.su-k { position: relative; display: inline-flex; align-items: center; gap: 5px; font-size: var(--fs-tiny); font-weight: 600; color: var(--text-secondary); overflow: hidden; }
+.su-k::before { content: ''; flex: none; width: 3px; height: 10px; border-radius: 2px; background: var(--c); }
+.su-spark { display: block; width: 58px; height: 14px; }
+.su-v { font-size: var(--fs-tiny); font-weight: 650; color: var(--text-primary); text-align: end; overflow: hidden; }
+.su-warn { flex: none; width: 12px; height: 12px; color: var(--warning); visibility: hidden; }
+/* CPU 높음 — 아이콘(글자 옆 자리는 늘 잡혀 있다)·옅은 경고 바탕·경고색 꺾은선(캔버스). 색만이 아니라 아이콘과 이름('CPU 높음'). */
+.side-usage[data-level="high"] .su-warn { visibility: visible; }
+.side-usage[data-level="high"] .su-row[data-metric="cpu"] { background: color-mix(in srgb, var(--warning) 12%, transparent); }
+.side-usage[data-level="high"] { border-color: color-mix(in srgb, var(--warning) 45%, var(--border-subtle)); }
+.su-mini { display: none; }
+/* 낮은 창 — 사이드바에서 줄어드는 칸은 '방송 중' 목록뿐이라 이 칸이 크면 그 목록이 먼저 사라진다. 높이에 따라 줄 수를 줄인다
+   (빠진 값은 툴팁·낭독 이름에 그대로 있다). 940px 이하 CPU·메모리, 820px 이하 CPU 만. */
+@media (max-height: 940px) { .su-row:is([data-metric="gpu"], [data-metric="net"]) { display: none; } }
+@media (max-height: 820px) { .su-row[data-metric="mem"] { display: none; } }
 
-/* ── 자세히 팝오버 ── 칩 아래에 떠 있는 비모달 대화 상자(문서 끝에 붙고 position: fixed — 위치는 usage-chip.js). */
-.usage-pop {
-  position: fixed; z-index: var(--z-popover); width: 372px; overflow-y: auto; overscroll-behavior: contain;
-  padding: 14px; border-radius: var(--radius-xl); border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface-popover) 92%, transparent);
-  backdrop-filter: saturate(170%) blur(22px); -webkit-backdrop-filter: saturate(170%) blur(22px);
-  box-shadow: var(--shadow-lg); color: var(--text-primary);
-  container: usage-pop / inline-size;
-}
-.usage-pop[hidden] { display: none; }
-.usage-pop:focus { outline: none; }
-.usage-pop:not([hidden]) { animation: mo-pop-down var(--dur-2, .18s) var(--ease-out) backwards; }
-.usage-pop[data-side="top"]:not([hidden]) { animation-name: mo-pop-up; }
-/* .up-head·.up-sub·.up-live 는 채팅 사용자 말풍선(app.css .user-pop)도 쓰는 이름 — 팝오버 안으로 한정한다. */
-.usage-pop .up-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
-.up-titles { flex: 1; min-width: 0; }
-.usage-pop .up-head h2 { font-size: var(--fs-callout); font-weight: 700; letter-spacing: -.2px; }
-.usage-pop .up-sub { margin-top: 2px; font-size: var(--fs-footnote); color: var(--text-tertiary); }
-.usage-pop .up-live { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: var(--radius-pill); font-size: var(--fs-micro); font-weight: 700; color: var(--text-secondary); background: var(--surface-elevated); }
-.usage-pop .up-live[hidden] { display: none; }
-.usage-pop .up-live i { width: 7px; height: 7px; border-radius: 50%; background: var(--primary); box-shadow: 0 0 0 0 var(--primary-ring); animation: up-pulse 2s var(--ease-out) infinite; }
-@keyframes up-pulse { 0% { box-shadow: 0 0 0 0 var(--primary-ring); } 70%, 100% { box-shadow: 0 0 0 6px transparent; } }
-
-.up-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
-@container usage-pop (max-width: 300px) { .up-tiles { grid-template-columns: minmax(0, 1fr); } }
-.up-tile {
-  position: relative; display: grid; gap: 3px; min-width: 0; padding: 10px 11px 9px; text-align: start; border-radius: var(--radius-md);
-  border: 1px solid var(--border-subtle); background: var(--surface-elevated); color: var(--text-primary);
-  transition: border-color .15s var(--ease-out), background-color .15s var(--ease-out), translate .2s var(--ease-out);
-}
-.up-tile:hover:not([aria-disabled="true"]) { border-color: var(--border); translate: 0 -1px; }
-.up-tile[aria-checked="true"] { border-color: color-mix(in srgb, var(--c) 60%, var(--border)); background: color-mix(in srgb, var(--c) 9%, var(--surface-elevated)); }
-.up-tile:focus-visible { outline: none; box-shadow: var(--focus-ring); }
-.up-tile[aria-disabled="true"] { cursor: default; }
-.up-tile-label { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-tiny); font-weight: 700; color: var(--text-secondary); }
-.up-tile-label i { width: 10px; height: 3px; border-radius: 2px; background: var(--c); }
-.up-tile-value { font-size: var(--fs-headline); font-weight: 750; letter-spacing: -.4px; line-height: 1.15; font-variant-numeric: tabular-nums; }
-.up-tile.unsupported .up-tile-value { font-size: var(--fs-callout); color: var(--text-tertiary); }
-.up-tile-sub { font-size: var(--fs-tiny); color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.up-chart { margin-bottom: 12px; }
+/* 접힌 레일 — 칸 테두리·바탕을 걷고 레일 가운데에 꺾은선 + CPU %(--sb-rail 은 app.css "접힌 사이드바"). */
+.sidebar.collapsed .side-usage { padding: 6px 0; background: transparent; border-color: transparent; border-radius: var(--radius-ms); }
+.sidebar.collapsed .side-usage:hover { background: var(--surface-elevated); }
+.sidebar.collapsed .side-usage[data-level="high"] { border-color: color-mix(in srgb, var(--warning) 45%, transparent); }
+.sidebar.collapsed .su-full { display: none; }
+.sidebar.collapsed .su-mini { display: grid; justify-items: center; gap: 4px; }
+.su-mini .su-spark { width: 36px; height: 14px; }
+.su-mini-v { display: inline-flex; align-items: center; gap: 2px; }
+.su-mini .su-warn { width: 10px; height: 10px; display: none; }
+.su-mini .su-v { font-size: var(--fs-micro); font-weight: 700; min-width: 4.4ch; text-align: center; }
+.side-usage[data-level="high"] .su-mini .su-warn { display: block; }
+.side-usage[data-level="high"] .su-mini .su-v { min-width: 0; }
+.sidebar.sb-anim .side-usage { animation: sb-reveal calc(var(--sb-dur) + 0.1s) ease-out backwards; }
 
 .up-groups-head { display: flex; justify-content: space-between; font-size: var(--fs-tiny); font-weight: 700; color: var(--text-tertiary); margin: 0 2px 6px; }
 .up-groups { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
@@ -125,8 +85,7 @@
 .uc-grid line { stroke: var(--border-subtle); stroke-width: 1; shape-rendering: crispEdges; }
 .uc-line { fill: none; stroke: var(--uc-color); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .uc-area { fill: var(--uc-color); opacity: .1; stroke: none; }
-.uc-dot { fill: var(--uc-color); stroke: var(--surface-popover); stroke-width: 2; }
-.settings-group .uc-dot { stroke: var(--surface-base); }
+.uc-dot { fill: var(--uc-color); stroke: var(--surface-base); stroke-width: 2; }
 .uc-cross { display: none; stroke: var(--text-tertiary); stroke-width: 1; shape-rendering: crispEdges; }
 .uc-x { grid-row: 2; grid-column: 2; display: flex; justify-content: space-between; font-size: var(--fs-micro); color: var(--text-tertiary); }
 .uc-tip {
@@ -177,18 +136,15 @@
   .usage-controls .seg { flex: 1; justify-content: center; padding-inline: 6px; }
 }
 
-/* ── 모션 줄이기 ── 깜박이는 점·칩 눌림·칸 떠오름·막대 길이 움직임을 멈춘다(끝 상태 그대로). */
+/* ── 모션 줄이기 ── 칸 눌림·화살표 밀림·막대 길이 움직임을 멈춘다(끝 상태 그대로). */
 @media (prefers-reduced-motion: reduce) {
-  .usage-pop .up-live i { animation: none; }
-  .usage-chip, .up-tile, .ug-bar i { transition: none; }
-  .usage-chip:active { scale: none; }
-  .up-tile:hover:not([aria-disabled="true"]) { translate: none; }
+  :is(.side-usage, .ug-bar i) { transition: none; }
+  .side-usage:active { scale: none; }
 }
-:root[data-motion="reduced"] .usage-pop .up-live i { animation: none; }
-:root[data-motion="reduced"] :is(.usage-chip, .up-tile, .ug-bar i) { transition: none; }
-:root[data-motion="reduced"] .up-tile:hover { translate: none; }
+:root[data-motion="reduced"] :is(.side-usage, .ug-bar i) { transition: none; }
+:root[data-motion="reduced"] .side-usage:active { scale: none; }
 /* 고대비(Windows forced-colors) — 엔진이 box-shadow 를 지워 초점 고리(--focus-ring)가 사라진다 → 시스템 강조색 테두리 */
 @media (forced-colors: active) {
-  :is(.usage-chip, .up-tile, .usage-table summary):focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
+  :is(.side-usage, .usage-table summary):focus-visible { outline: 2px solid Highlight; outline-offset: 2px; }
   :is(.uc-plot, .usage-table-scroll):focus-visible { outline: 2px solid Highlight; outline-offset: -2px; }
 }

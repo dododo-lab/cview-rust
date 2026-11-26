@@ -623,9 +623,9 @@ pub struct AppearanceSettings {
     #[serde(rename = "maxMemoryMB")]
     pub max_memory_mb: i64,
     pub debug_mode: bool,
-    /// 앱 사용률 측정·기록(설정 › 성능) — 끄면 표본을 멈추고 머리줄 칩도 숨긴다.
+    /// 앱 사용률 측정·기록(설정 › 성능) — 끄면 표본을 멈추고 사이드바 표시도 숨긴다.
     pub usage_monitor: bool,
-    /// 화면 머리줄에 사용률 칩을 보인다(측정이 켜져 있을 때).
+    /// 사이드바 아래에 실시간 사용률을 보인다(측정이 켜져 있을 때). 이름은 머리줄 칩 시절(v0.2.10) 그대로 — 저장된 설정 호환.
     pub usage_in_header: bool,
     /// 사용률 표본 간격(ms) — [`usage_limits`] 범위로 맞춘다.
     #[serde(deserialize_with = "de_usage_interval")]

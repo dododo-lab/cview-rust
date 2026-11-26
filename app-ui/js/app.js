@@ -42,7 +42,7 @@ import { installBackgroundSaver, setMenuHidden } from './background-saver.js';
 import { installPerfCollector } from './perf-collector.js';
 import { showMenu, refreshChatAuth, reconnectFailedChats } from './chat.js';
 import { installUiHealth } from './ui-health.js';
-import { installUsageChip, closeUsagePop } from './usage-chip.js';
+import { installSidebarUsage } from './sidebar-usage.js';
 import { closeUserPop } from './chat-user-pop.js';
 import { kbd, IS_WINDOWS, noteSaveDirs } from './platform.js';
 import { installWindowControls } from './window-controls.js';
@@ -700,7 +700,6 @@ function closeFloatingOnSheet() {
   new MutationObserver((records) => {
     const opened = records.some((r) => [...r.addedNodes].some((n) => n.nodeType === 1 && n.classList.contains('sheet-scrim')));
     if (!opened) return;
-    closeUsagePop();
     closeUserPop();
     sidebar?.closeAccountMenu?.();
     for (const m of document.querySelectorAll('body > :is(.ctx-menu, .design-menu)')) m.remove();
@@ -1080,8 +1079,8 @@ async function main() {
       }
     });
   }
-  // 머리줄 앱 사용률 칩(설정 › 성능) — 메인 창만. 명령이 없으면 그리지 않는다.
-  if (!AUX) installUsageChip();
+  // 사이드바 아래 앱 사용률(누르면 설정 › 성능) — 메인 창만. 명령이 없으면 그리지 않는다.
+  if (!AUX) installSidebarUsage();
 
   for (const p of Object.values(pages)) {
     const body = p.root.querySelector('.page-body');
