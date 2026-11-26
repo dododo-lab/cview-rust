@@ -139,7 +139,7 @@ export class MultiChatPage {
         <div class="mc-merged" hidden>
           <div class="chat-list mc-merged-list"></div>
           <div class="chat-input-banner mc-merged-banner" hidden></div>
-          <form class="chat-input mc-merged-input"><select class="select mc-target"></select><input type="text" maxlength="100" placeholder="선택한 채널로 보내기" autocomplete="off"><button class="btn primary">보내기</button></form>
+          <form class="chat-input mc-merged-input"><select class="select mc-target" aria-label="보낼 채널" title="보낼 채널"></select><input type="text" maxlength="100" placeholder="선택한 채널로 보내기" autocomplete="off"><button class="btn primary">보내기</button></form>
         </div>
       </div>`;
     content.append(this.root);

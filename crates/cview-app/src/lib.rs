@@ -327,11 +327,18 @@ pub fn run() {
             // OS 메모리 압박 신호 → 이미지·API 캐시 줄이기(심각하면 비선택 패인 디코드 잠시 멈춤).
             memory_pressure::start(handle.clone());
             // 저장소 변경 이력(메모리에만 있는 커밋 시각, 최대 10만 개)을 시작 1분 뒤, 그 뒤 6시간마다 정리한다 —
-            // 정리 함수는 있었으나 부르는 곳이 없어 앱을 오래 켜 두면 끝까지 쌓였다. 사용자 데이터는 지우지 않는다.
+            // 정리 함수는 있었으나 부르는 곳이 없어 앱을 오래 켜 두면 끝까지 쌓였다. 같은 때 오래된 다시보기(60일)·
+            // 클립(30일) 이어 보기 위치도 지운다(역시 부르는 곳이 없어 끝없이 쌓였다). 시청 기록은 지우지 않는다.
             if let Some(store) = app.state::<AppServices>().data_store.clone() {
                 tauri::async_runtime::spawn(async move {
                     tokio::time::sleep(std::time::Duration::from_secs(60)).await;
                     loop {
+                        let (clips, vods) = store.prune_playback_positions().await;
+                        if clips + vods > 0 {
+                            tracing::info!(
+                                "오래된 이어 보기 위치 정리: 클립 {clips}, 다시보기 {vods}"
+                            );
+                        }
                         store.trim_change_history().await;
                         tokio::time::sleep(std::time::Duration::from_secs(6 * 3600)).await;
                     }

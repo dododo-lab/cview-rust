@@ -152,11 +152,10 @@ export const SCHEMA = [
     { d: 'network', k: 'reconnectBaseDelay', label: '재연결 기본 지연(초)', type: 'range', min: 0.5, max: 5, step: 0.5 },
     { d: 'network', k: 'cacheExpiry', label: '캐시 유효 시간(초)', type: 'range', min: 30, max: 1800, step: 30 },
     { d: 'network', k: 'forceStreamProxy', label: '스트림 프록시 강제', type: 'toggle' },
-    { d: 'network', k: 'pauseRefreshWhenOffline', label: '오프라인이면 새로고침 멈춤', type: 'toggle' },
-    { d: 'network', k: 'reduceBackgroundActivity', label: '백그라운드 활동 줄이기', type: 'toggle' },
+    // '오프라인이면 새로고침 멈춤'·'백그라운드 활동 줄이기'(pauseRefreshWhenOffline·reduceBackgroundActivity)와 아래
+    // '메모리 목표(MB)'(maxMemoryMB)는 앱 어디서도 읽지 않아 바꿔도 아무 일이 없었다 — 화면에서 뺀다(설정 값은 호환을 위해 둔다).
   ]],
   ['advanced', '성능 · 진단', [
-    { d: 'appearance', k: 'maxMemoryMB', label: '메모리 목표(MB)', type: 'range', min: 256, max: 4096, step: 128 },
     { d: 'appearance', k: 'debugMode', label: '디버그 로그', help: '시작 단계·API 요청·CPU/메모리·프레임·채팅·플레이어 지표를 로그 파일에 남깁니다(쿠키·토큰은 가림). 끄면 기록하지 않습니다', type: 'toggle' },
     { type: 'action', action: 'open-logs', label: '로그 폴더', help: 'debug.jsonl — 10MB 마다 새 파일, 5개까지', button: '로그 폴더 열기' },
     { type: 'action', action: 'clear-image-cache', label: '썸네일 캐시', help: '썸네일·아바타를 디스크에 두어 다시 열 때 바로 보입니다', button: '썸네일 캐시 비우기' },
@@ -309,6 +308,20 @@ export class SettingsPage {
     this.render();
   }
 
+
+  /**
+   * 다시 그리되 키보드 초점을 지킨다 — body 를 통째로 다시 그려 테마·네트워크 프리셋·고급 펼치기·금지어/차단 풀기를
+   * 키보드로 누르면 초점이 문서 처음으로 떨어졌다(감사 UX-M10 남은 부분). 같은 항목이 다시 있으면 그것, 지워졌으면
+   * 같은 종류의 남은 첫 항목으로. 마우스로 눌러 초점이 없던 경우는 건드리지 않는다.
+   */
+  renderKeepingFocus(el, attr) {
+    const had = Boolean(el) && (el === document.activeElement || el.contains(document.activeElement));
+    const value = el ? el.getAttribute(attr) : null;
+    this.render();
+    if (!had) return;
+    const same = value != null ? this.body.querySelector(`[${attr}="${CSS.escape(value)}"]`) : null;
+    (same || this.body.querySelector(`[${attr}]`))?.focus({ preventScroll: true });
+  }
   render() {
     if (!this.settings) return;
     const tabs = `<div class="settings-top">
@@ -897,7 +910,8 @@ export class SettingsPage {
       this.body.querySelector('.settings-search')?.focus();
       return;
     }
-    if (e.target.closest('[data-adv]')) { e.preventDefault(); this.showAdvanced = !this.showAdvanced; this.render(); return; }
+    const adv = e.target.closest('[data-adv]');
+    if (adv) { e.preventDefault(); this.showAdvanced = !this.showAdvanced; this.renderKeepingFocus(adv, 'data-adv'); return; }
     const action = e.target.closest('[data-action]');
     if (action) {
       if (action.dataset.action === 'login') this.onLogin();
@@ -905,21 +919,21 @@ export class SettingsPage {
       return;
     }
     const choice = e.target.closest('[data-theme-choice]');
-    if (choice) { await setTheme(choice.dataset.themeChoice); this.render(); return; }
+    if (choice) { await setTheme(choice.dataset.themeChoice); this.renderKeepingFocus(choice, 'data-theme-choice'); return; }
     const w = e.target.closest('[data-remove-word]');
-    if (w) { await updateChatPrefs({ blockedWords: (chatPrefs().blockedWords || []).filter((x) => x !== w.dataset.removeWord) }); this.render(); return; }
+    if (w) { await updateChatPrefs({ blockedWords: (chatPrefs().blockedWords || []).filter((x) => x !== w.dataset.removeWord) }); this.renderKeepingFocus(w, 'data-remove-word'); return; }
     const u = e.target.closest('[data-unblock]');
     if (u) {
       const p = chatPrefs();
       const names = { ...(p.blockedUserNames || {}) };
       delete names[u.dataset.unblock];
       await updateChatPrefs({ blockedUsers: (p.blockedUsers || []).filter((x) => x !== u.dataset.unblock), blockedUserNames: names });
-      this.render();
+      this.renderKeepingFocus(u, 'data-unblock');
       return;
     }
     const preset = e.target.closest('[data-net-preset]');
     if (preset) {
-      try { this.settings = await api.networkPreset(preset.dataset.netPreset); toast(`네트워크: ${preset.textContent}`, 1500); this.render(); } catch (er) { toast(er.message); }
+      try { this.settings = await api.networkPreset(preset.dataset.netPreset); toast(`네트워크: ${preset.textContent}`, 1500); this.renderKeepingFocus(preset, 'data-net-preset'); } catch (er) { toast(er.message); }
       return;
     }
     const settingAction = e.target.closest('[data-setting-action]');

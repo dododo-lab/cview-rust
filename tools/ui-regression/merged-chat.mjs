@@ -8,6 +8,7 @@
 // MC05 통합 목록은 프레임마다 한 번 붙인다 — 채널 8개가 따로 보내도 목록에는 한 번(예전엔 이벤트마다 붙이고 바닥을 맞췄다).
 // MC06 멀티라이브 멀티채팅 — 통합·칸 목록도 같은 렌더러(칸은 태그 없음), 보기 메뉴의 '프로필·말풍선으로 보기',
 //      다른 패인 줄의 멘션은 그 패인을 고르고 넣는다, 프레임마다 한 번 붙인다.
+// MC09 멀티라이브 멀티채팅 — 채팅 지우기(⋯·⇧⌘K·/clear)가 보이는 통합 목록·칸과 그 버퍼(보기를 바꾸면 다시 그리는 것)까지 지운다.
 // MC08 설정 › 채팅 표시의 '통합 목록 줄 모양'으로도 고른다 — 열려 있는 통합 목록이 바로 바뀐다.
 // MC07 통합 목록 폭주(채널 8개 합쳐 초당 200개, CPU 4배 감속) — 20ms 넘는 프레임 비율·줄 상한. 촘촘은 15%(단일 채팅 P04 와 같은
 //      문턱), 말풍선은 회귀 감시용 45%(아래 주석). 숫자는 출력한다.
@@ -372,6 +373,64 @@ await check('MC06 multilive merged chat: shared renderer, bubble toggle in view 
   assert.equal(r.checked, 'false');
   assert.deepEqual(r.after, { compact: false, cells: false, checked: 'true' });
   assert.deepEqual(r.mention, { selected: ['s1'], value: '@닉2 ' });
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+await check('MC09 multilive merged/grid chat: clearing the chat (⋯ · ⇧⌘K · /clear) clears the visible merged list and cells', async () => {
+  const { ctx, page, errors } = await open();
+  const r = await page.evaluate(async () => {
+    localStorage.setItem('cview.ml.chatView', 'merged');
+    const el = document.createElement('section');
+    el.className = 'chat ml-chat';
+    el.style.cssText = 'position:fixed;right:0;top:0;width:360px;height:700px;z-index:99;display:flex;flex-direction:column;background:#111';
+    el.innerHTML = '<header class="chat-header"><strong>채팅</strong><div class="chat-tools-inner"></div></header><div class="chat-list"></div><form class="chat-input"><input type="text" maxlength="100"><button class="btn primary">채팅</button></form>';
+    document.body.append(el);
+    const { MultiLiveMergedChat } = await import('/js/ml-multichat.js');
+    const state = { selectedId: 's0', sessions: [{ id: 's0', channelId: 'c0', channelName: '첫째', chatChannelId: 'cc0' }, { id: 's1', channelId: 'c1', channelName: '둘째', chatChannelId: 'cc1' }] };
+    const mc = new MultiLiveMergedChat(el, { getState: () => state, getPanes: () => new Map(), onSelect: () => {} });
+    mc.sync();
+    const t = Date.now();
+    const mk = (id, uid) => ({ id, kind: 'chat', role: 'common_user', nickname: `닉${uid}`, userId: `mluser${uid}x`, content: `글 ${id}`, emojis: {}, badges: [], timestamp: t });
+    const send = (sid, ids) => window.__emit('chat://session-event', { session: `mlx:${sid}`, event: { type: 'messages', messages: ids.map((id) => mk(id, sid)) } });
+    send('s0', ['a']); send('s1', ['b']);
+    await new Promise((res) => requestAnimationFrame(() => setTimeout(res, 0)));
+    const before = mc.list.querySelectorAll('.merged-line').length;
+    send('s0', ['late']); // 아직 붙지 않은(프레임 대기) 줄도 지워진다
+    mc.clearByUser();
+    await new Promise((res) => requestAnimationFrame(() => setTimeout(res, 0)));
+    const merged = { lines: mc.list.querySelectorAll('.merged-line').length, empty: mc.list.querySelector('.empty')?.textContent };
+    mc.setMode('grid'); // 버퍼도 비었다 — 칸에 지난 줄이 다시 그려지지 않는다
+    const gridAfter = [...mc.grid.querySelectorAll('.merged-line')].length;
+    send('s1', ['c']);
+    await new Promise((res) => setTimeout(res, 600)); // 칸 보기는 화면 밖 상자라 숨은 화면 주기로 붙는다
+    const cellsBefore = mc.grid.querySelectorAll('.merged-line').length;
+    mc.clearByUser();
+    const cells = mc.grid.querySelectorAll('.merged-line').length;
+    mc.setMode('merged');
+    const back = mc.list.querySelectorAll('.merged-line').length;
+    // 실제 앱 연결 — 멀티라이브 화면의 선택 패인 ChatPanel 이 지우면 그 화면의 멀티채팅 보기도 지운다(multilive.js)
+    const { panelOf } = await import('/js/chat.js');
+    const mlChat = document.querySelector('.page-multilive .ml-chat');
+    mlChat.querySelector('.ml-mc-menu [data-mc-view="merged"]').click(); // 그 화면의 보기를 통합으로
+    const panel = panelOf(mlChat);
+    const box = mlChat.querySelector('.ml-merged-list');
+    box.insertAdjacentHTML('beforeend', '<div class="chat-line merged-line msg" data-id="x">옛 줄</div>');
+    const appBefore = box.querySelectorAll('.merged-line').length;
+    panel.clear(true);
+    const app = box.querySelectorAll('.merged-line').length;
+    panel.clear(false); // 채널이 바뀔 때의 비우기는 멀티채팅 보기를 건드리지 않는다
+    return { before, merged, gridAfter, cellsBefore, cells, back, appBefore, app };
+  });
+  if (process.env.CVIEW_MC_DEBUG) console.log(JSON.stringify(r));
+  assert.equal(r.before, 2);
+  assert.deepEqual(r.merged, { lines: 0, empty: '채팅을 지웠습니다' });
+  assert.equal(r.gridAfter, 0, '지운 줄이 칸 보기로 다시 나왔다');
+  assert.equal(r.cellsBefore, 1);
+  assert.equal(r.cells, 0, '칸 보기 줄이 남았다');
+  assert.equal(r.back, 0, '지운 칸 줄이 통합 보기로 다시 나왔다');
+  assert.equal(r.appBefore, 1);
+  assert.equal(r.app, 0, '멀티라이브 채팅 지우기가 보이는 통합 목록을 지우지 않았다');
   assert.deepEqual(errors, []);
   await ctx.close();
 });

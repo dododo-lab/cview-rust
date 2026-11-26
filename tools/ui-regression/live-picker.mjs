@@ -190,6 +190,23 @@ await check('칩에 마우스를 올리면 미리보기 말풍선이 그 칩 아
   assert.ok(p.hidden && p.described === 0, '벗어나면 닫힌다');
 });
 
+await check('키보드로 칩에 가서 뜬 미리보기는 Esc 가 미리보기만 닫는다(단독 보기는 그대로)', async () => {
+  await page.mouse.move(640, 600);
+  await page.keyboard.press('Shift'); // 마지막 입력을 키보드로 — 다음 focus() 가 :focus-visible
+  await page.locator('.ml-watch-chip:not(.active)').first().focus();
+  await page.waitForTimeout(100);
+  assert.ok(!(await page.$eval('.ml-peek', (e) => e.hidden)), '키보드 초점이면 미리보기가 바로 뜬다');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(100);
+  const after = await page.evaluate(() => ({
+    peek: document.querySelector('.ml-peek').hidden,
+    watch: document.querySelector('.page-multilive').classList.contains('as-watch') && !document.querySelector('.page-multilive').hidden,
+    focus: document.activeElement?.classList.contains('ml-watch-chip'),
+  }));
+  assert.deepEqual(after, { peek: true, watch: true, focus: true });
+  await page.evaluate(() => document.activeElement.blur());
+});
+
 await check('라이브 상한이 차면 가장 오래전에 둘러본 채널을 바꿔 끼운다', async () => {
   await play('p5'); // 5 / 5
   await settle();

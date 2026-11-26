@@ -32,6 +32,7 @@ impl HttpTransport for Fake {
         self.calls.fetch_add(1, Ordering::SeqCst);
         *self.last_if_none_match.lock().unwrap() = req.header("If-None-Match").map(str::to_string);
         assert!(req.header("Cookie").is_none(), "쿠키를 붙이지 않는다");
+        assert_eq!(req.max_body, Some(MAX_IMAGE_BYTES), "본문 상한을 건다");
         if self.delay_ms > 0 {
             tokio::time::sleep(Duration::from_millis(self.delay_ms)).await;
         }
@@ -197,6 +198,23 @@ fn request_paths_split_kind_and_url() {
     assert_eq!(k, ImageKind::Avatar);
     assert_eq!(u, "https://a.pstatic.net/p.png");
     assert!(parse_request_path("/live").is_none());
+}
+
+#[tokio::test]
+async fn oversized_images_are_not_cached() {
+    let dir = tempfile::tempdir().unwrap();
+    let fake = Fake::new(0);
+    *fake.body.lock().unwrap() = vec![0u8; MAX_IMAGE_BYTES + 1];
+    let s = service(fake.clone(), dir.path(), Arc::new(AtomicI64::new(0)));
+    assert!(s.load(URL, ImageKind::Live).await.is_err());
+    settle().await;
+    assert_eq!(s.hot().bytes, 0, "메모리에 넣지 않는다");
+    // 다시 부르면 다시 받는다(실패를 캐시하지 않는다) — 정상 크기면 보인다.
+    *fake.body.lock().unwrap() = b"img-1".to_vec();
+    assert_eq!(
+        s.load(URL, ImageKind::Live).await.unwrap().bytes.as_slice(),
+        b"img-1"
+    );
 }
 
 #[tokio::test]

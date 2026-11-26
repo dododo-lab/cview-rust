@@ -147,7 +147,7 @@ export class ChannelPage {
           </div>
           <div class="grow"></div>
           <div class="channel-actions">
-            ${live ? '<button class="btn primary lg" data-ch="play">▶ 라이브 보기</button><button class="btn" data-ch="multi">멀티라이브에 추가</button>' : ''}
+            ${live ? `<button class="btn primary lg" data-ch="play">▶ 라이브 보기</button>${this.onAddMulti ? '<button class="btn" data-ch="multi">멀티라이브에 추가</button>' : ''}` : ''}
             <button class="icon-btn round fav${d.isFavorite ? ' on' : ''}${pop ? ' mo-pop' : ''}" data-ch="favorite" title="${d.isFavorite ? '즐겨찾기 해제' : '즐겨찾기'}">${d.isFavorite ? ICON_STAR : ICON_STAR_LINE}</button>
             <button class="icon-btn round" data-ch="memo" title="메모">${ICON_NOTE}</button>
             <button class="icon-btn round" data-ch="notify" title="이 채널 알림 설정">🔔</button>
@@ -264,7 +264,7 @@ export class ChannelPage {
     switch (action.dataset.ch) {
       case 'back': this.onBack(); break;
       case 'play': this.onPlay(this.channelId); break;
-      case 'multi': this.onAddMulti(this.channelId); break;
+      case 'multi': this.onAddMulti?.(this.channelId); break;
       case 'external': api.openExternal(`https://chzzk.naver.com/${encodeURIComponent(this.channelId)}`).catch((er) => toast(er.message)); break;
       case 'favorite': {
         const next = !this.detail.isFavorite;

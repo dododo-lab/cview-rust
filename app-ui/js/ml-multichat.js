@@ -240,6 +240,24 @@ export class MultiLiveMergedChat {
     if (this.title) this.title.textContent = TITLES[this.mode];
   }
 
+  /**
+   * 사용자가 채팅을 지웠다(⋯ 지우기·⇧⌘K·/clear) — 통합·칸 보기의 줄과 버퍼도 지운다. 예전엔 숨은 선택 패인 목록만
+   * 지워져 보이는 통합 목록·칸은 그대로였다. 끔(off)이면 할 일이 없다.
+   */
+  clearByUser() {
+    if (!this.on) return;
+    this.pending = [];
+    this.pendingCount = 0;
+    this.mergedBacklog = [];
+    this.lines?.reset();
+    this.cellLines?.reset();
+    if (this.mode === 'merged') this.list.innerHTML = '<div class="empty">채팅을 지웠습니다</div>';
+    for (const c of this.conns.values()) {
+      c.backlog = [];
+      if (c.list && (this.mode === 'grid' || this.mode === 'focus')) c.list.innerHTML = '<div class="empty">채팅을 지웠습니다</div>';
+    }
+  }
+
   /** 지금 보기에서 줄이 보이는 상자 — 통합이면 통합 목록, 그리드·포커스면 칸 묶음. */
   lineBox() {
     return this.mode === 'merged' ? this.list : this.grid;

@@ -39,6 +39,26 @@ impl DataStore {
             .await;
     }
 
+    /// 다시보기(60일)·클립(30일) 이어 보기 위치 중 오래된 것을 지운다 — (클립, 다시보기) 지운 수. 실패는 0.
+    ///
+    /// 앱이 주기적으로 부른다. 예전엔 보존 정리 함수가 있었으나 부르는 곳이 없어 본 다시보기·클립마다 행이 끝없이
+    /// 쌓였다. 시청 기록(365일) 삭제는 통계 '전체' 기간을 줄이는 정책이라 여기서 하지 않는다.
+    pub async fn prune_playback_positions(&self) -> (i64, i64) {
+        let store = self.clone();
+        tokio::task::spawn_blocking(move || {
+            (
+                store
+                    .prune_clip_playback(super::clip_playback::CLIP_PLAYBACK_RETENTION)
+                    .unwrap_or(0),
+                store
+                    .prune_vod_playback(super::vod_playback::VOD_PLAYBACK_RETENTION)
+                    .unwrap_or(0),
+            )
+        })
+        .await
+        .unwrap_or((0, 0))
+    }
+
     /// 지금까지의 변경 이력(메모리에만 있는 커밋 시각 목록, 최대 10만 개)을 정리하고 빈 페이지를 돌려준다.
     /// 사용자 데이터는 지우지 않는다 — 앱이 주기적으로 부른다(`run_retention_maintenance` 의 보존 정리는 따로).
     pub async fn trim_change_history(&self) -> Option<usize> {

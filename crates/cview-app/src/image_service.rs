@@ -26,6 +26,9 @@ pub(crate) const HOT_CAP_BYTES: usize = 16 * 1024 * 1024;
 pub(crate) const HOT_MAX_ENTRY_BYTES: usize = 2 * 1024 * 1024;
 /// 메모리 경고 때 줄일 크기(심각하면 0).
 pub const HOT_TRIM_WARN_BYTES: usize = 4 * 1024 * 1024;
+/// 이미지 하나의 응답 본문 상한 — 넘으면 받다가 끊고 메모리·디스크 캐시에 넣지 않는다. 치지직·네이버 이미지는 큰
+/// 배너 원본도 수 MB 라 넉넉하다(예전엔 상한이 없어 허용 호스트가 비정상적으로 큰 응답을 주면 전부 메모리에 올렸다).
+pub(crate) const MAX_IMAGE_BYTES: usize = 16 * 1024 * 1024;
 /// 동시에 받는 수 — 이미지 CDN 은 HTTP/1.1 이라 연결 수가 곧 병렬도다(6 이면 첫 실행이 웹뷰 직접 받기보다 느렸다).
 const MAX_CONCURRENT_FETCHES: usize = 16;
 const FETCH_TIMEOUT: Duration = Duration::from_secs(15);
@@ -408,6 +411,10 @@ impl ImageService {
             .unwrap_or("")
             .trim()
             .to_ascii_lowercase();
+        // 전송이 상한을 지키지 않아도(다른 구현) 캐시에는 넣지 않는다.
+        if response.body.len() > MAX_IMAGE_BYTES {
+            return Err(ImageError::Unavailable("image too large".into()));
+        }
         if !content_type.starts_with("image/") || response.body.is_empty() {
             return Err(ImageError::Unavailable(format!(
                 "not an image: {content_type}"
@@ -451,6 +458,7 @@ impl ImageService {
         let parsed = Url::parse(url).map_err(|_| ImageError::Forbidden)?;
         let mut req = HttpRequest::new(cview_core::protocols::HttpMethod::Get, parsed);
         req.timeout = Some(FETCH_TIMEOUT);
+        req.max_body = Some(MAX_IMAGE_BYTES);
         req.set_header(
             "Accept",
             Some("image/avif,image/webp,image/png,image/*;q=0.8"),

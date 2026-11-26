@@ -25,6 +25,9 @@ pub struct HttpRequest {
     pub body: Option<Vec<u8>>,
     /// 요청별 타임아웃. `None` 이면 Swift `URLRequest` 기본값(60초)으로 보고 클라이언트 상한을 적용한다.
     pub timeout: Option<Duration>,
+    /// 응답 본문 상한(바이트). 넘으면 [`TransportError::Other`] 로 끊는다 — `Content-Length` 가 넘으면 받기 전에,
+    /// 없거나 틀리면 받는 도중에. `None` 이면 상한 없음.
+    pub max_body: Option<usize>,
 }
 
 impl HttpRequest {
@@ -35,6 +38,7 @@ impl HttpRequest {
             headers: Vec::new(),
             body: None,
             timeout: None,
+            max_body: None,
         }
     }
 
@@ -199,6 +203,15 @@ fn map_reqwest_error(e: reqwest::Error) -> TransportError {
     }
 }
 
+/// 본문 상한 검사 — 알려진 길이(`Content-Length`)나 지금까지 받은 양이 `max` 를 넘는지. 순수 함수.
+fn body_too_large(content_length: Option<u64>, received: usize, max: usize) -> bool {
+    content_length.is_some_and(|n| n > max as u64) || received > max
+}
+
+fn too_large(max: usize) -> TransportError {
+    TransportError::Other(format!("응답이 너무 큽니다(상한 {max} 바이트)"))
+}
+
 #[async_trait]
 impl HttpTransport for ReqwestTransport {
     async fn send(&self, request: HttpRequest) -> Result<HttpResponse, TransportError> {
@@ -225,7 +238,24 @@ impl HttpTransport for ReqwestTransport {
                     .map(|v| (k.as_str().to_string(), v.to_string()))
             })
             .collect();
-        let body = response.bytes().await.map_err(map_reqwest_error)?.to_vec();
+        let body = match request.max_body {
+            None => response.bytes().await.map_err(map_reqwest_error)?.to_vec(),
+            Some(max) => {
+                if body_too_large(response.content_length(), 0, max) {
+                    return Err(too_large(max));
+                }
+                let mut response = response;
+                let mut body = Vec::new();
+                while let Some(chunk) = response.chunk().await.map_err(map_reqwest_error)? {
+                    if body_too_large(None, body.len() + chunk.len(), max) {
+                        cview_core::utils::traffic::add_received(body.len() + chunk.len());
+                        return Err(too_large(max));
+                    }
+                    body.extend_from_slice(&chunk);
+                }
+                body
+            }
+        };
         cview_core::utils::traffic::add_received(body.len());
         Ok(HttpResponse {
             status,
@@ -237,6 +267,90 @@ impl HttpTransport for ReqwestTransport {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn body_limit_checks_length_and_received() {
+        use super::body_too_large;
+        assert!(!body_too_large(None, 0, 10));
+        assert!(!body_too_large(Some(10), 10, 10));
+        assert!(
+            body_too_large(Some(11), 0, 10),
+            "Content-Length 가 넘으면 받기 전에 끊는다"
+        );
+        assert!(
+            body_too_large(None, 11, 10),
+            "길이를 몰라도 받은 양이 넘으면 끊는다"
+        );
+        assert!(
+            body_too_large(Some(5), 11, 10),
+            "Content-Length 가 틀려도 받은 양으로 끊는다"
+        );
+    }
+
+    /// 로컬 서버 — `/len` 은 Content-Length 로 큰 본문을, `/chunked` 는 길이 없이 큰 본문을, `/small` 은 작은 본문을 준다.
+    async fn body_server() -> u16 {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
+        let port = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            while let Ok((mut sock, _)) = listener.accept().await {
+                tokio::spawn(async move {
+                    let mut buf = vec![0u8; 4096];
+                    let n = sock.read(&mut buf).await.unwrap_or(0);
+                    let head = String::from_utf8_lossy(&buf[..n]).to_string();
+                    let path = head.split_whitespace().nth(1).unwrap_or("").to_string();
+                    let big = vec![b'x'; 64 * 1024];
+                    let mut out = Vec::new();
+                    match path.as_str() {
+                        "/len" => {
+                            out.extend_from_slice(b"HTTP/1.1 200 OK\r\nContent-Length: 65536\r\nConnection: close\r\n\r\n");
+                            out.extend_from_slice(&big);
+                        }
+                        "/chunked" => {
+                            out.extend_from_slice(b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n");
+                            for part in big.chunks(4096) {
+                                out.extend_from_slice(format!("{:x}\r\n", part.len()).as_bytes());
+                                out.extend_from_slice(part);
+                                out.extend_from_slice(b"\r\n");
+                            }
+                            out.extend_from_slice(b"0\r\n\r\n");
+                        }
+                        _ => out.extend_from_slice(
+                            b"HTTP/1.1 200 OK\r\nContent-Length: 3\r\nConnection: close\r\n\r\nabc",
+                        ),
+                    }
+                    let _ = sock.write_all(&out).await;
+                });
+            }
+        });
+        port
+    }
+
+    #[tokio::test]
+    async fn max_body_stops_large_responses() {
+        use super::{HttpRequest, HttpTransport, ReqwestTransport, TransportError};
+        let port = body_server().await;
+        let t = ReqwestTransport::with_client(reqwest::Client::new());
+        let req = |path: &str, max: Option<usize>| {
+            let mut r = HttpRequest::new(
+                cview_core::protocols::HttpMethod::Get,
+                url::Url::parse(&format!("http://127.0.0.1:{port}{path}")).unwrap(),
+            );
+            r.max_body = max;
+            r
+        };
+        for path in ["/len", "/chunked"] {
+            let err = t.send(req(path, Some(16 * 1024))).await.unwrap_err();
+            assert!(matches!(err, TransportError::Other(_)), "{path}: {err:?}");
+            // 상한이 없으면 그대로 받는다.
+            let ok = t.send(req(path, None)).await.unwrap();
+            assert_eq!(ok.body.len(), 64 * 1024, "{path}");
+        }
+        let small = t.send(req("/small", Some(16 * 1024))).await.unwrap();
+        assert_eq!(small.body, b"abc");
+    }
+
     #[test]
     fn redirects_only_to_public_http_hosts() {
         let ok = |s: &str| super::redirect_allowed(&url::Url::parse(s).unwrap());
