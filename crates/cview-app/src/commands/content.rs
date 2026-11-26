@@ -952,12 +952,39 @@ pub async fn open_notification_settings() -> CmdResult<()> {
     launch(result, "알림 설정을 열 수 없습니다")
 }
 
-/// 외부 브라우저로 링크를 연다(치지직에서 열기 등). http(s) 만 허용한다.
+/// 외부 브라우저로 링크를 연다(치지직에서 열기 등). http(s) 와 메일 주소 하나만 적은 mailto 만 허용한다.
 #[tauri::command]
 pub async fn open_external(url: String) -> CmdResult<()> {
-    let parsed = url::Url::parse(&url).map_err(|_| CommandError("잘못된 주소입니다".into()))?;
-    if !matches!(parsed.scheme(), "http" | "https") {
-        return Err(CommandError("http(s) 주소만 열 수 있습니다".into()));
+    open_url(&url)
+}
+
+/// 열어도 되는 외부 주소인가 — http(s), 또는 받는 사람이 주소 하나뿐인 `mailto:`(문의하기). 순수 함수.
+/// mailto 는 여러 받는 사람(`,`)·참조·본문 같은 질의를 막는다 — 화면이 넘긴 글로 다른 곳에 메일을 쓰지 않게.
+pub(crate) fn allowed_external(parsed: &url::Url) -> bool {
+    match parsed.scheme() {
+        "http" | "https" => true,
+        "mailto" => {
+            let to = parsed.path();
+            parsed.query().is_none()
+                && parsed.fragment().is_none()
+                && to.split('@').count() == 2
+                && to
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"@.-_+".contains(&b))
+                && !to.starts_with('@')
+                && !to.ends_with('@')
+        }
+        _ => false,
+    }
+}
+
+/// 외부 주소를 기본 브라우저·메일 앱으로 연다([`allowed_external`] 만).
+pub(crate) fn open_url(url: &str) -> CmdResult<()> {
+    let parsed = url::Url::parse(url).map_err(|_| CommandError("잘못된 주소입니다".into()))?;
+    if !allowed_external(&parsed) {
+        return Err(CommandError(
+            "http(s) 주소나 메일 주소만 열 수 있습니다".into(),
+        ));
     }
     #[cfg(target_os = "macos")]
     let result = std::process::Command::new("open")
@@ -975,9 +1002,32 @@ pub async fn open_external(url: String) -> CmdResult<()> {
     launch(result, "열 수 없습니다")
 }
 
+/// 앱을 끝낸다 — 처음 실행 고지에 동의하지 않았을 때. 창 닫기 가로채기(`close_to_tray`)를 건너뛴다.
+#[tauri::command]
+pub async fn app_quit(app: tauri::AppHandle) -> CmdResult<()> {
+    crate::tray::request_quit(&app);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn external_links_allow_web_and_a_single_mail_address() {
+        let ok = |u: &str| allowed_external(&url::Url::parse(u).unwrap());
+        assert!(ok("https://github.com/dododo-lab/cview-rust"));
+        assert!(ok("http://example.com/a?b=c"));
+        assert!(ok("mailto:do@dododo.app"));
+        assert!(!ok("mailto:do@dododo.app,other@example.com"));
+        assert!(!ok("mailto:do@dododo.app?cc=other@example.com"));
+        assert!(!ok("mailto:do@dododo.app?body=hi"));
+        assert!(!ok("mailto:"));
+        assert!(!ok("mailto:@dododo.app"));
+        assert!(!ok("file:///etc/passwd"));
+        assert!(!ok("javascript:alert(1)"));
+        assert!(!ok("cview://live?channelId=x"));
+    }
 
     #[test]
     fn follow_date_kst_becomes_rfc3339_with_offset() {

@@ -257,6 +257,10 @@ export const api = {
   equalizerPresets: () => invoke('equalizer_presets'),
   settingsGet: () => invoke('settings_get'),
   settingsUpdate: (domain, patch) => invoke('settings_update', { domain, patch }),
+  /** 처음 실행 고지 동의 기록(notice.js) — 동의한 문구 버전. 돌려주는 값은 settingsGet 과 같다. */
+  noticeAccept: (version) => invoke('notice_accept', { version }),
+  /** 앱 종료 — 고지에 동의하지 않았을 때. */
+  appQuit: () => invoke('app_quit'),
   /** 이 창에 저장된 화면 크기(웹뷰 확대)를 건다 — 배율을 돌려준다. */
   uiZoomSync: () => invoke('ui_zoom_sync'),
   /** 화면 크기 한 단계 확대(1)·축소(-1)·실제 크기(0) — 모든 창에 걸고 새 설정을 돌려준다. */

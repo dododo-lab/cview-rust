@@ -491,6 +491,8 @@ pub fn run() {
             commands::chat::chat_send,
             commands::settings::settings_get,
             commands::settings::settings_update,
+            commands::settings::notice_accept,
+            commands::content::app_quit,
             commands::settings::ui_zoom_sync,
             commands::settings::ui_zoom_step,
             commands::settings::perf_log,
