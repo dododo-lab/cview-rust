@@ -79,7 +79,7 @@ export class MediaPage {
             <div class="media-title-box">
               <h1 class="media-title">${esc(info.title)}</h1>
               <div class="media-meta">
-                ${info.channelId ? `<button class="link-btn" data-media="channel" data-channel-id="${esc(info.channelId)}">${esc(info.channelName)}</button> · ` : `${esc(info.channelName)} · `}
+                ${info.channelId ? `<button class="link-btn" data-media="channel" data-channel-id="${esc(info.channelId)}" data-channel-name="${esc(info.channelName || '')}">${esc(info.channelName)}</button> · ` : `${esc(info.channelName)} · `}
                 조회 ${esc(compactCount(info.readCount || 0))}${info.publishDate ? ` · ${esc(relativeDate(info.publishDate))}` : ''} · ${esc(formatDuration(info.duration))}
               </div>
             </div>
@@ -135,7 +135,7 @@ export class MediaPage {
             <div class="media-title-box">
               <h1 class="media-title">${esc(d.clipTitle || '')}</h1>
               <div class="media-meta">
-                ${channelId ? `<button class="link-btn" data-media="channel" data-channel-id="${esc(channelId)}">${esc(channelName || '채널')}</button> · ` : ''}조회 ${esc(compactCount(d.readCount || 0))} · ${esc(formatDuration(d.duration))}
+                ${channelId ? `<button class="link-btn" data-media="channel" data-channel-id="${esc(channelId)}" data-channel-name="${esc(channelName || '')}">${esc(channelName || '채널')}</button> · ` : ''}조회 ${esc(compactCount(d.readCount || 0))} · ${esc(formatDuration(d.duration))}
               </div>
             </div>
             <div class="grow"></div>

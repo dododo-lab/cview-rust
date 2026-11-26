@@ -245,6 +245,10 @@ export class WatchInfoPanel {
       return;
     }
     const kind = this.tab;
+    // 같은 탭을 다시 그리면(탭을 다시 누름·오가기) 그 전에 보낸 '더 보기' 응답은 버린다 — 예전엔 탭 이름만 봐서,
+    // 늦게 온 다음 쪽이 새로 그린 첫 쪽 앞뒤로 붙어 다시보기가 겹치고, 클립은 본 것으로 걸러져 영영 빠졌다.
+    if (!append) this.tabRender = (this.tabRender || 0) + 1;
+    const tabRender = this.tabRender;
     if (!append) {
       this.pages[kind] = 0;
       if (kind === 'community') this.postImages.clear();
@@ -259,7 +263,7 @@ export class WatchInfoPanel {
       const res = kind === 'vod' ? await api.channelVods(id, page, 24)
         : kind === 'clip' ? await api.channelClips(id, append ? this.clipCursor : null, 24)
         : await api.channelPosts(id, page);
-      if (seq !== this.seq || this.tab !== kind) return;
+      if (seq !== this.seq || this.tab !== kind || tabRender !== this.tabRender) return;
       if (kind === 'clip') {
         this.clipCursor = res.nextCursor;
         res.items = res.items.filter((c) => !this.clipSeen.has(c.clipUID) && this.clipSeen.add(c.clipUID));
@@ -283,7 +287,7 @@ export class WatchInfoPanel {
       }
       if (kind === 'community') requestAnimationFrame(() => this.markOverflow(box));
     } catch (e) {
-      if (seq !== this.seq || this.tab !== kind) return;
+      if (seq !== this.seq || this.tab !== kind || tabRender !== this.tabRender) return;
       if (!append) box.innerHTML = this.failHtml('불러오지 못했습니다', e, 'retry-tab');
       else {
         this.pages[kind] -= 1;
@@ -291,7 +295,7 @@ export class WatchInfoPanel {
         if (tail) tail.outerHTML = '<div class="mwi-tail"><button class="mwi-btn" data-mwi="more">다시 시도</button></div>';
       }
     } finally {
-      if (seq === this.seq) this.loading = false;
+      if (seq === this.seq && tabRender === this.tabRender) this.loading = false;
     }
   }
 

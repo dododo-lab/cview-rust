@@ -173,6 +173,8 @@ export class DonationList {
     this.renderButton();
     panel.cleanups.push(onChatPrefs(() => {
       this.applyMode();
+      this.stripHtml = null; // 차단 목록이 바뀌었을 수 있다 — 띠도 다시
+      this.renderStrip();
       if (this.isOpen) this.renderList();
     }));
     panel.cleanups.push(() => this.close({ restore: false }));
@@ -242,6 +244,26 @@ export class DonationList {
 
   // ── 그리기 ──
 
+  /** 보여 줄 항목 — 차단한 사용자의 후원은 뺀다(채팅 줄은 block() 이 지운다). 예전엔 목록·띠에 닉네임·금액·메시지가 남았다. */
+  visibleEntries() {
+    const blocked = chatPrefs().blockedUsers || [];
+    return blocked.length ? this.entries.filter(({ m }) => !(m.userId && blocked.includes(m.userId))) : this.entries;
+  }
+
+  /** 관리자 삭제(블라인드) — 목록에 남은 원문도 가린다. */
+  blind(messageId, text) {
+    let hit = false;
+    this.entries = this.entries.map((x) => {
+      if (x.m.id !== messageId) return x;
+      hit = true;
+      return { ...x, m: { ...x.m, isBlinded: true, content: text, emojis: {} } };
+    });
+    if (!hit) return;
+    this.stripHtml = null;
+    this.renderStrip();
+    if (this.isOpen) this.renderList();
+  }
+
   renderButton(ping = false) {
     const n = this.unseen;
     this.badge.hidden = n === 0;
@@ -259,10 +281,11 @@ export class DonationList {
   }
 
   renderStrip() {
-    const on = this.mode === 'strip' && this.entries.length > 0;
+    const shown = this.visibleEntries();
+    const on = this.mode === 'strip' && shown.length > 0;
     this.strip.hidden = !on;
     if (!on) return;
-    const html = this.entries.slice(0, STRIP_MAX).map(({ m }) => {
+    const html = shown.slice(0, STRIP_MAX).map(({ m }) => {
       const e = eventMeta(m);
       return `<span class="event-chip ev-${e.tone} ev-tier-${e.tier} ev-lv-${e.level}" title="${esc(`${e.title} · ${m.content || ''}`)}"><span class="event-chip-icon">${EVENT_ICONS[e.icon] || ''}</span><b>${esc(donorName(m))}</b>${e.value ? `<span class="event-chip-value">${esc(e.value)}</span>` : ''}</span>`;
     }).join('');
@@ -296,8 +319,9 @@ export class DonationList {
 
   renderList() {
     const focusedSeq = this.el.contains(document.activeElement) ? document.activeElement.closest('.dp-item')?.dataset.dp : null;
-    const all = donationTotals(this.entries);
-    const view = viewDonations(this.entries, { filter: this.filter, sort: this.sort });
+    const entries = this.visibleEntries();
+    const all = donationTotals(entries);
+    const view = viewDonations(entries, { filter: this.filter, sort: this.sort });
     this.sumEl.textContent = this.entries.length ? `합계 ${totalsText(donationTotals(view))}` : '';
     for (const b of this.el.querySelectorAll('[data-dp-filter]')) {
       const v = b.dataset.dpFilter;

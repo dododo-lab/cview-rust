@@ -57,12 +57,9 @@ export const SCHEMA = [
     { d: 'player', k: 'latencyPidKd', label: 'PID Kd', type: 'number', step: 0.01, adv: true },
     { d: 'player', k: 'bufferDuration', label: '버퍼 길이(초)', type: 'range', min: 1, max: 10, step: 0.5, adv: true },
   ]],
-  ['watch', '라이브 되감기 · 실험', [
-    { d: 'player', k: 'liveRewindEnabled', label: '라이브 되감기', help: '방송을 뒤로 돌려 볼 수 있게 최근 구간을 기억합니다', type: 'toggle' },
-    // Rust 는 정해진 값(LIVE_REWIND_WINDOW_CHOICES·LIVE_REWIND_DISK_BUDGET_CHOICES) 중 가장 가까운 것으로 저장한다 —
-    // 예전 슬라이더(5~180분·512MB~)는 고를 수 없는 값을 보여 줘, 120분을 골라도 60분으로 저장됐다.
-    { d: 'player', k: 'liveRewindWindowMinutes', label: '되감기 범위', type: 'select', options: opt([[10, '10분'], [30, '30분'], [60, '1시간']]) },
-    { d: 'player', k: 'liveRewindDiskBudgetMB', label: '되감기 디스크 한도', type: 'select', options: opt([[2048, '2GB'], [5120, '5GB'], [10240, '10GB'], [20480, '20GB']]) },
+  ['watch', '실험', [
+    // '라이브 되감기'(켜기·범위·디스크 한도)는 뺐다 — 앱이 로컬 타임시프트 기록기를 붙이지 않아(set_timeshift_recorder_factory
+    //  호출 없음) 아무 효과가 없었다. ←/→ 되감기는 이 설정과 상관없이 재생 목록 범위 안에서 동작한다.
     { d: 'player', k: 'experimentalServerTimeMachine', label: '서버 타임머신(실험)', type: 'toggle' },
     { d: 'player', k: 'experimentalMatchWebV2', label: '웹 지연 맞춤 v2(실험)', type: 'toggle' },
   ]],
@@ -814,13 +811,15 @@ export class SettingsPage {
     };
     // 다른 곳을 누르면 취소(이 버튼을 다시 누르는 것은 위의 토글이 처리한다).
     const onDown = (e) => { if (!btn.contains(e.target)) { done(); this.render(); } };
+    // 키는 window 캡처로 받는다 — 문서 캡처에 먼저 걸린 ⌘K(명령 팔레트) 처리기보다 앞서야 한다. 예전엔 ⌘K 를 누르면
+    // 예약 키 안내 대신 팔레트가 열리고, 팔레트에 친 첫 글자가 이 단축키로 저장됐다.
     const done = () => {
-      document.removeEventListener('keydown', onKey, true);
+      window.removeEventListener('keydown', onKey, true);
       document.removeEventListener('pointerdown', onDown, true);
       this.cancelCapture = null;
     };
     this.cancelCapture = () => { done(); this.render(); };
-    document.addEventListener('keydown', onKey, true);
+    window.addEventListener('keydown', onKey, true);
     document.addEventListener('pointerdown', onDown, true);
   }
 

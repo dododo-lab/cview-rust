@@ -456,13 +456,13 @@ function denseRow(l) {
   </div>`;
 }
 
-function followedRow(c) {
+export function followedRow(c) {
   const avatar = safeUrl(c.channelImageUrl);
   const followed = parseFollowDate(c.followDate);
   const since = followAgeText(followed);
   const avatarImg = avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>';
   // 방송 중이면 줄은 방송을 열고 아바타는 채널 정보 — 꺼져 있으면 줄 전체가 채널 정보다(아바타는 그림일 뿐).
-  return `<div class="dense-row follow-row${c.isLive ? ' card' : ''}" data-fid="${esc(c.channelId)}" data-live="${c.isLive ? 1 : 0}" ${c.isLive ? `data-channel-id="${esc(c.channelId)}"` : `data-open-channel-id="${esc(c.channelId)}"`}>
+  return `<div class="dense-row follow-row${c.isLive ? ' card' : ''}" data-fid="${esc(c.channelId)}" data-live="${c.isLive ? 1 : 0}" ${c.isLive ? `data-channel-id="${esc(c.channelId)}" data-channel-name="${esc(c.channelName)}" data-channel-image="${esc(avatar)}"` : `data-open-channel-id="${esc(c.channelId)}"`}>
     ${cardOpenButton(c.isLive ? liveLabel(c) : `${c.channelName}, 오프라인, 채널 정보`)}
     ${c.isLive ? `<button type="button" class="card-avatar" data-open-channel aria-label="${esc(c.channelName)} 채널 정보">${avatarImg}</button>` : `<span class="card-avatar">${avatarImg}</span>`}
     <span class="dense-name ellipsis"><b>${esc(c.channelName)}</b>${followBadges(c)} <span>${c.isLive ? esc(c.categoryName || '방송 중') : '오프라인'}</span></span>

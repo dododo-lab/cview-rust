@@ -60,10 +60,13 @@ try {
       const items = SCHEMA.flatMap(([, , list]) => list);
       const by = (k) => items.find((i) => i.k === k);
       const alert = by('streamAlertScale');
+      // 되감기 범위·한도는 4차에서 설정 화면에서 뺐다(효과 없음 — precision-pass-4 S02). 있으면 Rust 선택지와 같아야 한다.
+      const win = by('liveRewindWindowMinutes');
+      const budget = by('liveRewindDiskBudgetMB');
       return {
         alert: [alert.type, alert.min, alert.max],
-        window: [by('liveRewindWindowMinutes').type, by('liveRewindWindowMinutes').options.map((o) => o.value)],
-        budget: [by('liveRewindDiskBudgetMB').type, by('liveRewindDiskBudgetMB').options.map((o) => o.value)],
+        window: win ? [win.type, win.options.map((o) => o.value)] : ['select', [10, 30, 60]],
+        budget: budget ? [budget.type, budget.options.map((o) => o.value)] : ['select', [2048, 5120, 10240, 20480]],
       };
     });
     // crates/cview-core/src/models/settings.rs: de_alert_scale(0.7~1.7), LIVE_REWIND_WINDOW_CHOICES, LIVE_REWIND_DISK_BUDGET_CHOICES

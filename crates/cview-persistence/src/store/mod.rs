@@ -392,6 +392,33 @@ impl DataStore {
         })
     }
 
+    /// 채널 메모 저장 — 채널 행이 없으면(본 적도 즐겨찾기한 적도 없는 채널) 행을 만들어 저장한다.
+    /// [`save_memo`](Self::save_memo) 는 행이 없으면 아무것도 쓰지 않고 성공을 돌려줘, 화면은 "저장했습니다"인데
+    /// 다시 열면 메모가 사라져 있었다. 빈 메모는 행을 만들지 않는다.
+    pub fn save_memo_creating(&self, info: &ChannelInfo, memo: &str) -> Result<()> {
+        self.write(|tx| {
+            let memo = (!memo.is_empty()).then(|| memo.to_string());
+            if let Some(mut channel) = Self::channel_by_id(tx, &info.channel_id)? {
+                channel.memo = memo;
+                db::update(tx, &channel)?;
+                return Ok(((), true));
+            }
+            let Some(memo) = memo else {
+                return Ok(((), false));
+            };
+            let mut channel = PersistedChannel::new(
+                info.channel_id.clone(),
+                info.channel_name.clone(),
+                info.channel_image_url.as_ref().map(|u| u.to_string()),
+                false,
+                None,
+            );
+            channel.memo = Some(memo);
+            db::insert(tx, &mut channel)?;
+            Ok(((), true))
+        })
+    }
+
     /// 채널 메모 조회(없으면 빈 문자열).
     pub fn fetch_memo(&self, channel_id: &str) -> Result<String> {
         self.read(|conn| {

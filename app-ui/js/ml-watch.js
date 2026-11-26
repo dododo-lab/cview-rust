@@ -7,6 +7,7 @@
 // - 아래 막대 단추: 스크린샷 · 북마크 · 영상+채팅 전체 화면 · 가운데 OSD
 // - 패인 ⚙ 의 배속·화면 꽉 채우기·자동 보정/업스케일·이퀄라이저(Windows)는 무대 패인에만(ml-pane-controls.js setStage)
 // 앱 메뉴 동작(⌘S·⇧⌘F·PiP·⌘W 등)은 app.js 가 이 도구로 넘긴다.
+import { screenshotFormat, screenshotExtension } from './screenshot-format.js';
 import { api } from './api.js';
 import { esc, toast, keyBelongsToTarget } from './dom.js';
 import { chatPrefs, onChatPrefs, updateChatPrefs } from './chat-prefs.js';
@@ -431,11 +432,11 @@ export class WatchTools {
     this.flash(behind > 2 ? `라이브보다 ${behind}초 뒤` : '라이브');
   }
 
-  screenshot() {
+  async screenshot() {
     const pane = this.pane;
     if (!pane) return;
     pane.shotPending = true;
-    pane.bridge.call('takeScreenshot', 'png');
+    pane.bridge.call('takeScreenshot', await screenshotFormat());
   }
 
   async saveScreenshot(data) {
@@ -445,7 +446,7 @@ export class WatchTools {
     }
     const name = this.session?.channelName || 'CView';
     try {
-      const path = await api.saveFile('screenshot', `${name}_${stamp()}.png`, data.base64, null);
+      const path = await api.saveFile('screenshot', `${name}_${stamp()}.${screenshotExtension(data)}`, data.base64, null);
       this.flash('스크린샷 저장됨');
       toast(`스크린샷을 저장했습니다 — ${path}`, 3500);
     } catch (e) {

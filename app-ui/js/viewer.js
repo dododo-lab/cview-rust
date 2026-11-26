@@ -30,7 +30,7 @@ const PHASE_TEXT = {
 };
 
 export class Viewer {
-  constructor(root, { isLoggedIn, onClose, onAddMulti = null, onPopout = null }) {
+  constructor(root, { isLoggedIn, onClose, onAddMulti = null, onPopout = null, chatSession = null }) {
     this.root = root;
     this.onClose = onClose;
     this.channelId = null;
@@ -45,7 +45,7 @@ export class Viewer {
 
     this.player = new PlayerBridge(root.querySelector('#player-frame'));
     this.alerts = new StreamAlerts(root.querySelector('.player-stage'));
-    this.chat = new ChatPanel(root.querySelector('.chat'), { isLoggedIn, onHighlight: (m) => this.alerts.push(m) });
+    this.chat = new ChatPanel(root.querySelector('.chat'), { isLoggedIn, onHighlight: (m) => this.alerts.push(m), session: chatSession, mentionNotify: true });
 
     this.player.onMessage((type, data) => this.onPlayerMessage(type, data));
     listen(Events.playerEvent, (ev) => this.onPlayerEvent(ev));

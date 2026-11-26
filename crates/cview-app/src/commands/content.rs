@@ -577,12 +577,17 @@ pub async fn memo_set(
     services: State<'_, AppServices>,
     channel_id: String,
     memo: String,
+    channel_name: Option<String>,
+    channel_image_url: Option<String>,
 ) -> CmdResult<()> {
     let store = services
         .data_store
         .as_ref()
         .ok_or_else(|| CommandError("저장소를 열 수 없습니다".into()))?;
-    store.save_memo(&channel_id, memo.trim()).map_err(store_err)
+    let info = channel_stub(&channel_id, channel_name, channel_image_url);
+    store
+        .save_memo_creating(&info, memo.trim())
+        .map_err(store_err)
 }
 
 /// 스트림 북마크.

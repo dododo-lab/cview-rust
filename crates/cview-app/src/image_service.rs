@@ -400,9 +400,11 @@ impl ImageService {
         let mut response = self.send(url, prev.as_ref()).await?;
         // 화면이 붙인 크기 단계(`?type=w640` 등)를 그 이미지 서버가 모르면 404 다 — 원본 주소로 한 번 더 받는다.
         // (캐시 키는 화면이 부른 주소 그대로라 다음부터는 바로 나온다.)
-        if response.status == 404 && prev.is_none() {
+        // 다시 받기(`prev`)도 같다 — 예전엔 첫 받기에서만 원본으로 넘어가, TTL 이 지난 뒤에는 볼 때마다 404 만 받고
+        // 항목이 끝내 새로 고쳐지지 않았다. 가진 ETag 는 원본 응답의 것이라 원본 주소에 그대로 쓸 수 있다.
+        if response.status == 404 {
             if let Some(original) = without_size_param(url) {
-                response = self.send(&original, None).await?;
+                response = self.send(&original, prev.as_ref()).await?;
             }
         }
         let now = (self.now_ms)();
