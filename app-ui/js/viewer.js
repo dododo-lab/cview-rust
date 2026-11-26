@@ -263,9 +263,13 @@ export class Viewer {
         if (token !== this.startToken) return;
         this.renderHeader(live);
         this.loadFollowers(channelId, token);
+        // 채팅 채널이 없으면 앞 채널 채팅을 끊는다 — 예전엔 머리줄은 새 채널인데 앞 채널 채팅이 계속 오고 보낼 수도 있었다.
         if (live.chatChannelId) this.chat.connect(live.chatChannelId, live.channelId);
+        else if (this.chat.active) this.chat.disconnect();
         this.showOverlay(live.isLive ? e.message : PHASE_TEXT.offline, live.isLive);
       } catch {
+        if (token !== this.startToken) return;
+        if (this.chat.active) this.chat.disconnect();
         this.showOverlay(e.message, true);
       }
     }

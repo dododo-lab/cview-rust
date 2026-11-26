@@ -134,6 +134,8 @@ pub struct AllBroadcastsState {
 pub struct AllBroadcastsShared {
     obs: Observed<AllBroadcastsState>,
     api: Arc<dyn AllBroadcastsApi>,
+    /// [`AllBroadcastsViewModel::fill_to`] 를 한 번에 하나씩 — 겹친 호출이 진행 중인 `load_more` 에 막혀 덜 채운 목록을 돌려주지 않게.
+    fill_lock: tokio::sync::Mutex<()>,
 }
 
 #[derive(Clone)]
@@ -328,6 +330,7 @@ impl AllBroadcastsViewModel {
                 feed_generation: 0,
             }),
             api,
+            fill_lock: tokio::sync::Mutex::new(()),
         });
         Self { shared }
     }
@@ -467,6 +470,20 @@ impl AllBroadcastsViewModel {
             }
         }
         s.is_refreshing = false;
+    }
+
+    /// 피드를 `size` 개까지(다음 커서가 있는 한) 채운다. 겹친 호출은 앞 호출이 끝나기를 기다린다 —
+    /// 예전엔 '더 보기'를 빨리 두 번 누르거나 홈·카테고리·사이드바가 함께 부르면, 뒤 호출의 `load_more` 가
+    /// 진행 중 표시에 막혀 곧장 돌아와 덜 찬 목록을 돌려줬고, 화면은 그걸 '마지막 쪽'으로 보고 '더 보기'를 없앴다.
+    pub async fn fill_to(&self, size: usize) {
+        let _turn = self.shared.fill_lock.lock().await;
+        while self.read().feed.len() < size && self.read().can_load_more {
+            let before = self.read().feed.len();
+            self.load_more().await;
+            if self.read().feed.len() == before {
+                break;
+            }
+        }
     }
 
     pub async fn load_more(&self) {

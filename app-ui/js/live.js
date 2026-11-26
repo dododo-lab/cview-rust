@@ -41,9 +41,10 @@ export class LivePage {
     // 처음만 스켈레톤(인기·팔로잉과 같게) — 다시 불러올 때는 보던 목록·스크롤·초점을 그대로 둔다.
     if (!this.loaded) this.body.innerHTML = skeletonGrid(8);
     const loggedIn = this.isLoggedIn();
-    const [following, popular] = await Promise.allSettled([
+    const [following, popular, dbRecent] = await Promise.allSettled([
       loggedIn ? api.followingLives(refresh) : Promise.resolve([]),
       api.popularLives(24, refresh),
+      api.recentChannels(6),
     ]);
     if (seq !== this.seq) return;
     const followFailed = following.status === 'rejected';
@@ -58,7 +59,10 @@ export class LivePage {
     const follow = followFailed ? [] : following.value || [];
     const pop = popFailed ? [] : popular.value || [];
     const liveIds = new Map([...pop, ...follow].map((l) => [l.channelId, l]));
-    const recent = recentChannels().slice(0, 6);
+    // 시청 기록(DB)을 먼저 — 이 브라우저 기록은 카드 클릭으로 연 채널만 적혀, 팔레트·채널 화면·알림·작업 공간 복원으로
+    // 본 채널은 홈 '최근 본 채널'에는 있는데 여기엔 없었다(홈과 같은 순서).
+    const fromDb = dbRecent.status === 'fulfilled' && Array.isArray(dbRecent.value) ? dbRecent.value : [];
+    const recent = (fromDb.length ? fromDb : recentChannels()).slice(0, 6);
     let html = '';
     if (recent.length) {
       html += `<h2 class="section-title">최근 시청</h2><div class="recent-row">${recent.map((r) => {

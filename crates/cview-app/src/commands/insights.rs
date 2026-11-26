@@ -238,7 +238,12 @@ fn health_blocking(
     };
     let backup_dir = path
         .parent()
-        .map(|p| p.join("Backups").display().to_string())
+        .map(|p| {
+            let dir = p.join("Backups");
+            // 백업을 아직 한 번도 만들지 않았으면 폴더가 없어 '백업 폴더 열기'가 "파일이 없습니다"로 실패했다.
+            let _ = std::fs::create_dir_all(&dir);
+            dir.display().to_string()
+        })
         .unwrap_or_default();
     DataHealthDto {
         available: store.is_some(),
@@ -341,4 +346,19 @@ pub async fn data_cleanup(
     })
     .await
     .map_err(|e| CommandError(e.to_string()))?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 백업을 한 번도 만들지 않은 새 설치에서도 '백업 폴더 열기'가 열 폴더가 있다.
+    #[test]
+    fn data_health_makes_the_backup_folder_it_points_to() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("cview.sqlite");
+        let health = health_blocking(path.clone(), StoreBackup::new(path), None);
+        assert!(!health.backup_dir.is_empty());
+        assert!(std::path::Path::new(&health.backup_dir).is_dir());
+    }
 }

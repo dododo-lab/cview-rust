@@ -94,14 +94,8 @@ pub async fn popular_lives(
     } else {
         vm.load_initial_if_needed().await;
     }
-    // 첫 페이지(30개)보다 많이 원하면 다음 커서를 더 받는다.
-    while vm.read().feed.len() < size && vm.read().can_load_more {
-        let before = vm.read().feed.len();
-        vm.load_more().await;
-        if vm.read().feed.len() == before {
-            break;
-        }
-    }
+    // 첫 페이지보다 많이 원하면 다음 커서를 더 받는다(겹친 호출은 차례를 기다린다).
+    vm.fill_to(size).await;
     let s = vm.read();
     if let LoadState::Error(message) = &s.state {
         return Err(CommandError(message.clone()));

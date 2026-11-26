@@ -146,7 +146,7 @@ export class WatchInfoPanel {
     const duration = live ? liveDuration(live.openDate) : '';
     const avatarImg = (kind) => (avatar
       ? `<img src="${esc(imageSrc(avatar, kind))}" alt="" referrerpolicy="no-referrer">`
-      : `<span>${esc((c.channelName || '?').slice(0, 1))}</span>`);
+      : `<span>${esc(Array.from(String(c.channelName || '').trim())[0] || '?')}</span>`);
     const meta = live ? [
       live.categoryName ? `<span class="mwi-pill mwi-pill-cat">${esc(live.categoryName)}</span>` : '',
       `<span class="mwi-pill mwi-pill-live" title="지금 시청자"><i aria-hidden="true"></i><span><span class="mo-num" data-mo-count>${esc(live.viewerCountText || '0')}</span>명</span></span>`,

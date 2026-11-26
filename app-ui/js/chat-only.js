@@ -44,7 +44,8 @@ export class ChatOnlyPage {
       if (a.dataset.co === 'pick-channel') this.show({ channelId: a.dataset.channelId });
       if (a.dataset.co === 'play' && this.channelId) this.onPlay(this.channelId);
     });
-    new MutationObserver(() => { if (this.root.hidden && this.chat.active) this.chat.disconnect(); })
+    // 숨으면 진행 중인 열기도 버린다(seq) — 정보 응답 전에 떠나면 숨은 화면에서 채팅이 연결돼 남았다.
+    new MutationObserver(() => { if (this.root.hidden) { this.seq = (this.seq || 0) + 1; if (this.chat.active) this.chat.disconnect(); } })
       .observe(this.root, { attributes: true, attributeFilter: ['hidden'] });
   }
 

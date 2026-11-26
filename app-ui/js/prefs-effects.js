@@ -2,6 +2,7 @@
 // DSN-02 모션 등급, DSN-03 콤팩트, PLY-16 후원 알림 위치·크기, PLY-19 백그라운드 재생, SYS-15 자동 새로고침 주기.
 import { api, listen, Events } from './api.js';
 import { setImageZoom } from './dom.js';
+import { syncTheme } from './theme.js';
 
 let settings = null;
 let refreshTimer = 0;
@@ -55,6 +56,8 @@ export async function installPrefsEffects(ctx) {
   // 다른 창·메뉴(⌘= ⌘- ⌘0)·가져오기·초기화로 외관이 바뀌면 모든 창에 온다 — 썸네일 배율·모션 등급을 맞춘다.
   listen(Events.appearanceChanged, (appearance) => {
     if (!appearance || typeof appearance !== 'object') return;
+    // 테마도 — 메뉴 막대 팝오버·다른 창에서 바꾸거나 가져오기·초기화하면 이 창 화면은 예전 테마로 남았다.
+    syncTheme(appearance.theme);
     apply({ ...(settings || {}), appearance }, ctx);
   });
   window.addEventListener('cview:settings-changed', (e) => {

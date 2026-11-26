@@ -122,6 +122,20 @@ fn round1(v: f64) -> f64 {
 }
 
 /// 한 줄 남긴다. 꺼져 있으면 아무것도 하지 않는다.
+/// 줄에 data 를 더한다. 줄의 머리 키(`ts`·`up_ms`·`kind`)는 data 가 덮지 못한다 — 화면 오류(`ui.error`)가 보내는
+/// `kind: "error"` 가 줄 종류를 덮어, 로그에서 `ui.error` 로 찾을 수 없었다. 겹친 키는 `data_<키>` 로 남긴다. 순수 함수.
+fn merge_data(line: &mut Map<String, Value>, data: Value) {
+    if let Value::Object(map) = data {
+        for (k, v) in map {
+            if matches!(k.as_str(), "ts" | "up_ms" | "kind") {
+                line.insert(format!("data_{k}"), v);
+            } else {
+                line.insert(k, v);
+            }
+        }
+    }
+}
+
 pub fn emit(kind: &str, data: Value) {
     if !enabled() {
         return;
@@ -137,11 +151,7 @@ pub fn emit(kind: &str, data: Value) {
     );
     line.insert("up_ms".into(), json!(round1(uptime_ms())));
     line.insert("kind".into(), Value::String(kind.to_string()));
-    if let Value::Object(map) = redact(data) {
-        for (k, v) in map {
-            line.insert(k, v);
-        }
-    }
+    merge_data(&mut line, redact(data));
     let Ok(text) = serde_json::to_string(&Value::Object(line)) else {
         return;
     };
@@ -347,6 +357,22 @@ fn sampler_loop() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn data_cannot_overwrite_line_head_keys() {
+        let mut line = Map::new();
+        line.insert("kind".into(), json!("ui.error"));
+        line.insert("ts".into(), json!("T"));
+        merge_data(
+            &mut line,
+            json!({"kind": "unhandledrejection", "ts": 1, "message": "x"}),
+        );
+        assert_eq!(line["kind"], "ui.error");
+        assert_eq!(line["ts"], "T");
+        assert_eq!(line["data_kind"], "unhandledrejection");
+        assert_eq!(line["data_ts"], 1);
+        assert_eq!(line["message"], "x");
+    }
 
     #[test]
     fn redact_hides_secret_keys_deeply() {

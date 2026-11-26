@@ -839,7 +839,7 @@ pub async fn save_file(
     let configured = (kind == "screenshot")
         .then(|| services.settings.player().screenshot_path)
         .filter(|p| !p.trim().is_empty())
-        .map(|p| PathBuf::from(shellexpand_home(&p, &home)));
+        .map(|p| resolve_user_dir(&p, &home));
     let dir = configured.unwrap_or_else(|| app_save_dir(&app, &kind));
     std::fs::create_dir_all(&dir)
         .map_err(|e| CommandError(format!("폴더를 만들 수 없습니다: {e}")))?;
@@ -852,6 +852,22 @@ pub async fn save_file(
         return Err(CommandError(format!("저장하지 못했습니다: {e}")));
     }
     Ok(path.to_string_lossy().into_owned())
+}
+
+/// 설정에 적은 저장 폴더 → 절대 경로. 앞뒤 공백을 지우고 `~`·`%USERPROFILE%` 를 펼치며, 상대 경로는 사용자 폴더
+/// 기준으로 본다 — 예전엔 `~` 하나나 `Pictures/CView` 가 작업 폴더(Finder 로 연 앱은 `/`) 기준이 되어
+/// "폴더를 만들 수 없습니다"로 실패하거나(macOS) 설치 폴더 아래에 저장했다(Windows).
+fn resolve_user_dir(raw: &str, home: &Path) -> PathBuf {
+    let t = raw.trim();
+    if t == "~" || t.eq_ignore_ascii_case("%USERPROFILE%") {
+        return home.to_path_buf();
+    }
+    let p = PathBuf::from(shellexpand_home(t, home));
+    if p.is_absolute() {
+        p
+    } else {
+        home.join(p)
+    }
 }
 
 fn shellexpand_home(path: &str, home: &Path) -> String {
@@ -1163,6 +1179,15 @@ mod tests {
             PathBuf::from(shellexpand_home("~/Pics", home)),
             home.join("Pics")
         );
+        // 설정 칸에 적은 그대로의 값들 — 공백, `~` 하나, 상대 경로도 사용자 폴더 기준 절대 경로.
+        assert_eq!(resolve_user_dir("  ~/Pics ", home), home.join("Pics"));
+        assert_eq!(resolve_user_dir("~", home), home.to_path_buf());
+        assert_eq!(
+            resolve_user_dir("Pictures/CView", home),
+            home.join("Pictures/CView")
+        );
+        let abs = std::env::temp_dir().join("shots");
+        assert_eq!(resolve_user_dir(&abs.to_string_lossy(), home), abs);
     }
 
     #[test]

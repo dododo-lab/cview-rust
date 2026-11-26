@@ -648,6 +648,24 @@ fn notice_events() {
 }
 
 #[test]
+fn notice_carries_emoji_map_from_extras() {
+    // 배너가 `{:d_47:}` 를 그림으로 바꾸려면 공지에도 extras.emojis 가 넘어가야 한다.
+    let ChatEvent::Notice(n) = parse(
+        r#"{"cmd":94010,"bdy":{"msg":"안녕 {:d_47:}","extras":"{\"emojis\":{\"d_47\":\"https://ssl.pstatic.net/e.png\",\"bad\":3},\"registerProfile\":{\"nickname\":\"닉\"}}"}}"#,
+    ) else {
+        panic!()
+    };
+    let emojis = n.extras.and_then(|e| e.emojis).expect("emojis");
+    assert_eq!(emojis.len(), 1);
+    assert_eq!(emojis["d_47"], "https://ssl.pstatic.net/e.png");
+    // 이모티콘이 없으면 예전처럼 extras 없음.
+    let ChatEvent::Notice(n) = parse(r#"{"cmd":94010,"bdy":{"msg":"그냥 공지"}}"#) else {
+        panic!()
+    };
+    assert!(n.extras.is_none());
+}
+
+#[test]
 fn notice_id_is_stable_by_content() {
     let json = r#"{"cmd":94010,"bdy":{"msg":"고정 공지입니다"}}"#;
     let (ChatEvent::Notice(a), ChatEvent::Notice(b)) = (parse(json), parse(json)) else {

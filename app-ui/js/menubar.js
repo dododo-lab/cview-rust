@@ -109,7 +109,7 @@ function renderNowPlaying() {
     if (wantSrc) {
       thumbBox.innerHTML = `<img src="${esc(wantSrc)}" alt="" referrerpolicy="no-referrer">`;
     } else {
-      const ch = (now.channelName || 'C').trim().charAt(0).toUpperCase();
+      const ch = (Array.from(String(now.channelName || '').trim())[0] || 'C').toUpperCase();
       thumbBox.innerHTML = `<span class="mb-now-fallback" aria-hidden="true">${esc(ch)}</span>`;
     }
   }
@@ -187,7 +187,7 @@ function itemHtml(item, { favorite = false, watching = false, inMulti = false } 
   const avatarUrl = safeUrl(item.channelImageUrl);
   const avatar = avatarUrl
     ? `<img class="mb-avatar" src="${esc(imageSrc(avatarUrl, 'avatar'))}" alt="" loading="lazy" referrerpolicy="no-referrer">`
-    : `<span class="mb-avatar-initial" aria-hidden="true">${esc(name.trim().charAt(0) || 'C')}</span>`;
+    : `<span class="mb-avatar-initial" aria-hidden="true">${esc(Array.from(name.trim())[0] || 'C')}</span>`;
   const viewers = item.viewerCountText || compactCount(item.viewerCount || 0);
   const cat = (item.categoryName || '').trim();
   const title = (item.liveTitle || '').trim() || '라이브 방송 중';
@@ -563,7 +563,7 @@ function bindEvents() {
       const span = document.createElement('span');
       span.className = 'mb-avatar-initial';
       span.setAttribute('aria-hidden', 'true');
-      span.textContent = name.trim().charAt(0) || 'C';
+      span.textContent = Array.from(name.trim())[0] || 'C';
       img.replaceWith(span);
     }
   }, true);

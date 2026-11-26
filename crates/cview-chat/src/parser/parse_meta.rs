@@ -9,7 +9,7 @@ use super::{body_object, body_str, ChatMessageParser};
 use crate::error::{ChatError, ChatResult};
 use crate::json::{any_int, fnv1a, ns_object, ns_str};
 use crate::protocol::ChatProtocolMessage;
-use cview_core::models::chat::{ChatMessage, MessageType};
+use cview_core::models::chat::{ChatExtras, ChatMessage, EmojiMap, MessageType};
 
 impl ChatMessageParser {
     /// cmd 94010 — `bdy` 는 객체 또는 단일 원소 배열 두 형태로 온다.
@@ -64,7 +64,12 @@ impl ChatMessageParser {
             timestamp: Utc::now(),
             r#type: MessageType::Notice,
             profile: None,
-            extras: None,
+            // 공지는 고정한 채팅 줄이라 extras 가 채팅과 같은 모양이다(위 registerProfile 도 거기서 읽는다).
+            // 이모티콘 표를 넘기지 않으면 배너에 `{:d_47:}` 같은 코드가 그대로 보였다.
+            extras: notice_emojis(extras.as_ref()).map(|emojis| ChatExtras {
+                emojis: Some(emojis),
+                ..ChatExtras::default()
+            }),
             is_blinded: false,
         })
     }
@@ -114,6 +119,17 @@ impl ChatMessageParser {
             .unwrap_or("")
             .to_owned()
     }
+}
+
+/// 공지 extras 의 이모티콘 표 — 채팅 extras 와 같이 문자열 값만 받는다. 비면 None.
+fn notice_emojis(extras: Option<&Map<String, Value>>) -> Option<EmojiMap> {
+    let map: EmojiMap = extras?
+        .get("emojis")?
+        .as_object()?
+        .iter()
+        .filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_owned())))
+        .collect();
+    (!map.is_empty()).then_some(map)
 }
 
 /// cmd 94010 본문 — `msg` / `message` / `content` / `text` 및 중첩 `notice` 객체.

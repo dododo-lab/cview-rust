@@ -260,7 +260,9 @@ function categoryChips(popular, selected) {
   if (selected && !top.includes(selected)) top.push(selected);
   const chip = (value, label, n) =>
     `<button class="chip${value === selected ? ' active' : ''}" data-category="${esc(value)}">${esc(label)}<span class="chip-count">${n}</span></button>`;
-  return `<div class="chips home-chips" role="group" aria-label="카테고리">${chip(ALL, '전체', popular.length)}${top.map((n) => chip(n, n, counts.get(n) || 0)).join('')}</div>`;
+  // 개수는 격자가 펼칠 수 있는 만큼(POPULAR_GRID) — 예전엔 '전체 45'인데 끝까지 펼쳐도 36개였다.
+  const shown = (n) => Math.min(n, POPULAR_GRID);
+  return `<div class="chips home-chips" role="group" aria-label="카테고리">${chip(ALL, '전체', shown(popular.length))}${top.map((n) => chip(n, n, shown(counts.get(n) || 0))).join('')}</div>`;
 }
 
 function popularGrid(popular, category, limit = GRID_STEP) {

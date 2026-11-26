@@ -152,6 +152,34 @@ async fn stale_load_more_is_discarded() {
 }
 
 #[tokio::test]
+async fn overlapping_fill_waits_for_the_running_page() {
+    // '더 보기'를 빨리 두 번 누르면 두 번째 호출이 진행 중인 load_more 에 막혀 30개만 돌려줬다.
+    let api = Arc::new(FakeApi::default());
+    let vm = AllBroadcastsViewModel::new(api.clone());
+    vm.reload().await;
+    api.hold_more.store(true, Ordering::SeqCst);
+    let v1 = vm.clone();
+    let first = tokio::spawn(async move { v1.fill_to(54).await });
+    wait_flag(&api.holding_more).await;
+    let v2 = vm.clone();
+    let second = tokio::spawn(async move {
+        v2.fill_to(54).await;
+        v2.read().feed.len()
+    });
+    for _ in 0..50 {
+        tokio::task::yield_now().await;
+    }
+    assert!(
+        !second.is_finished(),
+        "앞 호출이 받는 중인데 덜 찬 목록으로 끝났다"
+    );
+    api.hold_more.store(false, Ordering::SeqCst);
+    api.release_more.notify_waiters();
+    first.await.unwrap();
+    assert_eq!(second.await.unwrap(), 54);
+}
+
+#[tokio::test]
 async fn paging_loads_more_and_dedupes() {
     let api = Arc::new(FakeApi::default());
     let vm = AllBroadcastsViewModel::new(api.clone());
