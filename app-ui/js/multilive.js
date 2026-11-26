@@ -1601,13 +1601,9 @@ export class MultiLivePage {
   }
 
   /** 머리줄 폭이 바뀌면 보이는 칩 수를 다시 정한다(바뀔 때만 다시 나눈다). */
-  /**
-   * 지금 머리줄에 둘 칩 수 — 툴바의 앱 사용률 칩(usage-chip.js)이 차지한 폭만큼 좁은 머리줄로 본다(안 빼면 칩 줄이 넘쳐
-   * "+N" 이 밀려났다). 칩 줄을 다시 그릴 때(renderWatchPicker)와 머리줄 폭이 바뀔 때(syncChipWindowSize) 같은 값을 쓴다.
-   */
+  /** 지금 머리줄에 둘 칩 수 — 칩 줄을 다시 그릴 때(renderWatchPicker)와 머리줄 폭이 바뀔 때(syncChipWindowSize) 같은 값을 쓴다. */
   chipWindowNow() {
-    const usage = this.header.querySelector(':scope > .ml-toolbar > .usage-chip:not([hidden])');
-    return chipWindowFor(this.header.clientWidth - (usage ? usage.offsetWidth + 8 : 0));
+    return chipWindowFor(this.header.clientWidth);
   }
 
   syncChipWindowSize() {

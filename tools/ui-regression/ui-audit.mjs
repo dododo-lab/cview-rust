@@ -35,12 +35,11 @@ try {
   for (const theme of ['dark', 'light']) {
     const { ctx, page, errors } = await openApp(browser, { theme, welcomed: true });
 
-    await check('U01', `${theme}: 채팅 사용자 말풍선과 사용률 팝오버의 .up-* 가 서로 덮지 않는다`, async () => {
+    await check('U01', `${theme}: 채팅 사용자 말풍선의 .up-* 가 사용률(usage.css) 규칙에 덮이지 않는다`, async () => {
       const r = await page.evaluate(() => {
         const host = document.createElement('div');
         host.innerHTML = `
-          <div class="user-pop" id="t-user"><div class="up-head"></div><span class="up-live">방송 중</span><span class="up-sub">구독 3개월</span></div>
-          <div class="usage-pop" id="t-usage"><header class="up-head"><p class="up-sub"></p></header><span class="up-live"><i></i>실시간</span></div>`;
+          <div class="user-pop" id="t-user"><div class="up-head"></div><span class="up-live">방송 중</span><span class="up-sub">구독 3개월</span></div>`;
         document.body.append(host);
         const cs = (sel) => getComputedStyle(document.querySelector(sel));
         const root = getComputedStyle(document.documentElement);
@@ -50,8 +49,6 @@ try {
         const out = {
           userLive: cs('#t-user .up-live').color, userLiveDisplay: cs('#t-user .up-live').display, liveText: colorOf('--live-text'),
           userSub: cs('#t-user .up-sub').color, subscription: colorOf('--subscription'),
-          usageHeadPad: cs('#t-usage .up-head').paddingTop, usageSubWeight: cs('#t-usage .up-sub').fontWeight,
-          usageLiveDisplay: cs('#t-usage .up-live').display, usageHeadAlign: cs('#t-usage .up-head').alignItems,
           userHeadAlign: cs('#t-user .up-head').alignItems, hasLiveText: root.getPropertyValue('--live-text').trim() !== '',
         };
         host.remove(); probe.remove();
@@ -61,9 +58,7 @@ try {
       expect(r.userLive === r.liveText, `말풍선 '방송 중' 색 ${r.userLive} ≠ --live-text ${r.liveText}`);
       expect(r.userLiveDisplay !== 'inline-flex', '말풍선 .up-live 가 사용률 알약 모양(inline-flex)을 물려받았다');
       expect(r.userSub === r.subscription, `말풍선 구독 색 ${r.userSub} ≠ --subscription ${r.subscription}`);
-      expect(r.usageHeadPad === '0px', `사용률 머리 위 여백 ${r.usageHeadPad} — 말풍선 .up-head 여백을 물려받았다`);
-      expect(r.usageLiveDisplay === 'inline-flex', '사용률 실시간 알약 모양이 아니다');
-      expect(r.usageHeadAlign === 'flex-start' && r.userHeadAlign === 'center', `머리 정렬 사용률 ${r.usageHeadAlign} / 말풍선 ${r.userHeadAlign}`);
+      expect(r.userHeadAlign === 'center', `말풍선 머리 정렬 ${r.userHeadAlign}`);
     });
 
     await check('U02', `${theme}: 작은 빨강 글자·링크·시청 화면 안내막 글자 대비`, async () => {
