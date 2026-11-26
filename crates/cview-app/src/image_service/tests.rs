@@ -488,3 +488,32 @@ async fn a_static_request_does_not_freeze_a_live_thumbnail() {
     assert_eq!(got.bytes.as_slice(), b"img-2");
     assert_eq!(got.kind, ImageKind::Live);
 }
+
+#[tokio::test]
+async fn unknown_size_step_refreshes_from_the_original_after_ttl() {
+    let dir = tempfile::tempdir().unwrap();
+    let fake = Arc::new(SizeUnknown {
+        urls: Mutex::new(Vec::new()),
+    });
+    let cache = Arc::new(ImageCache::open(dir.path(), 10 * 1024 * 1024).unwrap());
+    let clock = Arc::new(AtomicI64::new(0));
+    let c = clock.clone();
+    let s = ImageService::with_clock(
+        Some(cache),
+        fake.clone(),
+        Arc::new(move || c.load(Ordering::SeqCst)),
+    );
+    let sized = "https://nng-phinf.pstatic.net/a/b.jpg?type=w400";
+    s.load(sized, ImageKind::Static).await.unwrap();
+    // 정적 TTL(7일)이 지나 다시 받는다 — 크기 단계 404 뒤 원본으로 넘어가야 한다.
+    clock.store(8 * 24 * 3_600_000, Ordering::SeqCst);
+    s.load(sized, ImageKind::Static).await.unwrap();
+    settle().await;
+    let urls = fake.urls.lock().unwrap().clone();
+    assert_eq!(urls.len(), 4, "{urls:?}");
+    assert_eq!(urls[3], "https://nng-phinf.pstatic.net/a/b.jpg");
+    // 새로 받았으니 이제 신선 — 다시 불러도 요청하지 않는다.
+    s.load(sized, ImageKind::Static).await.unwrap();
+    settle().await;
+    assert_eq!(fake.urls.lock().unwrap().len(), 4);
+}

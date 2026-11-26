@@ -170,6 +170,11 @@ function bindSeparatorKeys(el, { label, get, set, min = 0.2, max = 0.85, sign = 
   });
 }
 
+/** 지난 구성으로 기억할 채널 — 둘러본(카드로 잠깐 연) 세션은 뺀다. 순수 함수. */
+export function rememberedChannels(sessions, isTransient = null) {
+  return (sessions || []).filter((x) => !(isTransient && isTransient(x.id))).map((x) => x.channelId);
+}
+
 export class MultiLivePage {
   /**
    * @param {{ isLoggedIn: () => boolean, onAddChannel?: (channelId: string, opts?: { quiet?: boolean }) => Promise<void>,
@@ -752,7 +757,10 @@ export class MultiLivePage {
     // 1초마다 오는 상태라 같은 구성이면 localStorage 를 다시 쓰지 않고, 다시 열기 단추를 보일 때만 읽는다.
     const restore = this.root.querySelector('[data-ml="restore"]');
     if (total > 0) {
-      this.saveSessionIds(sessions.map((x) => x.channelId));
+      // 카드로 잠깐 연 방송(app.js 의 '둘러본 채널')은 구성에 넣지 않는다 — 예전엔 단독 보기로 하나만 봐도 지난 구성
+      // (예: 4채널)이 그 채널 하나로 덮였다.
+      const kept = rememberedChannels(sessions, this.isTransient);
+      if (kept.length) this.saveSessionIds(kept);
       restore.hidden = true;
     } else {
       const savedIds = this.savedSessionIds();

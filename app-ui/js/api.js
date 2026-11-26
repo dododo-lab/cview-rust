@@ -193,7 +193,7 @@ export const api = {
   favoritesList: () => invoke('favorites_list'),
   recentChannels: (limit = 20) => invoke('recent_channels', { limit }),
   recentChannelsClear: () => invoke('recent_channels_clear'),
-  memoSet: (channelId, memo) => invoke('memo_set', { channelId, memo }),
+  memoSet: (channelId, memo, channelName = null, channelImageUrl = null) => invoke('memo_set', { channelId, memo, channelName, channelImageUrl }),
   bookmarkAdd: (channelId, note) => invoke('bookmark_add', { channelId, note }),
   bookmarksList: () => invoke('bookmarks_list'),
   bookmarkDelete: (id) => invoke('bookmark_delete', { id }),

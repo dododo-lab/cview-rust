@@ -1,6 +1,6 @@
 // 채널 상세 — 원본 ChannelInfoView / ChannelInfoHeaderView / ChannelVODClipTab / ChannelMemoSheet.
 // NAV-01 헤더·방송 중 배지·정보/다시보기/클립 탭, VOD-05 채널 VOD·클립 탭, DAT-01 메모, DAT-02 즐겨찾기.
-import { channelSocialChanged } from './channel-actions.js';
+import { channelSocialChanged, CHANNEL_SOCIAL_EVENT } from './channel-actions.js';
 import { api } from './api.js';
 import { esc, safeUrl, toast, channelTone, imageSrc, dismiss } from './dom.js';
 import { emptyState, loadingState, compactCount, errorState } from './cards.js';
@@ -97,6 +97,18 @@ export class ChannelPage {
     this.body.addEventListener('click', (e) => this.onClick(e));
     // 카드 기울기·빛 번짐, 배너 마우스 패럴랙스(live-motion.js) — 위임이라 다시 그려도 그대로
     bindLiveMotion(this.body, { hero: '.channel-hero' });
+    // 다른 곳(사이드바·카드 우클릭·시청 상단 바)에서 이 채널 즐겨찾기를 바꾸면 별을 맞춘다 — 예전엔 옛 상태로 남아,
+    // 별을 누르면 이미 바뀐 쪽으로 한 번 더 요청해 아무것도 바뀌지 않았다.
+    window.addEventListener(CHANNEL_SOCIAL_EVENT, (e) => {
+      const d = e.detail || {};
+      if (!this.detail || d.channelId !== this.channelId || !('favorite' in d) || this.detail.isFavorite === d.favorite) return;
+      this.detail.isFavorite = d.favorite;
+      const star = this.body.querySelector('[data-ch="favorite"]');
+      if (!star) return;
+      star.classList.toggle('on', d.favorite);
+      star.title = d.favorite ? '즐겨찾기 해제' : '즐겨찾기';
+      star.innerHTML = d.favorite ? ICON_STAR : ICON_STAR_LINE;
+    });
     this.enterNext = false; // 다음 render 에 등장 모션을 걸까 — 화면에 들어올 때만(즐겨찾기로 다시 그릴 때는 X)
     this.favPop = false;
   }
@@ -179,6 +191,10 @@ export class ChannelPage {
       return;
     }
     const kind = this.tab;
+    // 같은 탭을 다시 그리면(탭을 다시 누름·오가기) 그 전에 보낸 '더 보기' 응답은 버린다 — 예전엔 탭 이름만 봐서,
+    // 늦게 온 다음 쪽이 새로 그린 첫 쪽 앞뒤로 붙어 다시보기가 겹치고, 클립은 본 것으로 걸러져 영영 빠졌다.
+    if (!append) this.tabRender = (this.tabRender || 0) + 1;
+    const tabRender = this.tabRender;
     if (!append) {
       this.pages[kind] = 0;
       if (kind === 'clip') { this.clipCursor = null; this.clipSeen.clear(); }
@@ -189,7 +205,7 @@ export class ChannelPage {
       const page = kind === 'vod'
         ? await api.channelVods(this.channelId, this.pages[kind], 24)
         : await api.channelClips(this.channelId, append ? this.clipCursor : null, 24);
-      if (seq !== this.seq || this.tab !== kind) return;
+      if (seq !== this.seq || this.tab !== kind || tabRender !== this.tabRender) return;
       if (kind === 'clip') {
         this.clipCursor = page.nextCursor;
         page.items = page.items.filter((c) => !this.clipSeen.has(c.clipUID) && this.clipSeen.add(c.clipUID));
@@ -205,7 +221,7 @@ export class ChannelPage {
       box.querySelector('.load-more')?.remove();
       if (page.hasMore) box.insertAdjacentHTML('beforeend', '<button class="btn load-more" data-ch="more">더 보기</button>');
     } catch (e) {
-      if (seq !== this.seq || this.tab !== kind) return; // 그사이 다른 탭 — 그 탭을 오류로 덮지 않는다
+      if (seq !== this.seq || this.tab !== kind || tabRender !== this.tabRender) return; // 그사이 다른 탭 — 그 탭을 오류로 덮지 않는다
       if (!append) box.innerHTML = errorState('불러오지 못했습니다', e);
       else { this.pages[kind] -= 1; toast(e.message); } // 다음 "더 보기"가 같은 쪽을 다시 받게
     }
@@ -354,6 +370,11 @@ export class ChannelPage {
   }
 
   editMemo() {
+    // 연 채널을 붙잡아 둔다 — 시트는 body 에 붙어 ⌘[·마우스 뒤로 가기로 다른 채널 화면이 되어도 남는데, 예전엔 저장할 때의
+    // this.channelId 로 써서 앞 채널의 메모가 지금 채널에 저장됐다.
+    const channelId = this.channelId;
+    const detail = this.detail;
+    const ch = detail.channel || {};
     const dialog = document.createElement('div');
     dialog.className = 'sheet-scrim';
     dialog.innerHTML = `
@@ -372,11 +393,11 @@ export class ChannelPage {
     dialog.querySelector('form').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
-        await api.memoSet(this.channelId, area.value);
-        this.detail.memo = area.value.trim();
+        await api.memoSet(channelId, area.value, ch.channelName || '', ch.channelImageUrl || null);
+        detail.memo = area.value.trim();
         toast('메모를 저장했습니다', 1400);
         close();
-        if (this.tab === 'info') this.renderTab();
+        if (this.channelId === channelId && this.tab === 'info') this.renderTab();
       } catch (er) { toast(er.message); }
     });
   }

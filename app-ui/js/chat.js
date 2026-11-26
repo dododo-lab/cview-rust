@@ -276,7 +276,7 @@ export class ChatPanel {
     this.pinBar.after(this.soloBar);
     this.soloBar.addEventListener('click', (e) => { if (e.target.closest('[data-solo-off]')) this.setSolo(null); });
     this.notice.addEventListener('click', (e) => {
-      if (e.target.closest('[data-hide-notice]')) { this.notice.hidden = true; this.noticeDismissed = true; }
+      if (e.target.closest('[data-hide-notice]')) { this.notice.hidden = true; this.noticeDismissed = this.noticeKey || true; }
     });
 
     this.tray = document.createElement('div');
@@ -669,15 +669,22 @@ export class ChatPanel {
         this.append(ev.messages, { recent: Boolean(ev.recent) });
         if (!ev.recent && this.onHighlight) {
           for (const m of ev.messages || []) {
-            if ((m.kind === 'donation' || m.kind === 'subscription') && passesFilters(m)) this.onHighlight(m);
+            // /mute 로 숨긴 사람의 후원도 영상 위에 띄우지 않는다(채팅 목록 append 와 같은 기준).
+            if ((m.kind === 'donation' || m.kind === 'subscription') && passesFilters(m) && !(this.localHidden && this.localHidden(m))) this.onHighlight(m);
           }
         }
         break;
-      case 'notice':
-        if (this.noticeDismissed) break;
+      case 'notice': {
+        // 숨긴 것은 그 공지만 — 예전엔 한 번 숨기면 새 공지도 모두 버려, 채널을 다시 열 때까지 공지가 보이지 않았다.
+        // (같은 공지는 다시 받아도 id 가 같다 — parse_meta.rs. id 가 없으면 내용으로 가린다.)
+        const key = ev.message.id || `${ev.message.nickname}\u0000${ev.message.content}`;
+        if (this.noticeDismissed && (this.noticeDismissed === true || this.noticeDismissed === key)) break;
+        this.noticeDismissed = false;
+        this.noticeKey = key;
         this.notice.innerHTML = `<span class="notice-icon">📌</span><span class="notice-body"><strong>${esc(ev.message.nickname)}</strong> ${renderContent(ev.message.content, ev.message.emojis)}</span><button class="icon-btn notice-x" data-hide-notice title="공지 숨기기">✕</button>`;
         this.notice.hidden = false;
         break;
+      }
       case 'noticeCleared':
         this.notice.hidden = true;
         break;
@@ -790,6 +797,7 @@ export class ChatPanel {
     };
     this.pendingLines = (this.pendingLines || []).map(blind);
     this.mentions = this.mentions.map(blind);
+    this.donations?.blind(messageId, text); // 후원 목록에 남은 원문도
     if (!this.tray.hidden) this.renderMentionTray();
     const lines = [...this.list.querySelectorAll(`.chat-line[data-id="${CSS.escape(messageId)}"]`)];
     if (this.pinBar.dataset.messageId === messageId) lines.push(...this.pinBar.querySelectorAll('.chat-line'));

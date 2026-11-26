@@ -603,7 +603,8 @@ function installCardMenu() {
     if (!card || e.target.closest('.chat') || card.closest('.ml-stage')) return;
     e.preventDefault();
     const id = card.dataset.channelId;
-    const name = card.dataset.channelName || '';
+    // 이름 칸이 없는 줄도 보이는 이름을 쓴다 — 예전엔 빈 이름으로 즐겨찾기 행이 생겨 보관함에 채널 id 만 보였다.
+    const name = card.dataset.channelName || card.querySelector('.dense-name b, .card-title-name, .channel-name')?.textContent.trim() || '';
     const image = card.dataset.channelImage || null;
     let isFav = false;
     try { isFav = (await api.favoritesList()).some((f) => f.channelId === id); } catch { /* 무시 */ }
@@ -941,6 +942,7 @@ async function main() {
     onLogout: logout,
   });
   pages.multilive = new MultiLivePage(content, { isLoggedIn, onAddChannel: addToMultiLive, onOpenChannel: watchFromDrawer, onSessionsChanged: () => syncWindowOcclusion() });
+  pages.multilive.isTransient = (sessionId) => browsedWatch.has(sessionId); // 둘러본 채널 — 지난 구성 저장에서 뺀다
   pages.live = new LivePage(content, { isLoggedIn, modeSwitch: !AUX });
   pages.categories = new CategoriesPage(content);
   pages.multichat = new MultiChatPage(content, { isLoggedIn, onPlay: openChannel });
@@ -961,6 +963,9 @@ async function main() {
     // 보조 창(플레이어 창 등)엔 사이드바가 없어 멀티라이브로 가면 돌아올 길이 없다 — 주석대로 보조 창에선 뺀다(감사 UX-H15).
     onAddMulti: AUX ? null : (id) => addToMultiLive(id),
     onPopout: AUX ? null : () => MENU_ACTIONS['window-player'](),
+    // 플레이어 창의 채팅은 창마다 따로 — 예전엔 메인 창의 기본 세션을 함께 써서, 창을 닫아도 연결이 남았고(창 정리가
+    // 기본 세션은 건드리지 않는다) 메인 창의 '채팅만 열기'가 같은 세션을 다른 채널로 바꿔 이 창의 채팅을 멈췄다.
+    chatSession: AUX === 'player' ? `pw-${Date.now()}` : null,
   });
   if (!AUX) insights = new InsightPanel(content, { isLoggedIn });
   if (!AUX) bindMultiLiveAddButtons(addToMultiLive);

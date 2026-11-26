@@ -83,6 +83,26 @@ fn memo_round_trip_and_empty_clears() {
     assert!(s.fetch_channel("ch1").unwrap().unwrap().memo.is_none());
 }
 
+#[test]
+fn memo_for_a_never_seen_channel_is_kept() {
+    let s = store();
+    // 본 적도 즐겨찾기한 적도 없는 채널 — 예전엔 행이 없어 성공만 돌려주고 쓰지 않았다.
+    s.save_memo_creating(&info("new", "새 채널"), "기억할 것")
+        .unwrap();
+    assert_eq!(s.fetch_memo("new").unwrap(), "기억할 것");
+    let row = s.fetch_channel("new").unwrap().unwrap();
+    assert_eq!(row.channel_name, "새 채널");
+    assert!(
+        !row.is_favorite && row.last_watched.is_none(),
+        "즐겨찾기·최근 시청에 끼지 않는다"
+    );
+    // 빈 메모는 행을 만들지 않고, 있는 행에서는 지운다.
+    s.save_memo_creating(&info("other", "다른"), "").unwrap();
+    assert!(s.fetch_channel("other").unwrap().is_none());
+    s.save_memo_creating(&info("new", "새 채널"), "").unwrap();
+    assert_eq!(s.fetch_memo("new").unwrap(), "");
+}
+
 // MARK: - 설정
 
 #[test]
