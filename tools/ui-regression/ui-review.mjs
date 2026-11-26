@@ -263,7 +263,7 @@ await check('UR06 [P1-6] ⌥⌘R ignored while the viewer is hidden; resetRecord
   assert.equal(r.recording, null);
   // viewer.close 가 녹화 표시를 바로 걷는지(시청 화면 전체를 띄우지 않고 코드로 확인)
   const src = fs.readFileSync('app-ui/js/viewer.js', 'utf8');
-  const close = src.slice(src.indexOf('async close('), src.indexOf('async close(') + 600);
+  const close = src.slice(src.indexOf('async close('), src.indexOf('async close(') + 1200);
   assert.match(close, /this\.panel\.resetRecording\(\)/, 'viewer.close 가 녹화 표시를 걷지 않는다');
   assert.deepEqual(errors, []);
   await ctx.close();

@@ -115,6 +115,13 @@ impl ManagerState {
         self.stage_session_id == Some(pip)
     }
 
+    /// 배치(균등·포커스·사용자)·포커스 방향·메인·비율이 바뀌면 같은 무대 크기로 패인 크기를 다시 낸다 — 무대 요소 크기는
+    /// 그대로라 화면이 다시 보고하지 않는다. 예전엔 포커스에서 균등으로 바꿔도 보조 패인이 포커스 때의 좁은 크기
+    /// (360p 상한)로 남았다.
+    pub fn reapply_pane_sizes(&mut self) {
+        self.reapply_pane_sizes_for_pip();
+    }
+
     pub fn reapply_pane_sizes_for_pip(&mut self) {
         let Some((w, h)) = self.last_reported_stage_size else {
             return;

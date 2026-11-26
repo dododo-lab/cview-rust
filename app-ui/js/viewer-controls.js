@@ -4,7 +4,7 @@
 // PLY-13 오류 오버레이 재시도, PLY-15 휠 볼륨·% 표시, PLY-17 북마크, 시청 화면 단축키.
 import { screenshotFormat, screenshotExtension } from './screenshot-format.js';
 import { api } from './api.js';
-import { esc, toast, keyBelongsToTarget, hideWithExit } from './dom.js';
+import { esc, toast, keyBelongsToTarget, hideWithExit, plainLetter } from './dom.js';
 import { matchPlainAction } from './shortcuts.js';
 import { kbd } from './platform.js';
 import { releaseForPip } from './background-saver.js';
@@ -327,6 +327,14 @@ export class ViewerControls {
     this.wake();
   }
 
+  /** 새로 열 때 — 앞 방송의 화질 목록·고른 화질·지연을 비운다(다음 playStarted·metrics 가 채운다). */
+  resetStream() {
+    this.levels = [];
+    this.manualIndex = -1;
+    this.currentHeight = 0;
+    this.latency = 0;
+  }
+
   get video() {
     const doc = this.viewer.player.iframe.contentDocument;
     return doc && doc.getElementById('video');
@@ -345,6 +353,9 @@ export class ViewerControls {
       if (typeof data.videoCodec === 'string') this.codec = data.videoCodec;
       this.renderStatus();
     } else if (type === 'playStarted' || type === 'playbackState') {
+      // 재생이 (다시) 시작되면 화질 상태를 플레이어에서 다시 읽는다 — 다시 연결·채널 전환·정지 복구는 hls 를 새로 만들어
+      // 고른 화질이 '자동'으로 풀리는데, 단추·배지는 메뉴를 열 때까지 옛 '720p' 로 남았다.
+      if (type === 'playStarted') this.viewer.player.call('getLevels');
       this.renderStatus();
     } else if (type === 'screenshot') {
       this.saveScreenshot(data);
@@ -492,6 +503,9 @@ export class ViewerControls {
 
   onWheel(e) {
     if (!this.viewer.isPlaying || this.root.hidden) return;
+    // 무대 위에 뜬 목록(⚙ 패널·⋯ 메뉴·화질 메뉴)은 스크롤한다 — 예전엔 목록이 움직이지 않고 볼륨이 바뀌어 음소거까지 풀렸다
+    // (멀티라이브 칸 메뉴는 ml-pane-controls 가 같은 식으로 뺀다).
+    if (e.target && e.target.closest && e.target.closest('.player-panel, .vt-menu, .quality-menu')) return;
     e.preventDefault();
     const range = this.root.querySelector('#volume');
     const step = e.deltaY > 0 ? -5 : 5;
@@ -517,6 +531,7 @@ export class ViewerControls {
   onKey(e) {
     if (this.root.hidden || !this.viewer.isPlaying || keyBelongsToTarget(e)) return;
     const mod = e.metaKey || e.ctrlKey;
+    const letter = plainLetter(e);
     const range = this.root.querySelector('#volume');
     // 사용자 단축키(맨 글자) — 수식 키 바인딩은 메뉴가 받는다 (SET-12).
     const act = matchPlainAction(e);
@@ -528,7 +543,7 @@ export class ViewerControls {
     if (e.key === ' ' && !mod) {
       e.preventDefault();
       this.togglePlay();
-    } else if (e.key.toLowerCase() === 'm' && !mod) {
+    } else if (letter === 'm' && !mod) {
       this.viewer.toggleMute();
       this.flash(this.viewer.sessionMuted ? '음소거' : '음소거 해제');
     } else if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !mod) {
@@ -544,9 +559,9 @@ export class ViewerControls {
     } else if (e.metaKey && e.ctrlKey && e.key.toLowerCase() === 'f') {
       e.preventDefault();
       this.fullscreen(true);
-    } else if (e.key.toLowerCase() === 'l' && !mod) {
+    } else if (letter === 'l' && !mod) {
       this.goLive();
-    } else if (e.key.toLowerCase() === 'b' && !mod && !e.altKey && !e.shiftKey) {
+    } else if (letter === 'b' && !mod && !e.altKey && !e.shiftKey) {
       // 단독 무대(ml-watch)와 같게 맨 글자 B 도 북마크(M-9 — 두 화면의 키를 맞춘다). 예약 키라 사용자 단축키와 겹치지 않는다.
       this.bookmark();
     }

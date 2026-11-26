@@ -119,7 +119,9 @@ impl ChzzkApiClient {
         self.request_raw(&ChzzkEndpoint::Follow {
             channel_id: channel_id.into(),
         })
-        .await
+        .await?;
+        self.forget_following_responses();
+        Ok(())
     }
 
     /// 언팔로우 (DELETE).
@@ -127,7 +129,17 @@ impl ChzzkApiClient {
         self.request_raw(&ChzzkEndpoint::Unfollow {
             channel_id: channel_id.into(),
         })
-        .await
+        .await?;
+        self.forget_following_responses();
+        Ok(())
+    }
+
+    /// 팔로우를 바꾼 뒤 — 캐시된 팔로잉 목록 응답(60초, 묵은 값은 10분)을 지운다. 예전엔 팔로우 직후 팔로잉 › 채널
+    /// 탭·인사이트가 그 캐시를 받아 방금 팔로우한 채널이 없거나 언팔로우한 채널이 남았다.
+    fn forget_following_responses(&self) {
+        use cview_core::protocols::EndpointProtocol as _;
+        let path = ChzzkEndpoint::Following { size: 0, page: 0 }.path();
+        self.cache().remove_containing(&format!(":{path}?"));
     }
 
     // MARK: - 검색

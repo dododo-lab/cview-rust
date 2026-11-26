@@ -528,18 +528,21 @@ impl ManagerState {
         if self.grid_layout_mode != mode {
             self.grid_layout_mode = mode;
             self.reconcile_focus_quality(None);
+            self.reapply_pane_sizes();
         }
     }
 
     pub fn set_layout_ratios(&mut self, ratios: MultiLiveLayoutRatios) {
         self.layout_ratios = ratios;
         self.reconcile_focus_quality(None);
+        self.reapply_pane_sizes();
     }
 
     pub fn set_focus_direction(&mut self, direction: MultiLiveFocusDirection) {
         if self.focus_direction != direction {
             self.focus_direction = direction;
             self.reconcile_focus_quality(None);
+            self.reapply_pane_sizes();
         }
     }
 
@@ -547,6 +550,7 @@ impl ManagerState {
         if self.focus_main_session_id != id {
             self.focus_main_session_id = id;
             self.reconcile_focus_quality(None);
+            self.reapply_pane_sizes();
         }
     }
 

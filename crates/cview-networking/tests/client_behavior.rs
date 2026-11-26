@@ -1175,3 +1175,29 @@ async fn following_rows_fall_back_when_big_page_is_rejected_but_not_on_auth_erro
         "서버 오류는 폴 실패로 그대로 알린다"
     );
 }
+
+/// 팔로우하면 캐시된 팔로잉 목록을 버린다 — 예전엔 60초~10분 동안 방금 팔로우한 채널이 목록에 없었다.
+#[tokio::test]
+async fn follow_forgets_the_cached_following_list() {
+    let followed = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let f = followed.clone();
+    let t = MockTransport::new(Duration::ZERO, move |req, _| {
+        if req.url.path().ends_with("/follow") {
+            f.store(true, Ordering::SeqCst);
+            return ok(json!(null));
+        }
+        let mut list = vec![following_item("a", true)];
+        if f.load(Ordering::SeqCst) {
+            list.push(following_item("x", false));
+        }
+        ok(json!({"totalCount": list.len(), "followingList": list}))
+    });
+    let c = client(t.clone(), Some(MockAuth::with_cookies()));
+    assert_eq!(c.fetch_following_rows(false).await.unwrap().rows.len(), 1);
+    c.follow("x").await.unwrap();
+    let rows = c.fetch_following_rows(false).await.unwrap().rows;
+    assert!(
+        rows.iter().any(|r| r.channel_id == "x"),
+        "팔로우한 채널이 캐시된 목록에 가려졌다"
+    );
+}

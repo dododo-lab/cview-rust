@@ -15,6 +15,10 @@
 // T12 상대 날짜 — 오늘·어제는 달력 날짜로, 360~364일 전은 '11개월 전', 갱신 캡션은 '60분 전'이 없다.
 // T13 지연 프리셋 '표준'은 Rust 이름(default)으로 보낸다.
 // T14 이모지로 시작하는 이름의 이니셜·멘션 알림 자르기·멀티라이브 무대 배율(코드 확인).
+// (6차 — 라이브·네트워크)
+// T15 맨 글자 단축키(M·L·B)는 한글 입력 상태(e.key 'ㅡ')에서도 물리 키로 알아본다.
+// T16 시청 화면 — 다시 연결이 음소거를 되돌리지 않고, 녹화를 먼저 마무리하고, 재생 시작마다 화질을 다시 읽고,
+//     무대 위 목록에서 휠은 스크롤하고, 닫을 때 전체 화면을 푼다(코드 확인 — 플레이어 iframe 은 모의 앱에서 돌지 않는다).
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { base, server, mockTauri, go } from './mock-app.mjs';
@@ -273,6 +277,34 @@ try {
     }
     assert.match(await src('chat.js'), /Array\.from\(String\(m\.content \|\| ''\)\)\.slice\(0, 140\)/);
     assert.match(await src('multilive.js'), /const scale = pixelScale\(\);/);
+  });
+
+  await check('T15 한글 입력 상태에서도 M·L·B 를 물리 키로 알아본다', async () => {
+    const { ctx, page } = await open();
+    const r = await page.evaluate(async () => {
+      const { plainLetter } = await import('/js/dom.js');
+      return [
+        plainLetter({ key: 'ㅡ', code: 'KeyM' }), plainLetter({ key: 'ㅣ', code: 'KeyL' }), plainLetter({ key: 'ㅠ', code: 'KeyB' }),
+        plainLetter({ key: 'M', code: 'KeyM' }), plainLetter({ key: ' ', code: 'Space' }), plainLetter({ key: 'ArrowUp', code: 'ArrowUp' }),
+      ];
+    });
+    assert.deepEqual(r, ['m', 'l', 'b', 'm', '', '']);
+    const vc = await (await fetch(`${base}js/viewer-controls.js`)).text();
+    assert.doesNotMatch(vc, /e\.key\.toLowerCase\(\) === '[mlb]' && !mod/);
+    const mw = await (await fetch(`${base}js/ml-watch.js`)).text();
+    assert.match(mw, /plainLetter\(e\) \|\| e\.key/);
+    await ctx.close();
+  });
+
+  await check('T16 시청 화면 다시 연결·녹화·화질·휠·전체 화면', async () => {
+    const v = await (await fetch(`${base}js/viewer.js`)).text();
+    const vc = await (await fetch(`${base}js/viewer-controls.js`)).text();
+    assert.match(v, /if \(!reopened\) this\.sessionMuted = this\.startMuted;/, '다시 연결이 음소거를 설정값으로 되돌린다');
+    assert.ok(v.indexOf('await this.panel.resetRecording();') > -1 && v.indexOf('await this.panel.resetRecording();') < v.indexOf('await api.playerStart(channelId)'), '녹화를 마무리하기 전에 재생을 시작한다');
+    assert.match(v, /this\.controls\.resetStream\(\);/);
+    assert.match(v, /document\.exitFullscreen\(\)\.catch/);
+    assert.match(vc, /if \(type === 'playStarted'\) this\.viewer\.player\.call\('getLevels'\);/);
+    assert.match(vc, /closest\('\.player-panel, \.vt-menu, \.quality-menu'\)\) return;/);
   });
 } finally {
   await browser.close();
