@@ -141,7 +141,9 @@ export class FollowExtras {
     if (!list) return;
     for (const row of list.querySelectorAll('[data-fid]')) {
       const known = extras.get(row.dataset.fid);
-      if (fresh(known)) fill(row, known);
+      // 방송 중이던 행이 꺼졌으면(또는 그 반대) 앞서 기억한 값에는 '마지막 방송'이 없다 — 다시 묻는다.
+      const sameState = known && known.live === (row.dataset.live === '1');
+      if (fresh(known) && sameState) fill(row, known);
       else if (known) { fill(row, known); this.observer.observe(row); } // 실패했던 값 — 보이던 것은 두고 다시 묻는다
       else this.observer.observe(row);
     }
@@ -171,12 +173,15 @@ export class FollowExtras {
 }
 
 async function load({ id, live }) {
-  const x = { at: Date.now(), failed: false, followersText: '', lastClose: '', lastTitle: '', lastCategory: '' };
+  const x = { at: Date.now(), live, failed: false, followersText: '', lastClose: '', lastTitle: '', lastCategory: '' };
   const miss = () => { x.failed = true; return null; };
   const info = await api.channelInfo(id).catch(miss);
   if (info && info.followerCount > 0) x.followersText = info.followerCountText || compactCount(info.followerCount);
   if (!live) {
-    const d = await api.liveDetail(id, false).catch(miss);
+    let d = await api.liveDetail(id, false).catch(miss);
+    // 방금 끝난 방송이면 캐시(최대 60초)가 아직 '방송 중'을 돌려줄 수 있다 — 한 번 새로 묻고, 그래도 그러면 짧게만 기억한다.
+    if (d && d.isLive) d = await api.liveDetail(id, true).catch(miss);
+    if (d && d.isLive) x.failed = true;
     if (d && !d.isLive) {
       x.lastClose = d.closeDate || '';
       x.lastTitle = d.liveTitle || '';

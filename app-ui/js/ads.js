@@ -160,7 +160,7 @@ class AdOverlay {
         </div>
         <div class="ad-bottom">
           <button class="ad-btn ad-more" hidden>자세히 보기</button>
-          <button class="ad-btn ad-unmute" aria-pressed="false">소리 끄기</button>
+          <button class="ad-btn ad-unmute">소리 끄기</button>
           <button class="ad-btn ad-resume" hidden>광고 계속 보기</button>
           <a class="ad-cheat" href="${esc(cheatKeyUrl)}">치트키로 광고 없이 보기</a>
           <span class="grow"></span>
@@ -283,8 +283,10 @@ function playOne(ui, candidate, vast, session) {
     video.volume = adVolume();
     video.muted = adMutedPref();
     const syncSound = () => {
+      // 이름이 상태를 따라 바뀌므로 aria-pressed 는 달지 않는다 — 둘을 함께 바꾸면 '소리 켜기, 눌림'(음소거 중)처럼
+      // 소리가 켜진 것으로 들렸다.
       ui.unmute.textContent = video.muted ? '소리 켜기' : '소리 끄기';
-      ui.unmute.setAttribute('aria-pressed', String(video.muted));
+      ui.unmute.removeAttribute('aria-pressed');
     };
     syncSound();
     video.src = vast.media;

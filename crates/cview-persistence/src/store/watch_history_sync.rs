@@ -26,6 +26,8 @@ pub struct AggregatedInsights {
     pub avg: TimeInterval,
     /// 상위 10 채널 (이름, 초).
     pub channels: Vec<(String, TimeInterval)>,
+    /// `channels` 와 같은 순서의 채널 id — 화면이 팔로우 여부로 거르거나 채널을 열 때 쓴다.
+    pub channel_ids: Vec<String>,
     /// 상위 8 카테고리 (표시 이름, 초).
     pub categories: Vec<(String, TimeInterval)>,
     pub hourly: BTreeMap<u32, TimeInterval>,
@@ -432,12 +434,33 @@ pub(crate) fn aggregate(
         *hourly.entry(calendar.hour(r.started_at)).or_insert(0.0) += duration;
         let day = calendar.start_of_day(r.started_at);
         streak_days.insert(day);
-        if r.started_at >= earliest30 {
-            *daily_map.entry(day).or_insert(0.0) += duration;
-        }
+        // 일별 막대·'오늘 시청'은 현지 정시 조각으로 나눠 그날에 담는다 — 예전엔 23시에 시작한 3시간을 모두 시작한 날에
+        // 넣어, 자정 뒤 '오늘 시청'이 0 이고 통계 화면(watch_report, 이미 조각으로 담음)과 값이 달랐다.
+        crate::watch_report::for_each_hour_piece(
+            r.started_at,
+            adding(&r.started_at, duration),
+            earliest30,
+            now.max(r.started_at),
+            calendar,
+            |piece, secs| *daily_map.entry(calendar.start_of_day(piece)).or_insert(0.0) += secs,
+        );
     }
 
-    let channels = top_n(channel_map.values().map(|(n, d)| (n.to_string(), *d)), 10);
+    // 이름으로 정렬하던 top_n 과 같은 순서(초 내림차순, 같으면 이름)로 고르되 id 를 함께 남긴다.
+    let mut ranked: Vec<(&str, &str, TimeInterval)> = channel_map
+        .iter()
+        .map(|(id, (n, d))| (*id, *n, *d))
+        .collect();
+    ranked.sort_by(|a, b| {
+        b.2.partial_cmp(&a.2)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.1.cmp(b.1))
+            .then_with(|| a.0.cmp(b.0))
+    });
+    ranked.truncate(10);
+    let channels: Vec<(String, TimeInterval)> =
+        ranked.iter().map(|(_, n, d)| (n.to_string(), *d)).collect();
+    let channel_ids: Vec<String> = ranked.iter().map(|(id, _, _)| id.to_string()).collect();
     let categories = top_n(category_map, 8);
 
     let today = calendar.start_of_day(now);
@@ -485,6 +508,7 @@ pub(crate) fn aggregate(
         streak,
         avg,
         channels,
+        channel_ids,
         categories,
         hourly,
         daily,
@@ -525,6 +549,38 @@ mod channel_summary_tests {
         assert_eq!(s.first_watched_at, Some(rows[0].started_at));
         assert_eq!(s.last_watched_at, Some(rows[2].started_at));
         assert_eq!(s.top_category.as_deref(), Some("마인크래프트"));
+    }
+
+    /// 자정을 넘긴 시청은 두 날에 나눠 담는다 — 23시에 시작한 3시간이 어제 1시간·오늘 2시간.
+    #[test]
+    fn daily_splits_a_session_across_midnight() {
+        use chrono::TimeZone;
+        let tz = chrono_tz::Asia::Seoul;
+        let now = tz
+            .with_ymd_and_hms(2026, 3, 10, 9, 0, 0)
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let started = tz
+            .with_ymd_and_hms(2026, 3, 9, 23, 0, 0)
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let mut r = WatchHistory::new("c1", "채널", None, None, started);
+        r.ended_at = Some(adding(&started, 3.0 * 3600.0));
+        r.duration = 3.0 * 3600.0;
+        r.updated_at = r.ended_at;
+        let a = aggregate(&[r], now, &tz);
+        let n = a.daily.len();
+        assert!(
+            (a.daily[n - 1].1 - 7200.0).abs() < 1e-6,
+            "오늘 {:?}",
+            a.daily[n - 1]
+        );
+        assert!(
+            (a.daily[n - 2].1 - 3600.0).abs() < 1e-6,
+            "어제 {:?}",
+            a.daily[n - 2]
+        );
+        assert!((a.all - 3.0 * 3600.0).abs() < 1e-6);
     }
 
     #[test]

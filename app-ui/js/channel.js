@@ -121,12 +121,18 @@ export class ChannelPage {
     return this.channelId ? { channelId: this.channelId, tab: this.tab } : {};
   }
 
-  async show(params = {}) {
+  /** 실패 화면의 '다시 시도' — 같은 채널·탭이라도 다시 받는다(아래 '뒤로 가기 그대로 두기'에 걸려 5분 동안 듣지 않았다). */
+  retry() {
+    if (this.channelId) this.show({ channelId: this.channelId, tab: this.tab, refresh: true });
+  }
+
+  async show(params = {}, { back = false } = {}) {
     if (!params.channelId) return;
     const changed = params.channelId !== this.channelId;
     // 뒤로 가기로 같은 채널에 돌아오면(5분 안) 그대로 둔다 — 예전엔 다시 받아 로딩이 깜빡이고, '더 보기'로 넓힌 다시보기·
-    // 클립과 스크롤이 처음으로 돌아갔다. ⌘R(refresh)·다른 탭을 지정한 이동은 다시 그린다.
-    if (!changed && !params.refresh && this.detail && this.body.querySelector('.channel-tabs')
+    // 클립과 스크롤이 처음으로 돌아갔다. ⌘R(refresh)·다른 탭을 지정한 이동은 다시 그린다. 뒤로 가기가 아닌 이동(카드·
+    // 말풍선·딥 링크로 다시 연 것)은 방송 상태(LIVE·라이브 보기)가 바뀌었을 수 있어 다시 받는다.
+    if (back && !changed && !params.refresh && this.detail && this.body.querySelector('.channel-tabs')
       && (!params.tab || params.tab === this.tab) && Date.now() - (this.loadedAt || 0) < 5 * 60 * 1000) return;
     this.channelId = params.channelId;
     if (changed || params.tab) this.tab = params.tab || 'info';
@@ -134,7 +140,7 @@ export class ChannelPage {
     this.enterNext = !params.refresh;
     if (!(params.refresh && !changed && refreshVeiled(this.root))) this.body.innerHTML = loadingState();
     try {
-      const detail = await api.channelDetail(this.channelId);
+      const detail = await api.channelDetail(this.channelId, Boolean(params.refresh));
       if (seq !== this.seq) return;
       this.detail = detail;
       this.loadedAt = Date.now();
@@ -394,6 +400,8 @@ export class ChannelPage {
     const on = Boolean(this.detail.isFavorite);
     star.classList.toggle('on', on);
     star.title = on ? '즐겨찾기 해제' : '즐겨찾기';
+    // 낭독 이름도 — a11y.js 는 붙을 때 한 번만 title 을 옮겨, 별만 다시 그리면 이름이 반대 상태로 남았다.
+    if (star.hasAttribute('aria-label')) star.setAttribute('aria-label', star.title);
     star.innerHTML = on ? ICON_STAR : ICON_STAR_LINE;
     star.classList.remove('mo-pop');
     if (pop) { void star.offsetWidth; star.classList.add('mo-pop'); }

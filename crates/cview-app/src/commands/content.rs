@@ -71,19 +71,23 @@ fn store_err(e: impl std::fmt::Display) -> CommandError {
 pub async fn channel_detail(
     services: State<'_, AppServices>,
     channel_id: String,
+    refresh: Option<bool>,
 ) -> CmdResult<ChannelDetailDto> {
-    channel_detail_for(&services, channel_id).await
+    channel_detail_for(&services, channel_id, refresh.unwrap_or(false)).await
 }
 
+/// `refresh` — 직접 새로고침(⌘R)·'다시 시도'. 방송 상태(라이브 상세)의 60초 캐시를 건너뛴다 — 예전엔 ⌘R 을 눌러도
+/// 방금 끝난 방송에 LIVE·'라이브 보기'가, 방금 켠 방송엔 꺼진 화면이 최대 1분 남았다.
 pub(crate) async fn channel_detail_for(
     services: &AppServices,
     channel_id: String,
+    refresh: bool,
 ) -> CmdResult<ChannelDetailDto> {
     // 방송 중인지는 채널 정보의 `openLive` 가 아니라 라이브 상세(60초 캐시)로 본다 — 채널 정보는 5분(묵은 값은 1시간까지)
     // 캐시라, 방송이 막 시작된 채널 화면에 LIVE·'라이브 보기'가 몇 분씩 없었다. 둘을 함께 받아 기다리는 시간은 같다.
     let (channel, live) = tokio::join!(
         services.api.channel_info(&channel_id),
-        services.api.live_detail(&channel_id, false)
+        services.api.live_detail(&channel_id, refresh)
     );
     let channel = channel?;
     let live = live
@@ -698,13 +702,17 @@ pub async fn bookmark_add(
     Ok(BookmarkDto::from(&saved))
 }
 
+/// 보관함 › 북마크 목록 상한. 저장에는 상한이 없어, 예전 200 이면 201번째부터 오래된 북마크가 보관함에서 사라지고
+/// 개수도 200 에 멈췄다(통계의 북마크 수는 전체). 화면이 실제로 다 그릴 수 있는 넉넉한 값으로 둔다.
+pub(crate) const BOOKMARK_LIST_LIMIT: usize = 10_000;
+
 #[tauri::command]
 pub async fn bookmarks_list(services: State<'_, AppServices>) -> CmdResult<Vec<BookmarkDto>> {
     let Some(store) = &services.data_store else {
         return Ok(Vec::new());
     };
     Ok(store
-        .fetch_bookmarks(200)
+        .fetch_bookmarks(BOOKMARK_LIST_LIMIT)
         .map_err(store_err)?
         .iter()
         .map(BookmarkDto::from)
@@ -1097,6 +1105,32 @@ pub async fn app_quit(app: tauri::AppHandle) -> CmdResult<()> {
 
 #[cfg(test)]
 mod tests {
+    /// 북마크가 200개를 넘어도 보관함 목록에 모두 나온다.
+    #[test]
+    fn bookmark_list_limit_keeps_more_than_two_hundred() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = cview_persistence::DataStore::open(dir.path().join("cview.sqlite")).unwrap();
+        for i in 0..250 {
+            store
+                .save_bookmark(
+                    "c1",
+                    "채널",
+                    &format!("방송 {i}"),
+                    None,
+                    None,
+                    i as f64,
+                    None,
+                )
+                .unwrap();
+        }
+        assert_eq!(
+            store
+                .fetch_bookmarks(super::BOOKMARK_LIST_LIMIT)
+                .unwrap()
+                .len(),
+            250
+        );
+    }
 
     #[test]
     fn social_change_payload_names_the_origin_window_and_the_changed_key() {
@@ -1165,12 +1199,65 @@ mod tests {
             services.api = cview_networking::ChzzkApiClient::new(
                 cview_networking::ClientConfig::new(Arc::new(JustStarted)),
             );
-            let d = channel_detail_for(&services, "c1".into()).await.unwrap();
+            let d = channel_detail_for(&services, "c1".into(), false)
+                .await
+                .unwrap();
             assert!(!d.channel.open_live);
             assert!(
                 d.live.is_some(),
                 "라이브 상세가 OPEN 인데 채널 화면이 라이브를 숨겼다"
             );
+        }
+
+        /// 라이브 상세 요청을 세는 전송 — 처음엔 OPEN, 그 뒤로는 CLOSE(방송이 막 끝남).
+        struct EndsAfterFirst(std::sync::atomic::AtomicUsize);
+
+        #[async_trait]
+        impl HttpTransport for EndsAfterFirst {
+            async fn send(&self, request: HttpRequest) -> Result<HttpResponse, TransportError> {
+                let path = request.url.path().to_string();
+                let body = if path.contains("live-detail") {
+                    let n = self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    let status = if n == 0 { "OPEN" } else { "CLOSE" };
+                    serde_json::json!({"code":200,"content":{
+                        "liveId":7,"liveTitle":"방송","status":status,
+                        "channel":{"channelId":"c1","channelName":"테스트"}
+                    }})
+                } else {
+                    serde_json::json!({"code":200,"content":{
+                        "channelId":"c1","channelName":"테스트","openLive":true
+                    }})
+                };
+                Ok(HttpResponse::new(200, serde_json::to_vec(&body).unwrap()))
+            }
+        }
+
+        /// 직접 새로고침은 방송 상태 캐시를 건너뛴다 — 방금 끝난 방송이 ⌘R 뒤에도 LIVE 로 남지 않는다.
+        #[tokio::test]
+        async fn channel_detail_refresh_bypasses_the_live_cache() {
+            let dir = tempfile::tempdir().unwrap();
+            let mut services = AppServices::initialize(
+                dir.path(),
+                "app.cview.test.channel-refresh",
+                Arc::new(EmptyWebView),
+                crate::state::ShellSinks::noop(),
+            )
+            .await;
+            services.api = cview_networking::ChzzkApiClient::new(
+                cview_networking::ClientConfig::new(Arc::new(EndsAfterFirst(Default::default()))),
+            );
+            let first = channel_detail_for(&services, "c1".into(), false)
+                .await
+                .unwrap();
+            assert!(first.live.is_some());
+            let cached = channel_detail_for(&services, "c1".into(), false)
+                .await
+                .unwrap();
+            assert!(cached.live.is_some(), "새로고침이 아니면 캐시를 쓴다");
+            let fresh = channel_detail_for(&services, "c1".into(), true)
+                .await
+                .unwrap();
+            assert!(fresh.live.is_none(), "새로고침인데 캐시된 LIVE 를 보였다");
         }
     }
 

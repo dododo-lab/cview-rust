@@ -188,7 +188,9 @@ const PROVIDERS = {
     const o = await safe(overview(), null);
     const s = liveSummary(lives);
     const followedIds = new Set(all.map((c) => c.channelId));
-    const mostWatched = (o ? o.channels : []).filter((c) => c.seconds >= 60).slice(0, 5).map((c) => ({ name: c.name, value: c.seconds }));
+    // 팔로우한 채널만 — 시청 순위(overview)는 모든 채널을 담는다. 팔로잉 목록을 못 받았으면(빈 집합) 거르지 않는다.
+    const isFollowed = (c) => !followedIds.size || !c.channelId || followedIds.has(c.channelId);
+    const mostWatched = (o ? o.channels : []).filter((c) => c.seconds >= 60 && isFollowed(c)).slice(0, 5).map((c) => ({ name: c.name, value: c.seconds }));
     return header('팔로잉 인사이트', `팔로잉 ${all.length || '?'}명 중 ${s.liveCount}명 방송 중`)
       + tiles([[String(s.liveCount), '방송 중'], [String(all.length || followedIds.size || '—'), '전체 팔로잉'], [compactCount(s.viewerTotal), '팔로잉 시청자'], [String(s.categoryCount), '방송 분야']])
       + section('heart', '많이 보는 팔로잉', bars(mostWatched, durationText))

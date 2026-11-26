@@ -342,9 +342,10 @@ fn assert_equivalent(actual: &InsightsResult, expected: &InsightsResult) {
         "lastUpdatedAt"
     );
     assert_eq!(actual.daily.len(), expected.daily.len(), "daily.count");
+    // 일별 초는 비교하지 않는다 — 저장소는 자정을 넘긴 시청을 정시 조각으로 나눠 담고(통계 리포트와 같음), 원본 포팅
+    // 계산은 시작한 날에 모두 담는다. 나눠 담기는 `daily_splits_a_session_across_midnight` 가 검사한다.
     for (a, e) in actual.daily.iter().zip(&expected.daily) {
         assert_eq!(a.0, e.0, "daily.day");
-        close(a.1, e.1, "daily");
     }
     assert_eq!(
         actual.hourly.keys().collect::<Vec<_>>(),

@@ -760,10 +760,19 @@ export class MultiLivePage {
       // 카드로 잠깐 연 방송(app.js 의 '둘러본 채널')은 구성에 넣지 않는다 — 예전엔 단독 보기로 하나만 봐도 지난 구성
       // (예: 4채널)이 그 채널 하나로 덮였다.
       const kept = rememberedChannels(sessions, this.isTransient);
+      // 열지 못했던 채널은 한 번 열리면(직접 다시 넣음) 보통 채널로 돌아간다 — 예전엔 앱을 끝낼 때까지 붙어 다녀, 그 채널을
+      // 직접 넣었다 닫아도 다음 '지난 구성'에 되살아났다.
+      if (this.unopened && this.unopened.length) {
+        const open = new Set(sessions.map((x) => x.channelId));
+        this.unopened = this.unopened.filter((id) => !open.has(id));
+      }
       const keep = [...kept, ...(this.unopened || []).filter((id) => !kept.includes(id))];
       if (kept.length && !this.restoring) this.saveSessionIds(keep);
       restore.hidden = true;
     } else {
+      // 모두 닫았으면 열지 못한 채널 기억도 놓는다 — 다음에 새로 꾸린 구성(D·E)에 옛 실패 채널이 끼지 않게.
+      // 지난 구성(저장된 목록)은 그대로라 '지난 구성 다시 열기'로 다시 시도할 수 있다.
+      if (!this.restoring) this.unopened = [];
       const savedIds = this.savedSessionIds();
       restore.hidden = !savedIds.length;
       setText(restore, `지난 구성 다시 열기 (${savedIds.length}개)`);
@@ -771,7 +780,14 @@ export class MultiLivePage {
     if (this.single != null && !view.some((x) => x.slot === this.single)) this.single = null;
     // 라이브 메뉴 단독 보기(원본 시청 모드) — 같은 세션을 무대에 올려 다시 연결하지 않는다.
     const watched = state.watchId ? sessions.find((x) => x.id === state.watchId) : null;
+    const wasWatch = this.watchSlot != null;
     this.watchSlot = watched && watched.slot != null ? watched.slot : null;
+    // 단독 보기를 닫아(⌘W·×·Esc) 그리드로 돌아오면 '영상+채팅 전체 화면'(⌃⌘F, .ml-body)도 푼다 — 그리드에는
+    // 이 전체 화면이 없어 그대로 두면 그리드가 전체 화면에 갇힌다. 패인 하나만 전체 화면(pane.el)은 그대로 둔다.
+    if (wasWatch && this.watchSlot == null && document.fullscreenElement
+      && document.fullscreenElement === this.root.querySelector('.ml-body') && document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    }
     this.root.classList.toggle('as-watch', this.watchSlot != null);
     this.noticeViewLimit(limit);
     // 단독 무대일 땐 라이브, 아니면 멀티라이브 — 전환 버튼이 지금 보기를 따른다(제목·아이콘은 늘 '라이브').

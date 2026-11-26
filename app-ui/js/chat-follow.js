@@ -97,13 +97,18 @@ export function snapAll(snaps) {
  * 배치한다(붐비는 채팅에서 붙일 때마다 수백 줄 레이아웃 — 4배 감속 초당 200개에서 프레임 25%가 20ms 를 넘었다).
  * 그래서 상한의 1/4(최소 20줄)을 더 넘칠 때까지 두었다가 상한까지 한 번에 지운다. 지웠으면 참.
  */
-export function trimFront(list, max) {
+export function trimFront(list, max, { keepView = false } = {}) {
   const children = list.children;
   if (children.length <= max + Math.max(20, max >> 2)) return false;
   const range = document.createRange();
   range.setStartBefore(children[0]);
   const cut = children.length - max;
   range.setEndAfter(children[cut - 1]);
+  // 위로 올려 읽는 중이면 지운 높이만큼 스크롤을 당겨 보던 줄을 제자리에 둔다 — WebKit(macOS)은 스크롤 앵커링이 없어
+  // 앞줄 수십 줄이 한꺼번에 빠지면 보던 자리가 수천 px 튀거나 바닥에 닿아 따라가기가 다시 켜지고 '새 메시지' 수가 0 이
+  // 됐다. 지우기는 상한의 1/4 마다 한 번이라 이 측정(레이아웃 한 번)은 드물다. Chromium 이 이미 앵커링했으면 두 번 당기지 않는다.
+  const before = keepView ? list.scrollTop : 0;
+  const removed = keepView ? children[cut].offsetTop - children[0].offsetTop : 0;
   // 지울 줄의 아바타 사진은 떼어 낸 뒤 src 를 비워 디코드한 그림 메모리를 바로 놓아 준다(chat-avatar.js).
   const photos = [];
   for (let i = 0; i < cut; i++) {
@@ -112,6 +117,10 @@ export function trimFront(list, max) {
   }
   range.deleteContents();
   for (const img of photos) img.removeAttribute('src');
+  if (keepView && removed > 0) {
+    const want = Math.max(0, before - removed);
+    if (list.scrollTop > want + 1) list.scrollTop = want;
+  }
   return true;
 }
 
