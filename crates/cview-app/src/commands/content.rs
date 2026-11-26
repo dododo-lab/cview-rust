@@ -388,6 +388,7 @@ pub async fn channel_follow(
     } else {
         services.api.unfollow(&channel_id).await?;
     }
+    services.following.invalidate_reuse();
     Ok(())
 }
 

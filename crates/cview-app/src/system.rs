@@ -134,11 +134,27 @@ pub fn notify_permission(app: AppHandle, request: Option<bool>) -> CmdResult<Not
     })
 }
 
+/// 폴 결과의 계정 세대가 기준선을 잡은 세대와 다르면(로그아웃 → 다른 계정 로그인) 기준선을 버린다 —
+/// 그 결과는 새 계정의 첫 기준선이 되고 알림을 내지 않는다.
+fn rebase_on_account_change(
+    baseline: &mut Option<BackgroundUpdateBaseline>,
+    seen: &mut Option<u64>,
+    generation: u64,
+) {
+    if *seen != Some(generation) {
+        *baseline = None;
+        *seen = Some(generation);
+    }
+}
+
 /// 팔로잉 변화 알림 루프. 문구는 원본 `NotificationService` 규칙을 그대로 쓴다.
 pub fn spawn_live_notifications(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         let texts = NotificationService::new(std::sync::Arc::new(NoopNotifier));
         let mut baseline: Option<BackgroundUpdateBaseline> = None;
+        // 기준선을 잡은 계정 세대 — 그 사이 로그아웃·다른 계정 로그인이 있었으면 새 계정의 방송 중 채널이
+        // 한꺼번에 "방송 시작"으로 뜨지 않게 기준선부터 다시 잡는다.
+        let mut baseline_generation: Option<u64> = None;
         tokio::time::sleep(Duration::from_secs(20)).await;
         loop {
             let services = app.state::<AppServices>();
@@ -171,6 +187,11 @@ pub fn spawn_live_notifications(app: AppHandle) {
             if !polling {
                 baseline = None;
             } else if let Some(result) = polled {
+                rebase_on_account_change(
+                    &mut baseline,
+                    &mut baseline_generation,
+                    result.generation,
+                );
                 let items: Vec<_> = result.channels.iter().map(to_live_channel_item).collect();
                 let prev = baseline.clone().unwrap_or_default();
                 let diff = BackgroundUpdateDiff::new(&items, &prev);
@@ -570,6 +591,17 @@ fn update_dto(release: Option<GitHubRelease>, current: String) -> CmdResult<Upda
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn account_switch_drops_the_notification_baseline() {
+        let mut baseline = Some(BackgroundUpdateBaseline::default());
+        let mut seen = Some(3);
+        rebase_on_account_change(&mut baseline, &mut seen, 3);
+        assert!(baseline.is_some(), "같은 계정이면 그대로");
+        rebase_on_account_change(&mut baseline, &mut seen, 4);
+        assert!(baseline.is_none());
+        assert_eq!(seen, Some(4));
+    }
 
     fn asset(name: &str) -> GitHubAsset {
         GitHubAsset {

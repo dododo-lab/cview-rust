@@ -458,7 +458,8 @@ impl AppServices {
             self.player.stop_stream().await;
         }
         self.watch_events.end(VIEWER_WATCH_SOURCE);
-        self.recorder.stop_recording();
+        // 녹화도 중지 단추처럼 끝낸다(fMP4 면 `.mp4` 로 바로잡기).
+        crate::commands::recording::finish_recording(self);
         *self
             .playing_stream
             .lock()

@@ -269,8 +269,8 @@ pub async fn multilive_set_audio_suspended(
         for s in st.sessions().to_vec() {
             s.set_muted(true);
         }
-    } else if let Some(id) = st.audio_session_id().or(st.selected_session_id()) {
-        st.route_audio(id);
+    } else {
+        st.restore_audio();
     }
     Ok(())
 }

@@ -75,31 +75,50 @@ pub fn sniff_extension(head: &[u8]) -> Option<&'static str> {
     None
 }
 
-#[tauri::command]
-pub async fn player_record_stop(services: State<'_, AppServices>) -> CmdResult<RecordingStatusDto> {
-    let before = status(&services);
-    services.recorder.stop_recording();
-    let mut path = before.path.clone();
-    // 치지직 LL-HLS 는 fMP4 라 .ts 로 두면 재생기가 못 연다 — 내용을 보고 확장자를 맞춘다.
-    if let Some(p) = before.path.as_deref().map(PathBuf::from) {
-        let mut head = [0u8; 12];
-        let n = std::fs::File::open(&p)
-            .and_then(|mut f| std::io::Read::read(&mut f, &mut head))
-            .unwrap_or(0);
-        if let Some(ext) = sniff_extension(&head[..n]) {
-            if p.extension().and_then(|e| e.to_str()) != Some(ext) {
-                let renamed = p.with_extension(ext);
-                if std::fs::rename(&p, &renamed).is_ok() {
-                    path = Some(renamed.to_string_lossy().into_owned());
-                }
-            }
-        }
+/// 녹화를 끝내고 내용에 맞게 확장자를 바로잡는다 — 중지 단추뿐 아니라 시청 화면 닫기·다른 방송 열기·
+/// 앱 종료(재생 정지)도 이 길로 끝낸다. 예전엔 중지 단추만 확장자를 맞춰, 그 밖의 길로 끝난 치지직
+/// LL-HLS(fMP4) 녹화는 `.ts` 로 남아 재생기가 열지 못했다. 녹화 중이 아니면 아무것도 하지 않는다.
+pub(crate) fn finish_recording(services: &AppServices) -> RecordingStatusDto {
+    let before = status(services);
+    if !before.recording {
+        return RecordingStatusDto {
+            path: None,
+            ..before
+        };
     }
-    Ok(RecordingStatusDto {
+    services.recorder.stop_recording();
+    let path = before.path.as_deref().map(|p| {
+        fix_recording_extension(&PathBuf::from(p))
+            .to_string_lossy()
+            .into_owned()
+    });
+    RecordingStatusDto {
         recording: false,
         path,
         ..before
-    })
+    }
+}
+
+/// 치지직 LL-HLS 는 fMP4 라 .ts 로 두면 재생기가 못 연다 — 내용을 보고 확장자를 맞춘다. 바꾼(또는 그대로인) 경로.
+pub fn fix_recording_extension(p: &std::path::Path) -> PathBuf {
+    let mut head = [0u8; 12];
+    let n = std::fs::File::open(p)
+        .and_then(|mut f| std::io::Read::read(&mut f, &mut head))
+        .unwrap_or(0);
+    if let Some(ext) = sniff_extension(&head[..n]) {
+        if p.extension().and_then(|e| e.to_str()) != Some(ext) {
+            let renamed = p.with_extension(ext);
+            if std::fs::rename(p, &renamed).is_ok() {
+                return renamed;
+            }
+        }
+    }
+    p.to_path_buf()
+}
+
+#[tauri::command]
+pub async fn player_record_stop(services: State<'_, AppServices>) -> CmdResult<RecordingStatusDto> {
+    Ok(finish_recording(&services))
 }
 
 #[tauri::command]
@@ -137,6 +156,21 @@ pub async fn equalizer_presets() -> CmdResult<(Vec<f32>, Vec<EqualizerPresetDto>
 mod tests {
     use super::*;
     use chrono::TimeZone;
+
+    #[test]
+    fn fmp4_recording_gets_mp4_extension_and_ts_stays() {
+        let dir = std::env::temp_dir().join(format!("cview-rec-ext-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let fmp4 = dir.join("a.ts");
+        std::fs::write(&fmp4, b"\0\0\0\x18ftypiso6rest").unwrap();
+        let fixed = fix_recording_extension(&fmp4);
+        assert_eq!(fixed, dir.join("a.mp4"));
+        assert!(fixed.exists() && !fmp4.exists());
+        let ts = dir.join("b.ts");
+        std::fs::write(&ts, [0x47u8, 0, 0, 0]).unwrap();
+        assert_eq!(fix_recording_extension(&ts), ts);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn sniffs_container() {

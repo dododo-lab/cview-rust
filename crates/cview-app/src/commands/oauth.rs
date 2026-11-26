@@ -235,6 +235,12 @@ where
     }
 }
 
+/// 콜백의 state 가 우리가 연 인가 주소의 state 와 같으면 그 값을 돌려준다(교환에 쓴다).
+pub(crate) fn accepted_callback_state(opened: &url::Url, state: &str) -> Option<String> {
+    let csrf = cview_auth::csrf::validate(Some(opened), Some(state));
+    csrf.ok.then(|| csrf.sent_state.unwrap_or_default())
+}
+
 /// 연결 — 브라우저로 인가 페이지를 열고 콜백을 기다린다.
 #[tauri::command]
 pub async fn oauth_connect(
@@ -256,18 +262,36 @@ pub async fn oauth_connect(
     super::content::open_external(auth_url.to_string()).await?;
 
     let auth = &services.auth;
-    serve_callback(
+    let cookies = &services.cookies;
+    let opened = auth_url.clone();
+    let result = serve_callback(
         &listener,
         tokio::time::Instant::now() + CALLBACK_WAIT,
         CALLBACK_READ_TIMEOUT,
         |code, state| async move {
-            auth.handle_oauth_login_success(&code, &state)
-                .await
-                .map_err(|e| format!("토큰 교환 실패: {e}"))
+            // 우리가 연 인가 주소의 state 와 같은 콜백만 받는다 — 지난 연결 때 남은 탭이 새로 고쳐지거나 다른
+            // 페이지가 이 포트로 보낸 콜백으로 로그인 상태를 건드리지 않게(예전엔 검사 없이 교환했다).
+            let Some(sent_state) = accepted_callback_state(&opened, &state) else {
+                return Err("인증 응답이 이 연결 요청과 맞지 않습니다(state 불일치)".to_string());
+            };
+            match auth.handle_oauth_login_success(&code, &sent_state).await {
+                Ok(()) => Ok(()),
+                Err(e) => {
+                    // 교환에 실패해도 쓰던 네이버 로그인(쿠키)은 그대로 — 통합 로그인 창과 같다. 예전엔 계정이
+                    // 오류(로그아웃) 상태로 바뀌어 팔로잉·채팅 참여가 앱을 다시 켤 때까지 사라졌다.
+                    if cookies.has_cookies() {
+                        auth.handle_login_success().await;
+                    }
+                    Err(format!("토큰 교환 실패: {e}"))
+                }
+            }
         },
     )
-    .await
-    .map_err(|e| CommandError(e.message()))?;
+    .await;
+    if result.is_err() {
+        super::auth::broadcast_status(&app, &services).await;
+    }
+    result.map_err(|e| CommandError(e.message()))?;
     super::auth::broadcast_status(&app, &services).await;
     Ok(status(&services))
 }
@@ -277,6 +301,19 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::Arc;
+
+    #[test]
+    fn connect_accepts_only_the_state_it_sent() {
+        let opened =
+            url::Url::parse("https://chzzk.naver.com/account-interlock?clientId=c&state=abc123")
+                .unwrap();
+        assert_eq!(
+            accepted_callback_state(&opened, "abc123").as_deref(),
+            Some("abc123")
+        );
+        assert_eq!(accepted_callback_state(&opened, "stale-state"), None);
+        assert_eq!(accepted_callback_state(&opened, ""), None);
+    }
 
     #[test]
     fn callback_parsing_and_hint() {

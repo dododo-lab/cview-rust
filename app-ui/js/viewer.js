@@ -225,6 +225,9 @@ export class Viewer {
     const frame = document.getElementById('player-frame');
     if (frame) frame.dataset.perfChannel = channelId; // data-channel-id 는 카드 열기 속성이라 쓰지 않는다
     this.ensurePlayerPage();
+    // 다시 연결·다시 시도는 처음 받은 설정 객체를 다시 넘긴다 — 그 볼륨은 연 뒤 바꾼 값이 아니라서
+    // 슬라이더를 되돌리면 소리가 저장된 볼륨과 어긋났다. 같은 객체면 지금 슬라이더(=저장된 볼륨)를 둔다.
+    const reopened = Boolean(settings) && settings === this.lastSettings;
     if (settings) this.lastSettings = settings;
     this.root.hidden = false;
     this.renderHeader(null);
@@ -232,12 +235,15 @@ export class Viewer {
     this.syncNowPlaying(null);
     this.showOverlay(PHASE_TEXT.loadingInfo);
     this.status.textContent = '';
-    if (settings && typeof settings.volumeLevel === 'number') {
+    if (settings && !reopened && typeof settings.volumeLevel === 'number') {
       this.volume.value = String(Math.round(settings.volumeLevel * 100));
       // 채움 색(--fill)도 — 속성이 아니라 값을 바꿔 viewer-controls 의 감시자가 모른다(input 을 쏘면 음소거가 풀린다)
       this.volume.style.setProperty('--fill', `${this.volume.value}%`);
     }
     this.startMuted = settings ? Boolean(settings.startMuted) : false;
+    // 이번 시청의 음소거 — 재연결·화질 바꾸기·정지 복구로 페이지가 다시 시작해도(playStarted 가 또 온다)
+    // 사용자가 바꾼 음소거를 지킨다. 예전엔 매번 '음소거로 시작' 설정으로 되돌아가 소리가 갑자기 났다.
+    this.sessionMuted = this.startMuted;
     try {
       const started = await api.playerStart(channelId);
       if (token !== this.startToken) return;
@@ -279,8 +285,10 @@ export class Viewer {
     this.syncNowPlaying(null);
     clearInterval(this.uptimeTimer);
     this.alerts.clear();
-    this.panel.resetRecording();
+    const recording = this.panel.resetRecording();
     this.showOverlay('');
+    // 녹화를 먼저 끝내야 저장 경로를 알릴 수 있다(재생 정지도 녹화를 끝내지만 경로는 돌려주지 않는다).
+    await recording;
     await Promise.allSettled([api.playerStop(), this.chat.disconnect()]);
     if (!silent && token === this.startToken && this.onClose) this.onClose();
   }
@@ -296,6 +304,7 @@ export class Viewer {
   }
 
   setMuted(muted) {
+    this.sessionMuted = muted;
     this.player.call('setMuted', muted);
     this.muteButton.innerHTML = muted ? icons.muted : icons.volume;
     this.muteButton.title = muted ? '음소거 해제' : '음소거';
@@ -312,10 +321,10 @@ export class Viewer {
       // 페이지는 자동재생 정책 때문에 음소거로 시작한다 — 설정에 따라 바로 해제한다.
       this.player.call('setVolume', Number(this.volume.value) / 100);
       if (this.audioSuspended) {
-        this.mutedBeforeSuspend = this.startMuted;
+        this.mutedBeforeSuspend = this.sessionMuted;
         this.player.call('setMuted', true);
       } else {
-        this.setMuted(this.startMuted);
+        this.setMuted(this.sessionMuted);
       }
     } else if (type === 'fatalError') {
       // 사용자에게는 쉬운 문구, 원문은 툴팁·콘솔에(L-11).

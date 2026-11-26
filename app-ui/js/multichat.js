@@ -223,7 +223,11 @@ export class MultiChatPage {
         let saved = null;
         try { saved = localStorage.getItem('cview.mc.layout'); } catch { /* 저장 불가 */ }
         this.layout = ['grid', 'tabs', 'merged'].includes(saved) ? saved : (mc.isGridLayout ? 'grid' : 'tabs');
-        for (const saved of (mc.savedSessions || []).slice(0, MAX_CHANNELS)) await this.add(saved.channelId, false);
+        const savedList = (mc.savedSessions || []).slice(0, MAX_CHANNELS);
+        for (const saved of savedList) await this.add(saved.channelId, false);
+        // 잠깐의 네트워크 오류로 열지 못한 채널 — 저장 목록에서 지우지 않고 다음 실행에 다시 연다
+        // (예전엔 이번 실행에서 아무 조작만 해도 저장 구성에서 영구히 빠졌다).
+        this.unrestored = savedList.filter((x) => x && x.channelId && !this.channels.some((c) => c.channelId === x.channelId));
         if (mc.selectedChannelId) this.focus(mc.selectedChannelId);
       } catch { /* 처음 */ }
     }
@@ -233,7 +237,10 @@ export class MultiChatPage {
 
   persist() {
     api.settingsUpdate('multiChat', {
-      savedSessions: this.channels.map((c) => ({ channelId: c.channelId, channelName: c.name })),
+      savedSessions: [
+        ...this.channels.map((c) => ({ channelId: c.channelId, channelName: c.name })),
+        ...(this.unrestored || []).filter((x) => !this.channels.some((c) => c.channelId === x.channelId)),
+      ].slice(0, MAX_CHANNELS),
       selectedChannelId: this.active,
       isGridLayout: this.layout === 'grid',
     }).catch(() => {});
@@ -364,7 +371,7 @@ export class MultiChatPage {
   /** 개요 칩 — 채널·연결 상태·분당 메시지 (MUL-04). 탭 모드에서는 탭 역할도 한다. */
   renderOverview() {
     const now = Date.now();
-    this.overview.innerHTML = this.channels.map((c) => {
+    const html = this.channels.map((c) => {
       c.rate = c.rate.filter((t) => now - t < 60000);
       const state = c.panel.state.className.includes('ok') ? 'ok' : (c.panel.state.className.includes('bad') ? 'bad' : 'warn');
       const avatar = safeUrl(c.image);
@@ -373,6 +380,19 @@ export class MultiChatPage {
         ${avatar ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(avatar, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}
         <span class="mc-chip-name">${esc(c.name)}</span><i class="mc-dot ${state}"></i><span class="mc-rate">${c.rate.length}/분</span></button><button class="mc-chip-x" data-mc-remove="${esc(c.channelId)}" title="닫기" aria-label="${esc(c.name)} 채팅 닫기">✕</button></span>`;
     }).join('');
+    // 5초마다 다시 그린다 — 바뀐 것이 없으면 그대로 두고, 바꿀 때는 키보드 초점을 같은 칩·닫기 단추로
+    // 되돌린다(예전엔 칩에 Tab 으로 둔 초점이 5초 안에 문서 처음으로 떨어졌다).
+    if (html === this.overviewHtml) return;
+    this.overviewHtml = html;
+    const a = document.activeElement;
+    const keep = a && this.overview.contains(a)
+      ? (a.dataset.mcFocus ? ['data-mc-focus', a.dataset.mcFocus] : (a.dataset.mcRemove ? ['data-mc-remove', a.dataset.mcRemove] : null))
+      : null;
+    this.overview.innerHTML = html;
+    if (keep) {
+      const back = [...this.overview.querySelectorAll(`[${keep[0]}]`)].find((el) => el.getAttribute(keep[0]) === keep[1]);
+      back?.focus({ preventScroll: true });
+    }
   }
 
   // ── 통합 채팅 (MUL-02) ──
@@ -461,7 +481,20 @@ export class MultiChatPage {
     const text = submitted.trim();
     const entry = this.targetEntry();
     if (!text || input.disabled || this.pendingSend || !entry?.panel.canSendMessage) return;
+    // 슬래시 명령(/stats·/tts·/clear 등)은 패널 입력처럼 앱이 처리한다 — 예전엔 그대로 채팅방에 공개로 올라갔다.
+    for (const fn of entry.panel.sendHooks) {
+      if (fn(text)) {
+        if (/^\/clear\b/i.test(text) && this.layout === 'merged') {
+          this.lines?.reset?.();
+          this.mergedList.innerHTML = '<div class="empty">채팅을 지웠습니다</div>';
+        }
+        input.value = '';
+        this.composer.renderCount();
+        return;
+      }
+    }
     const request = { entry, seq: entry.panel.connSeq, chatChannelId: entry.panel.chatChannelId };
+    const hadFocus = document.activeElement === input;
     const current = () => this.pendingSend === request && this.targetEntry() === entry
       && entry.panel.connSeq === request.seq && entry.panel.active && !entry.panel.destroyed;
     this.pendingSend = request;
@@ -477,6 +510,7 @@ export class MultiChatPage {
         this.pendingSend = null;
         this.updateMergedInput();
         this.composer.renderCount();
+        if (hadFocus && !input.disabled) input.focus();
       }
     }
   }

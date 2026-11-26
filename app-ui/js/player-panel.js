@@ -333,12 +333,20 @@ export class PlayerPanel {
     if (type === 'equalizer' && data && data.ok === false) toast('이퀄라이저를 켤 수 없습니다 — 이 방송은 오디오 처리를 쓸 수 없습니다');
   }
 
-  /** 시청 화면을 닫을 때 — 녹화 표시·상태 확인 타이머를 바로 거둔다(예전엔 2초 확인을 기다려 빨간 점이 남았다). */
-  resetRecording() {
+  /** 시청 화면을 닫을 때 — 녹화 표시·상태 확인 타이머를 바로 거둔다(예전엔 2초 확인을 기다려 빨간 점이 남았다).
+   *  녹화 중이었으면 중지 단추처럼 끝내고(확장자 맞추기) 저장 위치를 알린다 — 예전엔 아무 안내 없이 끝났다. */
+  async resetRecording() {
     clearInterval(this.recTimer);
     if (!this.recording) return;
     this.recording = null;
     this.setRecUi(false);
+    try {
+      const st = await api.playerRecordStop();
+      if (st.path && st.bytes > 0) {
+        const mb = (st.bytes / 1048576).toFixed(1);
+        toast(`녹화를 저장했습니다 (${mb}MB) — ${st.path}`, 6000, { label: REVEAL_LABEL, run: () => api.revealPath(st.path) });
+      }
+    } catch { /* 재생 정지가 녹화도 끝낸다 */ }
   }
 
   setRecUi(on) {

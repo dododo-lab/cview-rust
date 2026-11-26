@@ -105,41 +105,128 @@ pub async fn settings_get(services: State<'_, AppServices>) -> CmdResult<Setting
     Ok(snapshot(&services))
 }
 
+/// 패치를 입힐 바탕 — 화면의 부분 저장은 지금 값, 백업 가져오기는 기본값.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PatchBase {
+    Current,
+    /// 백업에 없는 키(끔·기본이라 내보내기에서 빠진 이퀄라이저·화면 비율, 채팅의 기본값 키 등)는 기본값으로
+    /// 돌아가야 백업 상태가 그대로 복원된다. 예전엔 지금 값 위에 얕게 병합해 그런 값이 그대로 남았다.
+    Defaults,
+}
+
+/// `base` 에 따라 지금 값 또는 기본값 위에 패치를 입힌다.
+fn patched<T: Serialize + DeserializeOwned + Default>(
+    base: PatchBase,
+    current: impl FnOnce() -> T,
+    patch: Value,
+) -> Result<T, String> {
+    match base {
+        PatchBase::Current => apply_patch(&current(), patch),
+        PatchBase::Defaults => apply_patch(&T::default(), patch),
+    }
+}
+
 /// 도메인 하나에 패치를 입힌다(`DOMAINS`). 네트워크 설정은 API 클라이언트에도 반영한다.
 fn apply_domain(services: &AppServices, domain: &str, patch: Value) -> CmdResult<()> {
+    apply_domain_on(services, domain, patch, PatchBase::Current)
+}
+
+fn apply_domain_on(
+    services: &AppServices,
+    domain: &str,
+    patch: Value,
+    base: PatchBase,
+) -> CmdResult<()> {
     let s = &services.settings;
     match domain {
-        "player" => s.set_player(apply_patch::<PlayerSettings>(&s.player(), patch)?),
-        "general" => s.set_general(apply_patch::<GeneralSettings>(&s.general(), patch)?),
-        "appearance" => {
-            s.set_appearance(apply_patch::<AppearanceSettings>(&s.appearance(), patch)?)
-        }
-        "chat" => s.set_chat(merge_patch(s.chat(), patch)),
+        "player" => s.set_player(patched::<PlayerSettings>(base, || s.player(), patch)?),
+        "general" => s.set_general(patched::<GeneralSettings>(base, || s.general(), patch)?),
+        "appearance" => s.set_appearance(patched::<AppearanceSettings>(
+            base,
+            || s.appearance(),
+            patch,
+        )?),
+        "chat" => s.set_chat(match (base, patch) {
+            // 가져오기 — 채팅은 화면이 바꾼 키만 저장하므로 백업 객체가 곧 그 상태다(나머지는 화면 기본값).
+            (PatchBase::Defaults, patch @ Value::Object(_)) => patch,
+            (_, patch) => merge_patch(s.chat(), patch),
+        }),
         "network" => {
             // 값 하나를 손으로 바꾸면 자동 프리셋은 꺼진다(백업 복원처럼 `autoPreset` 을 함께 보내면 그 값을 따른다).
             let manual = patch.get("autoPreset").is_none();
-            let mut next = apply_patch::<NetworkSettings>(&s.network(), patch)?;
+            let mut next = patched::<NetworkSettings>(base, || s.network(), patch)?;
             if manual {
                 next.auto_preset = false;
             }
             s.set_network(next);
             services.api.update_network_settings(&s.network());
         }
-        "multiLive" => s.set_multi_live(apply_patch::<MultiLiveSettings>(&s.multi_live(), patch)?),
-        "multiChat" => s.set_multi_chat(apply_patch::<MultiChatSettings>(&s.multi_chat(), patch)?),
-        "keyboard" => s.set_keyboard(apply_patch::<KeyboardShortcutSettings>(
-            &s.keyboard(),
+        "multiLive" => s.set_multi_live(patched::<MultiLiveSettings>(
+            base,
+            || s.multi_live(),
             patch,
         )?),
-        "channelNotifications" => s.set_channel_notifications(apply_patch::<
-            ChannelNotificationSettings,
-        >(
-            &s.channel_notifications(), patch
+        "multiChat" => s.set_multi_chat(patched::<MultiChatSettings>(
+            base,
+            || s.multi_chat(),
+            patch,
         )?),
-        "sync" => s.set_sync(apply_patch::<SyncSettings>(&s.sync(), patch)?),
+        "keyboard" => s.set_keyboard(patched::<KeyboardShortcutSettings>(
+            base,
+            || s.keyboard(),
+            patch,
+        )?),
+        "channelNotifications" => {
+            s.set_channel_notifications(patched::<ChannelNotificationSettings>(
+                base,
+                || s.channel_notifications(),
+                patch,
+            )?)
+        }
+        "sync" => s.set_sync(patched::<SyncSettings>(base, || s.sync(), patch)?),
         other => return Err(CommandError(format!("알 수 없는 설정 영역: {other}"))),
     }
     Ok(())
+}
+
+/// 도메인 값이 바뀐 뒤 앱(창·메뉴·트레이·네트워크)에 반영한다 — 화면 저장·백업 가져오기·초기화가 함께 쓴다.
+/// 예전엔 화면 저장만 일반(항상 위·로그인 시 실행·메뉴 막대 아이콘)·단축키(네이티브 메뉴)를 반영해, 초기화나
+/// 가져오기 뒤에는 화면만 바뀌고 창은 계속 항상 위·LaunchAgent 는 남는 식으로 어긋났다.
+fn after_domain_change(
+    app: &tauri::AppHandle,
+    services: &AppServices,
+    shell: &MultiLiveShell,
+    domain: &str,
+) {
+    match domain {
+        // 멀티라이브 상한이 바뀌면 보이는 패인·디코드 예산·패인 크기를 바로 다시 맞춘다(화면과 재생이 어긋나지 않게).
+        "multiLive" => shell.manager.lock().multi_live_limits_changed(),
+        "appearance" => {
+            appearance_changed(app, services);
+            // 설정 "디버그 로그"를 켜고 끄면 바로 반영하고 화면 수집기에 알린다.
+            if let Ok(dir) = tauri::Manager::path(app).app_data_dir() {
+                let on =
+                    crate::perf_log::forced_by_env() || services.settings.appearance().debug_mode;
+                crate::perf_log::set_enabled(&dir, on);
+                let _ = tauri::Emitter::emit(app, "perf://enabled", on);
+            }
+        }
+        "general" => {
+            crate::window_prefs::apply_general(app, &services.settings.general());
+            // "메뉴 막대에 표시" — 아이콘을 바로 보이거나 숨긴다. 팝오버의 알림 토글도 함께 맞춘다.
+            crate::tray::sync(app);
+            let _ = tauri::Emitter::emit(
+                app,
+                "settings://general",
+                to_value(&services.settings.general()),
+            );
+        }
+        "keyboard" => crate::menu::rebuild(app),
+        "network" => services
+            .api
+            .update_network_settings(&services.settings.network()),
+        _ => {}
+    }
 }
 
 /// `domain` 은 [`DOMAINS`] 중 하나.
@@ -152,32 +239,7 @@ pub async fn settings_update(
     patch: Value,
 ) -> CmdResult<SettingsDto> {
     apply_domain(&services, &domain, patch)?;
-    if domain == "multiLive" {
-        // 멀티라이브 상한이 바뀌면 보이는 패인·디코드 예산·패인 크기를 바로 다시 맞춘다(화면과 재생이 어긋나지 않게).
-        shell.manager.lock().multi_live_limits_changed();
-    }
-    if domain == "appearance" {
-        appearance_changed(&app, &services);
-        // 설정 "디버그 로그"를 켜고 끄면 바로 반영하고 화면 수집기에 알린다.
-        if let Ok(dir) = tauri::Manager::path(&app).app_data_dir() {
-            let on = crate::perf_log::forced_by_env() || services.settings.appearance().debug_mode;
-            crate::perf_log::set_enabled(&dir, on);
-            let _ = tauri::Emitter::emit(&app, "perf://enabled", on);
-        }
-    }
-    if domain == "general" {
-        crate::window_prefs::apply_general(&app, &services.settings.general());
-        // "메뉴 막대에 표시" — 아이콘을 바로 보이거나 숨긴다. 팝오버의 알림 토글도 함께 맞춘다.
-        crate::tray::sync(&app);
-        let _ = tauri::Emitter::emit(
-            &app,
-            "settings://general",
-            to_value(&services.settings.general()),
-        );
-    }
-    if domain == "keyboard" {
-        crate::menu::rebuild(&app);
-    }
+    after_domain_change(&app, &services, &shell, &domain);
     Ok(snapshot(&services))
 }
 
@@ -359,18 +421,13 @@ pub async fn settings_import(
     let mut skipped = Vec::new();
     for domain in DOMAINS {
         if let Some(v) = map.get(*domain) {
-            if apply_domain(&services, domain, v.clone()).is_err() {
+            if apply_domain_on(&services, domain, v.clone(), PatchBase::Defaults).is_err() {
                 skipped.push((*domain).to_string());
+            } else {
+                // 가져온 값도 저장·초기화처럼 바로 반영한다(화면 크기·멀티라이브 상한·항상 위·단축키 메뉴 등).
+                after_domain_change(&app, &services, &shell, domain);
             }
         }
-    }
-    if map.contains_key("multiLive") {
-        // 가져온 멀티라이브 상한도 저장·초기화처럼 바로 반영한다.
-        shell.manager.lock().multi_live_limits_changed();
-    }
-    if map.contains_key("appearance") {
-        // 가져온 화면 크기도 바로 — 설정은 150% 인데 창은 예전 배율로 남지 않게.
-        appearance_changed(&app, &services);
     }
     Ok(skipped)
 }
@@ -409,13 +466,8 @@ pub async fn settings_reset(
     } else {
         return Err(CommandError(format!("알 수 없는 설정 영역: {domain}")));
     }
-    services.api.update_network_settings(&s.network());
-    if domain == "all" || domain == "multiLive" {
-        shell.manager.lock().multi_live_limits_changed();
-    }
-    if domain == "all" || domain == "appearance" {
-        // 초기화한 화면 크기(100%)도 모든 창에 바로 건다.
-        appearance_changed(&app, &services);
+    for d in DOMAINS.iter().filter(|d| domain == "all" || **d == domain) {
+        after_domain_change(&app, &services, &shell, d);
     }
     Ok(snapshot(&services))
 }
@@ -423,6 +475,25 @@ pub async fn settings_reset(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn import_restores_keys_missing_from_the_backup_to_defaults() {
+        // 이퀄라이저·화면 비율이 꺼져 있던 백업(키 없음) — 지금 켜 둔 값이 남지 않고 기본값(끔)으로 돌아간다.
+        let current = PlayerSettings {
+            equalizer_preset: Some("Rock".into()),
+            aspect_ratio: Some("fill".into()),
+            ..PlayerSettings::default()
+        };
+        let backup = serde_json::to_value(PlayerSettings::default()).unwrap();
+        assert!(backup.get("equalizerPreset").is_none());
+        let kept: PlayerSettings =
+            patched(PatchBase::Current, || current.clone(), backup.clone()).unwrap();
+        assert_eq!(kept.equalizer_preset.as_deref(), Some("Rock"));
+        let restored: PlayerSettings =
+            patched(PatchBase::Defaults, || current.clone(), backup).unwrap();
+        assert_eq!(restored.equalizer_preset, None);
+        assert_eq!(restored.aspect_ratio, None);
+    }
 
     #[test]
     fn login_and_popover_windows_are_never_zoomed() {

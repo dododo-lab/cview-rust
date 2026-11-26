@@ -122,8 +122,10 @@ async function refreshSidebarList() {
   await Promise.all(jobs);
   if (seq === sideListSeq) paintSidebarList();
 }
+let sideFollowSeq = 0;
 async function refreshSidebarFollowing() {
   clearTimeout(followingTimer);
+  const seq = ++sideFollowSeq;
   // 보조 창(?w=…)은 사이드바를 숨긴다(app.css :root[data-window] .sidebar) — 2분마다 팔로잉 목록을 받아 그릴 곳이 없다.
   if (AUX) return;
   let failed = false;
@@ -134,6 +136,9 @@ async function refreshSidebarFollowing() {
     try {
       // 즐겨찾기 채널을 위로 (DAT-02) — 홈 등 기본 목록
       const [lives, favs] = await Promise.all([api.followingLives(false), api.favoritesList().catch(() => [])]);
+      // 그 사이 로그아웃했거나 더 새 갱신이 시작됐으면 버린다 — 예전엔 로그아웃 직후 늦게 온 이전 계정 목록이
+      // 로그아웃 상태 사이드바에 다시 그려져 다음 주기(2분)까지 남았다.
+      if (seq !== sideFollowSeq || !isLoggedIn()) return;
       sideData.following = lives;
       sideData.favorites = new Set(favs.map((f) => f.channelId));
     } catch {
