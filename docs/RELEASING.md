@@ -16,7 +16,7 @@ scripts/release-with-prs.sh [PR번호 ...] [-- release-macos.sh 옵션]
 
 1. 검사(fmt·clippy·테스트·JS 문법)와 버전·macOS 빌드 번호 증가
 2. macOS DMG(Apple Silicon) — Developer ID 서명, Apple 공증, 티켓 첨부·검증
-3. Windows x64·ARM64 NSIS 설치 파일 — 같은 버전의 소스를 서버에 보내 MSVC로 빌드하고, Mac에서 SHA-256·아키텍처·DLL 의존성 검증(미서명)
+3. Windows x64·ARM64 NSIS 설치 파일 — 같은 버전의 소스를 서버에 보내 MSVC 타깃으로 빌드하고, Mac에서 SHA-256·아키텍처·DLL 의존성 검증, Ubuntu 빌드 서버면 Parallels Windows ARM64에서 x64 테스트와 두 설치 파일의 설치·WebView2 시작 확인(미서명)
 4. 업데이트 서버 업로드·게시(`latest.json`과 `release-catalog.json`을 마지막에 원자적으로 갱신)
 5. 서버와 Mac 양쪽에서 전체 다운로드·SHA-256 검증
 6. 릴리스 커밋·`v<버전>` 태그 푸시
@@ -62,9 +62,9 @@ python3 scripts/github-release.py --version <버전>
 릴리스마다 다음 순서를 반드시 따른다.
 
 1. 기존 게시 버전보다 높은 새 버전으로 Cargo 작업공간·Tauri 버전과 macOS 빌드 번호를 맞추고 검사·테스트를 통과시킨다. 기존 게시 버전의 파일을 덮어쓰지 않는다.
-2. **macOS와 Windows 모두** 릴리스 설치 파일을 빌드한다. 위 최신 릴리스 피드 주소는 앱에 기본값으로 들어 있으며, 다른 서버를 쓸 때만 빌드 환경 변수 `CVIEW_UPDATE_URL`로 바꾼다(실행 시 같은 이름의 환경 변수가 있으면 그 값이 우선한다). macOS는 Developer ID 서명·Apple 공증·티켓 첨부 및 검증을 완료한다. Windows는 코드 서명을 적용하며, 인증서가 없어 미서명으로 배포할 때에는 다운로드 페이지의 릴리스 설명에 이를 명시한다.
+2. **macOS와 Windows 모두** 릴리스 설치 파일을 빌드한다. 앱에는 GitHub 릴리스 피드가 기본값, 위 최신 릴리스 피드가 대체 피드로 들어 있으며, 다른 서버 하나만 쓸 때만 빌드 환경 변수 `CVIEW_UPDATE_URL`로 바꾼다(실행 시 같은 이름의 환경 변수가 있으면 그 값이 우선한다). macOS는 Developer ID 서명·Apple 공증·티켓 첨부 및 검증을 완료한다. Windows는 코드 서명 인증서가 없어 미서명으로 배포하므로 다운로드 페이지의 릴리스 설명에 이를 명시한다.
 3. 같은 버전의 완성된 macOS·Windows 설치 파일과 릴리스 설명을 서버에 준비한다. `_local` 빌드, 소스 압축 파일, 테스트용 가짜 설치 파일은 게시하지 않는다.
-4. 서버의 관리자 PowerShell에서 `publish.py`로 게시한다. 여러 설치 파일은 `--artifact`를 반복해 한 릴리스에 함께 등록한다. 버전 폴더와 설치 파일을 먼저 배치하고 `latest.json`을 마지막에 원자적으로 갱신하는 게시 도구를 사용한다.
+4. 서버의 관리자 PowerShell에서 `publish.py`로 게시한다. 여러 설치 파일은 `--artifact`를 반복해 한 릴리스에 함께 등록한다. 버전 폴더와 설치 파일을 먼저 배치하고 `latest.json`을 마지막에 원자적으로 갱신하는 게시 도구를 사용한다. 서버에서 직접 `publish.py`(또는 `Publish-UploadedRelease.ps1`)를 실행하면 `latest.json`에 피드 서명이 들어가지 않아 앱이 자동 설치 대신 다운로드 단추만 보이고 `scripts/github-release.py`의 서명 확인이 실패하므로, 서명은 `scripts/publish-update.py` 경로로 넣는다.
 5. `check_server.py --download`로 HTTPS·릴리스 페이지·설치 파일 크기·SHA-256을 검사하고, Tailscale을 끈 외부 네트워크(휴대폰 데이터 등)에서도 접속과 다운로드를 확인한다. 릴리스 Mac은 서버와 같은 공유기 안에 있어 Mac의 검증만으로는 외부 공개 여부까지 확인되지 않는다([공개 다운로드 경로](../tools/windows-update-server/AUTOMATION.md#공개-다운로드-경로)).
 6. 게시 주소·버전·검증 결과를 확인한 뒤에만 릴리스 완료로 보고한다. 빌드나 게시가 실패하면 완료로 처리하지 않고 원인과 미완료 단계를 기록한다.
 
@@ -72,7 +72,7 @@ python3 scripts/github-release.py --version <버전>
 
 ```powershell
 $baseUrl = 'https://cv.dododo.app'
-& C:\CViewUpdates\tools\python\python.exe -I -B C:\CViewUpdates\tools\publish.py --root C:\CViewUpdates\site --base-url $baseUrl --version 0.1.21 --artifact C:\Releases\CView_0.1.21_arm64.dmg --artifact C:\Releases\CView_0.1.21_x64-setup.exe --notes-file C:\Releases\notes.txt
+& C:\CViewUpdates\tools\python\python.exe -I -B C:\CViewUpdates\tools\publish.py --root C:\CViewUpdates\site --base-url $baseUrl --version 0.1.21 --artifact C:\Releases\CView_0.1.21_arm64.dmg --artifact C:\Releases\CView_0.1.21_x64-setup.exe --artifact C:\Releases\CView_0.1.21_arm64-setup.exe --notes-file C:\Releases\notes.txt
 & C:\CViewUpdates\tools\python\python.exe -I -B C:\CViewUpdates\tools\check_server.py --base-url $baseUrl --download
 ```
 

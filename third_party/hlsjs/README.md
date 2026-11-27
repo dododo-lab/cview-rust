@@ -53,6 +53,6 @@ node --test third_party/hlsjs/contract/*.test.cjs
 
 1. 빌드를 한 번 돌려 작업 폴더의 `tree/` 를 만든다(업스트림 원본이 기준 커밋인 독립 git 저장소다).
 2. 고친 뒤 `git -C <작업 폴더>/tree diff > third_party/hlsjs/patches/NNNN-이름.patch`. 패치 하나에 목적 하나.
-3. 고친 파일 맨 위에 `// CView 수정: …` 주석(Apache-2.0 §4(b)). `patches/CHANGES.md` 에 한 줄. 새 동작은 설정 플래그로,
+3. 고친 파일 맨 위에 `// CView 수정(NNNN): …` 주석(Apache-2.0 §4(b)). `patches/CHANGES.md` 에 한 줄. 새 동작은 설정 플래그로,
    기본값은 업스트림과 같게.
 4. `forkRevision` 을 올리고 다시 빌드한다.

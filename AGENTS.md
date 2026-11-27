@@ -16,7 +16,7 @@ scripts/release-with-prs.sh [PR번호 ...] [-- release-macos.sh 옵션]
 
 - 열린 PR을 draft 해제·squash 병합하고, 커밋 안 된 작업(추적 안 된 파일 포함)을 stash로 보관한 뒤 `git pull --ff-only origin main` → `scripts/release-macos.sh --dmg`를 실행하고, 성공·실패와 관계없이 보관한 작업을 되돌린다.
 - `.idea/`는 `.git/info/exclude`에 넣어 IDE가 다시 만들어도 깨끗함 검사를 막지 않게 한다. `--no-notarize`는 넘기지 않는다.
-- main 브랜치에서만 실행한다. 되돌리기에 실패하면 안내대로 `git stash list` 맨 위 항목을 직접 확인한다.
+- main 브랜치에서만 실행한다. 되돌리기에 실패하면 안내에 나온 SHA로 `git stash apply --index <SHA>`를 직접 확인한다(stash는 모든 worktree가 함께 써서 맨 위 항목이 다른 작업일 수 있다).
 
 - `release-macos.sh --dmg`는 검사, 버전·빌드 번호 증가, macOS 서명·공증, Windows 설치 파일 생성, 업데이트 서버 업로드·게시, 서버와 Mac의 전체 다운로드·SHA-256 검증, Git 푸시, GitHub 릴리스 사본 업로드·검증까지 실행한다.
 - Windows 설치 파일 두 개는 버전을 올린 직후 `scripts/build-server.py release-windows`가 서버에 같은 버전의 소스 스냅샷을 전송해 MSVC x64·ARM64로 빌드한다. Ubuntu는 검사(fmt·clippy와 x64 테스트 컴파일)·x64·ARM64 세 갈래를 각자의 CARGO_TARGET_DIR에서 순서대로 돌린다. Parallels의 Windows ARM64에서 x64 테스트를 에뮬레이션으로 실행하고 두 NSIS 설치 파일의 설치·WebView2 시작을 확인한다. 백그라운드로 실행해 Mac 빌드·공증 대기와 겹치며 Mac 자동 작업자는 이 Windows 전용 작업을 가져가지 않는다. Mac에서 두 파일의 SHA-256·PE 아키텍처·DLL 의존성 검사와 Windows 실행 검증을 모두 통과해야 `dist/`에 내보내고 게시한다. 기록은 `dist/CView_<버전>_windows-build.json`, 출력은 `<target>/windows-build-<버전>.log`에 남는다. 실패하면 다른 단계처럼 버전을 되돌린다. Mac 측 대기를 중단해도 서버의 작업·원본·로그는 보존되며 게시되지 않는다.

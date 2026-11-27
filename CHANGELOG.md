@@ -1,10 +1,55 @@
 # 변경 기록
 
 CView의 버전별 변경 사항이다. 모든 버전은 macOS(Apple Silicon)와 Windows(x64, v0.1.71부터 ARM64 포함) 설치 파일이 같은 번호로 함께 배포되었고,
-설치 파일은 `https://cv.dododo.app/releases/<버전>/` 및 [GitHub 릴리스](https://github.com/dododo-lab/cview-rust/releases)에서 받을 수 있다. 버전 번호는 [유의적 버전](https://semver.org/lang/ko/)을 따르며,
+설치 파일은 `https://cv.dododo.app/releases/<버전>/`(v0.1.73부터는 [GitHub 릴리스](https://github.com/dododo-lab/cview-rust/releases)도)에서 받을 수 있다. 버전 번호는 [유의적 버전](https://semver.org/lang/ko/)을 따르며,
 배포할 때마다 버전과 macOS 빌드 번호가 함께 하나씩 오른다(`scripts/release-macos.sh`).
 
 이 파일은 Git 태그와 커밋 기록에서 정리했다. 새 버전을 배포하면 맨 위에 항목을 더한다.
+
+## [0.2.37](https://github.com/dododo-lab/cview-rust/releases/tag/v0.2.37) — 2026-11-27
+
+- fix: 애니메이션·모션 정밀 고도화 1·2차 — 실제 결함 25건 ([#177](https://github.com/dododo-lab/cview-rust/pull/177))
+
+## [0.2.36](https://github.com/dododo-lab/cview-rust/releases/tag/v0.2.36) — 2026-11-27
+
+- fix: 기능 정밀 고도화 12·13차 — 실제 결함 43건 수정 ([#176](https://github.com/dododo-lab/cview-rust/pull/176))
+
+## [0.2.35](https://github.com/dododo-lab/cview-rust/releases/tag/v0.2.35) — 2026-11-27
+
+- fix: 기능 정밀 고도화 11차 — 실제 결함 수정 ([#175](https://github.com/dododo-lab/cview-rust/pull/175))
+
+## [0.2.34](https://github.com/dododo-lab/cview-rust/releases/tag/v0.2.34) — 2026-11-27
+
+- fix: 기능 정밀 고도화 9·10차 — 실제 결함 54건 수정 ([#174](https://github.com/dododo-lab/cview-rust/pull/174))
+
+## [0.2.33](https://github.com/dododo-lab/cview-rust/releases/tag/v0.2.33) — 2026-11-27
+
+- fix: 기능 정밀 고도화 6·7·8차 — 실제 결함 48건 수정 ([#173](https://github.com/dododo-lab/cview-rust/pull/173))
+
+## [0.2.32](https://github.com/dododo-lab/cview-rust/releases/tag/v0.2.32) — 2026-11-26
+
+- feat: 처음 실행 이용 고지·동의 창, 도움말 문의·저장소·라이선스 항목, 오픈소스 표기 ([#172](https://github.com/dododo-lab/cview-rust/pull/172))
+- fix: 기능 정밀 고도화 5차 — 실제 결함 24건 수정 ([#171](https://github.com/dododo-lab/cview-rust/pull/171))
+
+## [0.2.31](https://github.com/dododo-lab/cview-rust/releases/tag/v0.2.31) — 2026-11-26
+
+- fix: 기능 정밀 고도화 4차 — 실제 결함 19건 수정 (#169 위에 쌓음) ([#170](https://github.com/dododo-lab/cview-rust/pull/170))
+
+## [0.2.30](https://github.com/dododo-lab/cview-rust/releases/tag/v0.2.30) — 2026-11-26
+
+- fix: 코드 검토로 새로 찾은 실제 결함 25건 수정(기능 정밀 고도화 2차) ([#168](https://github.com/dododo-lab/cview-rust/pull/168))
+
+## [0.2.29](https://github.com/dododo-lab/cview-rust/releases/tag/v0.2.29) — 2026-11-26
+
+- fix: 감사 문서에 남은 실제 결함 14건 수정(기능 정밀 고도화) ([#167](https://github.com/dododo-lab/cview-rust/pull/167))
+
+## [0.2.28](https://github.com/dododo-lab/cview-rust/releases/tag/v0.2.28) — 2026-11-26
+
+- feat(usage): 앱 사용률을 머리줄 칩에서 사이드바 아래로 옮기고 새로 설계 ([#166](https://github.com/dododo-lab/cview-rust/pull/166))
+
+## [0.2.27](https://github.com/dododo-lab/cview-rust/releases/tag/v0.2.27) — 2026-11-26
+
+- fix: 프로젝트 폴더 리뷰(2026-11-25) 발견 사항 10건 수정 ([#165](https://github.com/dododo-lab/cview-rust/pull/165))
 
 ## [0.2.26](https://github.com/dododo-lab/cview-rust/releases/tag/v0.2.26) — 2026-11-25
 
