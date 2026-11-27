@@ -335,6 +335,18 @@ class BuildTests(unittest.TestCase):
         self.assertIn('lane check: failed (exit 3)', data)
         self.assertIn('lane x64: stopped', data)
 
+    def test_linux_lane_groups_never_overlap_the_two_release_builds(self):
+        groups = common.LINUX_LANE_GROUPS
+        flat = [lane for group in groups for lane in group]
+        self.assertEqual(sorted(flat), sorted(n for n, _ in common.LANES), 'every lane runs exactly once')
+        self.assertEqual(len(flat), len(set(flat)))
+        for group in groups:
+            self.assertLessEqual(len(set(group) & set(common.TARGETS)), 1,
+                                 'two fat-LTO release builds exceed the Ubuntu server memory')
+        self.assertIn(('check', 'x64'), groups, 'the check lane overlaps the x64 release build')
+        source = Path(runner.__file__).read_text()
+        self.assertIn("else common.LINUX_LANE_GROUPS", source)
+
     def test_lanes_use_separate_cargo_target_dirs(self):
         dirs = [d for _, d in common.LANES]
         self.assertEqual(len(set(d.casefold() for d in dirs)), len(dirs))

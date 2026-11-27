@@ -35,6 +35,11 @@ TARGETS = {'x64': ('x86_64-pc-windows-msvc', 0x8664),
 # 따로 써서 cargo 빌드 폴더 잠금으로 서로 기다리지 않는다(x64 는 예전 `target` 캐시를 그대로 쓴다).
 LANES = (('check', 'target-check'), ('x64', 'target'), ('arm64', 'target-arm64'))
 LANE_TARGET_DIRS = dict(LANES)
+# Ubuntu 서버(4코어·메모리 7GB)에서 함께 돌릴 갈래 묶음. 릴리스 빌드(fat LTO, codegen-units=1)는 끝 약 1분에
+# rustc 하나가 4.8GB까지 올라가 x64·ARM64 를 겹치면 메모리를 넘는다(v0.2.39 arm64 실측: 앞 대부분 1.2~1.7GB·CPU 25%).
+# 검사(clippy·테스트 컴파일, 약 4분)는 LTO 를 하지 않아 x64 와 겹친다 — x64 의 4.8GB 구간은 시작 약 4.5분 뒤라 검사가
+# 대개 먼저 끝나고, 겹쳐도 스왑(4GB)이 받친다. ARM64 는 그 뒤 혼자 돈다.
+LINUX_LANE_GROUPS = (('check', 'x64'), ('arm64',))
 
 
 def now():

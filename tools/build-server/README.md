@@ -87,7 +87,8 @@ Visual Studio가 재부팅을 요청하면 진행 중인 작업을 확인한 뒤
 
 Ubuntu 빌드 서버는 CView의 MSVC x64·ARM64 타깃과 정적 CRT를 유지하고, LLVM과 NSIS로 설치 파일을 만든다.
 Rust 워크스페이스의 포맷과 x64 Clippy, ARM64 앱 Clippy를 검사한다. 서버에 할당된 메모리 안에서 동작하도록
-한 번에 한 갈래씩 실행하며 Cargo는 갈래당 컴파일 작업을 3개까지 실행한다.
+검사와 x64 갈래를 함께, ARM64 갈래를 그 뒤에 혼자 실행하며 Cargo는 갈래당 컴파일 작업을 3개까지 실행한다.
+릴리스 빌드(fat LTO)는 끝 약 1분에 rustc 하나가 4.8GB까지 올라가 x64·ARM64를 겹치지 않는다. 검사 갈래는 LTO가 없어 x64와 겹친다(`LINUX_LANE_GROUPS`).
 
 서버에 Rustup과 C 빌드 도구, LLVM·Clang·LLD·NSIS를 설치한다. Tauri CLI 2.12의 Linux 호스트
 트레이 라이브러리 검사에는 `pkg-config`와 `libayatana-appindicator3-dev`가 필요하다.
