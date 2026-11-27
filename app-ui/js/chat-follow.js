@@ -119,8 +119,10 @@ export function trimFront(list, max, { keepView = false } = {}) {
   // 위로 올려 읽는 중이면 지운 높이만큼 스크롤을 당겨 보던 줄을 제자리에 둔다 — WebKit(macOS)은 스크롤 앵커링이 없어
   // 앞줄 수십 줄이 한꺼번에 빠지면 보던 자리가 수천 px 튀거나 바닥에 닿아 따라가기가 다시 켜지고 '새 메시지' 수가 0 이
   // 됐다. 지우기는 상한의 1/4 마다 한 번이라 이 측정(레이아웃 한 번)은 드물다. Chromium 이 이미 앵커링했으면 두 번 당기지 않는다.
+  // 지운 높이는 목록 높이 차로 잰다 — offsetTop 은 숨긴 줄(검색·이 사람만 보기의 display:none)에서 0 이라 첫 줄이나 자를 줄이
+  // 숨어 있으면 너무 많이(목록 자체 위치만큼) 당기거나 아예 당기지 않았다.
   const before = keepView ? list.scrollTop : 0;
-  const removed = keepView ? children[cut].offsetTop - children[0].offsetTop : 0;
+  const h0 = keepView ? list.scrollHeight : 0;
   // 지울 줄의 아바타 사진은 떼어 낸 뒤 src 를 비워 디코드한 그림 메모리를 바로 놓아 준다(chat-avatar.js).
   const photos = [];
   for (let i = 0; i < cut; i++) {
@@ -129,6 +131,7 @@ export function trimFront(list, max, { keepView = false } = {}) {
   }
   range.deleteContents();
   for (const img of photos) img.removeAttribute('src');
+  const removed = keepView ? h0 - list.scrollHeight : 0;
   if (keepView && removed > 0) {
     const want = Math.max(0, before - removed);
     if (list.scrollTop > want + 1) list.scrollTop = want;

@@ -151,6 +151,11 @@ export class Sidebar {
     const app = el.parentElement;
     const r0 = el.getBoundingClientRect();
     const ghost = el.cloneNode(true);
+    // 복제는 캔버스 그림을 옮기지 않는다 — 사용률 막대그래프(.su-spark)가 미끄러지는 동안 비어 보였다. 같은 크기라 그대로 그린다.
+    const srcCanvas = el.querySelectorAll('canvas');
+    ghost.querySelectorAll('canvas').forEach((c, i) => {
+      try { if (srcCanvas[i] && srcCanvas[i].width && srcCanvas[i].height) c.getContext('2d')?.drawImage(srcCanvas[i], 0, 0); } catch { /* 그리지 못하면 빈 채로 */ }
+    });
     ghost.removeAttribute('id');
     for (const n of ghost.querySelectorAll('[id]')) n.removeAttribute('id');
     ghost.classList.remove('sb-anim');

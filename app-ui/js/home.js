@@ -679,12 +679,21 @@ export class HomePage {
       this.category = chip.dataset.category;
       this.gridLimit = GRID_STEP;
       for (const c of this.body.querySelectorAll('.chip')) c.classList.toggle('active', c === chip);
+      this.body.querySelector('.popular-grid').classList.remove('no-enter'); // 다른 분류는 새 목록 — 떠오른다
       this.body.querySelector('.popular-grid').innerHTML = popularGrid(this.discover || [], this.category, this.gridLimit);
       return;
     }
     if (e.target.closest('[data-grid-more]')) {
       this.gridLimit += GRID_STEP;
-      this.body.querySelector('.popular-grid').innerHTML = popularGrid(this.discover || [], this.category, this.gridLimit);
+      const box = this.body.querySelector('.popular-grid');
+      const had = box.querySelectorAll('.grid > *').length;
+      // 이미 보이던 카드는 다시 떠오르지 않게(no-enter) — 예전엔 더 보기마다 위 카드 8장(풍부면 전부)이 투명해졌다 다시 떴다.
+      box.classList.add('no-enter');
+      box.innerHTML = popularGrid(this.discover || [], this.category, this.gridLimit);
+      // 누른 단추가 다시 그려져 초점이 문서 처음으로 떨어졌다 — 새 더 보기(없으면 새로 붙은 첫 카드)로.
+      const card = box.querySelectorAll('.grid > *')[had];
+      const next = box.querySelector('[data-grid-more]') || (card?.matches('a, button, [tabindex]') ? card : card?.querySelector('a, button, [tabindex]'));
+      next?.focus({ preventScroll: true });
       return;
     }
     const shelfBtn = e.target.closest('[data-shelf]');

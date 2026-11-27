@@ -5,6 +5,7 @@
 import { screenshotFormat, screenshotExtension } from './screenshot-format.js';
 import { api } from './api.js';
 import { esc, toast, keyBelongsToTarget, hideWithExit, plainLetter } from './dom.js';
+import { announcePolite } from './a11y.js';
 import { matchPlainAction } from './shortcuts.js';
 import { kbd } from './platform.js';
 import { releaseForPip } from './background-saver.js';
@@ -149,8 +150,8 @@ export class ViewerControls {
     this.qualityMenu = root.querySelector('.quality-menu');
     this.osd = document.createElement('div');
     this.osd.className = 'player-osd';
-    this.osd.setAttribute('role', 'status');
-    this.osd.setAttribute('aria-live', 'polite');
+    // 보이는 OSD 는 꾸밈 — 낭독은 늘 있는 자리(announcePolite)로 한다(숨었다 나타나는 live 영역은 읽히지 않았다).
+    this.osd.setAttribute('aria-hidden', 'true');
     this.osd.hidden = true;
     this.stage.append(this.osd);
 
@@ -519,6 +520,7 @@ export class ViewerControls {
   }
 
   flash(text) {
+    announcePolite(text);
     this.osd.textContent = text;
     this.osd.hidden = false;
     this.osd.classList.remove('fade');

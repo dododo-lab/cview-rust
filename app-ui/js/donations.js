@@ -312,6 +312,8 @@ export class StreamAlerts {
   }
 
   show(item, ms) {
+    // 등장·6단계 흐름은 한 번만 — 시청 화면을 떠났다 6.5초 안에 돌아오면(display:none → 보임) 다시 튀어나오고 흐름도 또 돌았다.
+    item.addEventListener('animationend', (e) => { if (e.target === item && e.animationName === 'alert-in') item.classList.add('in-done'); });
     this.el.append(item);
     while (this.el.children.length > ALERT_MAX) {
       const old = this.el.firstElementChild;

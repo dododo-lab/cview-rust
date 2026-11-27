@@ -1206,8 +1206,9 @@ select.select {
   background: var(--primary); transform: scaleX(0); transform-origin: left center; will-change: transform;
 }
 .queue-item.active .queue-progress { animation: queue-progress 7s linear forwards; }
-/* 키보드 초점이 히어로(카드 단추·넘김 탭) 안에 있어도 멈춘다 — 호버만 멈추면 낭독·Tab 사용자는 7초마다 다른 방송으로 바뀌었다(WCAG 2.2.2). */
-.hero:is(:hover, :focus-within) .queue-item.active .queue-progress { animation-play-state: paused; }
+/* 키보드 초점이 히어로(카드 단추·넘김 탭) 안에 있어도 멈춘다 — 호버만 멈추면 낭독·Tab 사용자는 7초마다 다른 방송으로 바뀌었다(WCAG 2.2.2).
+   :focus-within 이 아니라 :focus-visible — Chromium(WebView2)은 마우스로 누른 탭에도 초점을 남겨, 탭을 누르고 떠나면 다시 넘어가지 않았다. */
+.hero:is(:hover, :has(:focus-visible)) .queue-item.active .queue-progress { animation-play-state: paused; }
 @keyframes queue-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 /* 넓은 홈은 넘김 탭을 오른쪽 목록으로 옮긴다. 히어로가 지나치게 긴 띠가 되지 않게 높이도 함께 조절한다. */
 @container home (min-width: 1040px) {
@@ -3375,6 +3376,9 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
   background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.28), transparent); transform: skewX(-18deg);
   animation: don-shine 2.6s var(--ease-out) .3s 2;
 }
+/* 이미 나타난 알림은 다시 보여도 등장·흐름·반짝임을 되풀이하지 않는다(donations.js show — 끝나면 in-done). */
+.stream-alert.in-done:not(.leaving), .stream-alert.ev-lv-6.in-done::after, .stream-alert.ev-lv-6.in-done :is(.stream-alert-icon, .stream-alert-title b) { animation: none; }
+.stream-alert.ev-lv-6.in-done::before { display: none; }
 @keyframes don-holo { from { background-position: 0% 50%; } to { background-position: 300% 50%; } }
 /* 반짝임은 left 대신 translate(합성만) — 폭 34% 라 부모 폭 170% 이동 = 자기 폭 500% */
 @keyframes don-shine { 0% { translate: 0 0; } 55%, 100% { translate: 500% 0; } }

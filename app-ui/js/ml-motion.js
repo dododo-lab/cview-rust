@@ -46,7 +46,8 @@ export function playLayoutMotion(panes, before) {
   // 새 애니메이션 첫 프레임에 패인이 옛 목적지로 튀었다가 미끄러졌다(배치를 연달아 바꿀 때). 이전 자리(before)는 이미
   // 보이는 그대로 재 두었으므로 그 자리에서 이어 움직인다. 나타나기를 기다리는 패인은 아래에서 다시 건다.
   for (const p of panes.values()) {
-    if (p.el.hidden || p.exiting || !p.anim || (p.enterHoldUntil && now < p.enterHoldUntil)) continue;
+    // 나타나는 중(기다림 + 커지며 나타나기)인 패인은 두고 아래 규칙을 따른다 — 걷으면 반쯤 투명하던 패인이 바로 불투명해졌다.
+    if (p.el.hidden || p.exiting || !p.anim || (p.enterHoldUntil && now < p.enterHoldUntil + ENTER_MS)) continue;
     p.anim.cancel();
     p.anim = null;
     p.el.style.transformOrigin = '';
