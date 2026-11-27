@@ -24,6 +24,8 @@ pub trait Calendar: Send + Sync {
     fn next_hour(&self, date: Date) -> Date;
     /// 그달 1일 0시(현지).
     fn start_of_month(&self, date: Date) -> Date;
+    /// 그 시각의 현지 오프셋(현지 − UTC, 초).
+    fn offset_seconds(&self, date: Date) -> i32;
 }
 
 fn resolve<Tz: TimeZone>(tz: &Tz, naive: NaiveDateTime) -> Option<Date> {
@@ -90,6 +92,10 @@ where
             }
         }
         hi
+    }
+
+    fn offset_seconds(&self, date: Date) -> i32 {
+        date.with_timezone(self).offset().fix().local_minus_utc()
     }
 
     fn start_of_month(&self, date: Date) -> Date {
