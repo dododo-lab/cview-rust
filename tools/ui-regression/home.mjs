@@ -161,6 +161,23 @@ await check('H03 hero pager switches slide', async () => {
 });
 await login.page.locator('[data-hero-index]').first().click();
 await login.page.mouse.move(5, 890);
+// 창이 포커스를 잃으면 넘김 진행 막대 애니메이션을 뺀다 — 멈춤(paused)만으로는 창 서버가 계속 합성했다(home.js app-away).
+await check('H16 hero progress animation is removed while the window is unfocused', async () => {
+  const p = login.page;
+  const anim = () => p.evaluate(() => getComputedStyle(document.querySelector('.page-home .queue-item.active .queue-progress')).animationName);
+  const setFocus = (on) => p.evaluate((v) => {
+    document.hasFocus = () => v;
+    window.dispatchEvent(new Event(v ? 'focus' : 'blur'));
+  }, on);
+  await setFocus(true);
+  assert.equal(await anim(), 'queue-progress');
+  await setFocus(false);
+  assert.ok(await p.evaluate(() => document.querySelector('.page-home').classList.contains('app-away')));
+  assert.equal(await anim(), 'none');
+  await setFocus(true);
+  assert.equal(await anim(), 'queue-progress');
+  await p.evaluate(() => { delete document.hasFocus; });
+});
 await shotFull(login.page, 'home-login');
 await check('H06 following, spotlight and discover do not repeat live channels', async () => {
   const groups = await login.page.evaluate(() => ['.lf .lf-item[data-channel-id]', '.hero-main', '.popular-grid .card'].map((sel) => [...document.querySelectorAll(sel)].map((el) => el.dataset.channelId)));
