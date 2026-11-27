@@ -634,6 +634,25 @@ class WindowsInstallerTests(unittest.TestCase):
         self.assertNotIn('CVIEW_LLVM_MINGW', script)
         self.assertNotIn('cargo tauri build --target "$t"', script)
 
+    def test_release_script_overlaps_full_tests_with_windows_build(self):
+        script = (TOOLS.parents[1] / 'scripts/release-macos.sh').read_text(encoding='utf-8')
+        fmt = script.index('cargo fmt --all --check')
+        clippy = script.index('cargo clippy --workspace --all-targets -q -- -D warnings')
+        bump = script.index('bumped=1')
+        trap = script.index('trap revert_bump EXIT INT TERM')
+        start = script.index('win_pid=$!')
+        tests = script.index('cargo test --workspace -q')
+        mac_build = script.index('(cd crates/cview-app && cargo tauri build --bundles app)')
+        commit = script.index('git commit -q')
+        # 빠른 검사는 번호를 올리기 전에, 전체 테스트는 Windows 빌드를 시작한 뒤·되돌리기 trap 안에서 돈다.
+        self.assertLess(fmt, bump)
+        self.assertLess(clippy, bump)
+        self.assertLess(trap, start)
+        self.assertLess(start, tests)
+        self.assertLess(tests, mac_build)
+        self.assertLess(tests, commit)
+        self.assertEqual(script.count('cargo test --workspace'), 1)
+
     def test_all_github_workflows_pin_external_actions_to_full_commit_sha(self):
         workflows = sorted((TOOLS.parents[1] / '.github' / 'workflows').glob('*.yml'))
         self.assertGreaterEqual(len(workflows), 3)

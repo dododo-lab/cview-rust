@@ -23,8 +23,9 @@
 #
 # 배포 빌드 순서(--dmg) — 반쯤 올린 상태가 남지 않게:
 #   1) 작업 트리가 깨끗해야 한다(되돌리기가 안전하도록).
-#   2) 검사(fmt · clippy -D warnings · 전체 테스트 · node --check)를 **올리기 전에** 통과해야 한다.
+#   2) 빠른 검사(fmt · clippy -D warnings · node --check)를 **올리기 전에** 통과해야 한다.
 #   3) 버전 patch+1(--minor/--major 면 그 자리 +1, 아래 자리 0)·빌드 번호 +1.
+#   3b) Windows 서버 빌드를 시작한 뒤 전체 테스트를 돌린다 — 실패하면 아래 4)처럼 되돌린다.
 #   4) 빌드 → DMG 서명 → 공증(Accepted 확인) → 스테이플 → 확인.
 #      여기서 하나라도 실패하면 올린 파일을 git 으로 되돌리고 끝낸다(trap).
 #   4b) 같은 소스 스냅샷으로 빌드 서버에서 MSVC x64·ARM64 NSIS 설치 파일을 만든다. 둘 다 있어야 게시한다.
@@ -139,9 +140,6 @@ PY
   step "검사(올리기 전에)"
   cargo fmt --all --check
   cargo clippy --workspace --all-targets -q -- -D warnings
-  # Windows 타깃 clippy·테스트는 같은 릴리스 소스를 받은 서버에서 수행한다.
-  cargo test --workspace -q 2>&1 | grep -E "^test result|FAILED|panicked" \
-    | awk '{p+=$4; f+=$6} /FAILED|panicked/ {print} END {print "   테스트 통과", p, "실패", f; exit (f > 0)}'
   for f in app-ui/js/*.js; do node --check "$f"; done
   step "버전·빌드 번호 올리기($part)"
   trap revert_bump EXIT INT TERM
@@ -194,6 +192,14 @@ PY
   mkdir -p dist
   build_windows_installers >"$win_log" 2>&1 &
   win_pid=$!
+  # 전체 테스트(약 5분)는 Windows 서버 빌드(약 18분, 릴리스의 가장 긴 갈래)를 시작한 뒤에 돌린다.
+  # 예전엔 올리기 전에 돌려 그만큼 Windows 시작이 늦었다(v0.2.35~0.2.38 총 24분, Mac 이 Windows 를 약 13분 기다림).
+  # 실패하면 trap(revert_bump)이 기다림을 멈추고 번호를 되돌린다 — 서버 작업은 보존·미게시로 끝까지 돌고,
+  # 그동안 다음 제출은 서버의 windows.lock 에서 순서를 기다린다(빠른 검사가 위에서 먼저 걸러 드물다).
+  # Windows 타깃 clippy·테스트는 같은 릴리스 소스를 받은 서버에서 수행한다.
+  step "전체 테스트(Windows 빌드와 겹쳐)"
+  cargo test --workspace -q 2>&1 | grep -E "^test result|FAILED|panicked" \
+    | awk '{p+=$4; f+=$6} /FAILED|panicked/ {print} END {print "   테스트 통과", p, "실패", f; exit (f > 0)}'
 fi
 
 (cd crates/cview-app && cargo tauri build --bundles app)
