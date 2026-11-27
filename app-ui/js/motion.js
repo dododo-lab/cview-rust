@@ -231,6 +231,35 @@ export function installMicroMotion() {
     svg.addEventListener('animationend', () => svg.classList.remove('spin-once'), { once: true });
   }, true);
   installIconHover();
+  installAwayState();
+}
+
+/**
+ * 창이 포커스를 잃으면(다른 앱을 쓰는 중) 루트에 app-away 를 붙인다 — motion.css 가 무한 반복 표시(로고 로더·스켈레톤·
+ * 녹화 점·불확정 진행 막대·홈 넘김 막대)를 뺀다. 화면에 도는 애니메이션이 하나라도 있으면 창 서버가 매 프레임 창을 다시
+ * 합성한다 — 크기와 상관없이 4×4px 점 하나의 깜박임도 WindowServer 코어 약 16%(VM 4K 실측, 0.1% → 16.6%).
+ * 멈춤(paused)으로는 합성 애니메이션이 남아 비용이 그대로라 뺀다(animation: none). 돌아오면 처음부터 다시 돈다.
+ * 포커스가 같은 출처 iframe(멀티라이브 패인 플레이어)으로 옮길 때도 부모 창에 blur 가 오므로 이벤트가 아니라
+ * document.hasFocus()(자식 문서 포함)로 판단하고, blur 직후에는 포커스 이동이 끝난 다음 태스크에서 잰다.
+ * 그 뒤 다른 앱으로 갔다 돌아오면 blur·focus 는 iframe 창에만 온다(실제 WebKit 확인) — 초점을 쥔 iframe 창에도 듣는다.
+ */
+function installAwayState() {
+  const root = document.documentElement;
+  const sync = () => root.classList.toggle('app-away', !document.hasFocus());
+  const heard = new WeakSet();
+  const onBlur = () => setTimeout(() => {
+    sync();
+    const win = document.hasFocus() && document.activeElement?.contentWindow;
+    if (!win || heard.has(win)) return;
+    try {
+      win.addEventListener('blur', onBlur);
+      win.addEventListener('focus', sync);
+      heard.add(win);
+    } catch { /* 다른 출처 — 받을 수 없다 */ }
+  }, 0);
+  window.addEventListener('blur', onBlur);
+  window.addEventListener('focus', sync);
+  sync();
 }
 
 /**
