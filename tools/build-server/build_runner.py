@@ -137,7 +137,7 @@ def run(root, job):
                     ], stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, env=env)
 
             lanes = [name for name, _ in common.LANES]
-            groups = [lanes] if os.name == 'nt' else ([lane] for lane in lanes)
+            groups = [lanes] if os.name == 'nt' else common.LINUX_LANE_GROUPS
             for group in groups:
                 failed = run_lanes(group, directory / 'windows.log', start)
                 if failed:
