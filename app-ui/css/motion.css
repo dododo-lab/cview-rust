@@ -98,6 +98,16 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) back
 :root[data-motion="reduced"] .nav-item.playing .nav-label::after,
 :root[data-motion="reduced"] :is(.rec-btn.recording .rec-dot, .dl-fill.indeterminate, .ml-addbar-refresh.spinning svg, .queue-item.active .queue-progress,
   .player-osd.fade, .update-progress-bar.indeterminate i) { animation: none !important; }
+/* ── 창이 포커스를 잃으면(motion.js app-away) — 무한 반복 표시를 뺀다 ──
+   도는 애니메이션이 하나라도 보이면 창 서버가 매 프레임 창을 다시 합성한다(크기 무관 — 4×4px 깜박임 하나도 VM 4K 에서
+   WindowServer 코어 약 16%). 다른 앱을 쓰는 동안 멈춘 방송의 버퍼링 로고·다시 잇는 채팅 로더·녹화 점이 계속 돌았다.
+   멈춤(paused)은 합성이 남아 none. 모양은 모션 줄이기와 같은 정지 상태, 창으로 돌아오면 다시 돈다. */
+:root.app-away :is(.spinner, .sk, .ip-skeleton span, .ip-skeleton i, .rec-btn.recording .rec-dot, .dl-fill.indeterminate,
+  .ml-addbar-refresh.spinning svg, .update-progress-bar.indeterminate i, .mwi-dots i, .queue-item.active .queue-progress,
+  .splash-logo .sp-ping, .splash-logo .sp-sheen, .rv-logo :is(.rv-bubble, .rv-play, .rv-ping, .rv-sheen)),
+:root.app-away .spinner::before, :root.app-away .spinner::after, :root.app-away .preview-loading::after { animation: none !important; }
+/* 흐르지 않는 불확정 막대는 '30% 받음'으로 읽힌다 — 모션 줄이기처럼 가득 찬 옅은 막대로 */
+:root.app-away :is(.dl-fill.indeterminate, .update-progress-bar.indeterminate i) { width: 100%; opacity: 0.5; }
 /* OSD — 사라지는 애니메이션이 시간 0 이 되면 나타나자마자 투명해져 아예 안 보였다. 줄이면 그대로 보였다가 JS 타이머(1.3초)가 숨긴다. */
 
 /* ── 직접 새로고침(refresh-veil.js) — 시작 로딩 화면의 로고가 가운데 뜨고, 본문은 흐리고 약간 어둡게 ── */

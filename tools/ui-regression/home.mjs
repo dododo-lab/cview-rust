@@ -161,7 +161,7 @@ await check('H03 hero pager switches slide', async () => {
 });
 await login.page.locator('[data-hero-index]').first().click();
 await login.page.mouse.move(5, 890);
-// 창이 포커스를 잃으면 넘김 진행 막대 애니메이션을 뺀다 — 멈춤(paused)만으로는 창 서버가 계속 합성했다(home.js app-away).
+// 창이 포커스를 잃으면 넘김 진행 막대 애니메이션을 뺀다 — 멈춤(paused)만으로는 창 서버가 계속 합성했다(motion.js 루트 app-away).
 await check('H16 hero progress animation is removed while the window is unfocused', async () => {
   const p = login.page;
   const anim = () => p.evaluate(() => getComputedStyle(document.querySelector('.page-home .queue-item.active .queue-progress')).animationName);
@@ -172,7 +172,7 @@ await check('H16 hero progress animation is removed while the window is unfocuse
   await setFocus(true);
   assert.equal(await anim(), 'queue-progress');
   await setFocus(false);
-  assert.ok(await p.evaluate(() => document.querySelector('.page-home').classList.contains('app-away')));
+  await p.waitForFunction(() => document.documentElement.classList.contains('app-away'));
   assert.equal(await anim(), 'none');
   await setFocus(true);
   assert.equal(await anim(), 'queue-progress');

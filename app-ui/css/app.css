@@ -1209,8 +1209,7 @@ select.select {
 /* 키보드 초점이 히어로(카드 단추·넘김 탭) 안에 있어도 멈춘다 — 호버만 멈추면 낭독·Tab 사용자는 7초마다 다른 방송으로 바뀌었다(WCAG 2.2.2).
    :focus-within 이 아니라 :focus-visible — Chromium(WebView2)은 마우스로 누른 탭에도 초점을 남겨, 탭을 누르고 떠나면 다시 넘어가지 않았다. */
 .hero:is(:hover, :has(:focus-visible)) .queue-item.active .queue-progress { animation-play-state: paused; }
-/* 창이 포커스를 잃으면 막대를 뺀다(home.js app-away) — 멈춤(paused)은 합성 애니메이션이 남아 창 서버가 계속 매 프레임 합성했다. */
-.page-home.app-away .queue-item.active .queue-progress { animation: none; }
+/* 창이 포커스를 잃으면 막대를 뺀다 — motion.css ':root.app-away'(멈춤은 합성 애니메이션이 남아 창 서버가 계속 매 프레임 합성했다). */
 @keyframes queue-progress { from { transform: scaleX(0); } to { transform: scaleX(1); } }
 /* 넓은 홈은 넘김 탭을 오른쪽 목록으로 옮긴다. 히어로가 지나치게 긴 띠가 되지 않게 높이도 함께 조절한다. */
 @container home (min-width: 1040px) {
