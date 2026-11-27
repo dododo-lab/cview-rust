@@ -24,7 +24,7 @@ Developer ID 서명을 적용하지만 Apple 공증은 하지 않는다. Windows
 ## 정식 릴리스의 Windows 빌드
 
 정식 릴리스 명령은 그대로 `scripts/release-macos.sh --dmg`다. 버전 증가 전에 `windows-preflight`로
-전용 SSH 접속·호스트·`windows-release-v1` 기능·서버 도구·Mac의 `7zz`·`llvm-readobj`를 점검한다.
+전용 SSH 접속·호스트·`windows-release-v1` 기능·서버 도구·Mac의 `7zz`·`llvm-readobj`를 점검한다(Ubuntu 서버면 `windows-release-parallels-v1` 기능·`windows_validation` 설정·Parallels VM도 점검한다).
 버전을 올린 직후 아래 작업을 백그라운드로 시작해 macOS 빌드·공증과 겹친다.
 
 ```sh
@@ -33,7 +33,7 @@ python3 scripts/build-server.py release-windows --source "$PWD" --version <릴�
 
 이 명령은 **Windows 전용 작업**을 제출한다. Mac 자동 작업자는 이 작업을 가져가지 않으므로 macOS를 중복 빌드하지 않는다.
 서버는 같은 소스 ZIP으로 MSVC x64·ARM64를 빌드하고, Mac은 두 설치 파일을 받아 해시·PE 아키텍처·DLL 의존성을 검사한다.
-두 파일 모두 검사에 통과해야 `dist/`에 내보내고 `CView_<버전>_windows-build.json`을 남긴다.
+Ubuntu 서버면 이어서 Parallels 검증([아래](#ubuntu에서-windows-교차-빌드))도 통과해야 한다. 두 파일 모두 검사에 통과해야 `dist/`에 내보내고 `CView_<버전>_windows-build.json`을 남긴다.
 이 기록은 Windows 빌드 완료 기록이며 릴리스 게시 완료 기록(`*_publish-receipt.json`)은 정식 스크립트가 이후에 따로 만든다.
 `release-windows` 자체는 버전을 올리거나 macOS 공증·게시·Git 푸시를 하지 않는다.
 
@@ -134,7 +134,7 @@ python3 tools/build-server/test_parallels.py --vm '<VM 이름>' --host '<Mac 사
 
 ```json
 {
-  "ssh_target": "<관리자 계정>@<서버 Tailscale 주소>",
+  "ssh_target": "<빌드 계정(Ubuntu는 cview-build, Windows 서버는 관리자 계정)>@<서버 Tailscale 주소>",
   "server_name": "<서버 hostname>",
   "ssh_key": "/Users/<사용자>/.config/cview-build/id_ed25519",
   "known_hosts": "/Users/<사용자>/.config/cview-build/known_hosts",
@@ -175,6 +175,7 @@ python3 scripts/build-server.py worker --once
 
 ## 소스를 서버에 올리고 빌드하기
 
+(Windows 빌드 서버 전용 — Ubuntu 설치 스크립트는 `Submit-Build.ps1`을 배치하지 않으므로 Ubuntu 서버에는 아래 Mac의 `submit`을 쓴다.)
 서버의 `C:\CViewBuild\source\` 같은 폴더에 전체 프로젝트 소스를 올리거나 변경된 파일을 덮어쓴다.
 삭제한 파일은 서버 소스 폴더에서도 삭제한다. 빌드 중인 작업은 업로드 후 변경한 소스의 영향을 받지 않는다.
 
@@ -200,12 +201,12 @@ python3 scripts/build-server.py submit --source /절대/경로/소스 --wait
 ```
 
 `--wait`만 생략하면 작업 ID를 표시하고 바로 끝난다. Windows에서 제출했든 Mac에서 제출했든 Mac 작업자가 실행 중이어야 한다.
-코드 업로드에는 관리자 계정의 빌드 전용 키가 필요하다. **업로드한 Rust build.rs 등은 양쪽 컴퓨터에서 실행된다.**
+코드 업로드에는 빌드 계정(Ubuntu는 `cview-build`, Windows 서버는 관리자 계정)에 등록한 빌드 전용 키가 필요하다. **업로드한 Rust build.rs 등은 양쪽 컴퓨터에서 실행된다.**
 이 큐는 신뢰하는 메인테이너 전용이며 외부 PR·익명 업로드를 자동 실행하는 보안 샌드박스가 아니다.
 
 ## 결과와 검증
 
-서버 `C:\CViewBuild\jobs\<작업 ID>\`:
+서버 `C:\CViewBuild\jobs\<작업 ID>\`(Ubuntu 서버는 `/srv/cview-build/jobs/<작업 ID>/`):
 
 ```text
 source.zip           두 운영체제가 함께 쓰는 원본
@@ -222,7 +223,7 @@ receipt.json         세 파일의 빌드·전송·의존성 검사를 모두 �
 
 Mac에도 `work_dir/<작업 ID>/artifacts/`와 `receipt.json`, `macos.log`가 남는다.
 Mac 작업자 자체 로그는 `~/.config/cview-build/logs/worker*.log`에 남는다.
-양쪽 fmt·clippy·Rust 테스트, Mac의 JavaScript 구문 검사, Windows 바이너리 PE 아키텍처 검사,
+양쪽 fmt·clippy·Rust 테스트(Ubuntu 서버는 Windows 테스트를 컴파일만 하고, 실행은 정식 릴리스의 Parallels 검증에서 한다), Mac의 JavaScript 구문 검사, Windows 바이너리 PE 아키텍처 검사,
 다운로드 SHA-256, Mac에서 NSIS를 풀어 실행 파일·DLL 의존성 검사를 통과해야 최종 성공이 된다.
 파일 세 개 중 하나라도 실패하면 완료로 처리하지 않는다. 설치와 실제 앱 실행·재생 검증은 별도다.
 
@@ -230,7 +231,7 @@ Mac 작업자 자체 로그는 `~/.config/cview-build/logs/worker*.log`에 남�
 python3 scripts/build-server.py status
 python3 scripts/build-server.py status <작업-ID>
 python3 scripts/build-server.py log <작업-ID>
-python3 scripts/build-server.py setup-log
+python3 scripts/build-server.py setup-log   # Windows 서버만(setup.log는 Install-BuildServer.ps1이 만든다)
 ```
 
 Mac 작업자만 중단됐다면 동일한 `worker` ID로 다시 실행하면 현재 작업을 이어간다.

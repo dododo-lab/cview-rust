@@ -23,7 +23,7 @@
 | ID | 상태 | 항목 | 위치 | 고치는 법 |
 |---|---|---|---|---|
 | M-1 | ✅ ed6a580 (나나양 채널이 방송 중이 아니라 그 증상 재현은 미검증) | 멀티라이브 패인이 첫 프레임 없이 영원히 "재생 중"(나나양) — 낡은 상태 렌더가 재사용 슬롯을 멈추게 할 수 있음, 첫 프레임 감시 없음 | `multilive.js:323-328`, `crates/cview-app/src/multi_live.rs:235,478`, `session.rs:529` | 상태 순번(rev)으로 낡은 렌더 무시 + 첫 프레임 감시(일정 시간 안 나오면 다시 연결) |
-| M-2 | ◐ `is_multi_live` 는 72d85c6 에서 켬(패인이 Automatic PID 로 돌아 비선택 안정성 목표·선택 전환·역할 화질이 안 걸리던 원인). 사용자 설정 전달은 여전히 ⏭ — 음소거로 시작·볼륨이 멀티 오디오 배분과 충돌, 일부만 골라 적용하는 별도 작업 | 패인 플레이어가 사용자 플레이어 설정을 안 받음(`player_settings: None`), `is_multi_live` 미설정 | `multi_live.rs:503-508`, `viewmodels/player/mod.rs:268` | 설정 전달·멀티 표시 |
+| M-2 | ✅ `is_multi_live` 는 72d85c6 에서 켬(패인이 Automatic PID 로 돌아 비선택 안정성 목표·선택 전환·역할 화질이 안 걸리던 원인). 사용자 설정 전달은 e0a6084 에서 넣음(`start.player_settings = Some(request.player_settings)`, 테스트 `pane_start_honors_player_settings`) | 패인 플레이어가 사용자 플레이어 설정을 안 받음(`player_settings: None`), `is_multi_live` 미설정 | `multi_live.rs:503-508`, `viewmodels/player/mod.rs:268` | 설정 전달·멀티 표시 |
 | W-1 | ✅ 5198a22 | Windows 에서 ⌃⌘ 조합·Ctrl+Tab 이 눌리지 않음(Ctrl→⌘ 바꿔 읽기 부작용) | `index.html:16-22`, `multichat.js:83`, `multilive.js:147`, `viewer-controls.js:376` | Ctrl+Tab 은 바꾸지 않고, ⌃⌘ 는 Windows 에서 Ctrl+Alt |
 | W-2 | ✅ 5198a22 | 단축키 안내가 Windows 에서도 ⌘ | `app.js:312,371-391`, `shortcuts.js:55` 외 10여 곳 | `kbd()` 헬퍼로 Windows 면 Ctrl+/Alt+/Shift+ |
 | A-1 | ✅ 9390361 | 전역 `:focus-visible { outline: none }` 이 초점 표시를 지움 | `css/app.css:778` | 삭제(뒤쪽 허용 목록이 그린다) |
@@ -126,9 +126,9 @@
 
 | ID | 상태 | 항목 · 이유 |
 |---|---|---|
-| A-4 | ⏭ | 앱 시트·채널 메모·온보딩 대화 상자 Tab 가두기 — 공용 `openDialog` 를 만들어 한 번에 옮기는 별도 작업 |
+| A-4 | ✅ 4914339(#106) | 앱 시트·채널 메모·온보딩 대화 상자 Tab 가두기 — 공용 `trapFocus`(`a11y.js`)로 옮김 |
 | A-5 | ⏭ | 채널 알림 팝오버(역할·Esc·화면 이동 때 닫기), 계정 메뉴의 문서 단위 Esc — 팝오버 공용 틀과 함께 |
-| A-6 | ⏭ | 탭 위젯 aria-selected·tabpanel·화살표(보관함·통계·채널), 홈 칩의 잘못된 tablist, 인사이트 줄·팔로잉 오프라인 줄·시청 화면 아바타의 키보드 접근, 카테고리 고정 버튼(버튼 안 버튼) — 마크업을 바꾸는 접근성 묶음 |
+| A-6 | ◐ 탭 위젯은 92a4eaf(#30)의 `syncTabs`·`bindTabKeys`(`a11y.js`)로 됨, 나머지 ⏭ | 탭 위젯 aria-selected·tabpanel·화살표(보관함·통계·채널), 홈 칩의 잘못된 tablist, 인사이트 줄·팔로잉 오프라인 줄·시청 화면 아바타의 키보드 접근, 카테고리 고정 버튼(버튼 안 버튼) — 마크업을 바꾸는 접근성 묶음 |
 | A-7 | ⏭ | 멀티채팅 개요 칩 5초마다 다시 그림·칩 안 ✕ — 칩을 제자리 갱신으로 바꾸는 렌더 정리 |
 | A-8 | ⏭ | 채팅·인사이트 접기 때 초점 이동·채팅 폭 전환 모션 — 레이아웃 전환과 함께 |
 | U-6 | ⏭ | 멀티라이브 "모두 닫기"·멀티채팅 "모두 닫기" 확인/되돌리기 — 되돌릴 세션 복원 경로가 필요 |
