@@ -350,6 +350,13 @@ export class HomePage {
       if (e.animationName !== 'queue-progress' || this.root.hidden || motionReduced()) return;
       this.setHero(this.heroIndex + 1);
     });
+    // 창이 포커스를 잃으면(다른 앱을 쓰는 중) 넘김 진행 막대 애니메이션을 뺀다(CSS .page-home.app-away). transform 애니메이션은
+    // 창 서버가 매 프레임 합성해, 홈을 띄워 둔 채 다른 일을 하는 내내 WindowServer 가 코어 약 10%를 썼다(VM 4K 실측 10.2% → 0.3%).
+    // animation-play-state: paused 로는 합성 애니메이션이 남아 비용이 그대로였다 — 그래서 멈춤이 아니라 뺀다. 돌아오면 지금 장부터 7초를 다시 잰다.
+    const away = () => this.root.classList.toggle('app-away', !document.hasFocus());
+    window.addEventListener('blur', away);
+    window.addEventListener('focus', away);
+    away();
   }
 
   attachReport(reportPage) {
