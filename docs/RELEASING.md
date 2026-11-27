@@ -14,7 +14,7 @@ scripts/release-with-prs.sh [PR번호 ...] [-- release-macos.sh 옵션]
 
 `release-macos.sh --dmg`가 하는 일:
 
-1. 검사(fmt·clippy·테스트·JS 문법)와 버전·macOS 빌드 번호 증가
+1. 빠른 검사(fmt·clippy·JS 문법)와 버전·macOS 빌드 번호 증가. 전체 테스트는 Windows 서버 빌드를 시작한 뒤 겹쳐 돌리며, 실패하면 번호를 되돌린다
 2. macOS DMG(Apple Silicon) — Developer ID 서명, Apple 공증, 티켓 첨부·검증
 3. Windows x64·ARM64 NSIS 설치 파일 — 같은 버전의 소스를 서버에 보내 MSVC 타깃으로 빌드하고, Mac에서 SHA-256·아키텍처·DLL 의존성 검증, Ubuntu 빌드 서버면 Parallels Windows ARM64에서 x64 테스트와 두 설치 파일의 설치·WebView2 시작 확인(미서명)
 4. 업데이트 서버 업로드·게시(`latest.json`과 `release-catalog.json`을 마지막에 원자적으로 갱신)
