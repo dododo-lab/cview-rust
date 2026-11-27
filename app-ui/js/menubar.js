@@ -249,6 +249,9 @@ function renderList() {
     if (!items.length) {
       if (state.query.trim()) {
         listEl.innerHTML = '<div class="mb-empty"><strong>일치하는 방송이 없습니다</strong><span>다른 검색어로 찾아보세요.</span></div>';
+      } else if (state.tab === 'following' && state.followingFailed) {
+        // 받기 실패를 "방송 중인 팔로잉 채널이 없습니다"로 말하지 않는다(메인 창 팔로잉 화면과 같게).
+        listEl.innerHTML = '<div class="mb-empty"><strong>팔로잉 방송을 불러오지 못했습니다</strong><span>새로고침으로 다시 시도해 주세요.</span></div>';
       } else if (state.tab === 'following') {
         listEl.innerHTML = `
           <div class="mb-empty">
@@ -330,6 +333,7 @@ async function refreshData({ force = false } = {}) {
         api.popularLives(30, force),
       ]);
       if (seq !== refreshSeq) return;
+      let followingOk = true;
       if (snapRes.status === 'fulfilled' && snapRes.value) {
         applySnapshot(snapRes.value, { render: false, trustAuth: authRes.status !== 'fulfilled' });
       }
@@ -353,17 +357,20 @@ async function refreshData({ force = false } = {}) {
           api.favoritesList(),
         ]);
         if (seq !== refreshSeq) return;
-        if (folRes.status === 'fulfilled' && Array.isArray(folRes.value)) {
-          state.following = folRes.value;
-        }
+        followingOk = folRes.status === 'fulfilled' && Array.isArray(folRes.value);
+        if (followingOk) state.following = folRes.value;
+        state.followingFailed = !followingOk;
         if (favRes.status === 'fulfilled' && Array.isArray(favRes.value)) {
           state.favorites = new Set(favRes.value.map((f) => f.channelId));
         }
       } else {
         state.following = [];
         state.favorites = new Set();
+        state.followingFailed = false;
       }
-      state.lastLoadedAt = Date.now();
+      // 받지 못한 목록이 있으면 '방금 받음'으로 치지 않는다 — 30초 안에 다시 열어도 다시 받는다.
+      const popularOk = popRes.status === 'fulfilled' && Array.isArray(popRes.value);
+      state.lastLoadedAt = followingOk && popularOk ? Date.now() : 0;
     } finally {
       if (seq === refreshSeq) {
         state.loading = false;

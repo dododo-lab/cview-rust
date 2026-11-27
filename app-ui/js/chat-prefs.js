@@ -29,6 +29,10 @@ export const CHAT_DEFAULTS = Object.freeze({
   // 앱 전용 — 차단한 사용자 이름(blockedUsers 는 원본처럼 사용자 ID 문자열 목록), 하이라이트 대상
   blockedUserNames: {},
   highlightedUsers: [],
+  // 후원 읽어 주기 음량(0~1)·속도(200 = 보통) — 읽는 쪽(chat-extras.js)과 같은 기본값. 예전엔 기본값이 없어 설정 화면
+  // 슬라이더가 빈 값(가운데 0.5·250)으로 그려지고 숫자도 비었다.
+  ttsVolume: 0.8,
+  ttsRate: 200,
 });
 
 let prefs = { ...CHAT_DEFAULTS };

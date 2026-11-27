@@ -65,6 +65,7 @@ function installMenubarMocks({ loggedIn = true, windowHidden = true, nowPlaying 
   const origInvoke = window.__TAURI__.core.invoke;
   window.__TAURI__.core.invoke = async (cmd, args = {}) => {
     if (cmd === 'tray_get_state') return structuredClone(state.snap);
+    if (cmd === 'following_lives') { state.followingCalls = (state.followingCalls || 0) + 1; if (window.__followFail) throw new Error('오프라인'); }
     if (cmd === 'tray_popover_close') { state.closed += 1; return null; }
     if (cmd === 'tray_control') { state.controls.push(args.action); return null; }
     if (cmd === 'appearance_set_theme') { state.themes.push(args.theme); return null; }
@@ -264,6 +265,31 @@ for (const theme of ['dark', 'light']) {
     await ctx.close();
   });
 }
+
+await check('MB08 팔로잉 받기 실패는 "방송 중인 팔로잉 없음"이 아니라 실패로 알리고, 다시 열면 다시 받는다(12차)', async () => {
+  const ctx = await browser.newContext({ viewport: { width: 384, height: 584 }, colorScheme: 'dark' });
+  const page = await ctx.newPage();
+  page.setDefaultTimeout(8000);
+  await page.addInitScript(mockTauri, [base, 'dark', 10]);
+  await page.addInitScript(installMenubarMocks, { loggedIn: true, windowHidden: true, nowPlaying: true });
+  await page.addInitScript(() => { window.__followFail = true; });
+  await page.goto(`${base}menubar.html`);
+  await page.waitForSelector('.mb-popover');
+  await page.waitForFunction(() => !document.querySelector('.mb-empty')?.textContent?.includes('불러오는 중'));
+  const text = await page.textContent('#mb-list');
+  assert.ok(text.includes('불러오지 못했습니다'), text);
+  assert.ok(!text.includes('방송 중인 팔로잉 채널이 없습니다'), text);
+  const before = await page.evaluate(() => window.__mb.followingCalls);
+  // 네트워크가 돌아온 뒤 팝오버를 닫았다 다시 열기(30초 안) — 실패한 받기를 '방금 받음'으로 치지 않는다
+  await page.evaluate(() => {
+    window.__followFail = false;
+    window.__emitMenubar('tray://state', { ...window.__mb.snap, open: false });
+    window.__emitMenubar('tray://state', { ...window.__mb.snap, open: true });
+  });
+  await page.waitForFunction((n) => window.__mb.followingCalls > n, before);
+  await page.waitForFunction(() => document.querySelectorAll('#mb-list [data-channel-id], #mb-list .mb-item').length > 0);
+  await ctx.close();
+});
 
 await check('MB07 메인 창 tray://control — 초점 유무와 관계없이 화면 이동 실행', async () => {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 }, colorScheme: 'dark' });

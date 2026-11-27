@@ -51,6 +51,8 @@ pub struct InsightsDto {
     pub streak: i64,
     pub average: f64,
     pub channels: Vec<NamedSeconds>,
+    /// 같은 순서의 상위 100 채널(id 포함) — 인사이트 '많이 보는 팔로잉'이 팔로우한 채널만 고른다.
+    pub channel_pool: Vec<NamedSeconds>,
     pub categories: Vec<NamedSeconds>,
     /// 0~23시, 빈 시간은 0.
     pub hourly: Vec<f64>,
@@ -136,6 +138,15 @@ fn overview(
         streak: a.streak,
         average: a.avg,
         channels: named_channels(a.channels, a.channel_ids),
+        channel_pool: a
+            .channel_pool
+            .into_iter()
+            .map(|(id, name, seconds)| NamedSeconds {
+                name,
+                seconds,
+                channel_id: Some(id),
+            })
+            .collect(),
         categories: named(a.categories),
         hourly,
         daily: a
@@ -377,6 +388,35 @@ pub async fn data_cleanup(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 순위 후보는 10위 밖까지 담는다 — 비팔로우 채널 12개 뒤 12위인 팔로잉 채널도 '많이 보는 팔로잉'에 닿는다.
+    #[test]
+    fn overview_channel_pool_reaches_past_the_top_ten() {
+        use cview_persistence::models::WatchHistory;
+        let dir = tempfile::tempdir().unwrap();
+        let store = cview_persistence::DataStore::open(dir.path().join("cview.sqlite")).unwrap();
+        let now = chrono::Utc::now();
+        let mut rows = Vec::new();
+        for i in 0..13 {
+            let id = format!("c{i:02}");
+            let secs = 6000.0 - f64::from(i) * 300.0;
+            let started = now - chrono::Duration::hours(3);
+            let mut r = WatchHistory::new(&id, &id, None, None, started);
+            r.ended_at = Some(started + chrono::Duration::seconds(secs as i64));
+            r.updated_at = r.ended_at;
+            r.duration = secs;
+            rows.push(r);
+        }
+        store.insert_watch_history_rows(&rows).unwrap();
+        let dto = overview(&store, now).unwrap();
+        assert_eq!(dto.channels.len(), 10);
+        assert_eq!(dto.channel_pool.len(), 13);
+        assert_eq!(dto.channel_pool[12].channel_id.as_deref(), Some("c12"));
+        // 앞 10개는 channels 와 같은 순서
+        for (a, b) in dto.channels.iter().zip(&dto.channel_pool) {
+            assert_eq!(a.channel_id, b.channel_id);
+        }
+    }
 
     /// 채널 순위에는 같은 순서의 채널 id 가 실린다 — 팔로잉 인사이트가 팔로우하지 않은 채널을 거른다.
     #[test]

@@ -74,6 +74,26 @@ fn playback_recent_filters_floor_and_completion() {
     assert_eq!(nos, vec![2]);
 }
 
+/// 끝 30초 안(열면 처음부터 재생)은 짧은 영상이라도 이어 보기에 담지 않는다 — 300초 영상 275초는 빼고, 긴 영상·중간 위치는 그대로.
+#[test]
+fn playback_recent_skips_positions_that_would_restart() {
+    let s = store();
+    s.record_vod_playback(1, 275.0, 300.0, "short", "c", None)
+        .unwrap();
+    s.record_vod_playback(2, 3000.0, 3600.0, "long", "c", None)
+        .unwrap();
+    s.record_vod_playback(3, 200.0, 300.0, "short-mid", "c", None)
+        .unwrap();
+    let mut nos: Vec<_> = s
+        .fetch_recent_vod_playback(20)
+        .unwrap()
+        .iter()
+        .map(|r| r.video_no)
+        .collect();
+    nos.sort();
+    assert_eq!(nos, vec![2, 3]);
+}
+
 #[test]
 fn playback_recent_sorts_by_last_seen_desc() {
     let s = store();

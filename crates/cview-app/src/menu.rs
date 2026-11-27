@@ -410,9 +410,28 @@ pub fn build<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
 
 /// 메뉴 이벤트 → 화면. 알려진 ID 만 넘긴다.
 pub fn forward<R: Runtime>(app: &AppHandle<R>, id: &str) {
-    if is_known(id) {
-        let _ = app.emit(MENU_ACTION, serde_json::json!({ "id": id }));
+    if !is_known(id) {
+        return;
     }
+    // 화면은 앞에 있는(초점 있는) 창만 메뉴 동작을 따른다. 메인 창을 내리거나 트레이로 숨긴 채 ⌘Tab 으로 CView 를
+    // 앞으로 가져오면 초점 있는 창이 없어 CView › 설정…·정보·업데이트 확인이 아무 일도 안 했다 — 메인 창을 보이고 그리로.
+    let any_focused = app.webview_windows().iter().any(|(label, w)| {
+        label != crate::tray_popover::TRAY_POPOVER_WINDOW && w.is_focused().unwrap_or(false)
+    });
+    if needs_main_window(id, any_focused) {
+        crate::tray::show_main(app);
+        crate::tray_popover::send_main_control(
+            app,
+            serde_json::json!({ "kind": "menu", "id": id }),
+        );
+        return;
+    }
+    let _ = app.emit(MENU_ACTION, serde_json::json!({ "id": id }));
+}
+
+/// 초점 있는 CView 창이 없을 때 메인 창으로 보내 여는 앱 메뉴 항목인가. 순수 함수.
+fn needs_main_window(id: &str, any_focused: bool) -> bool {
+    !any_focused && APP_ITEMS.contains(&id)
 }
 
 /// 화면으로 넘기는 항목이 든 메뉴 목록 전부.
@@ -425,6 +444,17 @@ pub fn is_known(id: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn app_menu_items_go_to_the_main_window_when_no_window_has_focus() {
+        for id in ["about", "check-update", "settings", "notification-settings"] {
+            assert!(super::needs_main_window(id, false), "{id}");
+            assert!(!super::needs_main_window(id, true), "{id}");
+        }
+        // 재생·채팅처럼 앞 창이 대상인 항목은 그대로(초점 없으면 아무 창도 하지 않는다)
+        assert!(!super::needs_main_window("play-pause", false));
+        assert!(!super::needs_main_window("close-viewer", false));
+    }
 
     #[test]
     fn popup_position_follows_the_web_view_zoom() {

@@ -17,6 +17,10 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 const WATCH_STREAK_WINDOW_DAYS: i64 = 14;
 
 /// `aggregateInsights` 결과 묶음(Swift 튜플).
+/// 순위 후보 수 — 상위 10(`channels`)만 담으면, 팔로우하지 않은 채널을 많이 보는 사용자의
+/// '많이 보는 팔로잉'이 비거나 11위 아래 팔로잉 채널이 빠졌다.
+pub const CHANNEL_POOL: usize = 100;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct AggregatedInsights {
     pub all: TimeInterval,
@@ -28,6 +32,8 @@ pub struct AggregatedInsights {
     pub channels: Vec<(String, TimeInterval)>,
     /// `channels` 와 같은 순서의 채널 id — 화면이 팔로우 여부로 거르거나 채널을 열 때 쓴다.
     pub channel_ids: Vec<String>,
+    /// 같은 순서로 상위 [`CHANNEL_POOL`] 채널 (id, 이름, 초) — 화면이 팔로우한 채널만 골라도 10위 밖까지 닿게.
+    pub channel_pool: Vec<(String, String, TimeInterval)>,
     /// 상위 8 카테고리 (표시 이름, 초).
     pub categories: Vec<(String, TimeInterval)>,
     pub hourly: BTreeMap<u32, TimeInterval>,
@@ -382,6 +388,48 @@ impl DataStore {
     }
 }
 
+/// `start..end`(`hi` 까지)를 현지 정시 조각으로 나눠 `f(조각 시작, 초, 현지 시)` 를 부른다.
+/// 기록 안에서 현지 오프셋이 같으면(거의 모든 기록) 달력에 묻지 않고 정수로 나눈다 — 전체 기록을 조각으로 나누어도
+/// 인사이트 집계가 느려지지 않게. 오프셋이 바뀌는 기록(서머타임 전환)은 달력의 정시([`for_each_hour_piece`])로 나눈다.
+///
+/// [`for_each_hour_piece`]: crate::watch_report::for_each_hour_piece
+fn hour_pieces(
+    start: Date,
+    end: Date,
+    hi: Date,
+    calendar: &dyn Calendar,
+    f: &mut impl FnMut(Date, TimeInterval, u32),
+) {
+    let end = end.min(hi);
+    if end <= start {
+        return;
+    }
+    let off = calendar.offset_seconds(start);
+    let (Some(s_ns), Some(e_ns)) = (start.timestamp_nanos_opt(), end.timestamp_nanos_opt()) else {
+        crate::watch_report::for_each_hour_piece(start, end, start, end, calendar, |p, secs| {
+            f(p, secs, calendar.hour(p))
+        });
+        return;
+    };
+    if calendar.offset_seconds(end) != off || e_ns - s_ns > 20 * 3_600_000_000_000 {
+        crate::watch_report::for_each_hour_piece(start, end, start, end, calendar, |p, secs| {
+            f(p, secs, calendar.hour(p))
+        });
+        return;
+    }
+    const HOUR: i64 = 3_600_000_000_000;
+    let off_ns = i64::from(off) * 1_000_000_000;
+    let mut cur = s_ns;
+    let mut idx = (s_ns + off_ns).div_euclid(HOUR);
+    while cur < e_ns {
+        let next = ((idx + 1) * HOUR - off_ns).min(e_ns);
+        let piece = chrono::DateTime::from_timestamp_nanos(cur);
+        f(piece, (next - cur) as f64 / 1e9, idx.rem_euclid(24) as u32);
+        cur = next;
+        idx += 1;
+    }
+}
+
 /// `aggregateInsights` 본체 — 원시 행 전량에서 한 번에 접는다.
 pub(crate) fn aggregate(
     records: &[WatchHistory],
@@ -431,19 +479,32 @@ pub(crate) fn aggregate(
                 r.category_name.as_deref(),
             ))
             .or_insert(0.0) += duration;
-        *hourly.entry(calendar.hour(r.started_at)).or_insert(0.0) += duration;
-        let day = calendar.start_of_day(r.started_at);
-        streak_days.insert(day);
-        // 일별 막대·'오늘 시청'은 현지 정시 조각으로 나눠 그날에 담는다 — 예전엔 23시에 시작한 3시간을 모두 시작한 날에
-        // 넣어, 자정 뒤 '오늘 시청'이 0 이고 통계 화면(watch_report, 이미 조각으로 담음)과 값이 달랐다.
-        crate::watch_report::for_each_hour_piece(
-            r.started_at,
-            adding(&r.started_at, duration),
-            earliest30,
-            now.max(r.started_at),
-            calendar,
-            |piece, secs| *daily_map.entry(calendar.start_of_day(piece)).or_insert(0.0) += secs,
-        );
+        // 일별 막대·'오늘 시청'·'주로 보는 시간'·'연속 시청'은 현지 정시 조각으로 나눠 그 시각·그날에 담는다 — 예전엔
+        // 23시에 시작한 3시간을 모두 시작한 시각·날에 넣어, 자정 뒤 '오늘 시청'이 0, 밤에 본 다음 날 '연속 시청'이 끊겼고
+        // 통계 화면(watch_report, 이미 조각으로 담음)과 값이 달랐다. (일별은 30일 칸 안의 조각만)
+        let end = adding(&r.started_at, duration);
+        let mut last_day: Option<(Date, u32)> = None; // (그날 0시, 앞 조각의 현지 시)
+        let mut put = |piece: Date, secs: TimeInterval, hour: u32| {
+            *hourly.entry(hour).or_insert(0.0) += secs;
+            // 날은 조각이 그날 첫 조각일 때만 달력에 묻는다 — 조각은 정시에서 끊기므로 현지 시가 앞 조각보다 작아지면
+            // (23시 → 0시) 다음 날이다(서머타임으로 같은 시가 두 번 와도 작아지지 않는다).
+            let day = match last_day {
+                Some((d, prev)) if hour >= prev => {
+                    last_day = Some((d, hour));
+                    d
+                }
+                _ => {
+                    let d = calendar.start_of_day(piece);
+                    streak_days.insert(d);
+                    last_day = Some((d, hour));
+                    d
+                }
+            };
+            if piece >= earliest30 {
+                *daily_map.entry(day).or_insert(0.0) += secs;
+            }
+        };
+        hour_pieces(r.started_at, end, now.max(end), calendar, &mut put);
     }
 
     // 이름으로 정렬하던 top_n 과 같은 순서(초 내림차순, 같으면 이름)로 고르되 id 를 함께 남긴다.
@@ -457,10 +518,21 @@ pub(crate) fn aggregate(
             .then_with(|| a.1.cmp(b.1))
             .then_with(|| a.0.cmp(b.0))
     });
-    ranked.truncate(10);
-    let channels: Vec<(String, TimeInterval)> =
-        ranked.iter().map(|(_, n, d)| (n.to_string(), *d)).collect();
-    let channel_ids: Vec<String> = ranked.iter().map(|(id, _, _)| id.to_string()).collect();
+    ranked.truncate(CHANNEL_POOL);
+    let channel_pool: Vec<(String, String, TimeInterval)> = ranked
+        .iter()
+        .map(|(id, n, d)| (id.to_string(), n.to_string(), *d))
+        .collect();
+    let channels: Vec<(String, TimeInterval)> = ranked
+        .iter()
+        .take(10)
+        .map(|(_, n, d)| (n.to_string(), *d))
+        .collect();
+    let channel_ids: Vec<String> = ranked
+        .iter()
+        .take(10)
+        .map(|(id, _, _)| id.to_string())
+        .collect();
     let categories = top_n(category_map, 8);
 
     let today = calendar.start_of_day(now);
@@ -509,6 +581,7 @@ pub(crate) fn aggregate(
         avg,
         channels,
         channel_ids,
+        channel_pool,
         categories,
         hourly,
         daily,
@@ -581,6 +654,74 @@ mod channel_summary_tests {
             a.daily[n - 2]
         );
         assert!((a.all - 3.0 * 3600.0).abs() < 1e-6);
+    }
+
+    /// 정수로 나누는 빠른 길은 달력 정시로 나눈 조각과 같다(30분 오프셋·서머타임 날 포함).
+    #[test]
+    fn hour_pieces_match_the_calendar_pieces() {
+        use chrono::TimeZone;
+        fn check(cal: &dyn Calendar, start: Date, secs: f64) {
+            let end = adding(&start, secs);
+            let mut fast = Vec::new();
+            hour_pieces(start, end, end, cal, &mut |p, s, h| fast.push((p, s, h)));
+            let mut slow = Vec::new();
+            crate::watch_report::for_each_hour_piece(start, end, start, end, cal, |p, s| {
+                slow.push((p, s, cal.hour(p)))
+            });
+            assert_eq!(fast.len(), slow.len(), "{start}");
+            for (a, b) in fast.iter().zip(&slow) {
+                assert_eq!((a.0, a.2), (b.0, b.2), "{start}");
+                assert!((a.1 - b.1).abs() < 1e-6);
+            }
+        }
+        let seoul = chrono_tz::Asia::Seoul;
+        let kolkata = chrono_tz::Asia::Kolkata;
+        let ny = chrono_tz::America::New_York;
+        let utc = |y, mo, d, h, mi| chrono::Utc.with_ymd_and_hms(y, mo, d, h, mi, 7).unwrap();
+        for start in [
+            utc(2026, 3, 9, 14, 50),
+            utc(2026, 3, 9, 23, 59),
+            utc(2026, 12, 31, 14, 0),
+        ] {
+            check(&seoul, start, 3.0 * 3600.0 + 125.5);
+            check(&kolkata, start, 5.0 * 3600.0);
+        }
+        // 뉴욕 서머타임 시작(2026-03-08 07:00Z)·끝(2026-11-01 06:00Z)을 걸친 기록
+        check(&ny, utc(2026, 3, 8, 5, 30), 4.0 * 3600.0);
+        check(&ny, utc(2026, 11, 1, 4, 30), 4.0 * 3600.0);
+        // 하루를 넘는 기록
+        check(&seoul, utc(2026, 5, 1, 3, 0), 30.0 * 3600.0);
+    }
+
+    /// '주로 보는 시간'·'연속 시청'도 정시 조각으로 — 월 23시~화 1시만 본 사용자는 수요일에 연속 2일, 23시·0시 각 1시간.
+    #[test]
+    fn hourly_and_streak_split_a_session_across_midnight() {
+        use chrono::TimeZone;
+        let tz = chrono_tz::Asia::Seoul;
+        let at = |d, h, m| {
+            tz.with_ymd_and_hms(2026, 3, d, h, m, 0)
+                .unwrap()
+                .with_timezone(&chrono::Utc)
+        };
+        let row = |started: Date, secs: f64| {
+            let mut r = WatchHistory::new("c1", "채널", None, None, started);
+            r.ended_at = Some(adding(&started, secs));
+            r.duration = secs;
+            r.updated_at = r.ended_at;
+            r
+        };
+        // 2026-03-09 은 월요일
+        let a = aggregate(&[row(at(9, 23, 0), 7200.0)], at(11, 9, 0), &tz);
+        assert_eq!(a.streak, 2, "월·화 연속");
+        assert!((a.hourly[&23] - 3600.0).abs() < 1e-6, "{:?}", a.hourly);
+        assert!((a.hourly[&0] - 3600.0).abs() < 1e-6, "{:?}", a.hourly);
+        // 19:50 부터 3시간 — 19시엔 10분뿐
+        let b = aggregate(&[row(at(10, 19, 50), 3.0 * 3600.0)], at(11, 9, 0), &tz);
+        assert!((b.hourly[&19] - 600.0).abs() < 1e-6, "{:?}", b.hourly);
+        assert!((b.hourly[&20] - 3600.0).abs() < 1e-6);
+        assert!((b.hourly[&22] - 3000.0).abs() < 1e-6);
+        let total: f64 = b.hourly.values().sum();
+        assert!((total - 3.0 * 3600.0).abs() < 1e-6);
     }
 
     #[test]

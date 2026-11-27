@@ -333,22 +333,33 @@ impl DownloadHistoryStore {
 
     // MARK: 파일 확인
 
-    /// 마지막 확인이 `max_age` 보다 오래됐으면 존재를 다시 확인한다.
+    /// 마지막 확인이 `max_age` 보다 오래됐는가(불러오기 전·확인 중이면 아니다).
+    fn file_status_is_stale(&self, max_age: TimeInterval) -> bool {
+        let st = lock(&self.inner);
+        if !st.is_hydrated || st.is_verifying {
+            return false;
+        }
+        match st.last_verified_at {
+            Some(last) => ((self.now)() - last).num_milliseconds() as f64 / 1000.0 >= max_age,
+            None => true,
+        }
+    }
+
+    /// 마지막 확인이 `max_age` 보다 오래됐으면 존재를 다시 확인한다(기다리지 않는다).
     pub fn refresh_file_status_if_stale(&self, max_age: TimeInterval) {
-        {
-            let st = lock(&self.inner);
-            if !st.is_hydrated || st.is_verifying {
-                return;
-            }
-            if let Some(last) = st.last_verified_at {
-                let age = ((self.now)() - last).num_milliseconds() as f64 / 1000.0;
-                if age < max_age {
-                    return;
-                }
-            }
+        if !self.file_status_is_stale(max_age) {
+            return;
         }
         let me = self.clone();
         tokio::spawn(async move { me.refresh_file_status().await });
+    }
+
+    /// 오래됐으면 다시 확인하고 끝날 때까지 기다린다 — 목록을 돌려주기 직전에 쓴다. 기다리지 않으면 밖에서 지운 파일이
+    /// 이번 목록엔 '있음'으로 나가고, 확인이 끝나도 알리지 않아 탭을 다시 열 때까지 '열기'만 보이고 '다시 받기'가 없었다.
+    pub async fn refresh_file_status_when_stale(&self, max_age: TimeInterval) {
+        if self.file_status_is_stale(max_age) {
+            self.refresh_file_status().await;
+        }
     }
 
     pub async fn refresh_file_status(&self) {
@@ -661,6 +672,36 @@ mod tests {
         let past =
             restarted.past_entries(DownloadState::Completed, &HashSet::from(["b".to_string()]));
         assert!(past.is_empty(), "같은 id 는 세션이 이긴다");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn list_refresh_waits_for_the_file_check() {
+        let dir = temp_dir();
+        let path = dir.join(DownloadHistoryDocument::FILE_NAME);
+        let video = dir.join("d.mp4");
+        std::fs::write(&video, b"x").unwrap();
+        let store = DownloadHistoryStore::new(Some(path), vec![dir.clone()], None);
+        store.hydrate().await;
+        store.record(completed("d", &video));
+        store.refresh_file_status().await;
+        assert_eq!(
+            store.file_status().get("d"),
+            Some(&DownloadHistoryFileStatus::Present)
+        );
+        std::fs::remove_file(&video).unwrap();
+        // 방금 확인했으면 다시 묻지 않는다
+        store.refresh_file_status_when_stale(60.0).await;
+        assert_eq!(
+            store.file_status().get("d"),
+            Some(&DownloadHistoryFileStatus::Present)
+        );
+        // 오래됐으면 돌아오기 전에 확인이 끝나 있다
+        store.refresh_file_status_when_stale(0.0).await;
+        assert_eq!(
+            store.file_status().get("d"),
+            Some(&DownloadHistoryFileStatus::Missing)
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

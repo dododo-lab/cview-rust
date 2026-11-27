@@ -82,7 +82,11 @@ export class CategoriesPage {
     // 목록 ↔ 한 카테고리를 오갈 때만 떠오르고, 같은 화면을 다시 그릴 때(자동 새로고침·고정)는 그대로
     const view = this.category || '';
     const enter = view !== this.view;
+    // 목록 ↔ 한 카테고리를 오가면 스크롤도 — 카테고리는 맨 위에서, 목록으로 돌아오면 누른 카드 자리로. 예전엔 앞 화면의
+    // 스크롤 그대로라 '‹ 모든 카테고리'와 첫 카드가 화면 밖이었다.
+    if (enter && this.view === '') this.listScroll = this.root.scrollTop;
     this.view = view;
+    if (enter) requestAnimationFrame(() => { this.root.scrollTop = view ? 0 : (this.listScroll || 0); });
     if (this.category) {
       const list = arrangeLives(this.lives, { category: this.category });
       this.sub.textContent = `${this.category} · 라이브 ${list.length}개`;

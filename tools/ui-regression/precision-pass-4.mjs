@@ -325,7 +325,8 @@ try {
     });
     assert.deepEqual(r, [[], ['a']]);
     const app = await (await fetch(`${base}js/app.js`)).text();
-    assert.match(app, /pages\.multilive\.isTransient = \(sessionId\) => browsedWatch\.has\(sessionId\)/);
+    // 12차 — 넣는 중인 채널(browsingChannels)도 둘러본 채널로 본다(채널 id 를 함께 받는다).
+    assert.match(app, /pages\.multilive\.isTransient = \(sessionId, channelId\) => browsedWatch\.has\(sessionId\)/);
     await ctx.close();
   });
 

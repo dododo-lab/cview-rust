@@ -64,7 +64,9 @@ export function showDesignMenu(anchor) {
     if (step) { e.preventDefault(); items[(i + step + items.length) % items.length].focus(); }
     else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); items[e.key === 'Home' ? 0 : items.length - 1].focus(); }
     else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(true); }
-    else if (e.key === 'Tab') close(false);
+    // Tab — 연 단추로 초점을 먼저 돌려 기본 Tab 이 그 다음 요소로 가게 한다. 예전엔 초점이 든 메뉴(body 끝)를 지워
+    // 문서 처음으로 넘어갔다.
+    else if (e.key === 'Tab') close(true);
   });
   (items.find((b) => b.dataset.width === cur) || items[0])?.focus({ preventScroll: true });
   setTimeout(() => document.addEventListener('pointerdown', function off(ev) {
@@ -86,6 +88,18 @@ export function parseCommand(text) {
   if (!t.startsWith('/') || t.length < 2) return null;
   const [cmd, ...args] = t.split(/\s+/);
   return [cmd.toLowerCase(), args];
+}
+
+/**
+ * 명령 인자에서 닉네임(과 끝의 초)을 꺼낸다 — 닉네임에 띄어쓰기가 있어도 된다(@ 자동 완성이 "@김 철수 "를 넣는다).
+ * 예전엔 첫 낱말만 읽어 '/block 김 철수'가 '김'을 찾았다(그런 사람이 있으면 그 사람을 차단). 순수 함수.
+ * @returns {{ nick: string, seconds: number|null }}
+ */
+export function commandNick(args, { seconds = false } = {}) {
+  const a = [...(args || [])];
+  let sec = null;
+  if (seconds && a.length > 1 && /^\d+$/.test(a[a.length - 1])) sec = Number(a.pop());
+  return { nick: a.join(' ').trim().replace(/^@/, ''), seconds: sec };
 }
 
 /** 후원·구독 읽을 문장. */
@@ -210,7 +224,11 @@ export function installChatExtras(panel) {
   };
 
   const exportChat = async () => {
-    const lines = [...panel.list.querySelectorAll('.chat-line')].map((l) => {
+    // 보고 있는 목록 — 멀티라이브 함께 보는 채팅이면 패널 목록은 숨고 통합·칸 목록이 보인다(예전엔 숨은 선택 패인 목록만 저장).
+    const src = panel.list.hidden
+      ? [...panel.root.querySelectorAll('.chat-line')].filter((l) => !panel.list.contains(l))
+      : [...panel.list.querySelectorAll('.chat-line')];
+    const lines = src.map((l) => {
       const time = l.querySelector('.chat-time')?.textContent || '';
       const nick = l.dataset.nick || '';
       const amount = l.querySelector('.ev-value')?.textContent || '';
@@ -299,7 +317,9 @@ export function installChatExtras(panel) {
     if (!parsed) return false;
     const [cmd, args] = parsed;
     const p = chatPrefs();
-    const nickToUid = (nick) => panel.list.querySelector(`.chat-line[data-nick="${CSS.escape(nick)}"]`)?.dataset.uid || uidByNick.get(nick);
+    // 화면에 보이는 모든 채팅 목록에서 찾는다 — 멀티라이브 통합·칸 목록, 멀티채팅 통합 목록의 다른 채널 줄도(아이디는 채널과 상관없이
+    // 같은 사람). 예전엔 숨은 패널 목록만 봐, 화면에 보이는 사람도 '찾지 못했습니다'였다.
+    const nickToUid = (nick) => document.querySelector(`.chat-line[data-nick="${CSS.escape(nick)}"][data-uid]`)?.dataset.uid || uidByNick.get(nick);
     switch (cmd) {
       case '/clear': panel.clear(true); return true;
       case '/export': exportChat(); return true;
@@ -311,14 +331,14 @@ export function installChatExtras(panel) {
         toast(`금지어 "${args.join(' ')}" 를 추가했습니다`, 1500);
         return true;
       case '/block': {
-        const nick = (args[0] || '').replace(/^@/, '');
+        const { nick } = commandNick(args);
         const uid = nick && nickToUid(nick);
         if (!uid) { toast('이 채팅에서 그 닉네임을 찾지 못했습니다'); return true; }
         panel.block(uid, nick);
         return true;
       }
       case '/unblock': {
-        const nick = (args[0] || '').replace(/^@/, '');
+        const { nick } = commandNick(args);
         if (!nick) { toast('사용법: /unblock 닉네임'); return true; }
         const names = p.blockedUserNames || {};
         const uid = Object.keys(names).find((k) => names[k] === nick) || nick;
@@ -331,9 +351,9 @@ export function installChatExtras(panel) {
         return true;
       }
       case '/mute': {
-        const nick = (args[0] || '').replace(/^@/, '');
+        const { nick, seconds } = commandNick(args, { seconds: true });
         if (!nick) { toast('사용법: /mute 닉네임 [초]'); return true; }
-        const sec = Math.min(86400, Math.max(10, Number(args[1]) || 300));
+        const sec = Math.min(86400, Math.max(10, seconds || 300));
         muted.set(nick, Date.now() + sec * 1000);
         // 패널 상자 안의 모든 목록 — 멀티라이브 멀티채팅의 통합·칸 목록도 이 상자 안에 있다(예전엔 숨은 패널 목록만 지웠다).
         for (const el of panel.root.querySelectorAll(`.chat-line[data-nick="${CSS.escape(nick)}"]`)) el.remove();
@@ -344,7 +364,7 @@ export function installChatExtras(panel) {
       case '/unmute': {
         // 이 앱의 /mute(숨기기)를 푼다 — 예전엔 '방송 관리 명령'이라며 막아, 숨긴 사람을 최대 24시간 되돌릴 수 없었다.
         // 숨긴 적이 없으면 예전처럼 방송 관리 명령 안내.
-        const nick = (args[0] || '').replace(/^@/, '');
+        const { nick } = commandNick(args);
         if (nick && muted.delete(nick)) { toast(`${nick} 님 메시지를 다시 보입니다`, 1500); return true; }
         toast(nick ? `숨긴 목록에 ${nick} 님이 없습니다 — 방송 관리 명령은 치지직 웹에서 해 주세요` : '사용법: /unmute 닉네임', 2000);
         return true;

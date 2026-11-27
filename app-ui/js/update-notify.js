@@ -10,12 +10,14 @@ import { checkForUpdate, lastUpdateResult } from './update-check.js';
 const FIRST_DELAY_MS = 15_000; // 실행 직후 화면·방송 로딩과 겹치지 않게 조금 늦게
 const INTERVAL_MS = 6 * 60 * 60 * 1000; // 6시간마다
 const RETRY_MS = 30 * 60 * 1000; // 실패하면 30분 뒤 다시
+const TOGGLE_DELAY_MS = 1_500; // 자동 확인을 켠 직후 — 토글을 여러 번 눌러도 한 번만
 const NOTIFIED_KEY = 'cview.updateNotified'; // 알림을 띄운 버전 — 같은 버전은 다시 띄우지 않는다
 const HIDDEN_KEY = 'cview.updatePillHidden'; // 사이드바 줄을 닫은 버전
 
 let timer = null;
 let lastCheckAt = 0;
 let checking = false;
+let autoOn = null; // 마지막으로 본 "자동으로 업데이트 확인" 값(모르면 null)
 let onOpen = () => {};
 
 function readKey(key) {
@@ -76,6 +78,8 @@ export async function checkQuietly({ force = false } = {}) {
     const u = await checkForUpdate();
     ok = true;
     lastCheckAt = Date.now();
+    // 확인하는 동안 자동 확인을 껐으면 알리지 않는다(결과는 설정 › 정보 줄에만).
+    if (!force && autoOn === false) return;
     renderUpdatePill(u);
     announce(u);
   } catch { /* 네트워크 없음 등 — 조용히 넘어간다 */ } finally {
@@ -114,5 +118,20 @@ export function installUpdateNotifier(openUpdate) {
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden && lastCheckAt && Date.now() - lastCheckAt > INTERVAL_MS) checkQuietly();
   });
+  // 설정 › 정보 › "자동으로 업데이트 확인"을 바꾸면 바로 따른다 — 켜면 곧 확인(꺼진 채 시작했으면
+  // 다음 확인이 6시간 뒤로 잡혀 있다), 끄면 예약한 확인을 멈추고 "새 버전" 줄을 내린다.
+  window.addEventListener('cview:settings-changed', (e) => {
+    const d = e.detail || {};
+    if (!(d.domain === 'all' || (d.domain === 'general' && d.key === 'autoCheckUpdates'))) return;
+    const on = d.settings?.general?.autoCheckUpdates !== false;
+    if (on === autoOn) return;
+    autoOn = on;
+    if (on) schedule(TOGGLE_DELAY_MS);
+    else {
+      clearTimeout(timer);
+      if (pill) pill.hidden = true;
+    }
+  });
+  autoCheckEnabled().then((on) => { autoOn = on; });
   schedule(FIRST_DELAY_MS);
 }

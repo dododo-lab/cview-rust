@@ -153,6 +153,7 @@ const PANELS = new Set();
 // 차단은 설정 하나(blockedUsers)라 어느 목록·창에서 막았든 이 창의 모든 채팅 목록(다른 패널·멀티채팅 통합 목록·멀티라이브 칸)에서
 // 그 사람 지난 줄을 걷는다 — 예전엔 차단을 누른 목록에서만 지워, 그리드의 다른 패널·통합 목록에 그대로 남았다.
 let blockedSeen = new Set();
+let wordsSeen = new Set(); // 이미 걸러 온 금지어(소문자) — 처음 설정을 읽을 때는 화면에 줄이 없다
 onChatPrefs((p) => {
   const now = new Set((p && p.blockedUsers) || []);
   for (const uid of now) {
@@ -160,6 +161,17 @@ onChatPrefs((p) => {
     for (const el of document.querySelectorAll(`.chat-line[data-uid="${CSS.escape(uid)}"]`)) el.remove();
   }
   blockedSeen = now;
+  // 금지어도 같다 — 새로 넣은 낱말(또는 필터를 켬)이면 이미 보이는 줄 가운데 걸리는 줄을 걷는다. 예전엔 '/filter 광고'로 넣어도
+  // 화면의 광고 20줄이 그대로 남고 새 줄만 막혔다.
+  const words = p && p.chatFilterEnabled ? ((p.blockedWords || []).map((w) => String(w || '').toLowerCase()).filter(Boolean)) : [];
+  const fresh = words.filter((w) => !wordsSeen.has(w));
+  wordsSeen = new Set(words);
+  if (!fresh.length) return;
+  for (const el of document.querySelectorAll('.chat-line:not(.system)')) {
+    const body = el.querySelector('.text, .ev-body');
+    const text = (body ? body.textContent : '').toLowerCase();
+    if (text && fresh.some((w) => text.includes(w))) el.remove();
+  }
 });
 
 /**

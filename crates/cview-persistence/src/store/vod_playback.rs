@@ -87,7 +87,11 @@ impl DataStore {
                     ],
                 )?;
                 for row in &page {
-                    if row.last_position_sec > 30.0 && row.progress() < 0.95 {
+                    // 열면 처음부터 재생하는 기록(끝 30초 안 — 앱의 이어 보기 위치 규칙)은 담지 않는다. 예전엔 10분보다 짧은
+                    // 영상을 끝 30초 안에서 멈추면 '이어 보기'에 92% 로 보이는데 열면 0:00 부터였다.
+                    let near_end =
+                        row.duration_sec > 0.0 && row.last_position_sec > row.duration_sec - 30.0;
+                    if row.last_position_sec > 30.0 && row.progress() < 0.95 && !near_end {
                         collected.push(PersistedVodPlaybackData::from(row));
                         if collected.len() >= limit {
                             break 'outer;

@@ -36,6 +36,7 @@ function patch(o) {
     if (cmd === 'multilive_state' || cmd === 'multilive_select') return JSON.parse(JSON.stringify(st));
     if (cmd === 'popular_lives' || cmd === 'following_lives') {
       if (o.fail) throw new Error('네트워크 연결을 확인해 주세요');
+      if (o.followFail && cmd === 'following_lives') { window.__followCalls = (window.__followCalls || 0) + 1; throw new Error('오프라인'); }
       const r = await inv(cmd, args);
       return cmd === 'popular_lives' ? r.concat([{ channelId: 'noimg', channelName: '프로필없음', liveTitle: '', isLive: true, viewerCount: 1, viewerCountText: '1' }]) : r;
     }
@@ -222,6 +223,19 @@ for (const [route, toggle] of [['multilive', '[data-ml="add"]'], ['multichat', '
   });
   await ctx.close();
 }
+
+await check('R12 팔로잉만 실패 — 알리고 "새로 받았습니다"는 띄우지 않으며, 다시 열면 다시 받는다(12차)', async () => {
+  const { ctx, page } = await openDrawer({ followFail: true });
+  const toasts = await page.evaluate(() => [...document.querySelectorAll('.toast-stack .toast, .toast')].map((t) => t.textContent).join(' | '));
+  assert.ok(toasts.includes('팔로잉 방송을 불러오지 못했습니다'), toasts);
+  const before = await page.evaluate(() => window.__followCalls);
+  // 닫았다 다시 열기
+  await page.evaluate(() => [...document.querySelectorAll('[data-ml="add"]')].find((b) => b.offsetParent).click());
+  await page.waitForTimeout(400);
+  await page.evaluate(() => [...document.querySelectorAll('[data-ml="add"]')].find((b) => b.offsetParent).click());
+  await page.waitForFunction((n) => window.__followCalls > n, before);
+  await ctx.close();
+});
 
 await browser.close();
 server.close();

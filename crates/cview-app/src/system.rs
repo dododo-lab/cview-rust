@@ -385,17 +385,40 @@ fn update_feed_urls(
 pub(crate) async fn fetch_current_release() -> CmdResult<Option<GitHubRelease>> {
     let runtime_url = std::env::var("CVIEW_UPDATE_URL").ok();
     let urls = update_feed_urls(runtime_url.as_deref(), option_env!("CVIEW_UPDATE_URL"))?;
-    let mut last = Ok(None);
+    let mut outcomes = Vec::with_capacity(urls.len());
     for url in urls {
         match fetch_release(url.clone()).await {
             Ok(Some(release)) => return Ok(Some(release)),
             other => {
                 tracing::warn!("업데이트 피드 {url} 를 쓰지 못했습니다 — 다음 피드를 시도합니다");
-                last = other;
+                outcomes.push(other);
             }
         }
     }
-    last
+    pick_feed_result(outcomes)
+}
+
+/// 피드들에서 릴리스를 못 받았을 때의 답. 순수 함수.
+/// 모두 "없음"(404)일 때만 `Ok(None)`. 하나라도 연결·HTTP 오류였으면 그 오류 —
+/// GitHub 장애 뒤 자체 서버가 잠깐 404 여도 "공개된 릴리스가 없습니다"로 말하지 않고,
+/// 백그라운드 확인도 6시간이 아니라 30분 뒤에 다시 한다([`release_notes_result`] 와 같은 규칙).
+fn pick_feed_result(
+    outcomes: Vec<CmdResult<Option<GitHubRelease>>>,
+) -> CmdResult<Option<GitHubRelease>> {
+    let mut failure = None;
+    for outcome in outcomes {
+        match outcome {
+            Ok(Some(release)) => return Ok(Some(release)),
+            Ok(None) => {}
+            Err(e) => {
+                failure.get_or_insert(e);
+            }
+        }
+    }
+    match failure {
+        Some(e) => Err(e),
+        None => Ok(None),
+    }
 }
 
 /// 최신 릴리스 확인(GitHub, 안 되면 자체 HTTPS 서버).
@@ -766,6 +789,34 @@ mod tests {
             assets: Vec::new(),
             signature: None,
         }
+    }
+
+    #[test]
+    fn feed_error_is_not_masked_by_a_later_404() {
+        let err = |m: &str| Err(CommandError(m.into()));
+        // GitHub 오류 뒤 자체 서버 404 → "릴리스 없음"이 아니라 GitHub 오류
+        let r = pick_feed_result(vec![err("GitHub 요청 한도"), Ok(None)]);
+        assert_eq!(r.unwrap_err().0, "GitHub 요청 한도");
+        // 404 뒤 오류도 오류, 첫 오류를 돌려준다
+        assert_eq!(
+            pick_feed_result(vec![Ok(None), err("b"), err("c")])
+                .unwrap_err()
+                .0,
+            "b"
+        );
+        // 모두 404 일 때만 릴리스 없음
+        assert!(pick_feed_result(vec![Ok(None), Ok(None)])
+            .unwrap()
+            .is_none());
+        assert!(pick_feed_result(Vec::new()).unwrap().is_none());
+        // 받은 릴리스가 있으면 그것
+        let got = pick_feed_result(vec![
+            err("a"),
+            Ok(Some(release("v0.2.36", "노트", "https://x.example"))),
+        ])
+        .unwrap()
+        .unwrap();
+        assert_eq!(got.tag_name, "v0.2.36");
     }
 
     #[test]

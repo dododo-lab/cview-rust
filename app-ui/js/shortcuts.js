@@ -28,6 +28,13 @@ const DEFAULTS = {
 const KEY_NAMES = { ' ': 'space', ArrowUp: 'upArrow', ArrowDown: 'downArrow', ArrowLeft: 'leftArrow', ArrowRight: 'rightArrow', Enter: 'return', Escape: 'escape', Tab: 'tab', Backspace: 'delete' };
 const KEY_LABELS = { space: 'Space', upArrow: '↑', downArrow: '↓', leftArrow: '←', rightArrow: '→', return: '⏎', escape: 'Esc', tab: '⇥', delete: '⌫' };
 
+const NOT_BINDABLE = new Set(['CapsLock', 'NumLock', 'ScrollLock', 'Fn', 'FnLock', 'HangulMode', 'HanjaMode', 'KanaMode', 'Process', 'Dead', 'Unidentified', 'Lang1', 'Lang2', 'AltGraph']);
+
+/** 동작의 기본 바인딩(없으면 null). */
+export function defaultBinding(action) {
+  return DEFAULTS[action] ? { ...DEFAULTS[action] } : null;
+}
+
 let bindings = { ...DEFAULTS };
 const listeners = new Set();
 
@@ -45,6 +52,9 @@ export function mapToPairs(map) {
 /** 키 이벤트 → 바인딩. 수식 키만 누른 경우 null. 순수 함수. */
 export function bindingFromEvent(e) {
   if (['Meta', 'Shift', 'Alt', 'Control'].includes(e.key)) return null;
+  // 잠금·입력기 키와 조합 중인 키는 바인딩이 아니다 — 예전엔 Caps Lock(입력 소스 전환)·한/영 키가 'CAPSLOCK'·'HANGULMODE'로
+  // 저장돼, 입력 소스를 바꿀 때마다 그 동작(전체 화면 등)이 실행됐다.
+  if (NOT_BINDABLE.has(e.key) || (e.isComposing && !(e.code && e.code.startsWith('Key')))) return null;
   const key = KEY_NAMES[e.key] || (e.code && e.code.startsWith('Key') ? e.code.slice(3).toLowerCase() : e.key.toLowerCase());
   const modifiers = (e.metaKey ? MOD.cmd : 0) | (e.shiftKey ? MOD.shift : 0) | (e.altKey ? MOD.option : 0) | (e.ctrlKey ? MOD.control : 0);
   return { key, modifiers };
