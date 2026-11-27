@@ -203,7 +203,10 @@ pub async fn download_list(downloads: State<'_, Downloads>) -> CmdResult<Downloa
     downloads.history.hydrate().await;
     downloads
         .history
-        .refresh_file_status_if_stale(DownloadHistoryStore::DEFAULT_VERIFY_MAX_AGE);
+        .refresh_file_status_when_stale(DownloadHistoryStore::DEFAULT_VERIFY_MAX_AGE)
+        .await;
+    // 저장 폴더는 첫 다운로드 때 만들어진다 — 그 전에 다운로드 탭의 '폴더 열기'가 "파일이 없습니다"였다.
+    let _ = std::fs::create_dir_all(&downloads.folder);
     Ok(snapshot(&downloads))
 }
 

@@ -562,7 +562,8 @@ export class SearchPage {
       const clip = e.target.closest('[data-clip-uid]');
       if (clip) { e.stopPropagation(); window.dispatchEvent(new CustomEvent('cview:open-clip', { detail: { clipUid: clip.dataset.clipUid } })); return; }
       const t = e.target.closest('[data-stab]');
-      if (t) { this.tab = t.dataset.stab; this.renderResults(); return; }
+      // 탭(‘전체 보기’ 포함)을 바꾸면 맨 위에서 — 예전엔 아래로 내린 자리 그대로라 탭 막대와 첫 줄이 화면 밖이었다.
+      if (t) { const changed = this.tab !== t.dataset.stab; this.tab = t.dataset.stab; this.renderResults(); if (changed) this.root.scrollTop = 0; return; }
       const vod = e.target.closest('[data-vod-no]');
       if (vod) window.dispatchEvent(new CustomEvent('cview:open-vod', { detail: { videoNo: Number(vod.dataset.vodNo) } }));
       const ch = e.target.closest('.channel-row[data-channel-id]');
@@ -577,7 +578,12 @@ export class SearchPage {
     if (this.discoveryPending) { this.discoveryPending = false; this.renderDiscovery(); }
     // 뒤로 가기로 같은 검색 결과에 돌아오면 그대로 둔다 — 예전엔 다시 찾아 로딩이 깜빡이고, '더 보기'로 넓힌 다시보기·
     // 클립과 스크롤이 처음으로 돌아갔다. ⌘R(refresh)은 다시 찾는다.
-    if (params && params.query && !params.refresh && !this.idle && String(params.query).trim() === this.query && (this.result || this.videos)) return undefined;
+    // 같은 검색어의 결과가 이미 보이면 그대로 — 다른 검색을 받는 중이면(lastQuery ≠ query) 그대로 두지 않는다. 예전엔 B 를 받는
+    // 동안 A 를 다시 고르면 무시되고 B 가 그려졌다. 입력창도 그 검색어로 맞춘다.
+    if (params && params.query && !params.refresh && !this.idle && String(params.query).trim() === this.query && this.lastQuery === this.query && (this.result || this.videos)) {
+      this.input.value = params.query;
+      return undefined;
+    }
     if (params && params.query) { this.input.value = params.query; return this.run(params.query); }
     // ⌘R — 경로에 검색어가 없어도 마지막 검색을 다시 한다.
     if (params && params.refresh && this.lastQuery) return this.retry();
@@ -598,12 +604,15 @@ export class SearchPage {
   }
 
   async loadDiscovery() {
-    if (this.discovery) return this.discovery;
+    // 2분 동안만 기억하고, 실패는 기억하지 않는다 — 예전엔 처음 연 값(실패면 빈 값)을 앱을 끝낼 때까지 써, 오프라인으로 한 번
+    // 열면 다시 연결돼도 두 칸이 비었고 시청자 수·인기 채널도 몇 시간 전 값이었다.
+    if (this.discovery && Date.now() - this.discoveryAt < 120_000) return this.discovery;
     try {
       const lives = await api.popularLives(50, false);
       this.discovery = { cats: categoryGroups(lives).slice(0, 14), top: lives.slice(0, 8) };
-    } catch { this.discovery = { cats: [], top: [] }; }
-    return this.discovery;
+      this.discoveryAt = Date.now();
+      return this.discovery;
+    } catch { return this.discovery || { cats: [], top: [] }; }
   }
 
   async renderDiscovery() {

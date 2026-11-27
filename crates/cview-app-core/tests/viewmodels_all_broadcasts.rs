@@ -155,6 +155,36 @@ async fn stale_load_more_is_discarded() {
 }
 
 #[tokio::test]
+async fn refresh_during_a_fill_does_not_cut_the_first_callers_list() {
+    // 카테고리 ⌘R(채우는 중)에 메뉴 막대가 새로 받으면, 앞 호출의 다음 쪽이 옛 세대로 버려져 30개만 돌려줬다.
+    let api = Arc::new(FakeApi::default());
+    let vm = AllBroadcastsViewModel::new(api.clone());
+    api.hold_more.store(true, Ordering::SeqCst);
+    let v1 = vm.clone();
+    let first = tokio::spawn(async move { v1.refresh_and_fill(54, |_| true).await });
+    wait_flag(&api.holding_more).await;
+    let v2 = vm.clone();
+    let second = tokio::spawn(async move { v2.refresh_and_fill(54, |_| true).await });
+    for _ in 0..50 {
+        tokio::task::yield_now().await;
+    }
+    assert!(!second.is_finished(), "뒤 호출이 앞 차례를 기다리지 않았다");
+    api.hold_more.store(false, Ordering::SeqCst);
+    api.release_more.notify_waiters();
+    let a = first.await.unwrap().unwrap();
+    let b = second.await.unwrap().unwrap();
+    assert_eq!(a.len(), 54);
+    assert_eq!(b.len(), 54);
+    let ids: Vec<i64> = a.iter().map(|l| l.live_id).collect();
+    assert_eq!(ids, (1..=54).collect::<Vec<_>>());
+    // 뒤 호출은 차례를 얻은 뒤 판단한다 — 새로 받지 않으면 첫 쪽을 다시 묻지 않는다
+    let calls = api.first_page_calls.load(Ordering::SeqCst);
+    let c = vm.refresh_and_fill(54, |_| false).await.unwrap();
+    assert_eq!(c.len(), 54);
+    assert_eq!(api.first_page_calls.load(Ordering::SeqCst), calls);
+}
+
+#[tokio::test]
 async fn overlapping_fill_waits_for_the_running_page() {
     // '더 보기'를 빨리 두 번 누르면 두 번째 호출이 진행 중인 load_more 에 막혀 30개만 돌려줬다.
     let api = Arc::new(FakeApi::default());

@@ -487,6 +487,34 @@ impl AllBroadcastsViewModel {
     /// 진행 중 표시에 막혀 곧장 돌아와 덜 찬 목록을 돌려줬고, 화면은 그걸 '마지막 쪽'으로 보고 '더 보기'를 없앴다.
     pub async fn fill_to(&self, size: usize) {
         let _turn = self.shared.fill_lock.lock().await;
+        self.fill_locked(size).await;
+    }
+
+    /// 필요하면 첫 페이지를 새로 받고 `size` 개까지 채워, 그 차례 안에서 앞 `size` 개를 돌려준다(실패면 오류 문구).
+    /// 새로 받기와 채우기를 한 차례로 묶는다 — 예전엔 카테고리 ⌘R(300개 채우기) 중에 메뉴 막대·홈이 새로 받으면, 앞 호출의
+    /// 다음 쪽이 '옛 세대'로 버려져 덜 찬 목록(예: 150개)을 돌려주거나, 새 첫 쪽 뒤에 옛 커서의 쪽이 붙었다.
+    /// `should_reload` 는 차례를 얻은 뒤에 본다(앞 호출이 방금 새로 받았으면 다시 받지 않게).
+    pub async fn refresh_and_fill(
+        &self,
+        size: usize,
+        should_reload: impl FnOnce(&AllBroadcastsState) -> bool,
+    ) -> Result<Vec<LiveInfo>, String> {
+        let _turn = self.shared.fill_lock.lock().await;
+        let reload = should_reload(&self.read());
+        if reload {
+            self.reload().await;
+        } else {
+            self.load_initial_if_needed().await;
+        }
+        self.fill_locked(size).await;
+        let s = self.read();
+        if let LoadState::Error(message) = &s.state {
+            return Err(message.clone());
+        }
+        Ok(s.feed[..s.feed.len().min(size)].to_vec())
+    }
+
+    async fn fill_locked(&self, size: usize) {
         while self.read().feed.len() < size && self.read().can_load_more {
             let before = self.read().feed.len();
             self.load_more().await;

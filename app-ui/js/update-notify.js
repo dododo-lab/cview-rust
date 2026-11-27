@@ -78,6 +78,8 @@ export async function checkQuietly({ force = false } = {}) {
     const u = await checkForUpdate();
     ok = true;
     lastCheckAt = Date.now();
+    // 확인하는 동안 자동 확인을 껐으면 알리지 않는다(결과는 설정 › 정보 줄에만).
+    if (!force && autoOn === false) return;
     renderUpdatePill(u);
     announce(u);
   } catch { /* 네트워크 없음 등 — 조용히 넘어간다 */ } finally {

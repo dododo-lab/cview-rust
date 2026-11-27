@@ -33,7 +33,8 @@ export class ChatOnlyPage {
         <form class="chat-input"><input type="text" maxlength="100" placeholder="채팅을 입력하세요…" autocomplete="off"><button class="btn primary" type="submit">채팅</button></form>
       </aside>`;
     content.append(this.root);
-    this.chat = new ChatPanel(this.root.querySelector('.chatonly-chat'), { isLoggedIn, session });
+    // 채팅 창은 채널 하나의 라이브 채팅이다 — 멘션 알림도 띄운다(창마다 따로 세션을 쓰게 된 뒤 기본값이 꺼져 알림이 오지 않았다).
+    this.chat = new ChatPanel(this.root.querySelector('.chatonly-chat'), { isLoggedIn, session, mentionNotify: true });
     if (standalone) this.root.querySelector('[data-co=back]').remove();
     this.root.addEventListener('click', (e) => {
       const a = e.target.closest('[data-co]');

@@ -373,6 +373,9 @@ export class ChatComposer {
         && this.recall(e.key === 'ArrowUp' ? -1 : 1)) e.preventDefault();
       return;
     }
+    // 한글 조합 중 Enter·Tab·화살표는 조합을 끝내는 키다 — 예전엔 조합 중인 글자 위에 후보를 넣어 '@도리도리 리'처럼
+    // 글자가 겹치거나 조합이 사라졌다. 조합이 끝난 뒤 다시 누르면 고른다(보내기 Enter 와 같은 규칙).
+    if (e.isComposing || e.keyCode === 229) return;
     const items = this.autocomplete.querySelectorAll('.ac-item');
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();

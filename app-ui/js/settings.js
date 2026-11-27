@@ -4,7 +4,7 @@
 // SET-10 성능, SET-11 네트워크(프리셋), SET-13 채널 알림, SET-15 동기화, SET-16 도메인, SET-17 백업·복원·초기화,
 // MUL-16 멀티라이브 설정.
 import { api, listen, Events } from './api.js';
-import { ACTIONS, FIXED, currentBindings, bindingLabel, bindingFromEvent, saveBinding, conflictOf } from './shortcuts.js';
+import { ACTIONS, FIXED, currentBindings, bindingLabel, bindingFromEvent, saveBinding, conflictOf, defaultBinding } from './shortcuts.js';
 import { esc, toast } from './dom.js';
 import { armConfirm, confirmDialog } from './confirm.js';
 import { bindTabKeys } from './a11y.js';
@@ -122,7 +122,7 @@ export const SCHEMA = [
     { d: 'appearance', k: 'motionQuality', label: '모션', type: 'select', options: opt([['reduced', '절약'], ['balanced', '균형'], ['rich', '풍부']]) },
     { local: 'thumbPreview', label: '썸네일 미리보기', help: '라이브·다시보기·클립 썸네일 위에 마우스를 잠시 올려 두면 소리 없이 미리 봅니다(모션 "절약"에서는 쉽니다)', type: 'toggle' },
     { d: 'appearance', k: 'transparencyMode', label: '투명도', type: 'select', options: opt([['system', '시스템'], ['full', '선명하게'], ['reduced', '불투명']]) },
-    { d: 'appearance', k: 'frameRateMode', label: '화면 갱신', type: 'select', options: opt([['adaptive', '적응형 (최대 120Hz)'], ['fixed60', '60Hz 고정']]) },
+    // '화면 갱신'(frameRateMode)은 앱 어디서도 읽지 않아 바꿔도 아무 일이 없었다 — 화면에서 뺀다(설정 값은 호환을 위해 둔다).
   ]],
   ['link', '시청 기록 동기화', [
     { d: 'sync', k: 'explicitlyOptedIn', label: '동기화 동의', help: '다른 기기와 시청 기록을 맞추려면 동의가 필요합니다', type: 'toggle' },
@@ -151,7 +151,7 @@ export const SCHEMA = [
     { d: 'network', k: 'maxReconnectAttempts', label: '최대 재연결', type: 'range', min: 1, max: 40, step: 1 },
     { d: 'network', k: 'reconnectBaseDelay', label: '재연결 기본 지연(초)', type: 'range', min: 0.5, max: 5, step: 0.5 },
     { d: 'network', k: 'cacheExpiry', label: '캐시 유효 시간(초)', type: 'range', min: 30, max: 1800, step: 30 },
-    { d: 'network', k: 'forceStreamProxy', label: '스트림 프록시 강제', type: 'toggle' },
+    // '스트림 프록시 강제'(forceStreamProxy)도 읽는 곳이 없었고, 끄면 '자동' 네트워크 프리셋만 꺼졌다 — 화면에서 뺀다.
     // '오프라인이면 새로고침 멈춤'·'백그라운드 활동 줄이기'(pauseRefreshWhenOffline·reduceBackgroundActivity)와 아래
     // '메모리 목표(MB)'(maxMemoryMB)는 앱 어디서도 읽지 않아 바꿔도 아무 일이 없었다 — 화면에서 뺀다(설정 값은 호환을 위해 둔다).
   ]],
@@ -314,7 +314,18 @@ export class SettingsPage {
     listen(Events.networkPresetChanged, async () => {
       if (!this.settings) return;
       try { this.settings = await api.settingsGet(); } catch { return; }
-      if (this.body.querySelector('[data-net-preset]')) this.render();
+      if (!this.body.querySelector('[data-net-preset]')) return;
+      // 쓰는 중이면(입력란에 초점, 가져오기 칸에 붙여 넣은 글) 프리셋 단추만 맞춘다 — 예전엔 화면을 통째로 다시 그려 붙여 넣은
+      // 설정 JSON·검색란 초점·쓰던 칸이 사라졌다.
+      const a = document.activeElement;
+      const typing = a && this.body.contains(a) && a.matches('input:not([type=range]):not([type=checkbox]), textarea, select');
+      const drafted = [...this.body.querySelectorAll('textarea')].some((t) => t.value.trim());
+      if (!typing && !drafted && !(this.root.querySelector('input[type=search]')?.value)) { this.render(); return; }
+      for (const b of this.body.querySelectorAll('[data-net-preset]')) {
+        const on = b.dataset.netPreset === this.settings.networkPreset;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-checked', String(on));
+      }
     });
   }
 
@@ -830,7 +841,13 @@ export class SettingsPage {
         this.render();
         return;
       }
-      if (clash) toast(`${clash.label} 와 겹칩니다 — 그 동작도 같은 키로 실행됩니다`, 4000);
+      // 다른 동작과 겹치면 저장하지 않는다 — 시청 화면은 같은 키의 동작 하나만 실행해, 예전엔 "그 동작도 실행됩니다"라고
+      // 안내하고 저장했지만 방금 고른 동작은 끝내 실행되지 않았다.
+      if (clash) {
+        toast(`${bindingLabel(b)} 은(는) 이미 "${clash.label}"에 쓰는 키입니다 — 그 동작의 키를 먼저 바꾸거나 다른 키를 고르세요`, 4500);
+        this.render();
+        return;
+      }
       try { await saveBinding(action, b); } catch (er) { toast(er.message); }
       this.render();
     };
@@ -912,7 +929,15 @@ export class SettingsPage {
     const bind = e.target.closest('[data-bind]');
     if (bind) { this.captureBinding(bind); return; }
     const bindReset = e.target.closest('[data-bind-reset]');
-    if (bindReset) { try { await saveBinding(bindReset.dataset.bindReset, null); this.render(); } catch (er) { toast(er.message); } return; }
+    if (bindReset) {
+      // 기본 키가 지금 다른 동작에 쓰이면 되돌리지 않는다(위 바꾸기와 같은 규칙).
+      const act = bindReset.dataset.bindReset;
+      const def = defaultBinding(act);
+      const clash = def && conflictOf(act, def);
+      if (clash) { toast(`기본 키 ${bindingLabel(def)} 은(는) 지금 "${clash.label}"에 쓰고 있습니다 — 그 동작의 키를 먼저 바꾸세요`, 4500); return; }
+      try { await saveBinding(act, null); this.render(); } catch (er) { toast(er.message); }
+      return;
+    }
     const oa = e.target.closest('[data-oauth]');
     if (oa) {
       e.preventDefault();

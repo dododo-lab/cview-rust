@@ -342,10 +342,9 @@ pub async fn search_videos(
 ) -> CmdResult<PageDto<VodInfo>> {
     let size = size.unwrap_or(24).clamp(1, 50);
     let offset = offset.unwrap_or(0).max(0);
-    let res = services
-        .api
-        .search_videos(keyword.trim(), offset, size)
-        .await?;
+    // 다른 탭(채널·라이브·클립)과 같은 검색어로 — 예전엔 100자로 자르지 않은 원문을 보냈다.
+    let keyword = crate::commands::live::normalize_keyword(&keyword).unwrap_or_default();
+    let res = services.api.search_videos(&keyword, offset, size).await?;
     Ok(PageDto::new(res.data, res.total_count, offset, size))
 }
 

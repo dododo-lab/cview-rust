@@ -25,7 +25,15 @@ pub const SEARCH_PAGE_SIZE: usize = 24;
 /// 검색어 정리 — 앞뒤 공백 제거, 비면 `None`.
 pub fn normalize_keyword(raw: &str) -> Option<String> {
     let k = raw.trim();
-    (!k.is_empty()).then(|| k.chars().take(100).collect())
+    // 100자로 자른 끝이 공백이면 다시 다듬는다 — 검색 상태는 다듬은 값을 기억해, 끝 공백이 남으면 클립 '더 보기'가
+    // 늘 "검색어가 바뀌었습니다"였다.
+    (!k.is_empty()).then(|| {
+        k.chars()
+            .take(100)
+            .collect::<String>()
+            .trim_end()
+            .to_string()
+    })
 }
 
 /// 팔로잉 중 방송 중인 채널. 로그인이 필요하다.
@@ -86,22 +94,18 @@ pub async fn popular_lives(
     refresh: Option<bool>,
 ) -> CmdResult<Vec<LiveCardDto>> {
     let size = size.unwrap_or(POPULAR_DEFAULT_SIZE).clamp(1, 300) as usize;
-    let vm = &services.popular;
-    let failed = matches!(vm.read().state, LoadState::Error(_));
-    let stale = popular_is_stale(vm.read().feed_fetched_at, chrono::Utc::now());
-    if refresh.unwrap_or(false) || failed || stale {
-        vm.reload().await;
-    } else {
-        vm.load_initial_if_needed().await;
-    }
-    // 첫 페이지보다 많이 원하면 다음 커서를 더 받는다(겹친 호출은 차례를 기다린다).
-    vm.fill_to(size).await;
-    let s = vm.read();
-    if let LoadState::Error(message) = &s.state {
-        return Err(CommandError(message.clone()));
-    }
-    let take = s.feed.len().min(size);
-    Ok(live_cards(&s.feed[..take]))
+    let refresh = refresh.unwrap_or(false);
+    // 새로 받기·채우기·읽기를 한 차례로(겹친 호출은 차례를 기다린다) — 첫 페이지보다 많이 원하면 다음 커서를 더 받는다.
+    let feed = services
+        .popular
+        .refresh_and_fill(size, |s| {
+            refresh
+                || matches!(s.state, LoadState::Error(_))
+                || popular_is_stale(s.feed_fetched_at, chrono::Utc::now())
+        })
+        .await
+        .map_err(CommandError)?;
+    Ok(live_cards(&feed))
 }
 
 /// 채널 + 라이브 + 클립 통합 검색 — app-core `SearchViewModel`(15초 결과 캐시·최근 검색어 포함).
@@ -245,6 +249,9 @@ mod tests {
     #[test]
     fn keyword_normalization() {
         assert_eq!(normalize_keyword("  "), None);
+        // 100번째 글자가 공백이면 끝 공백 없이
+        let k = normalize_keyword(&format!("{} b", "a".repeat(99))).unwrap();
+        assert_eq!(k, "a".repeat(99));
         assert_eq!(normalize_keyword("  풍월량 "), Some("풍월량".into()));
         assert_eq!(
             normalize_keyword(&"가".repeat(300))

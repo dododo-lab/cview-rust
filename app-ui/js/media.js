@@ -108,9 +108,11 @@ export class MediaPage {
       thumbnailUrl: info.thumbnailUrl,
     }, vodHandlers(video));
     if (info.resumeAt > 0) {
-      video.addEventListener('loadedmetadata', () => { video.currentTime = info.resumeAt; }, { once: true });
-      // 처음부터 보고 싶으면 바로 되돌릴 수 있게(감사 UX-M07)
-      toast(`${formatDuration(info.resumeAt)}부터 이어서 재생합니다`, 5000, { label: '처음부터', run: () => { video.currentTime = 0; } });
+      const resume = () => { video.currentTime = info.resumeAt; };
+      video.addEventListener('loadedmetadata', resume, { once: true });
+      // 처음부터 보고 싶으면 바로 되돌릴 수 있게(감사 UX-M07). 메타데이터 전에 눌러도 — 예전엔 남은 이어 보기 처리가
+      // 나중에 다시 이어 보기 위치로 옮겼다.
+      toast(`${formatDuration(info.resumeAt)}부터 이어서 재생합니다`, 5000, { label: '처음부터', run: () => { video.removeEventListener('loadedmetadata', resume); video.currentTime = 0; } });
     }
     // 실패하면 2.6초 토스트만 뜨고 검은 화면이 남았다(감사 UX-C06) — 무대 안에 다시 시도·치지직에서 열기를 둔다.
     video.addEventListener('error', () => {
@@ -278,13 +280,16 @@ export class MediaPage {
       }
       case 'later': {
         const i = this.info;
+        // 요청 중엔 다시 누르지 않게 — 예전엔 빠르게 두 번 누르면 둘 다 '담기'로 가 해제가 되지 않았다.
+        if (a.disabled) break;
         const next = !i.watchLater;
+        a.disabled = true;
         try {
           await api.vodWatchLaterSet(i.videoNo, next, i.title, i.channelName, i.thumbnailUrl || null, i.duration);
           i.watchLater = next;
           a.classList.toggle('primary', next);
           a.textContent = next ? '나중에 보기 ✓' : '나중에 보기';
-        } catch (er) { toast(er.message); }
+        } catch (er) { toast(er.message); } finally { a.disabled = false; }
         break;
       }
       default: break;
@@ -307,8 +312,10 @@ export class MediaPage {
       // 첫 로드 중(메타데이터 전)에 바꾸면 위치를 옮기지 않는다 — 남아 있는 이어 보기 처리가 새 주소에서 위치를 맞춘다.
       // 예전엔 그 뒤에 0 으로 되돌려 이어 보기 위치를 잃고, 주기 저장이 처음부터 본 위치로 저장 값을 덮었다.
       const keepPosition = v.readyState >= 1;
+      // 멈춘 채 화질을 바꾸면 멈춘 채로 — 예전엔 새 주소를 불러온 뒤 늘 재생했다.
+      const wasPaused = keepPosition && v.paused;
       v.src = q ? q.url : this.info.streamUrl;
-      v.addEventListener('loadedmetadata', () => { if (keepPosition) v.currentTime = at; v.playbackRate = rate; v.play().catch(() => {}); }, { once: true });
+      v.addEventListener('loadedmetadata', () => { if (keepPosition) v.currentTime = at; v.playbackRate = rate; if (!wasPaused) v.play().catch(() => {}); }, { once: true });
     }
   }
 }

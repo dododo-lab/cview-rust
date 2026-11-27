@@ -448,7 +448,9 @@ async function navigate(route, params = {}, { push = true, back = false } = {}) 
 function goBack() {
   const prev = backStack.pop();
   if (prev) navigate(prev.route, prev.params, { push: false, back: true });
-  else if (current !== 'home') navigate('home', {}, { push: false });
+  // 보조 창은 자기 화면 하나로 열린다(기록 없음) — 비었을 때 홈으로 가면 채팅·통계 창이 사이드바 없는 홈이 되고 되돌아갈 길도
+  // 없었다(마우스 뒤로 단추 한 번에). 보조 창 안에서 쌓인 기록(통계 → 채널 → 뒤로)은 그대로 돌아간다.
+  else if (!AUX && current !== 'home') navigate('home', {}, { push: false });
 }
 
 function openChannelPage(channelId) {
@@ -701,18 +703,18 @@ function installPalette() {
     isLoggedIn,
     onOpenChannel: openChannelPage,
     onPlay: openChannel,
-    onSearch: (q) => navigate('search', { query: q }),
+    onSearch: (q) => goRoute('search', { query: q }),
     actions: () => [
       // 화면 목록(ROUTES)에 이미 '검색'이 있다 — 따로 더하면 팔레트에 두 번 떴다. 검색만 설명을 붙인다.
       // 힌트는 그 화면의 실제 단축키(menu.rs GO) — 예전엔 모두 '이동'이었다(감사 UX-H09).
-      ...ROUTES.map((r) => ({ group: '화면', label: r.title, hint: ROUTE_KEYS[r.id] ? kbd(ROUTE_KEYS[r.id]) : '이동', run: () => (r.id === 'live' ? openLiveMenu() : navigate(r.id)) })),
-      { group: '보관함', label: '보관함 개요', hint: '한눈에', run: () => navigate('library', { tab: 'overview' }) },
-      { group: '방송&클립', label: '인기 방송', hint: '방송&클립', run: () => navigate('popular', { tab: 'live' }) },
-      { group: '방송&클립', label: '인기 클립', hint: '방송&클립', run: () => navigate('popular', { tab: 'clips' }) },
-      { group: '보관함', label: '이어 보기', hint: '다시보기', run: () => navigate('library', { tab: 'continue' }) },
-      { group: '보관함', label: '즐겨찾기', hint: '채널', run: () => navigate('library', { tab: 'favorites' }) },
-      { group: '보관함', label: '북마크', hint: '방송 장면', run: () => navigate('library', { tab: 'bookmarks' }) },
-      { group: '홈', label: '데이터 관리 · 백업', hint: '시청 리포트', run: () => navigate('stats', { tab: 'data' }) },
+      ...ROUTES.map((r) => ({ group: '화면', label: r.title, hint: ROUTE_KEYS[r.id] ? kbd(ROUTE_KEYS[r.id]) : '이동', run: () => (AUX ? openInMainWindow(r.id) : r.id === 'live' ? openLiveMenu() : navigate(r.id)) })),
+      { group: '보관함', label: '보관함 개요', hint: '한눈에', run: () => goRoute('library', { tab: 'overview' }) },
+      { group: '방송&클립', label: '인기 방송', hint: '방송&클립', run: () => goRoute('popular', { tab: 'live' }) },
+      { group: '방송&클립', label: '인기 클립', hint: '방송&클립', run: () => goRoute('popular', { tab: 'clips' }) },
+      { group: '보관함', label: '이어 보기', hint: '다시보기', run: () => goRoute('library', { tab: 'continue' }) },
+      { group: '보관함', label: '즐겨찾기', hint: '채널', run: () => goRoute('library', { tab: 'favorites' }) },
+      { group: '보관함', label: '북마크', hint: '방송 장면', run: () => goRoute('library', { tab: 'bookmarks' }) },
+      { group: '홈', label: '데이터 관리 · 백업', hint: '시청 리포트', run: () => goRoute('stats', { tab: 'data' }) },
       { group: '동작', label: resolvedTheme() === 'dark' ? '라이트 테마로 전환' : '다크 테마로 전환', hint: '테마', run: () => setTheme(resolvedTheme() === 'dark' ? 'light' : 'dark') },
       { group: '동작', label: '뒤로 가기', hint: kbd('⌘['), run: goBack },
       { group: '동작', label: '사이드바 접기/펼치기', hint: kbd('⌘\\'), run: () => sidebar.toggle() },
@@ -945,8 +947,12 @@ const MAIN_ROUTE_ACTIONS = {
   'nav-live': 'live', 'nav-library': 'library', 'nav-categories': 'categories', 'nav-multichat': 'multichat',
   search: 'search', settings: 'settings',
 };
-function openInMainWindow(route) {
-  api.trayControl({ kind: 'open-route', route, params: {} }).catch((e) => toast(e.message));
+function openInMainWindow(route, params = {}) {
+  api.trayControl({ kind: 'open-route', route, params }).catch((e) => toast(e.message));
+}
+/** 화면 이동 — 보조 창이면 메인 창에서(명령 팔레트도 같은 규칙, MAIN_ROUTE_ACTIONS 참고). */
+function goRoute(route, params = {}) {
+  if (AUX) openInMainWindow(route, params); else navigate(route, params);
 }
 
 function installMenuAndShortcuts() {
@@ -1204,9 +1210,14 @@ async function main() {
           else if (current === 'media' && pages.media?.video) togglePipFor(pages.media.video);
           setTimeout(syncTray, 160);
           break;
-        case 'navigate':
-          if (p.route) navigate(p.route, p.params && typeof p.params === 'object' ? p.params : {});
+        case 'navigate': {
+          const params = p.params && typeof p.params === 'object' ? p.params : {};
+          // 보조 창의 ⌘5·⌥⌘숫자·팔레트 '라이브'는 라이브 메뉴(마지막으로 본 라이브·멀티라이브) — 예전엔 늘 단독 라이브로 가
+          // 마지막 보기를 덮었다.
+          if (p.route === 'live' && !Object.keys(params).length) openLiveMenu();
+          else if (p.route) navigate(p.route, params);
           break;
+        }
         case 'show-now-playing':
           // 메뉴 막대·트레이 '지금 재생 중' — 재생 중인 화면으로(라이브 시청·단독 보기 → 라이브, 멀티라이브 칸 → 멀티라이브).
           // 다시보기 화면이면 이미 그 화면이라 그대로 둔다.
