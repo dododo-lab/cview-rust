@@ -11,6 +11,7 @@ import { compactCount } from './cards.js';
 import { vodCard, clipCard, relativeDate } from './channel.js';
 import { verifiedBadge } from './verified-badge.js';
 import { trapFocus } from './a11y.js';
+import { motionReduced } from './motion.js';
 import { bindLiveMotion, countUpIn, rollTo, tabSwap, watchPulse, unwatchPulse } from './live-motion.js';
 
 const TABS = [['info', '정보'], ['vod', '다시보기'], ['clip', '클립'], ['community', '커뮤니티']];
@@ -219,7 +220,7 @@ export class WatchInfoPanel {
     const sc = this.scroller;
     if (bar && sc && bar.classList.contains('stuck')) {
       const top = bar.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop;
-      sc.scrollTo({ top, behavior: 'smooth' });
+      sc.scrollTo({ top, behavior: motionReduced() ? 'auto' : 'smooth' }); // JS 부드러운 스크롤은 모션 줄이기를 스스로 따르지 않는다
     }
     this.renderTab();
     tabSwap(this.el.querySelector('.mwi-body'), dir); // 가는 쪽에서 내용이 들어온다

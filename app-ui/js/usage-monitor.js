@@ -426,7 +426,8 @@ export class UsageChart {
     const summary = hasData
       ? `${this.label}: ${m.label} 최근 ${ago(end - start).replace(' 전', '')} — 지금 ${m.fmt(st.now)}, 평균 ${m.fmt(st.avg)}, 최대 ${m.fmt(st.max)}`
       : `${this.label}: ${this.emptyText}`;
-    this.plot.setAttribute('aria-label', `${summary}. 화살표 키로 시점별 값을 볼 수 있습니다`);
+    // 초점이 그래프에 있는 동안은 이름을 바꾸지 않는다 — 초마다 바뀐 이름을 낭독기가 다시 읽어 말풍선 낭독을 덮었다(sidebar-usage.js 와 같은 규칙).
+    if (document.activeElement !== this.plot || !this.plot.hasAttribute('aria-label')) this.plot.setAttribute('aria-label', `${summary}. 화살표 키로 시점별 값을 볼 수 있습니다`);
     this.svg.setAttribute('aria-label', summary);
     if (this.hoverT != null) this.showAt(this.nearest(this.hoverT));
   }

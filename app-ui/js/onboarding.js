@@ -50,6 +50,8 @@ export function showWelcome({ force = false, onLogin } = {}) {
   scrim.className = 'sheet-scrim welcome-scrim';
   const render = () => {
     const [icon, title, body] = STEPS[i];
+    // 단계마다 .sheet 를 새로 만들어 시트 등장(mo-rise, 투명→떠오름)이 매번 다시 돌았다 — 두 번째 장부터는 끈다(motion.css).
+    if (scrim.firstChild) scrim.classList.add('stepped');
     scrim.innerHTML = `<div class="sheet welcome" role="dialog" aria-modal="true" aria-label="환영 안내">
       <div class="welcome-icon" aria-hidden="true">${icon}</div>
       <h2>${title}</h2><p>${kbd(body)}</p>
@@ -70,8 +72,10 @@ export function showWelcome({ force = false, onLogin } = {}) {
   };
   const onKey = (e) => {
     if (e.key === 'Escape') { e.preventDefault(); close(); }
-    else if (e.key === 'ArrowRight') { i = Math.min(STEPS.length - 1, i + 1); render(); }
-    else if (e.key === 'ArrowLeft') { i = Math.max(0, i - 1); render(); }
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      const j = e.key === 'ArrowRight' ? Math.min(STEPS.length - 1, i + 1) : Math.max(0, i - 1);
+      if (j !== i) { i = j; render(); } // 양 끝에서는 그대로 — 같은 장을 다시 그리지 않는다
+    }
   };
   scrim.addEventListener('click', (e) => {
     const dot = e.target.closest('[data-w-step]');

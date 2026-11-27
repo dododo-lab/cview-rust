@@ -36,6 +36,7 @@ const LOGO = `<svg class="rv-logo" viewBox="214 190 640 600" aria-hidden="true">
 let veil = null;
 let active = null; // { root, body, shownAt, showTimer, maxTimer }
 let leaveTimer = 0;
+let pendingDrop = null; // { timer, run } — 최소 표시 시간을 기다리는 걷기(화면을 옮기면 바로 걷는다)
 
 function ensureVeil() {
   if (veil && veil.isConnected) return veil;
@@ -69,20 +70,26 @@ function finish(state, { immediate = false } = {}) {
   clearTimeout(state.showTimer);
   clearTimeout(state.maxTimer);
   if (active === state) active = null;
-  const drop = () => {
+  const drop = (now = immediate) => {
     // 다음 새로고침이 이미 덮개를 다시 띄웠으면 그쪽이 쓰는 것(같은 화면의 흐림·덮개)은 걷지 않는다.
     const next = active && active.shownAt ? active : null;
     if (state.body && !(next && next.body === state.body)) state.body.classList.remove('is-refreshing');
     if (!(next && next.root === state.root)) state.root.removeAttribute('aria-busy');
     if (next || !veil) return;
-    if (immediate || motionReduced()) { veil.hidden = true; veil.classList.remove('leaving'); return; }
+    if (now || motionReduced()) { veil.hidden = true; veil.classList.remove('leaving'); return; }
     veil.classList.add('leaving');
     clearTimeout(leaveTimer);
     leaveTimer = setTimeout(() => { if (!(active && active.shownAt)) { veil.hidden = true; veil.classList.remove('leaving'); } }, LEAVE_MS);
   };
   if (!state.shownAt) return; // 띄우기 전에 끝났다 — 아무것도 보이지 않았다
   const wait = immediate ? 0 : MIN_VISIBLE_MS - (performance.now() - state.shownAt);
-  if (wait > 0) setTimeout(drop, wait); else drop();
+  if (wait > 0) {
+    // 기다리는 걷기를 기억해 둔다 — 예전엔 버려진 타이머라 그사이 다른 화면으로 옮기면(cancelRefreshVeil) active 가 이미
+    // 비어 아무 일도 하지 않았고, '새로고침 중…' 덮개가 새 화면 위에 0.5초 넘게 남았다.
+    const p = { run: () => drop(true) };
+    p.timer = setTimeout(() => { if (pendingDrop === p) pendingDrop = null; drop(); }, wait);
+    pendingDrop = p;
+  } else drop();
 }
 
 /**
@@ -111,4 +118,5 @@ export function refreshVeiled(root) {
 /** 다른 화면으로 옮기면 바로 걷는다(남은 요청은 그 화면이 알아서 버린다). */
 export function cancelRefreshVeil() {
   if (active) finish(active, { immediate: true });
+  if (pendingDrop) { clearTimeout(pendingDrop.timer); const p = pendingDrop; pendingDrop = null; p.run(); }
 }

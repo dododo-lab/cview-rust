@@ -77,11 +77,12 @@ function refill(list, items, max, empty) {
 /** 칸에 붙이고 넘치면 앞에서 지운다 — 바닥에 있었으면 계속 바닥을 따라간다. */
 function appendTo(list, html, max, snaps = null) {
   if (!html) return;
-  followAppend(list, () => {
+  followAppend(list, (follow) => {
     const empty = list.querySelector(':scope > .empty');
     if (empty) empty.remove();
     list.insertAdjacentHTML('beforeend', html);
-    trimFront(list, max);
+    // 올려 읽는 중이면 보던 줄을 제자리에 — WebKit 은 앞줄이 한꺼번에 빠지면 보던 자리가 튀거나 바닥에 닿았다.
+    trimFront(list, max, { keepView: !follow });
   }, { resumeMs: RESUME_FOLLOW_MS, snaps });
 }
 

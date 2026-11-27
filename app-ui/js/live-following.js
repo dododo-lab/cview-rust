@@ -485,7 +485,11 @@ export class LiveFollowingStrip {
       else this.focusQuiet(this.el.querySelector('.lf-all'));
     }
     if (this.peekKey) {
-      if (this.byId.has(this.peekKey) && !this.items.get(this.peekKey).hidden) this.fillPeek(this.peekKey, { keepMedia: true });
+      if (this.byId.has(this.peekKey) && !this.items.get(this.peekKey).hidden) {
+        this.fillPeek(this.peekKey, { keepMedia: true });
+        // 끝난 방송이 빠지거나 줄 수가 바뀌면 가리키던 칸이 옮겨 가고, 내용이 바뀌면 카드 높이도 달라진다 — 다시 놓는다.
+        this.place(this.items.get(this.peekKey));
+      }
       else this.hidePeek();
     }
   }

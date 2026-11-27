@@ -182,6 +182,9 @@ class AdOverlay {
       api.openExternal(cheatKeyUrl).catch(() => {});
     });
     (host || document.body).append(this.root);
+    // 처음 스타일을 한 번 계산해 둔 뒤 보인다 — rAF 는 그 프레임의 스타일 계산보다 먼저 돌아, 막 붙인 막의 첫 스타일이 이미
+    // .shown 이라 나타나기(opacity) 전환 없이 툭 떴다(라이브·멀티라이브 패인 광고).
+    void getComputedStyle(this.root).opacity;
     requestAnimationFrame(() => this.root.classList.add('shown'));
     // 창 전체 광고(다시보기)는 모달 — 초점을 가두고 Esc·닫기로 그만두고 돌아갈 수 있게(예전엔 끝날 때까지 갇혔다).
     this.onCancel = null;

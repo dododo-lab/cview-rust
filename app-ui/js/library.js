@@ -4,6 +4,7 @@
 // 인기 클립(VOD-04)은 사이드바 '방송&클립' › 클립 탭으로 옮겼다(pages.js). 옛 경로 library?tab=clips 는 app.js navigate 가 그리로 보낸다.
 import { api } from './api.js';
 import { esc, safeUrl, toast, imageSrc } from './dom.js';
+import { swapContent } from './motion.js';
 import { emptyState, loadingState, errorState, forgetRecentChannels } from './cards.js';
 import { vodCard, relativeDate, formatDuration } from './channel.js';
 import { continueCard } from './media.js';
@@ -225,7 +226,8 @@ export class LibraryPage {
     } catch (e) {
       html = errorState('불러오지 못했습니다', e);
     }
-    if (seq === this.seq) this.body.innerHTML = html;
+    // 보던 목록을 새로 받은 것으로 바꿀 때(⌘R·즐겨찾기 변경)는 격자·카드 등장을 다시 돌리지 않는다(swapContent).
+    if (seq === this.seq) swapContent(this.body, html);
   }
 
   async onClick(e) {

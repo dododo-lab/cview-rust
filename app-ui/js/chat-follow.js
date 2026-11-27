@@ -10,6 +10,17 @@ const followers = new Set(); // WeakRef<Follower>
 const byList = new WeakMap();
 let pressed = null; // 스크롤바를 끌거나 글을 고르는 중인 목록
 
+// 줄 등장(이벤트 카드·멘션·안내)과 6단계 후원 무지개 흐름은 한 번만 — CSS 애니메이션은 목록이 display:none 에서 다시
+// 그려질 때(시청 화면을 떠났다 돌아옴·채팅 숨김·이 사람만 보기 해제·검색) 처음부터 다시 돈다. 300줄 목록의 카드가 한꺼번에
+// 다시 튀어나오고 6단계 카드는 매 프레임 다시 칠하는 흐름을 10초 가까이 또 돌았다. 끝난 줄에 표시를 달아 다시 돌지 않게 한다(motion.css·app.css).
+const LINE_DONE = { 'mo-pop-up': 'mo-in-done', 'mo-fade': 'mo-in-done', 'don-holo': 'mo-holo-done' };
+export function markLineAnimationDone(e) {
+  const cls = LINE_DONE[e.animationName];
+  if (!cls || !e.target || !e.target.closest) return;
+  const line = e.target.closest('.chat-line');
+  if (line) line.classList.add(cls);
+}
+
 const atBottom = (list) => list.scrollHeight - list.scrollTop - list.clientHeight < BOTTOM_SLACK;
 
 class Follower {
@@ -25,6 +36,7 @@ class Follower {
     list.addEventListener('keydown', touch);
     list.addEventListener('pointerdown', () => { pressed = this; touch(); });
     list.addEventListener('scroll', () => this.onScroll(), { passive: true });
+    list.addEventListener('animationend', markLineAnimationDone);
     // 칸 크기가 바뀌거나(분할·보기 전환) 숨었다 다시 보이면 바닥에 있던 목록은 계속 바닥을 보이게 한다.
     if (typeof ResizeObserver === 'function') new ResizeObserver(() => { if (this.stuck && this.enabled()) this.snap(); }).observe(list);
   }
@@ -79,7 +91,7 @@ export function followAppend(list, insert, { resumeMs = 0, snaps = null } = {}) 
   const f = chatFollower(list);
   if (!f.stuck && resumeMs > 0 && pressed !== f && performance.now() - f.touchedAt > resumeMs) f.stuck = true;
   const follow = f.stuck;
-  insert();
+  insert(follow);
   // snaps — 여러 목록에 차례로 붙일 때(멀티라이브 채팅 그리드) 바닥 맞추기를 모았다가 붙이기가 다 끝난 뒤 한 번에
   // 한다(snapAll). 목록마다 붙이고(쓰기) 곧바로 scrollHeight 를 읽으면 칸 수만큼 강제 레이아웃이 일어났다.
   if (follow) { if (snaps) snaps.push(f); else f.snap(); }
@@ -107,8 +119,10 @@ export function trimFront(list, max, { keepView = false } = {}) {
   // 위로 올려 읽는 중이면 지운 높이만큼 스크롤을 당겨 보던 줄을 제자리에 둔다 — WebKit(macOS)은 스크롤 앵커링이 없어
   // 앞줄 수십 줄이 한꺼번에 빠지면 보던 자리가 수천 px 튀거나 바닥에 닿아 따라가기가 다시 켜지고 '새 메시지' 수가 0 이
   // 됐다. 지우기는 상한의 1/4 마다 한 번이라 이 측정(레이아웃 한 번)은 드물다. Chromium 이 이미 앵커링했으면 두 번 당기지 않는다.
+  // 지운 높이는 목록 높이 차로 잰다 — offsetTop 은 숨긴 줄(검색·이 사람만 보기의 display:none)에서 0 이라 첫 줄이나 자를 줄이
+  // 숨어 있으면 너무 많이(목록 자체 위치만큼) 당기거나 아예 당기지 않았다.
   const before = keepView ? list.scrollTop : 0;
-  const removed = keepView ? children[cut].offsetTop - children[0].offsetTop : 0;
+  const h0 = keepView ? list.scrollHeight : 0;
   // 지울 줄의 아바타 사진은 떼어 낸 뒤 src 를 비워 디코드한 그림 메모리를 바로 놓아 준다(chat-avatar.js).
   const photos = [];
   for (let i = 0; i < cut; i++) {
@@ -117,6 +131,7 @@ export function trimFront(list, max, { keepView = false } = {}) {
   }
   range.deleteContents();
   for (const img of photos) img.removeAttribute('src');
+  const removed = keepView ? h0 - list.scrollHeight : 0;
   if (keepView && removed > 0) {
     const want = Math.max(0, before - removed);
     if (list.scrollTop > want + 1) list.scrollTop = want;

@@ -491,7 +491,8 @@ export class MultiChatPage {
         line.classList.toggle('search-hit', ok);
       }
     }
-    trimFront(this.mergedList, 600);
+    // 위로 올려 읽는 중이면 지운 높이만큼 당겨 보던 줄을 제자리에 — WebKit 은 스크롤 앵커링이 없다(chat-follow.js trimFront).
+    trimFront(this.mergedList, 600, { keepView: !follow });
     if (q) this.queueSearchNote();
     if (follow) follower.snap();
   }
@@ -503,7 +504,7 @@ export class MultiChatPage {
     const follow = follower.stuck;
     this.mergedList.querySelector(':scope > .empty')?.remove();
     this.mergedList.insertAdjacentHTML('beforeend', `<div class="chat-line system merged-line" data-src="${esc(c.channelId)}" style="--mc-color:${esc(c.color)}"><span class="sys-pill">${esc(c.name)} · ${esc(text)}</span></div>`);
-    trimFront(this.mergedList, 600);
+    trimFront(this.mergedList, 600, { keepView: !follow });
     if (follow) follower.snap();
   }
 

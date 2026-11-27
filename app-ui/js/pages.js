@@ -563,7 +563,7 @@ export class SearchPage {
       if (clip) { e.stopPropagation(); window.dispatchEvent(new CustomEvent('cview:open-clip', { detail: { clipUid: clip.dataset.clipUid } })); return; }
       const t = e.target.closest('[data-stab]');
       // 탭(‘전체 보기’ 포함)을 바꾸면 맨 위에서 — 예전엔 아래로 내린 자리 그대로라 탭 막대와 첫 줄이 화면 밖이었다.
-      if (t) { const changed = this.tab !== t.dataset.stab; this.tab = t.dataset.stab; this.renderResults(); if (changed) this.root.scrollTop = 0; return; }
+      if (t) { const changed = this.tab !== t.dataset.stab; this.tab = t.dataset.stab; this.renderResults({ enter: changed }); if (changed) this.root.scrollTop = 0; return; }
       const vod = e.target.closest('[data-vod-no]');
       if (vod) window.dispatchEvent(new CustomEvent('cview:open-vod', { detail: { videoNo: Number(vod.dataset.vodNo) } }));
       const ch = e.target.closest('.channel-row[data-channel-id]');
@@ -750,7 +750,7 @@ export class SearchPage {
     this.renderResults();
   }
 
-  renderResults() {
+  renderResults({ enter = false } = {}) {
     if (!this.query) return;
     const mainFailed = !this.result;
     const vodFailed = !this.videos;
@@ -815,7 +815,17 @@ export class SearchPage {
       clips: c.hasMore ? '검색한 채널에 맞는 클립이 아직 없습니다' : '클립이 없습니다',
     };
     const empty = !html && !errors ? emptyState(emptyText[this.tab] || emptyText.all, `"${this.query}"`) : '';
-    this.body.innerHTML = `<div class="search-results">${tabBar}${errors}${html}${empty}${more}</div>`;
+    // 보던 결과를 다시 그릴 때(더 보기·다시 시도·응답 도착)는 카드 등장을 다시 돌리지 않는다 — 예전엔 더 보기 한 번에
+    // 보이던 카드가 두 번(불러오는 중·도착) 투명해졌다가 다시 떠올랐다. 첫 결과와 탭 바꾸기는 떠오른다(swapContent).
+    const act = document.activeElement;
+    if (act && this.body.contains(act) && act.matches('.load-more, [data-search-retry], [data-vod-more], [data-clip-more]')) this.moreFocus = true;
+    swapContent(this.body, `<div class="search-results">${tabBar}${errors}${html}${empty}${more}</div>`, enter);
+    // 누른 '더 보기'·'다시 시도'가 지워졌다 다시 생겨 초점이 문서 처음으로 떨어졌다 — 새 단추로 옮긴다(불러오는 중엔 비활성이라 도착 뒤에).
+    if (this.moreFocus && !this.body.contains(document.activeElement)) {
+      const next = this.body.querySelector('.load-more:not([disabled]), [data-search-retry], [data-vod-more], [data-clip-more]');
+      if (next) { next.focus({ preventScroll: true }); this.moreFocus = false; }
+      else if (!this.body.querySelector('.load-more[disabled]')) this.moreFocus = false;
+    }
     this.fitShelves();
   }
 

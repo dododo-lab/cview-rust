@@ -88,6 +88,25 @@ function bindSkipLink() {
   });
 }
 
+/**
+ * 화면 낭독기에 짧게 알린다(polite) — 늘 문서에 있는 자리 하나에 쓴다. 보였다 숨는 OSD 처럼 display:none 이던 상자가 글과 함께
+ * 나타나면 VoiceOver·NVDA 가 바뀜으로 보지 않아 거의 읽지 않았다. 같은 글을 다시 알릴 수 있게 한 번 비운 뒤 쓴다.
+ */
+export function announcePolite(text) {
+  let live = document.getElementById('polite-live');
+  if (!live) {
+    live = document.createElement('div');
+    live.id = 'polite-live';
+    live.className = 'sr-only';
+    live.setAttribute('role', 'status');
+    live.setAttribute('aria-live', 'polite');
+    live.setAttribute('aria-atomic', 'true');
+    document.body.append(live);
+  }
+  if (live.textContent === text) live.textContent = '';
+  live.textContent = text;
+}
+
 export function installA11y() {
   labelIconButtons(document);
   syncPressed(document);

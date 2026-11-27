@@ -24,6 +24,7 @@ function apply(s, ctx) {
   const a = s.appearance || {};
   root.classList.toggle('compact', Boolean(a.compactMode));
   root.dataset.motion = a.motionQuality || 'balanced';
+  try { if (localStorage.getItem('cview.motion') !== root.dataset.motion) localStorage.setItem('cview.motion', root.dataset.motion); } catch { /* 저장 불가 — 다음 시작은 설정을 받은 뒤 맞춘다 */ }
   // 화면 크기 — 웹뷰 확대는 Rust 가 건다(ui_zoom_sync·설정 저장). 여기선 썸네일 단계를 고를 배율만 알린다.
   setImageZoom(Number(a.uiScale) || 1);
   // CSS 도 배율을 안다 — macOS 신호등은 확대와 상관없이 물리 위치에 고정이라 줄이면 접힌 사이드바 밖으로 나왔다(app.css, 감사 UX-H02).

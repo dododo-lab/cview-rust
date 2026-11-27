@@ -1648,7 +1648,12 @@ export class MultiLivePage {
     const n = tabs.length;
     const w = this.chipWindow;
     this.chipStart = Math.max(0, Math.min(this.chipStart, n - w));
-    tabs.forEach((c, i) => { c.hidden = i < this.chipStart || i >= this.chipStart + w; });
+    // 숨기는 칩은 휠로 넘길 때 단 미끄러짐 표시도 뗀다 — 남겨 두면 다음에 크기 변경·Home/End 로 드러날 때(display:none → 보임)
+    // 그 애니메이션이 다시 돌아, 어떤 칩은 엉뚱한 쪽에서 미끄러져 나오고 어떤 칩은 그냥 나타났다.
+    tabs.forEach((c, i) => {
+      c.hidden = i < this.chipStart || i >= this.chipStart + w;
+      if (c.hidden) c.classList.remove('enter-start', 'enter-end');
+    });
     const lead = this.chipStart;
     const tail = Math.max(0, n - this.chipStart - w);
     for (const [el, count, label] of [[picker.querySelector('.ml-watch-more.start'), lead, '앞'], [picker.querySelector('.ml-watch-more.end'), tail, '뒤']]) {

@@ -196,6 +196,10 @@
   animation: mb-spin 0.65s linear infinite;
 }
 
+/* 모션 줄이기 — app.css 전역 규칙이 이 무한 회전을 0.01ms 로 돌려 아이콘이 매 프레임 아무 각도로 떨렸다. 멈춘 아이콘으로 둔다(진행은 aria-busy·흐린 단추). */
+@media (prefers-reduced-motion: reduce) { .mb-icon-btn.is-spinning svg { animation: none !important; } }
+:root[data-motion="reduced"] .mb-icon-btn.is-spinning svg { animation: none !important; }
+
 @keyframes mb-spin {
   to { transform: rotate(360deg); }
 }

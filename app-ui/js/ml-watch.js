@@ -10,6 +10,7 @@
 import { screenshotFormat, screenshotExtension } from './screenshot-format.js';
 import { api } from './api.js';
 import { esc, toast, keyBelongsToTarget, plainLetter } from './dom.js';
+import { announcePolite } from './a11y.js';
 import { chatPrefs, onChatPrefs, updateChatPrefs } from './chat-prefs.js';
 import { matchPlainAction, currentBindings, bindingLabel, onShortcuts } from './shortcuts.js';
 import { togglePipFor, stamp, toggleFullscreenOn } from './viewer-controls.js';
@@ -115,7 +116,8 @@ export class WatchTools {
 
     this.osd = document.createElement('div');
     this.osd.className = 'player-osd';
-    this.osd.setAttribute('role', 'status'); // 음소거·볼륨 같은 알림을 화면 읽기 프로그램도 읽게
+    // 보이는 OSD 는 꾸밈 — 낭독은 늘 있는 자리(announcePolite)로. 숨었다 나타나고 패인 사이를 옮겨 다니는 live 영역은 읽히지 않았다.
+    this.osd.setAttribute('aria-hidden', 'true');
     this.osd.hidden = true;
     page.stage.append(this.osd);
 
@@ -479,6 +481,7 @@ export class WatchTools {
     // 패인 안에 둔다 — 패인 전체 화면에서도 보이게.
     const host = this.pane?.el || this.page.stage;
     if (this.osd.parentElement !== host) host.append(this.osd);
+    announcePolite(text);
     this.osd.textContent = text;
     this.osd.hidden = false;
     this.osd.classList.remove('fade');
