@@ -270,6 +270,8 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) back
 .sheet-scrim > .sheet, .sheet-scrim > form.sheet { animation: mo-rise .32s var(--ease-emph) backwards; }
 .sheet-scrim.leaving { animation: mo-fade-out var(--dur-2) var(--ease-in) both; pointer-events: none; }
 .sheet-scrim.leaving > .sheet { animation: mo-sink var(--dur-2) var(--ease-in) both; }
+/* 환영 안내는 단계마다 카드를 다시 그린다 — 첫 등장 뒤에는 떠오르기를 되풀이하지 않는다(onboarding.js). */
+.welcome-scrim.stepped:not(.leaving) > .sheet { animation: none; }
 .palette-scrim:not([hidden]) { animation: mo-fade var(--dur-2) var(--ease-out) backwards; }
 .palette-scrim:not([hidden]) > .palette { animation: mo-pop-down .24s var(--ease-emph) backwards; transform-origin: top center; }
 .palette-item { transition: background var(--dur-1) var(--ease-out); }
@@ -284,6 +286,8 @@ body.app-entering .app { animation: app-in .42s cubic-bezier(.2, .8, .2, 1) back
 /* ── 채팅 — 사람이 보는 것(이벤트 카드·멘션·고정·점프)만 움직인다 ── */
 .chat-line.ev .ev-card { animation: mo-pop-up .3s var(--ease-out) backwards; transform-origin: left center; }
 .chat-line.mention, .chat-line.notice-line { animation: mo-fade .3s ease backwards; }
+/* 한 번 나타난 줄은 목록을 다시 보여도(display:none → 보임) 다시 튀어나오지 않는다(chat-follow.js markLineAnimationDone). */
+.chat-line.mo-in-done:is(.mention, .notice-line):not(.dp-flash), .chat-line.mo-in-done .ev-card { animation: none; }
 .chat-pin:not([hidden]), .chat-notice:not([hidden]), .chat-input-banner:not([hidden]) { animation: mo-pop-down var(--dur-3) var(--ease-out) backwards; transform-origin: top center; }
 .chat-jump:not([hidden]) { animation: mo-pop-up .3s var(--ease-spring) backwards; }   /* both 면 끝난 뒤에도 scale: 1 을 붙들어 누름(.93)이 안 보였다 */
 .chat-reopen:not([hidden]), .ip-reopen:not([hidden]) { animation: mo-fade var(--dur-3) var(--ease-out) backwards; }
@@ -805,6 +809,12 @@ svg.spin-once { animation: mo-spin-once .62s var(--ease-emph); }
 }
 .card .thumb.preview-on::after { opacity: 0 !important; }
 @keyframes thumb-preview-load { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+/* 시스템 모션 줄이기 — 미리보기는 앱 설정만 따라 계속 뜨는데(hover-preview.js), 전역 규칙이 이 무한 반복을 0.01ms 로 돌려
+   빛줄기가 매 프레임 아무 자리로 튀었다(깜빡임·매 프레임 다시 칠하기). 가운데에 멈춘 줄기로 둔다. */
+@media (prefers-reduced-motion: reduce) {
+  .preview-loading::after, .card .thumb.preview-loading::after { animation: none !important; background-position: 50% 0; }
+}
+:root[data-motion="reduced"] :is(.preview-loading, .card .thumb.preview-loading)::after { animation: none !important; background-position: 50% 0; }
 
 /* ══ 라이브 정보란·채널 화면 (2026-11-12) — 등장 순차·숫자·LIVE 맥동·탄성 호버·카드 기울기·배너 패럴랙스 ══
    - 대상: 라이브 단독 보기·포커스 아래 채널 정보(.mwi-*, ml-watch-info.js), 채널 화면(.page-channel, channel.js).

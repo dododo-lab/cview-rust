@@ -42,6 +42,15 @@ export function snapshotPanes(panes) {
 export function playLayoutMotion(panes, before) {
   if (!motionEnabled()) return;
   const now = performance.now();
+  // 이전 이동이 아직 돌고 있으면 먼저 걷는다 — 걸린 채 새 자리를 재면 옛 변환이 섞여(새 칸에 옛 이동량) 계산이 틀어지고,
+  // 새 애니메이션 첫 프레임에 패인이 옛 목적지로 튀었다가 미끄러졌다(배치를 연달아 바꿀 때). 이전 자리(before)는 이미
+  // 보이는 그대로 재 두었으므로 그 자리에서 이어 움직인다. 나타나기를 기다리는 패인은 아래에서 다시 건다.
+  for (const p of panes.values()) {
+    if (p.el.hidden || p.exiting || !p.anim || (p.enterHoldUntil && now < p.enterHoldUntil)) continue;
+    p.anim.cancel();
+    p.anim = null;
+    p.el.style.transformOrigin = '';
+  }
   for (const [slot, p] of panes) {
     if (p.el.hidden || p.exiting) continue;
     const b = p.el.getBoundingClientRect();
@@ -62,7 +71,6 @@ export function playLayoutMotion(panes, before) {
     const dx = (a.left + a.width / 2) - (b.left + (b.width * s) / 2);
     const dy = (a.top + a.height / 2) - (b.top + (b.height * s) / 2);
     if (Math.abs(dx) < 1 && Math.abs(dy) < 1 && Math.abs(s - 1) < 0.01) continue;
-    p.anim?.cancel();
     // 기준점은 인라인으로 — 키프레임에 transform-origin 이 끼면 합성할 수 없는 속성이라 애니메이션 전체가
     // 메인 스레드로 내려간다(영상 여러 개가 재생 중이면 340ms 동안 끊긴다). 끝나거나 취소되면 되돌린다.
     p.el.style.transformOrigin = '0 0';
@@ -88,6 +96,9 @@ export function playExit(pane, stage, rect, done) {
   pane.anim?.cancel();
   const st = pane.el.style;
   st.transformOrigin = '';
+  // 포커스·사용자 배치의 격자 칸 지정을 뗀다 — 칸이 지정된 절대 위치 격자 자식은 무대가 아니라 그 칸을 기준으로 놓여
+  // (CSS Grid §9.1) left/top 이 두 번 더해져 메인 열 너비만큼 옆에서 사라졌다. 같은 슬롯을 다시 쓰면 applyFocusGrid 가 다시 건다.
+  st.gridRow = ''; st.gridColumn = '';
   st.position = 'absolute';
   st.left = `${rect.left - s.left - stage.clientLeft}px`;
   st.top = `${rect.top - s.top - stage.clientTop}px`;

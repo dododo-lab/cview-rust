@@ -6,6 +6,11 @@ import { compactCount } from './cards.js';
 import { setTheme, syncTheme, resolvedTheme, onThemeChange } from './theme.js';
 import { installUiHealth } from './ui-health.js';
 
+/** 모션 등급 — 메인 창(prefs-effects.js)처럼 :root[data-motion] 에 건다. 예전엔 팝오버만 '절약'을 몰라 돌기 아이콘이 계속 돌았다. */
+function applyMotion(a) {
+  if (a && typeof a.motionQuality === 'string') document.documentElement.dataset.motion = a.motionQuality || 'balanced';
+}
+
 const ICON = {
   play: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5-13-7.5Z"/></svg>',
   pause: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z"/></svg>',
@@ -344,6 +349,7 @@ async function refreshData({ force = false } = {}) {
         const s = settingsRes.value;
         if (s.general) state.general = s.general;
         if (s.appearance && s.appearance.theme) syncTheme(s.appearance.theme);
+        applyMotion(s.appearance);
       }
       if (mlRes.status === 'fulfilled' && mlRes.value) {
         state.multiIds = new Set((mlRes.value.sessions || []).map((x) => x.channelId).filter(Boolean));
@@ -686,6 +692,7 @@ async function init() {
   });
   listen(Events.appearanceChanged, (a) => {
     if (a && a.theme) syncTheme(a.theme);
+    applyMotion(a);
     renderTiles();
   });
   listen(Events.generalChanged, (g) => {
