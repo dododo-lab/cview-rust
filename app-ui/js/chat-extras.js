@@ -64,7 +64,9 @@ export function showDesignMenu(anchor) {
     if (step) { e.preventDefault(); items[(i + step + items.length) % items.length].focus(); }
     else if (e.key === 'Home' || e.key === 'End') { e.preventDefault(); items[e.key === 'Home' ? 0 : items.length - 1].focus(); }
     else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(true); }
-    else if (e.key === 'Tab') close(false);
+    // Tab — 연 단추로 초점을 먼저 돌려 기본 Tab 이 그 다음 요소로 가게 한다. 예전엔 초점이 든 메뉴(body 끝)를 지워
+    // 문서 처음으로 넘어갔다.
+    else if (e.key === 'Tab') close(true);
   });
   (items.find((b) => b.dataset.width === cur) || items[0])?.focus({ preventScroll: true });
   setTimeout(() => document.addEventListener('pointerdown', function off(ev) {

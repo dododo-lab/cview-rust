@@ -91,7 +91,7 @@ export function paneControlsHtml() {
       <div class="ml-pane-bar">
         <button class="ml-pane-btn" data-mp="play" title="일시정지" aria-label="일시정지">${I.pause}</button>
         <div class="ml-vol">
-          <button class="ml-pane-btn" data-ml="audio" title="이 패인 소리 켜기" aria-label="소리">${I.muted}</button>
+          <button class="ml-pane-btn" data-ml="audio" title="이 패인 소리 켜기" aria-label="이 패인 소리 켜기">${I.muted}</button>
           <input type="range" class="ml-vol-range" min="0" max="100" value="100" aria-label="패인 볼륨">
         </div>
         <button class="ml-live-pill at-edge" data-mp="live" title="라이브로 이동">LIVE</button>

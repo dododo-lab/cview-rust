@@ -518,6 +518,7 @@ async function logout() {
  * 머리줄에 채널이 하나만 남았다). 멀티라이브에 직접 추가하거나 멀티라이브 화면으로 가면 남긴다(사이드바 수에 센다).
  */
 const browsedWatch = new Map(); // 세션 id → 채널 id, 연 차례
+const browsingChannels = new Set(); // 둘러보려고 넣는 중인 채널 id — 넣은 직후 그리기에서 '직접 넣음'으로 보이지 않게
 function keepTransient(channelId = null) {
   let changed = false;
   for (const [id, ch] of browsedWatch) {
@@ -568,12 +569,19 @@ async function openChannelWatch(channelId, seq = openSeq) {
     browsedWatch.delete(prev);
     await pages.multilive.run(api.multiLiveRemove(prev));
   }
-  await pages.multilive.add(channelId, { quiet: true, live: true, ad: false });
-  const s = multiLiveSessionFor(channelId);
+  browsingChannels.add(channelId);
+  let s;
+  try {
+    await pages.multilive.add(channelId, { quiet: true, live: true, ad: false });
+    s = multiLiveSessionFor(channelId);
+    if (s) browsedWatch.set(s.id, channelId);
+  } finally { browsingChannels.delete(channelId); }
   if (!s) return; // 추가 실패 — run 이 이미 알렸다
-  browsedWatch.set(s.id, channelId);
   if (seq !== openSeq) return; // 그새 다른 채널을 눌렀다
   await enterWatch(s.id);
+  // 무대에 올리는 동안 다른 채널을 눌렀으면 광고를 틀지 않는다 — 예전엔 검사가 enterWatch 앞에만 있어,
+  // 늦은 A 가 무대 밖에서 프리롤을 틀어 B 의 광고와 겹쳤다. (enterWatch 가 한 번 올린다.)
+  if (openSeq !== seq + 1) return;
   pages.multilive.playPaneAd(channelId);
 }
 
@@ -897,7 +905,9 @@ const MENU_ACTIONS = {
   'github-repo': () => openProjectLink('repo'),
   fullscreen: () => (viewer.isOpen ? viewer.controls.fullscreen(false) : activeWatch()?.fullscreen(false)),
   'fullscreen-chat': () => (viewer.isOpen ? viewer.controls.fullscreen(true) : activeWatch()?.fullscreen(true)),
-  'close-viewer': () => (viewer.isOpen ? viewer.close() : activeWatch() && closeWatch()),
+  // 보조 창(채팅·멀티채팅·통계, 방송 없는 플레이어 창)은 닫을 시청 화면이 없으면 창을 닫는다 — ⌘W 를 이 메뉴가 가져가서
+  // 예전엔 이 창들을 단축키로 닫을 수 없었다.
+  'close-viewer': () => (viewer.isOpen ? viewer.close() : activeWatch() ? closeWatch() : AUX && api.windowCloseSelf().catch(() => {})),
   // 멀티채팅(화면·창)은 모든 채널 채팅을 지운다 — 예전엔 대상이 없어 ⇧⌘K 가 아무 일도 안 했다(감사 UX-C12)
   'chat-clear': () => {
     if (current === 'multichat' && pages.multichat) {
@@ -927,26 +937,46 @@ async function zoomStep(dir) {
   } catch (e) { toast(e.message); }
 }
 
+// 보조 창(?w=…)은 사이드바 없이 한 화면만 그린다 — 화면 이동 메뉴·단축키를 그 창에서 따르면 채팅·통계 창이 사이드바 없는
+// 홈이나(보조 창은 멀티라이브를 그리지 않아) 빈 멀티라이브로 바뀌고, 그 화면의 단추가 메인 창 멀티라이브를 바꿨다.
+// 이 동작들은 메인 창을 앞으로 가져와 그 창에서 연다.
+const MAIN_ROUTE_ACTIONS = {
+  'nav-home': 'home', 'nav-following': 'following', 'nav-popular': 'popular', 'nav-multilive': 'multilive',
+  'nav-live': 'live', 'nav-library': 'library', 'nav-categories': 'categories', 'nav-multichat': 'multichat',
+  search: 'search', settings: 'settings',
+};
+function openInMainWindow(route) {
+  api.trayControl({ kind: 'open-route', route, params: {} }).catch((e) => toast(e.message));
+}
+
 function installMenuAndShortcuts() {
   // 메뉴 이벤트는 모든 창에 간다 — 앞에 있는 창만 실행한다.
   listen('menu://action', (p) => {
     const run = p && MENU_ACTIONS[p.id];
     // 처음 실행 고지가 떠 있는 동안은 메뉴 막대 동작도 받지 않는다(동의 전에 앱을 쓰지 않게).
-    if (run && document.hasFocus() && !noticeOpen()) run();
+    if (!run || !document.hasFocus() || noticeOpen()) return;
+    if (AUX && MAIN_ROUTE_ACTIONS[p.id]) { openInMainWindow(MAIN_ROUTE_ACTIONS[p.id]); return; }
+    run();
   });
   // 메뉴가 없는 환경(브라우저 미리보기 등)과 ⌘/ 보조.
   document.addEventListener('keydown', (e) => {
     if (!(e.metaKey || e.ctrlKey)) return;
     if (e.altKey && e.metaKey) {
       const hub = HUBS.find(([k]) => e.code === `Digit${k}`);
-      if (hub) { e.preventDefault(); if (hub[1] === 'live') openLiveMenu(); else navigate(hub[1]); hubFlash(hub[2]); return; }
+      if (hub) {
+        e.preventDefault();
+        if (AUX) { openInMainWindow(hub[1]); return; }
+        if (hub[1] === 'live') openLiveMenu(); else navigate(hub[1]);
+        hubFlash(hub[2]);
+        return;
+      }
     }
     // 화면 크기 — macOS 는 메뉴 단축키가 먼저 가져간다. 메뉴 막대가 없는 Windows 는 여기서.
     if (IS_WINDOWS && !e.altKey && (e.key === '+' || (!e.shiftKey && ['=', '-', '0'].includes(e.key)))) {
       e.preventDefault(); zoomStep(e.key === '0' ? 0 : e.key === '-' ? -1 : 1); return;
     }
     if (e.key === '/') { e.preventDefault(); showShortcuts(); }
-    else if (e.key === ',') { e.preventDefault(); navigate('settings'); }
+    else if (e.key === ',') { e.preventDefault(); if (AUX) openInMainWindow('settings'); else navigate('settings'); }
   });
   // 오프라인 배너 (SYS-12)
   const banner = document.createElement('div');
@@ -1027,7 +1057,8 @@ async function main() {
     onLogout: logout,
   });
   pages.multilive = new MultiLivePage(content, { isLoggedIn, onAddChannel: addToMultiLive, onOpenChannel: watchFromDrawer, onSessionsChanged: () => syncWindowOcclusion() });
-  pages.multilive.isTransient = (sessionId) => browsedWatch.has(sessionId); // 둘러본 채널 — 지난 구성 저장에서 뺀다
+  // 둘러본 채널 — 지난 구성 저장에서 뺀다. 넣는 중(browsedWatch 에 들기 전)인 채널도 둘러본 채널이다.
+  pages.multilive.isTransient = (sessionId, channelId) => browsedWatch.has(sessionId) || (channelId != null && browsingChannels.has(channelId));
   pages.live = new LivePage(content, { isLoggedIn, modeSwitch: !AUX });
   pages.categories = new CategoriesPage(content);
   pages.multichat = new MultiChatPage(content, { isLoggedIn, onPlay: openChannel });
@@ -1191,7 +1222,8 @@ async function main() {
           break;
         // 알림 영역 메뉴 › 도움말(tray.rs help_menu_action) — 오픈소스 라이선스·이용 고지 시트.
         case 'menu':
-          if ((p.id === 'licenses' || p.id === 'notice') && !noticeOpen()) MENU_ACTIONS[p.id]();
+          // 앱 메뉴(menu.rs needs_main_window) — 초점 있는 창이 없을 때 Rust 가 메인 창을 보이고 이리로 보낸다.
+          if (MAIN_MENU_IDS.has(p.id) && !noticeOpen()) MENU_ACTIONS[p.id]();
           break;
         default:
           break;
@@ -1382,6 +1414,7 @@ async function main() {
 }
 
 // 고지가 떠 있는 동안 무시하는 트레이·메뉴 막대 동작 — 화면 이동·멀티라이브 추가·업데이트 시트. 재생 제어는 그대로 둔다.
+const MAIN_MENU_IDS = new Set(['licenses', 'notice', 'about', 'check-update', 'settings', 'notification-settings']);
 const TRAY_BLOCKED_BY_NOTICE = new Set(['navigate', 'show-now-playing', 'queue-multi', 'check-update']);
 
 // 시작 로딩 화면이 홈 데이터를 기다리는 한도 — 네트워크가 느려도 이만큼 지나면 홈(스켈레톤)을 먼저 보여 주고

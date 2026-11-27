@@ -172,7 +172,7 @@ function bindSeparatorKeys(el, { label, get, set, min = 0.2, max = 0.85, sign = 
 
 /** 지난 구성으로 기억할 채널 — 둘러본(카드로 잠깐 연) 세션은 뺀다. 순수 함수. */
 export function rememberedChannels(sessions, isTransient = null) {
-  return (sessions || []).filter((x) => !(isTransient && isTransient(x.id))).map((x) => x.channelId);
+  return (sessions || []).filter((x) => !(isTransient && isTransient(x.id, x.channelId))).map((x) => x.channelId);
 }
 
 export class MultiLivePage {
@@ -762,8 +762,10 @@ export class MultiLivePage {
       const kept = rememberedChannels(sessions, this.isTransient);
       // 열지 못했던 채널은 한 번 열리면(직접 다시 넣음) 보통 채널로 돌아간다 — 예전엔 앱을 끝낼 때까지 붙어 다녀, 그 채널을
       // 직접 넣었다 닫아도 다음 '지난 구성'에 되살아났다.
+      // 카드로 잠깐 연(둘러본) 세션은 '직접 넣음'이 아니다 — 예전엔 열지 못했던 C 를 카드로 잠깐 보기만 해도 여기서 빠져,
+      // 닫은 뒤 저장되는 지난 구성에서 C 가 말없이 사라졌다.
       if (this.unopened && this.unopened.length) {
-        const open = new Set(sessions.map((x) => x.channelId));
+        const open = new Set(kept);
         this.unopened = this.unopened.filter((id) => !open.has(id));
       }
       const keep = [...kept, ...(this.unopened || []).filter((id) => !kept.includes(id))];

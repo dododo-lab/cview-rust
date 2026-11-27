@@ -446,15 +446,30 @@ fn compare_with_store(count: usize, seed: u64) {
     let now = reference_now();
     let rows = records(count, now, &cal, seed, 120);
     let raw = seeded_store(&rows, cal).aggregate_insights(now).unwrap();
+    let rolled = rollup(&rows, now, &cal);
+    // 시간대·연속 시청은 저장소가 정시 조각으로 담는다(통계 리포트와 같음). 원본 포팅 계산은 시작 시각 하나로 담는다 —
+    // 시간대 합계는 같고, 연속 일수는 같거나 길다. 나눠 담기는 `hourly_and_streak_split_a_session_across_midnight` 가 검사한다.
+    let sum = |h: &BTreeMap<u32, f64>| h.values().sum::<f64>();
+    let (got, want) = (sum(&raw.hourly), sum(&rolled.hourly));
+    assert!(
+        (got - want).abs() <= 1.0 + want * 1e-9,
+        "hourly sum {got} vs {want}"
+    );
+    assert!(
+        raw.streak >= rolled.streak,
+        "streak {} < {}",
+        raw.streak,
+        rolled.streak
+    );
     let expected = InsightsResult {
         all: raw.all,
         w7: raw.w7,
         w30: raw.w30,
-        streak: raw.streak,
+        streak: rolled.streak,
         avg: raw.avg,
         channels: raw.channels,
         categories: raw.categories,
-        hourly: raw.hourly,
+        hourly: rolled.hourly.clone(),
         daily: raw.daily,
         session_count: raw.session_count as i64,
         counted_session_count: raw.counted_session_count as i64,
@@ -462,7 +477,7 @@ fn compare_with_store(count: usize, seed: u64) {
         active_session_count: raw.active_session_count as i64,
         last_updated_at: raw.last_updated_at,
     };
-    assert_equivalent(&rollup(&rows, now, &cal), &expected);
+    assert_equivalent(&rolled, &expected);
 }
 
 #[test]

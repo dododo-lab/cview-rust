@@ -44,6 +44,8 @@ if (typeof window !== 'undefined') window.addEventListener(CHANNEL_SOCIAL_EVENT,
 listen(Events.authChanged, () => cache.clear());
 if (typeof window !== 'undefined') window.addEventListener('cview:recent-cleared', () => cache.clear());
 const safe = async (p, fallback) => { try { return await p; } catch { return fallback; } };
+// 받기 실패 표시 — 로그아웃(null)과 구분한다. 로그인한 사용자에게 "로그인하면 …"이라고 말하지 않는다.
+const FAILED = Symbol('failed');
 
 // ── 순수 계산(원본 PopularInsights / FollowingInsights 규칙) ─────
 /** 라이브 목록 요약 — 개수·총/평균 시청자·카테고리 수. 순수 함수. */
@@ -171,26 +173,30 @@ function popularRail(lives, title = '실시간 인사이트') {
 
 const PROVIDERS = {
   async home({ isLoggedIn }) {
-    const [f, p, o] = await Promise.all([safe(following(isLoggedIn), null), safe(popular(), []), safe(overview(), null)]);
+    const [got, p, o] = await Promise.all([safe(following(isLoggedIn), FAILED), safe(popular(), []), safe(overview(), null)]);
+    const f = got === FAILED ? null : got;
     const lives = f || [];
     const s = liveSummary(lives);
     const today = o && o.daily.length ? o.daily[o.daily.length - 1].seconds : 0;
-    return header('오늘의 인사이트', f ? `팔로잉 ${s.liveCount}명 방송 중` : '로그인하면 팔로잉 요약이 보여요')
+    return header('오늘의 인사이트', f ? `팔로잉 ${s.liveCount}명 방송 중` : got === FAILED ? '팔로잉 방송을 불러오지 못했어요' : '로그인하면 팔로잉 요약이 보여요')
       + tiles([[f ? String(s.liveCount) : '—', '팔로잉 방송'], [f ? compactCount(s.viewerTotal) : '—', '팔로잉 시청자'], [durationText(today), '오늘 시청'], [o ? `${o.streak}일` : '—', '연속 시청']])
       + section('flame', '지금 많이 보는 팔로잉', liveRows([...lives].sort((a, b) => b.viewerCount - a.viewerCount).slice(0, 4), (l) => `${l.categoryName || '기타'} · ${l.viewerCountText}명`))
       + section('grid', '지금 뜨는 카테고리', bars(categoryGroups(p).slice(0, 5).map((c) => ({ name: c.name, value: c.viewers, category: c.name }))))
       + (o && o.daily.length ? section('clock', '최근 7일 내 시청', columns(o.daily.slice(-7).map((d) => d.seconds), o.daily.slice(-7).map((d) => ['일', '월', '화', '수', '목', '금', '토'][new Date(d.date).getDay()]))) : '');
   },
   async following({ isLoggedIn }) {
-    const lives = await safe(following(isLoggedIn), null);
+    const lives = await safe(following(isLoggedIn), FAILED);
+    if (lives === FAILED) return header('팔로잉 인사이트', '팔로잉 방송을 불러오지 못했어요') + empty('잠시 뒤 다시 열어 주세요');
     if (!lives) return header('팔로잉 인사이트', '로그인하면 팔로잉 인사이트가 보여요') + empty('네이버 로그인 후 이용할 수 있어요');
-    const all = await safe(cached('followAll', () => api.followingChannelsAll(false)), []);
+    const allRes = await safe(cached('followAll', () => api.followingChannelsAll(false)), null);
+    const all = allRes || [];
     const o = await safe(overview(), null);
     const s = liveSummary(lives);
     const followedIds = new Set(all.map((c) => c.channelId));
-    // 팔로우한 채널만 — 시청 순위(overview)는 모든 채널을 담는다. 팔로잉 목록을 못 받았으면(빈 집합) 거르지 않는다.
-    const isFollowed = (c) => !followedIds.size || !c.channelId || followedIds.has(c.channelId);
-    const mostWatched = (o ? o.channels : []).filter((c) => c.seconds >= 60 && isFollowed(c)).slice(0, 5).map((c) => ({ name: c.name, value: c.seconds }));
+    // 팔로우한 채널만 — 시청 순위(overview)는 모든 채널을 담는다. 팔로잉 목록을 못 받았으면 거르지 않는다
+    // (받았는데 0명이면 모두 거른다). 상위 10위 밖 팔로잉도 닿게 후보(channelPool)에서 고른다.
+    const isFollowed = (c) => !allRes || !c.channelId || followedIds.has(c.channelId);
+    const mostWatched = (o ? o.channelPool || o.channels : []).filter((c) => c.seconds >= 60 && isFollowed(c)).slice(0, 5).map((c) => ({ name: c.name, value: c.seconds }));
     return header('팔로잉 인사이트', `팔로잉 ${all.length || '?'}명 중 ${s.liveCount}명 방송 중`)
       + tiles([[String(s.liveCount), '방송 중'], [String(all.length || followedIds.size || '—'), '전체 팔로잉'], [compactCount(s.viewerTotal), '팔로잉 시청자'], [String(s.categoryCount), '방송 분야']])
       + section('heart', '많이 보는 팔로잉', bars(mostWatched, durationText))

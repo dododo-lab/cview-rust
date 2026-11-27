@@ -296,6 +296,17 @@ async fn install(app: &AppHandle) -> CmdResult<()> {
     Ok(())
 }
 
+/// 응답 머리를 기다리는 한도. 본문 조각은 60초 한도가 따로 있다.
+const HEAD_TIMEOUT: Duration = Duration::from_secs(60);
+
+/// 응답 머리를 `limit` 까지만 기다린다 — 예전엔 `send()` 에 시간 제한이 없어, 연결 뒤 네트워크가 바뀌면
+/// 설치가 "확인하는 중"에 멈추고 `INSTALLING` 이 풀리지 않아 앱을 다시 켤 때까지 다시 시도할 수 없었다.
+async fn response_head<F: std::future::Future>(fut: F, limit: Duration) -> CmdResult<F::Output> {
+    tokio::time::timeout(limit, fut).await.map_err(|_| {
+        err("업데이트 서버가 응답하지 않아 중단했습니다 — 네트워크를 확인하고 다시 시도해 주세요")
+    })
+}
+
 /// 설치 파일을 받으며 크기·SHA-256 을 확인한다. 맞지 않으면 파일을 지운다.
 async fn download(
     progress: &(dyn Fn(u64, u64) + Send + Sync),
@@ -309,12 +320,15 @@ async fn download(
         .connect_timeout(Duration::from_secs(15))
         .build()
         .map_err(|e| err(format!("다운로드 연결 초기화 실패: {e}")))?;
-    let mut resp = client
-        .get(asset.browser_download_url.clone())
-        .header("User-Agent", "CView-Rust")
-        .send()
-        .await
-        .map_err(|e| err(format!("설치 파일 다운로드를 시작하지 못했습니다: {e}")))?;
+    let mut resp = response_head(
+        client
+            .get(asset.browser_download_url.clone())
+            .header("User-Agent", "CView-Rust")
+            .send(),
+        HEAD_TIMEOUT,
+    )
+    .await?
+    .map_err(|e| err(format!("설치 파일 다운로드를 시작하지 못했습니다: {e}")))?;
     let status = resp.status().as_u16();
     if !(200..300).contains(&status) {
         return Err(err(format!("설치 파일 다운로드 실패 (HTTP {status})")));
@@ -787,6 +801,14 @@ mod tests {
     }
 
     const SHA: &str = "76f238f606250c87c6beac75dccd35ee99070a13490555936abb6cb64ecce3d0";
+
+    #[tokio::test(start_paused = true)]
+    async fn install_download_gives_up_when_the_response_head_never_arrives() {
+        // 연결은 됐는데 응답 머리가 오지 않는 요청 — 예전엔 영영 기다렸다
+        let r = response_head(std::future::pending::<()>(), HEAD_TIMEOUT).await;
+        assert!(r.unwrap_err().0.contains("응답하지 않아"));
+        assert_eq!(response_head(async { 7 }, HEAD_TIMEOUT).await.unwrap(), 7);
+    }
 
     #[test]
     fn sha256_parsing() {

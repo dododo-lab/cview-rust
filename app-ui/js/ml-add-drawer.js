@@ -239,7 +239,7 @@ export class MultiLiveAddDrawer {
     this.el.inert = false;
     this.filter.value = '';
     this.sync();
-    if (!this.items.length || Date.now() - this.loadedAt > STALE_MS) this.load(false);
+    if (!this.items.length || this.partial || Date.now() - this.loadedAt > STALE_MS) this.load(false);
     else this.renderList();
     requestAnimationFrame(() => this.filter.focus({ preventScroll: true }));
   }
@@ -310,8 +310,13 @@ export class MultiLiveAddDrawer {
       if (refresh) toast(this.failed);
     } else {
       this.items = mergeLives(following.status === 'fulfilled' ? following.value : [], popular.status === 'fulfilled' ? popular.value : []);
+      // 한쪽만 실패 — 예전엔 아무 말 없이 그쪽 채널이 빠지고(팔로잉 실패면 팔로우 채널이 목록에서 사라짐) '새로 받았습니다'까지
+      // 떴다. 알리고, 다음에 열 때 다시 받는다.
+      const partial = following.status === 'rejected' ? '팔로잉 방송' : popular.status === 'rejected' ? '인기 방송' : '';
       this.loadedAt = Date.now();
-      if (refresh) toast('방송 목록을 새로 받았습니다', 1200);
+      this.partial = Boolean(partial);
+      if (partial) toast(`${partial}을 불러오지 못했습니다 — 받은 목록만 보여 줍니다`);
+      else if (refresh) toast('방송 목록을 새로 받았습니다', 1200);
     }
     this.renderList();
   }

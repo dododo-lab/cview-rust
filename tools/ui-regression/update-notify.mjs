@@ -163,6 +163,26 @@ await check('설정에서 자동 확인을 끄면 서버에 묻지 않음', asyn
   await page.close();
 });
 
+await check('자동 확인을 켜면 곧 확인하고, 끄면 줄을 내리고 다음 확인을 멈춤(12차)', async () => {
+  const { page, checks } = await open(() => { window.__autoCheck = false; });
+  await page.clock.fastForward(16000);
+  assert.equal(await checks(), 0);
+  const toggle = (on) => page.evaluate((v) => {
+    window.__autoCheck = v;
+    window.dispatchEvent(new CustomEvent('cview:settings-changed', { detail: { domain: 'general', key: 'autoCheckUpdates', value: v, settings: { general: { autoCheckUpdates: v } } } }));
+  }, on);
+  await toggle(true);
+  // 예전엔 꺼진 채 시작하면 다음 확인이 6시간 뒤로 잡혀 켜도 묻지 않았다
+  for (let i = 0; i < 10 && (await checks()) < 1; i++) await page.clock.fastForward(1000);
+  assert.equal(await checks(), 1, '켠 뒤 10초 안에 확인하지 않음');
+  await page.waitForSelector('#update-pill:not([hidden])');
+  await toggle(false);
+  assert.equal(await page.locator('#update-pill').isHidden(), true, '끈 뒤에도 새 버전 줄이 남음');
+  await page.clock.fastForward(7 * 60 * 60 * 1000);
+  assert.equal(await checks(), 1, '끈 뒤에도 확인함');
+  await page.close();
+});
+
 await check('확인 실패는 조용히 넘어가고 30분 뒤 다시 시도', async () => {
   const { page, checks, firstDelay } = await open();
   await page.evaluate(() => { window.__mock.handlers.update_check = () => { throw new Error('오프라인'); }; });
