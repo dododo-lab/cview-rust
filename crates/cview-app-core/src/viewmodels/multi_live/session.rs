@@ -856,10 +856,12 @@ impl MultiLiveSession {
                 if !still_tracking {
                     break;
                 }
-                if suspended {
-                    continue;
-                }
-                if !playing || !s.player.stream_phase().requires_playback_resources() {
+                // 보지 않는 동안(메뉴로 쉼·일시정지·연결 끊김)은 시각만 옮긴다 — 예전엔 건너뛰기만 해서 다시 볼 때
+                // 그 사이가 최대 5분(MAX_CHECKPOINT_GAP)씩 시청 시간으로 더해졌다.
+                if suspended || !playing || !s.player.stream_phase().requires_playback_resources() {
+                    if let Some(Ok(false)) = api.touch_watch_record(&channel_id, started_at).await {
+                        break;
+                    }
                     continue;
                 }
                 match api.checkpoint_watch_record(&channel_id, started_at).await {

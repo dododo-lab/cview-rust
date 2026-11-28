@@ -103,11 +103,14 @@ impl ChannelPresetStore {
         self.load_locked(&mut cache)
     }
 
-    pub fn save(&self, preset: &Preset) -> Result<(), PresetStoreError> {
+    /// 저장하고, 저장된 모습(이름이 겹쳐 `이름 (1)` 이 됐으면 그 이름)을 돌려준다 — 예전엔 아무것도 돌려주지 않아 저장 명령이
+    /// 처음 이름을 그대로 돌려줬고, 화면은 목록에 'A (1)' 이 생겼는데 "A 을(를) 저장했습니다" 라고 알렸다.
+    pub fn save(&self, preset: &Preset) -> Result<Preset, PresetStoreError> {
         let mut cache = lock(caches());
         let mut existing = self.load_locked(&mut cache)?;
-        Self::merge(preset, &mut existing);
-        self.persist(existing, &mut cache)
+        let stored = Self::merge(preset, &mut existing);
+        self.persist(existing, &mut cache)?;
+        Ok(stored)
     }
 
     fn unique_name(base: &str, taken: impl Fn(&str) -> bool) -> String {
@@ -120,9 +123,13 @@ impl ChannelPresetStore {
         name
     }
 
-    fn merge(preset: &Preset, existing: &mut Vec<Preset>) {
+    /// 이름은 같은 종류(멀티라이브·멀티채팅) 안에서만 겹치지 않게 한다 — 두 목록은 따로 보이는데, 예전엔 멀티채팅 묶음과
+    /// 이름이 같으면 멀티라이브 목록에 겹치는 것이 없어도 '(1)' 이 붙었다.
+    fn merge(preset: &Preset, existing: &mut Vec<Preset>) -> Preset {
         let name = Self::unique_name(&preset.name, |n| {
-            existing.iter().any(|p| p.name == n && p.id != preset.id)
+            existing
+                .iter()
+                .any(|p| p.name == n && p.id != preset.id && p.kind == preset.kind)
         });
         let normalized = Preset {
             id: preset.id,
@@ -131,7 +138,8 @@ impl ChannelPresetStore {
             kind: preset.kind,
         };
         existing.retain(|p| p.id != preset.id);
-        existing.push(normalized);
+        existing.push(normalized.clone());
+        normalized
     }
 
     pub fn delete(&self, id: Uuid) -> Result<(), PresetStoreError> {
@@ -146,7 +154,11 @@ impl ChannelPresetStore {
         let mut cache = lock(caches());
         let mut existing = self.load_locked(&mut cache)?;
         existing.retain(|p| p.id != preset.id);
-        let name = Self::unique_name(&preset.name, |n| existing.iter().any(|p| p.name == n));
+        let name = Self::unique_name(&preset.name, |n| {
+            existing
+                .iter()
+                .any(|p| p.name == n && p.kind == preset.kind)
+        });
         let normalized = Preset {
             id: preset.id,
             name,
@@ -319,6 +331,21 @@ mod tests {
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].name, "옛 묶음");
         assert_eq!(loaded[0].kind, PresetKind::Chat);
+    }
+
+    /// 저장은 겹쳐서 바뀐 이름을 돌려주고, 이름은 같은 종류 안에서만 겹치지 않게 한다.
+    #[test]
+    fn save_returns_the_stored_name_and_names_clash_only_within_a_kind() {
+        let store = ChannelPresetStore::new(temp_file());
+        assert_eq!(store.save(&preset("게임", &["a"])).unwrap().name, "게임");
+        assert_eq!(
+            store.save(&preset("게임", &["b"])).unwrap().name,
+            "게임 (1)"
+        );
+        let live = Preset::new("게임", vec!["c".into()], PresetKind::Live);
+        assert_eq!(store.save(&live).unwrap().name, "게임");
+        let live2 = Preset::new("게임", vec!["d".into()], PresetKind::Live);
+        assert_eq!(store.save(&live2).unwrap().name, "게임 (1)");
     }
 
     #[test]

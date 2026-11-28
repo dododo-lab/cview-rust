@@ -557,5 +557,11 @@ fn exit_cleanup<R: Runtime>(handle: &AppHandle<R>) {
     if done.is_err() {
         tracing::warn!("종료 정리가 3초를 넘어 건너뜁니다");
     }
+    // 시청 기록 종료까지 쓴 뒤 WAL 을 비운다 — 앱을 끄고 백업 파일로 바꾸는 손 복원(통계 › 데이터 관리 안내)이 남은 WAL 과 섞이지 않게.
+    if let Some(store) = services.as_ref().and_then(|s| s.data_store.as_ref()) {
+        if let Err(e) = store.checkpoint_wal() {
+            tracing::debug!("종료 WAL 정리 실패: {e}");
+        }
+    }
     tracing::info!(ms = started.elapsed().as_millis() as u64, "종료 정리 끝");
 }

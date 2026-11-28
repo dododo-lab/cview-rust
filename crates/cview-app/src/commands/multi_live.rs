@@ -406,8 +406,7 @@ pub async fn preset_save(
     let preset = Preset::new(name, channels, PresetKind::Live);
     preset_store(&app)?
         .save(&preset)
-        .map_err(|e| CommandError(e.to_string()))?;
-    Ok(preset)
+        .map_err(|e| CommandError(e.to_string()))
 }
 
 #[tauri::command]

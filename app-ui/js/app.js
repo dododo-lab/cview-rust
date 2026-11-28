@@ -302,7 +302,9 @@ async function closeWatch({ remove = false } = {}) {
   const id = pages.multilive.state.watchId;
   if (!id) return;
   const transient = browsedWatch.has(id);
-  if (!transient && !remove) { await navigate('multilive'); return; }
+  // 멀티라이브로 돌아갈 때는 기록을 쌓지 않는다 — 두 보기는 한 메뉴다(switchLiveMode). 예전엔 멀티라이브 패인을 크게 본 뒤
+  // Esc 로 돌아오면 열지 않은 '라이브' 목록이 뒤로 가기 기록에 남아 ⌘[ 가 그 목록으로 갔다.
+  if (!transient && !remove) { await navigate('multilive', {}, { push: false }); return; }
   browsedWatch.delete(id);
   // 닫기 단추 — 머리줄에 다른 채널이 남아 있으면 탭을 닫듯 옆 채널로 바꿔 보고 라이브 화면에 머문다.
   // 옆 채널을 먼저 무대에 올리고 뺀다(무대가 비는 순간 멀티라이브로 끌려가지 않게).
@@ -383,7 +385,10 @@ async function navigate(route, params = {}, { push = true, back = false } = {}) 
   // 있어도 새로 넘긴 값이 지금 값의 일부면 같은 화면이다 — 예전엔 뒤로 가기로 돌아온 채널을 아바타·말풍선으로 다시 열면
   // 기록이 하나 더 쌓여 ⌘[ 를 두 번 눌러야 했다.
   const now = current === route ? liveParams() : null;
+  // 값 없이 같은 화면을 다시 연 것(사이드바·⌘1 로 지금 화면을 또 누름)도 같다 — 홈은 지금 보기(view)를, 방송&클립은
+  // 아무것도 남기지 않아 예전엔 빈 값과 달라 보여 누를 때마다 기록이 쌓였고 ⌘[ 가 몇 번씩 제자리였다.
   const same = Boolean(now) && (JSON.stringify(currentParams) === JSON.stringify(params)
+    || !Object.keys(params).length
     || Object.keys(params).every((k) => JSON.stringify(now[k]) === JSON.stringify(params[k])) && Object.keys(params).length > 0);
   if (push && current && !same) {
     backStack.push({ route: current, params: liveParams() });
@@ -398,7 +403,9 @@ async function navigate(route, params = {}, { push = true, back = false } = {}) 
   refreshSidebarList();
   const watching = isWatching();
   if (insights) insights.show(route === 'live' && viewer && (viewer.isPlaying || watching) ? 'live' : route);
-  if (!AUX) saveWorkspace(route, currentParams, viewer && viewer.isPlaying ? viewer.channelId : null);
+  // 보던 방송 — 보통 경로는 멀티라이브 단독 보기(무대 패인)다. 예전엔 예전 시청 화면(viewer)만 적어, 다음 실행의
+  // '지난번에 보던 방송 · 이어 보기'가 거의 뜨지 않았다(그 화면은 멀티라이브가 가득 찼을 때만 쓴다).
+  if (!AUX) saveWorkspace(route, currentParams, viewer && viewer.isPlaying ? viewer.channelId : (watching ? pages.multilive.watch?.session?.channelId || null : null));
   // 라이브 메뉴는 재생 중이면 시청 화면, 아니면 이어 볼 채널 목록이다.
   // 멀티라이브에 있는 채널을 라이브로 볼 때(시청 모드)는 멀티라이브 화면을 단독 무대로 보여 준다.
   const showViewer = route === 'live' && viewer.isPlaying;
@@ -1077,7 +1084,7 @@ async function main() {
   pages.home = new HomePage(page('home'), { isLoggedIn, getAuth: () => auth });
   pages.following = new FollowingPage(page('following'), { isLoggedIn });
   pages.popular = new PopularPage(page('popular'));
-  pages.search = new SearchPage(page('search'));
+  pages.search = new SearchPage(page('search'), { isLoggedIn });
   pages.settings = new SettingsPage(page('settings'), {
     getAuth: () => auth,
     onLogin: login,
@@ -1088,7 +1095,7 @@ async function main() {
   pages.multilive.isTransient = (sessionId, channelId) => browsedWatch.has(sessionId) || (channelId != null && browsingChannels.has(channelId));
   pages.live = new LivePage(content, { isLoggedIn, modeSwitch: !AUX });
   pages.categories = new CategoriesPage(content);
-  pages.multichat = new MultiChatPage(content, { isLoggedIn, onPlay: openChannel });
+  pages.multichat = new MultiChatPage(content, { isLoggedIn, onPlay: openChannel, onChannelsChanged: () => { if (current === 'multichat') paintSidebarList(); } });
   // 채팅 창(?w=chat, 420px)에서 '▶ 영상 보기'는 플레이어 창을 연다 — 같은 창에 시청 화면을 열면 영상이 80px 로 눌리고 채팅이 겹쳤다.
   const chatOnlyPlay = AUX === 'chat' ? (id) => api.windowOpen('player', { channelId: id }).catch((er) => toast(er.message)) : openChannel;
   pages.chat = new ChatOnlyPage(content, { isLoggedIn, onBack: goBack, onPlay: chatOnlyPlay, session: AUX === 'chat' ? `win-${Date.now()}` : null, standalone: AUX === 'chat' });
@@ -1306,7 +1313,7 @@ async function main() {
   window.addEventListener('cview:open-clip', (e) => e.detail && navigate('media', { kind: 'clip', id: e.detail.clipUid }));
   window.addEventListener('cview:menu', (e) => { const run = MENU_ACTIONS[e.detail]; if (run && !noticeOpen()) run(); });
   window.addEventListener('cview:play', (e) => e.detail && openChannel(e.detail.channelId));
-  window.addEventListener('cview:ml-watch', (e) => e.detail && enterWatch(e.detail.sessionId));
+  window.addEventListener('cview:ml-watch', (e) => e.detail && enterWatch(e.detail.sessionId, { push: current !== 'multilive' }));
   window.addEventListener('cview:ml-watch-close', (e) => closeWatch(e.detail || {}));
   // 실패 화면의 "다시 시도" — 지금 화면을 다시 불러온다.
   document.addEventListener('click', (e) => {
@@ -1528,9 +1535,16 @@ function openDeepLink(p) {
 async function queueMulti(channelIds) {
   if (!channelIds.length) return;
   if (current !== 'multilive') await navigate('multilive');
-  for (const id of channelIds) {
+  // 이미 연 채널은 건너뛰고, 자리가 차면 멈춰 한 번만 알린다 — 예전엔 두 채널이 열린 채 '멀티라이브 4채널'을 누르면
+  // 넘치는 채널마다 '최대 시청 수' 알림이 뜨고 열리지도 않을 채널의 광고 준비까지 했다.
+  const open = () => new Set((pages.multilive.state?.sessions || []).map((x) => x.channelId));
+  const todo = channelIds.filter((id) => !open().has(id));
+  let skipped = 0;
+  for (const [i, id] of todo.entries()) {
+    if (pages.multilive.state && pages.multilive.state.canAdd === false) { skipped = todo.length - i; break; }
     try { await pages.multilive.add(id); } catch { /* 한도 초과 등은 add 가 알린다 */ }
   }
+  if (skipped) toast(`멀티라이브 자리가 차서 ${skipped}개 채널은 넣지 못했습니다`, 2600);
 }
 
 // 시작 중 예외가 나면 로딩 화면이 걷히지 않고 영원히 남았다(누구도 거부를 받지 않았다) — 걷고 다시 불러오기를 권한다.

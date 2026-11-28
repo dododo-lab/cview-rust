@@ -123,8 +123,10 @@ const MERGED_BACKLOG = 600;
 
 export class MultiChatPage {
   /** @param {{ isLoggedIn: () => boolean, onPlay?: (channelId: string) => void }} opts onPlay — 채널 추가 줄을 누르면 라이브로 */
-  constructor(content, { isLoggedIn, onPlay = null }) {
+  constructor(content, { isLoggedIn, onPlay = null, onChannelsChanged = null }) {
     this.isLoggedIn = isLoggedIn;
+    // 연 채널이 바뀌면(복원·추가·닫기) 알린다 — 메인 창 사이드바 '채팅 추가' 목록이 이미 연 채널을 빼고 다시 그린다.
+    this.onChannelsChanged = onChannelsChanged;
     this.root = document.createElement('section');
     this.root.className = 'page page-multichat';
     this.root.dataset.page = 'multichat';
@@ -235,26 +237,44 @@ export class MultiChatPage {
         this.layout = ['grid', 'tabs', 'merged'].includes(saved) ? saved : (mc.isGridLayout ? 'grid' : 'tabs');
         const savedList = (mc.savedSessions || []).slice(0, MAX_CHANNELS);
         for (const saved of savedList) await this.add(saved.channelId, false);
-        // 잠깐의 네트워크 오류로 열지 못한 채널 — 저장 목록에서 지우지 않고 다음 실행에 다시 연다
-        // (예전엔 이번 실행에서 아무 조작만 해도 저장 구성에서 영구히 빠졌다).
+        // 잠깐의 네트워크 오류로 열지 못한 채널 — 저장 목록에서 지우지 않고 다음 실행에 다시 연다(persist 가 남긴다).
+        // '모두 닫기'만 이것까지 지운다.
         this.unrestored = savedList.filter((x) => x && x.channelId && !this.channels.some((c) => c.channelId === x.channelId));
         if (mc.selectedChannelId) this.focus(mc.selectedChannelId);
+        this.onChannelsChanged?.();
       } catch { /* 처음 */ }
     }
     this.render();
     this.flushBacklog();
   }
 
+  /**
+   * 저장 목록에 이 화면의 채널을 합쳐 쓴다 — 메인 창 멀티채팅 화면과 멀티채팅 창(⇧⌘M)이 같은 목록을 쓰므로, 저장된 목록에서
+   * 이 화면이 닫은 채널만 빼고 나머지(다른 쪽이 연 채널·이번에 열지 못한 채널)는 남긴다. 예전엔 둘 다 자기 목록을 통째로 써서
+   * 창에서 더한 채널이 메인 화면 탭 하나만 눌러도 사라졌고, 열지 못했던 채널은 손으로 열었다 닫아도 다음 실행에 다시 열렸다.
+   */
   persist() {
-    api.settingsUpdate('multiChat', {
-      savedSessions: [
-        ...this.channels.map((c) => ({ channelId: c.channelId, channelName: c.name })),
-        ...(this.unrestored || []).filter((x) => !this.channels.some((c) => c.channelId === x.channelId)),
-      ].slice(0, MAX_CHANNELS),
-      selectedChannelId: this.active,
-      isGridLayout: this.layout === 'grid',
-    }).catch(() => {});
     try { localStorage.setItem('cview.mc.layout', this.layout); } catch { /* 저장 불가 */ }
+    const write = async () => {
+      let saved = [];
+      try { saved = ((await api.settingsGet()).multiChat || {}).savedSessions || []; } catch { /* 처음 */ }
+      const open = new Set(this.channels.map((c) => c.channelId));
+      const removed = this.removedIds || new Set();
+      const seen = new Set(open);
+      const rest = [...saved, ...(this.unrestored || [])].filter((x) => {
+        if (!x || !x.channelId || seen.has(x.channelId) || removed.has(x.channelId)) return false;
+        seen.add(x.channelId);
+        return true;
+      });
+      await api.settingsUpdate('multiChat', {
+        savedSessions: [...this.channels.map((c) => ({ channelId: c.channelId, channelName: c.name })), ...rest].slice(0, MAX_CHANNELS),
+        selectedChannelId: this.active,
+        isGridLayout: this.layout === 'grid',
+      });
+    };
+    // 차례대로 — 빠르게 연달아 닫으면 앞선 쓰기가 읽은 옛 목록으로 뒤 쓰기를 덮지 않게.
+    this.persistChain = (this.persistChain || Promise.resolve()).then(write).catch(() => {});
+    return this.persistChain;
   }
 
   async add(channelId, save = true) {
@@ -305,21 +325,25 @@ export class MultiChatPage {
       for (const el of this.mergedList.querySelectorAll(`.merged-line[data-src="${CSS.escape(channelId)}"][data-nick="${CSS.escape(nick)}"]`)) el.remove();
     };
     this.channels.push(entry);
+    this.removedIds?.delete(channelId);
     panel.connect(live.chatChannelId, channelId);
     if (!this.active) this.active = channelId;
     if (save) { this.focus(channelId); this.persist(); }
     this.render();
+    if (save) this.onChannelsChanged?.();
   }
 
   async remove(channelId) {
     const i = this.channels.findIndex((c) => c.channelId === channelId);
     if (i < 0) return;
     const [c] = this.channels.splice(i, 1);
+    (this.removedIds ??= new Set()).add(channelId);
     await c.panel.destroy();
     c.el.remove();
     if (this.active === channelId) this.active = this.channels[0]?.channelId || null;
     this.persist();
     this.render();
+    this.onChannelsChanged?.();
   }
 
   focus(channelId) {
@@ -636,7 +660,10 @@ export class MultiChatPage {
     // 모두 닫기는 되돌릴 수 없는 일괄 동작 — 두 번 눌러 확인(docs/UI_CONFIRM_RULES.md, 감사 UX-M11)
     if (a.dataset.mc === 'close-all') {
       if (!armConfirm(a, { armedLabel: '한 번 더 누르면 모두 닫습니다', what: '멀티채팅 채널' })) return;
+      for (const x of this.unrestored || []) (this.removedIds ??= new Set()).add(x.channelId);
+      this.unrestored = [];
       for (const c of [...this.channels]) await this.remove(c.channelId);
+      if (!this.channels.length) this.persist(); // 연 채널이 없었어도 열지 못한 채널은 지운다
     }
   }
 }
