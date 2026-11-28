@@ -3925,3 +3925,20 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 }
 .media-card:is(:hover, :focus-within) > .card-remove, .media-card > .card-remove:focus-visible { opacity: 1; }
 @media (hover: none) { .media-card > .card-remove { opacity: 1; } }
+
+/* 통합 검색 추천어(search-suggest.js) — 검색란 바로 아래 */
+.search-field:has(> .search-suggest) { position: relative; }
+.search-suggest {
+  position: absolute; z-index: 40; left: -1px; right: -1px; top: calc(100% + 6px); padding: 4px;
+  max-height: min(360px, calc(100vh - 140px)); overflow-y: auto;
+  background: var(--surface-popover); border: 1px solid var(--border-subtle); border-radius: var(--radius-ml); box-shadow: var(--shadow-lg);
+}
+.search-suggest[hidden] { display: none; }
+.sg-item { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 4px 10px; border-radius: var(--radius-sm); cursor: pointer; font-size: var(--fs-body); }
+.sg-item:hover { background: var(--hover); }
+.sg-item.active { background: var(--active); }
+.sg-text { flex: 1; min-width: 0; }
+.sg-item small { flex: none; color: var(--text-tertiary); font-size: var(--fs-caption); }
+.sg-avatar { flex: none; width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: var(--surface-elevated); }
+.sg-icon { flex: none; width: 24px; text-align: center; color: var(--text-tertiary); }
+.sg-live { flex: none; padding: 0 5px; border-radius: var(--radius-xxs); background: var(--live); color: #fff; font-size: var(--fs-micro); font-weight: 700; }

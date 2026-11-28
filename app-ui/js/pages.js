@@ -9,6 +9,7 @@ import { verifiedBadge } from './verified-badge.js';
 import { armConfirm } from './confirm.js';
 import { withRefreshVeil, refreshVeiled } from './refresh-veil.js';
 import { bindTabKeys } from './a11y.js';
+import { SearchSuggest } from './search-suggest.js';
 
 const loginAction = '<button class="btn primary" data-action="login">로그인</button>';
 
@@ -501,7 +502,7 @@ const PREVIEW = { lives: 8, channels: 8, videos: 12, clips: 16 };
 const shelfNav = `<div class="shelf-nav" hidden><button class="icon-btn round" data-shelf="-1" title="이전" aria-label="이전">${icons.chevronLeft}</button><button class="icon-btn round" data-shelf="1" title="다음" aria-label="다음">${icons.chevronRight}</button></div>`;
 
 export class SearchPage {
-  constructor(root) {
+  constructor(root, { isLoggedIn = () => false } = {}) {
     this.root = root;
     this.body = root.querySelector('.page-body');
     this.input = root.querySelector('input[type=search]');
@@ -523,6 +524,13 @@ export class SearchPage {
     // 입력란이 비면(X 단추·전체 지우기) 이전 결과를 남기지 않고 처음 화면으로 — 늦게 온 응답도 무시된다
     this.input.addEventListener('input', () => {
       if (!this.input.value.trim() && !this.idle) this.run('');
+    });
+    // 추천어 — 최근 검색어·내 채널에서 고른다. 채널을 고르면 채널 화면, 검색어를 고르면 그 말로 검색.
+    this.suggest = new SearchSuggest(this.input, {
+      recent: recentSearches,
+      isLoggedIn,
+      onQuery: (q) => this.run(q),
+      onChannel: (id) => window.dispatchEvent(new CustomEvent('cview:open-channel', { detail: { channelId: id } })),
     });
     this.body.addEventListener('error', fallbackAvatar, true);
     // 선반이 넘칠 때만 화살표·끝 흐림 — 본문 폭이 바뀌거나(창·사이드바·인사이트 패널, 숨김 뒤 재표시) 옆으로 넘기면 다시 잰다
@@ -573,6 +581,7 @@ export class SearchPage {
   }
 
   show(params = {}) {
+    this.suggest.reset();
     this.input.focus();
     // 숨은 채로 그리려던 첫 화면(인기 카테고리·채널) — 처음 보일 때 채운다.
     if (this.discoveryPending) { this.discoveryPending = false; this.renderDiscovery(); }

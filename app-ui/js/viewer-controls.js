@@ -382,7 +382,9 @@ export class ViewerControls {
     this.liveButton.classList.toggle('behind', badge.behind || paused);
     // 라이브 끝이면 숨긴다 — "LIVE" 는 위쪽 방송 정보 칩이 이미 보여 준다. 늦어지면 "-N초"(누르면 따라잡기)로 나타난다.
     // 멈췄거나 배속을 바꿨으면 늘 보인다 — 안내("LIVE 를 누르면 1배속")가 가리키는 단추가 사라져 있었다(감사 UX-H13).
-    this.liveButton.classList.toggle('at-edge', !badge.behind && !paused && (!v || v.playbackRate === 1));
+    // 배속은 사용자가 고른 값으로 본다 — 플레이어가 지연을 따라잡느라 잠깐 1.03배로 돌면(video.playbackRate) 예전엔
+    // 'LIVE' 칩이 저절로 떴다 사라지기를 되풀이했다.
+    this.liveButton.classList.toggle('at-edge', !badge.behind && !paused && (this.viewer.panel?.rate ?? 1) === 1);
     const auto = this.manualIndex < 0;
     // 직접 고른 화질은 고른 높이로 — 바꾼 직후엔 영상이 아직 앞 화질이라 720p 를 골라도 1080p 로 보였다.
     const chosen = auto ? null : this.levels.find((l) => l.index === this.manualIndex);

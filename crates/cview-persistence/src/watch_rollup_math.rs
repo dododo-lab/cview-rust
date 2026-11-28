@@ -252,13 +252,18 @@ impl WatchRollupMath {
     fn streak_count(days: &HashSet<Date>, today: Date, calendar: &dyn Calendar) -> i64 {
         let mut cursor = today;
         let mut streak = 0;
+        // 하루 전은 그날의 시작으로 다시 맞춘다 — 자정이 없는 일광 절약 날(시작이 01:00)에서 하루를 빼면 앞날 01:00 이 돼
+        // 그날 시작(00:00)과 달라, 연속 시청이 그날에서 끊겼다(watch_report::streaks 는 이미 이렇게 센다).
         if !days.contains(&cursor) {
-            cursor = calendar.add_days(-1, cursor).unwrap_or(cursor);
+            cursor = calendar
+                .add_days(-1, cursor)
+                .map(|d| calendar.start_of_day(d))
+                .unwrap_or(cursor);
         }
         while days.contains(&cursor) {
             streak += 1;
             match calendar.add_days(-1, cursor) {
-                Some(prev) => cursor = prev,
+                Some(prev) => cursor = calendar.start_of_day(prev),
                 None => break,
             }
         }

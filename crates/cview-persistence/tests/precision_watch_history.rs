@@ -480,3 +480,29 @@ fn actively_updating_open_session_counts_today() {
     rows.extend(one_each([-1]));
     assert_eq!(streak(&seed_streak(&rows)), 2);
 }
+
+/// 보지 않은 동안의 체크포인트(touch)는 시간을 더하지 않고 다음 체크포인트·종료가 그 시각부터 센다 — 예전엔 쉬는 동안
+/// 체크포인트를 건너뛰기만 해서 다시 볼 때 그 사이가 최대 5분 더해졌다.
+#[test]
+fn touch_moves_the_checkpoint_without_adding_time() {
+    let s = nested_sessions();
+    assert!(s
+        .checkpoint_watch_record("same", start_a(), add(&start_a(), 60.0))
+        .unwrap());
+    // 60~300초는 일시정지 — 시각만 옮긴다.
+    assert!(s
+        .touch_watch_record("same", start_a(), add(&start_a(), 300.0))
+        .unwrap());
+    assert!(approx(stored(&s, start_a()).duration, 60.0, 0.001));
+    assert!(s
+        .checkpoint_watch_record("same", start_a(), add(&start_a(), 360.0))
+        .unwrap());
+    assert!(approx(stored(&s, start_a()).duration, 120.0, 0.001));
+    s.end_watch_record("same", start_a(), add(&start_a(), 370.0))
+        .unwrap();
+    assert!(approx(stored(&s, start_a()).duration, 130.0, 0.001));
+    // 닫힌 기록은 찾지 못한다.
+    assert!(!s
+        .touch_watch_record("same", start_a(), add(&start_a(), 400.0))
+        .unwrap());
+}

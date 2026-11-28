@@ -33,6 +33,7 @@ use cview_core::utils::following_poll::FollowingPollOutcome;
 use cview_networking::{ChzzkApiClient, ClientConfig, ReqwestTransport};
 use cview_persistence::settings_store::MemoryDefaults;
 use cview_persistence::{DataStore, SettingsStore};
+use cview_player::coordinator::StreamPhase;
 use cview_player::hlsjs::HlsJsStreamingProfile;
 use futures_util::FutureExt;
 use tauri::async_runtime::JoinHandle;
@@ -606,7 +607,13 @@ impl AppServices {
             Ok(started) => {
                 *self.watch_record.lock().unwrap_or_else(|e| e.into_inner()) =
                     Some((channel.channel_id.clone(), started));
-                spawn_watch_checkpoints(store.clone(), channel.channel_id.clone(), started);
+                let player = self.player.clone();
+                spawn_watch_checkpoints(
+                    store.clone(),
+                    channel.channel_id.clone(),
+                    started,
+                    move || player.read().stream_phase.clone(),
+                );
             }
             Err(e) => tracing::debug!("시청 기록 시작 실패: {e}"),
         }
@@ -732,10 +739,15 @@ fn recover_interrupted_watch_records(store: Option<&DataStore>) {
 /// 단독 시청 화면의 시청 기록 체크포인트 — 멀티라이브 패인처럼 1분마다 시청 시간을 저장한다. 기록이 닫히면
 /// (정지·다른 방송) 체크포인트가 기록을 찾지 못해 스스로 끝난다. 예전엔 체크포인트가 없어 보는 동안 통계가
 /// "시청 중 · 0초"였고, 앱이 비정상 종료되면 그 시청이 0초로 남았다.
+///
+/// 재생 중이 아니면(일시정지·연결 중 쉼) 시간을 더하지 않고 시각만 옮기고, 방송이 끝나거나 오류로 멈추면 기록을 닫는다 —
+/// 예전엔 재생 상태를 보지 않아 '방송이 종료되었습니다' 화면을 띄워 둔 채(또는 다른 메뉴를 보는 동안) 몇 시간이고 그 채널
+/// 시청 시간이 쌓였고, 통계는 내내 "시청 중"이었다.
 fn spawn_watch_checkpoints(
     store: DataStore,
     channel_id: String,
     started: chrono::DateTime<chrono::Utc>,
+    phase: impl Fn() -> StreamPhase + Send + 'static,
 ) {
     if tokio::runtime::Handle::try_current().is_err() {
         return;
@@ -744,10 +756,28 @@ fn spawn_watch_checkpoints(
         loop {
             tokio::time::sleep(WATCH_CHECKPOINT_INTERVAL).await;
             let id = channel_id.clone();
-            match store
-                .off_main(move |s| s.checkpoint_watch_record(&id, started, chrono::Utc::now()))
-                .await
-            {
+            let now = phase();
+            let result = match now {
+                StreamPhase::StreamEnded | StreamPhase::Error(_) => {
+                    let _ = store
+                        .off_main(move |s| s.end_watch_record(&id, started, chrono::Utc::now()))
+                        .await;
+                    return;
+                }
+                p if !p.requires_playback_resources() => {
+                    store
+                        .off_main(move |s| s.touch_watch_record(&id, started, chrono::Utc::now()))
+                        .await
+                }
+                _ => {
+                    store
+                        .off_main(move |s| {
+                            s.checkpoint_watch_record(&id, started, chrono::Utc::now())
+                        })
+                        .await
+                }
+            };
+            match result {
                 Ok(true) => {}
                 Ok(false) => return,
                 Err(e) => tracing::debug!("시청 기록 체크포인트 실패: {e}"),
@@ -821,7 +851,7 @@ mod tests {
         let started = store
             .start_watch_record("c1", "채널", None, None, chrono::Utc::now())
             .unwrap();
-        spawn_watch_checkpoints(store.clone(), "c1".into(), started);
+        spawn_watch_checkpoints(store.clone(), "c1".into(), started, || StreamPhase::Playing);
         let before = store.all_watch_history_rows().unwrap()[0].updated_at;
         tokio::time::sleep(WATCH_CHECKPOINT_INTERVAL + std::time::Duration::from_secs(1)).await;
         for _ in 0..50 {
@@ -835,6 +865,35 @@ mod tests {
             store.all_watch_history_rows().unwrap()[0].updated_at,
             before,
             "보는 동안 체크포인트가 저장되지 않았다"
+        );
+    }
+
+    /// 방송이 끝나면 다음 체크포인트에서 기록을 닫는다 — 종료 화면을 띄워 둔 동안 시간이 쌓이지 않는다.
+    #[tokio::test(start_paused = true)]
+    async fn viewer_watch_record_closes_when_the_stream_ends() {
+        let store = DataStore::open_in_memory().unwrap();
+        let started = store
+            .start_watch_record("c1", "채널", None, None, chrono::Utc::now())
+            .unwrap();
+        spawn_watch_checkpoints(store.clone(), "c1".into(), started, || {
+            StreamPhase::StreamEnded
+        });
+        tokio::time::sleep(WATCH_CHECKPOINT_INTERVAL + std::time::Duration::from_secs(1)).await;
+        for _ in 0..50 {
+            tokio::task::yield_now().await;
+            if store.all_watch_history_rows().unwrap()[0]
+                .ended_at
+                .is_some()
+            {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(
+            store.all_watch_history_rows().unwrap()[0]
+                .ended_at
+                .is_some(),
+            "방송이 끝났는데 시청 기록이 열린 채 남았다"
         );
     }
 

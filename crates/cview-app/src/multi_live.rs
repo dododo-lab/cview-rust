@@ -789,6 +789,20 @@ impl MultiLiveSessionBackend for ShellBackend {
                 .map_err(|e| e.to_string()),
         )
     }
+    async fn touch_watch_record(
+        &self,
+        channel_id: &str,
+        started_at: DateTime<Utc>,
+    ) -> Option<Result<bool, String>> {
+        let store = self.data_store.as_ref()?;
+        let channel_id = channel_id.to_string();
+        Some(
+            store
+                .off_main(move |s| s.touch_watch_record(&channel_id, started_at, Utc::now()))
+                .await
+                .map_err(|e| e.to_string()),
+        )
+    }
     async fn live_detail(&self, channel_id: &str) -> Result<LiveInfo, MultiLiveBackendError> {
         self.api
             .live_detail(channel_id, true)

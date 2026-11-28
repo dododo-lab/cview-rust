@@ -1267,6 +1267,22 @@ export class MultiLivePage {
     if (this.state) this.render(this.state);
   }
 
+  /**
+   * 프리셋 불러오기 — 지금 구성을 그 프리셋으로 바꾼다. 프리셋에 없는 채널은 닫고, 없는 채널만 연다. 예전엔 열린 채널 뒤에
+   * 더하기만 해서, 두 채널이 열린 채 세 채널 프리셋을 부르면 상한에 걸려 마지막 채널이 '최대 시청 수' 로 빠지고 지난 구성
+   * 기억에는 상한보다 많은 채널이 남았다.
+   */
+  async loadPreset(channels) {
+    if (this.restoring) return;
+    const want = new Set(channels);
+    for (const s of [...(this.state?.sessions || [])]) {
+      if (want.has(s.channelId)) continue;
+      try { this.render(await api.multiLiveRemove(s.id)); } catch (e) { toast(e.message); }
+    }
+    const open = new Set((this.state?.sessions || []).map((s) => s.channelId));
+    await this.restoreSessions(channels.filter((id) => !open.has(id)));
+  }
+
   // ── 멀티라이브에서 볼 채널 고르기 ─────────────────────
 
   /** 라이브에 멀티라이브 상한보다 많이 담아 온 채 멀티라이브로 오면 한 번 알린다 — 고르기 단추로 바로 간다. */
@@ -1308,7 +1324,9 @@ export class MultiLivePage {
   async showPresets() {
     let presets = [];
     try { presets = (await api.presetList()).filter((p) => p.kind === 'live' && !deletingPresets.has(p.id)); } catch (e) { toast(e.message); }
-    const ids = (this.state.sessions || []).map((s) => s.channelId);
+    // 둘러보느라 잠깐 연 채널(카드에서 연 라이브)은 빼고 저장한다 — 지난 구성 기억(rememberedChannels)과 같은 규칙.
+    // 예전엔 그 채널까지 담겨, 프리셋을 불러오면 잠깐 본 방송도 함께 열렸다.
+    const ids = rememberedChannels(this.state.sessions, this.isTransient);
     const scrim = document.createElement('div');
     scrim.className = 'sheet-scrim';
     scrim.innerHTML = `<form class="sheet" role="dialog" aria-modal="true" aria-label="멀티라이브 프리셋">
@@ -1342,7 +1360,7 @@ export class MultiLivePage {
         });
         return;
       }
-      if (e.target.closest('[data-preset-load]')) { close(); toast(`${p.name} 불러오는 중…`, 1500); await this.restoreSessions(p.channels); }
+      if (e.target.closest('[data-preset-load]')) { close(); toast(`${p.name} 불러오는 중…`, 1500); await this.loadPreset(p.channels); }
     });
     scrim.querySelector('form').addEventListener('submit', async (e) => {
       e.preventDefault();

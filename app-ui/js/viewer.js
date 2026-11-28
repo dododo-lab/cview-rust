@@ -297,6 +297,10 @@ export class Viewer {
     this.channelId = null;
     this.topbar.loadedFor = null;
     this.topbar.closeMenu();
+    // 화질 메뉴·⚙ 패널도 닫는다 — 키보드(⌘W)로 닫으면 바깥 클릭 처리가 돌지 않아, 다음 방송을 열 때 앞 방송의 배속·탭을 보인
+    // 패널이 떠 있고 아래 막대가 '메뉴 열림'으로 깨어 있었다.
+    this.controls?.closeQualityMenu?.();
+    if (this.panel?.el && !this.panel.el.hidden) this.panel.el.hidden = true;
     this.syncNowPlaying(null);
     clearInterval(this.uptimeTimer);
     this.alerts.clear();

@@ -655,3 +655,26 @@ fn online_backup_preserves_uncheckpointed_wal_commits_and_restores_values() {
         .unwrap();
     assert_eq!(qc, "ok");
 }
+
+/// 종료 때의 WAL 비우기 — 커밋은 본 파일로 옮겨지고 `-wal` 은 빈다(앱을 끈 뒤 백업 파일로 바꿔도 남은 WAL 이 섞이지 않는다).
+#[test]
+fn checkpoint_wal_moves_commits_into_the_main_file_and_empties_the_wal() {
+    let b = OpenBox::new();
+    let health = b.recorder();
+    let path = b.store_path("checkpoint_wal");
+    let store = b.open(&path, &health).unwrap();
+    let ch = cview_core::models::ChannelInfo::new("ch-gamma", "감마 채널");
+    store.set_favorite("ch-gamma", true, Some(&ch)).unwrap();
+    let wal = std::path::PathBuf::from(format!("{}-wal", path.display()));
+    assert!(
+        std::fs::metadata(&wal).map(|m| m.len()).unwrap_or(0) > 0,
+        "WAL 에 커밋이 있어야 한다"
+    );
+    store.checkpoint_wal().unwrap();
+    assert_eq!(
+        std::fs::metadata(&wal).map(|m| m.len()).unwrap_or(0),
+        0,
+        "WAL 이 비지 않았다"
+    );
+    assert!(store.is_favorite("ch-gamma").unwrap());
+}

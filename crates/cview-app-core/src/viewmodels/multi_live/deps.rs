@@ -318,6 +318,14 @@ pub trait MultiLiveSessionBackend: Send + Sync {
     ) -> Option<Result<bool, String>> {
         None
     }
+    /// 보지 않은 동안의 체크포인트 — 시간은 더하지 않고 시각만 옮긴다(`DataStore::touch_watch_record`).
+    async fn touch_watch_record(
+        &self,
+        _channel_id: &str,
+        _started_at: DateTime<Utc>,
+    ) -> Option<Result<bool, String>> {
+        None
+    }
     async fn nudge_watch_history_sync(&self) {}
     /// `WatchHistoryAggregationPolicy.sleepUntilNextCheckpoint` 간격.
     fn watch_checkpoint_interval(&self) -> Duration {

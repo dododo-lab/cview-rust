@@ -669,6 +669,32 @@ impl DataStore {
         Ok(found)
     }
 
+    /// WAL 을 본 파일에 모두 옮기고 비운다(종료 때). 예전엔 종료가 이걸 하지 않아 `-wal` 에 쓰지 않은 쪽이 남았고, 안내대로
+    /// 앱을 끈 뒤 백업 파일(`cview.sqlite`)로 바꾸면 다음 실행에 남은 WAL 이 백업 위에 덧씌워져 옛 기록이 섞이거나 깨졌다.
+    pub fn checkpoint_wal(&self) -> Result<()> {
+        self.lock()
+            .execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
+        Ok(())
+    }
+
+    /// 보지 않은 동안(방송 종료·오류·일시정지·메뉴로 쉼)의 체크포인트 — 시간은 더하지 않고 마지막 체크포인트 시각만 옮긴다.
+    /// 다음 체크포인트·종료는 이 시각부터 센다. 예전엔 이런 동안 체크포인트를 건너뛰기만 해서, 다시 볼 때(또는 닫을 때)
+    /// 그 사이가 최대 5분씩 시청 시간으로 더해졌고, 단독 시청 화면은 방송이 끝난 뒤에도 1분마다 시간을 계속 더했다.
+    /// 못 찾으면 false.
+    pub fn touch_watch_record(&self, channel_id: &str, started_at: Date, at: Date) -> Result<bool> {
+        self.write(|tx| {
+            let Some(mut record) = Self::open_watch_record(tx, channel_id, &started_at)? else {
+                return Ok((false, false));
+            };
+            if record.updated_at.is_some_and(|u| u >= at) {
+                return Ok((true, false));
+            }
+            record.updated_at = Some(at);
+            db::update(tx, &record)?;
+            Ok((true, true))
+        })
+    }
+
     /// 시청 기록 종료. 못 찾으면 false.
     pub fn end_watch_record(
         &self,

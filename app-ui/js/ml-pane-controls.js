@@ -148,6 +148,15 @@ export class PaneControls {
     this.el.addEventListener('click', (e) => this.onClick(e));
     bindMenuKeys(this.gearMenu);
     bindMenuKeys(this.moreMenu);
+    // 앱 전체 Esc(app.js escapeTaken·closePopupsOnEscape)가 메뉴를 바로 숨겨도 단추의 펼침 상태가 따라오게 — 예전엔 마우스로
+    // 연 ⚙·⋯·화질 배지가 Esc 로 닫힌 뒤에도 '펼침'으로 낭독됐다(시청 화면 ⋯ 메뉴는 viewer-topbar 가 이미 이렇게 한다).
+    this.menuWatch = new MutationObserver(() => {
+      if (this.menuOpen) return;
+      for (const b of this.el.querySelectorAll('[data-mp="gear"], [data-mp="quality"], [data-mp="more"]')) {
+        if (b.getAttribute('aria-expanded') === 'true') b.setAttribute('aria-expanded', 'false');
+      }
+    });
+    for (const m of [this.gearMenu, this.moreMenu]) this.menuWatch.observe(m, { attributes: true, attributeFilter: ['hidden'] });
     // 메뉴 안의 Esc 는 메뉴가 먼저 받는다 — 앱 전체 Esc(app.js escapeTaken)가 먼저 숨기면 연 단추로 초점을 돌려주지 못했다
     // (단독 보기 위 막대 ⋯·화질 배지에서 Esc 를 누르면 초점이 body 로 떨어졌다).
     for (const m of [this.gearMenu, this.moreMenu]) {
@@ -201,6 +210,7 @@ export class PaneControls {
   /** 패인을 버릴 때 — 창·문서 리스너와 타이머를 놓는다(패인 요소는 부르는 쪽이 지운다). */
   destroy() {
     this.abort.abort();
+    this.menuWatch?.disconnect();
     clearTimeout(this.idleTimer);
   }
 
@@ -315,7 +325,9 @@ export class PaneControls {
     if (this.liveButton.textContent !== badge.text) this.liveButton.textContent = badge.text;
     this.liveButton.classList.toggle('behind', badge.behind || !playing);
     // 라이브 끝이면 숨긴다 — "LIVE" 는 위쪽 방송 정보 칩이 이미 보여 준다. 늦어지면 "-N초"(누르면 따라잡기)로 나타난다.
-    this.liveButton.classList.toggle('at-edge', !badge.behind);
+    // 멈췄거나 배속을 바꿨으면 늘 보인다 — 메뉴 안내('LIVE 를 누르면 1배속으로 돌아갑니다')가 가리키는 단추가 1.5배·2배로
+    // 지연이 줄면 숨어 버렸다(단독 시청 화면은 감사 UX-H13 에서 고침).
+    this.liveButton.classList.toggle('at-edge', !badge.behind && (!v || !v.paused) && this.rate === 1);
     const muted = !audible || this.gain === 0;
     const icon = muted ? PANE_ICON.muted : PANE_ICON.sound;
     if (this.audioButton.dataset.icon !== String(muted)) {
