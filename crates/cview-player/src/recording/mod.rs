@@ -59,9 +59,16 @@ pub(crate) struct State {
     pub(crate) pending_init_restart: bool,
     /// 순서를 지키려고 폴을 멈추게 한 조각과 연속 실패 폴 수.
     pub(crate) blocked: Option<(String, u32)>,
+    /// 재생목록을 잇달아 받지 못한 폴 수 — 방송이 끝났거나 주소가 막혔으면 녹화를 멈춘다([`Self::MAX_FAILED_POLLS`]).
+    pub(crate) failed_polls: u32,
     total_bytes: i64,
     start_date: Option<DateTime<Utc>>,
     key_cache: HashMap<Url, Vec<u8>>,
+}
+
+impl State {
+    /// 재생목록을 이만큼(폴 2초 × 15 = 약 30초) 잇달아 받지 못하면 녹화를 끝낸다.
+    pub(crate) const MAX_FAILED_POLLS: u32 = 15;
 }
 
 impl Inner {
@@ -206,6 +213,7 @@ impl StreamRecordingService {
         s.init_rewritten_before = None;
         s.pending_init_restart = false;
         s.blocked = None;
+        s.failed_polls = 0;
         s.total_bytes = 0;
         s.start_date = Some(Utc::now());
         s.state = RecordingState::Recording;
@@ -441,4 +449,26 @@ pub fn aes128_cbc_decrypt(data: &[u8], key: &[u8], iv: &[u8; 16]) -> Result<Vec<
     cbc::Decryptor::<aes::Aes128>::new(key.into(), iv.into())
         .decrypt_padded_vec_mut::<Pkcs7>(data)
         .map_err(|_| PlayerError::RecordingFailed("AES 복호화 실패".into()))
+}
+
+impl StreamRecordingService {
+    /// 재생목록을 오래 받지 못해 녹화를 멈춘다 — 예전엔 폴 실패를 로그에만 남겨, 방송이 끝나도 '녹화 중'(빨간 점·시간)이
+    /// 그대로였고 파일은 더 커지지 않은 채 끝난 주소를 2초마다 계속 물었다. 화면의 상태 확인이 오류를 보고 파일을 마무리한다.
+    pub(crate) fn stop_for_lost_playlist(&self) {
+        let mut s = self.st();
+        if s.state != RecordingState::Recording {
+            return;
+        }
+        if let Some(mut file) = s.file.take() {
+            let _ = file.flush();
+        }
+        if let Some(task) = s.task.take() {
+            task.abort();
+        }
+        let reason = "방송이 끝났거나 재생목록을 받을 수 없어 녹화를 멈췄습니다".to_string();
+        tracing::warn!("녹화 중단: {reason}");
+        s.downloaded = HashSet::new();
+        s.key_cache = HashMap::new();
+        s.state = RecordingState::Error(reason);
+    }
 }

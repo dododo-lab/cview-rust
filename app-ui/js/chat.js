@@ -186,13 +186,37 @@ onChatPrefs((p) => {
   const words = p && p.chatFilterEnabled ? ((p.blockedWords || []).map((w) => String(w || '').toLowerCase()).filter(Boolean)) : [];
   const fresh = words.filter((w) => !wordsSeen.has(w));
   wordsSeen = new Set(words);
-  if (!fresh.length) return;
-  for (const el of document.querySelectorAll('.chat-line:not(.system)')) {
-    const body = el.querySelector('.text, .ev-body');
-    const text = (body ? body.textContent : '').toLowerCase();
-    if (text && fresh.some((w) => text.includes(w))) el.remove();
+  if (fresh.length) {
+    for (const el of document.querySelectorAll('.chat-line:not(.system)')) {
+      const body = el.querySelector('.text, .ev-body');
+      const text = (body ? body.textContent : '').toLowerCase();
+      if (text && fresh.some((w) => text.includes(w))) el.remove();
+    }
   }
+  if (added.length || fresh.length) for (const panel of PANELS) regroupLines(panel);
 });
+
+/**
+ * 줄을 지운 뒤 말풍선 묶음을 바로잡는다 — 예전엔 차단·금지어로 묶음의 첫 줄을 지우면, 이름 없는 다음 줄이 바로 위의 다른
+ * 사람 줄에 붙어 그 사람 말처럼 보였고, 같은 사람의 다음 말도 그 줄에 이어 붙었다(lastGroup 이 지운 줄을 가리킴).
+ * 앞 줄이 같은 사람·같은 분이 아니면 이어진 줄(cont)을 풀고, 뒤에 이어지는 줄이 없으면 시간 감춤(has-next)을 푼다.
+ */
+function regroupLines(panel) {
+  const list = panel.list;
+  if (!list) return;
+  const key = (el) => (el && el.classList.contains('chat-line') && el.dataset.uid
+    ? `${el.dataset.uid}|${el.querySelector('.chat-time')?.textContent || ''}` : null);
+  for (const el of list.querySelectorAll(':scope > .chat-line.cont')) {
+    const k = key(el);
+    if (!k || key(el.previousElementSibling) !== k) el.classList.remove('cont');
+  }
+  for (const el of list.querySelectorAll(':scope > .chat-line.has-next')) {
+    if (!el.nextElementSibling || !el.nextElementSibling.classList.contains('cont')) el.classList.remove('has-next');
+  }
+  // 다음 메시지는 지금 마지막 줄과만 묶는다(지운 줄이 마지막이었으면 새 묶음).
+  const last = list.lastElementChild;
+  if (key(last) !== panel.lastGroup) panel.lastGroup = null;
+}
 
 /**
  * 로그인 상태가 바뀌면(로그인·만료·로그아웃) 열린 채팅을 새 신원으로 다시 연결한다 — 비로그인으로 붙은 채팅은
@@ -669,7 +693,14 @@ export class ChatPanel {
     }
     this.trimLines(!follow);
     if (follow) this.follower.snap();
-    else if (fresh.length) { this.unread += fresh.length; this.renderJump(); }
+    else if (fresh.length) {
+      // 목록이 넘치지 않아 바닥이 보이면 읽은 것이다 — 예전엔 스크롤 이벤트로만 지워, 검색·'이 사람만 보기'로 줄이 줄어 목록이
+      // 화면에 다 들어오면 '새 메시지 N개'가 지워지지 않고 계속 늘었다. 그때는 보이는 줄만 센다(가려진 사람의 말은 빼고).
+      const visible = this.soloUid ? fresh.filter((m) => m.userId === this.soloUid).length : fresh.length;
+      const filtered = Boolean(this.soloUid) || this.list.classList.contains('searching');
+      if (filtered && this.atBottom) this.unread = 0; else this.unread += visible;
+      this.renderJump();
+    }
   }
 
   /** 줄 상한(trimFront — 넘친 줄을 모았다가 한 번에 지운다). */

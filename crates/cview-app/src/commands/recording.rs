@@ -59,12 +59,37 @@ pub async fn player_record_start(
         .clone()
         .ok_or_else(|| CommandError("녹화할 방송이 없습니다".into()))?;
     let dir = app_save_dir(&app, "recording");
-    let path = dir.join(recording_file_name(&name, chrono::Local::now()));
+    let path = unique_recording_path(&dir.join(recording_file_name(&name, chrono::Local::now())));
     services
         .recorder
         .start_recording(&url, &path)
         .map_err(|e| CommandError(e.to_string()))?;
     Ok(status(&services))
+}
+
+/// 같은 이름(`.ts`·`.mp4` 어느 쪽이든)이 있으면 ` (2)` · ` (3)` 을 붙인다 — 녹화 이름은 초 단위라, 같은 초에 멈췄다 다시 시작하면
+/// 새 녹화가 앞 파일을 처음부터 덮어썼다(`File::create`). 순수 함수에 가깝다(파일이 있는지만 본다).
+pub fn unique_recording_path(p: &std::path::Path) -> PathBuf {
+    let taken = |c: &std::path::Path| {
+        c.exists() || c.with_extension("mp4").exists() || c.with_extension("ts").exists()
+    };
+    if !taken(p) {
+        return p.to_path_buf();
+    }
+    let stem = p
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("recording")
+        .to_string();
+    let ext = p
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("ts")
+        .to_string();
+    (2..1000)
+        .map(|i| p.with_file_name(format!("{stem} ({i}).{ext}")))
+        .find(|c| !taken(c))
+        .unwrap_or_else(|| p.to_path_buf())
 }
 
 /// 내용 첫 바이트로 컨테이너를 판정한다 — fMP4(`ftyp`/`styp`/`moof`) 면 `mp4`, MPEG-TS(0x47) 면 `ts`.
@@ -122,7 +147,8 @@ pub fn fix_recording_extension(p: &std::path::Path) -> PathBuf {
     if let Some(ext) = sniff_extension(&head[..n]) {
         if p.extension().and_then(|e| e.to_str()) != Some(ext) {
             let renamed = p.with_extension(ext);
-            if std::fs::rename(p, &renamed).is_ok() {
+            // 그 이름이 이미 있으면 덮지 않는다(rename 은 말없이 바꿔치기한다) — 앞 녹화가 사라졌다.
+            if !renamed.exists() && std::fs::rename(p, &renamed).is_ok() {
                 return renamed;
             }
         }
@@ -168,6 +194,25 @@ pub async fn equalizer_presets() -> CmdResult<(Vec<f32>, Vec<EqualizerPresetDto>
 
 #[cfg(test)]
 mod tests {
+
+    /// 같은 초에 다시 시작해도 앞 녹화(.ts 든 확장자를 바꾼 .mp4 든)를 덮지 않는다.
+    #[test]
+    fn a_same_second_restart_gets_a_new_file_name() {
+        let dir = std::env::temp_dir().join(format!("cview-rec-name-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("채널_20261128_120000.ts");
+        assert_eq!(super::unique_recording_path(&p), p);
+        std::fs::write(p.with_extension("mp4"), b"x").unwrap();
+        let second = super::unique_recording_path(&p);
+        assert_eq!(second, dir.join("채널_20261128_120000 (2).ts"));
+        std::fs::write(&second, b"y").unwrap();
+        assert_eq!(
+            super::unique_recording_path(&p),
+            dir.join("채널_20261128_120000 (3).ts")
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     use super::*;
     use chrono::TimeZone;
 

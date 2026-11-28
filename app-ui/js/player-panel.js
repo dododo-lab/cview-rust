@@ -295,6 +295,18 @@ export class PlayerPanel {
 
   async toggleRecording() {
     if (!this.viewer.isPlaying) return;
+    // 시작·정지를 기다리는 동안 다시 누른 것은 버린다 — 예전엔 정지를 두 번 누르면 둘째 호출이 '녹화된 내용이 없습니다'로
+    // 저장 위치 알림을 덮었고, 시작을 두 번 누르면 녹화는 시작됐는데 '이미 녹화 중입니다' 오류가 떴다.
+    if (this.recBusy) return;
+    this.recBusy = true;
+    try {
+      await this.toggleRecordingNow();
+    } finally {
+      this.recBusy = false;
+    }
+  }
+
+  async toggleRecordingNow() {
     try {
       if (this.recording) {
         const st = await api.playerRecordStop();

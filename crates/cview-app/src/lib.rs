@@ -374,6 +374,7 @@ pub fn run() {
             commands::auth::auth_logout,
             commands::live::following_lives,
             commands::live::popular_lives,
+            commands::live::popular_has_more,
             commands::live::search,
             commands::live::search_more_clips,
             commands::live::channel_info,

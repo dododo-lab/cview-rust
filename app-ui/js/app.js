@@ -1236,7 +1236,12 @@ async function main() {
       if (ml && ml.nowPlayingSlot != null) return ml.panes.get(ml.nowPlayingSlot) || null;
       return null;
     };
+    // 다시보기·클립을 보고 있으면 그 영상이 먼저다 — 예전엔 뒤에서 도는 라이브(시청 화면·멀티라이브 패인)를 먼저 골라,
+    // 메뉴 막대 재생·음소거가 보고 있는 다시보기가 아니라 뒤의 라이브를 멈췄다.
+    const mediaFront = () => (current === 'media' && !viewer.isOpen && pages.media?.video) || null;
     const readTrayMuted = () => {
+      const mv = mediaFront();
+      if (mv) return Boolean(mv.muted || mv.volume === 0);
       if (viewer.isOpen || (viewer.isPlaying && !trayPane())) return Boolean(viewer.sessionMuted);
       const pane = trayPane();
       if (pane?.controls?.el) return !pane.controls.el.classList.contains('audible');
@@ -1244,6 +1249,8 @@ async function main() {
       return null;
     };
     const readTrayPlayback = () => {
+      const mv = mediaFront();
+      if (mv) return { paused: Boolean(mv.paused), volume: mv.muted ? 0 : Math.round((Number(mv.volume) || 0) * 100), pip: videoPip(mv) };
       if (viewer.isOpen || (viewer.isPlaying && !trayPane())) {
         const v = viewer.controls?.video;
         return {
@@ -1284,7 +1291,8 @@ async function main() {
       const pane = trayPane();
       switch (p.kind) {
         case 'play-pause':
-          if (viewer.isOpen || (viewer.isPlaying && !pane)) viewer.controls.togglePlay();
+          if (mediaFront()) { const v = mediaFront(); if (v.paused) v.play().catch(() => {}); else v.pause(); }
+          else if (viewer.isOpen || (viewer.isPlaying && !pane)) viewer.controls.togglePlay();
           else if (activeWatch()) activeWatch().togglePlay();
           else if (pane?.controls) pane.controls.togglePlay();
           else if (current === 'media' && pages.media?.video) {
@@ -1294,7 +1302,8 @@ async function main() {
           setTimeout(syncTray, 120);
           break;
         case 'mute':
-          if (viewer.isOpen || (viewer.isPlaying && !pane)) viewer.toggleMute();
+          if (mediaFront()) mediaFront().muted = !mediaFront().muted;
+          else if (viewer.isOpen || (viewer.isPlaying && !pane)) viewer.toggleMute();
           else if (activeWatch()) activeWatch().toggleMute();
           else if (pane?.controls) {
             if (!pane.controls.toggleMute()) pages.multilive.makeAudible(pane);
@@ -1306,7 +1315,11 @@ async function main() {
           break;
         case 'volume': {
           const val = Math.max(0, Math.min(100, Math.round(Number(p.value) || 0)));
-          if (viewer.isOpen || (viewer.isPlaying && !pane)) {
+          if (mediaFront()) {
+            const v = mediaFront();
+            v.volume = val / 100;
+            v.muted = val === 0;
+          } else if (viewer.isOpen || (viewer.isPlaying && !pane)) {
             viewer.volume.value = String(val);
             viewer.player.call('setVolume', val / 100);
             if (val > 0 && viewer.sessionMuted) viewer.setMuted(false);
@@ -1326,7 +1339,8 @@ async function main() {
           break;
         }
         case 'pip':
-          if (activeWatch()) activeWatch().togglePip();
+          if (mediaFront()) togglePipFor(mediaFront());
+          else if (activeWatch()) activeWatch().togglePip();
           else if (viewer.isOpen || (viewer.isPlaying && !pane)) viewer.controls.togglePip();
           else if (pane?.controls?.video) togglePipFor(pane.controls.video);
           else if (current === 'media' && pages.media?.video) togglePipFor(pages.media.video);

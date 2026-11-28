@@ -73,17 +73,23 @@ export function viewerBuckets(lives) {
   return b;
 }
 
+// 0 인 단위는 빼고 1분 안은 초·'방금' — 예전엔 45초 시청이 '0분', 2시간이 '2시간 0분', 막 시작한 방송이 '0분 전 시작'이었다
+// (통계 화면 stats.js durationText 와 같은 규칙).
 function agoText(iso, now = Date.now()) {
-  const m = Math.max(0, Math.round((now - Date.parse(iso)) / 60000));
+  const m = Math.max(0, Math.floor((now - Date.parse(iso)) / 60000));
+  if (m < 1) return '방금 시작';
   if (m < 60) return `${m}분 전 시작`;
-  return `${Math.floor(m / 60)}시간 ${m % 60}분 전 시작`;
+  const h = Math.floor(m / 60);
+  return m % 60 ? `${h}시간 ${m % 60}분 전 시작` : `${h}시간 전 시작`;
 }
 
 function durationText(sec) {
   const s = Math.max(0, Math.round(Number(sec) || 0));
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
-  return h ? `${h}시간 ${m}분` : `${m}분`;
+  if (h) return m ? `${h}시간 ${m}분` : `${h}시간`;
+  if (m) return `${m}분`;
+  return `${s}초`;
 }
 
 function bytesText(n) {
@@ -301,7 +307,18 @@ export class InsightPanel {
     try { collapsed = localStorage.getItem(COLLAPSE_KEY) === '1'; } catch { /* 기본 펼침 */ }
     this.collapsed = collapsed;
     this.apply();
-    setInterval(() => { if (this.visible && !this.collapsed && !document.hidden) this.load(); }, REFRESH_MS);
+    // 앱이 뒤에 있으면(다른 앱 사용 중 — 창이 보여도) 1분마다 받지 않고, 돌아오면 한 번 받는다. 예전엔 document.hidden 만 봐
+    // 창을 덮은 채 다른 앱을 쓰는 동안에도 1분마다 인기·팔로잉을 받아 패널을 다시 그렸다(#182 가 애니메이션에서 뺀 것과 같은 일).
+    setInterval(() => {
+      if (!this.visible || this.collapsed || document.hidden) return;
+      if (!document.hasFocus()) { this.awayStale = true; return; }
+      this.load();
+    }, REFRESH_MS);
+    window.addEventListener('focus', () => {
+      if (!this.awayStale) return;
+      this.awayStale = false;
+      if (this.visible && !this.collapsed && !document.hidden) this.load();
+    });
     WIDE.addEventListener?.('change', () => {
       if (WIDE.matches && this.stale && this.visible && !this.collapsed) this.load();
     });

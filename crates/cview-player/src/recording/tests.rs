@@ -985,3 +985,35 @@ async fn write_error_stops_recording_and_allows_restart() {
     assert_eq!(h.service.current_state(), RecordingState::Idle);
     let _ = std::fs::remove_dir_all(&h.dir);
 }
+
+/// 재생목록을 오래(15번) 잇달아 받지 못하면 녹화를 오류로 멈춘다 — 방송이 끝났는데 '녹화 중'으로 남지 않게.
+/// 그 전에 한 번이라도 받으면 다시 센다.
+#[tokio::test]
+async fn recording_stops_when_the_playlist_is_gone_for_good() {
+    let h = Harness::new().await;
+    h.cdn.set_all(vec![
+        ("/live/chunklist.m3u8", media(&["#EXTINF:2,", "seg_0.ts"])),
+        ("/live/seg_0.ts", body(SEG0)),
+    ]);
+    let out = h.dir.join("ended.ts");
+    let url = h.cdn.url("/live/chunklist.m3u8");
+    let gone = h.cdn.url("/live/gone.m3u8");
+    h.service.start_recording(&url, &out).unwrap();
+    h.service.poll_once(&url).await;
+    for _ in 0..(State::MAX_FAILED_POLLS - 1) {
+        h.service.poll_once(&gone).await;
+    }
+    assert!(h.service.is_recording(), "잠깐의 실패로 녹화를 멈췄다");
+    h.service.poll_once(&url).await; // 다시 받음 — 센 것을 지운다
+    for _ in 0..(State::MAX_FAILED_POLLS - 1) {
+        h.service.poll_once(&gone).await;
+    }
+    assert!(h.service.is_recording());
+    h.service.poll_once(&gone).await;
+    assert!(
+        !h.service.is_recording(),
+        "재생목록이 사라졌는데 녹화 중으로 남았다"
+    );
+    assert!(h.service.failure_reason().is_some());
+    let _ = std::fs::remove_dir_all(&h.dir);
+}

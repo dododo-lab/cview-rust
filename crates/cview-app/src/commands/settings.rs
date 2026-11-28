@@ -222,7 +222,13 @@ fn after_domain_change(
             }
         }
         "general" => {
-            crate::window_prefs::apply_general(app, &services.settings.general());
+            // 자동 실행을 적용하지 못했으면(LaunchAgents 폴더에 쓸 수 없음 등) 저장한 값을 되돌린다 — 예전엔 오류를 로그에만
+            // 남겨, 설정은 '켜짐·저장했습니다'인데 로그인해도 앱이 뜨지 않았다. 화면은 저장된 값이 고른 값과 다르면 알린다.
+            if !crate::window_prefs::apply_general(app, &services.settings.general()) {
+                let mut g = services.settings.general();
+                g.launch_at_login = !g.launch_at_login;
+                services.settings.set_general(g);
+            }
             // "메뉴 막대에 표시" — 아이콘을 바로 보이거나 숨긴다. 팝오버의 알림 토글도 함께 맞춘다.
             crate::tray::sync(app);
             let _ = tauri::Emitter::emit(

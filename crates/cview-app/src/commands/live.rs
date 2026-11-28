@@ -108,6 +108,13 @@ pub async fn popular_lives(
     Ok(live_cards(&feed))
 }
 
+/// 인기 라이브에 다음 쪽이 남았는가 — '더 보기'가 한 줄도 더 받지 못했을 때 화면이 끝(단추 숨김)과 잠깐 실패(단추 유지)를
+/// 가른다. `popular_lives` 는 다음 쪽 요청이 실패해도 오류 없이 있던 만큼만 돌려준다.
+#[tauri::command]
+pub fn popular_has_more(services: State<'_, AppServices>) -> bool {
+    services.popular.read().can_load_more
+}
+
 /// 채널 + 라이브 + 클립 통합 검색 — app-core `SearchViewModel`(15초 결과 캐시·최근 검색어 포함).
 ///
 /// 라이브는 방송 중인 검색 채널이 먼저(라이브 검색 API 가 채널 이름으로는 찾지 못한다), 클립은 검색한
