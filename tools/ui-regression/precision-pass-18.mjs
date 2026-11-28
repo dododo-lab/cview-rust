@@ -64,13 +64,14 @@ try {
       await go(page, 'popular', { tab: 'live' });
       await page.waitForSelector('[data-page="popular"]:not([hidden]) [data-more]');
       await page.click('[data-page="popular"] [data-more]');
-      await page.waitForFunction(() => (window.__args.popular_lives || []).length >= 2);
+      await page.waitForFunction(() => (window.__args.popular_lives || []).some((a) => a.size === 60));
       await page.waitForTimeout(400);
       const shown = Boolean(await page.$('[data-page="popular"]:not([hidden]) [data-more]'));
       assert.equal(shown, expectButton);
       if (expectButton) {
-        const sizes = await page.evaluate(() => window.__args.popular_lives.map((a) => a.size));
-        assert.deepEqual(sizes.slice(0, 2), [30, 60]);
+        // 다른 화면(홈·인사이트)도 50개를 묻는다 — 방송&클립이 보낸 30·60 만 본다.
+        const sizes = await page.evaluate(() => window.__args.popular_lives.map((a) => a.size).filter((n) => n === 30 || n === 60));
+        assert.ok(sizes.includes(30) && sizes.includes(60), `더 보기 요청: ${sizes}`);
       }
       assert.deepEqual(errors, []);
       await ctx.close();
@@ -95,7 +96,7 @@ try {
     const chat = src('chat.js');
     assert.match(chat, /function regroupLines\(panel\)/);
     assert.match(chat, /if \(added\.length \|\| fresh\.length\) for \(const panel of PANELS\) regroupLines\(panel\);/);
-    assert.match(chat, /if \(this\.atBottom\) this\.unread = 0; else this\.unread \+= visible;/);
+    assert.match(chat, /if \(filtered && this\.atBottom\) this\.unread = 0; else this\.unread \+= visible;/);
     assert.match(src('player-panel.js'), /if \(this\.recBusy\) return;/);
     const insight = src('insight-panel.js');
     assert.match(insight, /if \(m < 1\) return '방금 시작';/);

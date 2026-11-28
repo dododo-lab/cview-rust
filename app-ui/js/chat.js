@@ -697,7 +697,8 @@ export class ChatPanel {
       // 목록이 넘치지 않아 바닥이 보이면 읽은 것이다 — 예전엔 스크롤 이벤트로만 지워, 검색·'이 사람만 보기'로 줄이 줄어 목록이
       // 화면에 다 들어오면 '새 메시지 N개'가 지워지지 않고 계속 늘었다. 그때는 보이는 줄만 센다(가려진 사람의 말은 빼고).
       const visible = this.soloUid ? fresh.filter((m) => m.userId === this.soloUid).length : fresh.length;
-      if (this.atBottom) this.unread = 0; else this.unread += visible;
+      const filtered = Boolean(this.soloUid) || this.list.classList.contains('searching');
+      if (filtered && this.atBottom) this.unread = 0; else this.unread += visible;
       this.renderJump();
     }
   }
