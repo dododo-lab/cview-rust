@@ -675,7 +675,12 @@ pub async fn bookmark_add(
         .data_store
         .as_ref()
         .ok_or_else(|| CommandError("저장소를 열 수 없습니다".into()))?;
-    let live = services.api.live_detail(&channel_id, false).await?;
+    // 캐시를 건너뛰고 지금 상태를 본다 — 예전엔 끝난 방송(종료 화면·오프라인 채널)에서도 북마크가 저장됐고, 경과 시간이 그 방송
+    // 시작부터 지금까지(며칠이 되기도)로 적혔다.
+    let live = services.api.live_detail(&channel_id, true).await?;
+    if live.status != LiveStatus::Open {
+        return Err(CommandError("방송 중이 아니라 북마크할 수 없습니다".into()));
+    }
     let uptime = live
         .open_date
         .map(|d| (Utc::now() - d).num_milliseconds() as f64 / 1000.0)

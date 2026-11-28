@@ -202,14 +202,16 @@ pub fn apply_on_launch<R: Runtime>(app: &AppHandle<R>, dir: &Path, general: &Gen
     let _ = window.set_always_on_top(general.always_on_top);
 }
 
-/// 설정을 바꿨을 때 — 항상 위·자동 실행을 즉시 반영한다.
-pub fn apply_general<R: Runtime>(app: &AppHandle<R>, general: &GeneralSettings) {
+/// 설정을 바꿨을 때 — 항상 위·자동 실행을 즉시 반영한다. 자동 실행을 적용하지 못했으면 `false`(설정을 되돌릴 차례).
+pub fn apply_general<R: Runtime>(app: &AppHandle<R>, general: &GeneralSettings) -> bool {
     if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
         let _ = window.set_always_on_top(general.always_on_top);
     }
     if let Err(e) = set_launch_at_login(general.launch_at_login) {
         tracing::warn!("로그인 시 자동 실행 설정 실패: {e}");
+        return false;
     }
+    true
 }
 
 fn launch_agent_path() -> Option<PathBuf> {

@@ -466,6 +466,9 @@ export class HomePage {
    * @param {Array} lives @param {Set<string>|Array} [favorites]
    */
   updateLiveFollowing(lives, favorites) {
+    // 인사·날짜도 맞춘다(2분마다 오는 갱신) — 예전엔 화면을 옮겨야만 다시 그려, 저녁에 둔 홈이 자정이 지나도 '좋은 저녁이에요'와
+    // 어제 날짜를 보였다.
+    if (this.greet && this.greet.isConnected) this.renderGreeting();
     if (!this.isLoggedIn() || !Array.isArray(lives) || !this.liveStrip.el.isConnected) return;
     if (favorites) this.favorites = [...favorites];
     this.liveStrip.update(lives, { favorites: this.favorites });

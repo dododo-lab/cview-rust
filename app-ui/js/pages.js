@@ -132,7 +132,7 @@ export class PopularPage {
       if (s) { this.sort = s.dataset.sort; this.render(); return; }
       const c = e.target.closest('[data-cat]');
       if (c) { this.category = c.dataset.cat; this.render(); return; }
-      if (e.target.closest('[data-more]')) { this.limit = Math.min(POPULAR_MAX, this.limit + POPULAR_PAGE); this.loadLive(); }
+      if (e.target.closest('[data-more]')) { this.moreFrom = this.lives.length; this.limit = Math.min(POPULAR_MAX, this.limit + POPULAR_PAGE); this.loadLive(); }
     });
     this.panels.clips.addEventListener('click', (e) => {
       const f = e.target.closest('[data-clip-filter]');
@@ -239,6 +239,18 @@ export class PopularPage {
     try {
       const lives = await api.popularLives(this.limit, refresh);
       if (seq !== this.seq.live) return;
+      // '더 보기'가 한 줄도 더 받지 못했으면(다음 쪽 요청이 잠깐 실패 — Rust 는 오류 없이 있던 만큼만 준다) 한도를 되돌려
+      // 단추를 남긴다. 예전엔 한도만 올라가 '더 보기'가 사라졌고 ⌘R 전에는 다시 나오지 않았다.
+      const from = this.moreFrom;
+      this.moreFrom = null;
+      if (from != null && lives.length <= from && lives.length < this.limit) {
+        const more = await api.popularHasMore().catch(() => false);
+        if (seq !== this.seq.live) return;
+        if (more) {
+          this.limit = Math.max(POPULAR_PAGE, this.limit - POPULAR_PAGE);
+          toast('방송을 더 불러오지 못했습니다 — 다시 눌러 주세요', 2600);
+        }
+      }
       this.lives = lives;
       this.loadedAt = Date.now();
       this.render();

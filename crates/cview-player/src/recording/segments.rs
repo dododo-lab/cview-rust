@@ -92,9 +92,20 @@ impl StreamRecordingService {
     /// 목록을 한 번 받아 새 조각을 순서대로 기록한다(폴링 루프의 한 바퀴).
     pub async fn poll_once(&self, playlist_url: &Url) {
         let segments = match self.fetch_parsed_segments(playlist_url).await {
-            Ok(s) => s,
+            Ok(s) => {
+                self.st().failed_polls = 0;
+                s
+            }
             Err(e) => {
                 tracing::warn!("Playlist 폴링 실패: {e}");
+                let give_up = {
+                    let mut s = self.st();
+                    s.failed_polls += 1;
+                    s.failed_polls >= super::State::MAX_FAILED_POLLS
+                };
+                if give_up {
+                    self.stop_for_lost_playlist();
+                }
                 return;
             }
         };

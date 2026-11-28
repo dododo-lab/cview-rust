@@ -80,6 +80,11 @@ export class ChatOnlyPage {
     }).join('') || '<p class="muted">방송 중인 채널이 없습니다</p>'}</div>`;
   }
 
+  /** ⌘R·다시 불러오기가 지금 채널로 다시 열게 — 예전엔 '채널 바꾸기'로 바꾼 뒤 ⌘R 을 누르면 창을 연 처음 채널로 돌아갔다. */
+  routeParams() {
+    return this.channelId ? { channelId: this.channelId } : {};
+  }
+
   async show(params = {}) {
     if (!params.channelId) { if (this.standalone && !this.channelId) this.showPicker(); return; }
     this.root.querySelector('.chat-picker').hidden = true;
@@ -95,7 +100,14 @@ export class ChatOnlyPage {
       this.root.querySelector('.chatonly-title .page-subtitle').textContent = live.isLive ? `${live.liveTitle || ''} · ${live.viewerCountText}명 시청 중` : '방송 중이 아닙니다';
       await this.chat.connect(live.chatChannelId, live.channelId);
     } catch (e) {
-      if (seq === this.seq) toast(e.message);
+      if (seq !== this.seq) return;
+      // 앞 채널의 채팅을 끊고 머리줄도 비운다 — 예전엔 새 채널 정보를 받지 못하면 앞 채널 채팅이 그대로 이어져, 거기 쓴 말은
+      // 앞 채널로 가는데 '영상 보기'는 새 채널을 열었다(시청 화면은 이미 이렇게 끊는다).
+      if (this.chat.active) this.chat.disconnect();
+      this.root.querySelector('.chatonly-avatar').innerHTML = '';
+      this.root.querySelector('.chatonly-title .page-title').textContent = '채팅';
+      this.root.querySelector('.chatonly-title .page-subtitle').textContent = kbd('채널 정보를 불러오지 못했습니다 — ⌘R 로 다시 시도해 주세요');
+      toast(e.message);
     }
   }
 }
