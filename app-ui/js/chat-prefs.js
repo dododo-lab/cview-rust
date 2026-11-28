@@ -110,7 +110,15 @@ export function passesFilters(m, p = prefs) {
 /** 내 닉네임 멘션인가(@닉네임 또는 닉네임 그대로). */
 export function mentionsMe(m, nick = myNickname) {
   if (!nick || !m || !m.content || m.nickname === nick) return false;
-  return String(m.content).includes(`@${nick}`);
+  // 닉네임 바로 뒤가 글자·숫자·_ 면 다른 사람(@철수 ≠ @철수짱) — 예전엔 포함만 봐서 내 닉네임으로 시작하는
+  // 더 긴 닉네임을 부른 말도 '나를 언급'으로 잡고 알림까지 띄웠다.
+  const text = String(m.content);
+  const tag = `@${nick}`;
+  for (let i = text.indexOf(tag); i !== -1; i = text.indexOf(tag, i + 1)) {
+    const next = text.slice(i + tag.length).match(/^./su)?.[0] || '';
+    if (!next || !/[\p{L}\p{N}_]/u.test(next)) return true;
+  }
+  return false;
 }
 
 /** 차단한 사용자의 표시 이름(모르면 ID). */

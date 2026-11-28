@@ -9,7 +9,7 @@ import { esc, toast } from './dom.js';
 import { armConfirm, confirmDialog } from './confirm.js';
 import { bindTabKeys } from './a11y.js';
 import { emptyState, errorState, loadingState } from './cards.js';
-import { THEMES, THEME_LABELS, currentTheme, setTheme, syncTheme } from './theme.js';
+import { THEMES, THEME_LABELS, currentTheme, onThemeChange, setTheme, syncTheme } from './theme.js';
 import { streamAlertsEnabled, setStreamAlertsEnabled, ALERT_HOME } from './donations.js';
 import { chatPrefs, updateChatPrefs, blockedLabel, loadChatPrefs } from './chat-prefs.js';
 import { BACKGROUNDS, READING_WIDTHS } from './chat-extras.js';
@@ -32,14 +32,13 @@ const APPEARANCE_SETTLE_MS = 700;
 export const SCHEMA = [
   ['watch', '재생', [
     { d: 'player', k: 'quality', label: '기본 화질', type: 'select', options: opt([['1080p', '1080p (원본)'], ['720p', '720p'], ['480p', '480p'], ['360p', '360p'], ['auto', '자동']]) },
-    { d: 'player', k: 'autoPlay', label: '자동 재생', help: '시청 화면을 열면 바로 재생합니다', type: 'toggle' },
+    // '자동 재생'(autoPlay)·'하드웨어 디코딩'(hardwareDecoding)은 앱 어디서도 읽지 않아 꺼도 바뀌는 것이 없었다 — 화면에서 뺀다(값은 호환을 위해 둔다).
     { d: 'player', k: 'startMuted', label: '음소거로 시작', help: '방송을 열 때 소리를 끈 상태로 시작합니다', type: 'toggle' },
     { d: 'player', k: 'forceHighestQuality', label: '항상 최고 화질', help: '1080p60 을 우선 유지합니다', type: 'toggle' },
     { d: 'player', k: 'hevcEnabled', label: 'HEVC(H.265) 화질', help: '하드웨어로 디코딩할 수 있으면 1080p 를 HEVC 로 받습니다. 끄면 H.264 만 씁니다', keywords: 'h265 h.265 hevc h264 h.264 코덱 화질', type: 'toggle' },
     { d: 'player', k: 'volumeLevel', label: '기본 볼륨', type: 'range', min: 0, max: 1, step: 0.05, pct: true },
     { d: 'player', k: 'continuePlaybackInBackground', label: '백그라운드 재생', help: '끄면 창이 가려지거나 앱이 뒤로 가면 일시정지합니다', type: 'toggle' },
     { d: 'player', k: 'streamProxyMode', label: '스트림 프록시', help: '로컬 프록시는 CDN 응답을 보정하고 암호화 방송 키를 인증합니다', type: 'select', options: opt([['localProxy', '로컬 프록시 (권장)'], ['none', '직접 재생']]) },
-    { d: 'player', k: 'hardwareDecoding', label: '하드웨어 디코딩', type: 'toggle' },
   ]],
   ['watch', '지연(저지연)', [
     { d: 'player', k: 'lowLatencyMode', label: '저지연 모드', help: '라이브 엣지에 가깝게 재생합니다', type: 'toggle' },
@@ -49,7 +48,7 @@ export const SCHEMA = [
     { d: 'player', k: 'latencyMax', label: '최대 지연(초)', type: 'range', min: 2, max: 30, step: 0.5, adv: true },
     { d: 'player', k: 'latencyMaxRate', label: '따라잡기 최대 배속', type: 'range', min: 1, max: 1.2, step: 0.01, adv: true },
     { d: 'player', k: 'latencyMinRate', label: '늦추기 최소 배속', type: 'range', min: 0.8, max: 1, step: 0.01, adv: true },
-    { d: 'player', k: 'catchupRate', label: '따라잡기 배속', type: 'range', min: 1, max: 1.2, step: 0.01, adv: true },
+    // '따라잡기 배속'(catchupRate)은 읽는 곳이 없었다(실제 상한은 위 '따라잡기 최대 배속') — 화면에서 뺀다.
     { d: 'player', k: 'latencyCatchUpThreshold', label: '따라잡기 시작 차이(초)', type: 'range', min: 0.1, max: 3, step: 0.05, adv: true },
     { d: 'player', k: 'latencySlowDownThreshold', label: '늦추기 시작 차이(초)', type: 'range', min: 0.1, max: 3, step: 0.05, adv: true },
     { d: 'player', k: 'latencyPidKp', label: 'PID Kp', type: 'number', step: 0.01, adv: true },
@@ -91,8 +90,7 @@ export const SCHEMA = [
     { d: 'multiLive', k: 'selectedSessionBWWeight', label: '선택 패인 대역폭 가중치', type: 'range', min: 1, max: 3, step: 0.1, disabled: offWhen('multiLive', 'bandwidthCoordinationEnabled') },
     { d: 'multiLive', k: 'levelCappingEnabled', label: '패인 크기 화질 제한', type: 'toggle' },
     { d: 'multiLive', k: 'backgroundQualityReduction', label: '보조 패인 화질 낮추기', type: 'toggle' },
-    { d: 'multiLive', k: 'autoReconnect', label: '자동 재연결', type: 'toggle' },
-    { d: 'multiLive', k: 'autoReconnectMaxRetries', label: '재연결 최대 횟수', type: 'range', min: 1, max: 30, step: 1, disabled: offWhen('multiLive', 'autoReconnect') },
+    // '자동 재연결'·'재연결 최대 횟수'(multiLive.autoReconnect*)는 읽는 곳이 없어 꺼도 패인이 그대로 다시 붙었다 — 화면에서 뺀다.
     { d: 'multiLive', k: 'chatOverlayInGrid', label: '그리드 채팅 오버레이', type: 'toggle' },
     { d: 'multiLive', k: 'chatOverlayOpacity', label: '채팅 오버레이 투명도', type: 'range', min: 0.1, max: 1, step: 0.05, pct: true },
     { d: 'multiLive', k: 'chatOverlayFontSize', label: '채팅 오버레이 글자 크기', type: 'range', min: 9, max: 20, step: 1 },
@@ -124,12 +122,8 @@ export const SCHEMA = [
     { d: 'appearance', k: 'transparencyMode', label: '투명도', type: 'select', options: opt([['system', '시스템'], ['full', '선명하게'], ['reduced', '불투명']]) },
     // '화면 갱신'(frameRateMode)은 앱 어디서도 읽지 않아 바꿔도 아무 일이 없었다 — 화면에서 뺀다(설정 값은 호환을 위해 둔다).
   ]],
-  ['link', '시청 기록 동기화', [
-    { d: 'sync', k: 'explicitlyOptedIn', label: '동기화 동의', help: '다른 기기와 시청 기록을 맞추려면 동의가 필요합니다', type: 'toggle' },
-    // 동의 없이 켜면 Rust 가 꺼진 값으로 저장한다(settings_ui.rs) — 동의 전에는 막아 둔다.
-    { d: 'sync', k: 'watchHistorySyncEnabled', label: '시청 기록 동기화', type: 'toggle', disabled: (v) => !(v.sync || {}).explicitlyOptedIn },
-    { d: 'sync', k: 'endpoint', label: '동기화 서버', type: 'text' },
-  ]],
+  // '연동 › 시청 기록 동기화'는 뺐다 — 동의·서버를 넣어도 동기화 서비스를 띄우는 곳이 없어(nudge_watch_history_sync 는 빈 함수)
+  // 아무것도 보내지 않았는데 켜 둔 사람은 맞춰지는 줄 알았다. 탭('연동')도 이것뿐이라 함께 뺀다(값은 호환을 위해 둔다).
   // 성능 — 앱 사용률 측정·기록(그래프 패널은 settings-usage.js, 값은 외관 도메인 usage*). 사이드바 아래 표시는 sidebar-usage.js.
   ['usage', '측정 · 기록', [
     { d: 'appearance', k: 'usageMonitor', label: '사용률 측정', help: '앱과 웹 화면·GPU·네트워크 도우미 프로세스의 CPU·GPU·메모리·네트워크 수신을 재어 기록합니다. 끄면 측정을 멈춰 CPU를 쓰지 않습니다', keywords: '성능 사용률 모니터 cpu gpu 메모리 램 네트워크 자원', type: 'toggle' },
@@ -142,15 +136,11 @@ export const SCHEMA = [
   ['advanced', '네트워크', [
     { d: 'network', k: 'requestRateLimit', label: '초당 요청 한도', type: 'range', min: 1, max: 30, step: 1 },
     { d: 'network', k: 'maxConcurrentAPIRequests', label: '동시 API 요청', type: 'range', min: 1, max: 12, step: 1 },
-    { d: 'network', k: 'maxConnectionsPerHost', label: '호스트당 연결', type: 'range', min: 2, max: 20, step: 1 },
-    { d: 'network', k: 'connectionTimeout', label: '연결 시간 제한(초)', type: 'range', min: 5, max: 60, step: 1 },
-    { d: 'network', k: 'streamConnectionTimeout', label: '스트림 연결 시간 제한(초)', type: 'range', min: 3, max: 40, step: 1 },
+    // '호스트당 연결'·'연결/스트림 연결 시간 제한'·'자동 재연결'·'최대 재연결'·'재연결 기본 지연'·'캐시 유효 시간'은 앱 어디서도 읽지 않아
+    // 바꿔도 아무 일이 없었다(네트워크 클라이언트는 요청 한도·동시 요청·API 시간 제한·시도 횟수만 쓴다) — 화면에서 뺀다(값은 호환을 위해 둔다).
     { d: 'network', k: 'apiResourceTimeout', label: 'API 응답 시간 제한(초)', type: 'range', min: 5, max: 60, step: 1 },
-    { d: 'network', k: 'retryCount', label: '재시도 횟수', type: 'range', min: 0, max: 10, step: 1 },
-    { d: 'network', k: 'autoReconnect', label: '자동 재연결', type: 'toggle' },
-    { d: 'network', k: 'maxReconnectAttempts', label: '최대 재연결', type: 'range', min: 1, max: 40, step: 1 },
-    { d: 'network', k: 'reconnectBaseDelay', label: '재연결 기본 지연(초)', type: 'range', min: 0.5, max: 5, step: 0.5 },
-    { d: 'network', k: 'cacheExpiry', label: '캐시 유효 시간(초)', type: 'range', min: 30, max: 1800, step: 30 },
+    // 값은 첫 요청을 포함한 시도 횟수다(effective_api_attempts, 1~10) — 예전 이름 '재시도 횟수'·최소 0 은 0 과 1 이 같고 모든 값이 한 번씩 많아 보였다.
+    { d: 'network', k: 'retryCount', label: '요청 시도 횟수', help: '실패하면 처음 요청을 포함해 이만큼까지 시도합니다', keywords: '재시도', type: 'range', min: 1, max: 10, step: 1 },
     // '스트림 프록시 강제'(forceStreamProxy)도 읽는 곳이 없었고, 끄면 '자동' 네트워크 프리셋만 꺼졌다 — 화면에서 뺀다.
     // '오프라인이면 새로고침 멈춤'·'백그라운드 활동 줄이기'(pauseRefreshWhenOffline·reduceBackgroundActivity)와 아래
     // '메모리 목표(MB)'(maxMemoryMB)는 앱 어디서도 읽지 않아 바꿔도 아무 일이 없었다 — 화면에서 뺀다(설정 값은 호환을 위해 둔다).
@@ -164,7 +154,7 @@ export const SCHEMA = [
 
 const GROUPS = [
   ['overview', '개요'], ['watch', '시청'], ['chat', '채팅'], ['multi', '멀티라이브'],
-  ['general', '일반'], ['link', '연동'], ['usage', '성능'], ['advanced', '고급'], ['about', '정보'],
+  ['general', '일반'], ['usage', '성능'], ['advanced', '고급'], ['about', '정보'],
 ];
 // 정보 › 업데이트 묶음의 토글 — 예전엔 일반 탭에 있었다(update-notify.js 가 읽는 general.autoCheckUpdates 그대로).
 // keywords — 예전 이름('업데이트 자동 확인')으로 찾아도 나오게.
@@ -321,12 +311,28 @@ export class SettingsPage {
       const typing = a && this.body.contains(a) && a.matches('input:not([type=range]):not([type=checkbox]), textarea, select');
       const drafted = [...this.body.querySelectorAll('textarea')].some((t) => t.value.trim());
       if (!typing && !drafted && !(this.root.querySelector('input[type=search]')?.value)) { this.render(); return; }
-      for (const b of this.body.querySelectorAll('[data-net-preset]')) {
-        const on = b.dataset.netPreset === this.settings.networkPreset;
+      this.syncNetPreset();
+    });
+    // 테마를 다른 곳에서 바꾸면(⇧⌘L·메뉴 막대·사이드바·다른 창) 개요의 테마 선택도 맞춘다 — 예전엔 화면 색만 바뀌고
+    // 선택 표시는 옛 테마에 남았다(테마 단추는 외관 컨트롤(data-domain)이 아니라 syncAppearance 가 보지 않는다).
+    onThemeChange((theme) => {
+      for (const b of this.body.querySelectorAll('[data-theme-choice]')) {
+        const on = b.dataset.themeChoice === theme;
         b.classList.toggle('active', on);
         b.setAttribute('aria-checked', String(on));
       }
     });
+  }
+
+  /** 네트워크 프리셋 줄(단추·설명)을 this.settings 에 맞춘다 — 다시 그리지 않아 초점·쓰던 칸은 그대로. */
+  syncNetPreset() {
+    for (const b of this.body.querySelectorAll('[data-net-preset]')) {
+      const on = b.dataset.netPreset === this.settings.networkPreset;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-checked', String(on));
+    }
+    const help = this.body.querySelector('[data-net-preset]')?.closest('.setting')?.querySelector('.setting-label small');
+    if (help) help.textContent = netPresetHelp(this.settings);
   }
 
   async show() {
@@ -666,7 +672,16 @@ export class SettingsPage {
     if (domain === 'player' && (key === 'sharpnessLevel' || key === 'sharpnessEnlargedOnly')) { await this.changeSharpness(key, target); return; }
     let value;
     if (target.type === 'checkbox') value = target.checked;
-    else if (target.type === 'range' || target.type === 'number') value = Number(target.value);
+    else if (target.type === 'number') {
+      // 비운 칸(고쳐 쓰려고 지움)·숫자 아닌 값은 저장하지 않고 저장된 값으로 되돌린다 — 예전엔 Number('') 가 0 이라
+      // PID Kp 를 지우고 초점을 옮기면 0 이 저장돼 지연 조정이 비례 항을 잃었다.
+      value = target.value.trim() === '' ? NaN : Number(target.value);
+      if (!Number.isFinite(value)) {
+        const saved = (this.settings?.[domain] || {})[key];
+        if (saved !== undefined) target.value = String(saved);
+        return;
+      }
+    } else if (target.type === 'range') value = Number(target.value);
     else if (target.tagName === 'SELECT' && /^\d+$/.test(target.value)) value = Number(target.value);
     else value = target.value;
     const busy = domain === 'appearance' && this.appearanceBusy;
@@ -686,6 +701,8 @@ export class SettingsPage {
         toast('설정을 저장했습니다', 1200);
       }
       this.syncDependentToggles();
+      // 네트워크 값을 손으로 바꾸면 Rust 가 '자동' 프리셋을 끄고 프리셋을 다시 고른다 — 예전엔 단추가 '자동'에 남았다.
+      if (domain === 'network') this.syncNetPreset();
       window.dispatchEvent(new CustomEvent('cview:settings-changed', { detail: { domain, key, value, settings: this.settings } }));
     } catch (e) {
       toast(e.message);
@@ -795,7 +812,10 @@ export class SettingsPage {
       e.preventDefault();
       const word = form.querySelector('input').value.trim();
       if (!word) return;
-      await updateChatPrefs({ blockedWords: [...new Set([...(chatPrefs().blockedWords || []), word])] });
+      // 낱말을 넣으면 필터도 켠다('/filter' 와 같다) — 예전엔 필터가 꺼진 기본 상태에서 넣은 낱말이 아무것도 막지 않았다.
+      const wasOff = !chatPrefs().chatFilterEnabled;
+      await updateChatPrefs({ blockedWords: [...new Set([...(chatPrefs().blockedWords || []), word])], chatFilterEnabled: true });
+      if (wasOff) toast('금지어 필터를 켰습니다', 1800);
       this.render();
     } else if (form.matches('[data-import]')) {
       e.preventDefault();
@@ -918,7 +938,7 @@ export class SettingsPage {
         if (st.state !== 'granted') st = await api.notifyPermission(true);
         const label = { granted: '허용됨', denied: '거부됨 — 시스템 설정 › 알림에서 CView 를 켜 주세요', prompt: '아직 묻지 않음', 'prompt-with-rationale': '아직 묻지 않음' };
         this.body.querySelector('.notify-status').textContent = label[st.state] || st.state;
-        if (st.state === 'granted') api.notifySend('CView', '알림이 이렇게 표시됩니다').catch(() => {});
+        if (st.state === 'granted') api.notifySend('CView', '알림이 이렇게 표시됩니다', { force: true }).catch(() => {});
       }
     } catch (er) { toast(er.message); }
     b.disabled = false;

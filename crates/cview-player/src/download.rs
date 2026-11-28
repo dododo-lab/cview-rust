@@ -286,7 +286,9 @@ impl VideoDownloader {
             if let Some(h) = span.range_header() {
                 req = req.header("Range", h);
             }
-            match req.send().await {
+            // 응답 머리·본문을 기다리는 동안에도 취소를 본다 — 예전엔 시도 사이에만 봐서, 조각 하나가 느리면 '취소'가
+            // 최대 30초 듣지 않았고 종료(⌘Q, 3초 대기) 때는 빈 파일과 `.part` 가 남았다(MP4 경로는 이미 이렇게 막음).
+            match self.until_ready(req.send()).await? {
                 Ok(resp) => {
                     let status = resp.status().as_u16();
                     if !(200..300).contains(&status) {
@@ -301,7 +303,7 @@ impl VideoDownloader {
                         .get(reqwest::header::CONTENT_RANGE)
                         .and_then(|v| v.to_str().ok())
                         .map(str::to_owned);
-                    match resp.bytes().await {
+                    match self.until_ready(resp.bytes()).await? {
                         Ok(b) => {
                             if let Some(slice) = HlsByteSpan::recordable_body(
                                 Some(&b),
@@ -331,20 +333,22 @@ impl VideoDownloader {
         for _ in 0..4 {
             // 재생목록 요청에도 시간 제한 — 멈추면 취소도 듣지 않았다.
             let resp = self
-                .client
-                .get(url.clone())
-                .timeout(Duration::from_secs(30))
-                .send()
-                .await
+                .until_ready(
+                    self.client
+                        .get(url.clone())
+                        .timeout(Duration::from_secs(30))
+                        .send(),
+                )
+                .await?
                 .map_err(|e| DownloadError::Network(e.to_string()))?;
             let status = resp.status().as_u16();
             if !(200..300).contains(&status) {
                 return Err(DownloadError::BadResponse(status));
             }
             let final_url = resp.url().clone();
-            let text = resp
-                .text()
-                .await
+            let text = self
+                .until_ready(resp.text())
+                .await?
                 .map_err(|e| DownloadError::Network(e.to_string()))?;
             if text.contains("#EXT-X-STREAM-INF") {
                 let master = parser
@@ -497,6 +501,87 @@ mod tests {
         let r = tokio::time::timeout(
             Duration::from_secs(5),
             dl.download_file(&url, &out, Arc::new(|_, _| {})),
+        )
+        .await;
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(
+            matches!(r, Ok(Err(DownloadError::Cancelled))),
+            "취소 5초 뒤에도 끝나지 않았다: {r:?}"
+        );
+    }
+
+    /// 재생목록은 바로 주고, 조각 요청에는 응답 머리를 보내지 않는 서버.
+    async fn serve_hls_with_silent_segment() -> Url {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            while let Ok((mut stream, _)) = listener.accept().await {
+                tokio::spawn(async move {
+                    let mut buf = vec![0u8; 4096];
+                    let n = stream.read(&mut buf).await.unwrap_or(0);
+                    let req = String::from_utf8_lossy(&buf[..n]).to_string();
+                    if req.lines().next().unwrap_or("").contains("/index.m3u8") {
+                        let body = "#EXTM3U\n#EXT-X-TARGETDURATION:4\n#EXTINF:4.0,\na.ts\n#EXT-X-ENDLIST\n";
+                        let resp = format!(
+                            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                            body.len(),
+                            body
+                        );
+                        let _ = stream.write_all(resp.as_bytes()).await;
+                        return;
+                    }
+                    tokio::time::sleep(Duration::from_secs(60)).await;
+                });
+            }
+        });
+        Url::parse(&format!("http://{addr}/index.m3u8")).unwrap()
+    }
+
+    /// HLS 조각을 기다리는 동안에도 취소가 바로 듣는다 — 예전엔 시도 사이에만 봐서 최대 30초 '받는 중'으로 남았고,
+    /// 종료 때(3초 대기)는 빈 파일과 `.part` 가 남았다.
+    #[tokio::test]
+    async fn hls_cancel_works_while_a_segment_is_in_flight() {
+        let url = serve_hls_with_silent_segment().await;
+        let dir = std::env::temp_dir().join(format!("cview-dl-hls-seg-{}", std::process::id()));
+        let out = dir.join("v.ts");
+        let cancel = Arc::new(AtomicBool::new(false));
+        let dl = VideoDownloader::new(cancel.clone());
+        let c = cancel.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            c.store(true, Ordering::Relaxed);
+        });
+        let r = tokio::time::timeout(
+            Duration::from_secs(5),
+            dl.download_hls(&url, &out, Arc::new(|_, _| {})),
+        )
+        .await;
+        let part_left = part_path(&out).exists();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(
+            matches!(r, Ok(Err(DownloadError::Cancelled))),
+            "취소 5초 뒤에도 끝나지 않았다: {r:?}"
+        );
+        assert!(!part_left, "취소 뒤 .part 가 남았다");
+    }
+
+    /// 재생목록 응답이 오지 않아도 취소가 바로 듣는다.
+    #[tokio::test]
+    async fn hls_cancel_works_while_the_playlist_stalls() {
+        let url = serve_silent().await;
+        let dir = std::env::temp_dir().join(format!("cview-dl-hls-pl-{}", std::process::id()));
+        let out = dir.join("v.ts");
+        let cancel = Arc::new(AtomicBool::new(false));
+        let dl = VideoDownloader::new(cancel.clone());
+        let c = cancel.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            c.store(true, Ordering::Relaxed);
+        });
+        let r = tokio::time::timeout(
+            Duration::from_secs(5),
+            dl.download_hls(&url, &out, Arc::new(|_, _| {})),
         )
         .await;
         let _ = std::fs::remove_dir_all(&dir);

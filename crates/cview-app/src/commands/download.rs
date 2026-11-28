@@ -261,6 +261,7 @@ pub async fn download_start(
             .find(|e| e.job.id == id)
             .map(|e| (e.job.title.clone(), e.job.channel_name.clone()))
             .unwrap_or_default();
+        let completed = result.is_ok();
         match result {
             Ok(path) => {
                 update(&handle, &id, |e| {
@@ -291,6 +292,12 @@ pub async fn download_start(
             }
         }
         emit(&handle);
+        // 파일 크기는 기록을 디스크에 쓰기 직전에 채운다 — 예전엔 그 뒤에 알리지 않아, 방금 받은 파일 줄에 크기가
+        // 빠진 채(개요 '용량'도 덜 셈) 탭을 다시 열 때까지 남았다.
+        if completed {
+            d.history.wait_for_pending_writes().await;
+            emit(&handle);
+        }
     });
     emit(&app);
     Ok(snapshot(&downloads))

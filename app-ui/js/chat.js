@@ -156,11 +156,22 @@ let blockedSeen = new Set();
 let wordsSeen = new Set(); // 이미 걸러 온 금지어(소문자) — 처음 설정을 읽을 때는 화면에 줄이 없다
 onChatPrefs((p) => {
   const now = new Set((p && p.blockedUsers) || []);
-  for (const uid of now) {
-    if (blockedSeen.has(uid)) continue;
+  const added = [...now].filter((uid) => !blockedSeen.has(uid));
+  for (const uid of added) {
     for (const el of document.querySelectorAll(`.chat-line[data-uid="${CSS.escape(uid)}"]`)) el.remove();
   }
   blockedSeen = now;
+  // 멘션 모음·@ 개수에서도 뺀다 — 예전엔 줄만 지워, 멘션을 도배한 사람을 막아도 @ 배지와 모음에 그 말이 그대로 남았다.
+  if (added.length) {
+    const gone = new Set(added);
+    for (const panel of PANELS) {
+      const before = panel.mentions.length;
+      panel.mentions = panel.mentions.filter((m) => !gone.has(m.userId));
+      if (panel.mentions.length === before) continue;
+      panel.renderMentionCount();
+      if (panel.tray && !panel.tray.hidden) panel.renderMentionTray();
+    }
+  }
   // 금지어도 같다 — 새로 넣은 낱말(또는 필터를 켬)이면 이미 보이는 줄 가운데 걸리는 줄을 걷는다. 예전엔 '/filter 광고'로 넣어도
   // 화면의 광고 20줄이 그대로 남고 새 줄만 막혔다.
   const words = p && p.chatFilterEnabled ? ((p.blockedWords || []).map((w) => String(w || '').toLowerCase()).filter(Boolean)) : [];
@@ -244,7 +255,7 @@ export class ChatPanel {
     this.buildChrome();
     root.querySelector('.chat-input').addEventListener('submit', (e) => {
       e.preventDefault();
-      if (this.autocomplete.hidden) this.send();
+      if (this.composer.acceptSubmit(e)) this.send();
     });
     const unlisten = session
       ? listen('chat://session-event', (p) => { if (p && p.session === session) this.onEvent(p.event); })

@@ -88,7 +88,7 @@ export async function mountDownloads(container) {
     const histShown = d.history;
     // 진행만 바뀌었으면(같은 작업·같은 상태·같은 기록) 글과 막대만 고친다 — 예전엔 0.4초마다 목록 전체를 다시 써
     // 진행 막대 전환(transition)이 끊기고 단추가 깜빡였다.
-    const next = `${d.folder}|${active.map((j) => `${j.id}:${j.state}`).join(',')}|${histShown.map((h) => `${h.id}:${h.fileStatus}:${h.completed}`).join(',')}`;
+    const next = `${d.folder}|${active.map((j) => `${j.id}:${j.state}`).join(',')}|${histShown.map((h) => `${h.id}:${h.fileStatus}:${h.completed}:${h.fileSize || 0}`).join(',')}`;
     if (next === shape && container.querySelector('.dl-head')) {
       for (const j of active) {
         const row = container.querySelector(`.dl-row[data-dl-id="${CSS.escape(j.id)}"]`);

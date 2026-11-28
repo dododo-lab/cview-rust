@@ -321,11 +321,15 @@ export class MediaPage {
 }
 
 /** 썸네일 URL(카드) — 이어 보기 카드용. */
-export function continueCard(item) {
+export function continueCard(item, { remove = null } = {}) {
   const thumb = safeUrl(item.thumbnailUrl);
   const pct = item.duration > 0 ? Math.min(100, Math.round((item.position / item.duration) * 100)) : 0;
+  // remove — 보관함 '이어 보기'·'나중에 보기'에서 이 항목만 빼는 단추(✕). 값은 목록 이름('continue' | 'later').
+  const label = remove === 'later' ? '나중에 보기에서 빼기' : '이어 보기에서 빼기';
+  const removeBtn = remove ? `<button type="button" class="icon-btn card-remove" data-lib="shelf-remove" data-shelf="${esc(remove)}" aria-label="${esc(`${item.title || '제목 없음'} — ${label}`)}" title="${label}">✕</button>` : '';
   return `
     <article class="card media-card" tabindex="0" data-vod-no="${esc(item.videoNo)}" title="${esc(item.title)}">
+      ${removeBtn}
       <div class="thumb"${previewAttr('vod', item.videoNo)}>
         ${thumb ? `<img src="${esc(imageSrc(thumb, 'vod'))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ''}
         <span class="badge-duration">${esc(formatDuration(item.duration))}</span>
