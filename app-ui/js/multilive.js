@@ -2244,7 +2244,23 @@ export class MultiLivePage {
     const s = (this.state?.sessions || []).find((x) => x.channelId === channelId);
     const pane = s && [...this.panes.values()].find((p) => p.sessionId === s.id);
     if (!pane) return;
-    playPreroll('live', channelId, { host: pane.el, player: pane.bridge, target: 'pane' }).catch(() => {});
+    // 설정을 읽는 동안에도 방송 소리를 막는다(playPreroll 도 곧바로 같은 일을 한다 — 켜기만 하는 값이라 두 번이어도 같다).
+    pane.bridge.exec('setAdHold(true)');
+    api.settingsGet().catch(() => null).then((st) => {
+      if (!pane.el.isConnected || pane.sessionId !== s.id) { pane.bridge.exec('setAdHold(false)'); return; }
+      playPreroll('live', channelId, { host: pane.el, player: pane.bridge, target: 'pane', ...this.paneAdSound(pane, st && st.player) }).catch(() => {});
+    });
+  }
+
+  /**
+   * 패인 광고 소리 — 설정 기본 볼륨 × 패인 배율. '음소거로 시작'(app.js applyStartMuted)이 아직 배율을 0 으로 두기 전에도
+   * 광고가 소리를 내지 않게 설정을 함께 본다.
+   */
+  paneAdSound(pane, player = {}) {
+    player = player || {};
+    const base = Number.isFinite(Number(player.volumeLevel)) ? Math.max(0, Math.min(1, Number(player.volumeLevel))) : 1;
+    const gain = pane.controls && Number.isFinite(pane.controls.gain) ? pane.controls.gain : 1;
+    return { volume: base * gain, muted: Boolean(player.startMuted) || gain === 0 };
   }
 
   /** 추가하고 선택 — 포커스 배치면 메인 패인이 된다(select 가 메인으로 올린다). */

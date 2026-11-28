@@ -374,7 +374,38 @@ const backStack = [];
 let currentParams = {};
 const BACK_MAX = 50;
 
-async function navigate(route, params = {}, { push = true, back = false } = {}) {
+/** 화면 안 요소에 있는 초점 — 뒤로 가기 기록에 남겨 돌아올 때 되돌린다. */
+function focusInside(page) {
+  const a = document.activeElement;
+  return page && page.root && a && a !== page.root && page.root.contains(a) ? a : null;
+}
+/**
+ * 화면을 옮긴 뒤 초점 — 뒤로 가기면 떠날 때 있던 요소로 되돌리고, 앞으로 가며 초점이 숨은 화면에 남았으면 새 화면 제목으로
+ * 옮긴다. 예전엔 카드에서 Enter 로 채널을 열면 초점이 숨은 카드에 남았고, ⌘[ 로 돌아오면 초점이 body 로 떨어져 다음 Tab 이
+ * 사이드바 맨 위부터였다(키보드로 쓰던 자리를 잃음).
+ */
+function settleFocus(before, target) {
+  const wasInPage = before && before !== document.body && Object.values(pages).some((p) => p.root && p.root.contains(before));
+  requestAnimationFrame(() => {
+    if (target && target.isConnected && !target.closest('[hidden]')) { target.focus({ preventScroll: true }); return; }
+    const a = document.activeElement;
+    if (a && a !== document.body && !a.closest('[hidden]')) return; // 새 화면이 스스로 초점을 옮겼다(검색란 등)
+    if (!wasInPage) return; // 사이드바·메뉴에서 옮긴 것 — 그 자리에 둔다
+    const page = Object.values(pages).find((p) => p.root && !p.root.hidden && !p.root.closest('[hidden]'));
+    const title = page && page.root.querySelector('.page-title');
+    if (!title) return;
+    if (!title.hasAttribute('tabindex')) title.setAttribute('tabindex', '-1');
+    title.focus({ preventScroll: true });
+  });
+}
+
+async function navigate(route, params = {}, opts = {}) {
+  const before = document.activeElement;
+  await navigateTo(route, params, opts);
+  settleFocus(before, opts.focus);
+}
+
+async function navigateTo(route, params = {}, { push = true, back = false } = {}) {
   // 예전 통계 진입점(메뉴 막대·팔레트·작업 공간)은 홈 리포트로 모은다. 보조 통계 창은 그대로 지원한다.
   if (route === 'stats' && AUX !== 'stats') { route = 'home'; params = { ...params, view: 'report' }; }
   // 인기 클립은 보관함에서 방송&클립 › 클립 탭으로 옮겼다 — 예전 경로(저장된 작업 공간·뒤로 가기 기록·옛 진입점)도 그리로.
@@ -391,7 +422,7 @@ async function navigate(route, params = {}, { push = true, back = false } = {}) 
     || !Object.keys(params).length
     || Object.keys(params).every((k) => JSON.stringify(now[k]) === JSON.stringify(params[k])) && Object.keys(params).length > 0);
   if (push && current && !same) {
-    backStack.push({ route: current, params: liveParams() });
+    backStack.push({ route: current, params: liveParams(), focus: focusInside(pages[current]) });
     if (backStack.length > BACK_MAX) backStack.shift();
   }
   current = route;
@@ -418,6 +449,9 @@ async function navigate(route, params = {}, { push = true, back = false } = {}) 
   // 숨긴 화면 안의 요소가 전체 화면이면 풀어 준다 — 단독 보기 '영상+채팅 전체 화면'(⌃⌘F)에서 ⌘W·× 로 닫으면
   // 숨은 멀티라이브 화면이 전체 화면으로 남아 검은 화면만 보였다(시청 화면 viewer.close 는 이미 푼다).
   exitHiddenFullscreen(Object.values(pages).map((p) => p.root));
+  // 무대 채널 칩 미리보기는 body 에 떠 있다 — 단축키로 다른 화면에 가면(마우스를 움직이지 않아) 닫히지 않고 새 화면 위에 남아
+  // 미리보기 영상을 계속 받았다.
+  if (pages.multilive?.root.hidden) pages.multilive.chipPeek?.close();
   // 숨은 탐색 페이지는 잠시 뒤 이미지 비트맵을 놓고, 보이게 된 페이지는 그리기 전에 되돌린다(page-hibernate.js).
   syncHibernation(pages);
   // 멀티라이브 화면 자체인가 — 라이브 단독 보기(showWatch)도 같은 화면을 쓰므로 그때는 멀티라이브 안내를 띄우지 않는다.
@@ -454,7 +488,7 @@ async function navigate(route, params = {}, { push = true, back = false } = {}) 
 /** 뒤로 가기 (`⌘[`, 마우스 뒤로 버튼). 스택이 비면 홈. */
 function goBack() {
   const prev = backStack.pop();
-  if (prev) navigate(prev.route, prev.params, { push: false, back: true });
+  if (prev) navigate(prev.route, prev.params, { push: false, back: true, focus: prev.focus });
   // 보조 창은 자기 화면 하나로 열린다(기록 없음) — 비었을 때 홈으로 가면 채팅·통계 창이 사이드바 없는 홈이 되고 되돌아갈 길도
   // 없었다(마우스 뒤로 단추 한 번에). 보조 창 안에서 쌓인 기록(통계 → 채널 → 뒤로)은 그대로 돌아간다.
   else if (!AUX && current !== 'home') navigate('home', {}, { push: false });
@@ -669,6 +703,35 @@ async function addToMultiLive(channelId, { quiet = false } = {}) {
   syncLiveIndicators();
 }
 
+/** 메뉴 막대와 같은 재생 대상 고르기(메인 창 시작 때 채움) — 앱 메뉴의 재생 동작이 다시보기·멀티라이브 그리드에서도 듣게. */
+let playbackFallback = null;
+
+/**
+ * 링크·기본 메뉴 막기.
+ * - 가운데 클릭: `<a href>`(채널 소개 링크·광고 치트키 등)는 click 이 아니라 auxclick 을 받아, WebView2 가 앱 안에 관리되지 않는
+ *   브라우저 창을 띄웠다(설정 › 정보는 이미 단추로 바꿨다). 기본 브라우저로 연다.
+ * - Windows 오른쪽 클릭: 빈 곳(사이드바·머리줄)의 WebView2 기본 메뉴에 '새로 고침·인쇄'가 있어, F5·Ctrl+P 를 막아 둔 문서 새로
+ *   고침(재생 멈춤·시작 화면)을 그대로 할 수 있었다. 입력란·고른 글자가 있을 때만 기본 메뉴(복사·붙여넣기)를 둔다.
+ */
+function installLinkGuards() {
+  document.addEventListener('auxclick', (e) => {
+    if (e.button !== 1) return;
+    const a = e.target.closest && e.target.closest('a[href]');
+    if (!a) return;
+    e.preventDefault();
+    const href = a.getAttribute('href') || '';
+    if (/^https?:\/\//i.test(href)) api.openExternal(href).catch(() => {});
+  }, true);
+  if (!IS_WINDOWS) return;
+  document.addEventListener('contextmenu', (e) => {
+    if (e.defaultPrevented) return; // 카드·채팅·칩 메뉴가 이미 받았다
+    const t = e.target;
+    if (t && t.closest && t.closest('input, textarea, [contenteditable="true"], [contenteditable=""]')) return;
+    if (String((window.getSelection && window.getSelection()) || '').trim()) return;
+    e.preventDefault();
+  });
+}
+
 /** 카드 우클릭 메뉴 — 원본 LiveCardActionMenu (NAV-10). */
 function installCardMenu() {
   // 메뉴 키·Shift+F10 — macOS 에는 메뉴 키가 없고 WKWebView 는 Shift+F10 을 contextmenu 로 바꾸지 않아, 키보드로는 카드·사이드바
@@ -745,13 +808,16 @@ function installPalette() {
       { group: '홈', label: '데이터 관리 · 백업', hint: '시청 리포트', run: () => goRoute('stats', { tab: 'data' }) },
       { group: '동작', label: resolvedTheme() === 'dark' ? '라이트 테마로 전환' : '다크 테마로 전환', hint: '테마', run: () => setTheme(resolvedTheme() === 'dark' ? 'light' : 'dark') },
       { group: '동작', label: '뒤로 가기', hint: kbd('⌘['), run: goBack },
-      { group: '동작', label: '사이드바 접기/펼치기', hint: kbd('⌘\\'), run: () => sidebar.toggle() },
+      // 보조 창(채팅·통계·플레이어)은 사이드바가 없다 — 눌러도 보이는 것은 없고 메인 창이 저장한 접힘 상태만 뒤집혔다.
+      ...(AUX ? [] : [{ group: '동작', label: '사이드바 접기/펼치기', hint: kbd('⌘\\'), run: () => sidebar.toggle() }]),
       { group: '동작', label: '현재 화면 새로고침', hint: kbd('⌘R'), run: () => reloadCurrent({ veil: true }) },
       ...(isLoggedIn() ? [{ group: '동작', label: '로그아웃', hint: '계정', run: logout }] : [{ group: '동작', label: '네이버 로그인', hint: '계정', run: login }]),
     ],
   });
   document.addEventListener('keydown', (e) => {
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+    // ⌘K 만(Windows 는 Ctrl+K) — 예전엔 Shift·⌃ 를 보지 않아 ⇧⌘K '채팅 지우기'가 팔레트를 여닫았고, macOS 채팅 입력란의
+    // ⌃K(줄 끝까지 지우기)도 팔레트를 열었다.
+    if ((IS_WINDOWS ? e.ctrlKey : e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
       e.preventDefault();
       e.stopImmediatePropagation();
       if (palette.isOpen) palette.close(); else palette.open();
@@ -881,7 +947,7 @@ const MENU_ACTIONS = {
   palette: () => (palette.isOpen ? palette.close() : palette.open()),
   back: () => goBack(),
   refresh: () => reloadCurrent({ veil: true }),
-  'toggle-sidebar': () => sidebar.toggle(),
+  'toggle-sidebar': () => { if (!AUX) sidebar.toggle(); },
   'theme-toggle': () => setTheme(resolvedTheme() === 'dark' ? 'light' : 'dark'),
   'zoom-in': () => zoomStep(1),
   'zoom-out': () => zoomStep(-1),
@@ -893,10 +959,18 @@ const MENU_ACTIONS = {
   'report-issue': () => api.openExternal('https://github.com/dododo-lab/cview-rust/issues').catch((e) => toast(e.message)),
   'notification-settings': () => api.openNotificationSettings().catch((e) => toast(e.message)),
   'open-logs': async () => { try { const i = await api.appInfo(); await api.revealPath(i.dataDir); } catch (e) { toast(e.message); } },
-  'play-pause': () => (viewer.isOpen ? viewer.controls.togglePlay() : activeWatch()?.togglePlay()),
+  // 시청 화면·단독 보기가 아니면(다시보기·멀티라이브 그리드) 메뉴 막대와 같은 대상으로 — 예전엔 다시보기에서 재생 메뉴
+  // (재생/일시정지·음소거·⌥⌘P PiP)가 아무 일도 하지 않거나 '재생 중인 방송이 없습니다'만 띄웠다.
+  'play-pause': () => {
+    if (viewer.isOpen) viewer.controls.togglePlay();
+    else if (activeWatch()) activeWatch().togglePlay();
+    else playbackFallback?.('play-pause');
+  },
   // 메뉴 막대·알림 영역 메뉴의 '음소거'도 여기로 온다 — 바뀐 상태를 아이콘 메뉴에 바로 알린다.
   mute: () => {
-    if (viewer.isOpen) viewer.toggleMute(); else activeWatch()?.toggleMute();
+    if (viewer.isOpen) viewer.toggleMute();
+    else if (activeWatch()) activeWatch().toggleMute();
+    else { playbackFallback?.('mute'); return; }
     syncTray();
   },
   'go-live': () => (viewer.isOpen ? viewer.controls.goLive() : activeWatch()?.goLive()),
@@ -925,6 +999,7 @@ const MENU_ACTIONS = {
     const w = activeWatch();
     if (w) w.togglePip();
     else if (viewer.isPlaying) viewer.controls.togglePip();
+    else if (playbackFallback) playbackFallback('pip');
     else toast('재생 중인 방송이 없습니다');
   },
   welcome: () => showWelcome({ force: true, onLogin: login }),
@@ -1181,7 +1256,7 @@ async function main() {
     };
     installTrayState({ muted: readTrayMuted, playback: readTrayPlayback });
 
-    listenHere(Events.trayControl, (p) => {
+    const onTrayControl = (p) => {
       if (!p || !p.kind) return;
       // 처음 실행 고지가 떠 있으면 화면을 옮기거나 방송을 여는 동작은 하지 않는다 — 예전엔 메뉴 막대 '멀티라이브 4채널'이
       // 고지 뒤에서 4개 방송을 소리와 함께 틀고, '업데이트 확인…' 시트가 고지 위에 떠 Esc 로도 닫히지 않았다.
@@ -1236,6 +1311,7 @@ async function main() {
           else if (viewer.isOpen || (viewer.isPlaying && !pane)) viewer.controls.togglePip();
           else if (pane?.controls?.video) togglePipFor(pane.controls.video);
           else if (current === 'media' && pages.media?.video) togglePipFor(pages.media.video);
+          else toast('재생 중인 방송이 없습니다');
           setTimeout(syncTray, 160);
           break;
         case 'navigate': {
@@ -1267,7 +1343,10 @@ async function main() {
         default:
           break;
       }
-    });
+    };
+    listenHere(Events.trayControl, onTrayControl);
+    // 앱 메뉴의 재생 동작도 같은 대상을 쓴다 — 시청 화면·단독 보기가 아니면(다시보기·멀티라이브 그리드) 여기로.
+    playbackFallback = (kind) => onTrayControl({ kind });
   }
   // 사이드바 아래 앱 사용률(누르면 설정 › 성능) — 메인 창만. 명령이 없으면 그리지 않는다.
   if (!AUX) installSidebarUsage();
@@ -1364,6 +1443,7 @@ async function main() {
     onRefresh: () => MENU_ACTIONS.refresh(),
   });
   installCardMenu();
+  installLinkGuards();
   installA11y();
   installPalette();
   installMenuAndShortcuts();

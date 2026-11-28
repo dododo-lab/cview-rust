@@ -96,7 +96,10 @@ impl HlsJsMatchWebV2Config {
             hls_target_seconds: 2.0,
             ingest_target_seconds,
             live_max_latency_seconds: 16.0,
-            seek_token_required: true,
+            // 토큰을 내주는 쪽이 없다 — 페이지의 `v2SeekTokenRequest` 는 브리지(player.js FORWARDED)가 넘기지 않고 앱도
+            // `GrantMatchWebV2Seek` 를 보내지 않아, 켜 두면 v2 탐색이 매번 토큰을 기다리다 포기했고(Rust 지연 조정은 v2 동안
+            // 쉬므로) 지연이 16초 점프까지 늘어났다. 페이지가 스스로 탐색하게 둔다.
+            seek_token_required: false,
         }
     }
 
@@ -169,7 +172,7 @@ mod tests {
         assert_eq!(obj["hlsTargetSec"].as_f64(), Some(2.0));
         assert_eq!(obj["ingestTargetSec"].as_f64(), Some(3.3));
         assert_eq!(obj["liveMaxLatencySec"].as_f64(), Some(16.0));
-        assert_eq!(obj["seekTokenRequired"], true);
+        assert_eq!(obj["seekTokenRequired"], false);
         assert!(literal.starts_with("{\"enabled\":true"));
         assert!(literal.ends_with("\"sessionId\":7}"));
         let custom = HlsJsMatchWebV2Config::new(3.1).js_object_literal(8);

@@ -3197,6 +3197,7 @@ function applyTopLevelLock(smooth) {
     requestManualLevel(top);
 }
 function setLockTopLevel(on) {
+    const wasLocked = _lockTopLevel;
     _lockTopLevel = !!on;
     // 사용자가 고정을 다시 걸면 새 시도다 — 이전 포기 상태를 끌고 가지 않는다.
     resetManualLockRestoreBudget();
@@ -3208,9 +3209,13 @@ function setLockTopLevel(on) {
         if (_forcedHeight > 0) applyForcedHeight();
         else applyTopLevelLock();
     } else {
+        // 이미 풀려 있으면 할 일이 없다 — 화질 메뉴는 고를 때마다 풀기부터 부르는데, 예전엔 그때마다 currentLevel = -1
+        // (hls.js 즉시 전환 = 앞 버퍼 전체 삭제)을 해 720p·자동을 고를 때마다 저지연 버퍼 2~3초를 버리고 화면이 멈췄다.
+        if (!wasLocked) return;
         if (_forcedHeight > 0) applyForcedHeight();
         else {
-            hls.currentLevel = -1;
+            // 자동으로 돌리기만 한다 — loadLevel 은 다음 조각부터 바꾼다(지금 버퍼는 그대로).
+            hls.loadLevel = -1;
             applyAdaptiveLevelCap();
             if (_preferSourceQuality) requestPreferredSourceLevel();
         }

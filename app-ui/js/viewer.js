@@ -315,7 +315,8 @@ export class Viewer {
   /** 새로 연 방송의 프리롤 — 영상 영역 안에만 띄우고, 그동안 이 플레이어 소리를 막는다(기다리지 않는다). */
   playAd(channelId) {
     const host = this.root.querySelector('.player-stage');
-    playPreroll('live', channelId, { host, player: this.player, target: 'viewer' }).catch(() => {});
+    // '음소거로 시작'으로 소리를 끈 채 연 방송이면 광고도 소리 없이 시작한다.
+    playPreroll('live', channelId, { host, player: this.player, target: 'viewer', muted: Boolean(this.sessionMuted) }).catch(() => {});
   }
 
   cancelAd() {
