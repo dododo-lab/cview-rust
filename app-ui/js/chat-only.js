@@ -48,6 +48,9 @@ export class ChatOnlyPage {
     // 숨으면 진행 중인 열기도 버린다(seq) — 정보 응답 전에 떠나면 숨은 화면에서 채팅이 연결돼 남았다.
     new MutationObserver(() => { if (this.root.hidden) { this.seq = (this.seq || 0) + 1; if (this.chat.active) this.chat.disconnect(); } })
       .observe(this.root, { attributes: true, attributeFilter: ['hidden'] });
+    // 열어 둔 동안 방송 상태를 1분마다 다시 본다(보이고 앱이 앞에 있을 때만) — 예전엔 열 때 한 번만 봐서 꺼진 채널을 기다리던 창이
+    // 방송이 시작돼도 '방송 중이 아닙니다'에 머물렀고, 채팅 채널이 없거나 바뀌면 ⌘R 전까지 다시 붙지 않았다.
+    setInterval(() => this.checkLive(), 60 * 1000);
   }
 
   /** '채널 바꾸기' — 다시 누르거나 Esc 면 닫는다(예전엔 채널을 골라야만 닫혔다, 감사 UX-M09). */
@@ -78,6 +81,18 @@ export class ChatOnlyPage {
       const a = safeUrl(l.channelImageUrl);
       return `<button class="picker-row" data-co="pick-channel" data-channel-id="${esc(l.channelId)}">${a ? `<img loading="lazy" decoding="async" class="avatar" src="${esc(imageSrc(a, 'avatar'))}" alt="" referrerpolicy="no-referrer">` : '<span class="avatar"></span>'}<span class="ellipsis"><b>${esc(l.channelName)}</b>${verifiedBadge(l, 'sm')} ${esc(l.categoryName || '')}</span><small>${esc(l.viewerCountText)}</small></button>`;
     }).join('') || '<p class="muted">방송 중인 채널이 없습니다</p>'}</div>`;
+  }
+
+  async checkLive() {
+    const id = this.channelId;
+    if (!id || this.root.hidden || document.hidden || !document.hasFocus()) return;
+    const seq = this.seq;
+    let live;
+    try { live = await api.liveDetail(id, true); } catch { return; }
+    if (seq !== this.seq || id !== this.channelId || this.root.hidden) return;
+    this.root.querySelector('.chatonly-title .page-subtitle').textContent = live.isLive ? `${live.liveTitle || ''} · ${live.viewerCountText}명 시청 중` : '방송 중이 아닙니다';
+    const stale = live.chatChannelId && (live.chatChannelId !== this.chat.chatChannelId || !this.chat.active || this.chat.stateName === 'failed');
+    if (stale) await this.chat.connect(live.chatChannelId, live.channelId);
   }
 
   /** ⌘R·다시 불러오기가 지금 채널로 다시 열게 — 예전엔 '채널 바꾸기'로 바꾼 뒤 ⌘R 을 누르면 창을 연 처음 채널로 돌아갔다. */

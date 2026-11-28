@@ -139,8 +139,12 @@ impl ManagerState {
     ) -> bool {
         let double_tap_main = double_tap_focused_id.filter(|id| self.contains(*id));
         let focus_layout_main = if self.grid_layout_mode == MultiLiveGridLayoutMode::Focus {
+            // 화면(DTO·놓기 안내)과 같은 순서로 메인을 고른다 — 지정한 메인, 없으면 선택한 패인, 그것도 없으면 첫 패인.
+            // 예전엔 선택한 패인을 건너뛰어, 기억한 포커스로 다시 연 뒤 '메인으로'라고 보인 칸에 놓아도 메인이 바뀌지 않거나
+            // 엉뚱한 칸이 메인이 됐다.
             self.focus_main_session_id
                 .filter(|id| self.contains(*id))
+                .or(self.selected_session_id.filter(|id| self.contains(*id)))
                 .or_else(|| self.sessions.first().map(|s| s.id()))
         } else {
             None

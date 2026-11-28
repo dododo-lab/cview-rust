@@ -315,6 +315,19 @@ async fn auth_required_paths() {
     assert!(expired.try_recv().is_ok());
 }
 
+/// 팔로우(원시 요청)가 로그인 정보로 401 을 받으면 세션 만료를 알린다 — 화면이 로그인한 채 남지 않게.
+#[tokio::test]
+async fn follow_401_reports_the_expired_session() {
+    let t = MockTransport::new(Duration::ZERO, |_, _| status(401));
+    let c = client(t.clone(), Some(MockAuth::with_cookies()));
+    let mut expired = c.subscribe_session_expired();
+    assert_eq!(c.follow("c").await, Err(ApiError::Unauthorized));
+    assert!(
+        expired.try_recv().is_ok(),
+        "팔로우 401 에 세션 만료 알림이 없다"
+    );
+}
+
 #[tokio::test(start_paused = true)]
 async fn rate_limit_uses_separate_budget_and_is_terminal() {
     let t = MockTransport::new(Duration::ZERO, |_, n| {

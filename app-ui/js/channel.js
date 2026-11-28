@@ -95,6 +95,9 @@ export class ChannelPage {
     this.clipCursor = null; // 클립 다음 쪽 커서(앞 응답의 nextCursor)
     this.clipSeen = new Set(); // 받은 clipUID — 쪽이 겹쳐도 같은 카드를 두 번 붙이지 않게
     this.body.addEventListener('click', (e) => this.onClick(e));
+    // 열어 둔 동안 방송이 켜지거나 꺼지면 다시 그린다(1분마다, 보이고 앱이 앞에 있을 때만) — 예전엔 열 때 한 번만 봐서, 꺼진
+    // 채널 화면에 LIVE·'라이브 보기'가 끝내 나오지 않고 끝난 방송의 '라이브 보기'가 남아 누르면 꺼진 화면이 열렸다.
+    setInterval(() => this.checkLive(), 60 * 1000);
     // 카드 기울기·빛 번짐, 배너 마우스 패럴랙스(live-motion.js) — 위임이라 다시 그려도 그대로
     bindLiveMotion(this.body, { hero: '.channel-hero' });
     // 다른 곳(사이드바·카드 우클릭·시청 상단 바)에서 이 채널 즐겨찾기를 바꾸면 별을 맞춘다 — 예전엔 옛 상태로 남아,
@@ -124,6 +127,16 @@ export class ChannelPage {
   /** 실패 화면의 '다시 시도' — 같은 채널·탭이라도 다시 받는다(아래 '뒤로 가기 그대로 두기'에 걸려 5분 동안 듣지 않았다). */
   retry() {
     if (this.channelId) this.show({ channelId: this.channelId, tab: this.tab, refresh: true });
+  }
+
+  async checkLive() {
+    const id = this.channelId;
+    if (!id || !this.detail || this.root.hidden || document.hidden || !document.hasFocus()) return;
+    let info;
+    try { info = await api.liveDetail(id, true); } catch { return; }
+    if (id !== this.channelId || !this.detail || this.root.hidden) return;
+    const wasLive = Boolean(this.detail.live);
+    if (Boolean(info && info.isLive) !== wasLive) this.show({ channelId: id, tab: this.tab, refresh: true });
   }
 
   async show(params = {}, { back = false } = {}) {

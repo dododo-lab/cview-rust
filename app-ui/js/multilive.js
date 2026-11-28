@@ -141,7 +141,7 @@ function paneIntendsPlay(pane, video) {
  * 분할선 키보드 — role=separator·초점·화살표(±2%, ⇧ ±10%)·Home/End(최소·최대)·Enter(가운데). 끌기만 되던 분할선(감사 UX-H19).
  * get/set 은 0~1 비율. sign() 이 -1 이면(메인이 오른쪽·아래) 화살표 방향을 뒤집는다.
  */
-function bindSeparatorKeys(el, { label, get, set, min = 0.2, max = 0.85, sign = () => 1 }) {
+function bindSeparatorKeys(el, { label, get, set, min = 0.2, max = 0.85, sign = () => 1, reset = 0.5 }) {
   el.tabIndex = 0;
   el.setAttribute('role', 'separator');
   el.setAttribute('aria-label', `${label} — 화살표로 조절`);
@@ -161,7 +161,7 @@ function bindSeparatorKeys(el, { label, get, set, min = 0.2, max = 0.85, sign = 
     else if ((!horiz && e.key === 'ArrowRight') || (horiz && e.key === 'ArrowDown')) next = cur + step;
     else if (e.key === 'Home') next = min;
     else if (e.key === 'End') next = max;
-    else if (e.key === 'Enter') next = 0.5;
+    else if (e.key === 'Enter') next = reset; // 더블클릭과 같은 기본값(포커스 메인은 70%)
     if (next == null) return;
     e.preventDefault();
     e.stopPropagation();
@@ -389,6 +389,7 @@ export class MultiLivePage {
     // 키보드 — 분할선에 초점을 두고 화살표로 메인 크기를 바꾼다(도구 막대의 비율 슬라이더와 같은 값, 감사 UX-H19)
     bindSeparatorKeys(this.divider, {
       label: '메인 크기',
+      reset: 0.7,
       // 메인 비율의 실제 범위(슬라이더 45~85%) — 기본값(20%)이면 Home 과 aria-valuemin 이 실제 값과 어긋났다.
       min: FOCUS_RATIO.min,
       max: FOCUS_RATIO.max,
@@ -473,6 +474,25 @@ export class MultiLivePage {
     this.motionSig = null; // 마지막으로 그린 배치(패인 구성·순서·레이아웃) — 바뀌면 FLIP 으로 움직인다
     this.dragRelease = null; // 방금 끌어 놓은 패인
     this.dragAwait = false; // 놓은 뒤 reorder 응답을 기다리는 중 — 그동안 옛 순서 상태(1초 주기 이벤트)로는 풀지 않는다
+    // 키보드로 자리 바꾸기 — 끌기 손잡이(⠿)에서 ←/↑ 앞으로, →/↓ 뒤로. 예전엔 손잡이가 초점을 받는데 아무 키도 듣지 않아,
+    // 키보드로는 패인 순서를 바꿀 길이 없었다(끌어 놓기만).
+    this.stage.addEventListener('keydown', async (e) => {
+      const handle = e.target.closest && e.target.closest('.ml-drag');
+      if (!handle || !['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown'].includes(e.key)) return;
+      const paneEl = handle.closest('[data-slot]');
+      const pane = paneEl && this.panes.get(Number(paneEl.dataset.slot));
+      if (!pane || !pane.sessionId) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const st = this.state;
+      const order = paneOrder(visibleSessions(st), st.focusMainId || st.selectedId, st.layout);
+      const at = order.indexOf(pane.sessionId);
+      const to = at + (e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 1);
+      if (at < 0 || to < 0 || to >= order.length) return;
+      const slot = paneEl.dataset.slot;
+      await this.run(api.multiLiveReorder(pane.sessionId, order[to]));
+      this.stage.querySelector(`[data-slot="${slot}"] .ml-drag`)?.focus({ preventScroll: true });
+    });
     // 끌어서 자리 바꾸기·메인 바꾸기(MUL-07) — 포인터로 직접 끈다(ml-motion.js).
     bindPaneDrag(this, async (dragged, target) => {
       this.dragAwait = true;
@@ -798,11 +818,17 @@ export class MultiLivePage {
     this.renderWatchPicker(sessions, watched);
     const single = this.watchSlot ?? this.single;
 
-    const focus = state.layout === 'focus' && n > 1;
+    // 한 채널만 크게(더블클릭)·라이브 단독 보기에서는 포커스 분할선을 내린다 — 예전엔 분할선이 단독 영상 위 70% 자리에 남아 그
+    // 띠를 누를 수 없었고, Tab 이 '메인 크기'에 멈췄으며, 끌면 보이지 않는 비율이 바뀌어 저장됐다(사용자 배치 분할선은 이미 뺐다).
+    const focus = state.layout === 'focus' && n > 1 && single == null;
     const stack = this.stackApplies(state, single);
     // 같은 값이면 대입하지 않는다 — 대입만으로도 class 변화로 잡혀 문서 전체 class 관찰자(motion·a11y)가 초마다 깼다.
     const stageClass = `ml-stage ml-n${n <= 4 ? n : (n <= 9 ? 'many' : 'lots')} ${focus ? `ml-focus dir-${state.focusDirection}` : ''} ${state.layout === 'custom' && n > 1 && n <= CUSTOM_MAX_PANES ? 'ml-custom' : ''} ${single != null ? 'ml-single' : ''} ${stack ? 'ml-stack' : ''}`;
-    if (this.stage.className !== stageClass) this.stage.className = stageClass;
+    // 끄는 중·정보 패널 같은 잠깐 붙는 class 는 남긴다 — 예전엔 1초마다 오는 상태로 class 를 통째로 바꿔 끄는 도중 커서·선 강조·
+    // 글자 선택 막기가 풀렸고(has-info 가 있으면 매번 달라 관찰자도 초마다 깼다).
+    const keep = ['resizing', 'row-resizing', 'ml-dragging', 'has-info'].filter((c) => this.stage.classList.contains(c));
+    const nextClass = keep.length ? `${stageClass} ${keep.join(' ')}` : stageClass;
+    if (this.stage.className !== nextClass) this.stage.className = nextClass;
     this.empty.hidden = total > 0;
     this.focusControls.hidden = state.layout !== 'focus';
     for (const b of this.root.querySelectorAll('[data-direction]')) {
@@ -1171,7 +1197,8 @@ export class MultiLivePage {
         d.addEventListener('pointerup', up);
         d.addEventListener('pointercancel', up);
       });
-      d.addEventListener('dblclick', () => this.run(api.multiLiveSetRatios(0.5, 0.5)));
+      // 두 번 누른 분할선의 축만 되돌린다 — 예전엔 열 분할선을 두 번 눌러도 줄 비율까지 50/50 으로 돌아갔다.
+      d.addEventListener('dblclick', () => this.run(axis === 'h' ? api.multiLiveSetRatios(0.5, null) : api.multiLiveSetRatios(null, 0.5)));
     }
     return { v, h };
   }

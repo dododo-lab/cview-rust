@@ -181,6 +181,25 @@ impl RequestGate {
         }
     }
 
+    /// 서버가 늦추라고 했다(429 Retry-After) — 기다리는 모든 요청의 다음 시작을 그때까지 미룬다. 예전엔 429 를 받은 요청만
+    /// 쉬고 나머지는 계속 나가, 팔로잉 상세처럼 한꺼번에 도는 요청이 줄줄이 429 를 받아 서버의 요청을 무시했다.
+    pub fn pause_for(&self, wait: Duration) {
+        if wait.is_zero() {
+            return;
+        }
+        let mut st = self.lock();
+        let until = Instant::now() + wait;
+        if until <= st.next_start {
+            return;
+        }
+        st.next_start = until;
+        if let Some(timer) = st.timer.take() {
+            timer.abort();
+        }
+        st.timer_generation += 1;
+        self.drain(&mut st);
+    }
+
     fn timer_fired(&self, generation: u64) {
         let mut st = self.lock();
         if generation != st.timer_generation {
@@ -237,6 +256,21 @@ mod tests {
         assert!(!snap.has_timer, "슬롯이 차면 타이머 없이 해제를 기다린다");
         drop(a);
         third.await.unwrap().unwrap();
+    }
+
+    /// 429 로 멈추면(pause_for) 기다리던 요청도 그때까지 시작하지 않는다.
+    #[tokio::test(start_paused = true)]
+    async fn pause_holds_every_queued_request() {
+        let gate = RequestGate::new();
+        gate.configure(30, 4, None);
+        drop(gate.acquire().await.unwrap());
+        gate.pause_for(Duration::from_secs(10));
+        let g2 = gate.clone();
+        let waiting = tokio::spawn(async move { g2.acquire().await.map(|_| ()) });
+        tokio::time::sleep(Duration::from_secs(9)).await;
+        assert!(!waiting.is_finished(), "멈춘 동안 다른 요청이 시작했다");
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        waiting.await.unwrap().unwrap();
     }
 
     #[tokio::test(start_paused = true)]
