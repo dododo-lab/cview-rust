@@ -279,6 +279,18 @@ impl ManagerState {
     /// 멀티라이브 상한 설정이 바뀌었을 때 — 보기·디코드 예산·패인 크기를 다시 맞춘다.
     pub fn multi_live_limits_changed(&mut self) {
         self.reconcile_decode_budget();
+        // 대역폭 설정(분배 켜고 끄기·패인 크기 화질 제한·선택 패인 가중치)도 바로 — 예전엔 루프를 시작할 때만 읽어, 바꿔도
+        // 패인 수가 바뀌거나 메뉴를 다시 열 때까지 옛 상한이 남았다.
+        self.update_bandwidth_coordinator_config();
+        let enabled = self
+            .settings
+            .as_ref()
+            .is_some_and(|s| s.multi_live().bandwidth_coordination_enabled);
+        if !enabled && self.bw_coordinator_task.is_some() {
+            self.stop_bandwidth_coordination();
+        } else if enabled && self.bw_coordinator_task.is_none() && self.sessions.len() >= 2 {
+            self.start_bandwidth_coordination();
+        }
         self.update_estimated_pane_sizes();
         // 보조 패인 볼륨도 바로 — 예전엔 설정에서 바꿔도 다음 소리 전환 때까지 옛 비율로 냈다.
         self.sync_audio_volumes();

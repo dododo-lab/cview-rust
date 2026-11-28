@@ -259,11 +259,14 @@ fn after_domain_change(
         // 재생 설정(백그라운드 재생·후원 알림 위치·크기…)도 모든 창에 — 예전엔 플레이어 창이 연 때 읽은 값을 계속 써서,
         // 메인 창에서 '백그라운드 재생'을 꺼도 그 창은 가려진 채 계속 재생했다.
         "player" => {
-            let _ = tauri::Emitter::emit(
-                app,
-                "settings://player",
-                to_value(&services.settings.player()),
-            );
+            let player = services.settings.player();
+            // 지연 설정(목표·최대·배속·PID)을 보던 재생에도 바로 — 예전엔 시작할 때만 읽어, 바꿔도 다시 열거나 재연결할 때까지
+            // 옛 값으로 따라잡았다. (프리셋을 '웹과 같게'↔다른 것으로 바꾸는 경우처럼 페이지 프로필이 바뀌는 것은 다음 재생부터.)
+            services.player.apply_latency_settings(&player);
+            for pane in shell.registry.players() {
+                pane.view_model().apply_latency_settings(&player);
+            }
+            let _ = tauri::Emitter::emit(app, "settings://player", to_value(&player));
         }
         _ => {}
     }

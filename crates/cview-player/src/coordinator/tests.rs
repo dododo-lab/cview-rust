@@ -2051,6 +2051,26 @@ async fn refreshed_url_arriving_after_stop_is_discarded() {
     assert_eq!(engine.s().play_count, 0, "늦은 URL 로 재생을 되살렸다");
 }
 
+/// 멈춘 동안 엔진이 오류가 나도 재연결로 저절로 재생하지 않고, 다시 재생할 때 재연결한다.
+#[tokio::test(start_paused = true)]
+async fn paused_stream_does_not_resume_by_itself_and_reconnects_on_play() {
+    let c = coordinator_with(config(false), MockFetcher::always(Ok(MASTER)));
+    let engine = MockEngine::new();
+    c.set_player_engine(engine.shared()).await;
+    c.start_stream(test_url()).await.unwrap();
+    c.report_engine_playing().await;
+    c.pause().await;
+    engine.reset();
+    engine.s().error_state = true; // 멈춘 동안 토큰 만료 등으로 엔진 오류
+    c.trigger_reconnect("CDN 403 토큰 만료 감지", false);
+    tokio::time::sleep(Duration::from_secs(5)).await;
+    assert_eq!(engine.s().play_count, 0, "멈춘 동안 재연결이 다시 재생했다");
+    c.resume().await;
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    assert_eq!(engine.s().play_count, 1, "다시 재생할 때 재연결하지 않았다");
+    c.stop_stream().await;
+}
+
 /// 시도 중 엔진이 치명 오류를 알리면 8초를 다 기다리지 않고 다음 시도로 넘어간다.
 #[tokio::test(start_paused = true)]
 async fn a_fatal_during_an_attempt_moves_on_without_waiting_8s() {

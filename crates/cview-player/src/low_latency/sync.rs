@@ -123,12 +123,27 @@ impl State {
         };
         self.last_process_instant = Some(now);
         let dt = measured_dt.clamp(0.5, 15.0);
-        let pid_output = self.pid.update(error, dt);
-
         let cfg = self.config;
+        // 따라잡기·늦추기는 들어간 뒤 목표 가까이(문턱의 1/4)까지 이어 간다 — 예전엔 문턱에서 바로 1배로 돌아와, 지연이 문턱
+        // 언저리에서 흔들리면 5초씩 최대 배속(음 높이 변화)과 1배가 번갈아 났고 지연은 목표가 아니라 문턱에 머물렀다.
+        let catching = error > cfg.catch_up_threshold
+            || (self.state == SyncState::CatchingUp && error > cfg.catch_up_threshold * 0.25);
+        let slowing = !catching
+            && (error < -cfg.slow_down_threshold
+                || (self.state == SyncState::SlowingDown
+                    && error < -cfg.slow_down_threshold * 0.25));
+        // 적분은 조정하는 동안만 쌓는다 — 예전엔 맞춘 구간(데드밴드) 안에서도 쌓여, 문턱을 넘는 순간 이미 포화돼 곧장 최대 배속이
+        // 됐고, 오래 목표 아래에 있다 쌓인 음의 적분은 다음 따라잡기를 1.015배로 기어가게 했다.
+        let pid_output = if catching || slowing {
+            self.pid.update(error, dt)
+        } else {
+            self.pid.reset();
+            0.0
+        };
+
         let min_step = 0.005f64.max(cfg.rate_significance_threshold);
         let mut new_rate;
-        if error > cfg.catch_up_threshold {
+        if catching {
             let bh = self.buffer_health_provider.as_ref().map_or(1.0, |p| p());
             let damping = if bh < 0.3 {
                 0.0
@@ -140,7 +155,7 @@ impl State {
             let rate_offset = (pid_output * 0.3).min(cfg.max_playback_rate - 1.0) * damping;
             new_rate = (1.0 + (min_step * damping).max(rate_offset)).min(cfg.max_playback_rate);
             self.state = SyncState::CatchingUp;
-        } else if error < -cfg.slow_down_threshold {
+        } else if slowing {
             let rate_offset = (pid_output * 0.3).max(cfg.min_playback_rate - 1.0);
             new_rate = (1.0 + (-min_step).min(rate_offset)).max(cfg.min_playback_rate);
             self.state = SyncState::SlowingDown;
@@ -254,6 +269,40 @@ mod tests {
         assert!((c.current_rate() - 1.0).abs() < 0.02);
         let snap = c.snapshot(3.0);
         assert_eq!(snap.sync_state, SyncState::Synced);
+    }
+
+    /// 문턱 바로 아래에 오래 머물러도 적분이 쌓이지 않고, 따라잡기에 들어가면 목표 가까이까지 이어 간다.
+    #[test]
+    fn no_windup_below_threshold_and_catch_up_keeps_going_until_near_target() {
+        let config = LowLatencyConfiguration {
+            target_latency: 3.0,
+            catch_up_threshold: 1.2,
+            slow_down_threshold: 0.5,
+            ..Default::default()
+        };
+        let c = LowLatencyController::new(config);
+        for _ in 0..30 {
+            c.process_latency(4.1); // 문턱(1.2) 바로 아래
+        }
+        assert_eq!(c.sync_state(), SyncState::Synced);
+        assert!((c.current_rate() - 1.0).abs() < 1e-9);
+        assert_eq!(
+            c.with(|s| s.pid.integral()),
+            0.0,
+            "맞춘 구간에서 적분이 쌓였다"
+        );
+        for _ in 0..6 {
+            c.process_latency(4.4); // 문턱을 넘음 — 따라잡기
+        }
+        assert_eq!(c.sync_state(), SyncState::CatchingUp);
+        for _ in 0..6 {
+            c.process_latency(3.6); // 문턱 아래지만 목표 + 0.6 — 계속 따라잡는다
+        }
+        assert_eq!(
+            c.sync_state(),
+            SyncState::CatchingUp,
+            "문턱 아래로 오자마자 1배로 돌아갔다"
+        );
     }
 
     #[test]

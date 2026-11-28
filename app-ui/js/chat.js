@@ -241,6 +241,14 @@ export function panelOf(root) {
   return null;
 }
 
+/** 잠자기에서 깬 뒤 — 연결돼 보이는 채팅도 다시 붙는다. 오래 잔 소켓은 대개 말없이 죽어 있는데, 핑 확인 시계는 잠자는 동안 흐르지
+ *  않아 깬 뒤에도 남은 시간(최대 수십 초~2분)을 다 기다렸다. */
+export function reconnectChatsAfterWake() {
+  for (const p of PANELS) {
+    if (p.active && p.chatChannelId) p.connect(p.chatChannelId, p.channelId);
+  }
+}
+
 export function reconnectFailedChats() {
   // 재연결 대기 중인 채팅도 바로 — 예전엔 실패한 채팅만 다시 붙여, 백오프(최대 30여 초)를 자던 채팅은 네트워크가 돌아온 뒤에도
   // 남은 대기를 다 채웠다. 같은 채널 재연결이라 토큰을 받지 못해도 지금 연결(과 그 재시도)은 그대로 남는다.

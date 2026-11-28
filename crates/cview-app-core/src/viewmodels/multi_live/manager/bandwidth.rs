@@ -172,7 +172,14 @@ impl ManagerState {
             let Some(h) = hls else {
                 continue;
             };
-            if advice.capped_max_height > 0 {
+            // 상한이 풀렸으면(0) 걸었던 높이 상한도 푼다 — 예전엔 0 을 건너뛰어, '패인 크기 화질 제한'을 꺼도 걸린 360/480p 가
+            // 패인이 바뀔 때까지 남았다.
+            if advice.capped_max_height == 0 {
+                if self.last_applied_cap_height.get(&sid).copied().unwrap_or(0) > 0 {
+                    h.set_max_resolution_height(0);
+                    self.last_applied_cap_height.insert(sid, 0);
+                }
+            } else if advice.capped_max_height > 0 {
                 let last = self.last_applied_cap_height.get(&sid).copied().unwrap_or(0);
                 if last != advice.capped_max_height {
                     h.set_max_resolution_height(advice.capped_max_height);

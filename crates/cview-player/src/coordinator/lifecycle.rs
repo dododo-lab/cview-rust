@@ -238,6 +238,11 @@ impl StreamCoordinator {
     pub async fn resume(&self) {
         self.st().user_paused = false;
         if let Some(e) = self.engine() {
+            // 멈춘 동안 엔진이 오류로 끝났으면(토큰 만료·네트워크) 다시 재생 대신 재연결 — 멈춘 동안에는 재연결하지 않는다.
+            if e.is_in_error_state() {
+                self.trigger_reconnect("일시정지 뒤 재개 — 엔진 오류", true);
+                return;
+            }
             e.resume();
         }
     }
