@@ -58,7 +58,7 @@ try {
     const { ctx, page, errors } = await open({ init: () => { try { localStorage.setItem('cview.recentSearches', JSON.stringify(['릴카 합방', '마인크래프트'])); } catch { /* 무시 */ } } });
     await go(page, 'search');
     const input = '[data-page="search"] input[type=search]';
-    await page.waitForSelector(`[data-page="search"]:not([hidden]) ${input}`);
+    await page.waitForSelector('[data-page="search"]:not([hidden]) input[type=search]');
     await page.evaluate(() => { window.__opened = []; window.addEventListener('cview:open-channel', (e) => window.__opened.push(e.detail.channelId)); });
     await page.focus(input);
     await page.keyboard.type('릴');
