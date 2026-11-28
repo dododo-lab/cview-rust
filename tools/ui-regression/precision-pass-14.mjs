@@ -208,7 +208,7 @@ try {
     assert.match(src('chat.js'), /this\.composer\.acceptSubmit\(e\)\) this\.send\(\)/);
     assert.match(src('multichat.js'), /this\.composer\.acceptSubmit\(e\)\) this\.sendMerged\(\)/);
     assert.match(src('settings.js'), /target\.value\.trim\(\) === '' \? NaN : Number\(target\.value\)/);
-    assert.match(src('app.js'), /await enterWatch\(s\.id\);\n\s+await applyStartMuted\(\);/);
+    assert.match(src('app.js'), /pages\.multilive\.playPaneAd\(channelId\);\s*(\/\/.*\s*)*await applyStartMuted\(\);/);
     assert.match(src('home.js'), /cont\.status === 'fulfilled' && !cont\.value\.length\) clear\('continue'\)/);
     assert.match(src('chat.js'), /panel\.mentions = panel\.mentions\.filter\(\(m\) => !gone\.has\(m\.userId\)\)/);
   });

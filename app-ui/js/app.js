@@ -581,11 +581,12 @@ async function openChannelWatch(channelId, seq = openSeq) {
   if (!s) return; // 추가 실패 — run 이 이미 알렸다
   if (seq !== openSeq) return; // 그새 다른 채널을 눌렀다
   await enterWatch(s.id);
-  await applyStartMuted();
   // 무대에 올리는 동안 다른 채널을 눌렀으면 광고를 틀지 않는다 — 예전엔 검사가 enterWatch 앞에만 있어,
   // 늦은 A 가 무대 밖에서 프리롤을 틀어 B 의 광고와 겹쳤다. (enterWatch 가 한 번 올린다.)
   if (openSeq !== seq + 1) return;
   pages.multilive.playPaneAd(channelId);
+  // 광고 소리는 광고가 따로 다룬다 — 패인 소리 배율만 0 으로 둔다(그새 다른 채널을 눌렀으면 위에서 끝났다).
+  await applyStartMuted();
 }
 
 /**
