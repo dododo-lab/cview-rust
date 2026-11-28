@@ -293,7 +293,15 @@ impl MultiLiveEnginePool for PanePool {
         }
         let mut active = lock(&self.active);
         let mut idle = lock(&self.idle);
-        let engine = idle.pop().unwrap_or_else(|| {
+        // 번호가 가장 낮은 쉬는 엔진부터 — 프런트는 쉬는 칸 가운데 번호가 낮은 둘만 iframe(플레이어 페이지)을 데워 두고 나머지를
+        // 30초 뒤 지운다(multilive.js reclaimIdlePanes). 예전엔 마지막에 놓인 엔진(번호가 높은 칸)을 먼저 꺼내, 다시 열 때
+        // 지워진 칸을 골라 플레이어 페이지를 처음부터 불러왔다(첫 화면이 늦음).
+        let lowest = idle
+            .iter()
+            .enumerate()
+            .min_by_key(|(_, e)| e.slot)
+            .map(|(i, _)| i);
+        let engine = lowest.map(|i| idle.remove(i)).unwrap_or_else(|| {
             // 버린 엔진의 슬롯 번호를 다시 쓴다 — 프런트는 슬롯마다 iframe 을 하나 두고 지우지 않으므로,
             // 번호가 늘기만 하면 채널을 넣고 뺄 때마다 빈 플레이어 iframe 이 쌓인다.
             let mut slot = 1;
@@ -321,7 +329,10 @@ impl MultiLiveEnginePool for PanePool {
         lock(&self.active).len()
     }
     async fn trim_idle(&self, keep_per_type: usize) {
-        lock(&self.idle).truncate(keep_per_type);
+        // 남기는 것도 번호가 낮은 쪽(프런트가 데워 두는 칸과 같게).
+        let mut idle = lock(&self.idle);
+        idle.sort_by_key(|e| e.slot);
+        idle.truncate(keep_per_type);
     }
     async fn drain(&self) {
         let engines: Vec<_> = lock(&self.active).drain(..).collect();

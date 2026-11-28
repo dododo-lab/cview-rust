@@ -780,6 +780,11 @@ impl PlayerViewModel {
             .unwrap_or(false);
         coordinator
             .update_low_latency_config(LatencyPresetPairing::configuration_for(settings, v2));
+        // 매니저가 정한 메인 패인 여유를 다시 얹는다 — 새 설정이 목표를 프리셋 기본값으로 되돌려, 예전엔 패인이 시작·재연결할
+        // 때마다(시작 설정 적용) 메인 패인 여유가 지워지고 같은 값이라 다시 걸리지도 않았다(set_latency_margin 이 건너뜀).
+        if s.latency_margin > 0.0 {
+            coordinator.set_target_latency_margin(s.latency_margin);
+        }
     }
 
     pub fn apply_sharp_pixel_scaling(&self, enabled: bool) {

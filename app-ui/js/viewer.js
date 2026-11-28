@@ -296,6 +296,7 @@ export class Viewer {
     this.root.hidden = true;
     this.channelId = null;
     this.phase = null;
+    clearInterval(this.restartTimer);
     this.topbar.loadedFor = null;
     this.topbar.closeMenu();
     // 화질 메뉴·⚙ 패널도 닫는다 — 키보드(⌘W)로 닫으면 바깥 클릭 처리가 돌지 않아, 다음 방송을 열 때 앞 방송의 배속·탭을 보인
@@ -383,11 +384,33 @@ export class Viewer {
     } else if (ev.type === 'ended') {
       this.showOverlay(PHASE_TEXT.streamEnded);
       this.player.setNowPlaying(null);
+      this.watchForRestart();
     } else if (ev.type === 'error') {
       // 엔진 치명 오류 원문(networkError: manifestLoadError 등)은 알림으로 띄우지 않는다(L-11) — 재연결 중에는 시도마다 떴다.
       // 사용자에게 보일 문구는 오류 단계(phase error)가 화면 카드로 보인다. 원문은 콘솔에만.
       console.warn('[viewer] 엔진 오류:', ev.message);
     }
+  }
+
+  /**
+   * 방송이 끝난 화면에 머무는 동안 다시 켜지는지 본다(30초마다, 10분까지) — 스트리머가 송출을 껐다 켜면(OBS 재시작 등) 예전엔
+   * '방송이 종료되었습니다'에 그대로 남아 직접 다시 열어야 했다(멀티라이브 패인은 이미 저절로 다시 붙는다). 다시 켜지면 같은
+   * 설정으로 이어 본다. 다른 채널을 열거나 닫으면 그친다.
+   */
+  watchForRestart() {
+    clearInterval(this.restartTimer);
+    const id = this.channelId;
+    const token = this.startToken;
+    const until = Date.now() + 10 * 60 * 1000;
+    this.restartTimer = setInterval(async () => {
+      if (this.channelId !== id || this.startToken !== token || Date.now() > until) { clearInterval(this.restartTimer); return; }
+      let live;
+      try { live = await api.liveDetail(id, true); } catch { return; }
+      if (this.channelId !== id || this.startToken !== token || !live || !live.isLive) return;
+      clearInterval(this.restartTimer);
+      toast('방송이 다시 시작돼 이어서 봅니다', 2500);
+      this.open(id, this.lastSettings);
+    }, 30 * 1000);
   }
 
   /** @param {boolean} [changed] 로그인 상태가 바뀌었는가 — 바뀌었을 때만 위 막대 팔로우 단추를 다시 읽는다. */

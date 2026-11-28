@@ -404,13 +404,16 @@ export class ViewerControls {
   togglePlay() {
     const v = this.video;
     if (!v) return;
-    this.viewer.player.call(v.paused ? 'play' : 'pause');
+    const pausing = !v.paused;
+    this.viewer.player.call(pausing ? 'pause' : 'play');
+    // 코디네이터도 알게 한다 — 멈춘 동안 재연결이 저절로 다시 재생하지 않게(재개 때 엔진 오류면 그때 다시 붙는다).
+    api.playerSetPaused(pausing).catch(() => {});
     setTimeout(() => this.renderStatus(), 150);
   }
 
   goLive() {
     const v = this.video;
-    if (v && v.paused) this.viewer.player.call('play');
+    if (v && v.paused) { this.viewer.player.call('play'); api.playerSetPaused(false).catch(() => {}); }
     if (v && v.playbackRate !== 1) { this.viewer.player.call('setRate', 1); if (this.viewer.panel) this.viewer.panel.rate = 1; }
     this.viewer.player.call('seekToLiveEdge');
     this.flash('라이브로 이동');

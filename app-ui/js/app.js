@@ -41,7 +41,7 @@ import { MultiChatPage, multiChatIcon } from './multichat.js';
 import { installPrefsEffects } from './prefs-effects.js';
 import { installBackgroundSaver, setMenuHidden } from './background-saver.js';
 import { installPerfCollector } from './perf-collector.js';
-import { showMenu, refreshChatAuth, reconnectFailedChats } from './chat.js';
+import { showMenu, refreshChatAuth, reconnectFailedChats, reconnectChatsAfterWake } from './chat.js';
 import { installUiHealth } from './ui-health.js';
 import { installSidebarUsage } from './sidebar-usage.js';
 import { closeUserPop } from './chat-user-pop.js';
@@ -609,10 +609,20 @@ async function openChannel(channelId) {
     await openInViewer(channelId, { ad: true });
     return;
   }
+  // 같은 채널을 여는 중이면 그 열기를 기다린다 — 예전엔 카드를 두 번 누르면(더블클릭) 둘째 열기가 '이미 추가하는 중'으로
+  // 실패하면서 순번만 올려, 첫 열기가 끝나도 무대에 올리지 않았다(채널은 숨은 채 추가되고, 첫 패인이면 화면 밖에서 소리가 났다).
+  const inflight = openingChannels.get(channelId);
+  if (inflight) { await inflight; return; }
   pendingWatch++;
   const seq = ++openSeq;
-  try { await openChannelWatch(channelId, seq); } finally { pendingWatch--; syncLiveIndicators(); }
+  const run = (async () => {
+    try { await openChannelWatch(channelId, seq); } finally { pendingWatch--; syncLiveIndicators(); }
+  })();
+  openingChannels.set(channelId, run);
+  try { await run; } finally { if (openingChannels.get(channelId) === run) openingChannels.delete(channelId); }
 }
+/** 지금 열고 있는 채널 → 그 열기(같은 채널을 거듭 누르면 같은 열기를 기다린다). */
+const openingChannels = new Map();
 // 가장 나중에 누른 열기만 무대에 올린다 — 예전엔 A(상세가 느림)를 누르고 곧 B 를 누르면 B 가 먼저 오른 뒤 늦게 끝난
 // A 가 무대를 빼앗고, 둘 다 프리롤 광고를 틀었다. 늦은 A 는 둘러본 채널로만 남는다(상한이 차면 먼저 빠짐).
 let openSeq = 0;
@@ -1116,6 +1126,25 @@ function installMenuAndShortcuts() {
     banner.hidden = false;
     if (isTauri) api.playerNetworkPath(false).catch(() => {});
   });
+  // 잠자기 복귀 — 시계가 크게 건너뛰면(타이머는 잠자는 동안 멈춘다) 재생·채팅을 점검한다. 창이 가려져 타이머가 느려지는
+  // 경우(백그라운드 절약)와 구별하려고 문턱을 넉넉히 둔다(잘못 알아채도 점검만 하고, 멀쩡한 재생은 건드리지 않는다).
+  if (isTauri && !AUX) {
+    let lastTick = Date.now();
+    setInterval(() => {
+      const now = Date.now();
+      const gap = now - lastTick;
+      lastTick = now;
+      if (gap < WAKE_GAP_MS) return;
+      console.info(`[app] 잠자기 복귀 추정(${Math.round(gap / 1000)}초 건너뜀) — 재생·채팅 점검`);
+      // 네트워크가 먼저 돌아오도록 잠깐 기다린 뒤 — 깨자마자는 DNS·Wi-Fi 가 아직이다.
+      setTimeout(() => {
+        if (navigator.onLine === false) return; // online 이벤트 쪽이 복구한다
+        api.playerSystemWake().catch(() => {});
+        if (gap >= WAKE_CHAT_GAP_MS) reconnectChatsAfterWake(); else reconnectFailedChats();
+        refreshSidebarFollowing();
+      }, ONLINE_SETTLE_MS);
+    }, 10 * 1000);
+  }
   // 네트워크가 흔들리면(VPN·Wi-Fi 전환) online 이 짧은 간격으로 여러 번 온다 — 복구 작업은 잠잠해진 뒤 한 번만.
   let onlineTimer = 0;
   window.addEventListener('offline', () => clearTimeout(onlineTimer));
@@ -1150,6 +1179,9 @@ function autoReloadOnOnline(route) {
 
 /** online 이벤트가 잠잠해지기를 기다리는 시간. */
 const ONLINE_SETTLE_MS = 800;
+/** 잠자기 복귀로 볼 시계 건너뜀 — 가린 창의 타이머 늦춤(분 단위 안팎)보다 넉넉히. 채팅 다시 붙기(목록을 비운다)는 더 길게 잔 때만. */
+const WAKE_GAP_MS = 90 * 1000;
+const WAKE_CHAT_GAP_MS = 180 * 1000;
 
 /** 전체 화면이면 신호등 자리를 비우지 않는다. */
 function trackFullscreen() {

@@ -139,6 +139,8 @@ export const api = {
   playerMessage: (message) => invoke('player_message', { message }),
   // 오프라인 ↔ 온라인 — 재생 코디네이터가 재연결 백오프를 건너뛰거나 소진된 재연결을 다시 시작한다
   playerNetworkPath: (online) => invoke('player_network_path', { online }),
+  playerSetPaused: (paused) => invoke('player_set_paused', { paused }),
+  playerSystemWake: () => invoke('player_system_wake'),
 
   multiLiveState: () => invoke('multilive_state'),
   // live — 라이브 단독 보기에 담는 추가(라이브 단독 보기 상한을 따른다)

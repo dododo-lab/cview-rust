@@ -200,6 +200,29 @@ pub async fn player_message(services: State<'_, AppServices>, message: Value) ->
 /// (최대 15초)를 다 기다렸고, 오래 끊겨 재연결이 소진(`Error`)됐으면 네트워크가 돌아와도 오류 카드에
 /// 그대로 머물렀다. 경로 종류는 웹뷰가 알려 주지 않으므로 온라인은 `Other` 로 넘긴다 — 판정
 /// ([`cview_player::coordinator::network_recovery_decision`])은 오프라인 ↔ 온라인 전이만 본다.
+/// 잠자기에서 깼다(화면이 시계 건너뜀으로 알아챈다) — 단독 시청 화면과 멀티라이브 패인의 재생 상태를 점검해 복구한다.
+/// 예전엔 깬 뒤를 아무도 알리지 않아, 멈춘 영상이 페이지의 멈춤 판정(약 48초)이 오류로 올라갈 때까지 그대로였고 패인은
+/// 주기 재취득 타이머(잠자는 동안 흐르지 않음)를 기다렸다. 판정은 보수적이다 — 멀쩡히 재생 중이면 매니페스트만 새로 받는다.
+#[tauri::command]
+pub async fn player_system_wake(
+    services: State<'_, AppServices>,
+    shell: State<'_, crate::multi_live::MultiLiveShell>,
+) -> CmdResult<()> {
+    tracing::info!("잠자기 복귀 — 재생 상태 점검");
+    services.player.recover_from_background();
+    for pane in shell.registry.players() {
+        pane.view_model().recover_from_background();
+    }
+    Ok(())
+}
+
+/// 단독 시청 화면이 멈추거나 다시 재생했다(페이지 안 일시정지) — 코디네이터가 멈춘 동안 재연결로 저절로 재생하지 않게 알린다.
+#[tauri::command]
+pub async fn player_set_paused(services: State<'_, AppServices>, paused: bool) -> CmdResult<()> {
+    services.player.set_user_paused(paused).await;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn player_network_path(
     services: State<'_, AppServices>,

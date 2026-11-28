@@ -3674,7 +3674,11 @@ function startCTMonitor() {
         //   실제 stall 감지는 재생 중(paused=false · document 노출)에만 필요.
         // [UsageOpt CPU 2026-08-06] document.hidden 도 pause 와 동일 취급 — keepAlive 가림에서
         //   video.paused=false 인데 CT 가 멈춰 오탐 recovery(seek/startLoad/IPC)가 나던 버그.
-        if (!hls || video.paused || document.hidden) {
+        // [BG-STALL 2026-11-28] 가려졌어도 배경 재생 중(정밀 타이머 bgTimersActive)이면 멈춤을 본다 — 예전엔 가린 창에서는
+        //   감시를 통째로 꺼, 소리만 듣던 창(배경 재생)이 멈춰도 2~4단계 복구로 올라가지 않고 창을 다시 볼 때까지 조용했다.
+        //   keepAlive 오탐(데이터는 충분한데 CT 만 멈춤)을 피하려고 가린 동안은 데이터가 모자랄 때(readyState ≤ 2)만 본다.
+        const hiddenWatch = document.hidden && bgTimersActive() && video.readyState <= 2;
+        if (!hls || video.paused || (document.hidden && !hiddenWatch)) {
             _lastCT = video.currentTime; _lastCTChangeAt = now;
             // [잔여수정 2026-08-12 STALL-1] **이 되감기가 곧 사각지대다.** 위 두 줄 때문에
             //   일시정지 상태에서는 '6s 무진행' 이 영원히 성립하지 않으므로, 정지가 정당한지는

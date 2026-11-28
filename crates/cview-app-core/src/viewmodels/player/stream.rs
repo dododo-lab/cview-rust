@@ -302,6 +302,26 @@ impl PlayerViewModel {
         self.notify_playback_state_changed();
     }
 
+    /// 화면(플레이어 페이지)이 직접 멈추거나 다시 재생했다 — 코디네이터도 알게 한다. 예전엔 단독 시청 화면의 일시정지가 페이지
+    /// 안에서만 일어나, 코디네이터는 계속 '재생 중'으로 알고 있다가 토큰 만료·네트워크 오류가 오면 재연결로 저절로 다시
+    /// 재생(소리 포함)했다. 멈춘 동안은 재연결하지 않고, 다시 재생할 때 엔진이 오류 상태면 그때 다시 붙는다.
+    pub async fn set_user_paused(&self, paused: bool) {
+        let (coordinator, phase) = {
+            let s = self.state.read();
+            (s.coordinator.clone(), s.stream_phase.clone())
+        };
+        let Some(c) = coordinator else {
+            return;
+        };
+        if paused {
+            if matches!(phase, StreamPhase::Playing | StreamPhase::Buffering) {
+                c.pause().await;
+            }
+        } else if phase == StreamPhase::Paused {
+            c.resume().await;
+        }
+    }
+
     pub async fn toggle_play_pause(&self) {
         let (coordinator, phase) = {
             let s = self.state.read();
