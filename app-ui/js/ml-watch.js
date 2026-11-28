@@ -28,6 +28,7 @@ export const WATCH_ICON = {
   bookmark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4z"/></svg>',
   chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg>',
   chatFull: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M15 20h5v-5"/><path d="M14 9h4M14 12h4"/></svg>',
+  fullscreenExit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>',
   popout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="13" height="13" rx="2"/><path d="M10 4h10v10M20 4l-8 8"/></svg>',
 };
 
@@ -140,6 +141,17 @@ export class WatchTools {
       }
     });
     document.addEventListener('keydown', (e) => this.onKey(e));
+    // 영상+채팅 전체 화면 단추 — 들어가면 '끝내기'로 바꾼다(패인마다 하나씩 있다).
+    document.addEventListener('fullscreenchange', () => {
+      const on = Boolean(this.body) && document.fullscreenElement === this.body;
+      for (const btn of this.root.querySelectorAll('[data-mw="fullchat"]')) {
+        if (btn.dataset.fs === String(on)) continue;
+        btn.dataset.fs = String(on);
+        btn.innerHTML = on ? WATCH_ICON.fullscreenExit : WATCH_ICON.chatFull;
+        btn.title = kbd(on ? '전체 화면 끝내기 (⌃⌘F · Esc)' : '영상+채팅 전체 화면 (⌃⌘F)');
+        btn.setAttribute('aria-label', on ? '전체 화면 끝내기' : '영상과 채팅 전체 화면');
+      }
+    });
     onChatPrefs(() => this.applyChatMode());
     // 단축키 표시 — 사용자가 바꾼 키(설정 › 단축키)를 단추 툴팁·⋯ 메뉴에 그대로 보인다.
     onShortcuts(() => this.applyShortcutHints());

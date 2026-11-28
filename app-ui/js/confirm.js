@@ -105,7 +105,7 @@ export function confirmDialog({ title, facts = [], check = null, confirmLabel = 
   return new Promise((resolve) => {
     const scrim = document.createElement('div');
     scrim.className = `sheet-scrim confirm-sheet${className ? ` ${className}` : ''}`;
-    scrim.innerHTML = `<form class="sheet" role="alertdialog" aria-modal="true" aria-labelledby="${id}-title" aria-describedby="${id}-desc">
+    scrim.innerHTML = `<form class="sheet" role="alertdialog" tabindex="-1" aria-modal="true" aria-labelledby="${id}-title" aria-describedby="${id}-desc">
       <h2 id="${id}-title">${esc(title)}</h2>
       <dl class="confirm-facts" id="${id}-desc">${facts.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>
       ${check ? `<label class="confirm-check"><span class="toggle"><input type="checkbox" data-confirm-check${check.checked === false ? '' : ' checked'}><span></span></span>
@@ -115,6 +115,8 @@ export function confirmDialog({ title, facts = [], check = null, confirmLabel = 
     document.body.append(scrim);
     const form = scrim.querySelector('form');
     const release = trapFocus(form); // 초점을 가두고, 닫으면 연 단추로 돌려준다
+    // 시트가 초점을 받을 수 있어야(tabindex=-1) 안의 글자를 눌러도 초점이 시트에 남아 Esc 가 닿는다 — 예전엔 body 로
+    // 떨어져 앱 전체 Esc 가 삼켰고 창이 닫히지 않았다(showSheet 는 이미 이렇게 한다).
     let done = false;
     const finish = (value) => {
       if (done) return;

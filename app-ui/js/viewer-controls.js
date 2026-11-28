@@ -137,11 +137,17 @@ export class ViewerControls {
     // 전체 화면이면 단추 그림·이름을 '끝내기'로 — 예전엔 들어가도 같은 그림이라 상태를 알 수 없었다(감사 UX-M07)
     const fsButton = root.querySelector('#fullscreen');
     const fsEnter = fsButton.innerHTML;
+    // 영상+채팅 전체 화면 단추도 같다 — 예전엔 영상 전체 화면 단추만 바뀌어, ⌃⌘F 로 들어간 뒤 이 단추는 '들어가기'로 남았다.
+    const fsChat = root.querySelector('#ctl-fullscreen-chat');
     document.addEventListener('fullscreenchange', () => {
       const on = document.fullscreenElement === this.stage;
       fsButton.innerHTML = on ? ICON.fullscreenExit : fsEnter;
       fsButton.title = kbd(on ? '전체 화면 끝내기 (⇧⌘F · Esc)' : '영상 전체 화면 (⇧⌘F)');
       fsButton.setAttribute('aria-label', on ? '전체 화면 끝내기' : '영상 전체 화면');
+      const chatOn = document.fullscreenElement === this.root;
+      fsChat.innerHTML = chatOn ? ICON.fullscreenExit : ICON.chatFull;
+      fsChat.title = kbd(chatOn ? '전체 화면 끝내기 (⌃⌘F · Esc)' : '영상+채팅 전체 화면 (⌃⌘F)');
+      fsChat.setAttribute('aria-label', chatOn ? '전체 화면 끝내기' : '영상과 채팅 전체 화면');
     });
 
     this.playButton = root.querySelector('#ctl-play');
@@ -456,7 +462,7 @@ export class ViewerControls {
     const run = (s) => this.viewer.player.run(s);
     if (index < 0) {
       // 자동 — 상한을 -1 로 지우지 않고 앱 화질 상한·백그라운드 절약 상한을 다시 적용한다.
-      run('if (typeof setLockTopLevel === "function") setLockTopLevel(false); if (hls) { hls.currentLevel = -1; hls.loadLevel = -1; if (typeof applyAdaptiveLevelCap === "function") applyAdaptiveLevelCap(); }');
+      run('if (typeof setLockTopLevel === "function") setLockTopLevel(false); if (hls) { hls.loadLevel = -1; if (typeof applyAdaptiveLevelCap === "function") applyAdaptiveLevelCap(); }');
       this.flash('화질 자동');
     } else {
       run(`if (typeof setLockTopLevel === "function") setLockTopLevel(false); requestManualLevel(${Number(index)});`);

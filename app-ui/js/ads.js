@@ -283,8 +283,8 @@ function playOne(ui, candidate, vast, session) {
     ui.skip.hidden = skipAt === null;
     ui.more.hidden = !vast.clickThrough;
     ui.resume.hidden = true;
-    video.volume = adVolume();
-    video.muted = adMutedPref();
+    video.volume = Number.isFinite(session.volume) ? Math.max(0, Math.min(1, session.volume)) : adVolume();
+    video.muted = adMutedPref() || Boolean(session.muted);
     const syncSound = () => {
       // 이름이 상태를 따라 바뀌므로 aria-pressed 는 달지 않는다 — 둘을 함께 바꾸면 '소리 켜기, 눌림'(음소거 중)처럼
       // 소리가 켜진 것으로 들렸다.
@@ -398,10 +398,12 @@ const hostSessions = new Map();
  * @param {string|number} id 라이브는 채널 ID, 다시보기는 videoNo
  * @param {{ host?: HTMLElement|null, player?: { exec(script: string): void }|null, target?: string }} [options]
  */
-export async function playPreroll(kind, id, { host = null, player = null, target = 'pane' } = {}) {
+export async function playPreroll(kind, id, { host = null, player = null, target = 'pane', volume = null, muted = false } = {}) {
   const previous = host ? hostSessions.get(host) : active;
   if (previous) previous.cancel();
-  const session = { cancelled: false, cancel: null };
+  // volume(0~1)·muted — 패인 광고는 그 패인의 볼륨·'음소거로 시작'을 따른다. 예전엔 언제나 예전 시청 화면의 볼륨 막대
+  // (#volume, 기본 100)를 읽어, 기본 볼륨 20%·음소거로 시작을 켜 둬도 무대·패인 광고가 최대 볼륨으로 소리를 냈다.
+  const session = { cancelled: false, cancel: null, volume, muted };
   const handle = {
     cancel() {
       session.cancelled = true;

@@ -517,7 +517,7 @@ export class SettingsPage {
         </div>
       </section>
       <section class="settings-group" data-g="overview"><h2>앱</h2>
-        <div class="setting" data-search="알림 권한 시스템 알림"><span class="setting-label">시스템 알림 권한<small class="notify-status">방송 시작·멘션 알림에 필요합니다</small></span><span class="shortcut-edit"><button class="btn" data-sys="notify">권한 확인</button><button class="link-btn" data-sys="notify-settings">시스템 설정 열기</button></span></div>
+        <div class="setting" data-search="알림 권한 시스템 알림"><span class="setting-label">시스템 알림 권한<small class="notify-status">방송 시작·멘션 알림에 필요합니다</small></span><span class="shortcut-edit"><button class="btn" data-sys="notify">권한 확인</button><button class="link-btn" data-sys="notify-settings">${IS_WINDOWS ? '알림 설정 열기' : '시스템 설정 열기'}</button></span></div>
         <div class="setting" data-search="딥 링크 cview url"><span class="setting-label">링크로 열기<small>cview://live?channelId=… · cview://search?q=… · cview://multilive</small></span></div>
       </section>`;
   }
@@ -936,7 +936,7 @@ export class SettingsPage {
       } else if (b.dataset.sys === 'notify') {
         let st = await api.notifyPermission(false);
         if (st.state !== 'granted') st = await api.notifyPermission(true);
-        const label = { granted: '허용됨', denied: '거부됨 — 시스템 설정 › 알림에서 CView 를 켜 주세요', prompt: '아직 묻지 않음', 'prompt-with-rationale': '아직 묻지 않음' };
+        const label = { granted: '허용됨', denied: IS_WINDOWS ? '거부됨 — Windows 설정 › 시스템 › 알림에서 CView 를 켜 주세요' : '거부됨 — 시스템 설정 › 알림에서 CView 를 켜 주세요', prompt: '아직 묻지 않음', 'prompt-with-rationale': '아직 묻지 않음' };
         this.body.querySelector('.notify-status').textContent = label[st.state] || st.state;
         if (st.state === 'granted') api.notifySend('CView', '알림이 이렇게 표시됩니다', { force: true }).catch(() => {});
       }

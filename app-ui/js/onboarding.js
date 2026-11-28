@@ -45,6 +45,8 @@ const STEPS = [
 /** 환영 안내 — 처음 한 번, 또는 force 로 다시. */
 export function showWelcome({ force = false, onLogin } = {}) {
   try { if (!force && localStorage.getItem(WELCOME_KEY)) return; } catch { /* 저장소 없음 */ }
+  // 이미 떠 있으면 하나 더 쌓지 않는다 — 예전엔 도움말 › 처음 안내 다시 보기를 누르면 두 장이 겹쳐 ←/→·Esc 에 함께 반응했다.
+  if (document.querySelector('.welcome-scrim')) return;
   let i = 0;
   const scrim = document.createElement('div');
   scrim.className = 'sheet-scrim welcome-scrim';
@@ -71,6 +73,9 @@ export function showWelcome({ force = false, onLogin } = {}) {
     document.removeEventListener('keydown', onKey, true);
   };
   const onKey = (e) => {
+    // 안내 위에 다른 층(⌘K 팔레트·단축키 시트 등)이 떠 있으면 그 층의 키다 — 예전엔 팔레트 입력란에서 ←/→ 로 커서를
+    // 옮기면 뒤의 안내 장이 넘어가며 초점이 빠져나갔고, Esc 한 번에 팔레트와 안내가 함께 닫혔다.
+    if (!scrim.contains(e.target) && e.target !== document.body) return;
     if (e.key === 'Escape') { e.preventDefault(); close(); }
     else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       const j = e.key === 'ArrowRight' ? Math.min(STEPS.length - 1, i + 1) : Math.max(0, i - 1);

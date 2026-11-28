@@ -74,6 +74,7 @@ export const PANE_ICON = {
   pip: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="11" width="7" height="6" rx="1" fill="currentColor" stroke="none"/></svg>',
   expand: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M10 20H4v-6M20 4l-7 7M4 20l7-7"/></svg>',
   fullscreen: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>',
+  fullscreenExit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>',
   more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg>',
   chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg>',
   info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 7.6v.2"/></svg>',
@@ -197,6 +198,17 @@ export class PaneControls {
     this.el.addEventListener('focusin', wake);
     // 패인 밖을 누르거나 Esc 면 메뉴를 닫는다.
     document.addEventListener('pointerdown', (e) => { if (this.menuOpen && !this.el.contains(e.target)) this.closeMenus(); }, { signal });
+    // 전체 화면이면 단추 그림·이름을 '끝내기'로 — 예전엔 들어가도 같은 그림·'전체 화면'이라 누르면 끝나는 줄 알 수 없었다.
+    document.addEventListener('fullscreenchange', () => {
+      const btn = this.el.querySelector('[data-mp="fullscreen"]');
+      if (!btn) return;
+      const on = document.fullscreenElement === this.el;
+      if (btn.dataset.fs === String(on)) return;
+      btn.dataset.fs = String(on);
+      btn.innerHTML = on ? PANE_ICON.fullscreenExit : PANE_ICON.fullscreen;
+      btn.title = on ? '전체 화면 끝내기 (Esc)' : '이 패인 전체 화면';
+      btn.setAttribute('aria-label', on ? '전체 화면 끝내기' : '전체 화면');
+    }, { signal });
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape' || !this.menuOpen) return;
       // 메뉴 안에서 Esc 면 연 버튼으로 초점을 돌려준다(메뉴가 숨으며 초점이 body 로 떨어진다)
@@ -295,7 +307,7 @@ export class PaneControls {
     this.closeMenus();
     this.el.classList.remove('audible', 'paused', 'buffering');
     // 앞 채널에서 고른 화질 고정을 푼다(자동 — 매니저의 화질 상한은 그대로).
-    if (manual) this.bridge.run('try { if (typeof setLockTopLevel === "function") setLockTopLevel(false); if (hls) { hls.currentLevel = -1; hls.loadLevel = -1; if (typeof applyAdaptiveLevelCap === "function") applyAdaptiveLevelCap(); } } catch (e) {}');
+    if (manual) this.bridge.run('try { if (typeof setLockTopLevel === "function") setLockTopLevel(false); if (hls) { hls.loadLevel = -1; if (typeof applyAdaptiveLevelCap === "function") applyAdaptiveLevelCap(); } } catch (e) {}');
     this.patchVolume();
   }
 
@@ -728,7 +740,7 @@ export class PaneControls {
     this.closeMenus();
     if (index < 0) {
       // 자동 — 매니저가 건 패인 화질 상한(applyAdaptiveLevelCap)은 그대로 둔다.
-      this.bridge.run('if (typeof setLockTopLevel === "function") setLockTopLevel(false); if (hls) { hls.currentLevel = -1; hls.loadLevel = -1; if (typeof applyAdaptiveLevelCap === "function") applyAdaptiveLevelCap(); }');
+      this.bridge.run('if (typeof setLockTopLevel === "function") setLockTopLevel(false); if (hls) { hls.loadLevel = -1; if (typeof applyAdaptiveLevelCap === "function") applyAdaptiveLevelCap(); }');
     } else {
       this.bridge.run(`if (typeof setLockTopLevel === "function") setLockTopLevel(false); requestManualLevel(${Number(index)});`);
     }

@@ -3942,3 +3942,6 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 .sg-avatar { flex: none; width: 24px; height: 24px; border-radius: 50%; object-fit: cover; background: var(--surface-elevated); }
 .sg-icon { flex: none; width: 24px; text-align: center; color: var(--text-tertiary); }
 .sg-live { flex: none; padding: 0 5px; border-radius: var(--radius-xxs); background: var(--live); color: #fff; font-size: var(--fs-micro); font-weight: 700; }
+
+/* 화면을 옮긴 뒤 초점을 받는 화면 제목(app.js settleFocus) — 자리 표시만 하고 고리는 그리지 않는다 */
+.page-title[tabindex="-1"]:focus, .page-title[tabindex="-1"]:focus-visible { outline: none; box-shadow: none; }
