@@ -173,8 +173,14 @@ function setAudioOwner(owner) {
   } else if (owner === 'multilive') {
     viewer.suspendAudio(true);
     mlAudioSuspended(false);
+  } else if (owner === 'media') {
+    // 다시보기·클립을 보는 동안은 뒤의 라이브·멀티라이브 소리를 끈다 — 예전엔 광고 동안만 껐다가 다시보기가 시작되면 되살려
+    // 두 소리가 함께 났다. 떠나면 앞의 주인으로 돌린다(navigateTo).
+    viewer.suspendAudio(true);
+    mlAudioSuspended(true);
   }
 }
+let ownerBeforeMedia = null;
 
 // 광고가 나오는 동안은 보던 방송 소리를 잠시 끄고, 끝나면 소리 주인 규칙대로 되돌린다.
 // 광고가 나오는 영상 영역(target)의 소리는 ads.js 가 그 플레이어에서 따로 막는다 — 시청 화면 광고면 시청 화면은 건드리지 않는다.
@@ -184,8 +190,8 @@ setAdAudioHooks({
     mlAudioSuspended(true);
   },
   release(target) {
-    if (target !== 'viewer') viewer.suspendAudio(audioOwner === 'multilive');
-    mlAudioSuspended(audioOwner === 'live');
+    if (target !== 'viewer') viewer.suspendAudio(audioOwner === 'multilive' || audioOwner === 'media');
+    mlAudioSuspended(audioOwner === 'live' || audioOwner === 'media');
   },
 });
 
@@ -466,6 +472,14 @@ async function navigateTo(route, params = {}, { push = true, back = false } = {}
     return;
   }
   viewer.hide();
+  if (route === 'media') {
+    if (audioOwner !== 'media') { ownerBeforeMedia = audioOwner; setAudioOwner('media'); }
+  } else if (audioOwner === 'media') {
+    const back = ownerBeforeMedia;
+    ownerBeforeMedia = null;
+    audioOwner = null; // 같은 주인으로 돌아가도 소리 켜기가 다시 돌게
+    if (back) setAudioOwner(back); else { viewer.suspendAudio(false); mlAudioSuspended(false); }
+  }
   // 다른 메뉴로 옮겨 뒤에서 소리만 나는 라이브 시청 화면은 화질을 낮춰 보이지 않는 1080p 디코딩을 줄인다(PiP 중이면 그대로).
   if (viewer.isPlaying) setMenuHidden(viewer.player.iframe, true);
   if (showWatch) {
@@ -529,7 +543,12 @@ function onAuthChanged(status) {
   if (wasLoggedIn !== isLoggedIn() && pages.multilive) pages.multilive.watch.refreshAuth();
   if (wasLoggedIn !== isLoggedIn()) refreshChatAuth();
   if (wasLoggedIn !== isLoggedIn() && current && current !== 'search' && !(viewer && viewer.isOpen) && !liveListHidden()) {
-    pages[current].show();
+    // 매개변수를 받는 화면(다시보기·채널 등)은 지금 값으로 — 예전엔 빈 값으로 불러, 다시보기 화면이 영상을 멈추고 '불러오는 중'
+    // 에서 멈췄다(로그인·로그아웃·세션 만료 때).
+    // 다시보기·클립이 이미 재생 중이면 그대로 둔다(로그인 상태가 바뀌어도 보던 영상을 끊지 않는다).
+    if (current === 'media' && pages.media.video && pages.media.video.isConnected) { /* 재생 중 */ }
+    else if (pages[current].acceptsParams) pages[current].show(liveParams(), { back: true });
+    else pages[current].show();
   }
   if (current === 'settings') pages.settings.render();
 }

@@ -1,6 +1,6 @@
 // 사이드바 화면들 — 팔로잉 / 방송&클립 / 검색 / 설정. 홈은 home.js.
 import { api } from './api.js';
-import { esc, safeUrl, imageSrc, icons } from './dom.js';
+import { esc, safeUrl, imageSrc, icons, toast } from './dom.js';
 import { motionReduced, swapContent } from './motion.js';
 import { liveGrid, liveCard, cardOpenButton, liveLabel, lacksThumbs, THUMB_FILL_DELAY_MS, THUMB_FILL_TRIES, channelRow, fallbackAvatar, emptyState, loadingState, compactCount, skeletonGrid, freshnessText, errorState, friendlyError, uptimeText } from './cards.js';
 import { FOLLOW_SORTS, FOLLOW_FILTERS, arrangeFollowed, followedInsights, followBadges, followAgeText, parseFollowDate, FollowExtras } from './following-info.js';
@@ -364,6 +364,10 @@ export class FollowingPage {
 
   async show(refresh = false) {
     if (!this.isLoggedIn()) {
+      // 앞 계정의 목록을 버린다 — 예전엔 남겨 두어, 다시 로그인하거나 다른 계정으로 들어오면 불러오는 동안 로그인 안내나
+      // 앞 계정의 격자가 그대로 보였다(있는 목록이 있다고 보고 불러오는 모양을 그리지 않았다).
+      this.lives = [];
+      this.channels = [];
       this.body.innerHTML = emptyState('네이버 로그인이 필요합니다', '로그인하면 팔로우한 채널의 라이브를 볼 수 있습니다', loginAction);
       return;
     }
@@ -378,7 +382,13 @@ export class FollowingPage {
         this.fillThumbsLater(refresh);
       }
     } catch (e) {
-      if (seq === this.seq) this.body.innerHTML = errorState('불러오지 못했습니다', e);
+      if (seq !== this.seq) return;
+      // 보이던 목록이 있으면 그대로 두고 알리기만 한다 — 예전엔 자동 새로고침·⌘R 한 번이 잠깐 실패해도 격자 전체가
+      // '불러오지 못했습니다'로 바뀌었다(인기 화면은 지난 목록을 지킨다).
+      if (hasData) {
+        this.render();
+        toast(`팔로잉을 새로 불러오지 못해 지난 목록을 보입니다 — ${friendlyError(e)}`, 3200);
+      } else this.body.innerHTML = errorState('불러오지 못했습니다', e);
     }
   }
 
@@ -667,11 +677,22 @@ export class SearchPage {
       this.renderIdle();
       return;
     }
+    // 같은 검색어를 받는 중이면 그 결과를 기다린다 — 예전엔 Enter 를 두 번(또는 같은 추천어를 두 번) 누르면, Rust 가 진행 중인
+    // 같은 검색을 다시 시작하지 않고 막 비운 목록을 돌려줘 빈 결과 화면이 떴다(첫 결과는 순번이 지나 버려졌다).
+    if (this.pendingQuery === q) { this.seq = this.pendingSeq; return; }
     this.lastQuery = q;
     this.idle = false;
     saveRecentSearch(q);
     if (!refreshVeiled(this.root)) this.body.innerHTML = loadingState();
-    const [main, vods] = await Promise.allSettled([api.search(q), api.searchVideos(q, 0, VOD_PAGE)]);
+    this.pendingQuery = q;
+    this.pendingSeq = seq;
+    let settled;
+    try {
+      settled = await Promise.allSettled([api.search(q), api.searchVideos(q, 0, VOD_PAGE)]);
+    } finally {
+      if (this.pendingSeq === seq) { this.pendingQuery = null; this.pendingSeq = 0; }
+    }
+    const [main, vods] = settled;
     if (seq !== this.seq) return;
     if (main.status === 'rejected' && vods.status === 'rejected') {
       this.query = '';

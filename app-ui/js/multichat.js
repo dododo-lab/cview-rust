@@ -41,9 +41,15 @@ export function lineMatches(text, query) {
 }
 
 /** 검색할 줄 글 — 보이는 글자 + 이모티콘 이름(img alt). 예전엔 textContent 만 봐 이모티콘 이름으로 찾지 못했다. */
+/** 통합 목록 자동 스크롤도 설정 '자동 스크롤'을 따른다 — 예전엔 따라가기를 만들 때 이 값을 주지 않아, 꺼 둬도 맨 아래로 뛰었다. */
+const mergedAutoScroll = () => chatPrefs().autoScroll;
+
 export function lineSearchText(line) {
-  let text = line.textContent;
-  for (const img of line.querySelectorAll('img.emoji')) if (img.alt) text += ` ${img.alt}`;
+  // 닉네임과 메시지 본문만 — 예전엔 줄 전체 글자(시각 HH:MM·채널 표시·'공지'·'나를 언급' 같은 꼬리표)를 봐서 '12' 를 찾으면 그 시각의
+  // 모든 줄이, 채널 이름을 찾으면 그 채널의 모든 줄이 걸렸다(단일 채팅 검색 chat-actions lineMatches 와 같게).
+  const body = line.querySelector('.text, .ev-body');
+  let text = `${line.dataset.nick || ''} ${body ? body.textContent : (line.classList.contains('system') ? line.textContent : '')}`;
+  for (const img of (body || line).querySelectorAll('img.emoji')) if (img.alt) text += ` ${img.alt}`;
   return text;
 }
 
@@ -498,7 +504,7 @@ export class MultiChatPage {
   /** @param {{ m: object, name: string, style: string, src: string }[]} items */
   appendMerged(items) {
     if (!items.length) return;
-    const follower = chatFollower(this.mergedList);
+    const follower = chatFollower(this.mergedList, mergedAutoScroll);
     const follow = follower.stuck;
     this.mergedList.querySelector(':scope > .empty')?.remove(); // 첫 메시지가 오면 "기다리는 중" 안내를 걷는다
     const before = this.mergedList.lastElementChild;
@@ -524,7 +530,7 @@ export class MultiChatPage {
   /** 패널 안내 한 줄을 통합 목록에 — 앞서 모아 둔 메시지 뒤에. */
   appendMergedSystem(c, text) {
     if (this.backlog?.length) this.flushBacklog();
-    const follower = chatFollower(this.mergedList);
+    const follower = chatFollower(this.mergedList, mergedAutoScroll);
     const follow = follower.stuck;
     this.mergedList.querySelector(':scope > .empty')?.remove();
     this.mergedList.insertAdjacentHTML('beforeend', `<div class="chat-line system merged-line" data-src="${esc(c.channelId)}" style="--mc-color:${esc(c.color)}"><span class="sys-pill">${esc(c.name)} · ${esc(text)}</span></div>`);
@@ -649,7 +655,7 @@ export class MultiChatPage {
     const f = e.target.closest('[data-mc-focus]');
     if (f) { this.focus(f.dataset.mcFocus); return; }
     const l = e.target.closest('[data-mc-layout]');
-    if (l) { this.layout = l.dataset.mcLayout; if (this.layout === 'merged') { this.lines.reset(); this.mergedList.innerHTML = '<div class="empty">새 메시지를 기다리는 중…</div>'; chatFollower(this.mergedList).stuck = true; } this.render(); this.persist(); return; }
+    if (l) { this.layout = l.dataset.mcLayout; if (this.layout === 'merged') { this.lines.reset(); this.mergedList.innerHTML = '<div class="empty">새 메시지를 기다리는 중…</div>'; chatFollower(this.mergedList, mergedAutoScroll).stuck = true; } this.render(); this.persist(); return; }
     const st = e.target.closest('[data-mc-style]');
     if (st) { setMergedChatStyle(st.dataset.mcStyle); return; }
     const a = e.target.closest('[data-mc]');

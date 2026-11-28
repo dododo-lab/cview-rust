@@ -69,10 +69,17 @@ pub async fn window_open(
             return Ok(kind);
         }
     }
+    // 이름이 겹치지 않게 늘어나는 번호를 붙인다 — 예전엔 밀리초를 써서, 같은 밀리초에 두 번 열면(두 번 누름) 둘째 창 만들기가
+    // "a window with label … already exists" 로 실패했다.
+    static NEXT_WINDOW: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     let label = if single {
         kind.clone()
     } else {
-        format!("{kind}-{}", chrono::Utc::now().timestamp_millis())
+        format!(
+            "{kind}-{}-{}",
+            chrono::Utc::now().timestamp_millis(),
+            NEXT_WINDOW.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        )
     };
     let mut pairs: Vec<(String, String)> = params.unwrap_or_default().into_iter().collect();
     pairs.sort();
@@ -91,9 +98,23 @@ pub async fn window_open(
     // Windows — 메인 창처럼 제목 막대 없이 화면 위 띠에 최소화·최대화·닫기를 그린다(window-controls.js).
     #[cfg(windows)]
     let builder = builder.decorations(false);
-    let window = builder
-        .build()
-        .map_err(|e| CommandError(format!("창을 열지 못했습니다: {e}")))?;
+    let window = match builder.build() {
+        Ok(w) => w,
+        Err(e) => {
+            // 하나만 두는 창(통계·멀티채팅)을 빠르게 두 번 열면 둘 다 '없음'을 본 뒤 둘째 만들기가 이름 겹침으로 실패했다 —
+            // 그새 생긴 창을 앞으로 가져온다(예전엔 반쯤 영어인 오류가 떴다).
+            if let Some(existing) = single.then(|| app.get_webview_window(&kind)).flatten() {
+                let _ = existing.unminimize();
+                let _ = existing.show();
+                let _ = existing.set_focus();
+                return Ok(kind);
+            }
+            tracing::warn!("창 만들기 실패({label}): {e}");
+            return Err(CommandError(
+                "창을 열지 못했습니다 — 잠시 뒤 다시 시도해 주세요".into(),
+            ));
+        }
+    };
     // 저장된 화면 크기 — 보조 창도 100% 로 먼저 그렸다가 튀지 않게 만들자마자 건다.
     if let Some(services) = app.try_state::<crate::state::AppServices>() {
         let appearance = services.settings.appearance();

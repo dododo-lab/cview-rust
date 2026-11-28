@@ -97,7 +97,7 @@ impl LiveCardDto {
             thumbnail_url: item.thumbnail_url.clone(),
             is_live: item.is_live,
             open_date: rfc3339(item.open_date),
-            adult: false,
+            adult: cview_app_core::caching::following_store::is_adult_live(&item.channel_id),
             badge: item.verified_badge.as_deref().and_then(badge_kind),
         }
     }

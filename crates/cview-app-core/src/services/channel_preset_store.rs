@@ -51,9 +51,9 @@ struct Envelope {
 
 #[derive(Debug, thiserror::Error)]
 pub enum PresetStoreError {
-    #[error("io: {0}")]
+    #[error("프리셋 파일을 읽거나 쓰지 못했습니다: {0}")]
     Io(#[from] std::io::Error),
-    #[error("decode: {0}")]
+    #[error("프리셋 파일 형식이 올바르지 않습니다: {0}")]
     Decode(#[from] serde_json::Error),
     /// `CocoaError(.fileReadCorruptFile)` — 지원하지 않는 버전.
     #[error("지원하지 않는 프리셋 파일 버전")]
@@ -90,7 +90,21 @@ impl ChannelPresetStore {
         }
         let presets = if self.file.exists() {
             let bytes = std::fs::read(&self.file)?;
-            Self::decode(&bytes)?.presets
+            match Self::decode(&bytes) {
+                Ok(env) => env.presets,
+                // 깨진 파일(디스크 오류·동기화 도구)은 옆으로 옮기고 빈 목록으로 시작한다 — 예전엔 읽기 실패가 저장·삭제까지 막아,
+                // 프리셋 메뉴가 영영 'decode: expected value …' 만 보였다. 지원하지 않는 (새) 버전은 옮기지 않는다(새 앱의 것).
+                Err(PresetStoreError::Decode(e)) => {
+                    let aside = self.file.with_extension(format!(
+                        "corrupt-{}.json",
+                        chrono::Utc::now().format("%Y%m%d%H%M%S")
+                    ));
+                    tracing::warn!("프리셋 파일이 깨져 옮겼습니다({}): {e}", aside.display());
+                    std::fs::rename(&self.file, &aside)?;
+                    Vec::new()
+                }
+                Err(e) => return Err(e),
+            }
         } else {
             Vec::new()
         };
@@ -331,6 +345,26 @@ mod tests {
         assert_eq!(loaded.len(), 1);
         assert_eq!(loaded[0].name, "옛 묶음");
         assert_eq!(loaded[0].kind, PresetKind::Chat);
+    }
+
+    /// 깨진 파일은 옆으로 옮기고 빈 목록으로 — 저장도 다시 된다.
+    #[test]
+    fn a_corrupt_preset_file_is_moved_aside_and_saving_works_again() {
+        let file = temp_file();
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, b"{ not json").unwrap();
+        let store = ChannelPresetStore::new(file.clone());
+        assert!(store.load_all().unwrap().is_empty());
+        let aside = std::fs::read_dir(file.parent().unwrap())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .any(|e| e.file_name().to_string_lossy().contains("corrupt-"));
+        assert!(aside, "깨진 파일을 옮기지 않았다");
+        assert_eq!(
+            store.save(&preset("새 묶음", &["a"])).unwrap().name,
+            "새 묶음"
+        );
+        assert_eq!(store.load_all().unwrap().len(), 1);
     }
 
     /// 저장은 겹쳐서 바뀐 이름을 돌려주고, 이름은 같은 종류 안에서만 겹치지 않게 한다.
