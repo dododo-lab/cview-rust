@@ -592,6 +592,16 @@ impl MultiLiveSession {
                 })
             });
             self.player.set_stream_ended_probe(Some(probe));
+            // 재연결 때 새 재생 URL — 예전엔 패인이 URL 을 다시 받지 않아, 노트북을 오래 덮었다 열면(주기 재취득 타이머는 잠자는
+            // 동안 흐르지 않는다) 만료된 URL 로 10번 모두 실패하고 '재연결 최대 횟수 초과'에 머물렀다.
+            let b = Arc::downgrade(&backend);
+            let cid = channel_id.clone();
+            let fetch: super::deps::LiveInfoFetcher = Arc::new(move || {
+                let b = b.clone();
+                let cid = cid.clone();
+                Box::pin(async move { b.upgrade()?.live_detail(&cid).await.ok() })
+            });
+            self.player.set_live_info_fetcher(Some(fetch));
         }
         if !reuse_chat {
             if let Some(chat_channel_id) = live.chat_channel_id.clone() {
@@ -1225,7 +1235,10 @@ async fn poll_loop(weak: Weak<MultiLiveSession>) {
             consecutive_errors = 0;
             continue;
         }
-        let in_error = s.player.engine().is_some_and(|e| e.is_in_error_state());
+        // 재연결을 다 쓰고 멈춘 패인도 오류로 본다 — 마지막 시도가 치명 오류 없이 시간만 넘겨 끝나면(CDN 요청이 8초 넘게 멈춤)
+        // 엔진 오류가 비어, 예전엔 방송이 열려 있어도 '재연결 최대 횟수 초과'에 영영 남았다(수동 재시도·네트워크 복귀 전까지).
+        let in_error = s.player.engine().is_some_and(|e| e.is_in_error_state())
+            || matches!(s.player.stream_phase(), StreamPhase::Error(_));
         if !in_error {
             consecutive_errors = 0;
             continue;

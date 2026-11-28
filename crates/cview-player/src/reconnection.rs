@@ -66,6 +66,17 @@ impl ReconnectionConfig {
     }
 }
 
+/// 재연결 대기에 ±20% 흔들림 — 예전엔 대기가 정확히 같아, 네트워크가 돌아온 순간 멀티라이브 패인들이 같은 때에 함께 상태 확인·
+/// 매니페스트를 요청했고(DNS 가 덜 돌아온 때 함께 실패하거나 요청 한도에 걸림) 그다음 시도도 다시 함께 갔다.
+fn jittered(delay: f64) -> f64 {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
+    let f = 0.8 + 0.4 * (nanos % 1000) as f64 / 999.0;
+    (delay * f).max(0.0)
+}
+
 impl Default for ReconnectionConfig {
     fn default() -> Self {
         Self::BALANCED
@@ -175,7 +186,7 @@ impl PlaybackReconnectionHandler {
                     Some(Err(()))
                 } else {
                     s.attempt += 1;
-                    let delay = s.config.delay_for(s.attempt);
+                    let delay = jittered(s.config.delay_for(s.attempt));
                     tracing::info!(
                         "PlaybackReconnectionHandler: 재시도 {}/{} — {:.1}초 후",
                         s.attempt,
@@ -432,14 +443,27 @@ mod tests {
         let (cb, delays) = collecting(|_, d| d);
         h.start_reconnecting(cb, noop_exhausted());
         settle().await;
-        assert_eq!(*delays.lock().unwrap(), vec![1.0, 2.0, 4.0, 8.0]);
+        // 대기는 기준값의 ±20% 안에서 흔들린다(패인들이 함께 다시 붙지 않게).
+        let near = |got: &[f64], want: &[f64]| {
+            got.len() >= want.len()
+                && got
+                    .iter()
+                    .zip(want)
+                    .all(|(g, w)| *g >= w * 0.8 - 1e-9 && *g <= w * 1.2 + 1e-9)
+        };
+        let got = delays.lock().unwrap().clone();
+        assert!(near(&got, &[1.0, 2.0, 4.0, 8.0]), "{got:?}");
 
         let h = PlaybackReconnectionHandler::new(ReconnectionConfig::new(5, 10.0, 15.0, 3.0));
         let (cb, delays) = collecting(|_, d| d);
         h.start_reconnecting(cb, noop_exhausted());
         settle().await;
         h.cancel();
-        assert_eq!(delays.lock().unwrap()[..3], [10.0, 15.0, 15.0]);
+        let got = delays.lock().unwrap().clone();
+        assert!(near(&got, &[10.0, 15.0, 15.0]), "{got:?}");
+        // 기준값 자체(지연 계산)는 그대로다.
+        let c = ReconnectionConfig::new(4, 1.0, 30.0, 2.0);
+        assert_eq!([1, 2, 3, 4].map(|a| c.delay_for(a)), [1.0, 2.0, 4.0, 8.0]);
     }
 
     #[tokio::test(start_paused = true)]

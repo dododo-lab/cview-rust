@@ -356,6 +356,8 @@ pub struct PanePlayer {
     auth_key_channels: AuthKeyChannels,
     on_state_changed: StateChangedSlot,
     stream_ended_probe: Arc<Mutex<Option<StreamEndedProbe>>>,
+    live_info_fetcher:
+        Arc<Mutex<Option<cview_app_core::viewmodels::multi_live::deps::LiveInfoFetcher>>>,
     presented_ticks: AtomicU64,
     watch_events: LiveWatchReporter,
     /// 시청 이벤트 화면 키(`pane-<번호>`) — 슬롯은 재사용되므로 플레이어마다 따로 붙인다.
@@ -389,6 +391,10 @@ impl PanePlayer {
         let slot = on_state_changed.clone();
         let stream_ended_probe: Arc<Mutex<Option<StreamEndedProbe>>> = Arc::new(Mutex::new(None));
         let probe_slot = stream_ended_probe.clone();
+        let live_info_fetcher: Arc<
+            Mutex<Option<cview_app_core::viewmodels::multi_live::deps::LiveInfoFetcher>>,
+        > = Arc::new(Mutex::new(None));
+        let fetch_slot = live_info_fetcher.clone();
         vm.set_callbacks(PlayerCallbacks {
             on_playback_state_changed: Some(Arc::new(move || {
                 let cb = lock(&slot).clone();
@@ -405,6 +411,13 @@ impl PanePlayer {
                     }
                 })
             })),
+            on_refresh_stream_url: Some(Arc::new(move |_| {
+                let fetch = lock(&fetch_slot).clone();
+                Box::pin(async move {
+                    let info = fetch?().await?;
+                    crate::playback::refreshed_stream_url(&info)
+                })
+            })),
             ..PlayerCallbacks::default()
         });
         Arc::new(Self {
@@ -414,6 +427,7 @@ impl PanePlayer {
             auth_key_channels,
             on_state_changed,
             stream_ended_probe,
+            live_info_fetcher,
             presented_ticks: AtomicU64::new(0),
             watch_events,
             watch_source: format!("pane-{}", NEXT_WATCH_SOURCE.fetch_add(1, Ordering::Relaxed)),
@@ -534,6 +548,12 @@ impl MultiLivePlayer for PanePlayer {
     }
     fn set_stream_ended_probe(&self, probe: Option<StreamEndedProbe>) {
         *lock(&self.stream_ended_probe) = probe;
+    }
+    fn set_live_info_fetcher(
+        &self,
+        fetch: Option<cview_app_core::viewmodels::multi_live::deps::LiveInfoFetcher>,
+    ) {
+        *lock(&self.live_info_fetcher) = fetch;
     }
     async fn start_stream(&self, request: MultiLiveStreamRequest) {
         let Ok(url) = Url::parse(&request.stream_url) else {

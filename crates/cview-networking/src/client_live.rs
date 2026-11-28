@@ -187,21 +187,66 @@ impl ChzzkApiClient {
             "/v1/chats/access-token",
             Some(&query),
         )?;
-        let mut request = HttpRequest::new(HttpMethod::Get, url);
-        request.set_header("User-Agent", Some(headers::CHROME_USER_AGENT));
-        request.set_header("Origin", Some(headers::CHZZK_ORIGIN));
-        request.set_header("Referer", Some(headers::CHZZK_REFERER));
-        if let Some(cookies) = self.auth_cookies().await {
-            request.set_header("Cookie", HttpCookie::header_value(&cookies).as_deref());
-        }
-        let response = self
-            .send(request, None)
-            .await
-            .map_err(transport_to_api_error)?;
-        if !(200..=299).contains(&response.status) {
-            tracing::error!("Chat token HTTP {}", response.status);
-            return Err(ApiError::http(response.status as i64));
-        }
+        // 일반 요청(request_inner)과 같은 규칙으로 다시 묻는다 — 예전엔 한 번만 보내, 네트워크가 막 돌아온 순간의 시간 초과·5xx
+        // 한 번에 채팅이 '연결 실패'로 끝났고(재연결 루프도 떼어졌다), 429 는 기다리지 않고 실패했으며, 낡은 로그인 쿠키의 401 은
+        // 읽기 전용 토큰으로도 붙지 못했다. GET 이라 다시 보내도 안전하다.
+        let cookies = self.auth_cookies().await;
+        let mut with_cookies = cookies.is_some();
+        let limit = self.lock_state().max_retries.max(1);
+        let mut attempt: i64 = 0;
+        let mut rate_limited = 0;
+        let response = loop {
+            let mut request = HttpRequest::new(HttpMethod::Get, url.clone());
+            request.set_header("User-Agent", Some(headers::CHROME_USER_AGENT));
+            request.set_header("Origin", Some(headers::CHZZK_ORIGIN));
+            request.set_header("Referer", Some(headers::CHZZK_REFERER));
+            if with_cookies {
+                if let Some(c) = cookies.as_ref() {
+                    request.set_header("Cookie", HttpCookie::header_value(c).as_deref());
+                }
+            }
+            let last = attempt >= limit - 1;
+            match self.send(request, None).await {
+                Err(crate::transport::TransportError::TimedOut(_))
+                | Err(crate::transport::TransportError::ConnectionLost(_))
+                    if !last =>
+                {
+                    attempt += 1;
+                    tokio::time::sleep(crate::client::backoff(attempt)).await;
+                    continue;
+                }
+                Err(e) => return Err(transport_to_api_error(e)),
+                Ok(r) if (200..=299).contains(&r.status) => break r,
+                Ok(r) if r.status == 401 && with_cookies => {
+                    // 쿠키를 빼고 한 번 더 — 보내기는 못 해도 채팅은 읽는다(세션 만료 판단은 다른 요청이 한다).
+                    tracing::info!("Chat token 401 — 쿠키 없이 다시 받습니다");
+                    with_cookies = false;
+                }
+                Ok(r) if r.status == 429 => {
+                    let wait = r
+                        .header("Retry-After")
+                        .and_then(|v| {
+                            crate::client::request::parse_retry_after(v, chrono::Utc::now())
+                        })
+                        .unwrap_or(5.0);
+                    if rate_limited >= limit - 1 {
+                        return Err(ApiError::RateLimited { retry_after: wait });
+                    }
+                    rate_limited += 1;
+                    let wait = wait.clamp(0.0, api_defaults::MAX_RATE_LIMIT_RETRY_SECS);
+                    self.inner.gate.pause_for(Duration::from_secs_f64(wait));
+                    tokio::time::sleep(Duration::from_secs_f64(wait)).await;
+                }
+                Ok(r) if (500..=599).contains(&r.status) && !last => {
+                    attempt += 1;
+                    tokio::time::sleep(crate::client::backoff(attempt)).await;
+                }
+                Ok(r) => {
+                    tracing::error!("Chat token HTTP {}", r.status);
+                    return Err(ApiError::http(r.status as i64));
+                }
+            }
+        };
         let parsed: ChzzkResponse<ChatAccessToken> = serde_json::from_slice(&response.body)
             .map_err(|e| {
                 tracing::error!("Chat token decode error: {e}");

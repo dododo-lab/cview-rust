@@ -13,7 +13,7 @@
 //!
 //! 요청 파이프라인은 `request`, 같은 GET 합치기와 stale 재검증 게이트는 `shared_get` 하위 모듈에 있다.
 
-mod request;
+pub(crate) mod request;
 mod shared_get;
 
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -276,7 +276,7 @@ impl std::fmt::Debug for ChzzkApiClient {
 }
 
 /// 백오프 지연: `min(n × 0.5, 3) + jitter(0…0.3 × base)` 초.
-fn backoff(n: i64) -> Duration {
+pub(crate) fn backoff(n: i64) -> Duration {
     let base = (n as f64 * 0.5).min(3.0);
     let jitter = rand::thread_rng().gen_range(0.0..=0.3) * base;
     Duration::from_secs_f64((base + jitter).max(0.0))

@@ -52,7 +52,16 @@ pub(crate) async fn accept_loop(
     loop {
         tokio::select! {
             accepted = listener.accept() => {
-                let Ok((stream, peer)) = accepted else { continue };
+                // 받기 실패(파일 기술자 소진 EMFILE 등)면 잠깐 쉬고 다시 — 예전엔 곧바로 다시 돌아, 실패가 이어지는 동안 tokio
+                // 작업자 하나가 CPU 100% 로 헛돌며 다른 작업을 굶겼다(그동안 패인은 기록 없이 멈췄다).
+                let (stream, peer) = match accepted {
+                    Ok(v) => v,
+                    Err(e) => {
+                        tracing::warn!("Proxy: accept 실패 — 잠시 뒤 다시 받습니다: {e}");
+                        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        continue;
+                    }
+                };
                 let Some(strong) = inner.upgrade() else { return };
                 let proxy = LocalStreamProxy { inner: strong };
                 if lock(&proxy.inner.state).generation != generation {

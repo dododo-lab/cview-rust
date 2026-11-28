@@ -149,15 +149,15 @@ impl StreamCoordinator {
 
     /// 첫 시도가 실패한 뒤부터 앱에서 같은 채널의 재생 URL 을 다시 받는다 — 처음 받은 마스터 URL 의 CDN 토큰이
     /// 만료됐거나 방송을 껐다 켜 경로가 바뀌면 그 URL 로는 10회 모두 실패한다. 세션이 그대로일 때만 바꾼다.
-    async fn refresh_stream_url(&self, generation: u64) {
+    async fn refresh_stream_url(&self, generation: u64) -> bool {
         let Some(callback) = self.st().on_refresh_stream_url.clone() else {
-            return;
+            return false;
         };
         let Some(fresh) = callback().await else {
-            return;
+            return false;
         };
         if !self.owns_reconnect(generation) {
-            return;
+            return false;
         }
         let swapped = {
             let mut s = self.st();
@@ -178,6 +178,7 @@ impl StreamCoordinator {
                 self.inner.proxy.reset_session();
             }
         }
+        swapped
     }
 
     async fn run_reconnect_attempt(&self, attempt: u32, delay: f64, generation: u64) {
@@ -195,15 +196,14 @@ impl StreamCoordinator {
             self.handle_stream_ended();
             return;
         }
-        // 매 시도마다 매니페스트 재갱신 → 최신 CDN 토큰. 화질을 고정했으면 첫 시도부터.
-        if attempt > 1 {
-            self.refresh_stream_url(generation).await;
-            if !self.owns_reconnect(generation) {
-                return;
-            }
+        // 첫 시도부터 재생 URL 을 다시 받는다 — 예전엔 둘째 시도부터라, CDN 403(토큰 만료)·잠자기 뒤처럼 첫 시도가 확실히 실패하는
+        // 경우에도 같은 만료 URL 로 한 번 더 시도해 8초를 더 기다렸다. 바뀌었으면 매니페스트도 새로 받는다.
+        let swapped = self.refresh_stream_url(generation).await;
+        if !self.owns_reconnect(generation) {
+            return;
         }
         let pinned = self.st().user_selected_variant.is_some();
-        if attempt > 1 || pinned {
+        if attempt > 1 || pinned || swapped {
             self.refresh_master_manifest().await;
         }
         if !self.owns_reconnect(generation) {
@@ -267,6 +267,11 @@ impl StreamCoordinator {
                         if s.phase != StreamPhase::Reconnecting || s.stream_url.is_none() {
                             break;
                         }
+                    }
+                    // 엔진이 이미 치명 오류를 알렸으면 기다리지 않고 다음 시도로 — 예전엔 0.3초 만에 실패한 시도도 8초를 다 채워,
+                    // 회복이 늦고 포기까지 2분 넘게 걸렸다(play 가 오류 상태를 지우므로 그 뒤의 오류만 이 시도의 것이다).
+                    if engine.is_in_error_state() {
+                        break;
                     }
                     if tokio::time::Instant::now() >= deadline {
                         break;

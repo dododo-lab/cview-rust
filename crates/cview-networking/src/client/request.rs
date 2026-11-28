@@ -305,8 +305,7 @@ impl ChzzkApiClient {
                     429 => {
                         let retry_after = response
                             .header("Retry-After")
-                            .and_then(|v| v.trim().parse::<f64>().ok())
-                            .filter(|v| v.is_finite())
+                            .and_then(|v| parse_retry_after(v, chrono::Utc::now()))
                             .unwrap_or(5.0);
                         if rate_limit_retries < attempt_limit - 1 {
                             rate_limit_retries += 1;
@@ -442,5 +441,42 @@ impl ChzzkApiClient {
             }
             other => Err(ApiError::http(other as i64)),
         }
+    }
+}
+
+/// `Retry-After` — 초(`120`) 또는 HTTP 날짜(`Wed, 21 Oct 2026 07:28:00 GMT`). 날짜면 지금부터 남은 초(지났으면 0).
+/// 예전엔 초만 읽어 날짜 형식은 늘 5초로 대신했다(서버가 1분 뒤를 말해도 5초 뒤에 다시 물었다). 순수 함수.
+pub(crate) fn parse_retry_after(value: &str, now: chrono::DateTime<chrono::Utc>) -> Option<f64> {
+    let v = value.trim();
+    if let Ok(secs) = v.parse::<f64>() {
+        return secs.is_finite().then_some(secs.max(0.0));
+    }
+    let at = chrono::DateTime::parse_from_rfc2822(v).ok()?;
+    let secs = (at.with_timezone(&chrono::Utc) - now).num_milliseconds() as f64 / 1000.0;
+    Some(secs.max(0.0))
+}
+
+#[cfg(test)]
+mod retry_after_tests {
+    use super::parse_retry_after;
+    use chrono::TimeZone;
+
+    #[test]
+    fn seconds_and_http_dates_are_both_read() {
+        let now = chrono::Utc
+            .with_ymd_and_hms(2026, 10, 21, 7, 27, 0)
+            .unwrap();
+        assert_eq!(parse_retry_after("7", now), Some(7.0));
+        assert_eq!(parse_retry_after(" 1.5 ", now), Some(1.5));
+        assert_eq!(
+            parse_retry_after("Wed, 21 Oct 2026 07:28:00 GMT", now),
+            Some(60.0)
+        );
+        assert_eq!(
+            parse_retry_after("Wed, 21 Oct 2026 07:00:00 GMT", now),
+            Some(0.0)
+        );
+        assert_eq!(parse_retry_after("soon", now), None);
+        assert_eq!(parse_retry_after("-3", now), Some(0.0));
     }
 }

@@ -146,6 +146,8 @@ impl PlayerEngineProtocol for MockEngine {
             self.holding.store(false, Ordering::SeqCst);
         }
         let mut s = self.s();
+        // 실제 엔진(WebViewHlsEngine::play)처럼 새 재생은 앞 오류를 지운다.
+        s.error_state = false;
         if let Some(e) = s.play_error.clone() {
             return Err(e);
         }
@@ -1994,21 +1996,13 @@ async fn reconnect_replays_with_refreshed_stream_url_after_first_failure() {
     }));
     engine.reset();
     c.trigger_reconnect("CDN 403 토큰 만료 감지", false);
-    // 1차: 옛 URL(재발급 없이) — 첫 프레임이 오지 않아 8초 뒤 2차.
+    // 첫 시도부터 새 URL — 예전엔 첫 시도가 만료 URL 로 8초를 기다린 뒤에야 둘째 시도가 새 URL 을 받았다.
     tokio::time::sleep(Duration::from_secs(1)).await;
     assert_eq!(engine.s().play_count, 1);
-    assert_eq!(engine.s().last_play_url, Some(test_url()));
-    assert_eq!(
-        asked.load(Ordering::SeqCst),
-        0,
-        "첫 시도는 API 를 부르지 않는다"
-    );
-    tokio::time::sleep(Duration::from_secs(10)).await;
-    assert_eq!(engine.s().play_count, 2);
     assert_eq!(
         engine.s().last_play_url,
         Some(fresh_url()),
-        "2차 시도가 처음 받은 만료 URL 을 다시 썼다"
+        "첫 시도가 처음 받은 만료 URL 을 다시 썼다"
     );
     assert_eq!(asked.load(Ordering::SeqCst), 1);
     c.report_engine_playing().await;
@@ -2053,7 +2047,30 @@ async fn refreshed_url_arriving_after_stop_is_discarded() {
         None,
         "정지한 세션에 늦은 URL 이 들어왔다"
     );
-    assert_eq!(engine.s().play_count, 1, "늦은 URL 로 재생을 되살렸다");
+    // 재발급은 첫 시도 전에 묻는다 — 정지했으니 시도 자체가 없다(처음 재생 1번만).
+    assert_eq!(engine.s().play_count, 0, "늦은 URL 로 재생을 되살렸다");
+}
+
+/// 시도 중 엔진이 치명 오류를 알리면 8초를 다 기다리지 않고 다음 시도로 넘어간다.
+#[tokio::test(start_paused = true)]
+async fn a_fatal_during_an_attempt_moves_on_without_waiting_8s() {
+    let c = coordinator_with(config(false), MockFetcher::always(Ok(MASTER)));
+    let engine = MockEngine::new();
+    c.set_player_engine(engine.shared()).await;
+    c.start_stream(test_url()).await.unwrap();
+    c.report_engine_playing().await;
+    engine.reset();
+    c.trigger_reconnect("stall", false);
+    tokio::time::sleep(Duration::from_millis(800)).await;
+    assert_eq!(engine.s().play_count, 1);
+    engine.s().error_state = true; // 시도 직후 페이지가 fatalError 를 보냈다
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    assert!(
+        engine.s().play_count >= 2,
+        "치명 오류 뒤에도 8초를 다 기다렸다 (play {})",
+        engine.s().play_count
+    );
+    c.stop_stream().await;
 }
 
 #[tokio::test(start_paused = true)]

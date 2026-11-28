@@ -73,9 +73,9 @@ pub async fn chat_connect(
         // 토큰·사용자 정보를 받는 동안 다른 채널 요청이 올 수 있다(멀티라이브 패인 전환, 지난 구성 다시 열기).
         // 받기 전에 순번을 잡아 두고 마지막 요청만 연결한다 — 먼저 보낸 요청이 늦게 끝나 새 채널을 덮지 않게.
         let ticket = chat.begin_connect_request();
-        (chat, ticket, detached)
+        (chat, ticket, detached, switching)
     });
-    let Some((chat, ticket, detached)) = prologue else {
+    let Some((chat, ticket, detached, switching)) = prologue else {
         tracing::debug!("채팅 연결 요청 {chat_channel_id} ({key}) — 더 새 요청이 먼저 와 건너뜀");
         return Ok(superseded());
     };
@@ -95,6 +95,11 @@ pub async fn chat_connect(
         Err(e) => {
             if !still_current(&services) {
                 return Ok(superseded());
+            }
+            // 같은 채널 재연결(네트워크 복귀·로그인 변경)이면 지금 연결과 그 재연결 루프를 그대로 둔다 — 예전엔 토큰 한 번 실패에
+            // 잘 붙어 있던(또는 스스로 다시 붙던) 채팅을 떼어 '연결 실패'로 멈췄다. 다른 채널로 바꾸는 중이면 앞 연결은 이미 뗐다.
+            if !switching {
+                return Err(e.into());
             }
             let Some(detached) = chat.detach_if_current(ticket) else {
                 return Ok(superseded());
