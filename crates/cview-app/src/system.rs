@@ -122,9 +122,46 @@ pub fn deeplink_take_pending(pending: State<'_, PendingDeepLinks>) -> Vec<Value>
 
 // ── 알림 ─────────────────────────────────────────
 
-/// 시스템 알림 한 건(멘션 알림 등).
+/// 방금 보낸 알림(제목·본문)과 시각 — 같은 채널 채팅을 두 창(메인 무대 + 채팅 창·플레이어 창)에 열어 두면
+/// 멘션 한 건이 창마다 한 번씩, 같은 알림 두 개로 떴다.
+static RECENT_NOTIFICATIONS: Mutex<Vec<(String, std::time::Instant)>> = Mutex::new(Vec::new());
+const NOTIFY_DEDUP_WINDOW: Duration = Duration::from_secs(5);
+
+/// 같은 알림을 `NOTIFY_DEDUP_WINDOW` 안에 이미 보냈으면 true(아니면 기록하고 false).
+fn notification_is_duplicate(key: &str, now: std::time::Instant) -> bool {
+    let mut recent = RECENT_NOTIFICATIONS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    recent.retain(|(_, at)| now.saturating_duration_since(*at) < NOTIFY_DEDUP_WINDOW);
+    if recent.iter().any(|(k, _)| k == key) {
+        return true;
+    }
+    recent.push((key.to_owned(), now));
+    false
+}
+
+/// 시스템 알림 한 건(멘션 알림 등). 설정 '알림 사용'을 끄면 보내지 않는다(`force` — 설정의 '알림 시험'만) —
+/// 예전엔 멘션 알림이 이 스위치를 보지 않아, 메뉴 막대·설정에서 알림을 꺼도 멘션마다 알림이 떴다.
 #[tauri::command]
-pub fn notify_send(app: AppHandle, title: String, body: String) -> CmdResult<()> {
+pub fn notify_send(
+    app: AppHandle,
+    title: String,
+    body: String,
+    force: Option<bool>,
+) -> CmdResult<()> {
+    if !force.unwrap_or(false) {
+        if !app
+            .state::<AppServices>()
+            .settings
+            .general()
+            .notifications_enabled
+        {
+            return Ok(());
+        }
+        if notification_is_duplicate(&format!("{title}\u{1f}{body}"), std::time::Instant::now()) {
+            return Ok(());
+        }
+    }
     app.notification()
         .builder()
         .title(title)
@@ -167,6 +204,39 @@ fn rebase_on_account_change(
     }
 }
 
+/// 방송이 끝난 뒤 이만큼 안에 다시 켜지면 '방송 시작'을 다시 알리지 않는다 — 송출이 잠깐 끊겨(OBS 재시작 등) 한
+/// 주기 동안 꺼졌다 돌아오면 예전엔 같은 방송에 "방송 시작!" 이 두 번·세 번 떴다.
+const LIVE_RESTART_QUIET: Duration = Duration::from_secs(10 * 60);
+
+/// 채널별 마지막으로 방송이 끝난 것을 본 시각.
+#[derive(Default)]
+struct LiveRestartQuiet {
+    ended_at: std::collections::HashMap<String, std::time::Instant>,
+}
+
+impl LiveRestartQuiet {
+    /// 앞 폴에 방송 중이었는데 이번 폴에 없는 채널을 '끝남'으로 적는다(오래된 기록은 버린다).
+    fn note_poll(
+        &mut self,
+        previous_online: &std::collections::HashSet<String>,
+        current_online: &std::collections::HashSet<String>,
+        now: std::time::Instant,
+    ) {
+        self.ended_at
+            .retain(|_, at| now.saturating_duration_since(*at) < LIVE_RESTART_QUIET);
+        for id in previous_online.difference(current_online) {
+            self.ended_at.insert(id.clone(), now);
+        }
+    }
+
+    /// 방금 끝났다가 다시 켜진 방송인가.
+    fn is_restart(&self, channel_id: &str, now: std::time::Instant) -> bool {
+        self.ended_at
+            .get(channel_id)
+            .is_some_and(|at| now.saturating_duration_since(*at) < LIVE_RESTART_QUIET)
+    }
+}
+
 /// 팔로잉 변화 알림 루프. 문구는 원본 `NotificationService` 규칙을 그대로 쓴다.
 pub fn spawn_live_notifications(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
@@ -175,6 +245,7 @@ pub fn spawn_live_notifications(app: AppHandle) {
         // 기준선을 잡은 계정 세대 — 그 사이 로그아웃·다른 계정 로그인이 있었으면 새 계정의 방송 중 채널이
         // 한꺼번에 "방송 시작"으로 뜨지 않게 기준선부터 다시 잡는다.
         let mut baseline_generation: Option<u64> = None;
+        let mut restarts = LiveRestartQuiet::default();
         tokio::time::sleep(Duration::from_secs(20)).await;
         loop {
             let services = app.state::<AppServices>();
@@ -215,6 +286,7 @@ pub fn spawn_live_notifications(app: AppHandle) {
                 let items: Vec<_> = result.channels.iter().map(to_live_channel_item).collect();
                 let prev = baseline.clone().unwrap_or_default();
                 let diff = BackgroundUpdateDiff::new(&items, &prev);
+                let now = std::time::Instant::now();
                 if baseline.is_some() {
                     let per = services.settings.channel_notifications();
                     let mut out = Vec::new();
@@ -223,6 +295,7 @@ pub fn spawn_live_notifications(app: AppHandle) {
                             diff.newly_online
                                 .iter()
                                 .filter(|c| per.is_live_notification_enabled(&c.channel_id))
+                                .filter(|c| !restarts.is_restart(&c.channel_id, now))
                                 .map(|c| texts.online_notification(c)),
                         );
                     }
@@ -253,6 +326,11 @@ pub fn spawn_live_notifications(app: AppHandle) {
                             .body(n.body)
                             .show();
                     }
+                }
+                if baseline.is_some() {
+                    restarts.note_poll(&prev.online_ids, &diff.next_baseline.online_ids, now);
+                } else {
+                    restarts = LiveRestartQuiet::default();
                 }
                 baseline = Some(diff.next_baseline);
             }
@@ -633,6 +711,46 @@ fn update_dto(release: Option<GitHubRelease>, current: String) -> CmdResult<Upda
 
 #[cfg(test)]
 mod tests {
+
+    /// 송출이 잠깐 끊겼다 10분 안에 돌아온 방송은 '방송 시작'을 다시 알리지 않는다 — 그보다 늦으면 새 방송으로 알린다.
+    #[test]
+    fn a_brief_stream_drop_does_not_announce_the_live_start_again() {
+        use std::collections::HashSet;
+        let set = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<HashSet<_>>();
+        let t0 = std::time::Instant::now();
+        let mut q = super::LiveRestartQuiet::default();
+        q.note_poll(&set(&["a", "b"]), &set(&["b"]), t0);
+        assert!(q.is_restart("a", t0 + std::time::Duration::from_secs(60)));
+        assert!(!q.is_restart("c", t0 + std::time::Duration::from_secs(60)));
+        assert!(!q.is_restart("a", t0 + std::time::Duration::from_secs(11 * 60)));
+        // 오래된 기록은 다음 폴에서 버린다.
+        q.note_poll(
+            &set(&["b"]),
+            &set(&["b"]),
+            t0 + std::time::Duration::from_secs(11 * 60),
+        );
+        assert!(q.ended_at.is_empty());
+    }
+
+    /// 같은 멘션을 두 창이 함께 보내도 알림은 한 번 — 5초가 지나면 같은 글도 다시 알린다.
+    #[test]
+    fn the_same_notification_from_two_windows_is_shown_once() {
+        let t0 = std::time::Instant::now();
+        let key = "test-dedup\u{1f}@철수 안녕";
+        assert!(!super::notification_is_duplicate(key, t0));
+        assert!(super::notification_is_duplicate(
+            key,
+            t0 + std::time::Duration::from_millis(300)
+        ));
+        assert!(!super::notification_is_duplicate(
+            "test-dedup\u{1f}다른 글",
+            t0
+        ));
+        assert!(!super::notification_is_duplicate(
+            key,
+            t0 + std::time::Duration::from_secs(6)
+        ));
+    }
 
     #[test]
     fn second_instance_single_link_is_left_to_the_deep_link_plugin_on_windows() {

@@ -585,6 +585,22 @@ async function openChannelWatch(channelId, seq = openSeq) {
   // 늦은 A 가 무대 밖에서 프리롤을 틀어 B 의 광고와 겹쳤다. (enterWatch 가 한 번 올린다.)
   if (openSeq !== seq + 1) return;
   pages.multilive.playPaneAd(channelId);
+  // 광고 소리는 광고가 따로 다룬다 — 패인 소리 배율만 0 으로 둔다(그새 다른 채널을 눌렀으면 위에서 끝났다).
+  await applyStartMuted();
+}
+
+/**
+ * 설정 '음소거로 시작' — 새로 연 방송의 무대 패인을 소리 0 으로 둔다(소리 단추·M 으로 바로 켠다). 예전엔 예전 시청
+ * 화면(viewer.js)만 이 설정을 읽어, 보통 경로(멀티라이브 단독 보기)로 연 방송은 켜 둬도 소리가 났다.
+ */
+async function applyStartMuted() {
+  let on = false;
+  try { on = Boolean((await api.settingsGet())?.player?.startMuted); } catch { return; }
+  const c = on ? pages.multilive.watch?.pane?.controls : null;
+  if (!c || c.gain === 0) return;
+  c.lastGain = c.gain;
+  c.range.value = '0';
+  c.setGain(0);
 }
 
 /** 예전 시청 화면으로 — 보조 플레이어 창, 멀티라이브가 가득 찼을 때. */
@@ -672,12 +688,17 @@ function installCardMenu() {
     const image = card.dataset.channelImage || null;
     let isFav = false;
     try { isFav = (await api.favoritesList()).some((f) => f.channelId === id); } catch { /* 무시 */ }
-    const url = `https://chzzk.naver.com/live/${id}`;
+    // 방송 중이 아닌 채널 줄(검색 '채널' 결과 — data-open-live 가 빈 값)은 재생·멀티라이브·채팅을 빼고 링크는 채널 화면으로 —
+    // 예전엔 같은 메뉴를 띄워 '재생'·'멀티라이브에 추가'가 '현재 방송 중이 아닙니다'로 실패하고 채팅만 열기는 빈 채팅을 열었다.
+    const offline = card.dataset.openLive === '';
+    const url = offline ? `https://chzzk.naver.com/${id}` : `https://chzzk.naver.com/live/${id}`;
     showMenu(e.clientX, e.clientY, [
-      ['play', '재생'],
-      ['multi', '멀티라이브에 추가'],
-      ['channel', '채널 정보'],
-      ['chat', '채팅만 열기'],
+      ...(offline ? [['channel', '채널 정보']] : [
+        ['play', '재생'],
+        ['multi', '멀티라이브에 추가'],
+        ['channel', '채널 정보'],
+        ['chat', '채팅만 열기'],
+      ]),
       ['-'],
       ['fav', isFav ? '즐겨찾기 해제' : '즐겨찾기 추가'],
       ['copy', '링크 복사'],

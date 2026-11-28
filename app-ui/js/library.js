@@ -2,7 +2,7 @@
 // VOD-01 팔로우 채널 다시보기·이어 보기·나중에 보기, NAV-08 허브,
 // NAV-09 즐겨찾기·최근 시청(DB, 지우기), PLY-17 북마크 목록·삭제. 첫 탭 "개요"는 나머지 탭 전부를 카드로 요약한다.
 // 인기 클립(VOD-04)은 사이드바 '방송&클립' › 클립 탭으로 옮겼다(pages.js). 옛 경로 library?tab=clips 는 app.js navigate 가 그리로 보낸다.
-import { api } from './api.js';
+import { api, listen, Events } from './api.js';
 import { esc, safeUrl, toast, imageSrc } from './dom.js';
 import { swapContent } from './motion.js';
 import { emptyState, loadingState, errorState, forgetRecentChannels } from './cards.js';
@@ -47,6 +47,8 @@ function channelRowSaved(c) {
 
 // 지우는 중(되돌리기 시간)인 북마크 — 그사이 탭을 오가 목록을 다시 그려도 다시 나타나지 않게 뺀다.
 const deletingBookmarks = new Set();
+// 되돌리기 시간 동안 숨겨 둔 이어 보기·나중에 보기 항목(`continue:<videoNo>` · `later:<videoNo>`) — 그새 탭을 다시 그려도 숨긴다.
+const deletingShelf = new Set();
 
 function bookmarkRow(b) {
   const thumb = safeUrl(b.thumbnailUrl);
@@ -86,6 +88,9 @@ export class LibraryPage {
     this.tabs = this.root.querySelector('.lib-tabs');
     this.seq = 0;
     this.cache = new Map();
+    // 계정이 바뀌면(로그아웃·다른 계정 로그인) 기억해 둔 '팔로우 다시보기'를 버린다 — 예전엔 1분 안에 돌아오면 앞 계정의
+    // 팔로우 채널 다시보기가 그대로 보였다.
+    listen(Events.authChanged, () => this.cache.clear()).catch(() => {});
     bindTabKeys(this.tabs);
     this.root.addEventListener('click', (e) => this.onClick(e));
     // 다른 곳(사이드바 메뉴·플레이어 창 별·채널 화면)에서 즐겨찾기가 바뀌면 보이는 즐겨찾기·최근 시청·개요를 다시 읽는다 —
@@ -188,12 +193,12 @@ export class LibraryPage {
         }
         case 'continue': {
           const list = await this.fetchTab('continue');
-          html = list.length ? `<div class="grid">${list.map(continueCard).join('')}</div>` : emptyState('이어 볼 다시보기가 없습니다', '다시보기를 보다 멈추면 여기에 남습니다');
+          html = list.length ? `<div class="grid">${list.filter((v) => !deletingShelf.has(`continue:${v.videoNo}`)).map((v) => continueCard(v, { remove: 'continue' })).join('')}</div>` : emptyState('이어 볼 다시보기가 없습니다', '다시보기를 보다 멈추면 여기에 남습니다');
           break;
         }
         case 'later': {
           const list = await this.fetchTab('later');
-          html = list.length ? `<div class="grid">${list.map(continueCard).join('')}</div>` : emptyState('나중에 볼 다시보기가 없습니다', '다시보기 화면의 "나중에 보기"로 담을 수 있습니다');
+          html = list.length ? `<div class="grid">${list.filter((v) => !deletingShelf.has(`later:${v.videoNo}`)).map((v) => continueCard(v, { remove: 'later' })).join('')}</div>` : emptyState('나중에 볼 다시보기가 없습니다', '다시보기 화면의 "나중에 보기"로 담을 수 있습니다');
           break;
         }
         case 'favorites': {
@@ -250,6 +255,9 @@ export class LibraryPage {
       this.show();
       return;
     }
+    // 카드 안 ✕(이어 보기·나중에 보기에서 빼기) — 카드 열기보다 먼저 본다.
+    const shelfRemove = e.target.closest('[data-lib="shelf-remove"]');
+    if (shelfRemove) { this.removeFromShelf(shelfRemove); return; }
     const vod = e.target.closest('[data-vod-no]');
     if (vod) { window.dispatchEvent(new CustomEvent('cview:open-vod', { detail: { videoNo: Number(vod.dataset.vodNo) } })); return; }
     const clip = e.target.closest('[data-clip-uid]');
@@ -296,5 +304,37 @@ export class LibraryPage {
     } else if (a.dataset.lib === 'bookmark-channel') {
       this.onOpenChannel(a.dataset.channelId);
     }
+  }
+
+  /**
+   * 이어 보기·나중에 보기에서 한 항목 빼기 — 북마크처럼 바로 숨기고 되돌리기 시간이 지나면 지운다. 예전엔 빼는 방법이
+   * 없어 보다 그만둔 영상이 새 항목 100개에 밀려날 때까지 이어 보기와 홈 레일에 남았고, 나중에 보기는 영상을 열어
+   * 단추를 다시 눌러야 뺄 수 있었다.
+   */
+  removeFromShelf(btn) {
+    const card = btn.closest('[data-vod-no]');
+    if (!card) return;
+    const videoNo = Number(card.dataset.vodNo);
+    const shelf = btn.dataset.shelf === 'later' ? 'later' : 'continue';
+    const key = `${shelf}:${videoNo}`;
+    deferDelete({
+      message: shelf === 'later' ? '나중에 보기에서 뺐습니다' : '이어 보기에서 뺐습니다',
+      hide: () => {
+        const had = card.contains(document.activeElement);
+        card.hidden = true;
+        deletingShelf.add(key);
+        if (had) {
+          const rest = [...this.body.querySelectorAll('.media-card:not([hidden]) [data-lib="shelf-remove"]')];
+          (rest.find((x) => card.compareDocumentPosition(x) & Node.DOCUMENT_POSITION_FOLLOWING) || rest.pop())?.focus();
+        }
+      },
+      restore: () => { deletingShelf.delete(key); if (card.isConnected) card.hidden = false; else if (this.tab === shelf) this.load(); },
+      commit: async () => {
+        if (shelf === 'later') await api.vodWatchLaterSet(videoNo, false);
+        else await api.vodProgressRemove(videoNo);
+        deletingShelf.delete(key);
+        card.remove();
+      },
+    });
   }
 }

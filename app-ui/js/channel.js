@@ -307,6 +307,10 @@ export class ChannelPage {
       case 'multi': this.onAddMulti?.(this.channelId); break;
       case 'external': api.openExternal(`https://chzzk.naver.com/${encodeURIComponent(this.channelId)}`).catch((er) => toast(er.message)); break;
       case 'favorite': {
+        // 저장하는 동안 다시 누른 것은 버린다 — 예전엔 빠르게 두 번 누르면 둘 다 같은 값(추가)을 보내 토스트가 두 번 뜨고
+        // 원래대로 돌아가지 않았다.
+        if (this.favoriteBusy) break;
+        this.favoriteBusy = true;
         const next = !this.detail.isFavorite;
         try {
           await api.favoriteSet(this.channelId, next, c.channelName, c.channelImageUrl || null);
@@ -315,7 +319,7 @@ export class ChannelPage {
           toast(next ? '즐겨찾기에 추가했습니다' : '즐겨찾기에서 뺐습니다', 1500);
           // 별만 바꾼다 — 예전엔 화면 전체를 다시 그려 다시보기·클립 탭이 첫 쪽부터 다시 받혔다('더 보기'로 넓힌 목록을 잃음).
           this.paintStar(next);
-        } catch (er) { toast(er.message); }
+        } catch (er) { toast(er.message); } finally { this.favoriteBusy = false; }
         break;
       }
       case 'memo': this.editMemo(); break;

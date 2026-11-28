@@ -238,7 +238,7 @@ export const api = {
   oauthSetCredentials: (clientId, clientSecret) => invoke('oauth_set_credentials', { clientId, clientSecret }),
   oauthClearCredentials: () => invoke('oauth_clear_credentials'),
   oauthConnect: () => invoke('oauth_connect'),
-  notifySend: (title, body) => invoke('notify_send', { title, body }),
+  notifySend: (title, body, { force = false } = {}) => invoke('notify_send', { title, body, force }),
   notifyPermission: (request) => invoke('notify_permission', { request }),
   deeplinkTakePending: () => invoke('deeplink_take_pending'),
   trayGetState: () => invoke('tray_get_state'),

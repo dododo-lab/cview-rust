@@ -140,6 +140,17 @@ export class ChatComposer {
     return !this.autocomplete.hidden;
   }
 
+  /**
+   * 보내기 submit 을 받아도 되나 — Enter(조합 중 등)로 온 submit 은 후보가 열려 있으면 막고, 보내기 단추를 눌러 온
+   * submit(`e.submitter`)은 후보를 닫고 보낸다. 예전엔 후보가 열린 채 단추를 누르면 아무 일도 없었다(닫는 처리도 없음).
+   */
+  acceptSubmit(e) {
+    if (!this.choosing) return true;
+    if (!e || !e.submitter) return false;
+    this.setAutocompleteOpen(false);
+    return true;
+  }
+
   // ── 글자 수·기록 ─────────────────────────
 
   /** 보낸 메시지를 입력 기록에 — 같은 말을 연달아 보내면 한 번만. */
@@ -321,6 +332,9 @@ export class ChatComposer {
     const el = this.input;
     const upto = el.value.slice(0, el.selectionStart ?? el.value.length);
     const m = /(^|\s)([:@])([^\s:@]{1,30})$/.exec(upto);
+    // 이모티콘(`:`)은 두 글자부터 — 예전엔 한 글자로도 열려 `ㅋㅋ :D` 에서 Enter 가 보내지 않고 기본 이모티콘 d_1 을
+    // 넣었다(`:p` `:b` 도 같음). 닉네임(`@`)은 한 글자부터 그대로.
+    if (m && m[2] === ':' && m[3].length < 2) return null;
     return m ? { kind: m[2], query: m[3], start: upto.length - m[3].length - 1 } : null;
   }
 

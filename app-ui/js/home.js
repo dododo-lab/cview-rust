@@ -621,6 +621,18 @@ export class HomePage {
       const history = box.closest('.home-history');
       if (history) history.hidden = false;
     };
+    // 받았는데 비었으면 레일을 내린다 — 60초 안에 돌아오면 본문을 다시 그리지 않아(show), 보관함에서 지운 이어 보기·끝난
+    // 클립 레일이 그대로 남고 누르면 지운 다시보기가 다시 열렸다.
+    const clear = (name) => {
+      const box = this.body.querySelector(`[data-rail="${name}"]`);
+      if (!box || box.hidden) return;
+      box.hidden = true;
+      box.innerHTML = '';
+      const history = box.closest('.home-history');
+      if (history && !history.querySelector('.recent-item') && ![...history.querySelectorAll('[data-rail]')].some((r) => !r.hidden)) history.hidden = true;
+    };
+    if (cont.status === 'fulfilled' && !cont.value.length) clear('continue');
+    if (clips.status === 'fulfilled' && !clips.value.length) clear('clips');
     if (cont.status === 'fulfilled' && cont.value.length) fill('continue', '이어 보기', '보던 다시보기를 멈춘 곳부터', `<div class="shelf continue-shelf">${cont.value.map(continueCard).join('')}</div>`, '<button class="link-btn" data-goto-lib="continue">전체 보기</button>');
     if (clips.status === 'fulfilled' && clips.value.length) fill('clips', '오늘의 인기 클립', '하루 동안 가장 많이 본 순간', `<div class="shelf clip-shelf">${clips.value.slice(0, 16).map(clipCard).join('')}</div>`, '<button class="link-btn" data-goto="popular" data-goto-tab="clips" data-goto-period="WITHIN_1_DAY">전체 보기</button>');
   }

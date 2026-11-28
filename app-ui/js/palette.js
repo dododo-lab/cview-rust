@@ -1,6 +1,6 @@
 // 커맨드 팔레트(⌘K) — 원본 CommandPaletteView / CViewActionRegistry: 화면 이동·동작·채널을 한 곳에서
 // 찾아 실행한다. 일치가 없으면 "검색" 으로 넘긴다 (NAV-12).
-import { api } from './api.js';
+import { api, listen, Events } from './api.js';
 import { esc, safeUrl, imageSrc, hideWithExit } from './dom.js';
 import { trapFocus } from './a11y.js';
 
@@ -36,6 +36,8 @@ export class CommandPalette {
     this.items = [];
     this.index = 0;
     this.channels = [];
+    // 계정이 바뀌면 지난번에 받아 둔 채널 후보(앞 계정의 방송 중 팔로잉)를 버린다 — 예전엔 다시 열 때 첫 화면에 남았다.
+    listen(Events.authChanged, () => { this.channels = []; }).catch(() => {});
     this.input.addEventListener('input', () => this.render());
     this.input.addEventListener('keydown', (e) => this.onKey(e));
     this.el.addEventListener('mousedown', (e) => {

@@ -204,7 +204,7 @@ export class MultiChatPage {
 
     this.root.addEventListener('click', (e) => this.onClick(e));
     this.search.addEventListener('input', () => this.applySearch());
-    this.mergedForm.addEventListener('submit', (e) => { e.preventDefault(); if (!this.composer.choosing) this.sendMerged(); });
+    this.mergedForm.addEventListener('submit', (e) => { e.preventDefault(); if (this.composer.acceptSubmit(e)) this.sendMerged(); });
     this.target.addEventListener('change', () => this.onTargetChange());
     this.mergedBanner.addEventListener('click', (e) => { if (e.target.closest('[data-login]')) window.dispatchEvent(new Event('cview:login')); });
     listen('chat://session-event', (p) => this.onSessionEvent(p));
