@@ -247,7 +247,8 @@ pub struct AppServices {
     /// 라이브 상세를 기다리는 시작 요청도 다음 시작·닫기로 취소한다.
     player_request_generation: AtomicU64,
     /// 지금 단독 재생 중인 원본 스트림 주소와 채널 이름(녹화용).
-    pub playing_stream: Mutex<Option<(url::Url, String)>>,
+    /// 단독 시청 화면이 재생 중인 스트림 — (주소, 채널 이름, 인증 키가 필요한 암호화 방송인가). 녹화가 쓴다.
+    pub playing_stream: Mutex<Option<(url::Url, String, bool)>>,
     /// 방송 녹화(원본 StreamRecordingService).
     pub recorder: cview_player::recording::StreamRecordingService,
     /// 진행 중인 시청 기록 — (채널, 시작 시각). 정지할 때 끝낸다(원본 WatchHeartbeatCenter).

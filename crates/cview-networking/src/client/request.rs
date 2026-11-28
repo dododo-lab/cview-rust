@@ -313,6 +313,7 @@ impl ChzzkApiClient {
                             tracing::info!("Rate limited, retrying after {retry_after}s");
                             let wait =
                                 retry_after.clamp(0.0, api_defaults::MAX_RATE_LIMIT_RETRY_SECS);
+                            self.inner.gate.pause_for(Duration::from_secs_f64(wait));
                             tokio::time::sleep(Duration::from_secs_f64(wait)).await;
                             continue 'retry;
                         }
@@ -431,7 +432,14 @@ impl ChzzkApiClient {
             .map_err(transport_to_api_error)?;
         match response.status {
             200..=299 => Ok(()),
-            401 => Err(ApiError::Unauthorized),
+            401 => {
+                // 보낸 로그인 정보가 거절됐다 — 일반 요청(request_inner)처럼 세션 만료를 알린다. 예전엔 팔로우·언팔로우(이 경로)가
+                // 401 을 받아도 알리지 않아, 화면은 로그인한 채 남고 누를 때마다 '로그인이 필요합니다'만 되풀이했다.
+                if endpoint.requires_auth() {
+                    let _ = self.inner.session_expired.send(());
+                }
+                Err(ApiError::Unauthorized)
+            }
             other => Err(ApiError::http(other as i64)),
         }
     }

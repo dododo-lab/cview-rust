@@ -721,6 +721,18 @@ fn drop_setup(mode: MultiLiveGridLayoutMode) -> (MultiLiveManager, Vec<Pane>) {
     (m, p)
 }
 
+/// 메인을 지정하지 않은 포커스(기억한 배치로 다시 연 뒤)는 화면처럼 선택한 패인을 메인으로 본다 — 그 칸에 놓으면 메인이 된다.
+#[test]
+fn drop_onto_selected_pane_promotes_when_focus_main_is_unset() {
+    let (m, s) = drop_setup(MultiLiveGridLayoutMode::Focus);
+    let mut st = m.lock();
+    st.set_focus_main_session_id(None);
+    st.set_selected_session_id(Some(s[1].session.id()));
+    let mut double_tap = None;
+    assert!(st.drop_tile(s[2].session.id(), s[1].session.id(), &mut double_tap));
+    assert_eq!(st.focus_main_session_id(), Some(s[2].session.id()));
+}
+
 #[test]
 fn drop_onto_focus_main_promotes() {
     let (m, s) = drop_setup(MultiLiveGridLayoutMode::Focus);

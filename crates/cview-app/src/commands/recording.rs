@@ -50,14 +50,28 @@ pub fn recording_file_name(channel: &str, now: chrono::DateTime<chrono::Local>) 
 #[tauri::command]
 pub async fn player_record_start(
     app: tauri::AppHandle,
+    window: tauri::Window,
     services: State<'_, AppServices>,
 ) -> CmdResult<RecordingStatusDto> {
-    let (url, name) = services
+    // 재생을 다른 창(플레이어 창)에 넘겨준 창에서 누르면 그 창의 방송을 녹화했다 — 지금 재생 대상 창에서만 받는다.
+    if window.label() != crate::windows::player_target() {
+        return Err(CommandError(
+            "이 창의 방송은 지금 재생 중이 아닙니다 — 재생 중인 창에서 녹화해 주세요".into(),
+        ));
+    }
+    let (url, name, encrypted) = services
         .playing_stream
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .clone()
         .ok_or_else(|| CommandError("녹화할 방송이 없습니다".into()))?;
+    // 인증 키가 필요한 암호화 방송은 녹화기가 키를 받지 못해(로그인 쿠키 없음) 모든 조각을 건너뛰고 빈 파일로 끝났다 —
+    // '녹화 중'으로 보이다가 '녹화된 내용이 없습니다'만 남지 않게 시작 전에 알린다.
+    if encrypted {
+        return Err(CommandError(
+            "이 방송은 암호화되어 있어 녹화할 수 없습니다".into(),
+        ));
+    }
     let dir = app_save_dir(&app, "recording");
     let path = unique_recording_path(&dir.join(recording_file_name(&name, chrono::Local::now())));
     services

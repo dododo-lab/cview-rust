@@ -129,6 +129,7 @@ async fn start_player(
             .as_ref()
             .map(|c| c.channel_name.clone())
             .unwrap_or_else(|| channel_id.clone()),
+        cview_app_core::viewmodels::playback_launch::requires_authenticated_key(&info, false),
     ));
     drop(channel);
 
