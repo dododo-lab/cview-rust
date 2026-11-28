@@ -209,9 +209,34 @@ fn shell_sinks<R: Runtime>(app: &AppHandle<R>) -> ShellSinks {
 }
 
 /// 앱 실행.
+/// 열 수 있는 파일 수 상한을 올린다 — macOS 앱은 소프트 상한 256 으로 시작해, 멀티라이브 패인마다 스트림 프록시(WebKit 연결 여럿 +
+/// CDN 연결 풀)·채팅 소켓·이미지 캐시가 쓰다 보면 바닥나 패인이 말없이 멈췄다. 하드 상한 안에서 4096 까지.
+#[cfg(target_os = "macos")]
+fn raise_open_file_limit() {
+    // SAFETY: getrlimit/setrlimit 은 넘긴 구조체만 읽고 쓴다.
+    unsafe {
+        let mut lim = libc::rlimit {
+            rlim_cur: 0,
+            rlim_max: 0,
+        };
+        if libc::getrlimit(libc::RLIMIT_NOFILE, &mut lim) != 0 {
+            return;
+        }
+        let want: libc::rlim_t = 4096.min(lim.rlim_max);
+        if lim.rlim_cur < want {
+            lim.rlim_cur = want;
+            if libc::setrlimit(libc::RLIMIT_NOFILE, &lim) != 0 {
+                tracing::debug!("열린 파일 상한을 올리지 못했습니다");
+            }
+        }
+    }
+}
+
 pub fn run() {
     perf_log::mark_process_start();
     init_tracing();
+    #[cfg(target_os = "macos")]
+    raise_open_file_limit();
     let app = tauri::Builder::default()
         // 단일 인스턴스는 다른 플러그인보다 먼저 등록해야 한다(SYS-07).
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {

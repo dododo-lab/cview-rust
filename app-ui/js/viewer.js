@@ -295,6 +295,7 @@ export class Viewer {
     if (fs && (fs === this.root || this.root.contains(fs)) && document.exitFullscreen) document.exitFullscreen().catch(() => {});
     this.root.hidden = true;
     this.channelId = null;
+    this.phase = null;
     this.topbar.loadedFor = null;
     this.topbar.closeMenu();
     // 화질 메뉴·⚙ 패널도 닫는다 — 키보드(⌘W)로 닫으면 바깥 클릭 처리가 돌지 않아, 다음 방송을 열 때 앞 방송의 배속·탭을 보인
@@ -352,6 +353,9 @@ export class Viewer {
       // 사용자에게는 쉬운 문구, 원문은 툴팁·콘솔에(L-11).
       const detail = [data.type, data.details].filter(Boolean).join(' · ');
       if (detail) console.warn('[viewer] 재생 오류:', detail, data);
+      // 재연결 중의 시도 실패는 '재연결 중…'을 유지한다 — 예전엔 시도마다 오류 카드('다시 시도')와 '재연결 중…'이 번갈아 떴다.
+      // 재연결을 다 쓰면 Rust 가 error 단계를 보내 그때 오류 카드를 띄운다.
+      if (this.phase === 'reconnecting') return;
       this.showOverlay('영상을 재생하지 못했습니다. 잠시 뒤 다시 시도해 주세요.', true, detail ? `오류 정보: ${detail}` : '');
     } else if (type === 'playbackState') {
       if (data.state === 'stalled') this.showOverlay(PHASE_TEXT.buffering);
@@ -369,6 +373,7 @@ export class Viewer {
     // 다른 메뉴로 가서 화면만 숨었어도 재생은 계속되므로 종료·오류는 받아 둔다(돌아왔을 때 낡은 화면이 남지 않게).
     if (!ev || !this.channelId) return;
     if (ev.type === 'phase') {
+      this.phase = ev.phase;
       if (ev.phase === 'playing' || ev.phase === 'idle') return;
       const text = PHASE_TEXT[ev.phase];
       if (ev.phase === 'error') this.showOverlay(ev.message || text, true);
@@ -379,7 +384,9 @@ export class Viewer {
       this.showOverlay(PHASE_TEXT.streamEnded);
       this.player.setNowPlaying(null);
     } else if (ev.type === 'error') {
-      toast(ev.message);
+      // 엔진 치명 오류 원문(networkError: manifestLoadError 등)은 알림으로 띄우지 않는다(L-11) — 재연결 중에는 시도마다 떴다.
+      // 사용자에게 보일 문구는 오류 단계(phase error)가 화면 카드로 보인다. 원문은 콘솔에만.
+      console.warn('[viewer] 엔진 오류:', ev.message);
     }
   }
 

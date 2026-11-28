@@ -665,6 +665,25 @@ async fn chat_access_token_uses_game_api() {
     assert!(req.header("Cookie").is_some());
 }
 
+/// 채팅 토큰 — 5xx 는 다시 묻고, 쿠키로 401 이면 쿠키 없이 한 번 더(읽기 전용 토큰) 받는다.
+#[tokio::test(start_paused = true)]
+async fn chat_access_token_retries_5xx_and_falls_back_without_cookies() {
+    let t = MockTransport::new(Duration::ZERO, |_, n| match n {
+        0 => status(502),
+        1 => status(401),
+        _ => ok(json!({"accessToken": "r"})),
+    });
+    let c = client(t.clone(), Some(MockAuth::with_cookies()));
+    let token = c.chat_access_token("chat1").await.unwrap();
+    assert_eq!(token.access_token, "r");
+    assert_eq!(t.sends(), 3);
+    assert!(t.request(1).header("Cookie").is_some());
+    assert!(
+        t.request(2).header("Cookie").is_none(),
+        "401 뒤에는 쿠키 없이"
+    );
+}
+
 #[tokio::test]
 async fn emoticon_negative_cache_per_generation() {
     let auth = MockAuth::with_cookies();

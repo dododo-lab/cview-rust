@@ -56,6 +56,8 @@ pub type SharedHlsEngine = Arc<dyn MultiLiveHlsEngine>;
 
 /// 스트림 종료 확인 프로브 (`onCheckStreamEnded`).
 pub type StreamEndedProbe = Arc<dyn Fn() -> BoxFuture<'static, bool> + Send + Sync>;
+/// 재연결 때 같은 채널의 라이브 상세를 다시 받는다 — 패인이 새 재생 URL(새 CDN 토큰·재시작한 방송 경로)을 꺼낸다.
+pub type LiveInfoFetcher = Arc<dyn Fn() -> BoxFuture<'static, Option<LiveInfo>> + Send + Sync>;
 
 /// `startStream` 요청.
 #[derive(Debug, Clone, PartialEq)]
@@ -110,6 +112,8 @@ pub trait MultiLivePlayer: Send + Sync {
     fn apply_started_settings(&self, settings: &PlayerSettings);
     fn set_on_playback_state_changed(&self, callback: Option<Arc<dyn Fn() + Send + Sync>>);
     fn set_stream_ended_probe(&self, probe: Option<StreamEndedProbe>);
+    /// 재연결이 만료된 URL 만 다시 쓰지 않게 새 상세를 받는 함수를 건다(기본: 아무것도 하지 않음).
+    fn set_live_info_fetcher(&self, _fetch: Option<LiveInfoFetcher>) {}
     async fn start_stream(&self, request: MultiLiveStreamRequest);
     async fn stop_stream(&self);
     async fn toggle_play_pause(&self);

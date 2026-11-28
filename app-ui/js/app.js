@@ -1121,10 +1121,12 @@ function installMenuAndShortcuts() {
   window.addEventListener('offline', () => clearTimeout(onlineTimer));
   window.addEventListener('online', () => {
     banner.hidden = true;
-    if (isTauri) api.playerNetworkPath(true).catch(() => {});
     clearTimeout(onlineTimer);
     onlineTimer = setTimeout(() => {
       if (navigator.onLine === false) return;
+      // 플레이어 재연결도 잠잠해진 뒤 한 번 — 예전엔 online 이 오자마자 보내, VPN·Wi-Fi 가 흔들리는 동안(DNS 가 덜 돌아옴)
+      // 모든 패인이 함께 재연결을 시도해 시도를 같이 날렸다.
+      if (isTauri) api.playerNetworkPath(true).catch(() => {});
       toast('다시 연결되었습니다', 1500);
       // 자동 복구 — 덮개 없이. 실패는 화면이 스스로 안내한다(처리되지 않은 거부로 남기지 않는다).
       // 재생·채팅·편집 화면은 스스로 복구한다(영상 오류 안내·실패한 채팅만 다시 연결) — 다시 불러오면 보던 다시보기가
