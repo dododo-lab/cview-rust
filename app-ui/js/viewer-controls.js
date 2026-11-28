@@ -462,10 +462,10 @@ export class ViewerControls {
     const run = (s) => this.viewer.player.run(s);
     if (index < 0) {
       // 자동 — 상한을 -1 로 지우지 않고 앱 화질 상한·백그라운드 절약 상한을 다시 적용한다.
-      run('if (typeof setLockTopLevel === "function") setLockTopLevel(false); if (hls) { hls.loadLevel = -1; if (typeof applyAdaptiveLevelCap === "function") applyAdaptiveLevelCap(); }');
+      run('if (typeof setLockTopLevel === "function") setLockTopLevel(false); if (typeof clearUserManualLevel === "function") clearUserManualLevel(); if (hls) { hls.loadLevel = -1; if (typeof applyAdaptiveLevelCap === "function") applyAdaptiveLevelCap(); }');
       this.flash('화질 자동');
     } else {
-      run(`if (typeof setLockTopLevel === "function") setLockTopLevel(false); requestManualLevel(${Number(index)});`);
+      run(`if (typeof setLockTopLevel === "function") setLockTopLevel(false); if (typeof pickManualLevel === "function") pickManualLevel(${Number(index)}); else requestManualLevel(${Number(index)});`);
       const opt = this.levels.find((l) => l.index === index);
       this.flash(`화질 ${opt ? opt.label : ''}`);
     }

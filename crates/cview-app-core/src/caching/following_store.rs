@@ -112,11 +112,33 @@ impl FollowingSource for ChzzkApiClient {
     }
 
     async fn live_detail(&self, channel_id: &str) -> Option<LiveDetailSnapshot> {
-        ChzzkApiClient::live_detail(self, channel_id, true)
+        let info = ChzzkApiClient::live_detail(self, channel_id, true)
             .await
-            .ok()
-            .map(|i| detail_snapshot(&i))
+            .ok()?;
+        note_adult_live(channel_id, info.adult);
+        Some(detail_snapshot(&info))
     }
+}
+
+/// 상세에서 본 19세 방송 채널 — 팔로잉 카드(`LiveChannelItem` 에는 이 값이 없다)가 19 표시를 달고 미리보기를 빼게 한다.
+/// 예전엔 팔로잉 카드가 언제나 `adult: false` 라, 팔로우한 19세 방송에 배지가 없고 마우스를 올리면 미리보기 영상이 떴다
+/// (인기 화면의 같은 방송은 맞게 보였다).
+static ADULT_LIVES: std::sync::LazyLock<Mutex<std::collections::HashSet<String>>> =
+    std::sync::LazyLock::new(|| Mutex::new(std::collections::HashSet::new()));
+
+/// 채널 상세의 19세 여부를 적는다.
+pub fn note_adult_live(channel_id: &str, adult: bool) {
+    let mut set = lock(&ADULT_LIVES);
+    if adult {
+        set.insert(channel_id.to_owned());
+    } else {
+        set.remove(channel_id);
+    }
+}
+
+/// 상세에서 19세 방송으로 본 채널인가.
+pub fn is_adult_live(channel_id: &str) -> bool {
+    lock(&ADULT_LIVES).contains(channel_id)
 }
 
 /// 싱크 자리. 선언 순서대로 부른다 — 홈이 먼저 반영하고 알림기가 같은 결과로 이벤트를 낸다.

@@ -168,11 +168,38 @@ export function reservedOf(binding, windows = IS_WINDOWS) {
 }
 
 /**
+ * 메뉴 기본 단축키(menu.rs MENU 표) — 그 동작의 사용자 키가 맨 글자(수식 없음·⇧ 만)면 메뉴에는 기본값이 그대로 남는다
+ * (menu_accelerator). 그래서 스크린샷을 맨 S 로 바꾸면 ⌘S 는 여전히 메뉴의 스크린샷이다. 예전엔 이것을 보지 않아, 다른 동작
+ * (북마크·PiP)에 ⌘S 를 주면 말없이 저장되고 메뉴 두 항목이 같은 키를 나눠 새 키가 듣지 않았다.
+ */
+export const MENU_DEFAULTS = {
+  screenshot: { key: 's', modifiers: C },
+  bookmarkStream: { key: 'b', modifiers: C | S },
+  toggleFullscreen: { key: 'f', modifiers: C | S },
+  togglePiP: { key: 'p', modifiers: C | MOD.option },
+};
+/** 메뉴에 달지 않는 바인딩(맨 글자·⇧ 하나뿐·비어 있음) — menu.rs accelerator 와 같은 규칙. 순수 함수. */
+export function menuKeepsDefault(binding) {
+  const m = (binding && binding.modifiers) || 0;
+  return !binding || !binding.key || m === 0 || m === S;
+}
+/** binding 이 다른 동작의 남아 있는 메뉴 기본값과 같으면 그 동작 이름. 순수 함수(all 은 지금 바인딩). */
+export function menuDefaultOf(action, binding, all = bindings) {
+  if (!binding || !binding.key) return null;
+  const m = binding.modifiers || 0;
+  for (const [a, def] of Object.entries(MENU_DEFAULTS)) {
+    if (a === action || !menuKeepsDefault(all[a])) continue;
+    if (def.key === binding.key && def.modifiers === m) return `${ACTIONS.find(([id]) => id === a)?.[1] || a}(메뉴)`;
+  }
+  return null;
+}
+
+/**
  * 겹치는지 — 예약 키(막아야 함)와 다른 동작(경고만)을 함께 본다(M-8).
  * @returns {null | { kind: 'reserved', label: string } | { kind: 'action', action: string, label: string }}
  */
 export function conflictOf(action, binding) {
-  const reserved = reservedOf(binding);
+  const reserved = reservedOf(binding) || menuDefaultOf(action, binding);
   if (reserved) return { kind: 'reserved', label: reserved };
   for (const [a, b] of Object.entries(bindings)) {
     if (a !== action && b && b.key === binding.key && (b.modifiers || 0) === (binding.modifiers || 0)) {
@@ -198,10 +225,11 @@ export function shortcutHelpRows() {
     ['← →', '되감기 10초 (⇧ 60초)'],
     ...bound('toggleChat', '채팅 표시 방식'),
     ...bound('toggleFullscreen', '영상 전체 화면'),
-    [kbd('⇧⌘F'), '영상 전체 화면'],
+    // 메뉴 기본값은 그 동작의 키가 맨 글자일 때만 남는다 — ⌘ 조합으로 바꾸면 메뉴가 그 키를 대신 달아 ⇧⌘F·⌥⌘P 는 듣지 않는다.
+    ...(menuKeepsDefault(b.toggleFullscreen) ? [[kbd('⇧⌘F'), '영상 전체 화면']] : []),
     [kbd('⌃⌘F'), '영상+채팅 전체 화면'],
     ...bound('togglePiP', 'PiP'),
-    [kbd('⌥⌘P'), 'PiP (메뉴)'],
+    ...(menuKeepsDefault(b.togglePiP) ? [[kbd('⌥⌘P'), 'PiP (메뉴)']] : []),
     ['B', '북마크'],
     // 바꾼 북마크 키가 맨 B 면 위 줄과 같은 줄이 두 번 나왔다
     ...bound('bookmarkStream', '북마크').filter(([k]) => k !== 'B'),

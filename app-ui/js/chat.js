@@ -153,6 +153,7 @@ const PANELS = new Set();
 // 차단은 설정 하나(blockedUsers)라 어느 목록·창에서 막았든 이 창의 모든 채팅 목록(다른 패널·멀티채팅 통합 목록·멀티라이브 칸)에서
 // 그 사람 지난 줄을 걷는다 — 예전엔 차단을 누른 목록에서만 지워, 그리드의 다른 패널·통합 목록에 그대로 남았다.
 let blockedSeen = new Set();
+let highlightSeen = new Set(); // 지난번에 본 강조 사용자 — 바뀐 사람만 지난 줄을 고친다
 let wordsSeen = new Set(); // 이미 걸러 온 금지어(소문자) — 처음 설정을 읽을 때는 화면에 줄이 없다
 onChatPrefs((p) => {
   const now = new Set((p && p.blockedUsers) || []);
@@ -161,6 +162,14 @@ onChatPrefs((p) => {
     for (const el of document.querySelectorAll(`.chat-line[data-uid="${CSS.escape(uid)}"]`)) el.remove();
   }
   blockedSeen = now;
+  // 강조도 설정 하나(highlightedUsers)다 — 바뀐 사람의 지난 줄을 이 창의 모든 목록(다른 패널·멀티채팅 그리드·통합 목록)에서 맞춘다.
+  // 예전엔 누른 목록만 바꿔, 같은 사람이 다른 패널에 쓴 줄은 새 줄부터 강조되고 통합 보기의 숨은 패널은 옛 상태로 남았다.
+  const lit = new Set((p && p.highlightedUsers) || []);
+  for (const uid of new Set([...lit, ...highlightSeen])) {
+    if (lit.has(uid) === highlightSeen.has(uid)) continue;
+    for (const el of document.querySelectorAll(`.chat-line[data-uid="${CSS.escape(uid)}"]`)) el.classList.toggle('highlighted', lit.has(uid));
+  }
+  highlightSeen = lit;
   // 멘션 모음·@ 개수에서도 뺀다 — 예전엔 줄만 지워, 멘션을 도배한 사람을 막아도 @ 배지와 모음에 그 말이 그대로 남았다.
   if (added.length) {
     const gone = new Set(added);
@@ -973,8 +982,7 @@ export class ChatPanel {
   toggleHighlight(uid) {
     const list = new Set(chatPrefs().highlightedUsers || []);
     if (list.has(uid)) list.delete(uid); else list.add(uid);
-    updateChatPrefs({ highlightedUsers: [...list] });
-    for (const el of this.list.querySelectorAll(`.chat-line[data-uid="${CSS.escape(uid)}"]`)) el.classList.toggle('highlighted', list.has(uid));
+    updateChatPrefs({ highlightedUsers: [...list] }); // 보이는 줄은 아래 onChatPrefs 가 모든 목록에서 맞춘다
   }
 
   /** 이 사람 채팅만 보기(CHT-25) — 다른 사람 줄은 CSS(.chat-list.solo)로 감춘다. uid 가 null 이면 모두 보기. */

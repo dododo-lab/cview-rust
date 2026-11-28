@@ -3945,3 +3945,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible, .dense-row:fo
 
 /* 화면을 옮긴 뒤 초점을 받는 화면 제목(app.js settleFocus) — 자리 표시만 하고 고리는 그리지 않는다 */
 .page-title[tabindex="-1"]:focus, .page-title[tabindex="-1"]:focus-visible { outline: none; box-shadow: none; }
+
+/* 검색 중에는 묶음의 이어진 줄도 이름·아바타·시각을 보인다 — 앞 줄(같은 사람의 첫 줄)이 걸러져 숨으면, 이름 없는 줄이 바로 위의
+   다른 사람 줄에 붙어 그 사람 말처럼 보였다(단일 채팅 .searching · 멀티채팅 .search-hit). */
+.chat-skin .chat-list.searching .chat-line.cont .chat-avatar,
+.chat-skin .chat-line.search-hit.cont .chat-avatar { visibility: visible; height: auto; }
+.chat-skin .chat-list.searching .chat-line.cont .msg-head,
+.chat-skin .chat-line.search-hit.cont .msg-head { display: flex; }
+.chat-skin .chat-list.searching .chat-line.has-next .msg-row .chat-time,
+.chat-skin .chat-line.search-hit.has-next .msg-row .chat-time { visibility: visible; }

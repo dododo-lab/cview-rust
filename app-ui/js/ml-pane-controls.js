@@ -307,7 +307,7 @@ export class PaneControls {
     this.closeMenus();
     this.el.classList.remove('audible', 'paused', 'buffering');
     // 앞 채널에서 고른 화질 고정을 푼다(자동 — 매니저의 화질 상한은 그대로).
-    if (manual) this.bridge.run('try { if (typeof setLockTopLevel === "function") setLockTopLevel(false); if (hls) { hls.loadLevel = -1; if (typeof applyAdaptiveLevelCap === "function") applyAdaptiveLevelCap(); } } catch (e) {}');
+    if (manual) this.bridge.run('try { if (typeof setLockTopLevel === "function") setLockTopLevel(false); if (typeof clearUserManualLevel === "function") clearUserManualLevel(); if (hls) { hls.loadLevel = -1; if (typeof applyAdaptiveLevelCap === "function") applyAdaptiveLevelCap(); } } catch (e) {}');
     this.patchVolume();
   }
 
@@ -740,9 +740,9 @@ export class PaneControls {
     this.closeMenus();
     if (index < 0) {
       // 자동 — 매니저가 건 패인 화질 상한(applyAdaptiveLevelCap)은 그대로 둔다.
-      this.bridge.run('if (typeof setLockTopLevel === "function") setLockTopLevel(false); if (hls) { hls.loadLevel = -1; if (typeof applyAdaptiveLevelCap === "function") applyAdaptiveLevelCap(); }');
+      this.bridge.run('if (typeof setLockTopLevel === "function") setLockTopLevel(false); if (typeof clearUserManualLevel === "function") clearUserManualLevel(); if (hls) { hls.loadLevel = -1; if (typeof applyAdaptiveLevelCap === "function") applyAdaptiveLevelCap(); }');
     } else {
-      this.bridge.run(`if (typeof setLockTopLevel === "function") setLockTopLevel(false); requestManualLevel(${Number(index)});`);
+      this.bridge.run(`if (typeof setLockTopLevel === "function") setLockTopLevel(false); if (typeof pickManualLevel === "function") pickManualLevel(${Number(index)}); else requestManualLevel(${Number(index)});`);
     }
     this.manualIndex = index;
     setTimeout(() => this.bridge.call('getLevels'), 600);

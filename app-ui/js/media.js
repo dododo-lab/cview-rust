@@ -121,6 +121,14 @@ export class MediaPage {
     this.savedAt = null;
     this.saveTimer = setInterval(() => this.saveProgress(), SAVE_EVERY_MS);
     video.addEventListener('pause', () => this.saveProgress());
+    // 크게 옮긴 뒤(탐색)와 앱이 가려질 때(⌘Q·⌘H·다른 앱)도 바로 적는다 — 예전엔 10초마다·멈출 때만 적어, 1시간 뒤로 옮기고
+    // 곧바로 끄면 다음에 옛 자리(또는 처음)부터 이어졌다.
+    video.addEventListener('seeked', () => this.saveProgress());
+    if (!this.hideSaver) {
+      this.hideSaver = () => { if (document.visibilityState === 'hidden' && this.video) this.saveProgress(); };
+      document.addEventListener('visibilitychange', this.hideSaver);
+      window.addEventListener('pagehide', () => { if (this.video) this.saveProgress(); });
+    }
   }
 
   async openClip(clipUid, seq) {
