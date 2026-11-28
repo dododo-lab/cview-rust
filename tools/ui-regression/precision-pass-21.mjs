@@ -44,8 +44,15 @@ try {
     await page.waitForSelector('[data-page]', { state: 'attached' });
     await page.waitForSelector('[data-page="home"]:not([hidden]) .card-open');
     await page.waitForTimeout(500);
-    // 카드를 빠르게 두 번 누른다(더블클릭) — 클릭 이벤트가 둘 간다.
-    await page.dblclick('[data-page="home"] .live-card .card-open, [data-page="home"] .card-open');
+    // 보이는 카드를 빠르게 두 번 누른다(더블클릭) — 클릭 이벤트가 둘 간다.
+    const clicked = await page.evaluate(() => {
+      const el = [...document.querySelectorAll('[data-page="home"] [data-channel-id] .card-open')].find((b) => b.offsetParent && b.getBoundingClientRect().width > 0);
+      if (!el) return false;
+      el.click();
+      el.click();
+      return true;
+    });
+    assert.ok(clicked, '누를 카드가 없다');
     await page.waitForTimeout(1500);
     const adds = await page.evaluate(() => window.__adds);
     assert.ok(adds <= 1, `같은 채널 추가를 ${adds}번 보냈다`);
